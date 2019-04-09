@@ -24,9 +24,8 @@ from distributed.utils_test import (gen_cluster, gen_test, slow, inc,
 
 @gen_cluster(ncores=[])
 def test_nanny(s):
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop)
 
-    yield n._start(0)
     with rpc(n.address) as nn:
         assert n.is_alive()
         assert s.ncores[n.worker_address] == 2
@@ -55,8 +54,7 @@ def test_nanny(s):
 
 @gen_cluster(ncores=[])
 def test_many_kills(s):
-    n = Nanny(s.address, ncores=2, loop=s.loop)
-    yield n._start(0)
+    n = yield Nanny(s.address, ncores=2, loop=s.loop)
     assert n.is_alive()
     yield [n.kill() for i in range(5)]
     yield [n.kill() for i in range(5)]
@@ -73,8 +71,7 @@ def test_str(s, a, b):
 
 @gen_cluster(ncores=[], timeout=20, client=True)
 def test_nanny_process_failure(c, s):
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
-    yield n._start()
+    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop)
     first_dir = n.worker_dir
 
     assert os.path.exists(first_dir)
@@ -121,8 +118,7 @@ def test_nanny_no_port():
 @gen_cluster(ncores=[])
 def test_run(s):
     pytest.importorskip('psutil')
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
-    yield n._start()
+    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop)
 
     with rpc(n.address) as nn:
         response = yield nn.run(function=dumps(lambda: 1))
@@ -169,8 +165,7 @@ def test_nanny_alt_worker_class(c, s, w1, w2):
 @gen_cluster(client=False, ncores=[])
 def test_nanny_death_timeout(s):
     yield s.close()
-    w = Nanny(s.address, death_timeout=1)
-    yield w._start()
+    w = yield Nanny(s.address, death_timeout=1)
 
     yield gen.sleep(3)
     assert w.status == 'closed'
@@ -199,8 +194,7 @@ def test_num_fds(s):
     proc = psutil.Process()
 
     # Warm up
-    w = Nanny(s.address)
-    yield w._start()
+    w = yield Nanny(s.address)
     yield w._close()
     del w
     gc.collect()
@@ -208,8 +202,7 @@ def test_num_fds(s):
     before = proc.num_fds()
 
     for i in range(3):
-        w = Nanny(s.address)
-        yield w._start()
+        w = yield Nanny(s.address)
         yield gen.sleep(0.1)
         yield w._close()
 
@@ -241,8 +234,7 @@ def test_scheduler_file():
     with tmpfile() as fn:
         s = Scheduler(scheduler_file=fn)
         s.start(8008)
-        w = Nanny(scheduler_file=fn)
-        yield w._start()
+        w = yield Nanny(scheduler_file=fn)
         assert set(s.workers) == {w.worker_address}
         yield w._close()
         s.stop()
@@ -290,8 +282,7 @@ def test_nanny_terminate(c, s, a):
 
 @gen_cluster(ncores=[], client=True)
 def test_avoid_memory_monitor_if_zero_limit(c, s):
-    nanny = Nanny(s.address, loop=s.loop, memory_limit=0)
-    yield nanny._start()
+    nanny = yield Nanny(s.address, loop=s.loop, memory_limit=0)
     typ = yield c.run(lambda dask_worker: type(dask_worker.data))
     assert typ == {nanny.worker_address: dict}
     pcs = yield c.run(lambda dask_worker: list(dask_worker.periodic_callbacks))
@@ -310,8 +301,7 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
 @gen_cluster(ncores=[], client=True)
 def test_scheduler_address_config(c, s):
     with dask.config.set({'scheduler-address': s.address}):
-        nanny = Nanny(loop=s.loop)
-        yield nanny._start()
+        nanny = yield Nanny(loop=s.loop)
         assert nanny.scheduler.address == s.address
 
         start = time()
@@ -339,7 +329,15 @@ def test_wait_for_scheduler():
 def test_environment_variable(c, s):
     a = Nanny(s.address, loop=s.loop, memory_limit=0, env={"FOO": "123"})
     b = Nanny(s.address, loop=s.loop, memory_limit=0, env={"FOO": "456"})
-    yield [a._start(), b._start()]
+    yield [a, b]
     results = yield c.run(lambda: os.environ['FOO'])
     assert results == {a.worker_address: "123", b.worker_address: "456"}
     yield [a._close(), b._close()]
+
+
+@gen_cluster(ncores=[], client=True)
+def test_data_types(c, s):
+    w = yield Nanny(s.address, data=dict)
+    r = yield c.run(lambda dask_worker: type(dask_worker.data))
+    assert r[w.worker_address] == dict
+    yield w._close()

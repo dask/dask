@@ -162,8 +162,7 @@ def test_new_worker_steals(c, s, a):
     while len(a.task_state) < 10:
         yield gen.sleep(0.01)
 
-    b = Worker(s.ip, s.port, loop=s.loop, ncores=1, memory_limit=TOTAL_MEMORY)
-    yield b._start()
+    b = yield Worker(s.ip, s.port, loop=s.loop, ncores=1, memory_limit=TOTAL_MEMORY)
 
     result = yield total
     assert result == sum(map(inc, range(100)))
@@ -266,8 +265,7 @@ def test_steal_resource_restrictions(c, s, a):
         yield gen.sleep(0.01)
     assert len(a.task_state) == 101
 
-    b = Worker(s.ip, s.port, loop=s.loop, ncores=1, resources={'A': 4})
-    yield b._start()
+    b = yield Worker(s.ip, s.port, loop=s.loop, ncores=1, resources={'A': 4})
 
     start = time()
     while not b.task_state or len(a.task_state) == 101:
@@ -527,8 +525,8 @@ def test_steal_twice(c, s, a, b):
     while len(s.tasks) < 100:  # tasks are all allocated
         yield gen.sleep(0.01)
 
-    workers = [Worker(s.ip, s.port, loop=s.loop) for _ in range(20)]
-    yield [w._start() for w in workers]  # army of new workers arrives to help
+    # Army of new workers arrives to help
+    workers = yield [Worker(s.ip, s.port, loop=s.loop) for _ in range(20)]
 
     yield wait(futures)
 

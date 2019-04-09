@@ -2751,7 +2751,7 @@ def test_worker_aliases():
     a = Worker(s.ip, s.port, name='alice')
     b = Worker(s.ip, s.port, name='bob')
     w = Worker(s.ip, s.port, name=3)
-    yield [a._start(), b._start(), w._start()]
+    yield [a, b, w]
 
     c = yield Client((s.ip, s.port), asynchronous=True)
 
@@ -2965,8 +2965,7 @@ def test_unrunnable_task_runs(c, s, a, b):
     assert s.tasks[x.key] in s.unrunnable
     assert s.get_task_status(keys=[x.key]) == {x.key: 'no-worker'}
 
-    w = Worker(s.ip, s.port, loop=s.loop)
-    yield w._start()
+    w = yield Worker(s.ip, s.port, loop=s.loop)
 
     start = time()
     while x.status != 'finished':
@@ -3634,7 +3633,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
                 yield gen.sleep(sleep)
                 w = worker(s['address'], loop=loop)
                 running[w] = None
-                yield w._start()
+                yield w
                 addr = w.worker_address
                 running[w] = addr
                 yield gen.sleep(duration)

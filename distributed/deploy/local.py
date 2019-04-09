@@ -254,10 +254,9 @@ class LocalCluster(Cluster):
         else:
             W = Worker
 
-        w = W(self.scheduler.address, loop=self.loop,
+        w = yield W(self.scheduler.address, loop=self.loop,
               death_timeout=death_timeout,
               silence_logs=self.silence_logs, **kwargs)
-        yield w._start()
 
         self.workers.append(w)
 

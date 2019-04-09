@@ -29,7 +29,8 @@ from . import profile, comm
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
-from .compatibility import unicode, get_thread_identity, finalize
+from .compatibility import (unicode, get_thread_identity, finalize,
+        MutableMapping)
 from .core import (error_message, CommClosedError, send_recv,
                    pingpong, coerce_to_address)
 from .diskutils import WorkSpace
@@ -216,6 +217,8 @@ class Worker(ServerNode):
     scheduler_ip: str
     scheduler_port: int
     ip: str, optional
+    data: MutableMapping, type, None
+        The object to use for storage, builds a disk-backed LRU dict by default
     ncores: int, optional
     loop: tornado.ioloop.IOLoop
     local_dir: str, optional
@@ -260,7 +263,7 @@ class Worker(ServerNode):
                  executor=None, resources=None, silence_logs=None,
                  death_timeout=None, preload=None, preload_argv=None, security=None,
                  contact_address=None, memory_monitor_interval='200ms',
-                 extensions=None, metrics=None, **kwargs):
+                 extensions=None, metrics=None, data=None, **kwargs):
         self.tasks = dict()
         self.task_state = dict()
         self.dep_state = dict()
@@ -411,7 +414,13 @@ class Worker(ServerNode):
         else:
             self.memory_pause_fraction = dask.config.get('distributed.worker.memory.pause')
 
-        if (self.memory_limit and
+        if isinstance(data, MutableMapping):
+            self.data = data
+        elif callable(data):
+            self.data = data()
+        elif isinstance(data, tuple):
+            self.data = data[0](**data[1])
+        elif (self.memory_limit and
                 (self.memory_target_fraction or
                  self.memory_spill_fraction)):
             try:
@@ -836,6 +845,10 @@ class Worker(ServerNode):
         yield self._register_with_scheduler()
 
         self.start_periodic_callbacks()
+        raise gen.Return(self)
+
+    def __await__(self):
+        return self._start().__await__()
 
     def start(self, port=0):
         self.loop.add_callback(self._start, port)

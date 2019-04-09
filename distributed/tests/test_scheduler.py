@@ -236,7 +236,7 @@ def test_add_worker(s, a, b):
     w = Worker(s.ip, s.port, ncores=3)
     w.data['x-5'] = 6
     w.data['y'] = 1
-    yield w._start(0)
+    yield w
 
     dsk = {('x-%d' % i): (inc, i) for i in range(10)}
     s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk), client='client',
@@ -502,14 +502,12 @@ def test_broadcast_nanny(s, a, b):
 def test_worker_name():
     s = Scheduler(validate=True)
     s.start(0)
-    w = Worker(s.ip, s.port, name='alice')
-    yield w._start()
+    w = yield Worker(s.ip, s.port, name='alice')
     assert s.workers[w.address].name == 'alice'
     assert s.aliases['alice'] == w.address
 
     with pytest.raises(ValueError):
-        w2 = Worker(s.ip, s.port, name='alice')
-        yield w2._start()
+        w2 = yield Worker(s.ip, s.port, name='alice')
         yield w2._close()
 
     yield s.close()
@@ -525,7 +523,7 @@ def test_coerce_address():
         a = Worker(s.ip, s.port, name='alice')
         b = Worker(s.ip, s.port, name=123)
         c = Worker('127.0.0.1', s.port, name='charlie')
-        yield [a._start(), b._start(), c._start()]
+        yield [a, b, c]
 
         assert s.coerce_address('127.0.0.1:8000') == 'tcp://127.0.0.1:8000'
         assert s.coerce_address('[::1]:8000') == 'tcp://[::1]:8000'
@@ -559,9 +557,7 @@ def test_file_descriptors_dont_leak(s):
     proc = psutil.Process()
     before = proc.num_fds()
 
-    w = Worker(s.ip, s.port)
-
-    yield w._start(0)
+    w = yield Worker(s.ip, s.port)
     yield w._close()
 
     during = proc.num_fds()
@@ -634,8 +630,7 @@ def test_scatter_no_workers(c, s):
 
 @gen_cluster(ncores=[])
 def test_scheduler_sees_memory_limits(s):
-    w = Worker(s.ip, s.port, ncores=3, memory_limit=12345)
-    yield w._start(0)
+    w = yield Worker(s.ip, s.port, ncores=3, memory_limit=12345)
 
     assert s.workers[w.address].memory_limit == 12345
     yield w._close()
@@ -751,8 +746,7 @@ def test_file_descriptors(c, s):
     num_fds_1 = proc.num_fds()
 
     N = 20
-    nannies = [Nanny(s.ip, s.port, loop=s.loop) for i in range(N)]
-    yield [n._start() for n in nannies]
+    nannies = yield [Nanny(s.ip, s.port, loop=s.loop) for i in range(N)]
 
     while len(s.ncores) < N:
         yield gen.sleep(0.1)
@@ -894,7 +888,7 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
     w = Worker(s.ip, s.port, ncores=1)
     w.put_key_in_memory(y.key, 3)
 
-    yield w._start()
+    yield w
 
     start = time()
 
@@ -945,7 +939,7 @@ def test_no_workers_to_memory(c, s):
     w = Worker(s.ip, s.port, ncores=1)
     w.put_key_in_memory(y.key, 3)
 
-    yield w._start()
+    yield w
 
     start = time()
 
@@ -975,7 +969,7 @@ def test_no_worker_to_memory_restrictions(c, s, a, b):
     w = Worker(s.ip, s.port, ncores=1, name='alice')
     w.put_key_in_memory(y.key, 3)
 
-    yield w._start()
+    yield w
 
     while len(s.workers) < 3:
         yield gen.sleep(0.01)

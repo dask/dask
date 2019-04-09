@@ -164,6 +164,11 @@ class Nanny(ServerNode):
 
         self.start_periodic_callbacks()
 
+        raise gen.Return(self)
+
+    def __await__(self):
+        return self._start().__await__()
+
     def start(self, addr_or_port=0):
         self.loop.add_callback(self._start, addr_or_port)
 

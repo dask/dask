@@ -281,8 +281,7 @@ def test_broadcast(s, a, b):
 def test_worker_with_port_zero():
     s = Scheduler()
     s.start(8007)
-    w = Worker(s.address)
-    yield w._start()
+    w = yield Worker(s.address)
     assert isinstance(w.port, int)
     assert w.port > 1024
 
@@ -293,8 +292,7 @@ def test_worker_with_port_zero():
 def test_worker_waits_for_center_to_come_up(loop):
     @gen.coroutine
     def f():
-        w = Worker('127.0.0.1', 8007)
-        yield w._start()
+        w = yield Worker('127.0.0.1', 8007)
 
     try:
         loop.run_sync(f, timeout=4)
@@ -345,9 +343,8 @@ def test_io_loop(loop):
 @gen_cluster(client=True, ncores=[])
 def test_spill_to_disk(c, s):
     np = pytest.importorskip('numpy')
-    w = Worker(s.address, loop=s.loop, memory_limit=1200 / 0.6,
+    w = yield Worker(s.address, loop=s.loop, memory_limit=1200 / 0.6,
                memory_pause_fraction=None, memory_spill_fraction=None)
-    yield w._start()
 
     x = c.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='x')
     yield wait(x)
@@ -408,7 +405,7 @@ def test_Executor(c, s):
     with ThreadPoolExecutor(2) as e:
         w = Worker(s.ip, s.port, executor=e)
         assert w.executor is e
-        yield w._start()
+        w = yield w
 
         future = c.submit(inc, 1)
         result = yield future
@@ -682,8 +679,7 @@ def test_hold_onto_dependents(c, s, a, b):
 def test_worker_death_timeout(s):
     with dask.config.set({'distributed.comm.timeouts.connect': '1s'}):
         yield s.close()
-        w = Worker(s.address, death_timeout=1)
-        yield w._start()
+        w = yield Worker(s.address, death_timeout=1)
 
     yield gen.sleep(2)
     assert w.status == 'closed'
@@ -902,8 +898,7 @@ def test_worker_fds(s):
     yield gen.sleep(0.05)
     start = psutil.Process().num_fds()
 
-    worker = Worker(s.address, loop=s.loop)
-    yield worker._start()
+    worker = yield Worker(s.address, loop=s.loop)
     yield gen.sleep(0.1)
     middle = psutil.Process().num_fds()
     start = time()
@@ -962,8 +957,7 @@ def test_scheduler_file():
     with tmpfile() as fn:
         s = Scheduler(scheduler_file=fn)
         s.start(8009)
-        w = Worker(scheduler_file=fn)
-        yield w._start()
+        w = yield Worker(scheduler_file=fn)
         assert set(s.workers) == {w.address}
         yield w._close()
         s.stop()
@@ -1122,9 +1116,8 @@ def test_deque_handler():
 
 @gen_cluster(ncores=[], client=True)
 def test_avoid_memory_monitor_if_zero_limit(c, s):
-    worker = Worker(s.address, loop=s.loop, memory_limit=0,
+    worker = yield Worker(s.address, loop=s.loop, memory_limit=0,
                     memory_monitor_interval=10)
-    yield worker._start()
     assert type(worker.data) is dict
     assert 'memory' not in worker.periodic_callbacks
 
@@ -1168,8 +1161,7 @@ def test_parse_memory_limit(s, w):
 @gen_cluster(ncores=[], client=True)
 def test_scheduler_address_config(c, s):
     with dask.config.set({'scheduler-address': s.address}):
-        worker = Worker(loop=s.loop)
-        yield worker._start()
+        worker = yield Worker(loop=s.loop)
         assert worker.scheduler.address == s.address
     yield worker._close()
 
@@ -1259,8 +1251,7 @@ def test_register_worker_callbacks(c, s, a, b):
     assert list(result.values()) == [False] * 2
 
     # Start a worker and check that startup is not run
-    worker = Worker(s.address, loop=s.loop)
-    yield worker._start()
+    worker = yield Worker(s.address, loop=s.loop)
     result = yield c.run(test_import, workers=[worker.address])
     assert list(result.values()) == [False]
     yield worker._close()
@@ -1275,8 +1266,7 @@ def test_register_worker_callbacks(c, s, a, b):
     assert list(result.values()) == [True] * 2
 
     # Start a worker and check it is ran on it
-    worker = Worker(s.address, loop=s.loop)
-    yield worker._start()
+    worker = yield Worker(s.address, loop=s.loop)
     result = yield c.run(test_import, workers=[worker.address])
     assert list(result.values()) == [True]
     yield worker._close()
@@ -1291,8 +1281,7 @@ def test_register_worker_callbacks(c, s, a, b):
     assert list(result.values()) == [True] * 2
 
     # Start a worker and check it is ran on it
-    worker = Worker(s.address, loop=s.loop)
-    yield worker._start()
+    worker = yield Worker(s.address, loop=s.loop)
     result = yield c.run(test_import, workers=[worker.address])
     assert list(result.values()) == [True]
     result = yield c.run(test_startup2, workers=[worker.address])
@@ -1302,3 +1291,25 @@ def test_register_worker_callbacks(c, s, a, b):
     # Final exception test
     with pytest.raises(ZeroDivisionError):
         yield c.register_worker_callbacks(setup=lambda: 1 / 0)
+
+
+@gen_cluster(ncores=[])
+def test_data_types(s):
+    w = yield Worker(s.address, data=dict)
+    assert isinstance(w.data, dict)
+    yield w._close()
+
+    data = dict()
+    w = yield Worker(s.address, data=data)
+    assert w.data is data
+    yield w._close()
+
+    class Data(dict):
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+    w = yield Worker(s.address, data=(Data, {'x': 123, 'y': 456}))
+    assert w.data.x == 123
+    assert w.data.y == 456
+    yield w._close()
