@@ -4,7 +4,7 @@ Generalized Ufuncs
 EXPERIMENTAL FEATURE added to Version 0.18.0 and above - see :ref:`disclaimer<disclaimer>`.
 
 
-`NumPy <http://www.numpy.org>`_ provides the concept of `generalized ufuncs <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html>`_. Generalized ufuncs are functions
+`NumPy <https://www.numpy.org>`_ provides the concept of `generalized ufuncs <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html>`_. Generalized ufuncs are functions
 that distinguish the various dimensions of passed arrays in the two classes loop dimensions
 and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_ is specified for NumPy generalized ufuncs.
 
@@ -19,7 +19,7 @@ NumPy generalized ufunc
 ~~~~~~~~~~~~~~~~~~~~~~~
 .. note::
 
-    `NumPy <http://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
+    `NumPy <https://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
     inside ``np.linalg._umath_linalg`` and might change in the future.
 
 

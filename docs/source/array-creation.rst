@@ -2,7 +2,7 @@ Create Dask Arrays
 ==================
 
 You can load or store Dask arrays from a variety of common sources like HDF5,
-NetCDF, `Zarr <http://zarr.readthedocs.io/en/stable/>`_, or any format that
+NetCDF, `Zarr <https://zarr.readthedocs.io/en/stable/>`_, or any format that
 supports NumPy-style slicing.
 
 .. currentmodule:: dask.array
@@ -23,7 +23,7 @@ NumPy Slicing
 
 Many storage formats have Python projects that expose storage using NumPy
 slicing syntax.  These include HDF5, NetCDF, BColz, Zarr, GRIB, etc.  For
-example, we can load a Dask array from an HDF5 file using `h5py <http://www.h5py.org/>`_:
+example, we can load a Dask array from an HDF5 file using `h5py <https://www.h5py.org/>`_:
 
 .. code-block:: Python
 

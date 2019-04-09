@@ -13,7 +13,7 @@ from dask.dataframe.utils import (
     assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION,
 )
 
-AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last']
+AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last', 'prod']
 
 
 @pytest.fixture(params=AGG_FUNCS)
@@ -361,6 +361,7 @@ def test_series_groupby():
         assert_eq(dg.size(), pdg.size())
         assert_eq(dg.first(), pdg.first())
         assert_eq(dg.last(), pdg.last())
+        assert_eq(dg.prod(), pdg.prod())
 
 
 def test_series_groupby_errors():
@@ -447,6 +448,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddkey).size(), pdf.groupby(pdkey).size())
         assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
+        assert_eq(ddf.groupby(ddkey).prod(), pdf.groupby(pdkey).prod())
 
         for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).var(ddof),
@@ -462,6 +464,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.a.groupby(ddkey).nunique(), pdf.a.groupby(pdkey).nunique(), check_names=False)
         assert_eq(ddf.a.groupby(ddkey).first(), pdf.a.groupby(pdkey).first(), check_names=False)
         assert_eq(ddf.a.groupby(ddkey).last(), pdf.a.groupby(pdkey).last(), check_names=False)
+        assert_eq(ddf.a.groupby(ddkey).prod(), pdf.a.groupby(pdkey).prod(), check_names=False)
 
         for ddof in ddofs:
             assert_eq(ddf.a.groupby(ddkey).var(ddof),
@@ -479,6 +482,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddf.b > i).a.size(), pdf.groupby(pdf.b > i).a.size())
         assert_eq(ddf.groupby(ddf.b > i).a.first(), pdf.groupby(pdf.b > i).a.first())
         assert_eq(ddf.groupby(ddf.b > i).a.last(), pdf.groupby(pdf.b > i).a.last())
+        assert_eq(ddf.groupby(ddf.b > i).a.prod(), pdf.groupby(pdf.b > i).a.prod())
 
         assert_eq(ddf.groupby(ddf.a > i).b.sum(), pdf.groupby(pdf.a > i).b.sum())
         assert_eq(ddf.groupby(ddf.a > i).b.min(), pdf.groupby(pdf.a > i).b.min())
@@ -489,6 +493,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddf.b > i).b.size(), pdf.groupby(pdf.b > i).b.size())
         assert_eq(ddf.groupby(ddf.b > i).b.first(), pdf.groupby(pdf.b > i).b.first())
         assert_eq(ddf.groupby(ddf.b > i).b.last(), pdf.groupby(pdf.b > i).b.last())
+        assert_eq(ddf.groupby(ddf.b > i).b.prod(), pdf.groupby(pdf.b > i).b.prod())
 
         assert_eq(ddf.groupby(ddf.b > i).sum(), pdf.groupby(pdf.b > i).sum())
         assert_eq(ddf.groupby(ddf.b > i).min(), pdf.groupby(pdf.b > i).min())
@@ -498,6 +503,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddf.b > i).size(), pdf.groupby(pdf.b > i).size())
         assert_eq(ddf.groupby(ddf.b > i).first(), pdf.groupby(pdf.b > i).first())
         assert_eq(ddf.groupby(ddf.b > i).last(), pdf.groupby(pdf.b > i).last())
+        assert_eq(ddf.groupby(ddf.b > i).prod(), pdf.groupby(pdf.b > i).prod())
 
         assert_eq(ddf.groupby(ddf.a > i).sum(), pdf.groupby(pdf.a > i).sum())
         assert_eq(ddf.groupby(ddf.a > i).min(), pdf.groupby(pdf.a > i).min())
@@ -507,6 +513,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddf.a > i).size(), pdf.groupby(pdf.a > i).size())
         assert_eq(ddf.groupby(ddf.a > i).first(), pdf.groupby(pdf.a > i).first())
         assert_eq(ddf.groupby(ddf.a > i).last(), pdf.groupby(pdf.a > i).last())
+        assert_eq(ddf.groupby(ddf.a > i).prod(), pdf.groupby(pdf.a > i).prod())
 
         for ddof in ddofs:
             assert_eq(ddf.groupby(ddf.b > i).std(ddof),
@@ -523,6 +530,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddkey).b.size(), pdf.groupby(pdkey).b.size())
         assert_eq(ddf.groupby(ddkey).b.first(), pdf.groupby(pdkey).b.first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
+        assert_eq(ddf.groupby(ddkey).prod(), pdf.groupby(pdkey).prod())
 
         assert_eq(ddf.groupby(ddkey).sum(), pdf.groupby(pdkey).sum())
         assert_eq(ddf.groupby(ddkey).min(), pdf.groupby(pdkey).min())
@@ -532,6 +540,7 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddkey).size(), pdf.groupby(pdkey).size())
         assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
+        assert_eq(ddf.groupby(ddkey).prod(), pdf.groupby(pdkey).prod())
 
         for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).b.std(ddof),
@@ -557,6 +566,7 @@ def test_split_apply_combine_on_series(empty):
     assert_dask_graph(ddf.groupby('b').a.var(), 'series-groupby-var')
     assert_dask_graph(ddf.groupby('b').a.first(), 'series-groupby-first')
     assert_dask_graph(ddf.groupby('b').a.last(), 'series-groupby-last')
+    assert_dask_graph(ddf.groupby('b').a.prod(), 'series-groupby-prod')
     # mean consists from sum and count operations
     assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-sum')
     assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-count')
@@ -569,6 +579,7 @@ def test_split_apply_combine_on_series(empty):
     assert_dask_graph(ddf.groupby('b').count(), 'dataframe-groupby-count')
     assert_dask_graph(ddf.groupby('b').first(), 'dataframe-groupby-first')
     assert_dask_graph(ddf.groupby('b').last(), 'dataframe-groupby-last')
+    assert_dask_graph(ddf.groupby('b').prod(), 'dataframe-groupby-prod')
     # mean consists from sum and count operations
     assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-sum')
     assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-count')
@@ -757,7 +768,7 @@ def test_groupby_normalize_index():
     {'b': {'c': 'mean'}, 'c': {'a': 'max', 'b': 'min'}},
     {'b': 'mean', 'c': ['min', 'max']},
     {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
-    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'first', 'last'],
+    ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'first', 'last', 'prod'],
     'var',
     {'b': 'mean', 'c': 'first', 'd': 'last', 'a': ['first', 'last']},
     {'b': {'c': 'mean'}, 'c': {'a': 'first', 'b': 'last'}},
@@ -879,8 +890,8 @@ def test_aggregate__dask():
     specs = [
         {'b': {'c': 'mean'}, 'c': {'a': 'max', 'b': 'min'}},
         {'b': 'mean', 'c': ['min', 'max']},
-        ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'first', 'last'],
-        'sum', 'mean', 'min', 'max', 'count', 'std', 'var', 'first', 'last'
+        ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'first', 'last', 'prod'],
+        'sum', 'mean', 'min', 'max', 'count', 'std', 'var', 'first', 'last', 'prod'
 
         # NOTE: the 'size' spec is special since it bypasses aggregate
         # 'size'
@@ -1282,7 +1293,7 @@ def test_groupby_agg_grouper_multiple(slice_):
                            "(pandas-dev/pandas#16859)")
 @pytest.mark.parametrize('agg_func', [
     'cumprod', 'cumcount', 'cumsum', 'var', 'sum', 'mean', 'count', 'size',
-    'std', 'min', 'max', 'first', 'last'
+    'std', 'min', 'max', 'first', 'last', 'prod'
 ])
 def test_groupby_column_and_index_agg_funcs(agg_func):
     def call(g, m, **kwargs):
@@ -1311,7 +1322,7 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
     assert_eq(expected, result)
 
     # apply-combine-apply aggregation functions
-    aca_agg = {'sum', 'mean', 'var', 'size', 'std', 'count', 'first', 'last'}
+    aca_agg = {'sum', 'mean', 'var', 'size', 'std', 'count', 'first', 'last', 'prod'}
 
     # Test aggregate strings
     if agg_func in aca_agg:
@@ -1542,3 +1553,29 @@ def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby('name').std(),
               df.groupby('name').std())
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="Parameter min_count not implemented in "
+                           "DataFrame.groupby().sum() and DataFrame.groupby().prod()")
+@pytest.mark.parametrize('min_count', [0, 1, 2, 3])
+def test_with_min_count(min_count):
+    dfs = [pd.DataFrame({
+                        'group':['A', 'A', 'B'],
+                        'val1':[np.nan, 2, 3],
+                        'val2':[np.nan, 5, 6],
+                        'val3':[5, 4, 9]
+                        }),
+           pd.DataFrame({
+                        'group':['A', 'A', 'B'],
+                        'val1':[2, np.nan, np.nan],
+                        'val2':[np.nan, 5, 6],
+                        'val3':[5, 4, 9]
+                        })]
+    ddfs = [dd.from_pandas(df, npartitions=4) for df in dfs]
+
+    for df, ddf in zip(dfs, ddfs):
+        assert_eq(df.groupby('group').sum(min_count=min_count),
+                  ddf.groupby('group').sum(min_count=min_count))
+        assert_eq(df.groupby('group').prod(min_count=min_count),
+                  ddf.groupby('group').prod(min_count=min_count))

@@ -1,6 +1,54 @@
 Changelog
 =========
 
+1.1.5 / 2019-03-29
+------------------
+
+Array
++++++
+
+-  Ensure that we use the dtype keyword in normalize_chunks (:pr:`4646`) `Matthew Rocklin`_
+
+Core
+++++
+
+-  Use recursive glob in LocalFileSystem (:pr:`4186`) `Brett Naul`_
+-  Avoid YAML deprecation (:pr:`4603`)
+-  Fix CI and add set -e (:pr:`4605`) `James Bourbeau`_
+-  Support builtin sequence types in dask.visualize (:pr:`4602`)
+-  unpack/repack orderedDict (:pr:`4623`) `Justin Poehnelt`_
+-  Add da.random.randint to API docs [skip ci] (:pr:`4628`) `James Bourbeau`_
+-  Add zarr to CI environment (:pr:`4604`) `James Bourbeau`_
+-  Enable codecov (:pr:`4631`) `Peter Andreas Entschev`_
+
+DataFrame
++++++++++
+
+-  Support setting the index (:pr:`4565`)
+-  DataFrame.itertuples accepts index, name kwargs (:pr:`4593`) `Dan O'Donovan`_
+-  Support non-Pandas series in dd.Series.unique (:pr:`4599`) `Ben Zaitlen`_
+-  Replace use of explicit type check with ._is_partition_type predicate (:pr:`4533`)
+-  Remove additional pandas warnings in tests (:pr:`4576`)
+-  Check object for name/dtype attributes rather than type (:pr:`4606`)
+-  Fix comparison against pd.Series (:pr:`4613`) `amerkel2`_
+-  Fixing warning from setting categorical codes to floats (:pr:`4624`) `Julia Signell`_
+-  Fix renaming on index to_frame method (:pr:`4498`) `Henrique Ribeiro`_
+-  Fix divisions when joining two single-partition dataframes (:pr:`4636`) `Justin Waugh`_
+-  Warn if partitions overlap in compute_divisions (:pr:`4600`) `Brian Chu`_
+-  Give informative meta= warning (:pr:`4637`) `Matthew Rocklin`_
+-  Add informative error message to Series.__getitem__ (:pr:`4638`) `Matthew Rocklin`_
+-  Add clear exception message when using index or index_col in read_csv (:pr:`4651`) `Álvaro Abella Bascarán`_
+
+Documentation
++++++++++++++
+
+-  Add documentation for custom groupby aggregations (:pr:`4571`)
+-  Docs dataframe joins (:pr:`4569`)
+-  Specify fork-based contributions  (:pr:`4619`) `James Bourbeau`_
+-  correct to_parquet example in docs (:pr:`4641`) `Aaron Fowles`_
+-  Update and secure several references (:pr:`4649`) `Søren Fuglede Jørgensen`_
+
+
 1.1.4 / 2019-03-08
 ------------------
 
@@ -1359,7 +1407,7 @@ DataFrame
   (:pr:`1495`)
 - Add ``dataframe.reduction`` and ``series.reduction`` methods to apply generic
   row-wise reduction to dataframes and series (:pr:`1483`)
-- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <http://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
+- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <https://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
 - ``dataframe.read_hdf`` now supports reading ``Series`` (:pr:`1564`)
 - Support Pandas 0.19.0 (:pr:`1540`)
 - Implement ``select_dtypes`` (:pr:`1556`)
@@ -1896,3 +1944,12 @@ Other
 .. _`Joe Corbett`: https://github.com/jcorb
 .. _`@HSR05`: https://github.com/HSR05
 .. _`Ben Zaitlen`: https://github.com/quasiben
+.. _`Brett Naul`: https://github.com/bnaul
+.. _`Justin Poehnelt`: https://github.com/justinwp
+.. _`Dan O'Donovan`: https://github.com/danodonovan
+.. _`amerkel2`: https://github.com/amerkel2
+.. _`Justin Waugh`: https://github.com/bluecoconut
+.. _`Brian Chu`: https://github.com/bchu
+.. _`Álvaro Abella Bascarán`: https://github.com/alvaroabascar
+.. _`Aaron Fowles`: https://github.com/aaronfowles
+.. _`Søren Fuglede Jørgensen`: https://github.com/fuglede
