@@ -1494,7 +1494,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
-    def quantile(self, q=0.5, axis=0, use_tdigest=True):
+    def quantile(self, q=0.5, axis=0, method='default'):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
 
         Parameters
@@ -1506,7 +1506,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             0 or 'index' for row-wise, 1 or 'columns' for column-wise
 
         Note: this implementation will use t-digest for columns with floating
-              dtype if axis is set to 0 and `use_tdigest` is set to True.
+              dtype if axis is set to 0 and `method` is set to `tdigest`.
               Otherwise it falls back to the internal implementation.
 
         """
@@ -1523,7 +1523,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             _raise_if_object_series(self, "quantile")
             meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
-            quantiles = tuple(quantile(self[c], q, use_tdigest) for c in num.columns)
+            quantiles = tuple(quantile(self[c], q, method) for c in num.columns)
 
             qnames = [(_q._name, 0) for _q in quantiles]
 
@@ -1538,7 +1538,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False, percentiles=None, use_tdigest=True):
+    def describe(self, split_every=False, percentiles=None, percentiles_method='default'):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
         if self.ndim == 2 and len(num.columns) == 0:
@@ -1553,7 +1553,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
                  num.min(split_every=split_every),
-                 num.quantile(percentiles, use_tdigest=use_tdigest),
+                 num.quantile(percentiles, method=percentiles_method),
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -2037,17 +2037,17 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    def quantile(self, q=0.5, use_tdigest=True):
+    def quantile(self, q=0.5, method='default'):
         """ Approximate quantiles of Series
 
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
 
-        Note: this implementation will use t-digest is `use_tdigest` is set to true and the
+        Note: this implementation will use t-digest is `method` is set to `tdigest` and the
               dtype of df is floating. Otherwise it falls back to the internal implementation.
 
         """
-        return quantile(self, q, use_tdigest=use_tdigest)
+        return quantile(self, q, method=method)
 
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """ Approximate quantiles of Series used for repartitioning
@@ -3947,7 +3947,7 @@ def _rename_dask(df, names):
     return new_dd_object(graph, name, metadata, df.divisions)
 
 
-def quantile(df, q, use_tdigest=True):
+def quantile(df, q, method='default'):
     """Approximate quantiles of Series.
 
     Parameters
@@ -3955,7 +3955,7 @@ def quantile(df, q, use_tdigest=True):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
 
-    Note: this implementation will use t-digest is `use_tdigest` is set to true and the
+    Note: this implementation will use t-digest is `method` is set to `tdigest` and the
           dtype of df is float. Otherwise it falls back to the internal implementation.
     """
     # current implementation needs q to be sorted so
@@ -3966,8 +3966,15 @@ def quantile(df, q, use_tdigest=True):
         q = q_ndarray
 
     assert isinstance(df, Series)
-    from dask.array.percentile import (_percentile, merge_percentiles,
-                                       _tdigest_chunk, _percentiles_from_tdigest)
+
+    allowed_methods = ['default', 'dask', 'tdigest']
+    if method not in allowed_methods:
+        raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
+
+    if method == 'default':
+        internal_method = 'dask'
+    else:
+        internal_method = method
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
@@ -4000,7 +4007,9 @@ def quantile(df, q, use_tdigest=True):
 
     df = df.dropna()
 
-    if use_tdigest and return_type == Series and np.issubdtype(meta.dtype, np.floating):
+    if internal_method == 'tdigest' and return_type == Series and np.issubdtype(meta.dtype, np.floating):
+
+        from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
 
         name = 'quantiles_tdigest-1-' + token
         val_dsk = {(name, i): (_tdigest_chunk, (getattr, key, 'values'))
@@ -4010,6 +4019,8 @@ def quantile(df, q, use_tdigest=True):
         merge_dsk = {(name2, 0): finalize_tsk((_percentiles_from_tdigest, qs,
                                             sorted(val_dsk)))}
     else:
+
+        from dask.array.percentile import _percentile, merge_percentiles
 
         name = 'quantiles-1-' + token
         val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)

@@ -4,7 +4,6 @@ from functools import wraps
 from numbers import Number
 
 import numpy as np
-from crick import TDigest
 from toolz import merge, merge_sorted
 
 from .core import Array
@@ -35,6 +34,8 @@ def _percentile(a, q, interpolation='linear'):
 
 def _tdigest_chunk(a):
 
+    from crick import TDigest
+
     t = TDigest()
     t.update(a)
 
@@ -43,19 +44,21 @@ def _tdigest_chunk(a):
 
 def _percentiles_from_tdigest(qs, digests):
 
+    from crick import TDigest
+
     t = TDigest()
     t.merge(*digests)
 
     return np.array([t.quantile(q / 100.0) for q in qs])
 
 
-def percentile(a, q, interpolation='linear', use_tdigest=True):
+def percentile(a, q, interpolation='linear', method='default'):
     """ Approximate percentile of 1-D array
 
     See :func:`numpy.percentile` for more information
 
     Note: this implementation will use t-digest for calculating the percentile
-          only if `use_tdigest` is set to True, the dtype of the array is integer
+          only if `method` is set to `tdigest`, the dtype of the array is integer
           or floating type and interpolation is set to linear. Otherwise it falls
           back to the internal implementation.
 
@@ -72,8 +75,17 @@ def percentile(a, q, interpolation='linear', use_tdigest=True):
     if np.issubdtype(dtype, np.integer):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
 
+    allowed_methods = ['default', 'dask', 'tdigest']
+    if method not in allowed_methods:
+        raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
+
+    if method == 'default':
+        internal_method = 'dask'
+    else:
+        internal_method = method
+
     # Use t-digest if dtype is floating type and interpolation is allowed
-    if use_tdigest and np.issubdtype(dtype, np.floating) and interpolation == 'linear':
+    if internal_method == 'tdigest' and np.issubdtype(dtype, np.floating) and interpolation == 'linear':
 
         name = 'percentile_tdigest_chunk-' + token
         dsk = dict(((name, i), (_tdigest_chunk, (key)))
