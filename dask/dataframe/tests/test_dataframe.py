@@ -288,14 +288,14 @@ def test_describe():
     ds = dd.from_pandas(s, 4)
     ddf = dd.from_pandas(df, 4)
 
-    assert_eq(df.describe(), ddf.describe(use_tdigest=False))
-    assert_eq(s.describe(), ds.describe(use_tdigest=False))
+    assert_eq(df.describe(), ddf.describe())
+    assert_eq(s.describe(), ds.describe())
 
     test_quantiles = [0.25, 0.75]
     assert_eq(df.describe(percentiles=test_quantiles),
-              ddf.describe(percentiles=test_quantiles, use_tdigest=False))
-    assert_eq(s.describe(), ds.describe(split_every=2, use_tdigest=False))
-    assert_eq(df.describe(), ddf.describe(split_every=2, use_tdigest=False))
+              ddf.describe(percentiles=test_quantiles))
+    assert_eq(s.describe(), ds.describe(split_every=2))
+    assert_eq(df.describe(), ddf.describe(split_every=2))
 
     assert ds.describe(split_every=2)._name != ds.describe()._name
     assert ddf.describe(split_every=2)._name != ddf.describe()._name
@@ -304,8 +304,8 @@ def test_describe():
     df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20,
                        'c': list('abcd') * 20})
     ddf = dd.from_pandas(df, 4)
-    assert_eq(df.describe(), ddf.describe(use_tdigest=False))
-    assert_eq(df.describe(), ddf.describe(split_every=2, use_tdigest=False))
+    assert_eq(df.describe(), ddf.describe())
+    assert_eq(df.describe(), ddf.describe(split_every=2))
 
 
 def test_describe_empty():
@@ -800,7 +800,7 @@ def test_nbytes():
 
 def test_quantile():
     # series / multiple
-    result = d.b.quantile([.3, .7], use_tdigest=False)
+    result = d.b.quantile([.3, .7])
     exp = full.b.quantile([.3, .7])  # result may different
     assert len(result) == 2
     assert result.divisions == (.3, .7)
@@ -816,7 +816,7 @@ def test_quantile():
     s = pd.Series(np.arange(10), index=np.arange(10))
     ds = dd.from_pandas(s, 2)
 
-    result = ds.index.quantile([.3, .7], use_tdigest=False)
+    result = ds.index.quantile([.3, .7])
     exp = s.quantile([.3, .7])
     assert len(result) == 2
     assert result.divisions == (.3, .7)
@@ -829,7 +829,7 @@ def test_quantile():
     assert 7 < result.iloc[1] < 8
 
     # series / single
-    result = d.b.quantile(.5, use_tdigest=False)
+    result = d.b.quantile(.5)
     exp = full.b.quantile(.5)  # result may different
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
@@ -867,7 +867,7 @@ def test_dataframe_quantile():
                       columns=['A', 'X', 'B', 'C'])
     ddf = dd.from_pandas(df, 3)
 
-    result = ddf.quantile(use_tdigest=False)
+    result = ddf.quantile()
     assert result.npartitions == 1
     assert result.divisions == ('A', 'X')
 
@@ -878,7 +878,7 @@ def test_dataframe_quantile():
     assert (result > pd.Series([16, 36, 26], index=['A', 'X', 'B'])).all()
     assert (result < pd.Series([17, 37, 27], index=['A', 'X', 'B'])).all()
 
-    result = ddf.quantile([0.25, 0.75], use_tdigest=False)
+    result = ddf.quantile([0.25, 0.75])
     assert result.npartitions == 1
     assert result.divisions == (0.25, 0.75)
 
@@ -893,7 +893,7 @@ def test_dataframe_quantile():
                           index=[0.25, 0.75], columns=['A', 'X', 'B'])
     assert (result < maxexp).all().all()
 
-    assert_eq(ddf.quantile(axis=1, use_tdigest=False), df.quantile(axis=1))
+    assert_eq(ddf.quantile(axis=1), df.quantile(axis=1))
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
 
 
@@ -908,15 +908,15 @@ def test_quantile_for_possibly_unsorted_q():
 
     for q in [[0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99], [0.75, 0.5, 0.25],
               [0.25, 0.99, 0.75, 0.50]]:
-        r = ds.quantile(q, use_tdigest=False).compute()
+        r = ds.quantile(q).compute()
         assert_eq(r.loc[0.25], 25.0)
         assert_eq(r.loc[0.50], 50.0)
         assert_eq(r.loc[0.75], 75.0)
 
-    r = ds.quantile([0.25], use_tdigest=False).compute()
+    r = ds.quantile([0.25]).compute()
     assert_eq(r.loc[0.25], 25.0)
 
-    r = ds.quantile(0.25, use_tdigest=False).compute()
+    r = ds.quantile(0.25).compute()
     assert_eq(r, 25.0)
 
 
