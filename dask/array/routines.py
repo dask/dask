@@ -541,12 +541,11 @@ def bincount(x, weights=None, minlength=None):
 
     # Call np.bincount on each block, possibly with weights
     name = 'bincount-' + token
-    if weights is not None:
-        for i, _ in enumerate(x.__dask_keys__()):
+    for i, _ in enumerate(x.__dask_keys__()):
+        if weights is not None:
             dsk[(name, i)] = (np.bincount, (x.name, i), (weights.name, i), ('minlength-' + token, 0))
             dtype = np.bincount([1], weights=[1]).dtype
-    else:
-        for i, _ in enumerate(x.__dask_keys__()):
+        else:
             dsk[(name, i)] = (np.bincount, (x.name, i), None, ('minlength-' + token, 0))
             dtype = np.bincount([]).dtype
 
