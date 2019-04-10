@@ -23,12 +23,17 @@ from ...utils import M, ensure_dict
 lock = Lock()
 
 
-def _meta_from_array(x, columns=None):
+def _meta_from_array(x, columns=None, index=None):
     """ Create empty pd.DataFrame or pd.Series which has correct dtype """
 
     if x.ndim > 2:
         raise ValueError('from_array does not input more than 2D array, got'
                          ' array with shape %r' % (x.shape,))
+
+    if index is not None:
+        if not isinstance(index, Index):
+            raise ValueError("'index' must be an instance of dask.dataframe.Index")
+        index = index._meta
 
     if getattr(x.dtype, 'names', None) is not None:
         # record array has named columns
@@ -44,9 +49,9 @@ def _meta_from_array(x, columns=None):
         dtypes = [fields[n][0] if n in fields else 'f8' for n in columns]
     elif x.ndim == 1:
         if np.isscalar(columns) or columns is None:
-            return pd.Series([], name=columns, dtype=x.dtype)
+            return pd.Series([], name=columns, dtype=x.dtype, index=index)
         elif len(columns) == 1:
-            return pd.DataFrame(np.array([], dtype=x.dtype), columns=columns)
+            return pd.DataFrame(np.array([], dtype=x.dtype), columns=columns, index=index)
         raise ValueError("For a 1d array, columns must be a scalar or single "
                          "element list")
     else:
@@ -61,7 +66,7 @@ def _meta_from_array(x, columns=None):
         dtypes = [x.dtype] * len(columns)
 
     data = {c: np.array([], dtype=dt) for (c, dt) in zip(columns, dtypes)}
-    return pd.DataFrame(data, columns=columns)
+    return pd.DataFrame(data, columns=columns, index=index)
 
 
 def from_array(x, chunksize=50000, columns=None):
@@ -382,7 +387,7 @@ def from_dask_array(x, columns=None, index=None):
     dask.dataframe._Frame.values: Reverse conversion
     dask.dataframe._Frame.to_records: Reverse conversion
     """
-    meta = _meta_from_array(x, columns)
+    meta = _meta_from_array(x, columns, index)
 
     if x.ndim == 2 and len(x.chunks[1]) > 1:
         x = x.rechunk({1: x.shape[1]})
