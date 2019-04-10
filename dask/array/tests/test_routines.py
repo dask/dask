@@ -510,7 +510,6 @@ def test_bincount_unspecified_minlength():
     x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
     e = da.bincount(d)
-    assert len(e) == 8
     assert_eq(e, np.bincount(x))
     assert same_keys(da.bincount(d), e)
 
