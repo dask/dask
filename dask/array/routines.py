@@ -556,8 +556,8 @@ def bincount(x, weights=None, minlength=None):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
-    minlength = Array(graph, 'minlength-' + token, ((0,),), dtype)
-    chunks = ((minlength,),)
+    chunksize = Array(graph, 'minlength-' + token, ((0,),), dtype)
+    chunks = ((chunksize,),)
 
     return Array(graph, name, chunks, dtype)
 
