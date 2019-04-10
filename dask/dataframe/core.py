@@ -3721,7 +3721,9 @@ def _extract_meta(x, nonempty=False):
     """
     Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
     """
-    if isinstance(x, (Scalar, _Frame)):
+    if isinstance(x, Index):
+        return x._meta_nonempty if nonempty else x._meta.to_series()
+    elif isinstance(x, (Scalar, _Frame)):
         return x._meta_nonempty if nonempty else x._meta
     elif isinstance(x, list):
         return [_extract_meta(_x, nonempty) for _x in x]
