@@ -525,13 +525,13 @@ def gradient(f, *varargs, **kwargs):
 
 
 @wraps(np.bincount)
-def bincount(x, weights=None, minlength=None):
+def bincount(x, weights=None, minlength=0):
     assert x.ndim == 1
     if weights is not None:
         assert weights.chunks == x.chunks
 
     token = tokenize(x, weights, minlength)
-    if minlength is not None:
+    if minlength != 0:
         dsk = {('minlength-' + token, 0): minlength}
     else:
         dsk = {('max-' + token, i): (np.amax, (x.name, i))
