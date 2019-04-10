@@ -506,15 +506,13 @@ def test_bincount_with_weights():
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
-def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
-    x = np.array([2, 1, 5, 2, 1])
+def test_bincount_unspecified_minlength():
+    x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
-    try:
-        da.bincount(d)
-    except Exception as e:
-        assert 'minlength' in str(e)
-    else:
-        assert False
+    e = da.bincount(d)
+    assert len(e) == 8
+    assert_eq(e, np.bincount(x))
+    assert same_keys(da.bincount(d), e)
 
 
 def test_digitize():
