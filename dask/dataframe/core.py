@@ -4013,18 +4013,18 @@ def quantile(df, q, method='default'):
 
         name = 'quantiles_tdigest-1-' + token
         val_dsk = {(name, i): (_tdigest_chunk, (getattr, key, 'values'))
-                for i, key in enumerate(df.__dask_keys__())}
+                   for i, key in enumerate(df.__dask_keys__())}
 
         name2 = 'quantiles_tdigest-2-' + token
         merge_dsk = {(name2, 0): finalize_tsk((_percentiles_from_tdigest, qs,
-                                            sorted(val_dsk)))}
+                                               sorted(val_dsk)))}
     else:
 
         from dask.array.percentile import _percentile, merge_percentiles
 
         name = 'quantiles-1-' + token
         val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
-                for i, key in enumerate(df.__dask_keys__())}
+                   for i, key in enumerate(df.__dask_keys__())}
 
         name2 = 'quantiles-2-' + token
         merge_dsk = {(name2, 0): finalize_tsk((merge_percentiles, qs,
