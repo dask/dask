@@ -543,10 +543,12 @@ def bincount(x, weights=None, minlength=None):
     name = 'bincount-' + token
     for i, _ in enumerate(x.__dask_keys__()):
         if weights is not None:
-            dsk[(name, i)] = (np.bincount, (x.name, i), (weights.name, i), ('minlength-' + token, 0))
+            dsk[(name, i)] = (np.bincount, (x.name, i), (weights.name, i),
+                              ('minlength-' + token, 0))
             dtype = np.bincount([1], weights=[1]).dtype
         else:
-            dsk[(name, i)] = (np.bincount, (x.name, i), None, ('minlength-' + token, 0))
+            dsk[(name, i)] = (np.bincount, (x.name, i), None,
+                              ('minlength-' + token, 0))
             dtype = np.bincount([]).dtype
 
     # Sum up all of the intermediate bincounts per block
@@ -554,7 +556,8 @@ def bincount(x, weights=None, minlength=None):
     name = 'bincount-sum-' + token
     dsk[(name, 0)] = (np.sum, bincount_list, 0)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
+    graph = HighLevelGraph.from_collections(name, dsk,
+        dependencies=[x] if weights is None else [x, weights])
 
     chunksize = Array(graph, 'minlength-' + token, ((0,),), dtype)
     chunks = ((chunksize,),)
