@@ -2,6 +2,7 @@ from __future__ import division, print_function, absolute_import
 
 import inspect
 import math
+from operator import sub
 import warnings
 from distutils.version import LooseVersion
 from functools import wraps, partial
@@ -524,32 +525,54 @@ def gradient(f, *varargs, **kwargs):
 
 
 @wraps(np.bincount)
-def bincount(x, weights=None, minlength=None):
-    if minlength is None:
-        raise TypeError("Must specify minlength argument in da.bincount")
+def bincount(x, weights=None, minlength=0):
     assert x.ndim == 1
     if weights is not None:
         assert weights.chunks == x.chunks
 
     # Call np.bincount on each block, possibly with weights
+    dsk = {}
     token = tokenize(x, weights, minlength)
-    name = 'bincount-' + token
-    if weights is not None:
-        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-               for i, _ in enumerate(x.__dask_keys__())}
-        dtype = np.bincount([1], weights=[1]).dtype
-    else:
-        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
-               for i, _ in enumerate(x.__dask_keys__())}
-        dtype = np.bincount([]).dtype
+    for i, _ in enumerate(x.__dask_keys__()):
+        if weights is not None:
+            dsk[('bincount-' + token, i)] = (np.bincount, (x.name, i),
+                                             (weights.name, i), minlength)
+            dtype = np.bincount([1], weights=[1]).dtype
+        else:
+            dsk[('bincount-' + token, i)] = (np.bincount, (x.name, i),
+                                             None, minlength)
+            dtype = np.bincount([]).dtype
+        if minlength == 0:
+            dsk[('length-' + token, i)] = (len, ('bincount-' + token, i))
+
+    # Define length of output array
+    if minlength == 0:
+        lengths_list = [i for i in list(dsk) if i[0] == 'length-' + token]
+        dsk[('minlength-' + token, 0)] = (np.max, lengths_list)
+        # Zero-pad ragged bincount results to the same length
+        for i, _ in enumerate(x.__dask_keys__()):
+            dsk[('padding-' + token, i)] = (sub, ('minlength-' + token, 0),
+                                                 ('length-' + token, i))
+            dsk[('zeropad-bincount-' + token, i)] = (
+                np.pad, ('bincount-' + token, i), [0, ('padding-' + token, i)],
+                'constant')
 
     # Sum up all of the intermediate bincounts per block
+    if minlength == 0:
+        name = 'zeropad-bincount-' + token
+    else:
+        name = 'bincount-' + token
+    bincount_list = [i for i in list(dsk) if i[0] == name]
     name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, list(dsk), 0)
-
-    chunks = ((minlength,),)
+    dsk[(name, 0)] = (np.sum, bincount_list, 0)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
+
+    if minlength == 0:
+        chunksize = Array(graph, 'minlength-' + token, ((0,),), dtype)
+        chunks = ((chunksize,),)
+    else:
+        chunks = ((minlength,),)
 
     return Array(graph, name, chunks, dtype)
 
