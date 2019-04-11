@@ -1425,7 +1425,11 @@ class Scheduler(ServerNode):
                 except KeyError:
                     deps = self.dependencies[key]
                 for dep in deps:
-                    if all(d in done for d in dependents[dep]):
+                    if dep in dependents:
+                        child_deps = dependents[dep]
+                    else:
+                        child_deps = self.dependencies[dep]
+                    if all(d in done for d in child_deps):
                         if dep in self.tasks:
                             done.add(dep)
                             stack.append(dep)

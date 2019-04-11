@@ -1437,13 +1437,17 @@ def test_gh2187(c, s, a, b):
         return x + 'bar'
 
     def baz(x):
-        sleep(0.1)
         return x + 'baz'
 
-    x = c.submit(foo, key='x')
-    y = c.submit(bar, x, key='y')
+    def qux(x):
+        sleep(0.1)
+        return x + 'qux'
+
+    w = c.submit(foo, key='w')
+    x = c.submit(bar, w, key='x')
+    y = c.submit(baz, x, key='y')
     yield y
-    z = c.submit(baz, y, key='z')
+    z = c.submit(qux, y, key='z')
     del y
     yield gen.sleep(0.1)
     f = c.submit(bar, x, key='y')
