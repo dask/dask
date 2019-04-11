@@ -1565,7 +1565,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'describe--' + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        return new_dd_object(graph, name, num._meta, divisions=[None, None])
+        meta = num._meta.describe()
+        return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
                  chunk_kwargs=None, out=None):
@@ -2770,7 +2771,7 @@ class DataFrame(_Frame):
         pairs = list(sum(kwargs.items(), ()))
 
         # Figure out columns of the output
-        df2 = self._meta.assign(**_extract_meta(kwargs))
+        df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
     @derived_from(pd.DataFrame, ua_args=['index'])
@@ -3737,6 +3738,8 @@ def _extract_meta(x, nonempty=False):
         for k in x:
             res[k] = _extract_meta(x[k], nonempty)
         return res
+    elif isinstance(x, Delayed):
+        raise ValueError("Cannot infer dataframe metadata with a `dask.delayed` argument")
     else:
         return x
 

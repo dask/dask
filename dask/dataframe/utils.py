@@ -794,18 +794,22 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
     useful due to the implicit conversion of integer to floating upon
     encountering missingness, which is hard to infer statically."""
 
-    eq_types = {'O', 'S', 'U', 'a'}     # treat object and strings alike
+    eq_type_sets = [{'O', 'S', 'U', 'a'}]     # treat object and strings alike
     if numeric_equal:
-        eq_types.update(('i', 'f'))
+        eq_type_sets.append({'i', 'f', 'u'})
+
+    def eq_dtypes(a, b):
+        return any(a.kind in eq_types and b.kind in eq_types
+                   for eq_types in eq_type_sets) or (a == b)
 
     if not is_dask_collection(res) and is_dataframe_like(res):
         for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes],
                                    axis=1).itertuples():
-            assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+            assert eq_dtypes(a, b)
     elif not is_dask_collection(res) and (is_index_like(res) or is_series_like(res)):
         a = ddf._meta.dtype
         b = res.dtype
-        assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+        assert eq_dtypes(a, b)
     else:
         if hasattr(ddf._meta, 'dtype'):
             a = ddf._meta.dtype
@@ -814,7 +818,7 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
                 b = np.dtype(type(res))
             else:
                 b = res.dtype
-            assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+            assert eq_dtypes(a, b)
         else:
             assert type(ddf._meta) == type(res)
 
