@@ -456,13 +456,18 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def stack_partitions(dfs, divisions, join='outer'):
     """Concatenate partitions on axis=0 by doing a simple stack"""
-    meta = methods.concat([df._meta for df in dfs], join=join, filter_warning=False)
+    meta = methods.concat([df._meta for df in dfs], join=join,
+                          filter_warning=False)
     empty = strip_unknown_categories(meta)
 
     name = 'concat-{0}'.format(tokenize(*dfs))
     dsk = {}
     i = 0
     for df in dfs:
+        # dtypes of all dfs need to be coherent
+        # refer to https://github.com/dask/dask/issues/4685
+        if not df._meta.dtypes.equals(meta.dtypes):
+            df = df.astype(meta.dtypes)
         dsk.update(df.dask)
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
