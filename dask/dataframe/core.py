@@ -4007,7 +4007,13 @@ def quantile(df, q, method='default'):
 
     df = df.dropna()
 
-    if internal_method == 'tdigest' and return_type == Series and np.issubdtype(meta.dtype, np.floating):
+    if (internal_method == 'tdigest' and
+            (np.issubdtype(df.dtype, np.floating) or np.issubdtype(df.dtype, np.integer))):
+
+        from dask.utils import import_required
+        import_required('crick',
+                        'crick is a required dependency for using the t-digest '
+                        'method.')
 
         from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
 

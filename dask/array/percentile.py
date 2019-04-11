@@ -84,8 +84,14 @@ def percentile(a, q, interpolation='linear', method='default'):
     else:
         internal_method = method
 
-    # Use t-digest if dtype is floating type and interpolation is allowed
-    if internal_method == 'tdigest' and np.issubdtype(dtype, np.floating) and interpolation == 'linear':
+    # Allow using t-digest if interpolation is allowed and dtype is of floating or integer type
+    if (internal_method == 'tdigest' and interpolation == 'linear' and
+            (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))):
+
+        from dask.utils import import_required
+        import_required('crick',
+                        'crick is a required dependency for using the t-digest '
+                        'method.')
 
         name = 'percentile_tdigest_chunk-' + token
         dsk = dict(((name, i), (_tdigest_chunk, (key)))
