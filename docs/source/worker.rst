@@ -70,7 +70,7 @@ thread per process::
    $ dask-worker scheduler:8786 --nprocs 8 --nthreads 1
 
 This will launch 8 worker processes each of which has its own
-ThreadPoolExecutor of size 1. 
+ThreadPoolExecutor of size 1.
 
 If your computations are external to Python and long-running and don't release
 the GIL then beware that while the computation is running the worker process
@@ -98,7 +98,9 @@ are the available options::
                             cores
      --nprocs INTEGER       Number of worker processes to launch.  Defaults to one.
      --name TEXT            Alias
-     --memory-limit TEXT    Number of bytes (per worker process) before spilling data to disk
+     --memory-limit TEXT    Maximum bytes of memory that this worker should use.
+                            Use 0 for unlimited, or 'auto' for
+                            TOTAL_MEMORY * min(1, ncores / total_cores)
      --no-nanny
      --help                 Show this message and exit.
 
@@ -149,7 +151,7 @@ command line ``--memory-limit`` keyword or the ``memory_limit=`` Python
 keyword argument, which sets the memory limit per worker processes launched
 by dask-worker ::
 
-    $ dask-worker tcp://scheduler:port --memory-limit=auto  # total available RAM on the machine
+    $ dask-worker tcp://scheduler:port --memory-limit=auto  # TOTAL_MEMORY * min(1, ncores / total_cores)
     $ dask-worker tcp://scheduler:port --memory-limit=4e9  # four gigabytes per worker process.
 
 Workers use a few different heuristics to keep memory use beneath this limit:

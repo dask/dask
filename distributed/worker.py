@@ -226,7 +226,8 @@ class Worker(ServerNode):
     name: str, optional
     memory_limit: int, float, string
         Number of bytes of memory that this worker should use.
-        Set to zero for no limit.  Set to 'auto' for 60% of memory use.
+        Set to zero for no limit.  Set to 'auto' to calculate
+        as TOTAL_MEMORY * min(1, ncores / total_cores)
         Use strings or numbers like 5GB or 5e9
     memory_target_fraction: float
         Fraction of memory to try to stay beneath
