@@ -8,10 +8,10 @@ from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
 
-from .utils import _parse_pandas_metadata, _normalize_index_columns
+from .utils import _parse_pandas_metadata, _normalize_index_columns, Engine
 
 
-class ArrowEngine:
+class ArrowEngine(Engine):
     @staticmethod
     def read_partition(fs, piece, columns, partitions, categories):
 
@@ -25,7 +25,7 @@ class ArrowEngine:
         return df[columns]
 
     @staticmethod
-    def get_metadata(
+    def read_metadata(
         fs, fs_token, paths, categories=None, index=None, gather_statistics=None
     ):
 

@@ -2,6 +2,106 @@ import re
 from ....compatibility import string_types
 
 
+class Engine:
+    """ The API necessary to provide a new Parquet reader/writer """
+
+    @staticmethod
+    def read_metadata(
+        fs, fs_token, paths, categories=None, index=None, gather_statistics=None
+    ):
+        """ Gather metadata about a Parquet Dataset to prepare for a read
+
+        This function is called once in the user's Python session to gather
+        important metadata about the parquet dataset.
+
+        Parameters
+        ----------
+        fs: FileSystem
+        fs_token: ??
+        paths; List[str]
+            A list of paths to files (or their equivalents)
+        categories:
+        index: str  # TODO: maybe remove this?
+            A suggested column to use as the index, if provided by the user
+        gather_statistics: bool
+            Whether or not to gather statistics data.  If ``None`` we only
+            gather statistics data if there is a single .metadata file to
+            cheaply query
+
+        Returns
+        -------
+        meta: pandas.DataFrame
+            An empty DataFrame object to use for metadata.
+            Should have appropriate column names and dtypes but need not have
+            any actual data
+        statistics: Optional[List[Dict]]
+            Either none, if no statistics were found, or a list of dictionaries
+            of statistics data, one dict for every partition (see the next
+            return value).  The statistics should look like the following:
+
+                [
+                    {'num-rows': 1000, 'columns': [
+                        {'name': 'id', 'min': 0, 'max': 100, 'null-count': 0},
+                        {'name': 'value', 'min': 0.0, 'max': 1.0, 'null-count': 5},
+                        ]},  # TODO: we might want to rethink this oranization
+                    ...
+                ]
+        parts: List[object]
+            A list of objects to be passed to ``Engine.read_partition``.
+            Each object should represent a row group of data.
+            We don't care about the type of this object, as long as the
+            read_partition function knows how to interpret it.
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def read_partition(fs, piece, columns, partitions, categories):
+        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
+
+        This function is called many times in individual tasks
+
+        Parameters
+        ----------
+        fs: FileSystem
+        piece: object
+            This is some token that is returned by Engine.read_metadata.
+            Typically it represents a row group in a Parquet dataset
+        columns: List[str]
+            List of column names to pull out of that row group
+        partitions:
+        categories:
+
+        Returns
+        -------
+        A Pandas DataFrame
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def write(df, fs, fs_token, path, append=False, partition_on=None, **kwargs):
+        """
+        Write a Dask DataFrame to Parquet
+
+        Parameters
+        ----------
+        df: dask.dataframe.DataFrame
+        fs: FileSystem
+        fs_token:
+        path: str
+        append: boolean
+            Whether or not to append to a previous dataset
+        partition_on:
+        **kwargs:
+            Other keywords as needed by the engine
+
+        Returns
+        -------
+        out: List[delayed]
+            A list of dask.delayed objects, one for each partition
+        """
+        raise NotImplementedError()
+
+
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
 
