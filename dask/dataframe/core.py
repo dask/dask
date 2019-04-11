@@ -3789,7 +3789,9 @@ def map_partitions(func, *args, **kwargs):
     meta_index = getattr(make_meta(dfs[0]), 'index', None) if dfs else None
 
     if meta is no_default:
-        meta = _emulate(func, *args, udf=True, **kwargs2)
+        # Use non-normalized kwargs here, as we want the real values (not
+        # delayed values)
+        meta = _emulate(func, *args, udf=True, **kwargs)
     else:
         meta = make_meta(meta, index=meta_index)
 
