@@ -608,3 +608,25 @@ def test_to_delayed_optimize_graph():
     dx2 = x.to_delayed(optimize_graph=False)
     assert len(dx.dask) < len(dx2.dask)
     assert_eq(dx.compute(), dx2.compute())
+
+
+def test_from_dask_array_index_dtype():
+    x = da.ones((10,), chunks=(5,))
+
+    df = pd.DataFrame({"date": pd.date_range('2019-01-01', periods=10, freq='1T'),
+                       "val1": list(range(10))})
+    ddf = dd.from_pandas(df, npartitions=2).set_index('date')
+
+    ddf2 = dd.from_dask_array(x, index=ddf.index, columns='val2')
+
+    assert ddf.index.dtype == ddf2.index.dtype
+    assert ddf.index.name == ddf2.index.name
+
+    df = pd.DataFrame({"idx": np.arange(0, 1, 0.1),
+                       "val1": list(range(10))})
+    ddf = dd.from_pandas(df, npartitions=2).set_index('idx')
+
+    ddf2 = dd.from_dask_array(x, index=ddf.index, columns='val2')
+
+    assert ddf.index.dtype == ddf2.index.dtype
+    assert ddf.index.name == ddf2.index.name
