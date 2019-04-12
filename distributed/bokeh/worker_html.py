@@ -63,8 +63,15 @@ class PrometheusHandler(RequestHandler):
         self.set_header('Content-Type', 'text/plain; version=0.0.4')
 
 
+class HealthHandler(RequestHandler):
+    def get(self):
+        self.write('ok')
+        self.set_header('Content-Type', 'text/plain')
+
+
 routes = [
         (r'metrics', PrometheusHandler),
+        (r'health', HealthHandler),
 ]
 
 

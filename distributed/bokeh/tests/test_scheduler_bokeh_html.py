@@ -85,3 +85,18 @@ def test_prometheus(c, s, a, b):
             for familiy in text_string_to_metric_families(txt)
         }
         assert 'dask_scheduler_workers' in families
+
+
+@gen_cluster(client=True,
+    check_new_threads=False,
+    scheduler_kwargs={'services': {('bokeh', 0):  BokehScheduler}})
+def test_health(c, s, a, b):
+    http_client = AsyncHTTPClient()
+
+    response = yield http_client.fetch('http://localhost:%d/health'
+                                       % s.services['bokeh'].port)
+    assert response.code == 200
+    assert response.headers['Content-Type'] == 'text/plain'
+
+    txt = response.body.decode('utf8')
+    assert txt == 'ok'

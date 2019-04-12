@@ -28,3 +28,17 @@ def test_prometheus(c, s, a, b):
             for familiy in text_string_to_metric_families(txt)
         }
         assert len(families) > 0
+
+
+@gen_cluster(client=True,
+    worker_kwargs={'services': {('bokeh', 0):  BokehWorker}})
+def test_health(c, s, a, b):
+    http_client = AsyncHTTPClient()
+
+    response = yield http_client.fetch('http://localhost:%d/health'
+                                       % a.services['bokeh'].port)
+    assert response.code == 200
+    assert response.headers['Content-Type'] == 'text/plain'
+
+    txt = response.body.decode('utf8')
+    assert txt == 'ok'

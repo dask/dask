@@ -210,6 +210,12 @@ class PrometheusHandler(RequestHandler):
         self.set_header('Content-Type', 'text/plain; version=0.0.4')
 
 
+class HealthHandler(RequestHandler):
+    def get(self):
+        self.write('ok')
+        self.set_header('Content-Type', 'text/plain')
+
+
 routes = [
         (r'info/main/workers.html', Workers),
         (r'info/worker/(.*).html', Worker),
@@ -223,6 +229,7 @@ routes = [
         (r'json/index.html', IndexJSON),
         (r'individual-plots.json', IndividualPlots),
         (r'metrics', PrometheusHandler),
+        (r'health', HealthHandler),
 ]
 
 

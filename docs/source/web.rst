@@ -50,6 +50,7 @@ The available pages are ``http://scheduler-address:8787/<page>/`` where ``<page>
 - ``status``: a stream of recently run tasks, progress bars, resource use
 - ``tasks``: a larger stream of the last 100k tasks
 - ``workers``: basic information about workers and their current load
+- ``health``: basic health check, returns ``ok`` if service is running
 
 .. _Bokeh: http://bokeh.pydata.org/en/latest/
 
