@@ -300,8 +300,7 @@ def to_parquet(
     )
 
     if compute:
-        out.compute()
-        return None
+        out = out.compute()
     return out
 
 

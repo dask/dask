@@ -196,3 +196,5 @@ class ArrowEngine(Engine):
             kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
             with fs.open(metadata_path, "wb") as fil:
                 pq.write_metadata(t.schema, fil, **kwargs_meta)
+
+        return filename
