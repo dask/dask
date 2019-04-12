@@ -317,7 +317,8 @@ def get_engine(engine):
     Parameters
     ----------
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet reader library to use. Default is first installed in this list.
+        Parquet reader library to use. Defaults to fastparquet if both are
+        installed
 
     Returns
     -------
