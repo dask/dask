@@ -5,6 +5,8 @@ import warnings
 import pytest
 np = pytest.importorskip('numpy')
 
+import itertools
+
 import dask.array as da
 from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
@@ -13,6 +15,26 @@ import dask.config as config
 
 def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
+
+
+@pytest.mark.parametrize('dtype', ['f4', 'i4'])
+@pytest.mark.parametrize('keepdims', [True, False])
+def test_numel(dtype, keepdims):
+    x = np.ones((2, 3, 4))
+
+    assert_eq(da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
+              np.sum(x, axis=0, keepdims=keepdims, dtype=dtype))
+
+    for length in range(x.ndim):
+        for sub in itertools.combinations([d for d in range(x.ndim)], length):
+            assert_eq(da.reductions.numel(x, axis=sub, keepdims=keepdims, dtype=dtype),
+                      np.sum(x, axis=sub, keepdims=keepdims, dtype=dtype))
+
+    for length in range(x.ndim):
+        for sub in itertools.combinations([d for d in range(x.ndim)], length):
+            ssub = np.random.shuffle(list(sub))
+            assert_eq(da.reductions.numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
+                      np.sum(x, axis=ssub, keepdims=keepdims, dtype=dtype))
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
