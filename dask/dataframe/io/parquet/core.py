@@ -276,7 +276,11 @@ def to_parquet(
         partition_on = [partition_on]
 
     if set(partition_on) - set(df.columns):
-        raise ValueError("Partitioning on non-existent column")
+        raise ValueError(
+            "Partitioning on non-existent column. "
+            "partition_on=%s ."
+            "columns=%s" % (str(partition_on), str(list(df.columns)))
+        )
 
     if compression != "default":
         kwargs["compression"] = compression
