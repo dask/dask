@@ -1,6 +1,25 @@
 Changelog
 =========
 
+1.27.0 - 2019-04-12
+-------------------
+
+   Add basic health endpoints to scheduler and worker bokeh. (#2607) `amerkel2`_
+-  Improved description accuracy of --memory-limit option. (:pr:`2601`) `Brett Randall`_
+-  Check self.dependencies when looking at dependent tasks in memory (:pr:`2606`) `deepthirajagopalan7`_
+-  Add RabbitMQ SchedulerPlugin example (:pr:`2604`) `Matt Nicolls`_
+-  add resources to scheduler update_graph plugin (:pr:`2603`) `Matt Nicolls`_
+-  Use ensure_bytes in serialize_error (:pr:`2588`) `Matthew Rocklin`_
+-  Specify data storage explicitly from Worker constructor (:pr:`2600`) `Matthew Rocklin`_
+-  Change bokeh port keywords to dashboard_address (:pr:`2589`) `Matthew Rocklin`_
+-  .detach_(`) pytorch tensor to serialize data as numpy array. (:pr:`2586`) `Muammar El Khatib`_
+-  Add warning if creating scratch directories takes a long time (:pr:`2561`) `Matthew Rocklin`_
+-  Fix typo in pub-sub doc. (:pr:`2599`) `Loïc Estève`_
+-  Allow return_when='FIRST_COMPLETED' in wait (:pr:`2598`) `Nikos Tsaousis`_
+-  Forward kwargs through Nanny to Worker (:pr:`2596`) `Brian Chu`_
+-  Use ensure_dict instead of dict (:pr:`2594`) `James Bourbeau`_
+-  Specify protocol in LocalCluster (:pr:`2489`) `Matthew Rocklin`_
+
 1.26.1 - 2019-03-29
 -------------------
 
@@ -960,3 +979,10 @@ significantly without many new features.
 .. _`Elliott Sales de Andrade`: https://github.com/QuLogic
 .. _`Brett Jurman`: https://github.com/ibebrett
 .. _`Julia Kent`: https://github.com/jukent
+.. _`Brett Randall`: https://github.com/javabrett
+.. _`deepthirajagopalan7`: https://github.com/deepthirajagopalan7
+.. _`Muammar El Khatib`: https://github.com/muammar
+.. _`Nikos Tsaousis`: https://github.com/tsanikgr
+.. _`Brian Chu`: https://github.com/bchu
+.. _`James Bourbeau`: https://github.com/jrbourbeau
+.. _`amerkel2`: https://github.com/amerkel2
