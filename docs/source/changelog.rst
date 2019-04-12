@@ -1,6 +1,44 @@
 Changelog
 =========
 
+1.2.0 / 2019-04-12
+------------------
+
+Array
++++++
+
+-  Fixed mean() and moment() on sparse arrays (:pr:`4525`) `Peter Andreas Entschev`_
+-  Add test for NEP-18. (:pr:`4675`) `Hameer Abbasi`_
+-  Allow None to say "no chunking" in normalize_chunks (:pr:`4656`) `Matthew Rocklin`_
+-  Fix limit value in auto_chunks (:pr:`4645`) `Matthew Rocklin`_
+
+Core
+++++
+
+-  Updated diagnostic bokeh test for compatibility with bokeh>=1.1.0 (:pr:`4680`) `Philipp Rudiger`_
+-  Adjusts codecov's target/threshold, disable patch (:pr:`4671`) `Peter Andreas Entschev`_
+-  Always start with empty http buffer, not None (:pr:`4673`) `Martin Durant`_
+
+DataFrame
++++++++++
+
+-  Propagate index dtype and name when create dask dataframe from array (:pr:`4686`) `Henrique Ribeiro`_
+-  Fix ordering of quantiles in describe (:pr:`4647`) `gregrf`_
+-  Clean up and document rearrange_column_by_tasks (:pr:`4674`) `Matthew Rocklin`_
+-  Mark some parquet tests xfail (:pr:`4667`) `Peter Andreas Entschev`_
+-  Fix parquet breakages with arrow 0.13.0 (:pr:`4668`) `Martin Durant`_
+-  Allow sample to be False when reading CSV from a remote URL (:pr:`4634`) `Ian Rose`_
+-  Fix timezone metadata inference on parquet load (:pr:`4655`) `Martin Durant`_
+-  Use is_dataframe/index_like in dd.utils (:pr:`4657`) `Matthew Rocklin`_
+-  Add min_count parameter to groupby sum method (:pr:`4648`) `Henrique Ribeiro`_
+-  Correct quantile to handle unsorted quantiles (:pr:`4650`) `gregrf`_
+
+Documentation
++++++++++++++
+
+-  Add delayed extra dependencies to install docs (:pr:`4660`) `James Bourbeau`_
+
+
 1.1.5 / 2019-03-29
 ------------------
 
@@ -17,7 +55,7 @@ Core
 -  Fix CI and add set -e (:pr:`4605`) `James Bourbeau`_
 -  Support builtin sequence types in dask.visualize (:pr:`4602`)
 -  unpack/repack orderedDict (:pr:`4623`) `Justin Poehnelt`_
--  Add da.random.randint to API docs [skip ci] (:pr:`4628`) `James Bourbeau`_
+-  Add da.random.randint to API docs (:pr:`4628`) `James Bourbeau`_
 -  Add zarr to CI environment (:pr:`4604`) `James Bourbeau`_
 -  Enable codecov (:pr:`4631`) `Peter Andreas Entschev`_
 
@@ -1953,3 +1991,7 @@ Other
 .. _`Álvaro Abella Bascarán`: https://github.com/alvaroabascar
 .. _`Aaron Fowles`: https://github.com/aaronfowles
 .. _`Søren Fuglede Jørgensen`: https://github.com/fuglede
+.. _`Hameer Abbasi`: https://github.com/hameerabbasi
+.. _`Philipp Rudiger`: https://github.com/philippjfr
+.. _`gregrf`: https://github.com/gregrf
+.. _`Ian Rose`: https://github.com/ian-r-rose
