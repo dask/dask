@@ -120,7 +120,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     Parameters
     ----------
-    df : pandas.DataFrame or pandas.Series
+    data : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a Dask DataFrame/Series
     npartitions : int, optional
         The number of partitions of the index to create. Note that depending on
