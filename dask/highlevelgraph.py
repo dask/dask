@@ -69,10 +69,8 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
     def __init__(self, layers, dependencies):
-        assert all(layers)
         self.layers = layers
         self.dependencies = dependencies
-        assert set(dependencies) == set(layers)
 
     @property
     def dicts(self):
