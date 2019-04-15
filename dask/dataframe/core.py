@@ -2787,7 +2787,7 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None, thresh=None):
-        return self.map_partitions(M.dropna, how=how, subset=subset, thresh=None)
+        return self.map_partitions(M.dropna, how=how, subset=subset, thresh=thresh)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):
