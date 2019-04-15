@@ -199,38 +199,41 @@ def test_columns_index(tmpdir, write_engine, read_engine):
               ddf[[]])
 
     # No divisions
-    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, infer_divisions=False),
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine,
+        gather_statistics=False),
               ddf[[]].clear_divisions(), check_divisions=True)
 
     # ### Single column, auto select index ###
     # With divisions if supported
-    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine, infer_divisions=should_check_divs(read_engine)),
+    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine,
+        gather_statistics=should_check_divs(read_engine)),
               ddf[['x']], check_divisions=should_check_divs(read_engine))
 
     # No divisions
-    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine, infer_divisions=False),
+    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine,
+        gather_statistics=False),
               ddf[['x']].clear_divisions(), check_divisions=True)
 
     # ### Single column, specify index ###
     # With divisions if supported
     assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine,
-                              infer_divisions=should_check_divs(read_engine)),
+                              gather_statistics=should_check_divs(read_engine)),
               ddf[['x']], check_divisions=should_check_divs(read_engine))
 
     # No divisions
     assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine,
-                              infer_divisions=False),
+                              gather_statistics=False),
               ddf[['x']].clear_divisions(), check_divisions=True)
 
     # ### Two columns, specify index ###
     # With divisions if supported
     assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine,
-                              infer_divisions=should_check_divs(read_engine)),
+                              gather_statistics=should_check_divs(read_engine)),
               ddf, check_divisions=should_check_divs(read_engine))
 
     # No divisions
     assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine,
-                              infer_divisions=False),
+                              gather_statistics=False),
               ddf.clear_divisions(), check_divisions=True)
 
 
@@ -264,22 +267,6 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     assert_eq(dd.read_parquet(fn, index=False, columns=['myindex', 'x'], engine=read_engine,
                               infer_divisions=False),
               ddf2[['myindex', 'x']], check_index=False, check_divisions=True)
-
-
-@write_read_engines_xfail
-def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
-    fn = str(tmpdir)
-    ddf.to_parquet(fn, engine=write_engine)
-
-    if read_engine == 'pyarrow' and not check_pa_divs:
-        match = 'requires pyarrow >=0.9.0'
-        ex = NotImplementedError
-    else:
-        match = 'not known to be sorted across partitions'
-        ex = ValueError
-
-    with pytest.raises(ex, match=match):
-        dd.read_parquet(fn, index='x', engine=read_engine, infer_divisions=True)
 
 
 @write_read_engines_xfail

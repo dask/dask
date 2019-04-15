@@ -183,7 +183,7 @@ def read_parquet(
     if index and index not in columns:
         columns = list(columns) + [index]
 
-    meta = meta[columns]
+    meta = meta[list(columns)]
 
     subgraph = {
         (name, i): (
