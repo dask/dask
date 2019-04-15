@@ -17,12 +17,15 @@ class ArrowEngine(Engine):
 
         with fs.open(piece.path, mode="rb") as f:
             table = piece.read(
-                columns=columns, partitions=partitions, use_pandas_metadata=True, file=f
+                columns=columns, partitions=partitions,
+                use_pandas_metadata=True,
+                file=f,
+                use_threads=False
             )
 
-        df = table.to_pandas(categories=categories)
+        df = table.to_pandas(categories=categories, use_threads=False)
 
-        return df[columns]
+        return df[list(columns)]
 
     @staticmethod
     def read_metadata(
