@@ -497,29 +497,36 @@ def test_append_with_partition(tmpdir):
               check_index=False)
 
 
-def test_partition_on_cats(tmpdir):
-    check_fastparquet()
+def test_partition_on_cats(tmpdir, engine):
     tmp = str(tmpdir)
     d = pd.DataFrame({'a': np.random.rand(50),
                       'b': np.random.choice(['x', 'y', 'z'], size=50),
                       'c': np.random.choice(['x', 'y', 'z'], size=50)})
     d = dd.from_pandas(d, 2)
-    d.to_parquet(tmp, partition_on=['b'], engine='fastparquet')
-    df = dd.read_parquet(tmp, engine='fastparquet')
+    d.to_parquet(tmp, partition_on=['b'], engine=engine)
+    df = dd.read_parquet(tmp, engine=engine)
     assert set(df.b.cat.categories) == {'x', 'y', 'z'}
 
-    d.to_parquet(tmp, partition_on=['b', 'c'], engine='fastparquet')
-    df = dd.read_parquet(tmp, engine='fastparquet')
+
+def test_partition_on_cats_2(tmpdir, engine):
+    tmp = str(tmpdir)
+    d = pd.DataFrame({'a': np.random.rand(50),
+                      'b': np.random.choice(['x', 'y', 'z'], size=50),
+                      'c': np.random.choice(['x', 'y', 'z'], size=50)})
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=['b', 'c'], engine=engine)
+    df = dd.read_parquet(tmp, engine=engine)
     assert set(df.b.cat.categories) == {'x', 'y', 'z'}
     assert set(df.c.cat.categories) == {'x', 'y', 'z'}
-    df = dd.read_parquet(tmp, columns=['a', 'c'], engine='fastparquet')
+
+    df = dd.read_parquet(tmp, columns=['a', 'c'], engine=engine)
     assert set(df.c.cat.categories) == {'x', 'y', 'z'}
     assert 'b' not in df.columns
-    df = dd.read_parquet(tmp, index='c', engine='fastparquet')
+    df = dd.read_parquet(tmp, index='c', engine=engine)
     assert set(df.index.categories) == {'x', 'y', 'z'}
     assert 'c' not in df.columns
     # series
-    df = dd.read_parquet(tmp, columns='b', engine='fastparquet')
+    df = dd.read_parquet(tmp, columns='b', engine=engine)
     assert set(df.cat.categories) == {'x', 'y', 'z'}
 
 

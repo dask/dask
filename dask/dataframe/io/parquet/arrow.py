@@ -1,5 +1,6 @@
 import json
 
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from ....delayed import delayed
@@ -79,7 +80,7 @@ class ArrowEngine(Engine):
         meta = _meta_from_dtypes(all_columns, dtypes)
         meta = clear_known_categories(meta, cols=categories)
 
-        if gather_statistics:
+        if gather_statistics and pieces:
             # Read from _metadata file
             if dataset.metadata and dataset.metadata.num_row_groups == len(
                 pieces
@@ -88,19 +89,24 @@ class ArrowEngine(Engine):
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
-            # Read from each individual piece (possibly slow)
+                # TODO get names
+                # names = schema.names  # Not quite right when partitioning
             else:
+                # Read from each individual piece (quite possibly slow)
                 row_groups = [
                     piece.get_metadata(
                         lambda fn: pq.ParquetFile(fs.open(fn, mode="rb"))
                     ).row_group(0)
                     for piece in pieces
                 ]
+                piece = pieces[0]
+                md = piece.get_metadata(lambda fn: pq.ParquetFile(fs.open(fn, mode="rb")))
+                names = md.schema.names
 
             stats = []
             for row_group in row_groups:
                 s = {"num-rows": row_group.num_rows, "columns": []}
-                for i, name in enumerate(schema.names):
+                for i, name in enumerate(names):
                     column = row_group.column(i)
                     d = {"name": name}
                     if column.statistics:
@@ -116,6 +122,12 @@ class ArrowEngine(Engine):
 
         else:
             stats = None
+
+        # TODO: these are both sets, maybe not safe to zip over them
+        if dataset.partitions:
+            for name, partition_set in zip(dataset.partitions.partition_names, dataset.partitions.levels):
+                if name in meta.columns:
+                    meta[name] = pd.Categorical(categories=partition_set.keys, values=[])
 
         return (
             meta,
