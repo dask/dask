@@ -415,7 +415,7 @@ def test_cumulative():
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2, 3, 4, np.nan, 6],
                        'y': [1, 2, np.nan, 4, np.nan, np.nan],
-                       'z': [1, 2, 3, 4, np.nan, np.nan]},
+                       'z': [1, 2, 3, 4, np.nan, 6]},
                       index=[10, 20, 30, 40, 50, 60])
     ddf = dd.from_pandas(df, 3)
 
@@ -429,6 +429,22 @@ def test_dropna():
     assert_eq(ddf.dropna(subset=['y', 'z']), df.dropna(subset=['y', 'z']))
     assert_eq(ddf.dropna(subset=['y', 'z'], how='all'),
               df.dropna(subset=['y', 'z'], how='all'))
+
+    # threshold
+    assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
+    assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None))
+
+    assert_eq(df.dropna(thresh=0), df.loc[:])
+    assert_eq(ddf.dropna(thresh=0), df.dropna(thresh=0))
+
+    assert_eq(df.dropna(thresh=1), df.loc[[10, 20, 30, 40, 60]])
+    assert_eq(ddf.dropna(thresh=1), df.dropna(thresh=1))
+
+    assert_eq(df.dropna(thresh=2), df.loc[[10, 20, 30, 40, 60]])
+    assert_eq(ddf.dropna(thresh=2), df.dropna(thresh=2))
+
+    assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
+    assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
 
 
 @pytest.mark.parametrize('lower, upper', [(2, 5), (2.5, 3.5)])
