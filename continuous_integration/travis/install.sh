@@ -62,6 +62,7 @@ conda install -q -c conda-forge \
     scipy \
     sqlalchemy \
     toolz \
+    tiledb-py \
     zarr
 
 pip install --upgrade codecov
