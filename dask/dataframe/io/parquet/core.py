@@ -143,14 +143,17 @@ def read_parquet(
         )
 
     if statistics:
-        parts, statistics = zip(
+        result = list(zip(
             *[
                 (part, stats)
                 for part, stats in zip(parts, statistics)
                 if stats["num-rows"] > 0
             ]
-        )
-
+        ))
+        if result:
+            parts, statistics = result
+        else:
+            parts, statistics = [], []
         if filters:
             parts, statistics = apply_filters(parts, statistics, filters)
 
