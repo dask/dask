@@ -79,7 +79,7 @@ if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.
 fi
 
 if [[ $NUMPY > '1.13.0' ]]; then
-    if [[ ${UPSTREAM_SPARSE} ]]; then
+    if [[ ${UPSTREAM_DEV} ]]; then
         pip install --upgrade git+https://github.com/pydata/sparse
     else
         pip install sparse
