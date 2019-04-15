@@ -19,6 +19,12 @@ def from_tiledb(uri, attribute=None, chunks=None,
     attribute: str or None
         Attribute selection (single-attribute view on multi-attribute array)
 
+
+    Returns
+    -------
+
+    A Dask Array
+
     Examples
     --------
 
@@ -80,18 +86,24 @@ def to_tiledb(darray, uri, compute=True, return_stored=False,
         A dask array to write.
     uri:
         Any supported TileDB storage location.
-    storage_options:
+    storage_options: dict
         Dict containing any configuration options for the TileDB backend.
         see https://docs.tiledb.io/en/stable/tutorials/config.html
     compute, return_stored: see ``store()``
-    :return:
-        None
 
-    Note on chunking/tiling:
-        TileDB only supports regularly-chunked arrays.
-        TileDB `tile extents`_ correspond to form 2 of the dask
-        `chunk specification`_, and the conversion is
-        done automatically for supported arrays.
+    Returns
+    -------
+
+    None
+        Unless ``return_stored`` is set to ``True`` (``False`` by default)
+
+    Notes
+    -----
+
+    TileDB only supports regularly-chunked arrays.
+    TileDB `tile extents`_ correspond to form 2 of the dask
+    `chunk specification`_, and the conversion is
+    done automatically for supported arrays.
 
     Examples
     --------
