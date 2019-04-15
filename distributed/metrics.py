@@ -83,7 +83,7 @@ class _WindowsTime(object):
 
 
 # A high-resolution wall clock timer measuring the seconds since Unix epoch
-if sys.platform.startswith('win'):
+if sys.platform.startswith("win"):
     time = _WindowsTime().time
 else:
     # Under modern Unices, time.time() should be good enough
@@ -97,7 +97,7 @@ def _native_thread_time():
 
 def _linux_thread_time():
     # Use hardcoded CLOCK_THREAD_CPUTIME_ID on Python 3 <= 3.6
-    if sys.platform != 'linux':
+    if sys.platform != "linux":
         raise OSError
     return timemod.clock_gettime(3)
 
@@ -134,8 +134,7 @@ def _detect_thread_time():
     Return a per-thread CPU timer function if possible, otherwise
     a per-process CPU timer function, or at worse a wall-clock timer.
     """
-    for func in [_native_thread_time, _linux_thread_time,
-                 _native_process_time]:
+    for func in [_native_thread_time, _linux_thread_time, _native_process_time]:
         try:
             func()
             return func

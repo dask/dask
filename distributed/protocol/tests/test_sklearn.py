@@ -1,5 +1,6 @@
 import pytest
-pytest.importorskip('sklearn')
+
+pytest.importorskip("sklearn")
 
 import sklearn.linear_model
 
@@ -11,7 +12,7 @@ def test_basic():
     est.fit([[0, 0], [1, 1], [2, 2]], [0, 1, 2])
 
     header, frames = serialize(est)
-    assert header['serializer'] == 'dask'
+    assert header["serializer"] == "dask"
 
     est2 = deserialize(header, frames)
 

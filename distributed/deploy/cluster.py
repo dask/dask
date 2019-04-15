@@ -51,6 +51,7 @@ class Cluster(object):
     --------
     LocalCluster: a simple implementation with local workers
     """
+
     def adapt(self, **kwargs):
         """ Turn on adaptivity
 
@@ -62,7 +63,7 @@ class Cluster(object):
         """
         with ignoring(AttributeError):
             self._adaptive.stop()
-        if not hasattr(self, '_adaptive_options'):
+        if not hasattr(self, "_adaptive_options"):
             self._adaptive_options = {}
         self._adaptive_options.update(kwargs)
         self._adaptive = Adaptive(self.scheduler, self, **self._adaptive_options)
@@ -74,9 +75,9 @@ class Cluster(object):
 
     @property
     def dashboard_link(self):
-        template = dask.config.get('distributed.dashboard.link')
-        host = self.scheduler.address.split('://')[1].split(':')[0]
-        port = self.scheduler.services['bokeh'].port
+        template = dask.config.get("distributed.dashboard.link")
+        host = self.scheduler.address.split("://")[1].split(":")[0]
+        port = self.scheduler.services["bokeh"].port
         return template.format(host=host, port=port, **os.environ)
 
     def scale(self, n):
@@ -101,9 +102,12 @@ class Cluster(object):
                 self.scheduler.loop.add_callback(self.scale_up, n)
             else:
                 to_close = self.scheduler.workers_to_close(
-                    n=len(self.scheduler.workers) - n)
+                    n=len(self.scheduler.workers) - n
+                )
                 logger.debug("Closing workers: %s", to_close)
-                self.scheduler.loop.add_callback(self.scheduler.retire_workers, workers=to_close)
+                self.scheduler.loop.add_callback(
+                    self.scheduler.retire_workers, workers=to_close
+                )
                 self.scheduler.loop.add_callback(self.scale_down, to_close)
 
     def _widget_status(self):
@@ -132,7 +136,11 @@ class Cluster(object):
     <tr><th>Memory</th> <td>%s</td></tr>
   </table>
 </div>
-""" % (workers, cores, memory)
+""" % (
+            workers,
+            cores,
+            memory,
+        )
         return text
 
     def _widget(self):
@@ -144,38 +152,39 @@ class Cluster(object):
 
         from ipywidgets import Layout, VBox, HBox, IntText, Button, HTML, Accordion
 
-        layout = Layout(width='150px')
+        layout = Layout(width="150px")
 
-        if 'bokeh' in self.scheduler.services:
+        if "bokeh" in self.scheduler.services:
             link = self.dashboard_link
-            link = '<p><b>Dashboard: </b><a href="%s" target="_blank">%s</a></p>\n' % (link, link)
+            link = '<p><b>Dashboard: </b><a href="%s" target="_blank">%s</a></p>\n' % (
+                link,
+                link,
+            )
         else:
-            link = ''
+            link = ""
 
-        title = '<h2>%s</h2>' % type(self).__name__
+        title = "<h2>%s</h2>" % type(self).__name__
         title = HTML(title)
         dashboard = HTML(link)
 
-        status = HTML(self._widget_status(), layout=Layout(min_width='150px'))
+        status = HTML(self._widget_status(), layout=Layout(min_width="150px"))
 
-        request = IntText(0, description='Workers', layout=layout)
-        scale = Button(description='Scale', layout=layout)
+        request = IntText(0, description="Workers", layout=layout)
+        scale = Button(description="Scale", layout=layout)
 
-        minimum = IntText(0, description='Minimum', layout=layout)
-        maximum = IntText(0, description='Maximum', layout=layout)
-        adapt = Button(description='Adapt', layout=layout)
+        minimum = IntText(0, description="Minimum", layout=layout)
+        maximum = IntText(0, description="Maximum", layout=layout)
+        adapt = Button(description="Adapt", layout=layout)
 
-        accordion = Accordion([HBox([request, scale]),
-                               HBox([minimum, maximum, adapt])],
-                               layout=Layout(min_width='500px'))
+        accordion = Accordion(
+            [HBox([request, scale]), HBox([minimum, maximum, adapt])],
+            layout=Layout(min_width="500px"),
+        )
         accordion.selected_index = None
-        accordion.set_title(0, 'Manual Scaling')
-        accordion.set_title(1, 'Adaptive Scaling')
+        accordion.set_title(0, "Manual Scaling")
+        accordion.set_title(1, "Adaptive Scaling")
 
-        box = VBox([title,
-                    HBox([status,
-                          accordion]),
-                    dashboard])
+        box = VBox([title, HBox([status, accordion]), dashboard])
 
         self._cached_widget = box
 
@@ -199,7 +208,7 @@ class Cluster(object):
             status.value = self._widget_status()
 
         pc = PeriodicCallback(update, 500, io_loop=self.scheduler.loop)
-        self.scheduler.periodic_callbacks['cluster-repr'] = pc
+        self.scheduler.periodic_callbacks["cluster-repr"] = pc
         pc.start()
 
         return box

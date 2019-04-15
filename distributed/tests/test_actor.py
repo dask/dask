@@ -47,21 +47,21 @@ class ParameterServer(object):
         return self.data[key]
 
 
-@pytest.mark.parametrize('direct_to_workers', [True, False])
+@pytest.mark.parametrize("direct_to_workers", [True, False])
 def test_client_actions(direct_to_workers):
-
     @gen_cluster(client=True)
     def test(c, s, a, b):
-        c = yield Client(s.address, asynchronous=True,
-                         direct_to_workers=direct_to_workers)
+        c = yield Client(
+            s.address, asynchronous=True, direct_to_workers=direct_to_workers
+        )
 
         counter = c.submit(Counter, workers=[a.address], actor=True)
         assert isinstance(counter, Future)
         counter = yield counter
         assert counter._address
-        assert hasattr(counter, 'increment')
-        assert hasattr(counter, 'add')
-        assert hasattr(counter, 'n')
+        assert hasattr(counter, "increment")
+        assert hasattr(counter, "add")
+        assert hasattr(counter, "n")
 
         n = yield counter.n
         assert n == 0
@@ -86,9 +86,8 @@ def test_client_actions(direct_to_workers):
     test()
 
 
-@pytest.mark.parametrize('separate_thread', [False, True])
+@pytest.mark.parametrize("separate_thread", [False, True])
 def test_worker_actions(separate_thread):
-
     @gen_cluster(client=True)
     def test(c, s, a, b):
         counter = c.submit(Counter, workers=[a.address], actor=True)
@@ -121,15 +120,17 @@ def test_Actor(c, s, a, b):
 
     assert counter._cls == Counter
 
-    assert hasattr(counter, 'n')
-    assert hasattr(counter, 'increment')
-    assert hasattr(counter, 'add')
+    assert hasattr(counter, "n")
+    assert hasattr(counter, "increment")
+    assert hasattr(counter, "add")
 
-    assert not hasattr(counter, 'abc')
+    assert not hasattr(counter, "abc")
 
 
-@pytest.mark.xfail(reason="Tornado can pass things out of order" +
-        "Should rely on sending small messages rather than rpc")
+@pytest.mark.xfail(
+    reason="Tornado can pass things out of order"
+    + "Should rely on sending small messages rather than rpc"
+)
 @gen_cluster(client=True)
 def test_linear_access(c, s, a, b):
     start = time()
@@ -159,7 +160,7 @@ def test_exceptions_create(c, s, a, b):
         x = 0
 
         def __init__(self):
-            raise ValueError('bar')
+            raise ValueError("bar")
 
     with pytest.raises(ValueError) as info:
         future = yield c.submit(Foo, actor=True)
@@ -250,11 +251,11 @@ def test_sync(client):
 
     assert future.result() == future.result()
 
-    assert 'ActorFuture' in repr(future)
-    assert 'distributed.actor' not in repr(future)
+    assert "ActorFuture" in repr(future)
+    assert "distributed.actor" not in repr(future)
 
 
-@gen_cluster(client=True, config={'distributed.comm.timeouts.connect': '1s'})
+@gen_cluster(client=True, config={"distributed.comm.timeouts.connect": "1s"})
 def test_failed_worker(c, s, a, b):
     future = c.submit(Counter, actor=True, workers=[a.address])
     yield wait(future)
@@ -280,21 +281,21 @@ def bench(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_numpy_roundtrip(c, s, a, b):
-    np = pytest.importorskip('numpy')
+    np = pytest.importorskip("numpy")
 
     server = yield c.submit(ParameterServer, actor=True)
 
     x = np.random.random(1000)
-    yield server.put('x', x)
+    yield server.put("x", x)
 
-    y = yield server.get('x')
+    y = yield server.get("x")
 
     assert (x == y).all()
 
 
 @gen_cluster(client=True)
 def test_numpy_roundtrip_getattr(c, s, a, b):
-    np = pytest.importorskip('numpy')
+    np = pytest.importorskip("numpy")
 
     counter = yield c.submit(Counter, actor=True)
 
@@ -311,10 +312,10 @@ def test_numpy_roundtrip_getattr(c, s, a, b):
 def test_repr(c, s, a, b):
     counter = yield c.submit(Counter, actor=True)
 
-    assert 'Counter' in repr(counter)
-    assert 'Actor' in repr(counter)
+    assert "Counter" in repr(counter)
+    assert "Actor" in repr(counter)
     assert counter.key in repr(counter)
-    assert 'distributed.actor' not in repr(counter)
+    assert "distributed.actor" not in repr(counter)
 
 
 @gen_cluster(client=True)
@@ -324,7 +325,7 @@ def test_dir(c, s, a, b):
     d = set(dir(counter))
 
     for attr in dir(Counter):
-        if not attr.startswith('_'):
+        if not attr.startswith("_"):
             assert attr in d
 
 
@@ -346,7 +347,7 @@ def test_many_computations(c, s, a, b):
     yield done
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 5)] * 2)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 5)] * 2)
 def test_thread_safety(c, s, a, b):
     class Unsafe(object):
         def __init__(self):
@@ -381,7 +382,7 @@ def test_load_balance(c, s, a, b):
         def __init__(self, x):
             pass
 
-    b = c.submit(operator.mul, 'b', 1000000)
+    b = c.submit(operator.mul, "b", 1000000)
     yield wait(b)
     [ws] = s.tasks[b.key].who_has
 
@@ -393,13 +394,13 @@ def test_load_balance(c, s, a, b):
     assert s.tasks[x.key].who_has != s.tasks[y.key].who_has  # second load balanced
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 5)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 5)
 def test_load_balance_map(c, s, *workers):
     class Foo(object):
         def __init__(self, x, y=None):
             pass
 
-    b = c.submit(operator.mul, 'b', 1000000)
+    b = c.submit(operator.mul, "b", 1000000)
     yield wait(b)
 
     actors = c.map(Foo, range(10), y=b, actor=True)
@@ -408,10 +409,11 @@ def test_load_balance_map(c, s, *workers):
     assert all(len(w.actors) == 2 for w in workers)
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4, Worker=Nanny)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 4, Worker=Nanny)
 def bench_param_server(c, s, *workers):
     import dask.array as da
     import numpy as np
+
     x = da.random.random((500000, 1000), chunks=(1000, 1000))
     x = x.persist()
     yield wait(x)
@@ -439,6 +441,7 @@ def bench_param_server(c, s, *workers):
         return np.array([[stop - start]])
 
     from distributed.utils import format_time
+
     start = time()
     ps = yield c.submit(ParameterServer, x.shape[1], actor=True)
     y = x.map_blocks(f, ps=ps, dtype=x.dtype)
@@ -448,10 +451,9 @@ def bench_param_server(c, s, *workers):
     print(format_time(end - start))
 
 
-@pytest.mark.xfail(reason='unknown')
+@pytest.mark.xfail(reason="unknown")
 @gen_cluster(client=True)
 def test_compute(c, s, a, b):
-
     @dask.delayed
     def f(n, counter):
         assert isinstance(counter, Actor)
@@ -502,8 +504,11 @@ def test_compute_sync(client):
         assert time() < start + 2
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)],
-             config={'distributed.worker.profile.interval': '1ms'})
+@gen_cluster(
+    client=True,
+    ncores=[("127.0.0.1", 1)],
+    config={"distributed.worker.profile.interval": "1ms"},
+)
 def test_actors_in_profile(c, s, a):
     class Sleeper(object):
         def sleep(self, time):
@@ -513,8 +518,10 @@ def test_actors_in_profile(c, s, a):
 
     for i in range(5):
         yield sleeper.sleep(0.200)
-        if (list(a.profile_recent['children'])[0].startswith('sleep') or
-                'Sleeper.sleep' in a.profile_keys):
+        if (
+            list(a.profile_recent["children"])[0].startswith("sleep")
+            or "Sleeper.sleep" in a.profile_keys
+        ):
             return
     assert False, list(a.profile_keys)
 

@@ -10,7 +10,7 @@ from bokeh.util.compiler import JavaScript
 
 
 fn = __file__
-fn = os.path.join(os.path.dirname(fn), 'export_tool.js')
+fn = os.path.join(os.path.dirname(fn), "export_tool.js")
 with open(fn) as f:
     JS_CODE = f.read()
 
@@ -27,4 +27,4 @@ class ExportTool(Tool):
             html = file_html(plot, CDN, "Task Stream")
             self.content = html
 
-        self.on_change('event', export_callback)
+        self.on_change("event", export_callback)

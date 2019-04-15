@@ -25,25 +25,28 @@ def validate_preload_argv(ctx, param, value):
         for a in unexpected_args:
             raise click.NoSuchOption(a)
         raise click.UsageError(
-            "Got unexpected extra argument%s: (%s)" %
-            ("s" if len(value) > 1 else "", " ".join(value))
+            "Got unexpected extra argument%s: (%s)"
+            % ("s" if len(value) > 1 else "", " ".join(value))
         )
 
     preload_modules = _import_modules(ctx.params.get("preload"))
 
     preload_commands = [
-        m["dask_setup"] for m in preload_modules.values()
+        m["dask_setup"]
+        for m in preload_modules.values()
         if isinstance(m["dask_setup"], click.Command)
     ]
 
     if len(preload_commands) > 1:
         raise click.UsageError(
-            "Multiple --preload modules with click-configurable setup: %s" %
-            list(preload_modules.keys()))
+            "Multiple --preload modules with click-configurable setup: %s"
+            % list(preload_modules.keys())
+        )
 
     if value and not preload_commands:
         raise click.UsageError(
-            "Unknown argument specified: %r Was click-configurable --preload target provided?")
+            "Unknown argument specified: %r Was click-configurable --preload target provided?"
+        )
     if not preload_commands:
         return value
     else:
@@ -98,7 +101,7 @@ def _import_modules(names, file_dir=None):
             module = sys.modules[name]
 
         result_modules[name] = {
-            attrname : getattr(module, attrname, None)
+            attrname: getattr(module, attrname, None)
             for attrname in ("dask_setup", "dask_teardown")
         }
 
@@ -128,7 +131,9 @@ def preload_modules(names, parameter=None, file_dir=None, argv=None):
 
         if dask_setup:
             if isinstance(dask_setup, click.Command):
-                context = dask_setup.make_context("dask_setup", list(argv), allow_extra_args=False)
+                context = dask_setup.make_context(
+                    "dask_setup", list(argv), allow_extra_args=False
+                )
                 dask_setup.callback(parameter, *context.args, **context.params)
             else:
                 dask_setup(parameter)

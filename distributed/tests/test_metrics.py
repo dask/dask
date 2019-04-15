@@ -58,7 +58,7 @@ def test_thread_time():
         dt = metrics.thread_time() - start
         assert dt <= 0.05
 
-        if sys.platform == 'linux':
+        if sys.platform == "linux":
             # Always per-thread on Linux
             t = threading.Thread(target=run_for, args=(0.1,))
             start = metrics.thread_time()

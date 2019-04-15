@@ -7,8 +7,8 @@ from distributed.submit import _submit
 
 
 @click.command()
-@click.argument('remote_client_address', type=str, required=True)
-@click.argument('filepath', type=str, required=True)
+@click.argument("remote_client_address", type=str, required=True)
+@click.argument("filepath", type=str, required=True)
 def main(remote_client_address, filepath):
     @gen.coroutine
     def f():
@@ -27,5 +27,5 @@ def go():
     main()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     go()

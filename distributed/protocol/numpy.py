@@ -24,13 +24,13 @@ def itemsize(dt):
 @dask_serialize.register(np.ndarray)
 def serialize_numpy_ndarray(x):
     if x.dtype.hasobject:
-        header = {'pickle': True}
+        header = {"pickle": True}
         frames = [pickle.dumps(x)]
         return header, frames
 
     # We cannot blindly pickle the dtype as some may fail pickling,
     # so we have a mixture of strategies.
-    if x.dtype.kind == 'V':
+    if x.dtype.kind == "V":
         # Preserving all the information works best when pickling
         try:
             # Only use stdlib pickle as cloudpickle is slow when failing
@@ -53,31 +53,29 @@ def serialize_numpy_ndarray(x):
     elif x.flags.c_contiguous or x.flags.f_contiguous:
         # Avoid a copy and respect order when unserializing
         strides = x.strides
-        data = x.ravel(order='K')
+        data = x.ravel(order="K")
     else:
         x = np.ascontiguousarray(x)
         strides = x.strides
         data = x.ravel()
 
     if data.dtype.fields or data.dtype.itemsize > 8:
-        data = data.view('u%d' % gcd(x.dtype.itemsize, 8))
+        data = data.view("u%d" % gcd(x.dtype.itemsize, 8))
 
     try:
         data = data.data
     except ValueError:
         # "ValueError: cannot include dtype 'M' in a buffer"
-        data = data.view('u%d' % gcd(x.dtype.itemsize, 8)).data
+        data = data.view("u%d" % gcd(x.dtype.itemsize, 8)).data
 
-    header = {'dtype': dt,
-              'shape': x.shape,
-              'strides': strides}
+    header = {"dtype": dt, "shape": x.shape, "strides": strides}
 
     if x.nbytes > 1e5:
         frames = frame_split_size([data])
     else:
         frames = [data]
 
-    header['lengths'] = [x.nbytes]
+    header["lengths"] = [x.nbytes]
 
     return header, frames
 
@@ -88,17 +86,18 @@ def deserialize_numpy_ndarray(header, frames):
         if len(frames) > 1:
             frames = merge_frames(header, frames)
 
-        if header.get('pickle'):
+        if header.get("pickle"):
             return pickle.loads(frames[0])
 
-        is_custom, dt = header['dtype']
+        is_custom, dt = header["dtype"]
         if is_custom:
             dt = pickle.loads(dt)
         else:
             dt = np.dtype(dt)
 
-        x = np.ndarray(header['shape'], dtype=dt, buffer=frames[0],
-                       strides=header['strides'])
+        x = np.ndarray(
+            header["shape"], dtype=dt, buffer=frames[0], strides=header["strides"]
+        )
 
         return x
 
@@ -116,13 +115,12 @@ def deserialize_numpy_ma_masked(header, frames):
 @dask_serialize.register(np.ma.core.MaskedArray)
 def serialize_numpy_maskedarray(x):
     data_header, frames = serialize_numpy_ndarray(x.data)
-    header = {'data-header': data_header,
-              'nframes': len(frames)}
+    header = {"data-header": data_header, "nframes": len(frames)}
 
     # Serialize mask if present
     if x.mask is not np.ma.nomask:
         mask_header, mask_frames = serialize_numpy_ndarray(x.mask)
-        header['mask-header'] = mask_header
+        header["mask-header"] = mask_header
         frames += mask_frames
 
     # Only a few dtypes have python equivalents msgpack can serialize
@@ -130,7 +128,7 @@ def serialize_numpy_maskedarray(x):
         serialized_fill_value = (False, x.fill_value.item())
     else:
         serialized_fill_value = (True, pickle.dumps(x.fill_value))
-    header['fill-value'] = serialized_fill_value
+    header["fill-value"] = serialized_fill_value
 
     return header, frames
 
@@ -138,12 +136,12 @@ def serialize_numpy_maskedarray(x):
 @dask_deserialize.register(np.ma.core.MaskedArray)
 def deserialize_numpy_maskedarray(header, frames):
     data_header = header["data-header"]
-    data_frames = frames[:header["nframes"]]
+    data_frames = frames[: header["nframes"]]
     data = deserialize_numpy_ndarray(data_header, data_frames)
 
-    if 'mask-header' in header:
+    if "mask-header" in header:
         mask_header = header["mask-header"]
-        mask_frames = frames[header["nframes"]:]
+        mask_frames = frames[header["nframes"] :]
         mask = deserialize_numpy_ndarray(mask_header, mask_frames)
     else:
         mask = np.ma.nomask

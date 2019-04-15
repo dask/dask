@@ -111,6 +111,7 @@ def test_secede_rejoin_quiet():
 
 def test_rejoin_idempotent():
     with ThreadPoolExecutor(2) as e:
+
         def f():
             secede()
             for i in range(5):

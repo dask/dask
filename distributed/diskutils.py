@@ -16,11 +16,11 @@ from .compatibility import finalize
 
 logger = logging.getLogger(__name__)
 
-DIR_LOCK_EXT = '.dirlock'
+DIR_LOCK_EXT = ".dirlock"
 
 
 def is_locking_enabled():
-    return dask.config.get('distributed.worker.use-file-locking')
+    return dask.config.get("distributed.worker.use-file-locking")
 
 
 def safe_unlink(path):
@@ -58,24 +58,33 @@ class WorkDir(object):
                         self._lock_file = locket.lock_file(self._lock_path)
                         self._lock_file.acquire()
                 except OSError as e:
-                    logger.exception("Could not acquire workspace lock on "
-                                     "path: %s ."
-                                     "Continuing without lock. "
-                                     "This may result in workspaces not being "
-                                     "cleaned up", self._lock_path,
-                                     exc_info=True)
+                    logger.exception(
+                        "Could not acquire workspace lock on "
+                        "path: %s ."
+                        "Continuing without lock. "
+                        "This may result in workspaces not being "
+                        "cleaned up",
+                        self._lock_path,
+                        exc_info=True,
+                    )
                     self._lock_file = None
             except Exception:
                 shutil.rmtree(self.dir_path, ignore_errors=True)
                 raise
             workspace._known_locks.add(self._lock_path)
 
-            self._finalizer = finalize(self, self._finalize,
-                                       workspace, self._lock_path,
-                                       self._lock_file, self.dir_path)
+            self._finalizer = finalize(
+                self,
+                self._finalize,
+                workspace,
+                self._lock_path,
+                self._lock_file,
+                self.dir_path,
+            )
         else:
-            self._finalizer = finalize(self, self._finalize,
-                                       workspace, None, None, self.dir_path)
+            self._finalizer = finalize(
+                self, self._finalize, workspace, None, None, self.dir_path
+            )
 
     def release(self):
         """
@@ -109,8 +118,8 @@ class WorkSpace(object):
     def __init__(self, base_dir):
         self.base_dir = os.path.abspath(base_dir)
         self._init_workspace()
-        self._global_lock_path = os.path.join(self.base_dir, 'global.lock')
-        self._purge_lock_path = os.path.join(self.base_dir, 'purge.lock')
+        self._global_lock_path = os.path.join(self.base_dir, "global.lock")
+        self._purge_lock_path = os.path.join(self.base_dir, "purge.lock")
 
     def _init_workspace(self):
         try:
@@ -165,7 +174,7 @@ class WorkSpace(object):
         return purged
 
     def _list_unknown_locks(self):
-        for p in glob.glob(os.path.join(self.base_dir, '*' + DIR_LOCK_EXT)):
+        for p in glob.glob(os.path.join(self.base_dir, "*" + DIR_LOCK_EXT)):
             try:
                 st = os.stat(p)
             except EnvironmentError:
@@ -199,10 +208,9 @@ class WorkSpace(object):
             return False
         try:
             # Lock file is stale, therefore purge corresponding directory
-            dir_path = lock_path[:-len(DIR_LOCK_EXT)]
+            dir_path = lock_path[: -len(DIR_LOCK_EXT)]
             if os.path.exists(dir_path):
-                logger.info("Found stale lock file and directory %r, purging",
-                            dir_path)
+                logger.info("Found stale lock file and directory %r, purging", dir_path)
                 self._purge_directory(dir_path)
         finally:
             lock.release()
@@ -212,8 +220,7 @@ class WorkSpace(object):
 
     def _on_remove_error(self, func, path, exc_info):
         typ, exc, tb = exc_info
-        logger.error("Failed to remove %r (failed in %r): %s",
-                     path, func, str(exc))
+        logger.error("Failed to remove %r (failed in %r): %s", path, func, str(exc))
 
     def new_work_dir(self, **kwargs):
         """
@@ -231,6 +238,8 @@ class WorkSpace(object):
         try:
             self._purge_leftovers()
         except OSError:
-            logger.error("Failed to clean up lingering worker directories "
-                         "in path: %s ", exc_info=True)
+            logger.error(
+                "Failed to clean up lingering worker directories " "in path: %s ",
+                exc_info=True,
+            )
         return WorkDir(self, **kwargs)

@@ -6,9 +6,8 @@ from distributed.submit import _remote
 
 
 @click.command()
-@click.option('--host', type=str, default=None,
-              help="IP or hostname of this server")
-@click.option('--port', type=int, default=8788, help="Remote Client Port")
+@click.option("--host", type=str, default=None, help="IP or hostname of this server")
+@click.option("--port", type=int, default=8788, help="Remote Client Port")
 def main(host, port):
     _remote(host, port)
 
@@ -19,5 +18,5 @@ def go():
     main()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     go()

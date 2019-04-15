@@ -8,6 +8,7 @@ from __future__ import print_function
 
 import atexit
 import os
+
 try:
     import queue
 except ImportError:
@@ -37,7 +38,7 @@ def run_cell_remote(ip, kc, cell):
     """
     msg_id = kc.execute(cell)
 
-    in_kernel = getattr(ip, 'kernel', False)
+    in_kernel = getattr(ip, "kernel", False)
     if in_kernel:
         socket = ip.display_pub.pub_socket
         session = ip.display_pub.session
@@ -49,30 +50,30 @@ def run_cell_remote(ip, kc, cell):
         except queue.Empty:
             raise TimeoutError("Timeout waiting for IPython output")
 
-        if msg['parent_header'].get('msg_id') != msg_id:
+        if msg["parent_header"].get("msg_id") != msg_id:
             continue
-        msg_type = msg['header']['msg_type']
-        content = msg['content']
-        if msg_type == 'status':
-            if content['execution_state'] == 'idle':
+        msg_type = msg["header"]["msg_type"]
+        content = msg["content"]
+        if msg_type == "status":
+            if content["execution_state"] == "idle":
                 # idle means output is done
                 break
-        elif msg_type == 'stream':
-            stream = getattr(sys, content['name'])
-            stream.write(content['text'])
-        elif msg_type in ('display_data', 'execute_result', 'error'):
+        elif msg_type == "stream":
+            stream = getattr(sys, content["name"])
+            stream.write(content["text"])
+        elif msg_type in ("display_data", "execute_result", "error"):
             if in_kernel:
                 session.send(socket, msg_type, content, parent=parent_header)
             else:
-                if msg_type == 'error':
-                    print('\n'.join(content['traceback']), file=sys.stderr)
+                if msg_type == "error":
+                    print("\n".join(content["traceback"]), file=sys.stderr)
                 else:
-                    sys.stdout.write(content['data'].get('text/plain', ''))
+                    sys.stdout.write(content["data"].get("text/plain", ""))
         else:
             pass
 
 
-def register_worker_magic(connection_info, magic_name='worker'):
+def register_worker_magic(connection_info, magic_name="worker"):
     """Register a %worker magic, given connection_info.
 
     Both a line and cell magic are registered,
@@ -80,7 +81,7 @@ def register_worker_magic(connection_info, magic_name='worker'):
     """
     ip = get_ipython()
     info = dict(connection_info)  # copy
-    key = info.pop('key')
+    key = info.pop("key")
     kc = BlockingKernelClient(**connection_info)
     kc.session.key = key
     kc.start_channels()
@@ -93,8 +94,8 @@ def register_worker_magic(connection_info, magic_name='worker'):
         run_cell_remote(ip, kc, cell)
 
     remote.client = kc  # preserve reference on kc, largely for mocking
-    ip.register_magic_function(remote, magic_kind='line', magic_name=magic_name)
-    ip.register_magic_function(remote, magic_kind='cell', magic_name=magic_name)
+    ip.register_magic_function(remote, magic_kind="line", magic_name=magic_name)
+    ip.register_magic_function(remote, magic_kind="cell", magic_name=magic_name)
 
 
 def remote_magic(line, cell=None):
@@ -124,8 +125,8 @@ def remote_magic(line, cell=None):
         cell = split_line[1]
 
     # turn info dict to hashable str for use as lookup key in _clients cache
-    key = ','.join(map(str, sorted(connection_info.items())))
-    session_key = connection_info.pop('key')
+    key = ",".join(map(str, sorted(connection_info.items())))
+    session_key = connection_info.pop("key")
 
     if key in remote_magic._clients:
         kc = remote_magic._clients[key]
@@ -144,7 +145,7 @@ def remote_magic(line, cell=None):
 remote_magic._clients = {}
 
 
-def register_remote_magic(magic_name='remote'):
+def register_remote_magic(magic_name="remote"):
     """Define the parameterized %remote magic
 
     See remote_magic above for details.
@@ -152,8 +153,8 @@ def register_remote_magic(magic_name='remote'):
     ip = get_ipython()
     if ip is None:
         return  # do nothing if IPython's not running
-    ip.register_magic_function(remote_magic, magic_kind='line', magic_name=magic_name)
-    ip.register_magic_function(remote_magic, magic_kind='cell', magic_name=magic_name)
+    ip.register_magic_function(remote_magic, magic_kind="line", magic_name=magic_name)
+    ip.register_magic_function(remote_magic, magic_kind="cell", magic_name=magic_name)
 
 
 def connect_qtconsole(connection_info, name=None, extra_args=None):
@@ -167,9 +168,9 @@ def connect_qtconsole(connection_info, name=None, extra_args=None):
     if name is None:
         name = uuid4().hex
 
-    path = os.path.join(runtime_dir, name + '.json')
+    path = os.path.join(runtime_dir, name + ".json")
     write_connection_file(path, **connection_info)
-    cmd = ['jupyter', 'qtconsole', '--existing', path]
+    cmd = ["jupyter", "qtconsole", "--existing", path]
     if extra_args:
         cmd.extend(extra_args)
     Popen(cmd)
@@ -197,11 +198,13 @@ def start_ipython(ip=None, ns=None, log=None):
         Hook up IPython's logging to an existing logger instead of the default.
     """
     from IPython import get_ipython
+
     if get_ipython() is not None:
         raise RuntimeError("Cannot start IPython, it's already running.")
 
     from zmq.eventloop.ioloop import ZMQIOLoop
     from ipykernel.kernelapp import IPKernelApp
+
     # save the global IOLoop instance
     # since IPython relies on it, but we are going to put it in a thread.
     save_inst = IOLoop.instance()
@@ -212,7 +215,7 @@ def start_ipython(ip=None, ns=None, log=None):
     # start IPython, disabling its signal handlers that won't work due to running in a thread:
     app = IPKernelApp.instance(log=log)
     # Don't connect to the history database
-    app.config.HistoryManager.hist_file = ':memory:'
+    app.config.HistoryManager.hist_file = ":memory:"
     # listen on all interfaces, so remote clients can connect:
     if ip:
         app.ip = ip

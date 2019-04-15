@@ -5,5 +5,6 @@ from ..utils import ignoring
 from .cluster import Cluster
 from .local import LocalCluster
 from .adaptive import Adaptive
+
 with ignoring(ImportError):
     from .ssh import SSHCluster

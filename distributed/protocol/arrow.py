@@ -3,9 +3,12 @@ from __future__ import print_function, division, absolute_import
 from .serialize import dask_serialize, dask_deserialize
 
 import pyarrow
-if pyarrow.__version__ < '0.10':
-    raise ImportError("Need pyarrow >= 0.10 . "
-                      "See https://arrow.apache.org/docs/python/install.html")
+
+if pyarrow.__version__ < "0.10":
+    raise ImportError(
+        "Need pyarrow >= 0.10 . "
+        "See https://arrow.apache.org/docs/python/install.html"
+    )
 
 
 @dask_serialize.register(pyarrow.RecordBatch)

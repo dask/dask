@@ -67,6 +67,7 @@ def get_backend(scheme):
     """
     backend = backends.get(scheme)
     if backend is None:
-        raise ValueError("unknown address scheme %r (known schemes: %s)"
-                         % (scheme, sorted(backends)))
+        raise ValueError(
+            "unknown address scheme %r (known schemes: %s)" % (scheme, sorted(backends))
+        )
     return backend

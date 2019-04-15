@@ -29,10 +29,11 @@ class LockExtension(object):
         self.events = defaultdict(deque)
         self.ids = dict()
 
-        self.scheduler.handlers.update({'lock_acquire': self.acquire,
-                                        'lock_release': self.release})
+        self.scheduler.handlers.update(
+            {"lock_acquire": self.acquire, "lock_release": self.release}
+        )
 
-        self.scheduler.extensions['locks'] = self
+        self.scheduler.extensions["locks"] = self
 
     @gen.coroutine
     def acquire(self, stream=None, name=None, id=None, timeout=None):
@@ -92,9 +93,10 @@ class Lock(object):
     >>> # do things with protected resource
     >>> lock.release()  # doctest: +SKIP
     """
+
     def __init__(self, name=None, client=None):
         self.client = client or _get_global_client() or get_worker().client
-        self.name = name or 'lock-' + uuid.uuid4().hex
+        self.name = name or "lock-" + uuid.uuid4().hex
         self.id = uuid.uuid4().hex
         self._locked = False
 
@@ -121,12 +123,15 @@ class Lock(object):
         """
         if not blocking:
             if timeout is not None:
-                raise ValueError(
-                    "can't specify a timeout for a non-blocking call")
+                raise ValueError("can't specify a timeout for a non-blocking call")
             timeout = 0
 
-        result = self.client.sync(self.client.scheduler.lock_acquire,
-                                  name=self.name, id=self.id, timeout=timeout)
+        result = self.client.sync(
+            self.client.scheduler.lock_acquire,
+            name=self.name,
+            id=self.id,
+            timeout=timeout,
+        )
         self._locked = True
         return result
 
@@ -134,8 +139,9 @@ class Lock(object):
         """ Release the lock if already acquired """
         if not self.locked():
             raise ValueError("Lock is not yet acquired")
-        result = self.client.sync(self.client.scheduler.lock_release,
-                                  name=self.name, id=self.id)
+        result = self.client.sync(
+            self.client.scheduler.lock_release, name=self.name, id=self.id
+        )
         self._locked = False
         return result
 

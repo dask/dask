@@ -18,6 +18,7 @@ def test_speed(c, s, a, b):
 
     Interestingly this runs 10x slower on Python 2
     """
+
     def pingpong(a, b, start=False, n=1000, msg=1):
         sub = Sub(a)
         pub = Pub(b)
@@ -36,10 +37,11 @@ def test_speed(c, s, a, b):
         return n
 
     import numpy as np
+
     x = np.random.random(1000)
 
-    x = c.submit(pingpong, 'a', 'b', start=True, msg=x, n=100)
-    y = c.submit(pingpong, 'b', 'a', n=100)
+    x = c.submit(pingpong, "a", "b", start=True, msg=x, n=100)
+    y = c.submit(pingpong, "b", "a", n=100)
 
     start = time()
     yield c.gather([x, y])
@@ -51,14 +53,14 @@ def test_speed(c, s, a, b):
 def test_client(c, s):
     with pytest.raises(Exception):
         get_worker()
-    sub = Sub('a')
-    pub = Pub('a')
+    sub = Sub("a")
+    pub = Pub("a")
 
-    sps = s.extensions['pubsub']
-    cps = c.extensions['pubsub']
+    sps = s.extensions["pubsub"]
+    cps = c.extensions["pubsub"]
 
     start = time()
-    while not set(sps.client_subscribers['a']) == {c.id}:
+    while not set(sps.client_subscribers["a"]) == {c.id}:
         yield gen.sleep(0.01)
         assert time() < start + 3
 
@@ -70,10 +72,10 @@ def test_client(c, s):
 
 @gen_cluster(client=True)
 def test_client_worker(c, s, a, b):
-    sub = Sub('a', client=c, worker=None)
+    sub = Sub("a", client=c, worker=None)
 
     def f(x):
-        pub = Pub('a')
+        pub = Pub("a")
         pub.put(x)
 
     futures = c.map(f, range(10))
@@ -86,32 +88,36 @@ def test_client_worker(c, s, a, b):
 
     assert set(L) == set(range(10))
 
-    sps = s.extensions['pubsub']
-    aps = a.extensions['pubsub']
-    bps = b.extensions['pubsub']
+    sps = s.extensions["pubsub"]
+    aps = a.extensions["pubsub"]
+    bps = b.extensions["pubsub"]
 
     start = time()
-    while (sps.publishers['a'] or
-           sps.subscribers['a'] or
-           aps.publishers['a'] or
-           bps.publishers['a'] or
-           len(sps.client_subscribers['a']) != 1):
+    while (
+        sps.publishers["a"]
+        or sps.subscribers["a"]
+        or aps.publishers["a"]
+        or bps.publishers["a"]
+        or len(sps.client_subscribers["a"]) != 1
+    ):
         yield gen.sleep(0.01)
         assert time() < start + 3
 
     del sub
 
     start = time()
-    while (sps.client_subscribers or
-           any(aps.publish_to_scheduler.values()) or
-           any(bps.publish_to_scheduler.values())):
+    while (
+        sps.client_subscribers
+        or any(aps.publish_to_scheduler.values())
+        or any(bps.publish_to_scheduler.values())
+    ):
         yield gen.sleep(0.01)
         assert time() < start + 3
 
 
 @gen_cluster(client=True)
 def test_timeouts(c, s, a, b):
-    sub = Sub('a', client=c, worker=None)
+    sub = Sub("a", client=c, worker=None)
     start = time()
     with pytest.raises(TimeoutError):
         yield sub.get(timeout=0.1)

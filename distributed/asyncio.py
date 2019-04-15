@@ -18,11 +18,13 @@ from .utils import ignoring
 
 def to_asyncio(fn, **default_kwargs):
     """Converts Tornado gen.coroutines and futures to asyncio ones"""
+
     @wraps(fn)
     def convert(*args, **kwargs):
         if default_kwargs:
             kwargs = merge(default_kwargs, kwargs)
         return to_asyncio_future(fn(*args, **kwargs))
+
     return convert
 
 
@@ -92,6 +94,7 @@ class AioClient(Client):
     distributed.client.Client: Blocking Client
     distributed.scheduler.Scheduler: Internal scheduler
     """
+
     def __init__(self, *args, **kwargs):
         loop = asyncio.get_event_loop()
         ioloop = BaseAsyncIOLoop(loop)

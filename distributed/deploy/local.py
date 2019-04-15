@@ -14,8 +14,16 @@ from tornado import gen
 from .cluster import Cluster
 from ..compatibility import get_thread_identity
 from ..core import CommClosedError
-from ..utils import (sync, ignoring, All, silence_logging, LoopRunner,
-        log_errors, thread_state, parse_timedelta)
+from ..utils import (
+    sync,
+    ignoring,
+    All,
+    silence_logging,
+    LoopRunner,
+    log_errors,
+    thread_state,
+    parse_timedelta,
+)
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, parse_memory_limit, _ncores
@@ -87,18 +95,35 @@ class LocalCluster(Cluster):
 
     >>> LocalCluster(service_kwargs={'bokeh': {'prefix': '/foo'}})  # doctest: +SKIP
     """
-    def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
-                 loop=None, start=None, ip=None, scheduler_port=0,
-                 silence_logs=logging.WARN, dashboard_address=':8787',
-                 diagnostics_port=None,
-                 services=None, worker_services=None, service_kwargs=None,
-                 asynchronous=False, security=None, protocol=None,
-                 blocked_handlers=None, **worker_kwargs):
+
+    def __init__(
+        self,
+        n_workers=None,
+        threads_per_worker=None,
+        processes=True,
+        loop=None,
+        start=None,
+        ip=None,
+        scheduler_port=0,
+        silence_logs=logging.WARN,
+        dashboard_address=":8787",
+        diagnostics_port=None,
+        services=None,
+        worker_services=None,
+        service_kwargs=None,
+        asynchronous=False,
+        security=None,
+        protocol=None,
+        blocked_handlers=None,
+        **worker_kwargs
+    ):
         if start is not None:
-            msg = ("The start= parameter is deprecated. "
-                   "LocalCluster always starts. "
-                   "For asynchronous operation use the following: \n\n"
-                   "  cluster = yield LocalCluster(asynchronous=True)")
+            msg = (
+                "The start= parameter is deprecated. "
+                "LocalCluster always starts. "
+                "For asynchronous operation use the following: \n\n"
+                "  cluster = yield LocalCluster(asynchronous=True)"
+            )
             raise ValueError(msg)
 
         if diagnostics_port is not None:
@@ -112,16 +137,16 @@ class LocalCluster(Cluster):
         self.processes = processes
 
         if protocol is None:
-            if ip and '://' in ip:
-                protocol = ip.split('://')[0]
+            if ip and "://" in ip:
+                protocol = ip.split("://")[0]
             elif security:
-                protocol = 'tls://'
+                protocol = "tls://"
             elif not self.processes and not scheduler_port:
-                protocol = 'inproc://'
+                protocol = "inproc://"
             else:
-                protocol = 'tcp://'
-        if not protocol.endswith('://'):
-            protocol = protocol + '://'
+                protocol = "tcp://"
+        if not protocol.endswith("://"):
+            protocol = protocol + "://"
         self.protocol = protocol
 
         self.silence_logs = silence_logs
@@ -142,13 +167,12 @@ class LocalCluster(Cluster):
         if n_workers and threads_per_worker is None:
             # Overcommit threads per worker, rather than undercommit
             threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
-        if n_workers and 'memory_limit' not in worker_kwargs:
-            worker_kwargs['memory_limit'] = parse_memory_limit('auto', 1, n_workers)
+        if n_workers and "memory_limit" not in worker_kwargs:
+            worker_kwargs["memory_limit"] = parse_memory_limit("auto", 1, n_workers)
 
-        worker_kwargs.update({
-            'ncores': threads_per_worker,
-            'services': worker_services,
-        })
+        worker_kwargs.update(
+            {"ncores": threads_per_worker, "services": worker_services}
+        )
 
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
@@ -160,29 +184,35 @@ class LocalCluster(Cluster):
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
-                services[('bokeh', dashboard_address)] = (BokehScheduler, (service_kwargs or {}).get('bokeh', {}))
-                worker_services[('bokeh', 0)] = BokehWorker
+                services[("bokeh", dashboard_address)] = (
+                    BokehScheduler,
+                    (service_kwargs or {}).get("bokeh", {}),
+                )
+                worker_services[("bokeh", 0)] = BokehWorker
 
-        self.scheduler = Scheduler(loop=self.loop,
-                                   services=services,
-                                   security=security,
-                                   blocked_handlers=blocked_handlers)
+        self.scheduler = Scheduler(
+            loop=self.loop,
+            services=services,
+            security=security,
+            blocked_handlers=blocked_handlers,
+        )
         self.scheduler_port = scheduler_port
 
         self.workers = []
         self.worker_kwargs = worker_kwargs
         if security:
-            self.worker_kwargs['security'] = security
+            self.worker_kwargs["security"] = security
 
         self.start(ip=ip, n_workers=n_workers)
 
         clusters_to_close.add(self)
 
     def __repr__(self):
-        return ('LocalCluster(%r, workers=%d, ncores=%d)' %
-                (self.scheduler_address, len(self.workers),
-                 sum(w.ncores for w in self.workers))
-                )
+        return "LocalCluster(%r, workers=%d, ncores=%d)" % (
+            self.scheduler_address,
+            len(self.workers),
+            sum(w.ncores for w in self.workers),
+        )
 
     def __await__(self):
         return self._started.__await__()
@@ -190,18 +220,18 @@ class LocalCluster(Cluster):
     @property
     def asynchronous(self):
         return (
-            self._asynchronous or
-            getattr(thread_state, 'asynchronous', False) or
-            hasattr(self.loop, '_thread_identity') and self.loop._thread_identity == get_thread_identity()
+            self._asynchronous
+            or getattr(thread_state, "asynchronous", False)
+            or hasattr(self.loop, "_thread_identity")
+            and self.loop._thread_identity == get_thread_identity()
         )
 
     def sync(self, func, *args, **kwargs):
-        if kwargs.pop('asynchronous', None) or self.asynchronous:
-            callback_timeout = kwargs.pop('callback_timeout', None)
+        if kwargs.pop("asynchronous", None) or self.asynchronous:
+            callback_timeout = kwargs.pop("callback_timeout", None)
             future = func(*args, **kwargs)
             if callback_timeout is not None:
-                future = gen.with_timeout(timedelta(seconds=callback_timeout),
-                                          future)
+                future = gen.with_timeout(timedelta(seconds=callback_timeout), future)
             return future
         else:
             return sync(self.loop, func, *args, **kwargs)
@@ -218,52 +248,56 @@ class LocalCluster(Cluster):
         """
         Start all cluster services.
         """
-        if self.status == 'running':
+        if self.status == "running":
             return
 
-        if self.protocol == 'inproc://':
+        if self.protocol == "inproc://":
             address = self.protocol
         else:
             if ip is None:
-                ip = '127.0.0.1'
+                ip = "127.0.0.1"
 
-            if '://' in ip:
+            if "://" in ip:
                 address = ip
             else:
                 address = self.protocol + ip
             if self.scheduler_port:
-                address += ':' + str(self.scheduler_port)
+                address += ":" + str(self.scheduler_port)
 
         self.scheduler.start(address)
 
         yield [self._start_worker(**self.worker_kwargs) for i in range(n_workers)]
 
-        self.status = 'running'
+        self.status = "running"
 
         raise gen.Return(self)
 
     @gen.coroutine
     def _start_worker(self, death_timeout=60, **kwargs):
-        if self.status and self.status.startswith('clos'):
+        if self.status and self.status.startswith("clos"):
             warnings.warn("Tried to start a worker while status=='%s'" % self.status)
             return
 
         if self.processes:
             W = Nanny
-            kwargs['quiet'] = True
+            kwargs["quiet"] = True
         else:
             W = Worker
 
-        w = yield W(self.scheduler.address, loop=self.loop,
-              death_timeout=death_timeout,
-              silence_logs=self.silence_logs, **kwargs)
+        w = yield W(
+            self.scheduler.address,
+            loop=self.loop,
+            death_timeout=death_timeout,
+            silence_logs=self.silence_logs,
+            **kwargs
+        )
 
         self.workers.append(w)
 
-        while w.status != 'closed' and w.worker_address not in self.scheduler.workers:
+        while w.status != "closed" and w.worker_address not in self.scheduler.workers:
             yield gen.sleep(0.01)
 
-        if w.status == 'closed' and self.scheduler.status == 'running':
+        if w.status == "closed" and self.scheduler.status == "running":
             self.workers.remove(w)
             raise gen.TimeoutError("Worker failed to start")
 
@@ -308,11 +342,11 @@ class LocalCluster(Cluster):
         self.sync(self._stop_worker, w)
 
     @gen.coroutine
-    def _close(self, timeout='2s'):
+    def _close(self, timeout="2s"):
         # Can be 'closing' as we're called by close() below
-        if self.status == 'closed':
+        if self.status == "closed":
             return
-        self.status = 'closing'
+        self.status = "closing"
 
         self.scheduler.clear_task_state()
 
@@ -328,11 +362,11 @@ class LocalCluster(Cluster):
                 yield self.scheduler.close(fast=True)
             del self.workers[:]
         finally:
-            self.status = 'closed'
+            self.status = "closed"
 
     def close(self, timeout=20):
         """ Close the cluster """
-        if self.status == 'closed':
+        if self.status == "closed":
             return
 
         try:
@@ -340,9 +374,11 @@ class LocalCluster(Cluster):
         except RuntimeError:  # IOLoop is closed
             result = None
 
-        if hasattr(self, '_old_logging_level'):
+        if hasattr(self, "_old_logging_level"):
             if self.asynchronous:
-                result.add_done_callback(lambda _: silence_logging(self._old_logging_level))
+                result.add_done_callback(
+                    lambda _: silence_logging(self._old_logging_level)
+                )
             else:
                 silence_logging(self._old_logging_level)
 
@@ -362,11 +398,13 @@ class LocalCluster(Cluster):
         """
         with log_errors():
             kwargs2 = toolz.merge(self.worker_kwargs, kwargs)
-            yield [self._start_worker(**kwargs2)
-                   for i in range(n - len(self.scheduler.workers))]
+            yield [
+                self._start_worker(**kwargs2)
+                for i in range(n - len(self.scheduler.workers))
+            ]
 
             # clean up any closed worker
-            self.workers = [w for w in self.workers if w.status != 'closed']
+            self.workers = [w for w in self.workers if w.status != "closed"]
 
     @gen.coroutine
     def scale_down(self, workers):
@@ -380,7 +418,7 @@ class LocalCluster(Cluster):
         """
         with log_errors():
             # clean up any closed worker
-            self.workers = [w for w in self.workers if w.status != 'closed']
+            self.workers = [w for w in self.workers if w.status != "closed"]
             workers = set(workers)
 
             # we might be given addresses
@@ -413,7 +451,7 @@ class LocalCluster(Cluster):
         try:
             return self.scheduler.address
         except ValueError:
-            return '<unstarted>'
+            return "<unstarted>"
 
 
 def nprocesses_nthreads(n):

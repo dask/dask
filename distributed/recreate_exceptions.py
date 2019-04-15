@@ -20,8 +20,8 @@ class ReplayExceptionScheduler(object):
 
     def __init__(self, scheduler):
         self.scheduler = scheduler
-        self.scheduler.handlers['cause_of_failure'] = self.cause_of_failure
-        self.scheduler.extensions['exceptions'] = self
+        self.scheduler.handlers["cause_of_failure"] = self.cause_of_failure
+        self.scheduler.extensions["exceptions"] = self
 
     def cause_of_failure(self, *args, **kwargs):
         """
@@ -39,7 +39,7 @@ class ReplayExceptionScheduler(object):
         deps: keys that the task depends on
         """
 
-        keys = kwargs.pop('keys', [])
+        keys = kwargs.pop("keys", [])
         for key in keys:
             if isinstance(key, list):
                 key = tuple(key)  # ensure not a list from msgpack
@@ -48,9 +48,11 @@ class ReplayExceptionScheduler(object):
             if ts is not None and ts.exception_blame is not None:
                 cause = ts.exception_blame
                 # NOTE: cannot serialize sets
-                return {'deps': [dts.key for dts in cause.dependencies],
-                        'cause': cause.key,
-                        'task': cause.run_spec}
+                return {
+                    "deps": [dts.key for dts in cause.dependencies],
+                    "cause": cause.key,
+                    "task": cause.run_spec,
+                }
 
 
 class ReplayExceptionClient(object):
@@ -66,7 +68,7 @@ class ReplayExceptionClient(object):
 
     def __init__(self, client):
         self.client = client
-        self.client.extensions['exceptions'] = self
+        self.client.extensions["exceptions"] = self
         # monkey patch
         self.client.recreate_error_locally = self.recreate_error_locally
         self.client._recreate_error_locally = self._recreate_error_locally
@@ -80,12 +82,11 @@ class ReplayExceptionClient(object):
     @gen.coroutine
     def _get_futures_error(self, future):
         # only get errors for futures that errored.
-        futures = [f for f in futures_of(future) if f.status == 'error']
+        futures = [f for f in futures_of(future) if f.status == "error"]
         if not futures:
             raise ValueError("No errored futures passed")
-        out = yield self.scheduler.cause_of_failure(
-            keys=[f.key for f in futures])
-        deps, task = out['deps'], out['task']
+        out = yield self.scheduler.cause_of_failure(keys=[f.key for f in futures])
+        deps, task = out["deps"], out["task"]
         if isinstance(task, dict):
             function, args, kwargs = _deserialize(**task)
             raise gen.Return((function, args, kwargs, deps))
@@ -177,6 +178,7 @@ class ReplayExceptionClient(object):
         Nothing; the function runs and should raise an exception, allowing
         the debugger to run.
         """
-        func, args, kwargs = sync(self.client.loop,
-                                  self._recreate_error_locally, future)
+        func, args, kwargs = sync(
+            self.client.loop, self._recreate_error_locally, future
+        )
         func(*args, **kwargs)

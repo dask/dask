@@ -15,17 +15,25 @@ from distributed.comm import CommClosedError
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils import sync, ignoring
-from distributed.utils_test import (gen_cluster, cluster, inc, slow, div,
-                                    slowinc, slowadd, captured_logger)
-from distributed.utils_test import loop # noqa: F401
+from distributed.utils_test import (
+    gen_cluster,
+    cluster,
+    inc,
+    slow,
+    div,
+    slowinc,
+    slowadd,
+    captured_logger,
+)
+from distributed.utils_test import loop  # noqa: F401
 
 
 def test_submit_after_failed_worker_sync(loop):
     with cluster(active_rpc_timeout=10) as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s["address"], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
-            a['proc']().terminate()
+            a["proc"]().terminate()
             total = c.submit(sum, L)
             assert total.result() == sum(map(inc, range(10)))
 
@@ -61,16 +69,20 @@ def test_submit_after_failed_worker(c, s, a, b):
 
 def test_gather_after_failed_worker(loop):
     with cluster(active_rpc_timeout=10) as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s["address"], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
-            a['proc']().terminate()
+            a["proc"]().terminate()
             result = c.gather(L)
             assert result == list(map(inc, range(10)))
 
 
-@gen_cluster(client=True, Worker=Nanny, ncores=[('127.0.0.1', 1)] * 4,
-             config={'distributed.comm.timeouts.connect': '1s'})
+@gen_cluster(
+    client=True,
+    Worker=Nanny,
+    ncores=[("127.0.0.1", 1)] * 4,
+    config={"distributed.comm.timeouts.connect": "1s"},
+)
 def test_gather_then_submit_after_failed_workers(c, s, w, x, y, z):
     L = c.map(inc, range(20))
     yield wait(L)
@@ -168,7 +180,7 @@ def test_restart_cleared(c, s, a, b):
 
 def test_restart_sync_no_center(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s["address"], loop=loop) as c:
             x = c.submit(inc, 1)
             c.restart()
             assert x.cancelled()
@@ -179,7 +191,7 @@ def test_restart_sync_no_center(loop):
 
 def test_restart_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s["address"], loop=loop) as c:
             x = c.submit(div, 1, 2)
             x.result()
 
@@ -205,7 +217,7 @@ def test_restart_fast(c, s, a, b):
     assert time() - start < 10
     assert len(s.ncores) == 2
 
-    assert all(x.status == 'cancelled' for x in L)
+    assert all(x.status == "cancelled" for x in L)
 
     x = c.submit(inc, 1)
     result = yield x
@@ -214,7 +226,7 @@ def test_restart_fast(c, s, a, b):
 
 def test_worker_doesnt_await_task_completion(loop):
     with cluster(nanny=True, nworkers=1) as (s, [w]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s["address"], loop=loop) as c:
             future = c.submit(sleep, 100)
             sleep(0.1)
             start = time()
@@ -225,7 +237,7 @@ def test_worker_doesnt_await_task_completion(loop):
 
 def test_restart_fast_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s["address"], loop=loop) as c:
             L = c.map(sleep, range(10))
 
             start = time()
@@ -233,7 +245,7 @@ def test_restart_fast_sync(loop):
             assert time() - start < 10
             assert len(c.ncores()) == 2
 
-            assert all(x.status == 'cancelled' for x in L)
+            assert all(x.status == "cancelled" for x in L)
 
             x = c.submit(inc, 1)
             assert x.result() == 2
@@ -247,7 +259,7 @@ def test_fast_kill(c, s, a, b):
     yield c._restart()
     assert time() - start < 10
 
-    assert all(x.status == 'cancelled' for x in L)
+    assert all(x.status == "cancelled" for x in L)
 
     x = c.submit(inc, 1)
     result = yield x
@@ -278,6 +290,7 @@ def test_multiple_clients_restart(s, a, b):
 @gen_cluster(Worker=Nanny, timeout=60)
 def test_restart_scheduler(s, a, b):
     import gc
+
     gc.collect()
     addrs = (a.worker_address, b.worker_address)
     yield s.restart()
@@ -294,6 +307,7 @@ def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
     y = c.submit(inc, 1)
     del x
     import gc
+
     gc.collect()
     yield gen.sleep(0.1)
     yield y
@@ -313,12 +327,14 @@ def test_broken_worker_during_computation(c, s, a, b):
     N = 256
     expected_result = N * (N + 1) // 2
     i = 0
-    L = c.map(inc, range(N),
-              key=['inc-%d-%d' % (i, j) for j in range(N)])
+    L = c.map(inc, range(N), key=["inc-%d-%d" % (i, j) for j in range(N)])
     while len(L) > 1:
         i += 1
-        L = c.map(slowadd, *zip(*partition_all(2, L)),
-                  key=['add-%d-%d' % (i, j) for j in range(len(L) // 2)])
+        L = c.map(
+            slowadd,
+            *zip(*partition_all(2, L)),
+            key=["add-%d-%d" % (i, j) for j in range(len(L) // 2)]
+        )
 
     yield gen.sleep(random.random() / 20)
     with ignoring(CommClosedError):  # comm will be closed abrupty
@@ -328,7 +344,9 @@ def test_broken_worker_during_computation(c, s, a, b):
     while len(s.workers) < 3:
         yield gen.sleep(0.01)
 
-    with ignoring(CommClosedError, EnvironmentError):  # perhaps new worker can't be contacted yet
+    with ignoring(
+        CommClosedError, EnvironmentError
+    ):  # perhaps new worker can't be contacted yet
         yield c._run(os._exit, 1, workers=[n.worker_address])
 
     [result] = yield c.gather(L)
@@ -365,8 +383,7 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    futures = c.map(slowinc, range(20), delay=0.01,
-                    key=['f%d' % i for i in range(20)])
+    futures = c.map(slowinc, range(20), delay=0.01, key=["f%d" % i for i in range(20)])
     yield wait(futures)
 
     result = yield c.submit(sum, futures, workers=a.address)
@@ -390,20 +407,20 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
 
 
 @slow
-@gen_cluster(client=True, timeout=60, Worker=Nanny, ncores=[('127.0.0.1', 1)])
+@gen_cluster(client=True, timeout=60, Worker=Nanny, ncores=[("127.0.0.1", 1)])
 def test_restart_timeout_on_long_running_task(c, s, a):
-    with captured_logger('distributed.scheduler') as sio:
+    with captured_logger("distributed.scheduler") as sio:
         future = c.submit(sleep, 3600)
         yield gen.sleep(0.1)
         yield c.restart(timeout=20)
 
     text = sio.getvalue()
-    assert 'timeout' not in text.lower()
+    assert "timeout" not in text.lower()
 
 
-@gen_cluster(client=True, scheduler_kwargs={'worker_ttl': '100ms'})
+@gen_cluster(client=True, scheduler_kwargs={"worker_ttl": "100ms"})
 def test_worker_time_to_live(c, s, a, b):
-    a.periodic_callbacks['heartbeat'].stop()
+    a.periodic_callbacks["heartbeat"].stop()
     yield gen.sleep(0.010)
     assert set(s.workers) == {a.address, b.address}
 
@@ -415,8 +432,8 @@ def test_worker_time_to_live(c, s, a, b):
     set(s.workers) == {b.address}
 
     start = time()
-    while b.status == 'running':
+    while b.status == "running":
         yield gen.sleep(0.050)
         assert time() < start + 1
 
-    assert b.status in ('closed', 'closing')
+    assert b.status in ("closed", "closing")

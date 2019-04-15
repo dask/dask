@@ -12,6 +12,7 @@ class GraphLayout(SchedulerPlugin):
     It is commonly used with distributed/bokeh/scheduler.py::GraphPlot, which
     is rendered at /graph on the diagnostic dashboard.
     """
+
     def __init__(self, scheduler):
         self.x = {}
         self.y = {}
@@ -31,14 +32,16 @@ class GraphLayout(SchedulerPlugin):
         scheduler.add_plugin(self)
 
         if self.scheduler.tasks:
-            dependencies = {k: [ds.key for ds in ts.dependencies]
-                            for k, ts in scheduler.tasks.items()}
+            dependencies = {
+                k: [ds.key for ds in ts.dependencies]
+                for k, ts in scheduler.tasks.items()
+            }
             priority = {k: ts.priority for k, ts in scheduler.tasks.items()}
-            self.update_graph(self.scheduler, dependencies=dependencies,
-                    priority=priority)
+            self.update_graph(
+                self.scheduler, dependencies=dependencies, priority=priority
+            )
 
-    def update_graph(self, scheduler, dependencies=None, priority=None,
-                     **kwargs):
+    def update_graph(self, scheduler, dependencies=None, priority=None, **kwargs):
         stack = sorted(dependencies, key=lambda k: priority.get(k, 0), reverse=True)
         while stack:
             key = stack.pop()
@@ -48,15 +51,18 @@ class GraphLayout(SchedulerPlugin):
             if deps:
                 if not all(dep in self.y for dep in deps):
                     stack.append(key)
-                    stack.extend(sorted(deps, key=lambda k: priority.get(k, 0),
-                                        reverse=True))
+                    stack.extend(
+                        sorted(deps, key=lambda k: priority.get(k, 0), reverse=True)
+                    )
                     continue
                 else:
-                    total_deps = sum(len(scheduler.tasks[dep].dependents)
-                                     for dep in deps)
-                    y = sum(self.y[dep] * len(scheduler.tasks[dep].dependents)
-                                          / total_deps
-                            for dep in deps)
+                    total_deps = sum(
+                        len(scheduler.tasks[dep].dependents) for dep in deps
+                    )
+                    y = sum(
+                        self.y[dep] * len(scheduler.tasks[dep].dependents) / total_deps
+                        for dep in deps
+                    )
                     x = max(self.x[dep] for dep in deps) + 1
             else:
                 x = 0
@@ -83,16 +89,20 @@ class GraphLayout(SchedulerPlugin):
                 self.new_edges.append(edge)
 
     def transition(self, key, start, finish, *args, **kwargs):
-        if finish != 'forgotten':
+        if finish != "forgotten":
             self.state_updates.append((self.index[key], finish))
         else:
-            self.visible_updates.append((self.index[key], 'False'))
+            self.visible_updates.append((self.index[key], "False"))
             task = self.scheduler.tasks[key]
             for dep in task.dependents:
                 edge = (key, dep.key)
-                self.visible_edge_updates.append((self.index_edge.pop((key, dep.key)), 'False'))
+                self.visible_edge_updates.append(
+                    (self.index_edge.pop((key, dep.key)), "False")
+                )
             for dep in task.dependencies:
-                self.visible_edge_updates.append((self.index_edge.pop((dep.key, key)), 'False'))
+                self.visible_edge_updates.append(
+                    (self.index_edge.pop((dep.key, key)), "False")
+                )
 
             try:
                 del self.collision[(self.x[key], self.y[key])]

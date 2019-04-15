@@ -20,11 +20,11 @@ class TaskStreamPlugin(SchedulerPlugin):
         self.index = 0
 
     def transition(self, key, start, finish, *args, **kwargs):
-        if start == 'processing':
+        if start == "processing":
             if key not in self.scheduler.tasks:
                 return
-            kwargs['key'] = key
-            if finish == 'memory' or finish == 'erred':
+            kwargs["key"] = key
+            if finish == "memory" or finish == "erred":
                 self.buffer.append(kwargs)
                 self.index += 1
 
@@ -34,7 +34,7 @@ class TaskStreamPlugin(SchedulerPlugin):
                 return left
 
             mid = (left + right) // 2
-            value = max(stop for _, start, stop in self.buffer[mid]['startstops'])
+            value = max(stop for _, start, stop in self.buffer[mid]["startstops"])
 
             if value < target:
                 return bisect(target, mid + 1, right)
@@ -98,16 +98,15 @@ def rectangles(msgs, workers=None, start_boundary=0):
     L_y = []
 
     for msg in msgs:
-        key = msg['key']
+        key = msg["key"]
         name = key_split(key)
-        startstops = msg.get('startstops', [])
+        startstops = msg.get("startstops", [])
         try:
-            worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+            worker_thread = "%s-%d" % (msg["worker"], msg["thread"])
         except Exception:
             continue
-            logger.warning("Message contained bad information: %s", msg,
-                           exc_info=True)
-            worker_thread = ''
+            logger.warning("Message contained bad information: %s", msg, exc_info=True)
+            worker_thread = ""
 
         if worker_thread not in workers:
             workers[worker_thread] = len(workers) / 2
@@ -126,46 +125,54 @@ def rectangles(msgs, workers=None, start_boundary=0):
             L_name.append(prefix[action] + name)
             L_color.append(color)
             L_alpha.append(alphas[action])
-            L_worker.append(msg['worker'])
+            L_worker.append(msg["worker"])
             L_worker_thread.append(worker_thread)
             L_y.append(workers[worker_thread])
 
-    return {'start': L_start,
-            'duration': L_duration,
-            'duration_text': L_duration_text,
-            'key': L_key,
-            'name': L_name,
-            'color': L_color,
-            'alpha': L_alpha,
-            'worker': L_worker,
-            'worker_thread': L_worker_thread,
-            'y': L_y}
+    return {
+        "start": L_start,
+        "duration": L_duration,
+        "duration_text": L_duration_text,
+        "key": L_key,
+        "name": L_name,
+        "color": L_color,
+        "alpha": L_alpha,
+        "worker": L_worker,
+        "worker_thread": L_worker_thread,
+        "y": L_y,
+    }
 
 
 def color_of_message(msg):
-    if msg['status'] == 'OK':
-        split = key_split(msg['key'])
+    if msg["status"] == "OK":
+        split = key_split(msg["key"])
         return color_of(split)
     else:
-        return 'black'
+        return "black"
 
 
-colors = {'transfer': 'red',
-          'disk-write': 'orange',
-          'disk-read': 'orange',
-          'deserialize': 'gray',
-          'compute': color_of_message}
+colors = {
+    "transfer": "red",
+    "disk-write": "orange",
+    "disk-read": "orange",
+    "deserialize": "gray",
+    "compute": color_of_message,
+}
 
 
-alphas = {'transfer': 0.4,
-          'compute': 1,
-          'deserialize': 0.4,
-          'disk-write': 0.4,
-          'disk-read': 0.4}
+alphas = {
+    "transfer": 0.4,
+    "compute": 1,
+    "deserialize": 0.4,
+    "disk-write": 0.4,
+    "disk-read": 0.4,
+}
 
 
-prefix = {'transfer': 'transfer-',
-          'disk-write': 'disk-write-',
-          'disk-read': 'disk-read-',
-          'deserialize': 'deserialize-',
-          'compute': ''}
+prefix = {
+    "transfer": "transfer-",
+    "disk-write": "disk-write-",
+    "disk-read": "disk-read-",
+    "deserialize": "deserialize-",
+    "compute": "",
+}

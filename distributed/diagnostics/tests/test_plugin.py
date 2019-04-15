@@ -7,7 +7,6 @@ from distributed.diagnostics.plugin import SchedulerPlugin
 
 @gen_cluster(client=True)
 def test_simple(c, s, a, b):
-
     class Counter(SchedulerPlugin):
         def start(self, scheduler):
             self.scheduler = scheduler
@@ -15,7 +14,7 @@ def test_simple(c, s, a, b):
             self.count = 0
 
         def transition(self, key, start, finish, *args, **kwargs):
-            if start == 'processing' and finish == 'memory':
+            if start == "processing" and finish == "memory":
                 self.count += 1
 
     counter = Counter()
@@ -42,11 +41,11 @@ def test_add_remove_worker(s):
     class MyPlugin(SchedulerPlugin):
         def add_worker(self, worker, scheduler):
             assert scheduler is s
-            events.append(('add_worker', worker))
+            events.append(("add_worker", worker))
 
         def remove_worker(self, worker, scheduler):
             assert scheduler is s
-            events.append(('remove_worker', worker))
+            events.append(("remove_worker", worker))
 
     plugin = MyPlugin()
     s.add_plugin(plugin)
@@ -59,11 +58,12 @@ def test_add_remove_worker(s):
     yield a._close()
     yield b._close()
 
-    assert events == [('add_worker', a.address),
-                      ('add_worker', b.address),
-                      ('remove_worker', a.address),
-                      ('remove_worker', b.address),
-                      ]
+    assert events == [
+        ("add_worker", a.address),
+        ("add_worker", b.address),
+        ("remove_worker", a.address),
+        ("remove_worker", b.address),
+    ]
 
     events[:] = []
     s.remove_plugin(plugin)

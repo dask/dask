@@ -36,12 +36,13 @@ class BatchedSend(object):
 
         ['Hello,', 'world!']
     """
+
     # XXX why doesn't BatchedSend follow either the IOStream or Comm API?
 
     def __init__(self, interval, loop=None, serializers=None):
         # XXX is the loop arg useful?
         self.loop = loop or IOLoop.current()
-        self.interval = parse_timedelta(interval, default='ms')
+        self.interval = parse_timedelta(interval, default="ms")
         self.waker = locks.Event()
         self.stopped = locks.Event()
         self.please_stop = False
@@ -51,7 +52,9 @@ class BatchedSend(object):
         self.batch_count = 0
         self.byte_count = 0
         self.next_deadline = None
-        self.recent_message_log = deque(maxlen=dask.config.get('distributed.comm.recent-messages-log-length'))
+        self.recent_message_log = deque(
+            maxlen=dask.config.get("distributed.comm.recent-messages-log-length")
+        )
         self.serializers = serializers
 
     def start(self, comm):
@@ -63,9 +66,9 @@ class BatchedSend(object):
 
     def __repr__(self):
         if self.closed():
-            return '<BatchedSend: closed>'
+            return "<BatchedSend: closed>"
         else:
-            return '<BatchedSend: %d in buffer>' % len(self.buffer)
+            return "<BatchedSend: %d in buffer>" % len(self.buffer)
 
     __str__ = __repr__
 
@@ -81,21 +84,20 @@ class BatchedSend(object):
                 # Nothing to send
                 self.next_deadline = None
                 continue
-            if (self.next_deadline is not None and
-                    self.loop.time() < self.next_deadline):
+            if self.next_deadline is not None and self.loop.time() < self.next_deadline:
                 # Send interval not expired yet
                 continue
             payload, self.buffer = self.buffer, []
             self.batch_count += 1
             self.next_deadline = self.loop.time() + self.interval
             try:
-                nbytes = yield self.comm.write(payload,
-                                               serializers=self.serializers,
-                                               on_error='raise')
+                nbytes = yield self.comm.write(
+                    payload, serializers=self.serializers, on_error="raise"
+                )
                 if nbytes < 1e6:
                     self.recent_message_log.append(payload)
                 else:
-                    self.recent_message_log.append('large-message')
+                    self.recent_message_log.append("large-message")
                 self.byte_count += nbytes
             except CommClosedError as e:
                 logger.info("Batched Comm Closed: %s", e)
@@ -134,9 +136,9 @@ class BatchedSend(object):
             try:
                 if self.buffer:
                     self.buffer, payload = [], self.buffer
-                    yield self.comm.write(payload,
-                                          serializers=self.serializers,
-                                          on_error='raise')
+                    yield self.comm.write(
+                        payload, serializers=self.serializers, on_error="raise"
+                    )
             except CommClosedError:
                 pass
             yield self.comm.close()

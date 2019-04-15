@@ -33,19 +33,20 @@ class QueueExtension(object):
         self.client_refcount = dict()
         self.future_refcount = defaultdict(lambda: 0)
 
-        self.scheduler.handlers.update({
-            'queue_create': self.create,
-            'queue_put': self.put,
-            'queue_get': self.get,
-            'queue_qsize': self.qsize}
+        self.scheduler.handlers.update(
+            {
+                "queue_create": self.create,
+                "queue_put": self.put,
+                "queue_get": self.get,
+                "queue_qsize": self.qsize,
+            }
         )
 
-        self.scheduler.stream_handlers.update({
-            'queue-future-release': self.future_release,
-            'queue_release': self.release,
-        })
+        self.scheduler.stream_handlers.update(
+            {"queue-future-release": self.future_release, "queue_release": self.release}
+        )
 
-        self.scheduler.extensions['queues'] = self
+        self.scheduler.extensions["queues"] = self
 
     def create(self, stream=None, name=None, client=None, maxsize=0):
         if name not in self.queues:
@@ -64,18 +65,20 @@ class QueueExtension(object):
             futures = self.queues[name]._queue
             del self.queues[name]
             self.scheduler.client_releases_keys(
-                    keys=[d['value'] for d in futures if d['type'] == 'Future'],
-                    client='queue-%s' % name
+                keys=[d["value"] for d in futures if d["type"] == "Future"],
+                client="queue-%s" % name,
             )
 
     @gen.coroutine
-    def put(self, stream=None, name=None, key=None, data=None, client=None, timeout=None):
+    def put(
+        self, stream=None, name=None, key=None, data=None, client=None, timeout=None
+    ):
         if key is not None:
-            record = {'type': 'Future', 'value': key}
+            record = {"type": "Future", "value": key}
             self.future_refcount[name, key] += 1
-            self.scheduler.client_desires_keys(keys=[key], client='queue-%s' % name)
+            self.scheduler.client_desires_keys(keys=[key], client="queue-%s" % name)
         else:
-            record = {'type': 'msgpack', 'value': data}
+            record = {"type": "msgpack", "value": data}
         if timeout is not None:
             timeout = datetime.timedelta(seconds=(timeout))
         yield self.queues[name].put(record, timeout=timeout)
@@ -83,25 +86,23 @@ class QueueExtension(object):
     def future_release(self, name=None, key=None, client=None):
         self.future_refcount[name, key] -= 1
         if self.future_refcount[name, key] == 0:
-            self.scheduler.client_releases_keys(keys=[key],
-                                                client='queue-%s' % name)
+            self.scheduler.client_releases_keys(keys=[key], client="queue-%s" % name)
             del self.future_refcount[name, key]
 
     @gen.coroutine
-    def get(self, stream=None, name=None, client=None, timeout=None,
-            batch=False):
+    def get(self, stream=None, name=None, client=None, timeout=None, batch=False):
         def process(record):
             """ Add task status if known """
-            if record['type'] == 'Future':
+            if record["type"] == "Future":
                 record = record.copy()
-                key = record['value']
+                key = record["value"]
                 ts = self.scheduler.tasks.get(key)
-                state = ts.state if ts is not None else 'lost'
+                state = ts.state if ts is not None else "lost"
 
-                record['state'] = state
-                if state == 'erred':
-                    record['exception'] = ts.exception_blame.exception
-                    record['traceback'] = ts.exception_blame.traceback
+                record["state"] = state
+                if state == "erred":
+                    record["exception"] = ts.exception_blame.exception
+                    record["traceback"] = ts.exception_blame.traceback
 
             return record
 
@@ -114,8 +115,10 @@ class QueueExtension(object):
                     out.append(record)
             else:
                 if timeout is not None:
-                    msg = ("Dask queues don't support simultaneous use of "
-                           "integer batch sizes and timeouts")
+                    msg = (
+                        "Dask queues don't support simultaneous use of "
+                        "integer batch sizes and timeouts"
+                    )
                     raise NotImplementedError(msg)
                 for i in range(batch):
                     record = yield q.get()
@@ -164,13 +167,20 @@ class Queue(object):
 
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
-        self.name = name or 'queue-' + uuid.uuid4().hex
-        if self.client.asynchronous or getattr(thread_state, 'on_event_loop_thread', False):
-            self._started = self.client.scheduler.queue_create(name=self.name,
-                                                               maxsize=maxsize)
+        self.name = name or "queue-" + uuid.uuid4().hex
+        if self.client.asynchronous or getattr(
+            thread_state, "on_event_loop_thread", False
+        ):
+            self._started = self.client.scheduler.queue_create(
+                name=self.name, maxsize=maxsize
+            )
         else:
-            sync(self.client.loop, self.client.scheduler.queue_create,
-                 name=self.name, maxsize=maxsize)
+            sync(
+                self.client.loop,
+                self.client.scheduler.queue_create,
+                name=self.name,
+                maxsize=maxsize,
+            )
             self._started = gen.moment
 
     def __await__(self):
@@ -178,18 +188,19 @@ class Queue(object):
         def _():
             yield self._started
             raise gen.Return(self)
+
         return _().__await__()
 
     @gen.coroutine
     def _put(self, value, timeout=None):
         if isinstance(value, Future):
-            yield self.client.scheduler.queue_put(key=tokey(value.key),
-                                                  timeout=timeout,
-                                                  name=self.name)
+            yield self.client.scheduler.queue_put(
+                key=tokey(value.key), timeout=timeout, name=self.name
+            )
         else:
-            yield self.client.scheduler.queue_put(data=value,
-                                                  timeout=timeout,
-                                                  name=self.name)
+            yield self.client.scheduler.queue_put(
+                data=value, timeout=timeout, name=self.name
+            )
 
     def put(self, value, timeout=None, **kwargs):
         """ Put data into the queue """
@@ -207,8 +218,7 @@ class Queue(object):
             If an integer than return that many elements from the queue
             If False (default) then return one item at a time
          """
-        return self.client.sync(self._get, timeout=timeout, batch=batch,
-                                **kwargs)
+        return self.client.sync(self._get, timeout=timeout, batch=batch, **kwargs)
 
     def qsize(self, **kwargs):
         """ Current number of elements in the queue """
@@ -216,21 +226,20 @@ class Queue(object):
 
     @gen.coroutine
     def _get(self, timeout=None, batch=False):
-        resp = yield self.client.scheduler.queue_get(timeout=timeout,
-                                                     name=self.name,
-                                                     batch=batch)
+        resp = yield self.client.scheduler.queue_get(
+            timeout=timeout, name=self.name, batch=batch
+        )
 
         def process(d):
-            if d['type'] == 'Future':
-                value = Future(d['value'], self.client, inform=True,
-                               state=d['state'])
-                if d['state'] == 'erred':
-                    value._state.set_error(d['exception'], d['traceback'])
-                self.client._send_to_scheduler({'op': 'queue-future-release',
-                                                'name': self.name,
-                                                'key': d['value']})
+            if d["type"] == "Future":
+                value = Future(d["value"], self.client, inform=True, state=d["state"])
+                if d["state"] == "erred":
+                    value._state.set_error(d["exception"], d["traceback"])
+                self.client._send_to_scheduler(
+                    {"op": "queue-future-release", "name": self.name, "key": d["value"]}
+                )
             else:
-                value = d['value']
+                value = d["value"]
 
             return value
 
@@ -247,9 +256,8 @@ class Queue(object):
         raise gen.Return(result)
 
     def close(self):
-        if self.client.status == 'running':  # TODO: can leave zombie futures
-            self.client._send_to_scheduler({'op': 'queue_release',
-                                            'name': self.name})
+        if self.client.status == "running":  # TODO: can leave zombie futures
+            self.client._send_to_scheduler({"op": "queue_release", "name": self.name})
 
     def __getstate__(self):
         return (self.name, self.client.scheduler.address)

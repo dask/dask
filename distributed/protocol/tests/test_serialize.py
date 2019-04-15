@@ -9,11 +9,20 @@ import pytest
 from toolz import identity
 
 from distributed import wait
-from distributed.protocol import (register_serialization, serialize,
-                                  deserialize, nested_deserialize, Serialize,
-                                  Serialized, to_serialize, serialize_bytes,
-                                  deserialize_bytes, serialize_bytelist,
-                                  register_serialization_family, dask_serialize)
+from distributed.protocol import (
+    register_serialization,
+    serialize,
+    deserialize,
+    nested_deserialize,
+    Serialize,
+    Serialized,
+    to_serialize,
+    serialize_bytes,
+    deserialize_bytes,
+    serialize_bytelist,
+    register_serialization_family,
+    dask_serialize,
+)
 from distributed.utils import nbytes
 from distributed.utils_test import inc, gen_test
 from distributed.comm.utils import to_frames, from_frames
@@ -24,7 +33,7 @@ class MyObj(object):
         self.data = data
 
     def __getstate__(self):
-        raise Exception('Not picklable')
+        raise Exception("Not picklable")
 
 
 def serialize_myobj(x):
@@ -41,7 +50,7 @@ register_serialization(MyObj, serialize_myobj, deserialize_myobj)
 def test_dumps_serialize():
     for x in [123, [1, 2, 3]]:
         header, frames = serialize(x)
-        assert header['serializer'] == 'pickle'
+        assert header["serializer"] == "pickle"
         assert len(frames) == 1
 
         result = deserialize(header, frames)
@@ -49,7 +58,7 @@ def test_dumps_serialize():
 
     x = MyObj(123)
     header, frames = serialize(x)
-    assert header['type']
+    assert header["type"]
     assert len(frames) == 1
 
     result = deserialize(header, frames)
@@ -57,7 +66,7 @@ def test_dumps_serialize():
 
 
 def test_serialize_bytestrings():
-    for b in (b'123', bytearray(b'4567')):
+    for b in (b"123", bytearray(b"4567")):
         header, frames = serialize(b)
         assert frames[0] is b
         bb = deserialize(header, frames)
@@ -66,7 +75,7 @@ def test_serialize_bytestrings():
 
 def test_Serialize():
     s = Serialize(123)
-    assert '123' in str(s)
+    assert "123" in str(s)
     assert s.data == 123
 
     t = Serialize((1, 2))
@@ -92,18 +101,18 @@ def test_Serialized():
 
 
 def test_nested_deserialize():
-    x = {'op': 'update',
-         'x': [to_serialize(123), to_serialize(456), 789],
-         'y': {'a': ['abc', Serialized(*serialize('def'))],
-               'b': b'ghi'}
-         }
+    x = {
+        "op": "update",
+        "x": [to_serialize(123), to_serialize(456), 789],
+        "y": {"a": ["abc", Serialized(*serialize("def"))], "b": b"ghi"},
+    }
     x_orig = copy.deepcopy(x)
 
-    assert nested_deserialize(x) == {'op': 'update',
-                                     'x': [123, 456, 789],
-                                     'y': {'a': ['abc', 'def'],
-                                           'b': b'ghi'}
-                                     }
+    assert nested_deserialize(x) == {
+        "op": "update",
+        "x": [123, 456, 789],
+        "y": {"a": ["abc", "def"], "b": b"ghi"},
+    }
     assert x == x_orig  # x wasn't mutated
 
 
@@ -146,7 +155,7 @@ def test_inter_worker_comms(c, s, a, b):
 
 class Empty(object):
     def __getstate__(self):
-        raise Exception('Not picklable')
+        raise Exception("Not picklable")
 
 
 def serialize_empty(x):
@@ -168,6 +177,7 @@ def test_empty():
 
 def test_empty_loads():
     from distributed.protocol import loads, dumps
+
     e = Empty()
     e2 = loads(dumps([to_serialize(e)]))
     assert isinstance(e2[0], Empty)
@@ -175,13 +185,14 @@ def test_empty_loads():
 
 def test_empty_loads_deep():
     from distributed.protocol import loads, dumps
+
     e = Empty()
     e2 = loads(dumps([[[to_serialize(e)]]]))
     assert isinstance(e2[0][0][0], Empty)
 
 
 def test_serialize_bytes():
-    for x in [1, 'abc', np.arange(5)]:
+    for x in [1, "abc", np.arange(5)]:
         b = serialize_bytes(x)
         assert isinstance(b, bytes)
         y = deserialize_bytes(b)
@@ -189,12 +200,12 @@ def test_serialize_bytes():
 
 
 def test_serialize_list_compress():
-    pytest.importorskip('lz4')
+    pytest.importorskip("lz4")
     x = np.ones(1000000)
     L = serialize_bytelist(x)
     assert sum(map(nbytes, L)) < x.nbytes / 2
 
-    b = b''.join(L)
+    b = b"".join(L)
     y = deserialize_bytes(b)
     assert (x == y).all()
 
@@ -217,7 +228,7 @@ def test_malicious_exception():
     assert "Sneaky" not in str(info.value)
     assert "MyClass" in str(info.value)
 
-    header, frames = serialize(obj, serializers=['pickle'])
+    header, frames = serialize(obj, serializers=["pickle"])
     with pytest.raises(Exception) as info:
         deserialize(header, frames)
 
@@ -226,28 +237,27 @@ def test_malicious_exception():
 
 
 def test_errors():
-    msg = {'data': {'foo': to_serialize(inc)}}
+    msg = {"data": {"foo": to_serialize(inc)}}
 
-    header, frames = serialize(msg, serializers=['msgpack', 'pickle'])
-    assert header['serializer'] == 'pickle'
+    header, frames = serialize(msg, serializers=["msgpack", "pickle"])
+    assert header["serializer"] == "pickle"
 
-    header, frames = serialize(msg, serializers=['msgpack'])
-    assert header['serializer'] == 'error'
+    header, frames = serialize(msg, serializers=["msgpack"])
+    assert header["serializer"] == "error"
 
     with pytest.raises(TypeError):
-        serialize(msg, serializers=['msgpack'], on_error='raise')
+        serialize(msg, serializers=["msgpack"], on_error="raise")
 
 
 @gen_test()
 def test_err_on_bad_deserializer():
-    frames = yield to_frames({'x': to_serialize(1234)},
-                                     serializers=['pickle'])
+    frames = yield to_frames({"x": to_serialize(1234)}, serializers=["pickle"])
 
-    result = yield from_frames(frames, deserializers=['pickle', 'foo'])
-    assert result == {'x': 1234}
+    result = yield from_frames(frames, deserializers=["pickle", "foo"])
+    assert result == {"x": 1234}
 
     with pytest.raises(TypeError) as info:
-        yield from_frames(frames, deserializers=['msgpack'])
+        yield from_frames(frames, deserializers=["msgpack"])
 
 
 class MyObject(object):
@@ -256,10 +266,12 @@ class MyObject(object):
 
 
 def my_dumps(obj, context=None):
-    if type(obj).__name__ == 'MyObject':
-        header = {'serializer': 'my-ser'}
-        frames = [msgpack.dumps(obj.__dict__, use_bin_type=True),
-                  msgpack.dumps(context, use_bin_type=True)]
+    if type(obj).__name__ == "MyObject":
+        header = {"serializer": "my-ser"}
+        frames = [
+            msgpack.dumps(obj.__dict__, use_bin_type=True),
+            msgpack.dumps(context, use_bin_type=True),
+        ]
         return header, frames
     else:
         raise NotImplementedError()
@@ -274,11 +286,13 @@ def my_loads(header, frames):
     return obj
 
 
-@gen_cluster(client=True,
-             client_kwargs={'serializers': ['my-ser', 'pickle']},
-             worker_kwargs={'serializers': ['my-ser', 'pickle']})
+@gen_cluster(
+    client=True,
+    client_kwargs={"serializers": ["my-ser", "pickle"]},
+    worker_kwargs={"serializers": ["my-ser", "pickle"]},
+)
 def test_context_specific_serialization(c, s, a, b):
-    register_serialization_family('my-ser', my_dumps, my_loads)
+    register_serialization_family("my-ser", my_dumps, my_loads)
 
     try:
         # Create the object on A, force communication to B
@@ -295,16 +309,17 @@ def test_context_specific_serialization(c, s, a, b):
             return my_obj.context
 
         result = yield c.run(check, workers=[b.address])
-        expected = {'sender': a.address, 'recipient': b.address}
-        assert result[b.address]['sender'] == a.address  # see origin worker
+        expected = {"sender": a.address, "recipient": b.address}
+        assert result[b.address]["sender"] == a.address  # see origin worker
 
         z = yield y  # bring object to local process
 
         assert z.x == 1 and z.y == 2
-        assert z.context['sender'] == b.address
+        assert z.context["sender"] == b.address
     finally:
         from distributed.protocol.serialize import families
-        del families['my-ser']
+
+        del families["my-ser"]
 
 
 @gen_cluster(client=True)
@@ -325,13 +340,13 @@ def test_context_specific_serialization_class(c, s, a, b):
         return my_obj.context
 
     result = yield c.run(check, workers=[b.address])
-    expected = {'sender': a.address, 'recipient': b.address}
-    assert result[b.address]['sender'] == a.address  # see origin worker
+    expected = {"sender": a.address, "recipient": b.address}
+    assert result[b.address]["sender"] == a.address  # see origin worker
 
     z = yield y  # bring object to local process
 
     assert z.x == 1 and z.y == 2
-    assert z.context['sender'] == b.address
+    assert z.context["sender"] == b.address
 
 
 def test_serialize_raises():
@@ -345,4 +360,4 @@ def test_serialize_raises():
     with pytest.raises(Exception) as info:
         deserialize(*serialize(Foo()))
 
-    assert 'Hello-123' in str(info.value)
+    assert "Hello-123" in str(info.value)

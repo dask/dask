@@ -10,7 +10,7 @@ import pytest
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
     async def publish():
-        pub = Pub('a')
+        pub = Pub("a")
 
         i = 0
         while True:
@@ -19,7 +19,7 @@ def test_basic(c, s, a, b):
             i += 1
 
     def f(_):
-        sub = Sub('a')
+        sub = Sub("a")
         return list(toolz.take(5, sub))
 
     c.run_coroutine(publish, workers=[a.address])

@@ -12,11 +12,22 @@ from tornado import gen
 from distributed import Scheduler, Worker, Client, config, default_client
 from distributed.core import rpc
 from distributed.metrics import time
-from distributed.utils_test import (cluster, gen_cluster, inc,
-                                    gen_test, wait_for_port, new_config)
+from distributed.utils_test import (  # noqa: F401
+    cluster,
+    gen_cluster,
+    inc,
+    gen_test,
+    wait_for_port,
+    new_config,
+)
 
-from distributed.utils_test import (loop, tls_only_security, # noqa: F401
-                                    security, tls_client, tls_cluster)
+from distributed.utils_test import (  # noqa: F401
+    loop,
+    tls_only_security,
+    security,
+    tls_client,
+    tls_cluster,
+)
 from distributed.utils import get_ip
 
 
@@ -27,10 +38,10 @@ def test_bare_cluster(loop):
 
 def test_cluster(loop):
     with cluster() as (s, [a, b]):
-        with rpc(s['address']) as s:
+        with rpc(s["address"]) as s:
             ident = loop.run_sync(s.identity)
-            assert ident['type'] == 'Scheduler'
-            assert len(ident['workers']) == 2
+            assert ident["type"] == "Scheduler"
+            assert len(ident["workers"]) == 2
 
 
 @gen_cluster(client=True)
@@ -45,16 +56,17 @@ def test_gen_cluster(c, s, a, b):
 @pytest.mark.skip(reason="This hangs on travis")
 def test_gen_cluster_cleans_up_client(loop):
     import dask.context
-    assert not dask.config.get('get', None)
+
+    assert not dask.config.get("get", None)
 
     @gen_cluster(client=True)
     def f(c, s, a, b):
-        assert dask.config.get('get', None)
+        assert dask.config.get("get", None)
         yield c.submit(inc, 1)
 
     f()
 
-    assert not dask.config.get('get', None)
+    assert not dask.config.get("get", None)
 
 
 @gen_cluster(client=False)
@@ -65,16 +77,19 @@ def test_gen_cluster_without_client(s, a, b):
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
 
 
-@gen_cluster(client=True, scheduler='tls://127.0.0.1',
-             ncores=[('tls://127.0.0.1', 1), ('tls://127.0.0.1', 2)],
-             security=tls_only_security())
+@gen_cluster(
+    client=True,
+    scheduler="tls://127.0.0.1",
+    ncores=[("tls://127.0.0.1", 1), ("tls://127.0.0.1", 2)],
+    security=tls_only_security(),
+)
 def test_gen_cluster_tls(e, s, a, b):
     assert isinstance(e, Client)
     assert isinstance(s, Scheduler)
-    assert s.address.startswith('tls://')
+    assert s.address.startswith("tls://")
     for w in [a, b]:
         assert isinstance(w, Worker)
-        assert w.address.startswith('tls://')
+        assert w.address.startswith("tls://")
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
 
 
@@ -132,11 +147,11 @@ def test_wait_for_port():
 
 def test_new_config():
     c = config.copy()
-    with new_config({'xyzzy': 5}):
-        config['xyzzy'] == 5
+    with new_config({"xyzzy": 5}):
+        config["xyzzy"] == 5
 
     assert config == c
-    assert 'xyzzy' not in config
+    assert "xyzzy" not in config
 
 
 def test_lingering_client():
@@ -152,7 +167,7 @@ def test_lingering_client():
 
 def test_lingering_client(loop):
     with cluster() as (s, [a, b]):
-        client = Client(s['address'], loop=loop)
+        client = Client(s["address"], loop=loop)
 
 
 def test_tls_cluster(tls_client):
@@ -162,8 +177,8 @@ def test_tls_cluster(tls_client):
 
 def test_tls_scheduler(security, loop):
     s = Scheduler(security=security, loop=loop)
-    s.start('localhost')
-    assert s.address.startswith('tls')
+    s.start("localhost")
+    assert s.address.startswith("tls")
     s.close()
 
 

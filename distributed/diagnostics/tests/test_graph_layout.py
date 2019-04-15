@@ -45,9 +45,9 @@ def test_states(c, s, a, b):
     yield total
 
     updates = {state for idx, state in gl.state_updates}
-    assert 'memory' in updates
-    assert 'processing' in updates
-    assert 'released' in updates
+    assert "memory" in updates
+    assert "processing" in updates
+    assert "released" in updates
 
 
 @gen_cluster(client=True)

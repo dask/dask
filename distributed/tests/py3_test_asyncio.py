@@ -1,7 +1,7 @@
 # flake8: noqa
 import pytest
 
-asyncio = pytest.importorskip('asyncio')
+asyncio = pytest.importorskip("asyncio")
 
 import functools
 from time import time
@@ -50,7 +50,7 @@ async def test_coro_test():
 @coro_test
 async def test_asyncio_start_close():
     async with AioClient(processes=False, dashboard_address=False) as c:
-        assert c.status == 'running'
+        assert c.status == "running"
         # AioClient has installed its AioLoop shim.
         assert isinstance(IOLoop.current(instance=False), BaseAsyncIOLoop)
 
@@ -58,7 +58,7 @@ async def test_asyncio_start_close():
         assert result == 11
 
         await c.close()
-        assert c.status == 'closed'
+        assert c.status == "closed"
         # assert IOLoop.current(instance=False) is None
 
 
@@ -153,25 +153,23 @@ async def test_asyncio_gather():
         assert result == 11
         result = await c.gather([x])
         assert result == [11]
-        result = await c.gather({'x': x, 'y': [y]})
-        assert result == {'x': 11, 'y': [12]}
+        result = await c.gather({"x": x, "y": [y]})
+        assert result == {"x": 11, "y": [12]}
 
 
 @coro_test
 async def test_asyncio_get():
     async with AioClient(processes=False) as c:
-        result = await c.get({'x': (inc, 1)}, 'x')
+        result = await c.get({"x": (inc, 1)}, "x")
         assert result == 2
 
-        result = await c.get({'x': (inc, 1)}, ['x'])
+        result = await c.get({"x": (inc, 1)}, ["x"])
         assert result == [2]
 
         result = await c.get({}, [])
         assert result == []
 
-        result = await c.get({('x', 1): (inc, 1),
-                              ('x', 2): (inc, ('x', 1))},
-                             ('x', 2))
+        result = await c.get({("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))}, ("x", 2))
         assert result == 3
 
 
@@ -228,7 +226,7 @@ async def test_asyncio_cancel():
         await c.cancel([x])
 
         assert x.cancelled()
-        assert 'cancel' in str(x)
+        assert "cancel" in str(x)
         s.validate_state()
 
         start = time()
@@ -244,7 +242,7 @@ async def test_asyncio_cancel():
 @coro_test
 async def test_asyncio_cancel_tuple_key():
     async with AioClient(processes=False) as c:
-        x = c.submit(inc, 1, key=('x', 0, 1))
+        x = c.submit(inc, 1, key=("x", 0, 1))
         await x
         await c.cancel(x)
         with pytest.raises(CancelledError):
@@ -298,7 +296,7 @@ async def test_asyncio_run_coroutine():
 
     async def aiothrows(x, delay=0.02):
         await asyncio.sleep(delay)
-        raise RuntimeError('hello')
+        raise RuntimeError("hello")
 
     async with AioClient(processes=False) as c:
         results = await c.run_coroutine(aioinc, 1, delay=0.05)
@@ -317,7 +315,7 @@ async def test_asyncio_run_coroutine():
 @coro_test
 async def test_asyncio_restart():
     async with AioClient(processes=False) as c:
-        assert c.status == 'running'
+        assert c.status == "running"
         x = c.submit(inc, 1)
         assert x.key in c.refcount
 
@@ -327,6 +325,7 @@ async def test_asyncio_restart():
         key = x.key
         del x
         import gc
+
         gc.collect()
 
         assert key not in c.refcount
@@ -343,8 +342,8 @@ async def test_asyncio_variable():
     async with AioClient(processes=False) as c:
         s = c.cluster.scheduler
 
-        x = Variable('x')
-        xx = Variable('x')
+        x = Variable("x")
+        xx = Variable("x")
         assert x.client is c
 
         future = c.submit(inc, 1)

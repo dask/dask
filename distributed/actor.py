@@ -47,6 +47,7 @@ class Actor(WrappedKey):
     >>> future.result()
     2
     """
+
     def __init__(self, cls, address, key, worker=None):
         self._cls = cls
         self._address = address
@@ -67,7 +68,7 @@ class Actor(WrappedKey):
                 self._client = None
 
     def __repr__(self):
-        return '<Actor: %s, key=%s>' % (self._cls.__name__, self.key)
+        return "<Actor: %s, key=%s>" % (self._cls.__name__, self.key)
 
     def __reduce__(self):
         return (Actor, (self._cls, self._address, self.key))
@@ -112,16 +113,19 @@ class Actor(WrappedKey):
 
     def __dir__(self):
         o = set(dir(type(self)))
-        o.update(attr for attr in dir(self._cls) if not attr.startswith('_'))
+        o.update(attr for attr in dir(self._cls) if not attr.startswith("_"))
         return sorted(o)
 
     def __getattr__(self, key):
         attr = getattr(self._cls, key)
 
-        if self._future and self._future.status not in ('finished', 'pending'):
-            raise ValueError("Worker holding Actor was lost.  Status: " + self._future.status)
+        if self._future and self._future.status not in ("finished", "pending"):
+            raise ValueError(
+                "Worker holding Actor was lost.  Status: " + self._future.status
+            )
 
         if callable(attr):
+
             @functools.wraps(attr)
             def func(*args, **kwargs):
                 @gen.coroutine
@@ -138,7 +142,7 @@ class Actor(WrappedKey):
                             yield self._future
                         else:
                             raise OSError("Unable to contact Actor's worker")
-                    raise gen.Return(result['result'])
+                    raise gen.Return(result["result"])
 
                 if self._asynchronous:
                     return run_actor_function_on_worker()
@@ -151,16 +155,21 @@ class Actor(WrappedKey):
                     def wait_then_add_to_queue():
                         x = yield run_actor_function_on_worker()
                         q.put(x)
+
                     self._io_loop.add_callback(wait_then_add_to_queue)
 
                     return ActorFuture(q, self._io_loop)
+
             return func
 
         else:
+
             @gen.coroutine
             def get_actor_attribute_from_worker():
-                x = yield self._worker_rpc.actor_attribute(attribute=key, actor=self.key)
-                raise gen.Return(x['result'])
+                x = yield self._worker_rpc.actor_attribute(
+                    attribute=key, actor=self.key
+                )
+                raise gen.Return(x["result"])
 
             return self._sync(get_actor_attribute_from_worker)
 
@@ -173,6 +182,7 @@ class ProxyRPC(object):
     """
     An rpc-like object that uses the scheduler's rpc to connect to a worker
     """
+
     def __init__(self, rpc, address):
         self.rpc = rpc
         self._address = address
@@ -180,7 +190,7 @@ class ProxyRPC(object):
     def __getattr__(self, key):
         @gen.coroutine
         def func(**msg):
-            msg['op'] = key
+            msg["op"] = key
             result = yield self.rpc.proxy(worker=self._address, msg=msg)
             raise gen.Return(result)
 
@@ -198,6 +208,7 @@ class ActorFuture(object):
     --------
     Actor
     """
+
     def __init__(self, q, io_loop):
         self.q = q
         self.io_loop = io_loop
@@ -210,4 +221,4 @@ class ActorFuture(object):
             return self._cached_result
 
     def __repr__(self):
-        return '<ActorFuture>'
+        return "<ActorFuture>"

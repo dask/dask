@@ -4,14 +4,19 @@ import random
 import time
 
 from concurrent.futures import (
-    CancelledError, TimeoutError, Future, wait, as_completed,
-    FIRST_COMPLETED, FIRST_EXCEPTION)
+    CancelledError,
+    TimeoutError,
+    Future,
+    wait,
+    as_completed,
+    FIRST_COMPLETED,
+    FIRST_EXCEPTION,
+)
 
 import pytest
 from toolz import take
 
-from distributed.utils_test import (slowinc, slowadd, slowdec,
-                                    inc, throws, varying)
+from distributed.utils_test import slowinc, slowadd, slowdec, inc, throws, varying
 from distributed.utils_test import client, cluster_fixture, loop, s, a, b  # noqa: F401
 
 
@@ -174,19 +179,20 @@ def test_pure(client):
 
 def test_workers(client, s, a, b):
     N = 10
-    with client.get_executor(workers=[b['address']]) as e:
+    with client.get_executor(workers=[b["address"]]) as e:
         fs = [e.submit(slowinc, i) for i in range(N)]
         wait(fs)
         has_what = client.has_what()
-        assert not has_what.get(a['address'])
-        assert len(has_what[b['address']]) == N
+        assert not has_what.get(a["address"])
+        assert len(has_what[b["address"]]) == N
 
 
 def test_unsupported_arguments(client, s, a, b):
     with pytest.raises(TypeError) as excinfo:
-        client.get_executor(workers=[b['address']], foo=1, bar=2)
-    assert ("unsupported arguments to ClientExecutor: ['bar', 'foo']"
-            in str(excinfo.value))
+        client.get_executor(workers=[b["address"]], foo=1, bar=2)
+    assert "unsupported arguments to ClientExecutor: ['bar', 'foo']" in str(
+        excinfo.value
+    )
 
 
 def test_retries(client):

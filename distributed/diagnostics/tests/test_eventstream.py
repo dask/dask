@@ -11,9 +11,9 @@ from distributed.metrics import time
 from distributed.utils_test import div, gen_cluster
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
 def test_eventstream(c, s, *workers):
-    pytest.importorskip('bokeh')
+    pytest.importorskip("bokeh")
 
     es = EventStream()
     s.add_plugin(es)
@@ -28,17 +28,18 @@ def test_eventstream(c, s, *workers):
 
     from distributed.bokeh import messages
     from distributed.diagnostics.progress_stream import task_stream_append
-    lists = deepcopy(messages['task-events']['rectangles'])
+
+    lists = deepcopy(messages["task-events"]["rectangles"])
     workers = dict()
     for msg in es.buffer:
         task_stream_append(lists, msg, workers)
 
-    assert len([n for n in lists['name'] if n.startswith('transfer')]) == 2
-    for name, color in zip(lists['name'], lists['color']):
-        if name == 'transfer':
-            assert color == 'red'
+    assert len([n for n in lists["name"] if n.startswith("transfer")]) == 2
+    for name, color in zip(lists["name"], lists["color"]):
+        if name == "transfer":
+            assert color == "red"
 
-    assert any(c == 'black' for c in lists['color'])
+    assert any(c == "black" for c in lists["color"])
 
 
 @gen_cluster(client=True)

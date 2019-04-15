@@ -14,82 +14,96 @@ from tornado.concurrent import Future
 from distributed.compatibility import PY3
 from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
-from distributed.utils_test import (gen_test, requires_ipv6, has_ipv6,
-                                    get_cert, get_server_ssl_context,
-                                    get_client_ssl_context)
+from distributed.utils_test import (
+    gen_test,
+    requires_ipv6,
+    has_ipv6,
+    get_cert,
+    get_server_ssl_context,
+    get_client_ssl_context,
+)
 from distributed.utils_test import loop  # noqa: F401
 
-from distributed.protocol import (to_serialize, Serialized, serialize,
-                                  deserialize)
+from distributed.protocol import to_serialize, Serialized, serialize, deserialize
 
-from distributed.comm import (tcp, inproc, connect, listen, CommClosedError,
-                              parse_address, parse_host_port,
-                              unparse_host_port, resolve_address,
-                              get_address_host, get_local_address_for)
+from distributed.comm import (
+    tcp,
+    inproc,
+    connect,
+    listen,
+    CommClosedError,
+    parse_address,
+    parse_host_port,
+    unparse_host_port,
+    resolve_address,
+    get_address_host,
+    get_local_address_for,
+)
 
 
 EXTERNAL_IP4 = get_ip()
 if has_ipv6():
     with warnings.catch_warnings(record=True):
-        warnings.simplefilter('always')
+        warnings.simplefilter("always")
         EXTERNAL_IP6 = get_ipv6()
 
 
-ca_file = get_cert('tls-ca-cert.pem')
+ca_file = get_cert("tls-ca-cert.pem")
 
 # The Subject field of our test certs
 cert_subject = (
-    (('countryName', 'XY'),),
-    (('localityName', 'Dask-distributed'),),
-    (('organizationName', 'Dask'),),
-    (('commonName', 'localhost'),)
+    (("countryName", "XY"),),
+    (("localityName", "Dask-distributed"),),
+    (("organizationName", "Dask"),),
+    (("commonName", "localhost"),),
 )
 
 
 def check_tls_extra(info):
     assert isinstance(info, dict)
-    assert info['peercert']['subject'] == cert_subject
-    assert 'cipher' in info
-    cipher_name, proto_name, secret_bits = info['cipher']
+    assert info["peercert"]["subject"] == cert_subject
+    assert "cipher" in info
+    cipher_name, proto_name, secret_bits = info["cipher"]
     # Most likely
-    assert 'AES' in cipher_name
-    assert 'TLS' in proto_name
+    assert "AES" in cipher_name
+    assert "TLS" in proto_name
     assert secret_bits >= 128
 
 
-tls_kwargs = dict(listen_args={'ssl_context': get_server_ssl_context()},
-                  connect_args={'ssl_context': get_client_ssl_context()})
+tls_kwargs = dict(
+    listen_args={"ssl_context": get_server_ssl_context()},
+    connect_args={"ssl_context": get_client_ssl_context()},
+)
 
 
 @gen.coroutine
-def get_comm_pair(listen_addr, listen_args=None, connect_args=None,
-                  **kwargs):
+def get_comm_pair(listen_addr, listen_args=None, connect_args=None, **kwargs):
     q = queues.Queue()
 
     def handle_comm(comm):
         q.put(comm)
 
-    listener = listen(listen_addr, handle_comm,
-                      connection_args=listen_args, **kwargs)
+    listener = listen(listen_addr, handle_comm, connection_args=listen_args, **kwargs)
     listener.start()
 
-    comm = yield connect(listener.contact_address,
-                         connection_args=connect_args, **kwargs)
+    comm = yield connect(
+        listener.contact_address, connection_args=connect_args, **kwargs
+    )
     serv_comm = yield q.get()
     raise gen.Return((comm, serv_comm))
 
 
 def get_tcp_comm_pair(**kwargs):
-    return get_comm_pair('tcp://', **kwargs)
+    return get_comm_pair("tcp://", **kwargs)
 
 
 def get_tls_comm_pair(**kwargs):
     kwargs.update(tls_kwargs)
-    return get_comm_pair('tls://', **kwargs)
+    return get_comm_pair("tls://", **kwargs)
 
 
 def get_inproc_comm_pair(**kwargs):
-    return get_comm_pair('inproc://', **kwargs)
+    return get_comm_pair("inproc://", **kwargs)
 
 
 @gen.coroutine
@@ -99,7 +113,7 @@ def debug_loop():
     """
     while True:
         loop = ioloop.IOLoop.current()
-        print('.', loop, loop._handlers)
+        print(".", loop, loop._handlers)
         yield gen.sleep(0.50)
 
 
@@ -107,86 +121,86 @@ def debug_loop():
 # Test utility functions
 #
 
+
 def test_parse_host_port():
     f = parse_host_port
 
-    assert f('localhost:123') == ('localhost', 123)
-    assert f('127.0.0.1:456') == ('127.0.0.1', 456)
-    assert f('localhost:123', 80) == ('localhost', 123)
-    assert f('localhost', 80) == ('localhost', 80)
+    assert f("localhost:123") == ("localhost", 123)
+    assert f("127.0.0.1:456") == ("127.0.0.1", 456)
+    assert f("localhost:123", 80) == ("localhost", 123)
+    assert f("localhost", 80) == ("localhost", 80)
 
     with pytest.raises(ValueError):
-        f('localhost')
+        f("localhost")
 
-    assert f('[::1]:123') == ('::1', 123)
-    assert f('[fe80::1]:123', 80) == ('fe80::1', 123)
-    assert f('[::1]', 80) == ('::1', 80)
+    assert f("[::1]:123") == ("::1", 123)
+    assert f("[fe80::1]:123", 80) == ("fe80::1", 123)
+    assert f("[::1]", 80) == ("::1", 80)
 
     with pytest.raises(ValueError):
-        f('[::1]')
+        f("[::1]")
     with pytest.raises(ValueError):
-        f('::1:123')
+        f("::1:123")
     with pytest.raises(ValueError):
-        f('::1')
+        f("::1")
 
 
 def test_unparse_host_port():
     f = unparse_host_port
 
-    assert f('localhost', 123) == 'localhost:123'
-    assert f('127.0.0.1', 123) == '127.0.0.1:123'
-    assert f('::1', 123) == '[::1]:123'
-    assert f('[::1]', 123) == '[::1]:123'
+    assert f("localhost", 123) == "localhost:123"
+    assert f("127.0.0.1", 123) == "127.0.0.1:123"
+    assert f("::1", 123) == "[::1]:123"
+    assert f("[::1]", 123) == "[::1]:123"
 
-    assert f('127.0.0.1') == '127.0.0.1'
-    assert f('127.0.0.1', 0) == '127.0.0.1'
-    assert f('127.0.0.1', None) == '127.0.0.1'
-    assert f('127.0.0.1', '*') == '127.0.0.1:*'
+    assert f("127.0.0.1") == "127.0.0.1"
+    assert f("127.0.0.1", 0) == "127.0.0.1"
+    assert f("127.0.0.1", None) == "127.0.0.1"
+    assert f("127.0.0.1", "*") == "127.0.0.1:*"
 
-    assert f('::1') == '[::1]'
-    assert f('[::1]') == '[::1]'
-    assert f('::1', '*') == '[::1]:*'
+    assert f("::1") == "[::1]"
+    assert f("[::1]") == "[::1]"
+    assert f("::1", "*") == "[::1]:*"
 
 
 def test_get_address_host():
     f = get_address_host
 
-    assert f('tcp://127.0.0.1:123') == '127.0.0.1'
-    assert f('inproc://%s/%d/123' % (get_ip(), os.getpid())) == get_ip()
+    assert f("tcp://127.0.0.1:123") == "127.0.0.1"
+    assert f("inproc://%s/%d/123" % (get_ip(), os.getpid())) == get_ip()
 
 
 def test_resolve_address():
     f = resolve_address
 
-    assert f('tcp://127.0.0.1:123') == 'tcp://127.0.0.1:123'
-    assert f('127.0.0.2:789') == 'tcp://127.0.0.2:789'
-    assert f('tcp://0.0.0.0:456') == 'tcp://0.0.0.0:456'
-    assert f('tcp://0.0.0.0:456') == 'tcp://0.0.0.0:456'
+    assert f("tcp://127.0.0.1:123") == "tcp://127.0.0.1:123"
+    assert f("127.0.0.2:789") == "tcp://127.0.0.2:789"
+    assert f("tcp://0.0.0.0:456") == "tcp://0.0.0.0:456"
+    assert f("tcp://0.0.0.0:456") == "tcp://0.0.0.0:456"
 
     if has_ipv6():
-        assert f('tcp://[::1]:123') == 'tcp://[::1]:123'
-        assert f('tls://[::1]:123') == 'tls://[::1]:123'
+        assert f("tcp://[::1]:123") == "tcp://[::1]:123"
+        assert f("tls://[::1]:123") == "tls://[::1]:123"
         # OS X returns '::0.0.0.2' as canonical representation
-        assert f('[::2]:789') in ('tcp://[::2]:789',
-                                  'tcp://[::0.0.0.2]:789')
-        assert f('tcp://[::]:123') == 'tcp://[::]:123'
+        assert f("[::2]:789") in ("tcp://[::2]:789", "tcp://[::0.0.0.2]:789")
+        assert f("tcp://[::]:123") == "tcp://[::]:123"
 
-    assert f('localhost:123') == 'tcp://127.0.0.1:123'
-    assert f('tcp://localhost:456') == 'tcp://127.0.0.1:456'
-    assert f('tls://localhost:456') == 'tls://127.0.0.1:456'
+    assert f("localhost:123") == "tcp://127.0.0.1:123"
+    assert f("tcp://localhost:456") == "tcp://127.0.0.1:456"
+    assert f("tls://localhost:456") == "tls://127.0.0.1:456"
 
 
 def test_get_local_address_for():
     f = get_local_address_for
 
-    assert f('tcp://127.0.0.1:80') == 'tcp://127.0.0.1'
-    assert f('tcp://8.8.8.8:4444') == 'tcp://' + get_ip()
+    assert f("tcp://127.0.0.1:80") == "tcp://127.0.0.1"
+    assert f("tcp://8.8.8.8:4444") == "tcp://" + get_ip()
     if has_ipv6():
-        assert f('tcp://[::1]:123') == 'tcp://[::1]'
+        assert f("tcp://[::1]:123") == "tcp://[::1]"
 
-    inproc_arg = 'inproc://%s/%d/444' % (get_ip(), os.getpid())
+    inproc_arg = "inproc://%s/%d/444" % (get_ip(), os.getpid())
     inproc_res = f(inproc_arg)
-    assert inproc_res.startswith('inproc://')
+    assert inproc_res.startswith("inproc://")
     assert inproc_res != inproc_arg
 
 
@@ -194,24 +208,26 @@ def test_get_local_address_for():
 # Test concrete transport APIs
 #
 
+
 @gen_test()
 def test_tcp_specific():
     """
     Test concrete TCP API.
     """
+
     @gen.coroutine
     def handle_comm(comm):
-        assert comm.peer_address.startswith('tcp://' + host)
+        assert comm.peer_address.startswith("tcp://" + host)
         assert comm.extra_info == {}
         msg = yield comm.read()
-        msg['op'] = 'pong'
+        msg["op"] = "pong"
         yield comm.write(msg)
         yield comm.close()
 
-    listener = tcp.TCPListener('localhost', handle_comm)
+    listener = tcp.TCPListener("localhost", handle_comm)
     listener.start()
     host, port = listener.get_host_port()
-    assert host in ('localhost', '127.0.0.1', '::1')
+    assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
 
     connector = tcp.TCPConnector()
@@ -219,15 +235,15 @@ def test_tcp_specific():
 
     @gen.coroutine
     def client_communicate(key, delay=0):
-        addr = '%s:%d' % (host, port)
+        addr = "%s:%d" % (host, port)
         comm = yield connector.connect(addr)
-        assert comm.peer_address == 'tcp://' + addr
+        assert comm.peer_address == "tcp://" + addr
         assert comm.extra_info == {}
-        yield comm.write({'op': 'ping', 'data': key})
+        yield comm.write({"op": "ping", "data": key})
         if delay:
             yield gen.sleep(delay)
         msg = yield comm.read()
-        assert msg == {'op': 'pong', 'data': key}
+        assert msg == {"op": "pong", "data": key}
         l.append(key)
         yield comm.close()
 
@@ -245,23 +261,23 @@ def test_tls_specific():
     """
     Test concrete TLS API.
     """
+
     @gen.coroutine
     def handle_comm(comm):
-        assert comm.peer_address.startswith('tls://' + host)
+        assert comm.peer_address.startswith("tls://" + host)
         check_tls_extra(comm.extra_info)
         msg = yield comm.read()
-        msg['op'] = 'pong'
+        msg["op"] = "pong"
         yield comm.write(msg)
         yield comm.close()
 
     server_ctx = get_server_ssl_context()
     client_ctx = get_client_ssl_context()
 
-    listener = tcp.TLSListener('localhost', handle_comm,
-                               ssl_context=server_ctx)
+    listener = tcp.TLSListener("localhost", handle_comm, ssl_context=server_ctx)
     listener.start()
     host, port = listener.get_host_port()
-    assert host in ('localhost', '127.0.0.1', '::1')
+    assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
 
     connector = tcp.TLSConnector()
@@ -269,15 +285,15 @@ def test_tls_specific():
 
     @gen.coroutine
     def client_communicate(key, delay=0):
-        addr = '%s:%d' % (host, port)
+        addr = "%s:%d" % (host, port)
         comm = yield connector.connect(addr, ssl_context=client_ctx)
-        assert comm.peer_address == 'tls://' + addr
+        assert comm.peer_address == "tls://" + addr
         check_tls_extra(comm.extra_info)
-        yield comm.write({'op': 'ping', 'data': key})
+        yield comm.write({"op": "ping", "data": key})
         if delay:
             yield gen.sleep(delay)
         msg = yield comm.read()
-        assert msg == {'op': 'pong', 'data': key}
+        assert msg == {"op": "pong", "data": key}
         l.append(key)
         yield comm.close()
 
@@ -309,6 +325,7 @@ def test_comm_failure_threading():
             if thread_count > max_thread_count:
                 max_thread_count = thread_count
         raise gen.Return(max_thread_count)
+
     original_thread_count = threading.active_count()
 
     # tcp.TCPConnector()
@@ -323,8 +340,11 @@ def test_comm_failure_threading():
     # tcp.TLSConnector()
     sleep_future = sleep_for_60ms()
     with pytest.raises(IOError):
-        yield connect("tls://localhost:28400", 0.052,
-                                 connection_args={'ssl_context': get_client_ssl_context()})
+        yield connect(
+            "tls://localhost:28400",
+            0.052,
+            connection_args={"ssl_context": get_client_ssl_context()},
+        )
     max_thread_count = yield sleep_future
     if PY3:
         assert max_thread_count <= 2 + original_thread_count
@@ -336,7 +356,7 @@ def check_inproc_specific(run_client):
     Test concrete InProc API.
     """
     listener_addr = inproc.global_manager.new_address()
-    addr_head = listener_addr.rpartition('/')[0]
+    addr_head = listener_addr.rpartition("/")[0]
 
     client_addresses = set()
 
@@ -344,17 +364,21 @@ def check_inproc_specific(run_client):
 
     @gen.coroutine
     def handle_comm(comm):
-        assert comm.peer_address.startswith('inproc://' + addr_head)
+        assert comm.peer_address.startswith("inproc://" + addr_head)
         client_addresses.add(comm.peer_address)
         for i in range(N_MSGS):
             msg = yield comm.read()
-            msg['op'] = 'pong'
+            msg["op"] = "pong"
             yield comm.write(msg)
         yield comm.close()
 
     listener = inproc.InProcListener(listener_addr, handle_comm)
     listener.start()
-    assert listener.listen_address == listener.contact_address == 'inproc://' + listener_addr
+    assert (
+        listener.listen_address
+        == listener.contact_address
+        == "inproc://" + listener_addr
+    )
 
     connector = inproc.InProcConnector(inproc.global_manager)
     l = []
@@ -362,13 +386,13 @@ def check_inproc_specific(run_client):
     @gen.coroutine
     def client_communicate(key, delay=0):
         comm = yield connector.connect(listener_addr)
-        assert comm.peer_address == 'inproc://' + listener_addr
+        assert comm.peer_address == "inproc://" + listener_addr
         for i in range(N_MSGS):
-            yield comm.write({'op': 'ping', 'data': key})
+            yield comm.write({"op": "ping", "data": key})
             if delay:
                 yield gen.sleep(delay)
             msg = yield comm.read()
-        assert msg == {'op': 'pong', 'data': key}
+        assert msg == {"op": "pong", "data": key}
         l.append(key)
         with pytest.raises(CommClosedError):
             yield comm.read()
@@ -399,8 +423,7 @@ def run_coro_in_thread(func, *args, **kwargs):
     def run():
         thread_loop = ioloop.IOLoop()  # need fresh IO loop for run_sync()
         try:
-            res = thread_loop.run_sync(partial(func, *args, **kwargs),
-                                       timeout=10)
+            res = thread_loop.run_sync(partial(func, *args, **kwargs), timeout=10)
         except Exception:
             main_loop.add_callback(fut.set_exc_info, sys.exc_info())
         else:
@@ -427,30 +450,37 @@ def test_inproc_specific_different_threads():
 # Test communications through the abstract API
 #
 
+
 @gen.coroutine
-def check_client_server(addr, check_listen_addr=None, check_contact_addr=None,
-                        listen_args=None, connect_args=None):
+def check_client_server(
+    addr,
+    check_listen_addr=None,
+    check_contact_addr=None,
+    listen_args=None,
+    connect_args=None,
+):
     """
     Abstract client / server test.
     """
+
     @gen.coroutine
     def handle_comm(comm):
         scheme, loc = parse_address(comm.peer_address)
         assert scheme == bound_scheme
 
         msg = yield comm.read()
-        assert msg['op'] == 'ping'
-        msg['op'] = 'pong'
+        assert msg["op"] == "ping"
+        msg["op"] = "pong"
         yield comm.write(msg)
 
         msg = yield comm.read()
-        assert msg['op'] == 'foobar'
+        assert msg["op"] == "foobar"
 
         yield comm.close()
 
     # Arbitrary connection args should be ignored
-    listen_args = listen_args or {'xxx': 'bar'}
-    connect_args = connect_args or {'xxx': 'foo'}
+    listen_args = listen_args or {"xxx": "bar"}
+    connect_args = connect_args or {"xxx": "foo"}
 
     listener = listen(addr, handle_comm, connection_args=listen_args)
     listener.start()
@@ -458,7 +488,7 @@ def check_client_server(addr, check_listen_addr=None, check_contact_addr=None,
     # Check listener properties
     bound_addr = listener.listen_address
     bound_scheme, bound_loc = parse_address(bound_addr)
-    assert bound_scheme in ('inproc', 'tcp', 'tls')
+    assert bound_scheme in ("inproc", "tcp", "tls")
     assert bound_scheme == parse_address(addr)[0]
 
     if check_listen_addr is not None:
@@ -478,16 +508,15 @@ def check_client_server(addr, check_listen_addr=None, check_contact_addr=None,
 
     @gen.coroutine
     def client_communicate(key, delay=0):
-        comm = yield connect(listener.contact_address,
-                             connection_args=connect_args)
+        comm = yield connect(listener.contact_address, connection_args=connect_args)
         assert comm.peer_address == listener.contact_address
 
-        yield comm.write({'op': 'ping', 'data': key})
-        yield comm.write({'op': 'foobar'})
+        yield comm.write({"op": "ping", "data": key})
+        yield comm.write({"op": "foobar"})
         if delay:
             yield gen.sleep(delay)
         msg = yield comm.read()
-        assert msg == {'op': 'pong', 'data': key}
+        assert msg == {"op": "pong", "data": key}
         l.append(key)
         yield comm.close()
 
@@ -521,7 +550,7 @@ def inproc_check():
     expected_pid = os.getpid()
 
     def checker(loc):
-        ip, pid, suffix = loc.split('/')
+        ip, pid, suffix = loc.split("/")
         assert ip == expected_ip
         assert int(pid) == expected_pid
 
@@ -531,70 +560,75 @@ def inproc_check():
 @gen_test()
 def test_default_client_server_ipv4():
     # Default scheme is (currently) TCP
-    yield check_client_server('127.0.0.1', tcp_eq('127.0.0.1'))
-    yield check_client_server('127.0.0.1:3201', tcp_eq('127.0.0.1', 3201))
-    yield check_client_server('0.0.0.0',
-                              tcp_eq('0.0.0.0'), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server('0.0.0.0:3202',
-                              tcp_eq('0.0.0.0', 3202), tcp_eq(EXTERNAL_IP4, 3202))
+    yield check_client_server("127.0.0.1", tcp_eq("127.0.0.1"))
+    yield check_client_server("127.0.0.1:3201", tcp_eq("127.0.0.1", 3201))
+    yield check_client_server("0.0.0.0", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    yield check_client_server(
+        "0.0.0.0:3202", tcp_eq("0.0.0.0", 3202), tcp_eq(EXTERNAL_IP4, 3202)
+    )
     # IPv4 is preferred for the bound address
-    yield check_client_server('',
-                              tcp_eq('0.0.0.0'), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server(':3203',
-                              tcp_eq('0.0.0.0', 3203), tcp_eq(EXTERNAL_IP4, 3203))
+    yield check_client_server("", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    yield check_client_server(
+        ":3203", tcp_eq("0.0.0.0", 3203), tcp_eq(EXTERNAL_IP4, 3203)
+    )
 
 
 @requires_ipv6
 @gen_test()
 def test_default_client_server_ipv6():
-    yield check_client_server('[::1]', tcp_eq('::1'))
-    yield check_client_server('[::1]:3211', tcp_eq('::1', 3211))
-    yield check_client_server('[::]', tcp_eq('::'), tcp_eq(EXTERNAL_IP6))
-    yield check_client_server('[::]:3212', tcp_eq('::', 3212), tcp_eq(EXTERNAL_IP6, 3212))
+    yield check_client_server("[::1]", tcp_eq("::1"))
+    yield check_client_server("[::1]:3211", tcp_eq("::1", 3211))
+    yield check_client_server("[::]", tcp_eq("::"), tcp_eq(EXTERNAL_IP6))
+    yield check_client_server(
+        "[::]:3212", tcp_eq("::", 3212), tcp_eq(EXTERNAL_IP6, 3212)
+    )
 
 
 @gen_test()
 def test_tcp_client_server_ipv4():
-    yield check_client_server('tcp://127.0.0.1', tcp_eq('127.0.0.1'))
-    yield check_client_server('tcp://127.0.0.1:3221', tcp_eq('127.0.0.1', 3221))
-    yield check_client_server('tcp://0.0.0.0',
-                              tcp_eq('0.0.0.0'), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server('tcp://0.0.0.0:3222',
-                              tcp_eq('0.0.0.0', 3222), tcp_eq(EXTERNAL_IP4, 3222))
-    yield check_client_server('tcp://',
-                              tcp_eq('0.0.0.0'), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server('tcp://:3223',
-                              tcp_eq('0.0.0.0', 3223), tcp_eq(EXTERNAL_IP4, 3223))
+    yield check_client_server("tcp://127.0.0.1", tcp_eq("127.0.0.1"))
+    yield check_client_server("tcp://127.0.0.1:3221", tcp_eq("127.0.0.1", 3221))
+    yield check_client_server("tcp://0.0.0.0", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    yield check_client_server(
+        "tcp://0.0.0.0:3222", tcp_eq("0.0.0.0", 3222), tcp_eq(EXTERNAL_IP4, 3222)
+    )
+    yield check_client_server("tcp://", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    yield check_client_server(
+        "tcp://:3223", tcp_eq("0.0.0.0", 3223), tcp_eq(EXTERNAL_IP4, 3223)
+    )
 
 
 @requires_ipv6
 @gen_test()
 def test_tcp_client_server_ipv6():
-    yield check_client_server('tcp://[::1]', tcp_eq('::1'))
-    yield check_client_server('tcp://[::1]:3231', tcp_eq('::1', 3231))
-    yield check_client_server('tcp://[::]',
-                              tcp_eq('::'), tcp_eq(EXTERNAL_IP6))
-    yield check_client_server('tcp://[::]:3232',
-                              tcp_eq('::', 3232), tcp_eq(EXTERNAL_IP6, 3232))
+    yield check_client_server("tcp://[::1]", tcp_eq("::1"))
+    yield check_client_server("tcp://[::1]:3231", tcp_eq("::1", 3231))
+    yield check_client_server("tcp://[::]", tcp_eq("::"), tcp_eq(EXTERNAL_IP6))
+    yield check_client_server(
+        "tcp://[::]:3232", tcp_eq("::", 3232), tcp_eq(EXTERNAL_IP6, 3232)
+    )
 
 
 @gen_test()
 def test_tls_client_server_ipv4():
-    yield check_client_server('tls://127.0.0.1', tls_eq('127.0.0.1'), **tls_kwargs)
-    yield check_client_server('tls://127.0.0.1:3221', tls_eq('127.0.0.1', 3221), **tls_kwargs)
-    yield check_client_server('tls://', tls_eq('0.0.0.0'),
-                              tls_eq(EXTERNAL_IP4), **tls_kwargs)
+    yield check_client_server("tls://127.0.0.1", tls_eq("127.0.0.1"), **tls_kwargs)
+    yield check_client_server(
+        "tls://127.0.0.1:3221", tls_eq("127.0.0.1", 3221), **tls_kwargs
+    )
+    yield check_client_server(
+        "tls://", tls_eq("0.0.0.0"), tls_eq(EXTERNAL_IP4), **tls_kwargs
+    )
 
 
 @requires_ipv6
 @gen_test()
 def test_tls_client_server_ipv6():
-    yield check_client_server('tls://[::1]', tls_eq('::1'), **tls_kwargs)
+    yield check_client_server("tls://[::1]", tls_eq("::1"), **tls_kwargs)
 
 
 @gen_test()
 def test_inproc_client_server():
-    yield check_client_server('inproc://', inproc_check())
+    yield check_client_server("inproc://", inproc_check())
     yield check_client_server(inproc.new_address(), inproc_check())
 
 
@@ -602,56 +636,66 @@ def test_inproc_client_server():
 # TLS certificate handling
 #
 
+
 @gen_test()
 def test_tls_reject_certificate():
     cli_ctx = get_client_ssl_context()
     serv_ctx = get_server_ssl_context()
 
     # These certs are not signed by our test CA
-    bad_cert_key = ('tls-self-signed-cert.pem', 'tls-self-signed-key.pem')
+    bad_cert_key = ("tls-self-signed-cert.pem", "tls-self-signed-key.pem")
     bad_cli_ctx = get_client_ssl_context(*bad_cert_key)
     bad_serv_ctx = get_server_ssl_context(*bad_cert_key)
 
     @gen.coroutine
     def handle_comm(comm):
         scheme, loc = parse_address(comm.peer_address)
-        assert scheme == 'tls'
+        assert scheme == "tls"
         yield comm.close()
 
     # Listener refuses a connector not signed by the CA
-    listener = listen('tls://', handle_comm,
-                      connection_args={'ssl_context': serv_ctx})
+    listener = listen("tls://", handle_comm, connection_args={"ssl_context": serv_ctx})
     listener.start()
 
     with pytest.raises(EnvironmentError) as excinfo:
-        comm = yield connect(listener.contact_address, timeout=0.5,
-                      connection_args={'ssl_context': bad_cli_ctx})
-        yield comm.write({'x': 'foo'})  # TODO: why is this necessary in Tornado 6 ?
+        comm = yield connect(
+            listener.contact_address,
+            timeout=0.5,
+            connection_args={"ssl_context": bad_cli_ctx},
+        )
+        yield comm.write({"x": "foo"})  # TODO: why is this necessary in Tornado 6 ?
 
     # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
-    if sys.version_info >= (3,) and os.name != 'nt':
+    if sys.version_info >= (3,) and os.name != "nt":
         try:
             # See https://serverfault.com/questions/793260/what-does-tlsv1-alert-unknown-ca-mean
             assert "unknown ca" in str(excinfo.value)
         except AssertionError:
-            if os.name == 'nt':
-                assert "An existing connection was forcibly closed" in str(excinfo.value)
+            if os.name == "nt":
+                assert "An existing connection was forcibly closed" in str(
+                    excinfo.value
+                )
             else:
                 raise
 
     # Sanity check
-    comm = yield connect(listener.contact_address, timeout=0.5,
-                         connection_args={'ssl_context': cli_ctx})
+    comm = yield connect(
+        listener.contact_address, timeout=0.5, connection_args={"ssl_context": cli_ctx}
+    )
     yield comm.close()
 
     # Connector refuses a listener not signed by the CA
-    listener = listen('tls://', handle_comm,
-                      connection_args={'ssl_context': bad_serv_ctx})
+    listener = listen(
+        "tls://", handle_comm, connection_args={"ssl_context": bad_serv_ctx}
+    )
     listener.start()
 
     with pytest.raises(EnvironmentError) as excinfo:
-        yield connect(listener.contact_address, timeout=0.5,
-                      connection_args={'ssl_context': cli_ctx})
+        yield connect(
+            listener.contact_address,
+            timeout=0.5,
+            connection_args={"ssl_context": cli_ctx},
+        )
     # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
     if sys.version_info >= (3,):
         assert "certificate verify failed" in str(excinfo.value)
@@ -661,9 +705,9 @@ def test_tls_reject_certificate():
 # Test communication closing
 #
 
+
 @gen.coroutine
-def check_comm_closed_implicit(addr, delay=None, listen_args=None,
-                               connect_args=None):
+def check_comm_closed_implicit(addr, delay=None, listen_args=None, connect_args=None):
     @gen.coroutine
     def handle_comm(comm):
         yield comm.close()
@@ -683,12 +727,12 @@ def check_comm_closed_implicit(addr, delay=None, listen_args=None,
 
 @gen_test()
 def test_tcp_comm_closed_implicit():
-    yield check_comm_closed_implicit('tcp://127.0.0.1')
+    yield check_comm_closed_implicit("tcp://127.0.0.1")
 
 
 @gen_test()
 def test_tls_comm_closed_implicit():
-    yield check_comm_closed_implicit('tls://127.0.0.1', **tls_kwargs)
+    yield check_comm_closed_implicit("tls://127.0.0.1", **tls_kwargs)
 
 
 @gen_test()
@@ -722,12 +766,12 @@ def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
 
 @gen_test()
 def test_tcp_comm_closed_explicit():
-    yield check_comm_closed_explicit('tcp://127.0.0.1')
+    yield check_comm_closed_explicit("tcp://127.0.0.1")
 
 
 @gen_test()
 def test_tls_comm_closed_explicit():
-    yield check_comm_closed_explicit('tls://127.0.0.1', **tls_kwargs)
+    yield check_comm_closed_explicit("tls://127.0.0.1", **tls_kwargs)
 
 
 @gen_test()
@@ -750,7 +794,7 @@ def test_inproc_comm_closed_explicit_2():
         else:
             comm.close()
 
-    listener = listen('inproc://', handle_comm)
+    listener = listen("inproc://", handle_comm)
     listener.start()
     contact_addr = listener.contact_address
 
@@ -792,6 +836,7 @@ def test_inproc_comm_closed_explicit_2():
 # Various stress tests
 #
 
+
 @gen.coroutine
 def check_connect_timeout(addr):
     t1 = time()
@@ -803,7 +848,7 @@ def check_connect_timeout(addr):
 
 @gen_test()
 def test_tcp_connect_timeout():
-    yield check_connect_timeout('tcp://127.0.0.1:44444')
+    yield check_connect_timeout("tcp://127.0.0.1:44444")
 
 
 @gen_test()
@@ -833,19 +878,20 @@ def check_many_listeners(addr):
 
 @gen_test()
 def test_tcp_many_listeners():
-    check_many_listeners('tcp://127.0.0.1')
-    check_many_listeners('tcp://0.0.0.0')
-    check_many_listeners('tcp://')
+    check_many_listeners("tcp://127.0.0.1")
+    check_many_listeners("tcp://0.0.0.0")
+    check_many_listeners("tcp://")
 
 
 @gen_test()
 def test_inproc_many_listeners():
-    check_many_listeners('inproc://')
+    check_many_listeners("inproc://")
 
 
 #
 # Test deserialization
 #
+
 
 @gen.coroutine
 def check_listener_deserialize(addr, deserialize, in_value, check_out):
@@ -893,21 +939,22 @@ def check_deserialize(addr):
     """
     # Test with Serialize and Serialized objects
 
-    msg = {'op': 'update',
-           'x': b'abc',
-           'to_ser': [to_serialize(123)],
-           'ser': Serialized(*serialize(456)),
-           }
+    msg = {
+        "op": "update",
+        "x": b"abc",
+        "to_ser": [to_serialize(123)],
+        "ser": Serialized(*serialize(456)),
+    }
     msg_orig = msg.copy()
 
     def check_out_false(out_value):
         # Check output with deserialize=False
         out_value = out_value.copy()  # in case transport passed the object as-is
-        to_ser = out_value.pop('to_ser')
-        ser = out_value.pop('ser')
+        to_ser = out_value.pop("to_ser")
+        ser = out_value.pop("ser")
         expected_msg = msg_orig.copy()
-        del expected_msg['ser']
-        del expected_msg['to_ser']
+        del expected_msg["ser"]
+        del expected_msg["to_ser"]
         assert out_value == expected_msg
 
         assert isinstance(ser, Serialized)
@@ -925,8 +972,8 @@ def check_deserialize(addr):
     def check_out_true(out_value):
         # Check output with deserialize=True
         expected_msg = msg.copy()
-        expected_msg['ser'] = 456
-        expected_msg['to_ser'] = [123]
+        expected_msg["ser"] = 456
+        expected_msg["to_ser"] = [123]
         assert out_value == expected_msg
 
     yield check_listener_deserialize(addr, False, msg, check_out_false)
@@ -940,22 +987,23 @@ def check_deserialize(addr):
 
     _uncompressible = os.urandom(1024 ** 2) * 4  # end size: 8 MB
 
-    msg = {'op': 'update',
-           'x': _uncompressible,
-           'to_ser': [to_serialize(_uncompressible)],
-           'ser': Serialized(*serialize(_uncompressible)),
-           }
+    msg = {
+        "op": "update",
+        "x": _uncompressible,
+        "to_ser": [to_serialize(_uncompressible)],
+        "ser": Serialized(*serialize(_uncompressible)),
+    }
     msg_orig = msg.copy()
 
     def check_out(deserialize_flag, out_value):
         # Check output with deserialize=False
         assert sorted(out_value) == sorted(msg_orig)
         out_value = out_value.copy()  # in case transport passed the object as-is
-        to_ser = out_value.pop('to_ser')
-        ser = out_value.pop('ser')
+        to_ser = out_value.pop("to_ser")
+        ser = out_value.pop("ser")
         expected_msg = msg_orig.copy()
-        del expected_msg['ser']
-        del expected_msg['to_ser']
+        del expected_msg["ser"]
+        del expected_msg["to_ser"]
         assert out_value == expected_msg
 
         if deserialize_flag:
@@ -980,15 +1028,15 @@ def check_deserialize(addr):
     yield check_connector_deserialize(addr, True, msg, partial(check_out, True))
 
 
-@pytest.mark.xfail(reason='intermittent failure on windows')
+@pytest.mark.xfail(reason="intermittent failure on windows")
 @gen_test()
 def test_tcp_deserialize():
-    yield check_deserialize('tcp://')
+    yield check_deserialize("tcp://")
 
 
 @gen_test()
 def test_inproc_deserialize():
-    yield check_deserialize('inproc://')
+    yield check_deserialize("inproc://")
 
 
 @gen.coroutine
@@ -1000,11 +1048,12 @@ def check_deserialize_roundtrip(addr):
     # as a separate payload
     _uncompressible = os.urandom(1024 ** 2) * 4  # end size: 4 MB
 
-    msg = {'op': 'update',
-           'x': _uncompressible,
-           'to_ser': [to_serialize(_uncompressible)],
-           'ser': Serialized(*serialize(_uncompressible)),
-           }
+    msg = {
+        "op": "update",
+        "x": _uncompressible,
+        "to_ser": [to_serialize(_uncompressible)],
+        "ser": Serialized(*serialize(_uncompressible)),
+    }
 
     for should_deserialize in (True, False):
         a, b = yield get_comm_pair(addr, deserialize=should_deserialize)
@@ -1014,24 +1063,24 @@ def check_deserialize_roundtrip(addr):
         got = yield a.read()
 
         assert sorted(got) == sorted(msg)
-        for k in ('op', 'x'):
+        for k in ("op", "x"):
             assert got[k] == msg[k]
         if should_deserialize:
-            assert isinstance(got['to_ser'][0], (bytes, bytearray))
-            assert isinstance(got['ser'], (bytes, bytearray))
+            assert isinstance(got["to_ser"][0], (bytes, bytearray))
+            assert isinstance(got["ser"], (bytes, bytearray))
         else:
-            assert isinstance(got['to_ser'][0], (to_serialize, Serialized))
-            assert isinstance(got['ser'], Serialized)
+            assert isinstance(got["to_ser"][0], (to_serialize, Serialized))
+            assert isinstance(got["ser"], Serialized)
 
 
 @gen_test()
 def test_inproc_deserialize_roundtrip():
-    yield check_deserialize_roundtrip('inproc://')
+    yield check_deserialize_roundtrip("inproc://")
 
 
 @gen_test()
 def test_tcp_deserialize_roundtrip():
-    yield check_deserialize_roundtrip('tcp://')
+    yield check_deserialize_roundtrip("tcp://")
 
 
 def _raise_eoferror():
@@ -1048,9 +1097,10 @@ def check_deserialize_eoferror(addr):
     """
     EOFError when deserializing should close the comm.
     """
+
     @gen.coroutine
     def handle_comm(comm):
-        yield comm.write({'data': to_serialize(_EOFRaising())})
+        yield comm.write({"data": to_serialize(_EOFRaising())})
         with pytest.raises(CommClosedError):
             yield comm.read()
 
@@ -1062,21 +1112,22 @@ def check_deserialize_eoferror(addr):
 
 @gen_test()
 def test_tcp_deserialize_eoferror():
-    yield check_deserialize_eoferror('tcp://')
+    yield check_deserialize_eoferror("tcp://")
 
 
 #
 # Test various properties
 #
 
+
 @gen.coroutine
 def check_repr(a, b):
-    assert 'closed' not in repr(a)
-    assert 'closed' not in repr(b)
+    assert "closed" not in repr(a)
+    assert "closed" not in repr(b)
     yield a.close()
-    assert 'closed' in repr(a)
+    assert "closed" in repr(a)
     yield b.close()
-    assert 'closed' in repr(b)
+    assert "closed" in repr(b)
 
 
 @gen_test()

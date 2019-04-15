@@ -44,7 +44,7 @@ def worker_client(timeout=3, separate_thread=True):
     client = get_client(timeout=timeout)
     if separate_thread:
         secede()  # have this thread secede from the thread pool
-        worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
+        worker.loop.add_callback(worker.transition, thread_state.key, "long-running")
 
     yield client
 

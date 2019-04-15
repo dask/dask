@@ -15,8 +15,7 @@ from ..compatibility import html_escape
 from ..core import connect, coerce_to_address, CommClosedError
 from ..client import default_client, futures_of
 from ..protocol.pickle import dumps
-from ..utils import (ignoring, key_split, is_kernel, LoopRunner,
-        parse_timedelta)
+from ..utils import ignoring, key_split, is_kernel, LoopRunner, parse_timedelta
 
 
 logger = logging.getLogger(__name__)
@@ -29,17 +28,17 @@ def get_scheduler(scheduler):
 
 
 class ProgressBar(object):
-    def __init__(self, keys, scheduler=None, interval='100ms', complete=True):
+    def __init__(self, keys, scheduler=None, interval="100ms", complete=True):
         self.scheduler = get_scheduler(scheduler)
 
         self.client = None
         for key in keys:
-            if hasattr(key, 'client'):
+            if hasattr(key, "client"):
                 self.client = weakref.ref(key.client)
                 break
 
-        self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
-        self.interval = parse_timedelta(interval, default='s')
+        self.keys = {k.key if hasattr(k, "key") else k for k in keys}
+        self.interval = parse_timedelta(interval, default="s")
         self.complete = complete
         self._start_time = default_timer()
 
@@ -59,34 +58,42 @@ class ProgressBar(object):
             raise gen.Return(p)
 
         def function(scheduler, p):
-            result = {'all': len(p.all_keys),
-                      'remaining': len(p.keys),
-                      'status': p.status}
-            if p.status == 'error':
+            result = {
+                "all": len(p.all_keys),
+                "remaining": len(p.keys),
+                "status": p.status,
+            }
+            if p.status == "error":
                 result.update(p.extra)
             return result
 
-        self.comm = yield connect(self.scheduler,
-                                  connection_args=self.client().connection_args
-                                  if self.client else None)
+        self.comm = yield connect(
+            self.scheduler,
+            connection_args=self.client().connection_args if self.client else None,
+        )
         logger.debug("Progressbar Connected to scheduler")
 
-        yield self.comm.write({'op': 'feed',
-                               'setup': dumps(setup),
-                               'function': dumps(function),
-                               'interval': self.interval},
-                              serializers=self.client()._serializers if self.client else None)
+        yield self.comm.write(
+            {
+                "op": "feed",
+                "setup": dumps(setup),
+                "function": dumps(function),
+                "interval": self.interval,
+            },
+            serializers=self.client()._serializers if self.client else None,
+        )
 
         while True:
             try:
-                response = yield self.comm.read(deserializers=self.client()._deserializers
-                                                if self.client else None)
+                response = yield self.comm.read(
+                    deserializers=self.client()._deserializers if self.client else None
+                )
             except CommClosedError:
                 break
             self._last_response = response
-            self.status = response['status']
+            self.status = response["status"]
             self._draw_bar(**response)
-            if response['status'] in ('error', 'finished'):
+            if response["status"] in ("error", "finished"):
                 yield self.comm.close()
                 self._draw_stop(**response)
                 break
@@ -102,10 +109,17 @@ class ProgressBar(object):
 
 
 class TextProgressBar(ProgressBar):
-    def __init__(self, keys, scheduler=None, interval='100ms', width=40,
-                 loop=None, complete=True, start=True):
-        super(TextProgressBar, self).__init__(keys, scheduler, interval,
-                                              complete)
+    def __init__(
+        self,
+        keys,
+        scheduler=None,
+        interval="100ms",
+        width=40,
+        loop=None,
+        complete=True,
+        start=True,
+    ):
+        super(TextProgressBar, self).__init__(keys, scheduler, interval, complete)
         self.width = width
         self.loop = loop or IOLoop()
 
@@ -115,17 +129,18 @@ class TextProgressBar(ProgressBar):
 
     def _draw_bar(self, remaining, all, **kwargs):
         frac = (1 - remaining / all) if all else 1.0
-        bar = '#' * int(self.width * frac)
+        bar = "#" * int(self.width * frac)
         percent = int(100 * frac)
         elapsed = format_time(self.elapsed)
-        msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self.width,
-                                                           percent, elapsed)
+        msg = "\r[{0:<{1}}] | {2}% Completed | {3}".format(
+            bar, self.width, percent, elapsed
+        )
         with ignoring(ValueError):
             sys.stdout.write(msg)
             sys.stdout.flush()
 
     def _draw_stop(self, **kwargs):
-        sys.stdout.write('\r')
+        sys.stdout.write("\r")
         sys.stdout.flush()
 
 
@@ -138,15 +153,16 @@ class ProgressWidget(ProgressBar):
     TextProgressBar: Text version suitable for the console
     """
 
-    def __init__(self, keys, scheduler=None, interval='100ms',
-                 complete=False, loop=None):
-        super(ProgressWidget, self).__init__(keys, scheduler, interval,
-                                             complete)
+    def __init__(
+        self, keys, scheduler=None, interval="100ms", complete=False, loop=None
+    ):
+        super(ProgressWidget, self).__init__(keys, scheduler, interval, complete)
 
         from ipywidgets import FloatProgress, HBox, VBox, HTML
-        self.elapsed_time = HTML('')
-        self.bar = FloatProgress(min=0, max=1, description='')
-        self.bar_text = HTML('')
+
+        self.elapsed_time = HTML("")
+        self.bar = FloatProgress(min=0, max=1, description="")
+        self.bar_text = HTML("")
 
         self.bar_widget = HBox([self.bar_text, self.bar])
         self.widget = VBox([self.elapsed_time, self.bar_widget])
@@ -156,38 +172,52 @@ class ProgressWidget(ProgressBar):
         return self.widget._ipython_display_(**kwargs)
 
     def _draw_stop(self, remaining, status, exception=None, **kwargs):
-        if status == 'error':
-            self.bar.bar_style = 'danger'
+        if status == "error":
+            self.bar.bar_style = "danger"
             self.elapsed_time.value = (
-                    '<div style="padding: 0px 10px 5px 10px"><b>Exception</b> '
-                    '<tt>' + repr(exception) + '</tt>:' +
-                    format_time(self.elapsed) + ' ' +
-                    '</div>'
+                '<div style="padding: 0px 10px 5px 10px"><b>Exception</b> '
+                "<tt>"
+                + repr(exception)
+                + "</tt>:"
+                + format_time(self.elapsed)
+                + " "
+                + "</div>"
             )
         elif not remaining:
-            self.bar.bar_style = 'success'
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + \
-                format_time(self.elapsed) + '</div>'
+            self.bar.bar_style = "success"
+            self.elapsed_time.value = (
+                '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> '
+                + format_time(self.elapsed)
+                + "</div>"
+            )
 
     def _draw_bar(self, remaining, all, **kwargs):
         ndone = all - remaining
-        self.elapsed_time.value = '<div style=\"padding: 0px 10px 5px 10px\"><b>Computing:</b> ' + \
-            format_time(self.elapsed) + '</div>'
+        self.elapsed_time.value = (
+            '<div style="padding: 0px 10px 5px 10px"><b>Computing:</b> '
+            + format_time(self.elapsed)
+            + "</div>"
+        )
         self.bar.value = ndone / all if all else 1.0
-        self.bar_text.value = '<div style="padding: 0px 10px 0px 10px; text-align:right;">%d / %d</div>' % (ndone, all)
+        self.bar_text.value = (
+            '<div style="padding: 0px 10px 0px 10px; text-align:right;">%d / %d</div>'
+            % (ndone, all)
+        )
 
 
 class MultiProgressBar(object):
-    def __init__(self, keys, scheduler=None, func=key_split, interval='100ms', complete=False):
+    def __init__(
+        self, keys, scheduler=None, func=key_split, interval="100ms", complete=False
+    ):
         self.scheduler = get_scheduler(scheduler)
 
         self.client = None
         for key in keys:
-            if hasattr(key, 'client'):
+            if hasattr(key, "client"):
                 self.client = weakref.ref(key.client)
                 break
 
-        self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.keys = {k.key if hasattr(k, "key") else k for k in keys}
         self.func = func
         self.interval = interval
         self.complete = complete
@@ -210,30 +240,38 @@ class MultiProgressBar(object):
             raise gen.Return(p)
 
         def function(scheduler, p):
-            result = {'all': valmap(len, p.all_keys),
-                      'remaining': valmap(len, p.keys),
-                      'status': p.status}
-            if p.status == 'error':
+            result = {
+                "all": valmap(len, p.all_keys),
+                "remaining": valmap(len, p.keys),
+                "status": p.status,
+            }
+            if p.status == "error":
                 result.update(p.extra)
             return result
 
-        self.comm = yield connect(self.scheduler,
-                                  connection_args=self.client().connection_args
-                                  if self.client else None)
+        self.comm = yield connect(
+            self.scheduler,
+            connection_args=self.client().connection_args if self.client else None,
+        )
         logger.debug("Progressbar Connected to scheduler")
 
-        yield self.comm.write({'op': 'feed',
-                               'setup': dumps(setup),
-                               'function': dumps(function),
-                               'interval': self.interval})
+        yield self.comm.write(
+            {
+                "op": "feed",
+                "setup": dumps(setup),
+                "function": dumps(function),
+                "interval": self.interval,
+            }
+        )
 
         while True:
-            response = yield self.comm.read(deserializers=self.client()._deserializers if
-                                            self.client else None)
+            response = yield self.comm.read(
+                deserializers=self.client()._deserializers if self.client else None
+            )
             self._last_response = response
-            self.status = response['status']
+            self.status = response["status"]
             self._draw_bar(**response)
-            if response['status'] in ('error', 'finished'):
+            if response["status"] in ("error", "finished"):
                 yield self.comm.close()
                 self._draw_stop(**response)
                 break
@@ -260,26 +298,38 @@ class MultiProgressWidget(MultiProgressBar):
     ProgressWidget: Single progress bar widget
     """
 
-    def __init__(self, keys, scheduler=None, minimum=0, interval=0.1, func=key_split,
-                 complete=False):
-        super(MultiProgressWidget, self).__init__(keys, scheduler, func, interval, complete)
+    def __init__(
+        self,
+        keys,
+        scheduler=None,
+        minimum=0,
+        interval=0.1,
+        func=key_split,
+        complete=False,
+    ):
+        super(MultiProgressWidget, self).__init__(
+            keys, scheduler, func, interval, complete
+        )
         from ipywidgets import VBox
+
         self.widget = VBox([])
 
     def make_widget(self, all):
         from ipywidgets import FloatProgress, HBox, VBox, HTML
-        self.elapsed_time = HTML('')
-        self.bars = {key: FloatProgress(min=0, max=1, description='')
-                     for key in all}
-        self.bar_texts = {key: HTML('') for key in all}
-        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px;'
-                                     ' text-align:left; word-wrap: '
-                                     'break-word;\">' +
-                                     html_escape(key.decode()
-                                                 if isinstance(key, bytes)
-                                                 else key) +
-                                     '</div>')
-                           for key in all}
+
+        self.elapsed_time = HTML("")
+        self.bars = {key: FloatProgress(min=0, max=1, description="") for key in all}
+        self.bar_texts = {key: HTML("") for key in all}
+        self.bar_labels = {
+            key: HTML(
+                '<div style="padding: 0px 10px 0px 10px;'
+                " text-align:left; word-wrap: "
+                'break-word;">'
+                + html_escape(key.decode() if isinstance(key, bytes) else key)
+                + "</div>"
+            )
+            for key in all
+        }
 
         def keyfunc(kv):
             """ Order keys by most numerous, then by string name """
@@ -287,10 +337,12 @@ class MultiProgressWidget(MultiProgressBar):
 
         key_order = [k for k, v in sorted(all.items(), key=keyfunc, reverse=True)]
 
-        self.bar_widgets = VBox([HBox([self.bar_texts[key],
-                                       self.bars[key],
-                                       self.bar_labels[key]])
-                                 for key in key_order])
+        self.bar_widgets = VBox(
+            [
+                HBox([self.bar_texts[key], self.bars[key], self.bar_labels[key]])
+                for key in key_order
+            ]
+        )
         self.widget.children = (self.elapsed_time, self.bar_widgets)
 
     def _ipython_display_(self, **kwargs):
@@ -300,32 +352,43 @@ class MultiProgressWidget(MultiProgressBar):
     def _draw_stop(self, remaining, status, exception=None, key=None, **kwargs):
         for k, v in remaining.items():
             if not v:
-                self.bars[k].bar_style = 'success'
+                self.bars[k].bar_style = "success"
             else:
-                self.bars[k].bar_style = 'danger'
+                self.bars[k].bar_style = "danger"
 
-        if status == 'error':
+        if status == "error":
             # self.bars[self.func(key)].bar_style = 'danger'  # TODO
             self.elapsed_time.value = (
-                '<div style="padding: 0px 10px 5px 10px"><b>Exception</b> ' +
-                '<tt>' + repr(exception) + '</tt>:' +
-                format_time(self.elapsed) + ' ' +
-                '</div>'
+                '<div style="padding: 0px 10px 5px 10px"><b>Exception</b> '
+                + "<tt>"
+                + repr(exception)
+                + "</tt>:"
+                + format_time(self.elapsed)
+                + " "
+                + "</div>"
             )
         else:
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + \
-                format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = (
+                '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> '
+                + format_time(self.elapsed)
+                + "</div>"
+            )
 
     def _draw_bar(self, remaining, all, status, **kwargs):
         if self.keys and not self.widget.children:
             self.make_widget(all)
         for k, ntasks in all.items():
             ndone = ntasks - remaining[k]
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Computing:</b> ' + \
-                format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = (
+                '<div style="padding: 0px 10px 5px 10px"><b>Computing:</b> '
+                + format_time(self.elapsed)
+                + "</div>"
+            )
             self.bars[k].value = ndone / ntasks if ntasks else 1.0
-            self.bar_texts[k].value = '<div style="padding: 0px 10px 0px 10px; text-align: right">%d / %d</div>' % (
-                ndone, ntasks)
+            self.bar_texts[k].value = (
+                '<div style="padding: 0px 10px 0px 10px; text-align: right">%d / %d</div>'
+                % (ndone, ntasks)
+            )
 
 
 def progress(*futures, **kwargs):
@@ -359,9 +422,9 @@ def progress(*futures, **kwargs):
     >>> progress(futures)  # doctest: +SKIP
     [########################################] | 100% Completed |  1.7s
     """
-    notebook = kwargs.pop('notebook', None)
-    multi = kwargs.pop('multi', True)
-    complete = kwargs.pop('complete', True)
+    notebook = kwargs.pop("notebook", None)
+    multi = kwargs.pop("multi", True)
+    complete = kwargs.pop("complete", True)
     assert not kwargs
 
     futures = futures_of(futures)

@@ -78,29 +78,51 @@ def make_cert_key(hostname, sign=False):
     req_file, cert_file, key_file = tempnames
     try:
         req = req_template.format(hostname=hostname)
-        with open(req_file, 'w') as f:
+        with open(req_file, "w") as f:
             f.write(req)
-        args = ['req', '-new', '-days', '3650', '-nodes',
-                '-newkey', 'rsa:2048', '-keyout', key_file,
-                '-config', req_file]
+        args = [
+            "req",
+            "-new",
+            "-days",
+            "3650",
+            "-nodes",
+            "-newkey",
+            "rsa:2048",
+            "-keyout",
+            key_file,
+            "-config",
+            req_file,
+        ]
         if sign:
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 tempnames.append(f.name)
                 reqfile = f.name
-            args += ['-out', reqfile]
+            args += ["-out", reqfile]
 
         else:
-            args += ['-x509', '-out', cert_file]
-        subprocess.check_call(['openssl'] + args)
+            args += ["-x509", "-out", cert_file]
+        subprocess.check_call(["openssl"] + args)
 
         if sign:
-            args = ['ca', '-config', req_file, '-out', cert_file, '-outdir', 'cadir',
-                    '-policy', 'policy_anything', '-batch', '-infiles', reqfile]
-            subprocess.check_call(['openssl'] + args)
+            args = [
+                "ca",
+                "-config",
+                req_file,
+                "-out",
+                cert_file,
+                "-outdir",
+                "cadir",
+                "-policy",
+                "policy_anything",
+                "-batch",
+                "-infiles",
+                reqfile,
+            ]
+            subprocess.check_call(["openssl"] + args)
 
-        with open(cert_file, 'r') as f:
+        with open(cert_file, "r") as f:
             cert = f.read()
-        with open(key_file, 'r') as f:
+        with open(key_file, "r") as f:
             key = f.read()
         return cert, key
     finally:
@@ -108,7 +130,7 @@ def make_cert_key(hostname, sign=False):
             os.remove(name)
 
 
-TMP_CADIR = 'cadir'
+TMP_CADIR = "cadir"
 
 
 def unmake_ca():
@@ -117,53 +139,82 @@ def unmake_ca():
 
 def make_ca():
     os.mkdir(TMP_CADIR)
-    with open(os.path.join('cadir', 'index.txt'), 'a+') as f:
+    with open(os.path.join("cadir", "index.txt"), "a+") as f:
         pass  # empty file
     # with open(os.path.join('cadir','crl.txt'),'a+') as f:
-        # f.write("00")
-    with open(os.path.join('cadir', 'index.txt.attr'), 'w+') as f:
-        f.write('unique_subject = no')
+    # f.write("00")
+    with open(os.path.join("cadir", "index.txt.attr"), "w+") as f:
+        f.write("unique_subject = no")
 
     with tempfile.NamedTemporaryFile("w") as t:
-        t.write(req_template.format(hostname='our-ca-server'))
+        t.write(req_template.format(hostname="our-ca-server"))
         t.flush()
         with tempfile.NamedTemporaryFile() as f:
-            args = ['req', '-new', '-days', '3650', '-extensions', 'v3_ca', '-nodes',
-                    '-newkey', 'rsa:2048', '-keyout', 'tls-ca-key.pem',
-                    '-out', f.name,
-                    '-subj', '/C=XY/L=Dask-distributed/O=Dask CA/CN=our-ca-server']
-            subprocess.check_call(['openssl'] + args)
-            args = ['ca', '-config', t.name, '-create_serial',
-                    '-out', 'tls-ca-cert.pem', '-batch', '-outdir', TMP_CADIR,
-                    '-keyfile', 'tls-ca-key.pem', '-days', '3650',
-                    '-selfsign', '-extensions', 'v3_ca', '-infiles', f.name]
-            subprocess.check_call(['openssl'] + args)
-            #args = ['ca', '-config', t.name, '-gencrl', '-out', 'revocation.crl']
-            #subprocess.check_call(['openssl'] + args)
+            args = [
+                "req",
+                "-new",
+                "-days",
+                "3650",
+                "-extensions",
+                "v3_ca",
+                "-nodes",
+                "-newkey",
+                "rsa:2048",
+                "-keyout",
+                "tls-ca-key.pem",
+                "-out",
+                f.name,
+                "-subj",
+                "/C=XY/L=Dask-distributed/O=Dask CA/CN=our-ca-server",
+            ]
+            subprocess.check_call(["openssl"] + args)
+            args = [
+                "ca",
+                "-config",
+                t.name,
+                "-create_serial",
+                "-out",
+                "tls-ca-cert.pem",
+                "-batch",
+                "-outdir",
+                TMP_CADIR,
+                "-keyfile",
+                "tls-ca-key.pem",
+                "-days",
+                "3650",
+                "-selfsign",
+                "-extensions",
+                "v3_ca",
+                "-infiles",
+                f.name,
+            ]
+            subprocess.check_call(["openssl"] + args)
+            # args = ['ca', '-config', t.name, '-gencrl', '-out', 'revocation.crl']
+            # subprocess.check_call(['openssl'] + args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     os.chdir(here)
-    cert, key = make_cert_key('localhost')
-    with open('tls-self-signed-cert.pem', 'w') as f:
+    cert, key = make_cert_key("localhost")
+    with open("tls-self-signed-cert.pem", "w") as f:
         f.write(cert)
-    with open('tls-self-signed-key.pem', 'w') as f:
+    with open("tls-self-signed-key.pem", "w") as f:
         f.write(key)
 
     # For certificate matching tests
     make_ca()
-    with open('tls-ca-cert.pem', 'r') as f:
+    with open("tls-ca-cert.pem", "r") as f:
         ca_cert = f.read()
 
-    cert, key = make_cert_key('localhost', sign=True)
-    with open('tls-cert.pem', 'w') as f:
+    cert, key = make_cert_key("localhost", sign=True)
+    with open("tls-cert.pem", "w") as f:
         f.write(cert)
-    with open('tls-cert-chain.pem', 'w') as f:
+    with open("tls-cert-chain.pem", "w") as f:
         f.write(cert)
         f.write(ca_cert)
-    with open('tls-key.pem', 'w') as f:
+    with open("tls-key.pem", "w") as f:
         f.write(key)
-    with open('tls-key-cert.pem', 'w') as f:
+    with open("tls-key-cert.pem", "w") as f:
         f.write(key)
         f.write(cert)
 

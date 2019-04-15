@@ -12,100 +12,201 @@ from distributed.config import config
 from distributed.utils import get_ip_interface, parse_timedelta
 from distributed.worker import _ncores
 from distributed.security import Security
-from distributed.cli.utils import (check_python_3, uri_from_host_port,
-                                   install_signal_handlers)
+from distributed.cli.utils import (
+    check_python_3,
+    uri_from_host_port,
+    install_signal_handlers,
+)
 from distributed.comm import get_address_host_port
 from distributed.preloading import validate_preload_argv
-from distributed.proctitle import (enable_proctitle_on_children,
-                                   enable_proctitle_on_current)
+from distributed.proctitle import (
+    enable_proctitle_on_children,
+    enable_proctitle_on_current,
+)
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado import gen
 
-logger = logging.getLogger('distributed.dask_worker')
+logger = logging.getLogger("distributed.dask_worker")
 
 
 pem_file_option_type = click.Path(exists=True, resolve_path=True)
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
-@click.argument('scheduler', type=str, required=False)
-@click.option('--tls-ca-file', type=pem_file_option_type, default=None,
-              help="CA cert(s) file for TLS (in PEM format)")
-@click.option('--tls-cert', type=pem_file_option_type, default=None,
-              help="certificate file for TLS (in PEM format)")
-@click.option('--tls-key', type=pem_file_option_type, default=None,
-              help="private key file for TLS (in PEM format)")
-@click.option('--worker-port', type=int, default=0,
-              help="Serving computation port, defaults to random")
-@click.option('--nanny-port', type=int, default=0,
-              help="Serving nanny port, defaults to random")
-@click.option('--bokeh-port', type=int, default=None,
-              help="Deprecated.  See --dashboard-address")
-@click.option('--dashboard-address', type=str, default=':0',
-              help="Address on which to listen for diagnostics dashboard")
-@click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
-              required=False, help="Launch Bokeh Web UI")
-@click.option('--listen-address', type=str, default=None,
-        help="The address to which the worker binds. "
-             "Example: tcp://0.0.0.0:9000")
-@click.option('--contact-address', type=str, default=None,
-        help="The address the worker advertises to the scheduler for "
-             "communication with it and other workers. "
-             "Example: tcp://127.0.0.1:9000")
-@click.option('--host', type=str, default=None,
-              help="Serving host. Should be an ip address that is"
-                   " visible to the scheduler and other workers. "
-                   "See --listen-address and --contact-address if you "
-                   "need different listen and contact addresses. "
-                   "See --interface.")
-@click.option('--interface', type=str, default=None,
-              help="Network interface like 'eth0' or 'ib0'")
-@click.option('--nthreads', type=int, default=0,
-              help="Number of threads per process.")
-@click.option('--nprocs', type=int, default=1,
-              help="Number of worker processes to launch.  Defaults to one.")
-@click.option('--name', type=str, default='',
-              help="A unique name for this worker like 'worker-1'. "
-                   "If used with --nprocs then the process number "
-                   "will be appended like name-0, name-1, name-2, ...")
-@click.option('--memory-limit', default='auto',
-              help="Bytes of memory per process that the worker can use. "
-                   "This can be an integer (bytes), "
-                   "float (fraction of total system memory), "
-                   "string (like 5GB or 5000M), "
-                   "'auto', or zero for no memory management")
-@click.option('--reconnect/--no-reconnect', default=True,
-              help="Reconnect to scheduler if disconnected")
-@click.option('--nanny/--no-nanny', default=True,
-              help="Start workers in nanny process for management")
-@click.option('--pid-file', type=str, default='',
-              help="File to write the process PID")
-@click.option('--local-directory', default='', type=str,
-              help="Directory to place worker files")
-@click.option('--resources', type=str, default='',
-              help='Resources for task constraints like "GPU=2 MEM=10e9". '
-                   'Resources are applied separately to each worker process '
-                   "(only relevant when starting multiple worker processes with '--nprocs').")
-@click.option('--scheduler-file', type=str, default='',
-              help='Filename to JSON encoded scheduler information. '
-                   'Use with dask-scheduler --scheduler-file')
-@click.option('--death-timeout', type=str, default=None,
-              help="Seconds to wait for a scheduler before closing")
-@click.option('--bokeh-prefix', type=str, default=None,
-              help="Prefix for the bokeh app")
-@click.option('--preload', type=str, multiple=True, is_eager=True,
-              help='Module that should be loaded by each worker process '
-                   'like "foo.bar" or "/path/to/foo.py"')
-@click.argument('preload_argv', nargs=-1,
-                type=click.UNPROCESSED, callback=validate_preload_argv)
-def main(scheduler, host, worker_port, listen_address, contact_address,
-         nanny_port, nthreads, nprocs, nanny, name,
-         memory_limit, pid_file, reconnect, resources, bokeh,
-         bokeh_port, local_directory, scheduler_file, interface,
-         death_timeout, preload, preload_argv, bokeh_prefix, tls_ca_file,
-         tls_cert, tls_key, dashboard_address):
+@click.argument("scheduler", type=str, required=False)
+@click.option(
+    "--tls-ca-file",
+    type=pem_file_option_type,
+    default=None,
+    help="CA cert(s) file for TLS (in PEM format)",
+)
+@click.option(
+    "--tls-cert",
+    type=pem_file_option_type,
+    default=None,
+    help="certificate file for TLS (in PEM format)",
+)
+@click.option(
+    "--tls-key",
+    type=pem_file_option_type,
+    default=None,
+    help="private key file for TLS (in PEM format)",
+)
+@click.option(
+    "--worker-port",
+    type=int,
+    default=0,
+    help="Serving computation port, defaults to random",
+)
+@click.option(
+    "--nanny-port", type=int, default=0, help="Serving nanny port, defaults to random"
+)
+@click.option(
+    "--bokeh-port", type=int, default=None, help="Deprecated.  See --dashboard-address"
+)
+@click.option(
+    "--dashboard-address",
+    type=str,
+    default=":0",
+    help="Address on which to listen for diagnostics dashboard",
+)
+@click.option(
+    "--bokeh/--no-bokeh",
+    "bokeh",
+    default=True,
+    show_default=True,
+    required=False,
+    help="Launch Bokeh Web UI",
+)
+@click.option(
+    "--listen-address",
+    type=str,
+    default=None,
+    help="The address to which the worker binds. " "Example: tcp://0.0.0.0:9000",
+)
+@click.option(
+    "--contact-address",
+    type=str,
+    default=None,
+    help="The address the worker advertises to the scheduler for "
+    "communication with it and other workers. "
+    "Example: tcp://127.0.0.1:9000",
+)
+@click.option(
+    "--host",
+    type=str,
+    default=None,
+    help="Serving host. Should be an ip address that is"
+    " visible to the scheduler and other workers. "
+    "See --listen-address and --contact-address if you "
+    "need different listen and contact addresses. "
+    "See --interface.",
+)
+@click.option(
+    "--interface", type=str, default=None, help="Network interface like 'eth0' or 'ib0'"
+)
+@click.option("--nthreads", type=int, default=0, help="Number of threads per process.")
+@click.option(
+    "--nprocs",
+    type=int,
+    default=1,
+    help="Number of worker processes to launch.  Defaults to one.",
+)
+@click.option(
+    "--name",
+    type=str,
+    default="",
+    help="A unique name for this worker like 'worker-1'. "
+    "If used with --nprocs then the process number "
+    "will be appended like name-0, name-1, name-2, ...",
+)
+@click.option(
+    "--memory-limit",
+    default="auto",
+    help="Bytes of memory per process that the worker can use. "
+    "This can be an integer (bytes), "
+    "float (fraction of total system memory), "
+    "string (like 5GB or 5000M), "
+    "'auto', or zero for no memory management",
+)
+@click.option(
+    "--reconnect/--no-reconnect",
+    default=True,
+    help="Reconnect to scheduler if disconnected",
+)
+@click.option(
+    "--nanny/--no-nanny",
+    default=True,
+    help="Start workers in nanny process for management",
+)
+@click.option("--pid-file", type=str, default="", help="File to write the process PID")
+@click.option(
+    "--local-directory", default="", type=str, help="Directory to place worker files"
+)
+@click.option(
+    "--resources",
+    type=str,
+    default="",
+    help='Resources for task constraints like "GPU=2 MEM=10e9". '
+    "Resources are applied separately to each worker process "
+    "(only relevant when starting multiple worker processes with '--nprocs').",
+)
+@click.option(
+    "--scheduler-file",
+    type=str,
+    default="",
+    help="Filename to JSON encoded scheduler information. "
+    "Use with dask-scheduler --scheduler-file",
+)
+@click.option(
+    "--death-timeout",
+    type=str,
+    default=None,
+    help="Seconds to wait for a scheduler before closing",
+)
+@click.option("--bokeh-prefix", type=str, default=None, help="Prefix for the bokeh app")
+@click.option(
+    "--preload",
+    type=str,
+    multiple=True,
+    is_eager=True,
+    help="Module that should be loaded by each worker process "
+    'like "foo.bar" or "/path/to/foo.py"',
+)
+@click.argument(
+    "preload_argv", nargs=-1, type=click.UNPROCESSED, callback=validate_preload_argv
+)
+def main(
+    scheduler,
+    host,
+    worker_port,
+    listen_address,
+    contact_address,
+    nanny_port,
+    nthreads,
+    nprocs,
+    nanny,
+    name,
+    memory_limit,
+    pid_file,
+    reconnect,
+    resources,
+    bokeh,
+    bokeh_port,
+    local_directory,
+    scheduler_file,
+    interface,
+    death_timeout,
+    preload,
+    preload_argv,
+    bokeh_prefix,
+    tls_ca_file,
+    tls_cert,
+    tls_key,
+    dashboard_address,
+):
     enable_proctitle_on_current()
     enable_proctitle_on_children()
 
@@ -116,32 +217,41 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
         )
         dashboard_address = bokeh_port
 
-    sec = Security(tls_ca_file=tls_ca_file,
-                   tls_worker_cert=tls_cert,
-                   tls_worker_key=tls_key,
-                   )
+    sec = Security(
+        tls_ca_file=tls_ca_file, tls_worker_cert=tls_cert, tls_worker_key=tls_key
+    )
 
     if nprocs > 1 and worker_port != 0:
-        logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
+        logger.error(
+            "Failed to launch worker.  You cannot use the --port argument when nprocs > 1."
+        )
         exit(1)
 
     if nprocs > 1 and not nanny:
-        logger.error("Failed to launch worker.  You cannot use the --no-nanny argument when nprocs > 1.")
+        logger.error(
+            "Failed to launch worker.  You cannot use the --no-nanny argument when nprocs > 1."
+        )
         exit(1)
 
     if contact_address and not listen_address:
-        logger.error("Failed to launch worker. "
-                     "Must specify --listen-address when --contact-address is given")
+        logger.error(
+            "Failed to launch worker. "
+            "Must specify --listen-address when --contact-address is given"
+        )
         exit(1)
 
     if nprocs > 1 and listen_address:
-        logger.error("Failed to launch worker. "
-                     "You cannot specify --listen-address when nprocs > 1.")
+        logger.error(
+            "Failed to launch worker. "
+            "You cannot specify --listen-address when nprocs > 1."
+        )
         exit(1)
 
     if (worker_port or host) and listen_address:
-        logger.error("Failed to launch worker. "
-                     "You cannot specify --listen-address when --worker-port or --host is given.")
+        logger.error(
+            "Failed to launch worker. "
+            "You cannot specify --listen-address when --worker-port or --host is given."
+        )
         exit(1)
 
     try:
@@ -167,12 +277,13 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
         nthreads = _ncores // nprocs
 
     if pid_file:
-        with open(pid_file, 'w') as f:
+        with open(pid_file, "w") as f:
             f.write(str(os.getpid()))
 
         def del_pid_file():
             if os.path.exists(pid_file):
                 os.remove(pid_file)
+
         atexit.register(del_pid_file)
 
     services = {}
@@ -184,14 +295,14 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
             pass
         else:
             if bokeh_prefix:
-                result = (BokehWorker, {'prefix': bokeh_prefix})
+                result = (BokehWorker, {"prefix": bokeh_prefix})
             else:
                 result = BokehWorker
-            services[('bokeh', dashboard_address)] = result
+            services[("bokeh", dashboard_address)] = result
 
     if resources:
-        resources = resources.replace(',', ' ').split()
-        resources = dict(pair.split('=') for pair in resources)
+        resources = resources.replace(",", " ").split()
+        resources = dict(pair.split("=") for pair in resources)
         resources = valmap(float, resources)
     else:
         resources = None
@@ -199,17 +310,19 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
     loop = IOLoop.current()
 
     if nanny:
-        kwargs = {'worker_port': worker_port, 'listen_address': listen_address}
+        kwargs = {"worker_port": worker_port, "listen_address": listen_address}
         t = Nanny
     else:
         kwargs = {}
         if nanny_port:
-            kwargs['service_ports'] = {'nanny': nanny_port}
+            kwargs["service_ports"] = {"nanny": nanny_port}
         t = Worker
 
-    if not scheduler and not scheduler_file and 'scheduler-address' not in config:
-        raise ValueError("Need to provide scheduler address like\n"
-                         "dask-worker SCHEDULER_ADDRESS:8786")
+    if not scheduler and not scheduler_file and "scheduler-address" not in config:
+        raise ValueError(
+            "Need to provide scheduler address like\n"
+            "dask-worker SCHEDULER_ADDRESS:8786"
+        )
 
     if interface:
         if host:
@@ -224,17 +337,29 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
         addr = None
 
     if death_timeout is not None:
-        death_timeout = parse_timedelta(death_timeout, 's')
+        death_timeout = parse_timedelta(death_timeout, "s")
 
-    nannies = [t(scheduler, scheduler_file=scheduler_file, ncores=nthreads,
-                 services=services, loop=loop, resources=resources,
-                 memory_limit=memory_limit, reconnect=reconnect,
-                 local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload, preload_argv=preload_argv,
-                 security=sec, contact_address=contact_address,
-                 name=name if nprocs == 1 or not name else name + '-' + str(i),
-                 **kwargs)
-               for i in range(nprocs)]
+    nannies = [
+        t(
+            scheduler,
+            scheduler_file=scheduler_file,
+            ncores=nthreads,
+            services=services,
+            loop=loop,
+            resources=resources,
+            memory_limit=memory_limit,
+            reconnect=reconnect,
+            local_dir=local_directory,
+            death_timeout=death_timeout,
+            preload=preload,
+            preload_argv=preload_argv,
+            security=sec,
+            contact_address=contact_address,
+            name=name if nprocs == 1 or not name else name + "-" + str(i),
+            **kwargs
+        )
+        for i in range(nprocs)
+    ]
 
     @gen.coroutine
     def close_all():
@@ -249,7 +374,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
     @gen.coroutine
     def run():
         yield [n._start(addr) for n in nannies]
-        while all(n.status != 'closed' for n in nannies):
+        while all(n.status != "closed" for n in nannies):
             yield gen.sleep(0.2)
 
     install_signal_handlers(loop, cleanup=on_signal)
@@ -267,5 +392,5 @@ def go():
     main()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     go()

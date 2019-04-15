@@ -62,7 +62,7 @@ class Progress(SchedulerPlugin):
     """
 
     def __init__(self, keys, scheduler, minimum=0, dt=0.1, complete=False):
-        self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.keys = {k.key if hasattr(k, "key") else k for k in keys}
         self.keys = {tokey(k) for k in self.keys}
         self.scheduler = scheduler
         self.complete = complete
@@ -100,21 +100,21 @@ class Progress(SchedulerPlugin):
         logger.debug("Set up Progress keys")
 
         for k in errors:
-            self.transition(k, None, 'erred', exception=True)
+            self.transition(k, None, "erred", exception=True)
 
     def transition(self, key, start, finish, *args, **kwargs):
-        if key in self.keys and start == 'processing' and finish == 'memory':
+        if key in self.keys and start == "processing" and finish == "memory":
             logger.debug("Progress sees key %s", key)
             self.keys.remove(key)
 
             if not self.keys:
                 self.stop()
 
-        if key in self.all_keys and finish == 'erred':
+        if key in self.all_keys and finish == "erred":
             logger.debug("Progress sees task erred")
-            self.stop(exception=kwargs['exception'], key=key)
+            self.stop(exception=kwargs["exception"], key=key)
 
-        if key in self.keys and finish == 'forgotten':
+        if key in self.keys and finish == "forgotten":
             logger.debug("A task was cancelled (%s), stopping progress", key)
             self.stop(exception=True, key=key)
 
@@ -125,11 +125,10 @@ class Progress(SchedulerPlugin):
         if self in self.scheduler.plugins:
             self.scheduler.plugins.remove(self)
         if exception:
-            self.status = 'error'
-            self.extra.update({'exception': self.scheduler.exceptions[key],
-                               'key': key})
+            self.status = "error"
+            self.extra.update({"exception": self.scheduler.exceptions[key], "key": key})
         else:
-            self.status = 'finished'
+            self.status = "finished"
         logger.debug("Remove Progress plugin")
 
 
@@ -156,11 +155,13 @@ class MultiProgress(Progress):
      'y': {'y-1', 'y-2'}}
     """
 
-    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1,
-                 complete=False):
+    def __init__(
+        self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1, complete=False
+    ):
         self.func = func
-        Progress.__init__(self, keys, scheduler, minimum=minimum, dt=dt,
-                          complete=complete)
+        Progress.__init__(
+            self, keys, scheduler, minimum=minimum, dt=dt, complete=complete
+        )
 
     @gen.coroutine
     def setup(self):
@@ -193,11 +194,11 @@ class MultiProgress(Progress):
                 self.keys[k] = set()
 
         for k in errors:
-            self.transition(k, None, 'erred', exception=True)
+            self.transition(k, None, "erred", exception=True)
         logger.debug("Set up Progress keys")
 
     def transition(self, key, start, finish, *args, **kwargs):
-        if start == 'processing' and finish == 'memory':
+        if start == "processing" and finish == "memory":
             s = self.keys.get(self.func(key), None)
             if s and key in s:
                 s.remove(key)
@@ -205,13 +206,13 @@ class MultiProgress(Progress):
             if not self.keys or not any(self.keys.values()):
                 self.stop()
 
-        if finish == 'erred':
+        if finish == "erred":
             logger.debug("Progress sees task erred")
             k = self.func(key)
-            if (k in self.all_keys and key in self.all_keys[k]):
-                self.stop(exception=kwargs.get('exception'), key=key)
+            if k in self.all_keys and key in self.all_keys[k]:
+                self.stop(exception=kwargs.get("exception"), key=key)
 
-        if finish == 'forgotten':
+        if finish == "forgotten":
             k = self.func(key)
             if k in self.all_keys and key in self.all_keys[k]:
                 logger.debug("A task was cancelled (%s), stopping progress", key)
@@ -231,11 +232,11 @@ def format_time(t):
     m, s = divmod(t, 60)
     h, m = divmod(m, 60)
     if h:
-        return '{0:2.0f}hr {1:2.0f}min {2:4.1f}s'.format(h, m, s)
+        return "{0:2.0f}hr {1:2.0f}min {2:4.1f}s".format(h, m, s)
     elif m:
-        return '{0:2.0f}min {1:4.1f}s'.format(m, s)
+        return "{0:2.0f}min {1:4.1f}s".format(m, s)
     else:
-        return '{0:4.1f}s'.format(s)
+        return "{0:4.1f}s".format(s)
 
 
 class AllProgress(SchedulerPlugin):
@@ -266,13 +267,13 @@ class AllProgress(SchedulerPlugin):
         except KeyError:  # TODO: remove me once we have a new or clean state
             pass
 
-        if start == 'memory':
+        if start == "memory":
             # XXX why not respect DEFAULT_DATA_SIZE?
             self.nbytes[prefix] -= ts.nbytes or 0
-        if finish == 'memory':
+        if finish == "memory":
             self.nbytes[prefix] += ts.nbytes or 0
 
-        if finish != 'forgotten':
+        if finish != "forgotten":
             self.state[finish][prefix].add(key)
         else:
             s = self.all[prefix]
@@ -290,6 +291,7 @@ class AllProgress(SchedulerPlugin):
 
 class GroupProgress(SchedulerPlugin):
     """ Keep track of all keys, grouped by key_split """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.keys = dict()
@@ -305,7 +307,7 @@ class GroupProgress(SchedulerPlugin):
                 self.create(key, k)
             self.keys[k].add(key)
             self.groups[k][ts.state] += 1
-            if ts.state == 'memory' and ts.nbytes is not None:
+            if ts.state == "memory" and ts.nbytes is not None:
                 self.nbytes[k] += ts.nbytes
 
         scheduler.add_plugin(self)
@@ -313,14 +315,12 @@ class GroupProgress(SchedulerPlugin):
     def create(self, key, k):
         with log_errors():
             ts = self.scheduler.tasks[key]
-            g = {'memory': 0, 'erred': 0, 'waiting': 0,
-                 'released': 0, 'processing': 0}
+            g = {"memory": 0, "erred": 0, "waiting": 0, "released": 0, "processing": 0}
             self.keys[k] = set()
             self.groups[k] = g
             self.nbytes[k] = 0
             self.durations[k] = 0
-            self.dependents[k] = {key_split_group(dts.key)
-                                  for dts in ts.dependents}
+            self.dependents[k] = {key_split_group(dts.key) for dts in ts.dependents}
             for dts in ts.dependencies:
                 d = key_split_group(dts.key)
                 self.dependents[d].add(k)
@@ -340,7 +340,7 @@ class GroupProgress(SchedulerPlugin):
             else:
                 g[start] -= 1
 
-            if finish != 'forgotten':
+            if finish != "forgotten":
                 g[finish] += 1
             else:
                 self.keys[k].remove(key)
@@ -350,9 +350,9 @@ class GroupProgress(SchedulerPlugin):
                     for dep in self.dependencies.pop(k):
                         self.dependents[key_split_group(dep)].remove(k)
 
-            if start == 'memory' and ts.nbytes is not None:
+            if start == "memory" and ts.nbytes is not None:
                 self.nbytes[k] -= ts.nbytes
-            if finish == 'memory' and ts.nbytes is not None:
+            if finish == "memory" and ts.nbytes is not None:
                 self.nbytes[k] += ts.nbytes
 
     def restart(self, scheduler):

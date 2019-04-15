@@ -48,9 +48,18 @@ from .metrics import time
 from .process import _cleanup_dangling
 from .proctitle import enable_proctitle_on_children
 from .security import Security
-from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
-                    DequeHandler, reset_logger_locks, sync,
-                    iscoroutinefunction, thread_state)
+from .utils import (
+    ignoring,
+    log_errors,
+    mp_context,
+    get_ip,
+    get_ipv6,
+    DequeHandler,
+    reset_logger_locks,
+    sync,
+    iscoroutinefunction,
+    thread_state,
+)
 from .worker import Worker, TOTAL_MEMORY, _global_workers
 
 try:
@@ -62,33 +71,38 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-logging_levels = {name: logger.level for name, logger in
-                  logging.root.manager.loggerDict.items()
-                  if isinstance(logger, logging.Logger)}
+logging_levels = {
+    name: logger.level
+    for name, logger in logging.root.manager.loggerDict.items()
+    if isinstance(logger, logging.Logger)
+}
 
 
 offload(lambda: None).result()  # create thread during import
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def valid_python_script(tmpdir_factory):
-    local_file = tmpdir_factory.mktemp('data').join('file.py')
+    local_file = tmpdir_factory.mktemp("data").join("file.py")
     local_file.write("print('hello world!')")
     return local_file
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def client_contract_script(tmpdir_factory):
-    local_file = tmpdir_factory.mktemp('data').join('distributed_script.py')
-    lines = ("from distributed import Client", "e = Client('127.0.0.1:8989')",
-             'print(e)')
-    local_file.write('\n'.join(lines))
+    local_file = tmpdir_factory.mktemp("data").join("distributed_script.py")
+    lines = (
+        "from distributed import Client",
+        "e = Client('127.0.0.1:8989')",
+        "print(e)",
+    )
+    local_file.write("\n".join(lines))
     return local_file
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def invalid_python_script(tmpdir_factory):
-    local_file = tmpdir_factory.mktemp('data').join('file.py')
+    local_file = tmpdir_factory.mktemp("data").join("file.py")
     local_file.write("a+1")
     return local_file
 
@@ -116,6 +130,7 @@ def loop():
                 orig_start()
             finally:
                 is_stopped.set()
+
         loop.start = start
 
         yield loop
@@ -151,8 +166,7 @@ def loop():
 @pytest.fixture
 def loop_in_thread():
     with pristine_loop() as loop:
-        thread = threading.Thread(target=loop.start,
-                                  name="test IOLoop")
+        thread = threading.Thread(target=loop.start, name="test IOLoop")
         thread.daemon = True
         thread.start()
         loop_started = threading.Event()
@@ -166,6 +180,7 @@ def loop_in_thread():
 @pytest.fixture
 def zmq_ctx():
     import zmq
+
     ctx = zmq.Context.instance()
     yield ctx
     ctx.destroy(linger=0)
@@ -193,6 +208,7 @@ def pristine_loop():
 def mock_ipython():
     import mock
     from distributed._ipython_utils import remote_magic
+
     ip = mock.Mock()
     ip.user_ns = {}
     ip.kernel = None
@@ -200,8 +216,9 @@ def mock_ipython():
     def get_ip():
         return ip
 
-    with mock.patch('IPython.get_ipython', get_ip), \
-            mock.patch('distributed._ipython_utils.get_ipython', get_ip):
+    with mock.patch("IPython.get_ipython", get_ip), mock.patch(
+        "distributed._ipython_utils.get_ipython", get_ip
+    ):
         yield ip
     # cleanup remote_magic client cache
     for kc in remote_magic._clients.values():
@@ -285,7 +302,7 @@ def deep(n):
 
 
 def throws(x):
-    raise RuntimeError('hello!')
+    raise RuntimeError("hello!")
 
 
 def double(x):
@@ -309,6 +326,7 @@ def slowdouble(x, delay=0.02):
 
 def randominc(x, scale=1):
     from random import random
+
     sleep(random() * scale)
     return x + 1
 
@@ -324,7 +342,7 @@ def slowsum(seq, delay=0.02):
 
 
 def slowidentity(*args, **kwargs):
-    delay = kwargs.get('delay', 0.02)
+    delay = kwargs.get("delay", 0.02)
     sleep(delay)
     if len(args) == 1:
         return args[0]
@@ -364,7 +382,7 @@ def varying(items):
     # used by *func* below, so we can't use `global <something>`.
     # Instead look up the module by name to get the original namespace
     # and not a copy.
-    slot = _ModuleSlot(__name__, '_varying_dict')
+    slot = _ModuleSlot(__name__, "_varying_dict")
     key = next(_varying_key_gen)
 
     def func():
@@ -388,6 +406,7 @@ def map_varying(itemslists):
     Like *varying*, but return the full specification for a map() call
     on multiple items lists.
     """
+
     def apply(func, *args, **kwargs):
         return func(*args, **kwargs)
 
@@ -403,17 +422,19 @@ def geninc(x, delay=0.02):
 def compile_snippet(code, dedent=True):
     if dedent:
         code = textwrap.dedent(code)
-    code = compile(code, '<dynamic>', 'exec')
+    code = compile(code, "<dynamic>", "exec")
     ns = globals()
     exec(code, ns, ns)
 
 
 if sys.version_info >= (3, 5):
-    compile_snippet("""
+    compile_snippet(
+        """
         async def asyncinc(x, delay=0.02):
             await gen.sleep(delay)
             return x + 1
-        """)
+        """
+    )
     assert asyncinc  # noqa: F821
 else:
     asyncinc = None
@@ -461,7 +482,7 @@ def run_scheduler(q, nputs, **kwargs):
     # so avoid inheriting the parent's IO loop.
     with pristine_loop() as loop:
         scheduler = Scheduler(validate=True, **kwargs)
-        done = scheduler.start('127.0.0.1')
+        done = scheduler.start("127.0.0.1")
 
         for i in range(nputs):
             q.put(scheduler.address)
@@ -482,6 +503,7 @@ def run_worker(q, scheduler_q, **kwargs):
             loop.run_sync(lambda: worker._start(0))
             q.put(worker.address)
             try:
+
                 @gen.coroutine
                 def wait_until_closed():
                     yield worker._closed.wait()
@@ -523,13 +545,17 @@ def check_active_rpc(loop, active_rpc_timeout=1):
     # (*) (example: gather_from_workers())
 
     def fail():
-        pytest.fail("some RPCs left active by test: %s"
-                    % (set(rpc.active) - active_before))
+        pytest.fail(
+            "some RPCs left active by test: %s" % (set(rpc.active) - active_before)
+        )
 
     @gen.coroutine
     def wait():
-        yield async_wait_for(lambda: len(set(rpc.active) - active_before) == 0,
-                             timeout=active_rpc_timeout, fail_func=fail)
+        yield async_wait_for(
+            lambda: len(set(rpc.active) - active_before) == 0,
+            timeout=active_rpc_timeout,
+            fail_func=fail,
+        )
 
     loop.run_sync(wait)
 
@@ -561,27 +587,28 @@ def b(cluster_fixture):
 @pytest.fixture
 def client(loop, cluster_fixture):
     scheduler, workers = cluster_fixture
-    with Client(scheduler['address'], loop=loop) as client:
+    with Client(scheduler["address"], loop=loop) as client:
         yield client
 
 
 @pytest.fixture
 def client_secondary(loop, cluster_fixture):
     scheduler, workers = cluster_fixture
-    with Client(scheduler['address'], loop=loop) as client:
+    with Client(scheduler["address"], loop=loop) as client:
         yield client
 
 
 @contextmanager
-def tls_cluster_context(worker_kwargs=None, scheduler_kwargs=None,
-                        security=None, **kwargs):
+def tls_cluster_context(
+    worker_kwargs=None, scheduler_kwargs=None, security=None, **kwargs
+):
     security = security or tls_only_security()
-    worker_kwargs = assoc(worker_kwargs or {}, 'security', security)
-    scheduler_kwargs = assoc(scheduler_kwargs or {}, 'security', security)
+    worker_kwargs = assoc(worker_kwargs or {}, "security", security)
+    scheduler_kwargs = assoc(scheduler_kwargs or {}, "security", security)
 
-    with cluster(worker_kwargs=worker_kwargs,
-                 scheduler_kwargs=scheduler_kwargs,
-                 **kwargs) as (s, workers):
+    with cluster(
+        worker_kwargs=worker_kwargs, scheduler_kwargs=scheduler_kwargs, **kwargs
+    ) as (s, workers):
         yield s, workers
 
 
@@ -594,7 +621,7 @@ def tls_cluster(loop, security):
 @pytest.fixture
 def tls_client(tls_cluster, loop, security):
     s, workers = tls_cluster
-    with Client(s['address'], security=security, loop=loop) as client:
+    with Client(s["address"], security=security, loop=loop) as client:
         yield client
 
 
@@ -604,8 +631,9 @@ def security():
 
 
 @contextmanager
-def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
-            scheduler_kwargs={}):
+def cluster(
+    nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1, scheduler_kwargs={}
+):
     ws = weakref.WeakSet()
 
     reset_config()
@@ -626,9 +654,11 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             scheduler_q = mp_context.Queue()
 
             # Launch scheduler
-            scheduler = mp_context.Process(target=run_scheduler,
-                                           args=(scheduler_q, nworkers + 1),
-                                           kwargs=scheduler_kwargs)
+            scheduler = mp_context.Process(
+                target=run_scheduler,
+                args=(scheduler_q, nworkers + 1),
+                kwargs=scheduler_kwargs,
+            )
             ws.add(scheduler)
             scheduler.daemon = True
             scheduler.start()
@@ -637,20 +667,22 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             workers = []
             for i in range(nworkers):
                 q = mp_context.Queue()
-                fn = '_test_worker-%s' % uuid.uuid4()
-                kwargs = merge({'ncores': 1, 'local_dir': fn,
-                                'memory_limit': TOTAL_MEMORY}, worker_kwargs)
-                proc = mp_context.Process(target=_run_worker,
-                                          args=(q, scheduler_q),
-                                          kwargs=kwargs)
+                fn = "_test_worker-%s" % uuid.uuid4()
+                kwargs = merge(
+                    {"ncores": 1, "local_dir": fn, "memory_limit": TOTAL_MEMORY},
+                    worker_kwargs,
+                )
+                proc = mp_context.Process(
+                    target=_run_worker, args=(q, scheduler_q), kwargs=kwargs
+                )
                 ws.add(proc)
-                workers.append({'proc': proc, 'queue': q, 'dir': fn})
+                workers.append({"proc": proc, "queue": q, "dir": fn})
 
             for worker in workers:
-                worker['proc'].start()
+                worker["proc"].start()
             try:
                 for worker in workers:
-                    worker['address'] = worker['queue'].get(timeout=5)
+                    worker["address"] = worker["queue"].get(timeout=5)
             except Empty:
                 raise pytest.xfail.Exception("Worker failed to start in test")
 
@@ -659,8 +691,10 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             start = time()
             try:
                 try:
-                    security = scheduler_kwargs['security']
-                    rpc_kwargs = {'connection_args': security.get_connection_args('client')}
+                    security = scheduler_kwargs["security"]
+                    rpc_kwargs = {
+                        "connection_args": security.get_connection_args("client")
+                    }
                 except KeyError:
                     rpc_kwargs = {}
 
@@ -673,16 +707,23 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                             raise Exception("Timeout on cluster creation")
 
                 # avoid sending processes down to function
-                yield {'address': saddr}, [{'address': w['address'],
-                                            'proc': weakref.ref(w['proc'])}
-                                           for w in workers]
+                yield {"address": saddr}, [
+                    {"address": w["address"], "proc": weakref.ref(w["proc"])}
+                    for w in workers
+                ]
             finally:
                 logger.debug("Closing out test cluster")
 
-                loop.run_sync(lambda: disconnect_all([w['address'] for w in workers],
-                                                     timeout=0.5,
-                                                     rpc_kwargs=rpc_kwargs))
-                loop.run_sync(lambda: disconnect(saddr, timeout=0.5, rpc_kwargs=rpc_kwargs))
+                loop.run_sync(
+                    lambda: disconnect_all(
+                        [w["address"] for w in workers],
+                        timeout=0.5,
+                        rpc_kwargs=rpc_kwargs,
+                    )
+                )
+                loop.run_sync(
+                    lambda: disconnect(saddr, timeout=0.5, rpc_kwargs=rpc_kwargs)
+                )
 
                 scheduler.terminate()
                 scheduler_q.close()
@@ -690,21 +731,21 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                 scheduler_q._writer.close()
 
                 for w in workers:
-                    w['proc'].terminate()
-                    w['queue'].close()
-                    w['queue']._reader.close()
-                    w['queue']._writer.close()
+                    w["proc"].terminate()
+                    w["queue"].close()
+                    w["queue"]._reader.close()
+                    w["queue"]._writer.close()
 
                 scheduler.join(2)
                 del scheduler
-                for proc in [w['proc'] for w in workers]:
+                for proc in [w["proc"] for w in workers]:
                     proc.join(timeout=2)
 
                 with ignoring(UnboundLocalError):
                     del worker, w, proc
                 del workers[:]
 
-                for fn in glob('_test_worker-*'):
+                for fn in glob("_test_worker-*"):
                     with ignoring(OSError):
                         shutil.rmtree(fn)
 
@@ -718,7 +759,7 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
     start = time()
     while list(ws):
         sleep(0.01)
-        assert time() < start + 1, 'Workers still around after one second'
+        assert time() < start + 1, "Workers still around after one second"
 
 
 @gen.coroutine
@@ -758,6 +799,7 @@ def gen_test(timeout=10):
     def test_foo():
         yield ...  # use tornado coroutines
     """
+
     def _(func):
         def test_func():
             with pristine_loop() as loop:
@@ -769,7 +811,9 @@ def gen_test(timeout=10):
                     loop.run_sync(cor, timeout=timeout)
                 finally:
                     loop.stop()
+
         return test_func
+
     return _
 
 
@@ -778,25 +822,38 @@ from .worker import Worker
 
 
 @gen.coroutine
-def start_cluster(ncores, scheduler_addr, loop, security=None,
-                  Worker=Worker, scheduler_kwargs={}, worker_kwargs={}):
-    s = Scheduler(loop=loop, validate=True, security=security,
-                  **scheduler_kwargs)
+def start_cluster(
+    ncores,
+    scheduler_addr,
+    loop,
+    security=None,
+    Worker=Worker,
+    scheduler_kwargs={},
+    worker_kwargs={},
+):
+    s = Scheduler(loop=loop, validate=True, security=security, **scheduler_kwargs)
     done = s.start(scheduler_addr)
-    workers = [Worker(s.address, ncores=ncore[1], name=i, security=security,
-                      loop=loop, validate=True,
-                      **(merge(worker_kwargs, ncore[2])
-                         if len(ncore) > 2
-                         else worker_kwargs))
-               for i, ncore in enumerate(ncores)]
+    workers = [
+        Worker(
+            s.address,
+            ncores=ncore[1],
+            name=i,
+            security=security,
+            loop=loop,
+            validate=True,
+            **(merge(worker_kwargs, ncore[2]) if len(ncore) > 2 else worker_kwargs)
+        )
+        for i, ncore in enumerate(ncores)
+    ]
     for w in workers:
         w.rpc = workers[0].rpc
 
     yield [w._start(ncore[0]) for ncore, w in zip(ncores, workers)]
 
     start = time()
-    while (len(s.workers) < len(ncores) or
-           any(comm.comm is None for comm in s.stream_comms.values())):
+    while len(s.workers) < len(ncores) or any(
+        comm.comm is None for comm in s.stream_comms.values()
+    ):
         yield gen.sleep(0.01)
         if time() - start > 5:
             yield [w._close(timeout=1) for w in workers]
@@ -819,12 +876,22 @@ def end_cluster(s, workers):
     s.stop()
 
 
-def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
-                scheduler='127.0.0.1', timeout=10, security=None,
-                Worker=Worker, client=False, scheduler_kwargs={},
-                worker_kwargs={}, client_kwargs={}, active_rpc_timeout=1,
-                config={}, check_new_threads=True):
+def gen_cluster(
+    ncores=[("127.0.0.1", 1), ("127.0.0.1", 2)],
+    scheduler="127.0.0.1",
+    timeout=10,
+    security=None,
+    Worker=Worker,
+    client=False,
+    scheduler_kwargs={},
+    worker_kwargs={},
+    client_kwargs={},
+    active_rpc_timeout=1,
+    config={},
+    check_new_threads=True,
+):
     from distributed import Client
+
     """ Coroutine test with small cluster
 
     @gen_cluster()
@@ -835,8 +902,9 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         start
         end
     """
-    worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
-                          worker_kwargs)
+    worker_kwargs = merge(
+        {"memory_limit": TOTAL_MEMORY, "death_timeout": 5}, worker_kwargs
+    )
 
     def _(func):
         if not iscoroutinefunction(func):
@@ -849,7 +917,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
 
             reset_config()
 
-            dask.config.set({'distributed.comm.timeouts.connect': '5s'})
+            dask.config.set({"distributed.comm.timeouts.connect": "5s"})
             # Restore default logging levels
             # XXX use pytest hooks/fixtures instead?
             for name, level in logging_levels.items():
@@ -860,6 +928,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
 
             with pristine_loop() as loop:
                 with check_active_rpc(loop, active_rpc_timeout):
+
                     @gen.coroutine
                     def coro():
                         with dask.config.set(config):
@@ -867,11 +936,19 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             for i in range(5):
                                 try:
                                     s, ws = yield start_cluster(
-                                        ncores, scheduler, loop, security=security,
-                                        Worker=Worker, scheduler_kwargs=scheduler_kwargs,
-                                        worker_kwargs=worker_kwargs)
+                                        ncores,
+                                        scheduler,
+                                        loop,
+                                        security=security,
+                                        Worker=Worker,
+                                        scheduler_kwargs=scheduler_kwargs,
+                                        worker_kwargs=worker_kwargs,
+                                    )
                                 except Exception as e:
-                                    logger.error("Failed to start gen_cluster, retrying", exc_info=True)
+                                    logger.error(
+                                        "Failed to start gen_cluster, retrying",
+                                        exc_info=True,
+                                    )
                                 else:
                                     workers[:] = ws
                                     args = [s] + workers
@@ -879,23 +956,30 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             if s is False:
                                 raise Exception("Could not start cluster")
                             if client:
-                                c = yield Client(s.address, loop=loop, security=security,
-                                                 asynchronous=True, **client_kwargs)
+                                c = yield Client(
+                                    s.address,
+                                    loop=loop,
+                                    security=security,
+                                    asynchronous=True,
+                                    **client_kwargs
+                                )
                                 args = [c] + args
                             try:
                                 future = func(*args)
                                 if timeout:
-                                    future = gen.with_timeout(timedelta(seconds=timeout),
-                                                              future)
+                                    future = gen.with_timeout(
+                                        timedelta(seconds=timeout), future
+                                    )
                                 result = yield future
                                 if s.validate:
                                     s.validate_state()
                             finally:
                                 if client:
-                                    yield c._close(fast=s.status == 'closed')
+                                    yield c._close(fast=s.status == "closed")
                                 yield end_cluster(s, workers)
-                                yield gen.with_timeout(timedelta(seconds=1),
-                                                       cleanup_global_workers())
+                                yield gen.with_timeout(
+                                    timedelta(seconds=1), cleanup_global_workers()
+                                )
 
                             try:
                                 c = yield default_client()
@@ -906,10 +990,12 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
 
                             raise gen.Return(result)
 
-                    result = loop.run_sync(coro, timeout=timeout * 2 if timeout else timeout)
+                    result = loop.run_sync(
+                        coro, timeout=timeout * 2 if timeout else timeout
+                    )
 
                 for w in workers:
-                    if getattr(w, 'data', None):
+                    if getattr(w, "data", None):
                         try:
                             w.data.clear()
                         except EnvironmentError:
@@ -921,24 +1007,28 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                 for w in _global_workers:
                     w = w()
                     w._close(report=False, executor_wait=False)
-                    if w.status == 'running':
+                    if w.status == "running":
                         w.close()
                 del _global_workers[:]
 
             if PY3 and not WINDOWS and check_new_threads:
                 start = time()
                 while True:
-                    bad = [t for t, v in threading._active.items()
-                           if t not in active_threads_start and
-                          "Threaded" not in v.name and
-                          "watch message" not in v.name and
-                          "TCP-Executor" not in v.name]
+                    bad = [
+                        t
+                        for t, v in threading._active.items()
+                        if t not in active_threads_start
+                        and "Threaded" not in v.name
+                        and "watch message" not in v.name
+                        and "TCP-Executor" not in v.name
+                    ]
                     if not bad:
                         break
                     else:
                         sleep(0.01)
                     if time() > start + 5:
                         from distributed import profile
+
                         tid = bad[0]
                         thread = threading._active[tid]
                         call_stacks = profile.call_stack(sys._current_frames()[tid])
@@ -949,6 +1039,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             return result
 
         return test_func
+
     return _
 
 
@@ -962,7 +1053,7 @@ def raises(func, exc=Exception):
 
 def terminate_process(proc):
     if proc.poll() is None:
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith("win"):
             proc.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             proc.send_signal(signal.SIGINT)
@@ -981,18 +1072,20 @@ def terminate_process(proc):
 
 @contextmanager
 def popen(args, **kwargs):
-    kwargs['stdout'] = subprocess.PIPE
-    kwargs['stderr'] = subprocess.PIPE
-    if sys.platform.startswith('win'):
+    kwargs["stdout"] = subprocess.PIPE
+    kwargs["stderr"] = subprocess.PIPE
+    if sys.platform.startswith("win"):
         # Allow using CTRL_C_EVENT / CTRL_BREAK_EVENT
-        kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     dump_stdout = False
 
     args = list(args)
-    if sys.platform.startswith('win'):
-        args[0] = os.path.join(sys.prefix, 'Scripts', args[0])
+    if sys.platform.startswith("win"):
+        args[0] = os.path.join(sys.prefix, "Scripts", args[0])
     else:
-        args[0] = os.path.join(os.environ.get('DESTDIR', '') + sys.prefix, 'bin', args[0])
+        args[0] = os.path.join(
+            os.environ.get("DESTDIR", "") + sys.prefix, "bin", args[0]
+        )
     proc = subprocess.Popen(args, **kwargs)
     try:
         yield proc
@@ -1007,10 +1100,10 @@ def popen(args, **kwargs):
             # XXX Also dump stdout if return code != 0 ?
             out, err = proc.communicate()
             if dump_stdout:
-                print('\n\nPrint from stderr\n  %s\n=================\n' % args[0][0])
+                print("\n\nPrint from stderr\n  %s\n=================\n" % args[0][0])
                 print(err.decode())
 
-                print('\n\nPrint from stdout\n=================\n')
+                print("\n\nPrint from stdout\n=================\n")
                 print(out.decode())
 
 
@@ -1061,7 +1154,7 @@ def has_ipv6():
     serv = cli = None
     try:
         serv = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        serv.bind(('::', 0))
+        serv.bind(("::", 0))
         serv.listen(5)
         cli = socket.create_connection(serv.getsockname()[:2])
     except EnvironmentError:
@@ -1076,8 +1169,10 @@ def has_ipv6():
 
 
 if has_ipv6():
+
     def requires_ipv6(test_func):
         return test_func
+
 
 else:
     requires_ipv6 = pytest.mark.skip("ipv6 required")
@@ -1091,13 +1186,14 @@ def assert_can_connect(addr, timeout=None, connection_args=None):
     """
     if timeout is None:
         timeout = 0.5
-    comm = yield connect(addr, timeout=timeout,
-                         connection_args=connection_args)
+    comm = yield connect(addr, timeout=timeout, connection_args=connection_args)
     comm.abort()
 
 
 @gen.coroutine
-def assert_cannot_connect(addr, timeout=None, connection_args=None, exception_class=EnvironmentError):
+def assert_cannot_connect(
+    addr, timeout=None, connection_args=None, exception_class=EnvironmentError
+):
     """
     Check that it is impossible to connect to the distributed *addr*
     within the given *timeout*.
@@ -1105,43 +1201,46 @@ def assert_cannot_connect(addr, timeout=None, connection_args=None, exception_cl
     if timeout is None:
         timeout = 0.5
     with pytest.raises(exception_class):
-        comm = yield connect(addr, timeout=timeout,
-                             connection_args=connection_args)
+        comm = yield connect(addr, timeout=timeout, connection_args=connection_args)
         comm.abort()
 
 
 @gen.coroutine
-def assert_can_connect_from_everywhere_4_6(port, timeout=None, connection_args=None, protocol='tcp'):
+def assert_can_connect_from_everywhere_4_6(
+    port, timeout=None, connection_args=None, protocol="tcp"
+):
     """
     Check that the local *port* is reachable from all IPv4 and IPv6 addresses.
     """
     args = (timeout, connection_args)
     futures = [
-        assert_can_connect('%s://127.0.0.1:%d' % (protocol, port), *args),
-        assert_can_connect('%s://%s:%d' % (protocol, get_ip(), port), *args),
+        assert_can_connect("%s://127.0.0.1:%d" % (protocol, port), *args),
+        assert_can_connect("%s://%s:%d" % (protocol, get_ip(), port), *args),
     ]
     if has_ipv6():
         futures += [
-            assert_can_connect('%s://[::1]:%d' % (protocol, port), *args),
-            assert_can_connect('%s://[%s]:%d' % (protocol, get_ipv6(), port), *args),
+            assert_can_connect("%s://[::1]:%d" % (protocol, port), *args),
+            assert_can_connect("%s://[%s]:%d" % (protocol, get_ipv6(), port), *args),
         ]
     yield futures
 
 
 @gen.coroutine
-def assert_can_connect_from_everywhere_4(port, timeout=None, connection_args=None, protocol='tcp'):
+def assert_can_connect_from_everywhere_4(
+    port, timeout=None, connection_args=None, protocol="tcp"
+):
     """
     Check that the local *port* is reachable from all IPv4 addresses.
     """
     args = (timeout, connection_args)
     futures = [
-        assert_can_connect('%s://127.0.0.1:%d' % (protocol, port), *args),
-        assert_can_connect('%s://%s:%d' % (protocol, get_ip(), port), *args),
+        assert_can_connect("%s://127.0.0.1:%d" % (protocol, port), *args),
+        assert_can_connect("%s://%s:%d" % (protocol, get_ip(), port), *args),
     ]
     if has_ipv6():
         futures += [
-            assert_cannot_connect('%s://[::1]:%d' % (protocol, port), *args),
-            assert_cannot_connect('%s://[%s]:%d' % (protocol, get_ipv6(), port), *args),
+            assert_cannot_connect("%s://[::1]:%d" % (protocol, port), *args),
+            assert_cannot_connect("%s://[%s]:%d" % (protocol, get_ipv6(), port), *args),
         ]
     yield futures
 
@@ -1152,17 +1251,13 @@ def assert_can_connect_locally_4(port, timeout=None, connection_args=None):
     Check that the local *port* is only reachable from local IPv4 addresses.
     """
     args = (timeout, connection_args)
-    futures = [
-        assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
-    ]
-    if get_ip() != '127.0.0.1':  # No outside IPv4 connectivity?
-        futures += [
-            assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
-        ]
+    futures = [assert_can_connect("tcp://127.0.0.1:%d" % port, *args)]
+    if get_ip() != "127.0.0.1":  # No outside IPv4 connectivity?
+        futures += [assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), *args)]
     if has_ipv6():
         futures += [
-            assert_cannot_connect('tcp://[::1]:%d' % port, *args),
-            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
+            assert_cannot_connect("tcp://[::1]:%d" % port, *args),
+            assert_cannot_connect("tcp://[%s]:%d" % (get_ipv6(), port), *args),
         ]
     yield futures
 
@@ -1175,10 +1270,10 @@ def assert_can_connect_from_everywhere_6(port, timeout=None, connection_args=Non
     assert has_ipv6()
     args = (timeout, connection_args)
     futures = [
-        assert_cannot_connect('tcp://127.0.0.1:%d' % port, *args),
-        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
-        assert_can_connect('tcp://[::1]:%d' % port, *args),
-        assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
+        assert_cannot_connect("tcp://127.0.0.1:%d" % port, *args),
+        assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), *args),
+        assert_can_connect("tcp://[::1]:%d" % port, *args),
+        assert_can_connect("tcp://[%s]:%d" % (get_ipv6(), port), *args),
     ]
     yield futures
 
@@ -1191,14 +1286,12 @@ def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
     assert has_ipv6()
     args = (timeout, connection_args)
     futures = [
-        assert_cannot_connect('tcp://127.0.0.1:%d' % port, *args),
-        assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
-        assert_can_connect('tcp://[::1]:%d' % port, *args),
+        assert_cannot_connect("tcp://127.0.0.1:%d" % port, *args),
+        assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), *args),
+        assert_can_connect("tcp://[::1]:%d" % port, *args),
     ]
-    if get_ipv6() != '::1':  # No outside IPv6 connectivity?
-        futures += [
-            assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
-        ]
+    if get_ipv6() != "::1":  # No outside IPv6 connectivity?
+        futures += [assert_cannot_connect("tcp://[%s]:%d" % (get_ipv6(), port), *args)]
     yield futures
 
 
@@ -1244,6 +1337,7 @@ def new_config(new_config):
     Temporarily change configuration dictionary.
     """
     from .config import defaults
+
     config = dask.config.config
     orig_config = config.copy()
     try:
@@ -1275,25 +1369,25 @@ def new_config_file(c):
     Temporarily change configuration file to match dictionary *c*.
     """
     import yaml
-    old_file = os.environ.get('DASK_CONFIG')
-    fd, path = tempfile.mkstemp(prefix='dask-config')
+
+    old_file = os.environ.get("DASK_CONFIG")
+    fd, path = tempfile.mkstemp(prefix="dask-config")
     try:
-        with os.fdopen(fd, 'w') as f:
+        with os.fdopen(fd, "w") as f:
             f.write(yaml.dump(c))
-        os.environ['DASK_CONFIG'] = path
+        os.environ["DASK_CONFIG"] = path
         try:
             yield
         finally:
             if old_file:
-                os.environ['DASK_CONFIG'] = old_file
+                os.environ["DASK_CONFIG"] = old_file
             else:
-                del os.environ['DASK_CONFIG']
+                del os.environ["DASK_CONFIG"]
     finally:
         os.remove(path)
 
 
-certs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                         'tests'))
+certs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "tests"))
 
 
 def get_cert(filename):
@@ -1309,22 +1403,16 @@ def tls_config():
     """
     A functional TLS configuration with our test certs.
     """
-    ca_file = get_cert('tls-ca-cert.pem')
-    keycert = get_cert('tls-key-cert.pem')
+    ca_file = get_cert("tls-ca-cert.pem")
+    keycert = get_cert("tls-key-cert.pem")
 
     c = {
-        'tls': {
-            'ca-file': ca_file,
-            'client': {
-                'cert': keycert,
-            },
-            'scheduler': {
-                'cert': keycert,
-            },
-            'worker': {
-                'cert': keycert,
-            },
-        },
+        "tls": {
+            "ca-file": ca_file,
+            "client": {"cert": keycert},
+            "scheduler": {"cert": keycert},
+            "worker": {"cert": keycert},
+        }
     }
     return c
 
@@ -1335,7 +1423,7 @@ def tls_only_config():
     plain TCP communications.
     """
     c = tls_config()
-    c['require-encryption'] = True
+    c["require-encryption"] = True
     return c
 
 
@@ -1359,20 +1447,20 @@ def tls_only_security():
     return sec
 
 
-def get_server_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
-                           ca_file='tls-ca-cert.pem'):
-    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH,
-                                     cafile=get_cert(ca_file))
+def get_server_ssl_context(
+    certfile="tls-cert.pem", keyfile="tls-key.pem", ca_file="tls-ca-cert.pem"
+):
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=get_cert(ca_file))
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_REQUIRED
     ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
     return ctx
 
 
-def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
-                           ca_file='tls-ca-cert.pem'):
-    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH,
-                                     cafile=get_cert(ca_file))
+def get_client_ssl_context(
+    certfile="tls-cert.pem", keyfile="tls-key.pem", ca_file="tls-ca-cert.pem"
+):
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=get_cert(ca_file))
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_REQUIRED
     ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
@@ -1380,18 +1468,17 @@ def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
 
 
 def bump_rlimit(limit, desired):
-    resource = pytest.importorskip('resource')
+    resource = pytest.importorskip("resource")
     try:
         soft, hard = resource.getrlimit(limit)
         if soft < desired:
-            resource.setrlimit(limit,
-                               (desired, max(hard, desired)))
+            resource.setrlimit(limit, (desired, max(hard, desired)))
     except Exception as e:
-        pytest.skip("rlimit too low (%s) and can't be increased: %s"
-                    % (soft, e))
+        pytest.skip("rlimit too low (%s) and can't be increased: %s" % (soft, e))
 
 
 def gen_tls_cluster(**kwargs):
-    kwargs.setdefault('ncores', [('tls://127.0.0.1', 1), ('tls://127.0.0.1', 2)])
-    return gen_cluster(scheduler='tls://127.0.0.1',
-                       security=tls_only_security(), **kwargs)
+    kwargs.setdefault("ncores", [("tls://127.0.0.1", 1), ("tls://127.0.0.1", 2)])
+    return gen_cluster(
+        scheduler="tls://127.0.0.1", security=tls_only_security(), **kwargs
+    )

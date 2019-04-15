@@ -26,6 +26,7 @@ class ThrottledGC(object):
     to log a warning level message whenever an actual call to gc.collect()
     lasts too long.
     """
+
     def __init__(self, max_in_gc_frac=0.05, warn_if_longer=1, logger=None):
         self.max_in_gc_frac = max_in_gc_frac
         self.warn_if_longer = warn_if_longer
@@ -41,25 +42,30 @@ class ThrottledGC(object):
         collect_start = thread_time()
         elapsed = max(collect_start - self.last_collect, MIN_RUNTIME)
         if self.last_gc_duration / elapsed < self.max_in_gc_frac:
-            self.logger.debug("Calling gc.collect(). %0.3fs elapsed since "
-                              "previous call.", elapsed)
+            self.logger.debug(
+                "Calling gc.collect(). %0.3fs elapsed since " "previous call.", elapsed
+            )
             gc.collect()
             self.last_collect = collect_start
             self.last_gc_duration = max(thread_time() - collect_start, MIN_RUNTIME)
             if self.last_gc_duration > self.warn_if_longer:
-                self.logger.warning("gc.collect() took %0.3fs. This is usually"
-                                    " a sign that the some tasks handle too"
-                                    " many Python objects at the same time."
-                                    " Rechunking the work into smaller tasks"
-                                    " might help.",
-                                    self.last_gc_duration)
+                self.logger.warning(
+                    "gc.collect() took %0.3fs. This is usually"
+                    " a sign that the some tasks handle too"
+                    " many Python objects at the same time."
+                    " Rechunking the work into smaller tasks"
+                    " might help.",
+                    self.last_gc_duration,
+                )
             else:
-                self.logger.debug("gc.collect() took %0.3fs",
-                                  self.last_gc_duration)
+                self.logger.debug("gc.collect() took %0.3fs", self.last_gc_duration)
         else:
-            self.logger.debug("gc.collect() lasts %0.3fs but only %0.3fs "
-                              "elapsed since last call: throttling.",
-                              self.last_gc_duration, elapsed)
+            self.logger.debug(
+                "gc.collect() lasts %0.3fs but only %0.3fs "
+                "elapsed since last call: throttling.",
+                self.last_gc_duration,
+                elapsed,
+            )
 
 
 class FractionalTimer(object):
@@ -178,33 +184,42 @@ class GCDiagnosis(object):
     def _gc_callback(self, phase, info):
         # Young generations are small and collected very often,
         # don't waste time measuring them
-        if info['generation'] != 2:
+        if info["generation"] != 2:
             return
         if self._proc is not None:
             rss = self._proc.memory_info().rss
         else:
             rss = 0
-        if phase == 'start':
+        if phase == "start":
             self._fractional_timer.start_timing()
             self._gc_rss_before = rss
             return
-        assert phase == 'stop'
+        assert phase == "stop"
         self._fractional_timer.stop_timing()
         frac = self._fractional_timer.running_fraction
         if frac is not None and frac >= self._warn_over_frac:
-            logger.warning("full garbage collections took %d%% CPU time "
-                           "recently (threshold: %d%%)",
-                           100 * frac, 100 * self._warn_over_frac)
+            logger.warning(
+                "full garbage collections took %d%% CPU time "
+                "recently (threshold: %d%%)",
+                100 * frac,
+                100 * self._warn_over_frac,
+            )
         rss_saved = self._gc_rss_before - rss
         if rss_saved >= self._info_over_rss_win:
-            logger.info("full garbage collection released %s "
-                        "from %d reference cycles (threshold: %s)",
-                        format_bytes(rss_saved), info['collected'],
-                        format_bytes(self._info_over_rss_win))
-        if info['uncollectable'] > 0:
+            logger.info(
+                "full garbage collection released %s "
+                "from %d reference cycles (threshold: %s)",
+                format_bytes(rss_saved),
+                info["collected"],
+                format_bytes(self._info_over_rss_win),
+            )
+        if info["uncollectable"] > 0:
             # This should ideally never happen on Python 3, but who knows?
-            logger.warning("garbage collector couldn't collect %d objects, "
-                           "please look in gc.garbage", info['uncollectable'])
+            logger.warning(
+                "garbage collector couldn't collect %d objects, "
+                "please look in gc.garbage",
+                info["uncollectable"],
+            )
 
 
 _gc_diagnosis = GCDiagnosis()

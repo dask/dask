@@ -8,13 +8,13 @@ from functools import partial
 
 
 def test_pickle_data():
-    data = [1, b'123', '123', [123], {}, set()]
+    data = [1, b"123", "123", [123], {}, set()]
     for d in data:
         assert loads(dumps(d)) == d
 
 
 def test_pickle_numpy():
-    np = pytest.importorskip('numpy')
+    np = pytest.importorskip("numpy")
     x = np.ones(5)
     assert (loads(dumps(x)) == x).all()
 
@@ -28,6 +28,7 @@ def test_pickle_functions():
 
         def f(x):  # closure
             return x + value
+
         return f
 
     def funcs():

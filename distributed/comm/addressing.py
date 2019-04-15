@@ -7,7 +7,7 @@ import dask
 from . import registry
 
 
-DEFAULT_SCHEME = dask.config.get('distributed.comm.default-scheme')
+DEFAULT_SCHEME = dask.config.get("distributed.comm.default-scheme")
 
 
 def parse_address(addr, strict=False):
@@ -21,11 +21,13 @@ def parse_address(addr, strict=False):
     """
     if not isinstance(addr, six.string_types):
         raise TypeError("expected str, got %r" % addr.__class__.__name__)
-    scheme, sep, loc = addr.rpartition('://')
+    scheme, sep, loc = addr.rpartition("://")
     if strict and not sep:
-        msg = ("Invalid url scheme. "
-               "Must include protocol like tcp://localhost:8000. "
-               "Got %s" % addr)
+        msg = (
+            "Invalid url scheme. "
+            "Must include protocol like tcp://localhost:8000. "
+            "Got %s" % addr
+        )
         raise ValueError(msg)
     if not sep:
         scheme = DEFAULT_SCHEME
@@ -39,7 +41,7 @@ def unparse_address(scheme, loc):
     >>> unparse_address('tcp', '127.0.0.1')
     'tcp://127.0.0.1'
     """
-    return '%s://%s' % (scheme, loc)
+    return "%s://%s" % (scheme, loc)
 
 
 def normalize_address(addr):
@@ -69,24 +71,24 @@ def parse_host_port(address, default_port=None):
             raise ValueError("missing port number in address %r" % (address,))
         return default_port
 
-    if address.startswith('['):
+    if address.startswith("["):
         # IPv6 notation: '[addr]:port' or '[addr]'.
         # The address may contain multiple colons.
-        host, sep, tail = address[1:].partition(']')
+        host, sep, tail = address[1:].partition("]")
         if not sep:
             _fail()
         if not tail:
             port = _default()
         else:
-            if not tail.startswith(':'):
+            if not tail.startswith(":"):
                 _fail()
             port = tail[1:]
     else:
         # Generic notation: 'addr:port' or 'addr'.
-        host, sep, port = address.partition(':')
+        host, sep, port = address.partition(":")
         if not sep:
             port = _default()
-        elif ':' in host:
+        elif ":" in host:
             _fail()
 
     return host, int(port)
@@ -96,10 +98,10 @@ def unparse_host_port(host, port=None):
     """
     Undo parse_host_port().
     """
-    if ':' in host and not host.startswith('['):
-        host = '[%s]' % host
+    if ":" in host and not host.startswith("["):
+        host = "[%s]" % host
     if port:
-        return '%s:%s' % (host, port)
+        return "%s:%s" % (host, port)
     else:
         return host
 
@@ -119,8 +121,9 @@ def get_address_host_port(addr, strict=False):
     try:
         return backend.get_address_host_port(loc)
     except NotImplementedError:
-        raise ValueError("don't know how to extract host and port "
-                         "for address %r" % (addr,))
+        raise ValueError(
+            "don't know how to extract host and port " "for address %r" % (addr,)
+        )
 
 
 def get_address_host(addr):

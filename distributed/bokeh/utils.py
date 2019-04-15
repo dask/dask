@@ -10,11 +10,12 @@ from ..compatibility import PY2
 BOKEH_VERSION = LooseVersion(bokeh.__version__)
 
 
-if BOKEH_VERSION >= '1.0.0' and not PY2:
+if BOKEH_VERSION >= "1.0.0" and not PY2:
     # This decorator is only available in bokeh >= 1.0.0, and doesn't work for
     # callbacks in Python 2, since the signature introspection won't line up.
     from bokeh.core.properties import without_property_validation
 else:
+
     def without_property_validation(f):
         return f
 

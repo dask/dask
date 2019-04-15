@@ -14,7 +14,7 @@ from distributed.diagnostics.task_stream import TaskStreamPlugin
 from distributed.metrics import time
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
 def test_TaskStreamPlugin(c, s, *workers):
     es = TaskStreamPlugin(s)
     assert not es.buffer
@@ -29,20 +29,21 @@ def test_TaskStreamPlugin(c, s, *workers):
 
     rects = es.rectangles(0, 10, workers)
     assert workers
-    assert all(n == 'div' for n in rects['name'])
-    assert all(d > 0 for d in rects['duration'])
-    counts = frequencies(rects['color'])
-    assert counts['black'] == 1
+    assert all(n == "div" for n in rects["name"])
+    assert all(d > 0 for d in rects["duration"])
+    counts = frequencies(rects["color"])
+    assert counts["black"] == 1
     assert set(counts.values()) == {9, 1}
-    assert len(set(rects['y'])) == 3
+    assert len(set(rects["y"])) == 3
 
     rects = es.rectangles(2, 5, workers)
     assert all(len(L) == 3 for L in rects.values())
 
-    starts = sorted(rects['start'])
-    rects = es.rectangles(2, 5, workers=workers,
-                          start_boundary=(starts[0] + starts[1]) / 2000)
-    assert set(rects['start']).issubset(set(starts[1:]))
+    starts = sorted(rects["start"])
+    rects = es.rectangles(
+        2, 5, workers=workers, start_boundary=(starts[0] + starts[1]) / 2000
+    )
+    assert set(rects["start"]).issubset(set(starts[1:]))
 
 
 @gen_cluster(client=True)
@@ -68,10 +69,10 @@ def test_collect(c, s, a, b):
     L = tasks.collect(start=start + 0.2)
     assert 4 <= len(L) <= len(futures)
 
-    L = tasks.collect(start='20 s')
+    L = tasks.collect(start="20 s")
     assert len(L) == len(futures)
 
-    L = tasks.collect(start='500ms')
+    L = tasks.collect(start="500ms")
     assert 0 < len(L) <= len(futures)
 
     L = tasks.collect(count=3)
@@ -107,7 +108,7 @@ def test_client_sync(client):
 
 @gen_cluster(client=True)
 def test_get_task_stream_plot(c, s, a, b):
-    bokeh = pytest.importorskip('bokeh')
+    bokeh = pytest.importorskip("bokeh")
     yield c.get_task_stream()
 
     futures = c.map(slowinc, range(10), delay=0.1)
@@ -118,15 +119,15 @@ def test_get_task_stream_plot(c, s, a, b):
 
 
 def test_get_task_stream_save(client, tmpdir):
-    bokeh = pytest.importorskip('bokeh')
+    bokeh = pytest.importorskip("bokeh")
     tmpdir = str(tmpdir)
-    fn = os.path.join(tmpdir, 'foo.html')
+    fn = os.path.join(tmpdir, "foo.html")
 
-    with get_task_stream(plot='save', filename=fn) as ts:
+    with get_task_stream(plot="save", filename=fn) as ts:
         wait(client.map(inc, range(10)))
     with open(fn) as f:
         data = f.read()
-    assert 'inc' in data
-    assert 'bokeh' in data
+    assert "inc" in data
+    assert "bokeh" in data
 
     assert isinstance(ts.figure, bokeh.plotting.Figure)

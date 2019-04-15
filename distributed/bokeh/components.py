@@ -6,9 +6,23 @@ from time import time
 import weakref
 
 from bokeh.layouts import row, column
-from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
-        HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Range1d,
-        Quad, TapTool, OpenURL, Button, Select)
+from bokeh.models import (
+    ColumnDataSource,
+    Plot,
+    DataRange1d,
+    LinearAxis,
+    HoverTool,
+    BoxZoomTool,
+    ResetTool,
+    PanTool,
+    WheelZoomTool,
+    Range1d,
+    Quad,
+    TapTool,
+    OpenURL,
+    Button,
+    Select,
+)
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 import dask
@@ -20,14 +34,14 @@ from ..diagnostics.progress_stream import nbytes_bar
 from .. import profile
 from ..utils import log_errors, parse_timedelta
 
-if dask.config.get('distributed.dashboard.export-tool'):
+if dask.config.get("distributed.dashboard.export-tool"):
     from .export_tool import ExportTool
 else:
     ExportTool = None
 
 
-profile_interval = dask.config.get('distributed.worker.profile.interval')
-profile_interval = parse_timedelta(profile_interval, default='ms')
+profile_interval = dask.config.get("distributed.worker.profile.interval")
+profile_interval = parse_timedelta(profile_interval, default="ms")
 
 
 class DashboardComponent(object):
@@ -56,12 +70,12 @@ class TaskStream(DashboardComponent):
     The start and stop time of tasks as they occur on each core of the cluster.
     """
 
-    def __init__(self, n_rectangles=1000, clear_interval='20s', **kwargs):
+    def __init__(self, n_rectangles=1000, clear_interval="20s", **kwargs):
         """
         kwargs are applied to the bokeh.models.plots.Plot constructor
         """
         self.n_rectangles = n_rectangles
-        clear_interval = parse_timedelta(clear_interval, default='ms')
+        clear_interval = parse_timedelta(clear_interval, default="ms")
         self.clear_interval = clear_interval
         self.last = 0
 
@@ -73,20 +87,21 @@ class TaskStream(DashboardComponent):
     @without_property_validation
     def update(self, messages):
         with log_errors():
-            index = messages['task-events']['index']
-            rectangles = messages['task-events']['rectangles']
+            index = messages["task-events"]["index"]
+            rectangles = messages["task-events"]["rectangles"]
 
             if not index or index[-1] == self.task_stream_index[0]:
                 return
 
             ind = bisect(index, self.task_stream_index[0])
-            rectangles = {k: [v[i] for i in range(ind, len(index))]
-                          for k, v in rectangles.items()}
+            rectangles = {
+                k: [v[i] for i in range(ind, len(index))] for k, v in rectangles.items()
+            }
             self.task_stream_index[0] = index[-1]
 
             # If there has been a significant delay then clear old rectangles
-            if rectangles['start']:
-                m = min(map(add, rectangles['start'], rectangles['duration']))
+            if rectangles["start"]:
+                m = min(map(add, rectangles["start"], rectangles["duration"]))
                 if m > self.last:
                     self.last, last = m, self.last
                     if m > last + self.clear_interval:
@@ -96,31 +111,40 @@ class TaskStream(DashboardComponent):
             self.source.stream(rectangles, self.n_rectangles)
 
 
-def task_stream_figure(clear_interval='20s', **kwargs):
+def task_stream_figure(clear_interval="20s", **kwargs):
     """
     kwargs are applied to the bokeh.models.plots.Plot constructor
     """
-    clear_interval = parse_timedelta(clear_interval, default='ms')
+    clear_interval = parse_timedelta(clear_interval, default="ms")
 
-    source = ColumnDataSource(data=dict(
-        start=[time() - clear_interval], duration=[0.1], key=['start'],
-        name=['start'], color=['white'], duration_text=['100 ms'],
-        worker=['foo'], y=[0], worker_thread=[1], alpha=[0.0])
+    source = ColumnDataSource(
+        data=dict(
+            start=[time() - clear_interval],
+            duration=[0.1],
+            key=["start"],
+            name=["start"],
+            color=["white"],
+            duration_text=["100 ms"],
+            worker=["foo"],
+            y=[0],
+            worker_thread=[1],
+            alpha=[0.0],
+        )
     )
 
     x_range = DataRange1d(range_padding=0)
     y_range = DataRange1d(range_padding=0)
 
     root = figure(
-        name='task_stream',
+        name="task_stream",
         title="Task Stream",
-        id='bk-task-stream-plot',
+        id="bk-task-stream-plot",
         x_range=x_range,
         y_range=y_range,
         toolbar_location="above",
-        x_axis_type='datetime',
+        x_axis_type="datetime",
         min_border_right=35,
-        tools='',
+        tools="",
         **kwargs
     )
 
@@ -134,7 +158,7 @@ def task_stream_figure(clear_interval='20s', **kwargs):
         line_color="color",
         line_alpha=0.6,
         fill_alpha="alpha",
-        line_width=3
+        line_width=3,
     )
     rect.nonselection_glyph = None
 
@@ -150,17 +174,18 @@ def task_stream_figure(clear_interval='20s', **kwargs):
                 <span style="font-size: 12px; font-weight: bold;">@name:</span>&nbsp;
                 <span style="font-size: 10px; font-family: Monaco, monospace;">@duration_text</span>
             </div>
-            """
+            """,
     )
 
-    tap = TapTool(callback=OpenURL(url='/profile?key=@name'))
+    tap = TapTool(callback=OpenURL(url="/profile?key=@name"))
 
     root.add_tools(
-        hover, tap,
+        hover,
+        tap,
         BoxZoomTool(),
         ResetTool(),
         PanTool(dimensions="width"),
-        WheelZoomTool(dimensions="width")
+        WheelZoomTool(dimensions="width"),
     )
     if ExportTool:
         export = ExportTool()
@@ -174,24 +199,42 @@ class MemoryUsage(DashboardComponent):
     """ The memory usage across the cluster, grouped by task type """
 
     def __init__(self, **kwargs):
-        self.source = ColumnDataSource(data=dict(
-            name=[], left=[], right=[], center=[], color=[],
-            percent=[], MB=[], text=[])
+        self.source = ColumnDataSource(
+            data=dict(
+                name=[],
+                left=[],
+                right=[],
+                center=[],
+                color=[],
+                percent=[],
+                MB=[],
+                text=[],
+            )
         )
 
         self.root = Plot(
-            id='bk-nbytes-plot', x_range=DataRange1d(), y_range=DataRange1d(),
-            toolbar_location=None, outline_line_color=None, **kwargs
+            id="bk-nbytes-plot",
+            x_range=DataRange1d(),
+            y_range=DataRange1d(),
+            toolbar_location=None,
+            outline_line_color=None,
+            **kwargs
         )
 
         self.root.add_glyph(
             self.source,
-            Quad(top=1, bottom=0, left='left', right='right',
-                 fill_color='color', fill_alpha=1)
+            Quad(
+                top=1,
+                bottom=0,
+                left="left",
+                right="right",
+                fill_color="color",
+                fill_alpha=1,
+            ),
         )
 
-        self.root.add_layout(LinearAxis(), 'left')
-        self.root.add_layout(LinearAxis(), 'below')
+        self.root.add_layout(LinearAxis(), "left")
+        self.root.add_layout(LinearAxis(), "below")
 
         hover = HoverTool(
             point_policy="follow_mouse",
@@ -208,20 +251,21 @@ class MemoryUsage(DashboardComponent):
                     <span style="font-size: 14px; font-weight: bold;">MB:</span>&nbsp;
                     <span style="font-size: 10px; font-family: Monaco, monospace;">@MB</span>
                 </div>
-                """
+                """,
         )
         self.root.add_tools(hover)
 
     @without_property_validation
     def update(self, messages):
         with log_errors():
-            msg = messages['progress']
+            msg = messages["progress"]
             if not msg:
                 return
-            nb = nbytes_bar(msg['nbytes'])
+            nb = nbytes_bar(msg["nbytes"])
             self.source.data.update(nb)
-            self.root.title.text = \
-                "Memory Use: %0.2f MB" % (sum(msg['nbytes'].values()) / 1e6)
+            self.root.title.text = "Memory Use: %0.2f MB" % (
+                sum(msg["nbytes"].values()) / 1e6
+            )
 
 
 class Processing(DashboardComponent):
@@ -232,14 +276,25 @@ class Processing(DashboardComponent):
     """
 
     def __init__(self, **kwargs):
-        data = self.processing_update({'processing': {}, 'ncores': {}})
+        data = self.processing_update({"processing": {}, "ncores": {}})
         self.source = ColumnDataSource(data)
 
         x_range = Range1d(-1, 1)
-        fig = figure(title='Processing and Pending', tools='',
-                     x_range=x_range, id='bk-processing-stacks-plot', **kwargs)
-        fig.quad(source=self.source, left=0, right='right', color=Spectral9[0],
-                 top='top', bottom='bottom')
+        fig = figure(
+            title="Processing and Pending",
+            tools="",
+            x_range=x_range,
+            id="bk-processing-stacks-plot",
+            **kwargs
+        )
+        fig.quad(
+            source=self.source,
+            left=0,
+            right="right",
+            color=Spectral9[0],
+            top="top",
+            bottom="bottom",
+        )
 
         fig.xaxis.minor_tick_line_alpha = 0
         fig.yaxis.visible = False
@@ -258,20 +313,20 @@ class Processing(DashboardComponent):
             <span style="font-size: 10px; font-family: Monaco, monospace;">@processing</span>
         </div>
         """
-        hover.point_policy = 'follow_mouse'
+        hover.point_policy = "follow_mouse"
 
         self.root = fig
 
     @without_property_validation
     def update(self, messages):
         with log_errors():
-            msg = messages['processing']
-            if not msg.get('ncores'):
+            msg = messages["processing"]
+            if not msg.get("ncores"):
                 return
             data = self.processing_update(msg)
             x_range = self.root.x_range
-            max_right = max(data['right'])
-            cores = max(data['ncores'])
+            max_right = max(data["right"])
+            cores = max(data["ncores"])
             if x_range.end < max_right:
                 x_range.end = max_right + 2
             elif x_range.end > 2 * max_right + cores:  # way out there, walk back
@@ -282,21 +337,23 @@ class Processing(DashboardComponent):
     @staticmethod
     def processing_update(msg):
         with log_errors():
-            names = sorted(msg['processing'])
+            names = sorted(msg["processing"])
             names = sorted(names)
-            processing = msg['processing']
+            processing = msg["processing"]
             processing = [processing[name] for name in names]
-            ncores = msg['ncores']
+            ncores = msg["ncores"]
             ncores = [ncores[name] for name in names]
             n = len(names)
-            d = {'name': list(names),
-                 'processing': processing,
-                 'right': list(processing),
-                 'top': list(range(n, 0, -1)),
-                 'bottom': list(range(n - 1, -1, -1)),
-                 'ncores': ncores}
+            d = {
+                "name": list(names),
+                "processing": processing,
+                "right": list(processing),
+                "top": list(range(n, 0, -1)),
+                "bottom": list(range(n - 1, -1, -1)),
+                "ncores": ncores,
+            }
 
-            d['alpha'] = [0.7] * n
+            d["alpha"] = [0.7] * n
 
             return d
 
@@ -310,7 +367,7 @@ class ProfilePlot(DashboardComponent):
     def __init__(self, **kwargs):
         state = profile.create()
         data = profile.plot_data(state, profile_interval)
-        self.states = data.pop('states')
+        self.states = data.pop("states")
         self.root, self.source = profile.plot_figure(data, **kwargs)
 
         @without_property_validation
@@ -319,28 +376,28 @@ class ProfilePlot(DashboardComponent):
                 try:
                     selected = new.indices
                 except AttributeError:
-                    selected = new['1d']['indices']
+                    selected = new["1d"]["indices"]
                 try:
                     ind = selected[0]
                 except IndexError:
                     return
                 data = profile.plot_data(self.states[ind], profile_interval)
                 del self.states[:]
-                self.states.extend(data.pop('states'))
+                self.states.extend(data.pop("states"))
                 self.source.data.update(data)
                 self.source.selected = old
 
-        if BOKEH_VERSION >= '1.0.0':
-            self.source.selected.on_change('indices', cb)
+        if BOKEH_VERSION >= "1.0.0":
+            self.source.selected.on_change("indices", cb)
         else:
-            self.source.on_change('selected', cb)
+            self.source.on_change("selected", cb)
 
     @without_property_validation
     def update(self, state):
         with log_errors():
             self.state = state
             data = profile.plot_data(self.state, profile_interval)
-            self.states = data.pop('states')
+            self.states = data.pop("states")
             self.source.data.update(data)
 
 
@@ -354,25 +411,25 @@ class ProfileTimePlot(DashboardComponent):
         if doc is not None:
             self.doc = weakref.ref(doc)
             try:
-                self.key = doc.session_context.request.arguments.get('key', None)
+                self.key = doc.session_context.request.arguments.get("key", None)
             except AttributeError:
                 self.key = None
             if isinstance(self.key, list):
                 self.key = self.key[0]
             if isinstance(self.key, bytes):
                 self.key = self.key.decode()
-            self.task_names = ['All', self.key]
+            self.task_names = ["All", self.key]
         else:
             self.key = None
-            self.task_names = ['All']
+            self.task_names = ["All"]
 
         self.server = server
         self.start = None
         self.stop = None
-        self.ts = {'count': [], 'time': []}
+        self.ts = {"count": [], "time": []}
         self.state = profile.create()
         data = profile.plot_data(self.state, profile_interval)
-        self.states = data.pop('states')
+        self.states = data.pop("states")
         self.profile_plot, self.source = profile.plot_figure(data, **kwargs)
 
         changing = [False]  # avoid repeated changes from within callback
@@ -385,14 +442,14 @@ class ProfileTimePlot(DashboardComponent):
                 if isinstance(new, list):  # bokeh >= 1.0
                     selected = new
                 else:
-                    selected = new['1d']['indices']
+                    selected = new["1d"]["indices"]
                 try:
                     ind = selected[0]
                 except IndexError:
                     return
                 data = profile.plot_data(self.states[ind], profile_interval)
                 del self.states[:]
-                self.states.extend(data.pop('states'))
+                self.states.extend(data.pop("states"))
                 changing[0] = True  # don't recursively trigger callback
                 self.source.data.update(data)
                 if isinstance(new, list):  # bokeh >= 1.0
@@ -401,20 +458,25 @@ class ProfileTimePlot(DashboardComponent):
                     self.source.selected = old
                 changing[0] = False
 
-        if BOKEH_VERSION >= '1.0.0':
-            self.source.selected.on_change('indices', cb)
+        if BOKEH_VERSION >= "1.0.0":
+            self.source.selected.on_change("indices", cb)
         else:
-            self.source.on_change('selected', cb)
+            self.source.on_change("selected", cb)
 
-        self.ts_source = ColumnDataSource({'time': [], 'count': []})
-        self.ts_plot = figure(title='Activity over time', height=100,
-                              x_axis_type='datetime', active_drag='xbox_select',
-                              y_range=[0, 1 / profile_interval],
-                              tools='xpan,xwheel_zoom,xbox_select,reset',
-                              **kwargs)
-        self.ts_plot.line('time', 'count', source=self.ts_source)
-        self.ts_plot.circle('time', 'count', source=self.ts_source, color=None,
-                            selection_color='orange')
+        self.ts_source = ColumnDataSource({"time": [], "count": []})
+        self.ts_plot = figure(
+            title="Activity over time",
+            height=100,
+            x_axis_type="datetime",
+            active_drag="xbox_select",
+            y_range=[0, 1 / profile_interval],
+            tools="xpan,xwheel_zoom,xbox_select,reset",
+            **kwargs
+        )
+        self.ts_plot.line("time", "count", source=self.ts_source)
+        self.ts_plot.circle(
+            "time", "count", source=self.ts_source, color=None, selection_color="orange"
+        )
         self.ts_plot.yaxis.visible = False
         self.ts_plot.grid.visible = False
 
@@ -423,22 +485,22 @@ class ProfileTimePlot(DashboardComponent):
                 try:
                     selected = self.ts_source.selected.indices
                 except AttributeError:
-                    selected = self.ts_source.selected['1d']['indices']
+                    selected = self.ts_source.selected["1d"]["indices"]
                 if selected:
-                    start = self.ts_source.data['time'][min(selected)] / 1000
-                    stop = self.ts_source.data['time'][max(selected)] / 1000
+                    start = self.ts_source.data["time"][min(selected)] / 1000
+                    stop = self.ts_source.data["time"][max(selected)] / 1000
                     self.start, self.stop = min(start, stop), max(start, stop)
                 else:
                     self.start = self.stop = None
                 self.trigger_update(update_metadata=False)
 
-        if BOKEH_VERSION >= '1.0.0':
-            self.ts_source.selected.on_change('indices', ts_change)
+        if BOKEH_VERSION >= "1.0.0":
+            self.ts_source.selected.on_change("indices", ts_change)
         else:
-            self.ts_source.on_change('selected', ts_change)
+            self.ts_source.on_change("selected", ts_change)
 
         self.reset_button = Button(label="Reset", button_type="success")
-        self.reset_button.on_click(lambda: self.update(self.state) )
+        self.reset_button.on_click(lambda: self.update(self.state))
 
         self.update_button = Button(label="Update", button_type="success")
         self.update_button.on_click(self.trigger_update)
@@ -446,34 +508,42 @@ class ProfileTimePlot(DashboardComponent):
         self.select = Select(value=self.task_names[-1], options=self.task_names)
 
         def select_cb(attr, old, new):
-            if new == 'All':
+            if new == "All":
                 new = None
             self.key = new
             self.trigger_update(update_metadata=False)
 
-        self.select.on_change('value', select_cb)
+        self.select.on_change("value", select_cb)
 
-        self.root = column(row(self.select, self.reset_button,
-                               self.update_button, sizing_mode='scale_width'),
-                           self.profile_plot, self.ts_plot, **kwargs)
+        self.root = column(
+            row(
+                self.select,
+                self.reset_button,
+                self.update_button,
+                sizing_mode="scale_width",
+            ),
+            self.profile_plot,
+            self.ts_plot,
+            **kwargs
+        )
 
     @without_property_validation
     def update(self, state, metadata=None):
         with log_errors():
             self.state = state
             data = profile.plot_data(self.state, profile_interval)
-            self.states = data.pop('states')
+            self.states = data.pop("states")
             self.source.data.update(data)
 
-            if metadata is not None and metadata['counts']:
-                self.task_names = ['All'] + sorted(metadata['keys'])
+            if metadata is not None and metadata["counts"]:
+                self.task_names = ["All"] + sorted(metadata["keys"])
                 self.select.options = self.task_names
                 if self.key:
-                    ts = metadata['keys'][self.key]
+                    ts = metadata["keys"][self.key]
                 else:
-                    ts = metadata['counts']
+                    ts = metadata["counts"]
                 times, counts = zip(*ts)
-                self.ts = {'count': counts, 'time': [t * 1000 for t in times]}
+                self.ts = {"count": counts, "time": [t * 1000 for t in times]}
 
                 self.ts_source.data.update(self.ts)
 
@@ -482,7 +552,9 @@ class ProfileTimePlot(DashboardComponent):
         @gen.coroutine
         def cb():
             with log_errors():
-                prof = self.server.get_profile(key=self.key, start=self.start, stop=self.stop)
+                prof = self.server.get_profile(
+                    key=self.key, start=self.start, stop=self.stop
+                )
                 if update_metadata:
                     metadata = self.server.get_profile_metadata()
                 else:
@@ -507,10 +579,10 @@ class ProfileServer(DashboardComponent):
         self.log = self.server.io_loop.profile
         self.start = None
         self.stop = None
-        self.ts = {'count': [], 'time': []}
+        self.ts = {"count": [], "time": []}
         self.state = profile.get_profile(self.log)
         data = profile.plot_data(self.state, profile_interval)
-        self.states = data.pop('states')
+        self.states = data.pop("states")
         self.profile_plot, self.source = profile.plot_figure(data, **kwargs)
 
         changing = [False]  # avoid repeated changes from within callback
@@ -523,14 +595,14 @@ class ProfileServer(DashboardComponent):
                 if isinstance(new, list):  # bokeh >= 1.0
                     selected = new
                 else:
-                    selected = new['1d']['indices']
+                    selected = new["1d"]["indices"]
                 try:
                     ind = selected[0]
                 except IndexError:
                     return
                 data = profile.plot_data(self.states[ind], profile_interval)
                 del self.states[:]
-                self.states.extend(data.pop('states'))
+                self.states.extend(data.pop("states"))
                 changing[0] = True  # don't recursively trigger callback
                 self.source.data.update(data)
                 if isinstance(new, list):  # bokeh >= 1.0
@@ -539,20 +611,25 @@ class ProfileServer(DashboardComponent):
                     self.source.selected = old
                 changing[0] = False
 
-        if BOKEH_VERSION >= '1.0.0':
-            self.source.selected.on_change('indices', cb)
+        if BOKEH_VERSION >= "1.0.0":
+            self.source.selected.on_change("indices", cb)
         else:
-            self.source.on_change('selected', cb)
+            self.source.on_change("selected", cb)
 
-        self.ts_source = ColumnDataSource({'time': [], 'count': []})
-        self.ts_plot = figure(title='Activity over time', height=100,
-                              x_axis_type='datetime', active_drag='xbox_select',
-                              y_range=[0, 1 / profile_interval],
-                              tools='xpan,xwheel_zoom,xbox_select,reset',
-                              **kwargs)
-        self.ts_plot.line('time', 'count', source=self.ts_source)
-        self.ts_plot.circle('time', 'count', source=self.ts_source, color=None,
-                            selection_color='orange')
+        self.ts_source = ColumnDataSource({"time": [], "count": []})
+        self.ts_plot = figure(
+            title="Activity over time",
+            height=100,
+            x_axis_type="datetime",
+            active_drag="xbox_select",
+            y_range=[0, 1 / profile_interval],
+            tools="xpan,xwheel_zoom,xbox_select,reset",
+            **kwargs
+        )
+        self.ts_plot.line("time", "count", source=self.ts_source)
+        self.ts_plot.circle(
+            "time", "count", source=self.ts_source, color=None, selection_color="orange"
+        )
         self.ts_plot.yaxis.visible = False
         self.ts_plot.grid.visible = False
 
@@ -561,19 +638,19 @@ class ProfileServer(DashboardComponent):
                 try:
                     selected = self.ts_source.selected.indices
                 except AttributeError:
-                    selected = self.ts_source.selected['1d']['indices']
+                    selected = self.ts_source.selected["1d"]["indices"]
                 if selected:
-                    start = self.ts_source.data['time'][min(selected)] / 1000
-                    stop = self.ts_source.data['time'][max(selected)] / 1000
+                    start = self.ts_source.data["time"][min(selected)] / 1000
+                    stop = self.ts_source.data["time"][max(selected)] / 1000
                     self.start, self.stop = min(start, stop), max(start, stop)
                 else:
                     self.start = self.stop = None
                 self.trigger_update()
 
-        if BOKEH_VERSION >= '1.0.0':
-            self.ts_source.selected.on_change('indices', ts_change)
+        if BOKEH_VERSION >= "1.0.0":
+            self.ts_source.selected.on_change("indices", ts_change)
         else:
-            self.ts_source.on_change('selected', ts_change)
+            self.ts_source.on_change("selected", ts_change)
 
         self.reset_button = Button(label="Reset", button_type="success")
         self.reset_button.on_click(lambda: self.update(self.state))
@@ -581,27 +658,30 @@ class ProfileServer(DashboardComponent):
         self.update_button = Button(label="Update", button_type="success")
         self.update_button.on_click(self.trigger_update)
 
-        self.root = column(row(self.reset_button, self.update_button,
-                               sizing_mode='scale_width'),
-                           self.profile_plot, self.ts_plot, **kwargs)
+        self.root = column(
+            row(self.reset_button, self.update_button, sizing_mode="scale_width"),
+            self.profile_plot,
+            self.ts_plot,
+            **kwargs
+        )
 
     @without_property_validation
     def update(self, state):
         with log_errors():
             self.state = state
             data = profile.plot_data(self.state, profile_interval)
-            self.states = data.pop('states')
+            self.states = data.pop("states")
             self.source.data.update(data)
 
     @without_property_validation
     def trigger_update(self):
         self.state = profile.get_profile(self.log, start=self.start, stop=self.stop)
         data = profile.plot_data(self.state, profile_interval)
-        self.states = data.pop('states')
+        self.states = data.pop("states")
         self.source.data.update(data)
         times = [t * 1000 for t, _ in self.log]
-        counts = list(toolz.pluck('count', toolz.pluck(1, self.log)))
-        self.ts_source.data.update({'time': times, 'count': counts})
+        counts = list(toolz.pluck("count", toolz.pluck(1, self.log)))
+        self.ts_source.data.update({"time": times, "count": counts})
 
 
 def add_periodic_callback(doc, component, interval):
@@ -628,7 +708,7 @@ def update(ref):
 
 
 def _attach(doc, component):
-    if not hasattr(doc, 'components'):
+    if not hasattr(doc, "components"):
         doc.components = set()
 
     doc.components.add(component)

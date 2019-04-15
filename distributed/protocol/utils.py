@@ -4,7 +4,7 @@ import struct
 
 from ..utils import ensure_bytes, nbytes
 
-BIG_BYTES_SHARD_SIZE = 2**26
+BIG_BYTES_SHARD_SIZE = 2 ** 26
 
 
 def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
@@ -34,7 +34,7 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
             except AttributeError:
                 itemsize = 1
             for i in range(0, nbytes(frame) // itemsize, n // itemsize):
-                out.append(frame[i: i + n // itemsize])
+                out.append(frame[i : i + n // itemsize])
         else:
             out.append(frame)
     return out
@@ -50,7 +50,7 @@ def merge_frames(header, frames):
     >>> merge_frames({'lengths': [6]}, [b'123', b'456'])
     [b'123456']
     """
-    lengths = list(header['lengths'])
+    lengths = list(header["lengths"])
 
     if not frames:
         return frames
@@ -77,15 +77,16 @@ def merge_frames(header, frames):
                 L.append(mv[:l])
                 frames.append(mv[l:])
                 l = 0
-        out.append(b''.join(map(ensure_bytes, L)))
+        out.append(b"".join(map(ensure_bytes, L)))
     return out
 
 
 def pack_frames_prelude(frames):
     lengths = [len(f) for f in frames]
-    lengths = ([struct.pack('Q', len(frames))] +
-               [struct.pack('Q', nbytes(frame)) for frame in frames])
-    return b''.join(lengths)
+    lengths = [struct.pack("Q", len(frames))] + [
+        struct.pack("Q", nbytes(frame)) for frame in frames
+    ]
+    return b"".join(lengths)
 
 
 def pack_frames(frames):
@@ -102,7 +103,7 @@ def pack_frames(frames):
     if not isinstance(frames, list):
         frames = list(frames)
 
-    return b''.join(prelude + frames)
+    return b"".join(prelude + frames)
 
 
 def unpack_frames(b):
@@ -115,13 +116,13 @@ def unpack_frames(b):
     --------
     pack_frames
     """
-    (n_frames,) = struct.unpack('Q', b[:8])
+    (n_frames,) = struct.unpack("Q", b[:8])
 
     frames = []
     start = 8 + n_frames * 8
     for i in range(n_frames):
-        (length,) = struct.unpack('Q', b[(i + 1) * 8: (i + 2) * 8])
-        frame = b[start: start + length]
+        (length,) = struct.unpack("Q", b[(i + 1) * 8 : (i + 2) * 8])
+        frame = b[start : start + length]
         frames.append(frame)
         start += length
 

@@ -16,46 +16,51 @@ logger = logging.getLogger(__name__)
 
 class PubSubSchedulerExtension(object):
     """ Extend Dask's scheduler with routes to handle PubSub machinery """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.publishers = defaultdict(set)
         self.subscribers = defaultdict(set)
         self.client_subscribers = defaultdict(set)
 
-        self.scheduler.handlers.update({
-            'pubsub_add_publisher': self.add_publisher,
-        })
+        self.scheduler.handlers.update({"pubsub_add_publisher": self.add_publisher})
 
-        self.scheduler.stream_handlers.update({
-            'pubsub-add-subscriber': self.add_subscriber,
-            'pubsub-remove-publisher': self.remove_publisher,
-            'pubsub-remove-subscriber': self.remove_subscriber,
-            'pubsub-msg': self.handle_message,
-        })
+        self.scheduler.stream_handlers.update(
+            {
+                "pubsub-add-subscriber": self.add_subscriber,
+                "pubsub-remove-publisher": self.remove_publisher,
+                "pubsub-remove-subscriber": self.remove_subscriber,
+                "pubsub-msg": self.handle_message,
+            }
+        )
 
-        self.scheduler.extensions['pubsub'] = self
+        self.scheduler.extensions["pubsub"] = self
 
     def add_publisher(self, comm=None, name=None, worker=None):
         logger.debug("Add publisher: %s %s", name, worker)
         self.publishers[name].add(worker)
-        return {'subscribers': {addr: {} for addr in self.subscribers[name]},
-                'publish-scheduler': name in self.client_subscribers and
-                                     len(self.client_subscribers[name]) > 0}
+        return {
+            "subscribers": {addr: {} for addr in self.subscribers[name]},
+            "publish-scheduler": name in self.client_subscribers
+            and len(self.client_subscribers[name]) > 0,
+        }
 
     def add_subscriber(self, comm=None, name=None, worker=None, client=None):
         if worker:
             logger.debug("Add worker subscriber: %s %s", name, worker)
             self.subscribers[name].add(worker)
             for pub in self.publishers[name]:
-                self.scheduler.worker_send(pub, {'op': 'pubsub-add-subscriber',
-                                                 'address': worker,
-                                                 'name': name})
+                self.scheduler.worker_send(
+                    pub,
+                    {"op": "pubsub-add-subscriber", "address": worker, "name": name},
+                )
         elif client:
             logger.debug("Add client subscriber: %s %s", name, client)
             for pub in self.publishers[name]:
-                self.scheduler.worker_send(pub, {'op': 'pubsub-publish-scheduler',
-                                                 'name': name,
-                                                 'publish': True})
+                self.scheduler.worker_send(
+                    pub,
+                    {"op": "pubsub-publish-scheduler", "name": name, "publish": True},
+                )
             self.client_subscribers[name].add(client)
 
     def remove_publisher(self, comm=None, name=None, worker=None):
@@ -72,18 +77,24 @@ class PubSubSchedulerExtension(object):
             logger.debug("Add worker subscriber: %s %s", name, worker)
             self.subscribers[name].remove(worker)
             for pub in self.publishers[name]:
-                self.scheduler.worker_send(pub, {'op': 'pubsub-remove-subscriber',
-                                                 'address': worker,
-                                                 'name': name})
+                self.scheduler.worker_send(
+                    pub,
+                    {"op": "pubsub-remove-subscriber", "address": worker, "name": name},
+                )
         elif client:
             logger.debug("Add client subscriber: %s %s", name, client)
             self.client_subscribers[name].remove(client)
             if not self.client_subscribers[name]:
                 del self.client_subscribers[name]
                 for pub in self.publishers[name]:
-                    self.scheduler.worker_send(pub, {'op': 'pubsub-publish-scheduler',
-                                                     'name': name,
-                                                     'publish': False})
+                    self.scheduler.worker_send(
+                        pub,
+                        {
+                            "op": "pubsub-publish-scheduler",
+                            "name": name,
+                            "publish": False,
+                        },
+                    )
 
         if not self.subscribers[name] and not self.publishers[name]:
             logger.debug("Remove PubSub topic %s", name)
@@ -93,35 +104,38 @@ class PubSubSchedulerExtension(object):
     def handle_message(self, name=None, msg=None, worker=None, client=None):
         for c in list(self.client_subscribers[name]):
             try:
-                self.scheduler.client_comms[c].send({'op': 'pubsub-msg',
-                                                     'name': name,
-                                                     'msg': msg})
+                self.scheduler.client_comms[c].send(
+                    {"op": "pubsub-msg", "name": name, "msg": msg}
+                )
             except (KeyError, CommClosedError):
                 self.remove_subscriber(name=name, client=c)
 
         if client:
             for sub in self.subscribers[name]:
-                self.scheduler.worker_send(sub, {'op': 'pubsub-msg',
-                                                 'name': name,
-                                                 'msg': msg})
+                self.scheduler.worker_send(
+                    sub, {"op": "pubsub-msg", "name": name, "msg": msg}
+                )
 
 
 class PubSubWorkerExtension(object):
     """ Extend Dask's Worker with routes to handle PubSub machinery """
+
     def __init__(self, worker):
         self.worker = worker
-        self.worker.stream_handlers.update({
-            'pubsub-add-subscriber': self.add_subscriber,
-            'pubsub-remove-subscriber': self.remove_subscriber,
-            'pubsub-msg': self.handle_message,
-            'pubsub-publish-scheduler': self.publish_scheduler,
-        })
+        self.worker.stream_handlers.update(
+            {
+                "pubsub-add-subscriber": self.add_subscriber,
+                "pubsub-remove-subscriber": self.remove_subscriber,
+                "pubsub-msg": self.handle_message,
+                "pubsub-publish-scheduler": self.publish_scheduler,
+            }
+        )
 
         self.subscribers = defaultdict(weakref.WeakSet)
         self.publishers = defaultdict(weakref.WeakSet)
         self.publish_to_scheduler = defaultdict(lambda: False)
 
-        self.worker.extensions['pubsub'] = self  # circular reference
+        self.worker.extensions["pubsub"] = self  # circular reference
 
     def add_subscriber(self, name=None, address=None, **info):
         for pub in self.publishers[name]:
@@ -144,15 +158,13 @@ class PubSubWorkerExtension(object):
     def cleanup(self):
         for name, s in dict(self.subscribers).items():
             if not len(s):
-                msg = {'op': 'pubsub-remove-subscriber',
-                       'name': name}
+                msg = {"op": "pubsub-remove-subscriber", "name": name}
                 self.worker.batched_stream.send(msg)
                 del self.subscribers[name]
 
         for name, p in dict(self.publishers).items():
             if not len(p):
-                msg = {'op': 'pubsub-remove-publisher',
-                       'name': name}
+                msg = {"op": "pubsub-remove-publisher", "name": name}
                 self.worker.batched_stream.send(msg)
                 del self.publishers[name]
                 del self.publish_to_scheduler[name]
@@ -160,22 +172,22 @@ class PubSubWorkerExtension(object):
 
 class PubSubClientExtension(object):
     """ Extend Dask's Client with handlers to handle PubSub machinery """
+
     def __init__(self, client):
         self.client = client
-        self.client._stream_handlers.update({
-            'pubsub-msg': self.handle_message
-        })
+        self.client._stream_handlers.update({"pubsub-msg": self.handle_message})
 
         self.subscribers = defaultdict(weakref.WeakSet)
-        self.client.extensions['pubsub'] = self  # TODO: circular reference
+        self.client.extensions["pubsub"] = self  # TODO: circular reference
 
     def handle_message(self, name=None, msg=None):
         for sub in self.subscribers[name]:
             sub._put(msg)
 
         if not self.subscribers[name]:
-            self.client.scheduler_comm.send({'op': 'pubsub-remove-subscribers',
-                                             'name': name})
+            self.client.scheduler_comm.send(
+                {"op": "pubsub-remove-subscribers", "name": name}
+            )
 
     def trigger_cleanup(self):
         self.client.loop.add_callback(self.cleanup)
@@ -183,8 +195,7 @@ class PubSubClientExtension(object):
     def cleanup(self):
         for name, s in self.subscribers.items():
             if not s:
-                msg = {'op': 'pubsub-remove-subscriber',
-                       'name': name}
+                msg = {"op": "pubsub-remove-subscriber", "name": name}
                 self.client.scheduler_comm.send(msg)
 
 
@@ -265,9 +276,11 @@ class Pub(object):
     --------
     Sub
     """
+
     def __init__(self, name, worker=None, client=None):
         if worker is None and client is None:
             from distributed import get_worker, get_client
+
             try:
                 worker = get_worker()
             except Exception:
@@ -291,7 +304,7 @@ class Pub(object):
         self.loop.add_callback(self._start)
 
         if self.worker:
-            pubsub = self.worker.extensions['pubsub']
+            pubsub = self.worker.extensions["pubsub"]
             self.loop.add_callback(pubsub.publishers[name].add, self)
             finalize(self, pubsub.trigger_cleanup)
 
@@ -299,12 +312,11 @@ class Pub(object):
     def _start(self):
         if self.worker:
             result = yield self.scheduler.pubsub_add_publisher(
-                    name=self.name,
-                    worker=self.worker.address
+                name=self.name, worker=self.worker.address
             )
-            pubsub = self.worker.extensions['pubsub']
-            self.subscribers.update(result['subscribers'])
-            pubsub.publish_to_scheduler[self.name] = result['publish-scheduler']
+            pubsub = self.worker.extensions["pubsub"]
+            self.subscribers.update(result["subscribers"])
+            pubsub.publish_to_scheduler[self.name] = result["publish-scheduler"]
 
         self._started = True
 
@@ -317,13 +329,13 @@ class Pub(object):
             self._buffer.append(msg)
             return
 
-        data = {'op': 'pubsub-msg', 'name': self.name, 'msg': to_serialize(msg)}
+        data = {"op": "pubsub-msg", "name": self.name, "msg": to_serialize(msg)}
 
         if self.worker:
             for sub in self.subscribers:
                 self.worker.send_to_worker(sub, data)
 
-            if self.worker.extensions['pubsub'].publish_to_scheduler[self.name]:
+            if self.worker.extensions["pubsub"].publish_to_scheduler[self.name]:
                 self.worker.batched_stream.send(data)
         elif self.client:
             self.client.scheduler_comm.send(data)
@@ -340,9 +352,11 @@ class Sub(object):
     --------
     Pub: for full docstring
     """
+
     def __init__(self, name, worker=None, client=None):
         if worker is None and client is None:
             from distributed.worker import get_worker, get_client
+
             try:
                 worker = get_worker()
             except Exception:
@@ -359,12 +373,12 @@ class Sub(object):
         self.condition = tornado.locks.Condition()
 
         if self.worker:
-            pubsub = self.worker.extensions['pubsub']
+            pubsub = self.worker.extensions["pubsub"]
         elif self.client:
-            pubsub = self.client.extensions['pubsub']
+            pubsub = self.client.extensions["pubsub"]
         self.loop.add_callback(pubsub.subscribers[name].add, self)
 
-        msg = {'op': 'pubsub-add-subscriber', 'name': self.name}
+        msg = {"op": "pubsub-add-subscriber", "name": self.name}
         if self.worker:
             self.loop.add_callback(self.worker.batched_stream.send, msg)
         elif self.client:

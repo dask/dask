@@ -8,8 +8,13 @@ from distributed import Nanny
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, div, nodebug
-from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
-                                              AllProgress, GroupProgress, MultiProgress)
+from distributed.diagnostics.progress import (
+    Progress,
+    SchedulerPlugin,
+    AllProgress,
+    GroupProgress,
+    MultiProgress,
+)
 
 
 def f(*args):
@@ -37,7 +42,7 @@ def test_many_Progress(c, s, a, b):
     yield z
 
     start = time()
-    while not all(b.status == 'finished' for b in bars):
+    while not all(b.status == "finished" for b in bars):
         yield gen.sleep(0.1)
         assert time() < start + 5
 
@@ -53,19 +58,20 @@ def test_multiprogress(c, s, a, b):
     p = MultiProgress([y2], scheduler=s, complete=True)
     yield p.setup()
 
-    assert p.all_keys == {'f': {f.key for f in [x1, x2, x3]},
-                          'g': {f.key for f in [y1, y2]}}
+    assert p.all_keys == {
+        "f": {f.key for f in [x1, x2, x3]},
+        "g": {f.key for f in [y1, y2]},
+    }
 
     yield x3
 
-    assert p.keys['f'] == set()
+    assert p.keys["f"] == set()
 
     yield y2
 
-    assert p.keys == {'f': set(),
-                      'g': set()}
+    assert p.keys == {"f": set(), "g": set()}
 
-    assert p.status == 'finished'
+    assert p.status == "finished"
 
 
 @gen_cluster(client=True)
@@ -85,9 +91,9 @@ def test_robust_to_bad_plugin(c, s, a, b):
 
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
-    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == '[' + '#' * width + ']'
-    assert percent == '100% Completed'
+    bar, percent, time = [i.strip() for i in out.split("\r")[-1].split("|")]
+    assert bar == "[" + "#" * width + "]"
+    assert percent == "100% Completed"
 
 
 @gen_cluster(client=True, Worker=Nanny, timeout=None)
@@ -97,20 +103,20 @@ def test_AllProgress(c, s, a, b):
 
     yield wait([x, y, z])
     p = AllProgress(s)
-    assert p.all['inc'] == {x.key, y.key, z.key}
-    assert p.state['memory']['inc'] == {x.key, y.key, z.key}
-    assert p.state['released'] == {}
-    assert p.state['erred'] == {}
-    assert 'inc' in p.nbytes
-    assert isinstance(p.nbytes['inc'], int)
-    assert p.nbytes['inc'] > 0
+    assert p.all["inc"] == {x.key, y.key, z.key}
+    assert p.state["memory"]["inc"] == {x.key, y.key, z.key}
+    assert p.state["released"] == {}
+    assert p.state["erred"] == {}
+    assert "inc" in p.nbytes
+    assert isinstance(p.nbytes["inc"], int)
+    assert p.nbytes["inc"] > 0
 
     yield wait([xx, yy, zz])
-    assert p.all['dec'] == {xx.key, yy.key, zz.key}
-    assert p.state['memory']['dec'] == {xx.key, yy.key, zz.key}
-    assert p.state['released'] == {}
-    assert p.state['erred'] == {}
-    assert p.nbytes['inc'] == p.nbytes['dec']
+    assert p.all["dec"] == {xx.key, yy.key, zz.key}
+    assert p.state["memory"]["dec"] == {xx.key, yy.key, zz.key}
+    assert p.state["released"] == {}
+    assert p.state["erred"] == {}
+    assert p.nbytes["inc"] == p.nbytes["dec"]
 
     t = c.submit(sum, [x, y, z])
     yield t
@@ -118,32 +124,34 @@ def test_AllProgress(c, s, a, b):
     keys = {x.key, y.key, z.key}
     del x, y, z
     import gc
+
     gc.collect()
 
     while any(k in s.who_has for k in keys):
         yield gen.sleep(0.01)
 
-    assert p.state['released']['inc'] == keys
-    assert p.all['inc'] == keys
-    assert p.all['dec'] == {xx.key, yy.key, zz.key}
-    if 'inc' in p.nbytes:
-        assert p.nbytes['inc'] == 0
+    assert p.state["released"]["inc"] == keys
+    assert p.all["inc"] == keys
+    assert p.all["dec"] == {xx.key, yy.key, zz.key}
+    if "inc" in p.nbytes:
+        assert p.nbytes["inc"] == 0
 
     xxx = c.submit(div, 1, 0)
     yield wait([xxx])
-    assert p.state['erred'] == {'div': {xxx.key}}
+    assert p.state["erred"] == {"div": {xxx.key}}
 
     tkey = t.key
     del xx, yy, zz, t
     import gc
+
     gc.collect()
 
     while tkey in s.tasks:
         yield gen.sleep(0.01)
 
     for coll in [p.all, p.nbytes] + list(p.state.values()):
-        assert 'inc' not in coll
-        assert 'dec' not in coll
+        assert "inc" not in coll
+        assert "dec" not in coll
 
     def f(x):
         return x
@@ -151,12 +159,13 @@ def test_AllProgress(c, s, a, b):
     for i in range(4):
         future = c.submit(f, i)
     import gc
+
     gc.collect()
 
     yield gen.sleep(1)
 
     yield wait([future])
-    assert p.state['memory'] == {'f': {future.key}}
+    assert p.state["memory"] == {"f": {future.key}}
 
     yield c._restart()
 
@@ -165,8 +174,8 @@ def test_AllProgress(c, s, a, b):
 
     x = c.submit(div, 1, 2)
     yield wait([x])
-    assert set(p.all) == {'div'}
-    assert all(set(d) == {'div'} for d in p.state.values())
+    assert set(p.all) == {"div"}
+    assert all(set(d) == {"div"} for d in p.state.values())
 
 
 @gen_cluster(client=True, Worker=Nanny)
@@ -174,20 +183,20 @@ def test_AllProgress_lost_key(c, s, a, b, timeout=None):
     p = AllProgress(s)
     futures = c.map(inc, range(5))
     yield wait(futures)
-    assert len(p.state['memory']['inc']) == 5
+    assert len(p.state["memory"]["inc"]) == 5
 
     yield a._close()
     yield b._close()
 
     start = time()
-    while len(p.state['memory']['inc']) > 0:
+    while len(p.state["memory"]["inc"]) > 0:
         yield gen.sleep(0.1)
         assert time() < start + 5
 
 
 @gen_cluster(client=True)
 def test_GroupProgress(c, s, a, b):
-    da = pytest.importorskip('dask.array')
+    da = pytest.importorskip("dask.array")
     fp = GroupProgress(s)
     x = da.ones(100, chunks=10)
     y = x + 1

@@ -39,8 +39,7 @@ class SchedulerPlugin(object):
     >>> scheduler.add_plugin(c)  # doctest: +SKIP
     """
 
-    def update_graph(self, scheduler, dsk=None, keys=None,
-                     restrictions=None, **kwargs):
+    def update_graph(self, scheduler, dsk=None, keys=None, restrictions=None, **kwargs):
         """ Run when a new graph / tasks enter the scheduler """
 
     def restart(self, scheduler, **kwargs):

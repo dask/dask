@@ -3,12 +3,22 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 
 from .compression import compressions, default_compression
-from .core import (dumps, loads, maybe_compress, decompress, msgpack)
+from .core import dumps, loads, maybe_compress, decompress, msgpack
 from .serialize import (
-    serialize, deserialize, nested_deserialize, Serialize, Serialized,
-    to_serialize, register_serialization, dask_serialize, dask_deserialize,
-    serialize_bytes, deserialize_bytes, serialize_bytelist,
-    register_serialization_family, register_generic,
+    serialize,
+    deserialize,
+    nested_deserialize,
+    Serialize,
+    Serialized,
+    to_serialize,
+    register_serialization,
+    dask_serialize,
+    dask_deserialize,
+    serialize_bytes,
+    deserialize_bytes,
+    serialize_bytelist,
+    register_serialization_family,
+    register_generic,
 )
 
 from ..utils import ignoring
@@ -54,6 +64,7 @@ def _register_arrow():
 @dask_deserialize.register_lazy("sklearn")
 def _register_sklearn():
     import sklearn.base
+
     register_generic(sklearn.base.BaseEstimator)
 
 

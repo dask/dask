@@ -10,7 +10,9 @@ from ..utils import log_errors, format_bytes, format_time
 
 dirname = os.path.dirname(__file__)
 
-ns = {func.__name__: func for func in [format_bytes, format_time, datetime.fromtimestamp]}
+ns = {
+    func.__name__: func for func in [format_bytes, format_time, datetime.fromtimestamp]
+}
 
 
 class RequestHandler(web.RequestHandler):
@@ -19,43 +21,50 @@ class RequestHandler(web.RequestHandler):
         self.extra = extra or {}
 
     def get_template_path(self):
-        return os.path.join(dirname, 'templates')
+        return os.path.join(dirname, "templates")
 
 
 class Workers(RequestHandler):
     def get(self):
         with log_errors():
-            self.render('workers.html',
-                        title='Workers',
-                        scheduler=self.server,
-                        **toolz.merge(self.server.__dict__, ns, self.extra))
+            self.render(
+                "workers.html",
+                title="Workers",
+                scheduler=self.server,
+                **toolz.merge(self.server.__dict__, ns, self.extra)
+            )
 
 
 class Worker(RequestHandler):
     def get(self, worker):
         worker = escape.url_unescape(worker)
         with log_errors():
-            self.render('worker.html',
-                        title='Worker: ' + worker, Worker=worker,
-                        **toolz.merge(self.server.__dict__, ns, self.extra))
+            self.render(
+                "worker.html",
+                title="Worker: " + worker,
+                Worker=worker,
+                **toolz.merge(self.server.__dict__, ns, self.extra)
+            )
 
 
 class Task(RequestHandler):
     def get(self, task):
         task = escape.url_unescape(task)
         with log_errors():
-            self.render('task.html',
-                        title='Task: ' + task,
-                        Task=task,
-                        server=self.server,
-                        **toolz.merge(self.server.__dict__, ns, self.extra))
+            self.render(
+                "task.html",
+                title="Task: " + task,
+                Task=task,
+                server=self.server,
+                **toolz.merge(self.server.__dict__, ns, self.extra)
+            )
 
 
 class Logs(RequestHandler):
     def get(self):
         with log_errors():
             logs = self.server.get_logs()
-            self.render('logs.html', title="Logs", logs=logs, **self.extra)
+            self.render("logs.html", title="Logs", logs=logs, **self.extra)
 
 
 class WorkerLogs(RequestHandler):
@@ -65,8 +74,7 @@ class WorkerLogs(RequestHandler):
             worker = escape.url_unescape(worker)
             logs = yield self.server.get_worker_logs(workers=[worker])
             logs = logs[worker]
-            self.render('logs.html', title="Logs: " + worker, logs=logs,
-                        **self.extra)
+            self.render("logs.html", title="Logs: " + worker, logs=logs, **self.extra)
 
 
 class WorkerCallStacks(RequestHandler):
@@ -76,8 +84,12 @@ class WorkerCallStacks(RequestHandler):
             worker = escape.url_unescape(worker)
             keys = self.server.processing[worker]
             call_stack = yield self.server.get_call_stack(keys=keys)
-            self.render('call-stack.html', title="Call Stacks: " + worker,
-                        call_stack=call_stack, **self.extra)
+            self.render(
+                "call-stack.html",
+                title="Call Stacks: " + worker,
+                call_stack=call_stack,
+                **self.extra
+            )
 
 
 class TaskCallStack(RequestHandler):
@@ -87,11 +99,17 @@ class TaskCallStack(RequestHandler):
             key = escape.url_unescape(key)
             call_stack = yield self.server.get_call_stack(keys=[key])
             if not call_stack:
-                self.write("<p>Task not actively running. "
-                           "It may be finished or not yet started</p>")
+                self.write(
+                    "<p>Task not actively running. "
+                    "It may be finished or not yet started</p>"
+                )
             else:
-                self.render('call-stack.html', title="Call Stack: " + key,
-                            call_stack=call_stack, **self.extra)
+                self.render(
+                    "call-stack.html",
+                    title="Call Stack: " + key,
+                    call_stack=call_stack,
+                    **self.extra
+                )
 
 
 class CountsJSON(RequestHandler):
@@ -109,7 +127,7 @@ class CountsJSON(RequestHandler):
         for ts in scheduler.tasks.values():
             if ts.exception_blame is not None:
                 erred += 1
-            elif ts.state == 'released':
+            elif ts.state == "released":
                 released += 1
             if ts.waiting_on:
                 waiting += 1
@@ -122,21 +140,21 @@ class CountsJSON(RequestHandler):
             processing += len(ws.processing)
 
         response = {
-            'bytes': nbytes,
-            'clients': len(scheduler.clients),
-            'cores': ncores,
-            'erred': erred,
-            'hosts': len(scheduler.host_info),
-            'idle': len(scheduler.idle),
-            'memory': memory,
-            'processing': processing,
-            'released': released,
-            'saturated': len(scheduler.saturated),
-            'tasks': len(scheduler.tasks),
-            'unrunnable': len(scheduler.unrunnable),
-            'waiting': waiting,
-            'waiting_data': waiting_data,
-            'workers': len(scheduler.workers),
+            "bytes": nbytes,
+            "clients": len(scheduler.clients),
+            "cores": ncores,
+            "erred": erred,
+            "hosts": len(scheduler.host_info),
+            "idle": len(scheduler.idle),
+            "memory": memory,
+            "processing": processing,
+            "released": released,
+            "saturated": len(scheduler.saturated),
+            "tasks": len(scheduler.tasks),
+            "unrunnable": len(scheduler.unrunnable),
+            "waiting": waiting,
+            "waiting_data": waiting_data,
+            "workers": len(scheduler.workers),
         }
         self.write(response)
 
@@ -149,17 +167,20 @@ class IdentityJSON(RequestHandler):
 class IndexJSON(RequestHandler):
     def get(self):
         with log_errors():
-            r = [url for url, _ in routes if url.endswith('.json')]
-            self.render('json-index.html', routes=r, title='Index of JSON routes', **self.extra)
+            r = [url for url, _ in routes if url.endswith(".json")]
+            self.render(
+                "json-index.html", routes=r, title="Index of JSON routes", **self.extra
+            )
 
 
 class IndividualPlots(RequestHandler):
     def get(self):
-        bokeh_server = self.server.services['bokeh']
-        result = {uri.strip('/').replace('-', ' ').title(): uri
-                  for uri in bokeh_server.apps
-                  if uri.lstrip('/').startswith('individual-')
-                  and not uri.endswith('.json')}
+        bokeh_server = self.server.services["bokeh"]
+        result = {
+            uri.strip("/").replace("-", " ").title(): uri
+            for uri in bokeh_server.apps
+            if uri.lstrip("/").startswith("individual-") and not uri.endswith(".json")
+        }
         self.write(result)
 
 
@@ -170,13 +191,13 @@ class _PrometheusCollector(object):
 
     def collect(self):
         yield self.prometheus_client.core.GaugeMetricFamily(
-            'dask_scheduler_workers',
-            'Number of workers.',
+            "dask_scheduler_workers",
+            "Number of workers.",
             value=len(self.server.workers),
         )
         yield self.prometheus_client.core.GaugeMetricFamily(
-            'dask_scheduler_clients',
-            'Number of clients.',
+            "dask_scheduler_clients",
+            "Number of clients.",
             value=len(self.server.clients),
         )
 
@@ -186,6 +207,7 @@ class PrometheusHandler(RequestHandler):
 
     def __init__(self, *args, **kwargs):
         import prometheus_client  # keep out of global namespace
+
         self.prometheus_client = prometheus_client
 
         super(PrometheusHandler, self).__init__(*args, **kwargs)
@@ -197,41 +219,38 @@ class PrometheusHandler(RequestHandler):
             return
 
         self.prometheus_client.REGISTRY.register(
-            _PrometheusCollector(
-                self.server,
-                self.prometheus_client,
-            )
+            _PrometheusCollector(self.server, self.prometheus_client)
         )
 
         PrometheusHandler._initialized = True
 
     def get(self):
         self.write(self.prometheus_client.generate_latest())
-        self.set_header('Content-Type', 'text/plain; version=0.0.4')
+        self.set_header("Content-Type", "text/plain; version=0.0.4")
 
 
 class HealthHandler(RequestHandler):
     def get(self):
-        self.write('ok')
-        self.set_header('Content-Type', 'text/plain')
+        self.write("ok")
+        self.set_header("Content-Type", "text/plain")
 
 
 routes = [
-        (r'info/main/workers.html', Workers),
-        (r'info/worker/(.*).html', Worker),
-        (r'info/task/(.*).html', Task),
-        (r'info/main/logs.html', Logs),
-        (r'info/call-stacks/(.*).html', WorkerCallStacks),
-        (r'info/call-stack/(.*).html', TaskCallStack),
-        (r'info/logs/(.*).html', WorkerLogs),
-        (r'json/counts.json', CountsJSON),
-        (r'json/identity.json', IdentityJSON),
-        (r'json/index.html', IndexJSON),
-        (r'individual-plots.json', IndividualPlots),
-        (r'metrics', PrometheusHandler),
-        (r'health', HealthHandler),
+    (r"info/main/workers.html", Workers),
+    (r"info/worker/(.*).html", Worker),
+    (r"info/task/(.*).html", Task),
+    (r"info/main/logs.html", Logs),
+    (r"info/call-stacks/(.*).html", WorkerCallStacks),
+    (r"info/call-stack/(.*).html", TaskCallStack),
+    (r"info/logs/(.*).html", WorkerLogs),
+    (r"json/counts.json", CountsJSON),
+    (r"json/identity.json", IdentityJSON),
+    (r"json/index.html", IndexJSON),
+    (r"individual-plots.json", IndividualPlots),
+    (r"metrics", PrometheusHandler),
+    (r"health", HealthHandler),
 ]
 
 
 def get_handlers(server):
-    return [(url, cls, {'server': server}) for url, cls in routes]
+    return [(url, cls, {"server": server}) for url, cls in routes]

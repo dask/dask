@@ -9,14 +9,14 @@ from tornado import gen
 
 from distributed import Client, Variable, worker_client, Nanny, wait
 from distributed.metrics import time
-from distributed.utils_test import (gen_cluster, inc, slow, div)
-from distributed.utils_test import client, cluster_fixture, loop # noqa: F401
+from distributed.utils_test import gen_cluster, inc, slow, div
+from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 
 
 @gen_cluster(client=True)
 def test_variable(c, s, a, b):
-    x = Variable('x')
-    xx = Variable('x')
+    x = Variable("x")
+    xx = Variable("x")
     assert x.client is c
 
     future = c.submit(inc, 1)
@@ -40,20 +40,20 @@ def test_variable(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_queue_with_data(c, s, a, b):
-    x = Variable('x')
-    xx = Variable('x')
+    x = Variable("x")
+    xx = Variable("x")
     assert x.client is c
 
-    yield x.set((1, 'hello'))
+    yield x.set((1, "hello"))
     data = yield xx.get()
 
-    assert data == (1, 'hello')
+    assert data == (1, "hello")
 
 
 def test_sync(client):
     future = client.submit(lambda x: x + 1, 10)
-    x = Variable('x')
-    xx = Variable('x')
+    x = Variable("x")
+    xx = Variable("x")
     x.set(future)
     future2 = xx.get()
 
@@ -64,7 +64,7 @@ def test_sync(client):
 def test_hold_futures(s, a, b):
     c1 = yield Client(s.address, asynchronous=True)
     future = c1.submit(lambda x: x + 1, 10)
-    x1 = Variable('x')
+    x1 = Variable("x")
     yield x1.set(future)
     del x1
     yield c1.close()
@@ -72,7 +72,7 @@ def test_hold_futures(s, a, b):
     yield gen.sleep(0.1)
 
     c2 = yield Client(s.address, asynchronous=True)
-    x2 = Variable('x')
+    x2 = Variable("x")
     future2 = yield x2.get()
     result = yield future2
 
@@ -82,7 +82,7 @@ def test_hold_futures(s, a, b):
 
 @gen_cluster(client=True)
 def test_timeout(c, s, a, b):
-    v = Variable('v')
+    v = Variable("v")
 
     start = time()
     with pytest.raises(gen.TimeoutError):
@@ -92,7 +92,7 @@ def test_timeout(c, s, a, b):
 
 
 def test_timeout_sync(client):
-    v = Variable('v')
+    v = Variable("v")
     start = time()
     with pytest.raises(gen.TimeoutError):
         v.get(timeout=0.1)
@@ -102,8 +102,8 @@ def test_timeout_sync(client):
 
 @gen_cluster(client=True)
 def test_cleanup(c, s, a, b):
-    v = Variable('v')
-    vv = Variable('v')
+    v = Variable("v")
+    vv = Variable("v")
 
     x = c.submit(lambda x: x + 1, 10)
     y = c.submit(lambda x: x + 1, 20)
@@ -124,7 +124,7 @@ def test_cleanup(c, s, a, b):
 
 
 def test_pickleable(client):
-    v = Variable('v')
+    v = Variable("v")
 
     def f(x):
         v.set(x + 1)
@@ -135,27 +135,26 @@ def test_pickleable(client):
 
 @gen_cluster(client=True)
 def test_timeout_get(c, s, a, b):
-    v = Variable('v')
+    v = Variable("v")
 
     tornado_future = v.get()
 
-    vv = Variable('v')
+    vv = Variable("v")
     yield vv.set(1)
 
     result = yield tornado_future
     assert result == 1
 
 
-@pytest.mark.skipif(sys.version_info[0] == 2, reason='Multi-client issues')
+@pytest.mark.skipif(sys.version_info[0] == 2, reason="Multi-client issues")
 @slow
-@gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 5, Worker=Nanny,
-             timeout=None)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
 def test_race(c, s, *workers):
     NITERS = 50
 
     def f(i):
         with worker_client() as c:
-            v = Variable('x', client=c)
+            v = Variable("x", client=c)
             for _ in range(NITERS):
                 future = v.get()
                 x = future.result()
@@ -166,7 +165,7 @@ def test_race(c, s, *workers):
             sleep(0.1)  # allow fire-and-forget messages to clear
             return result
 
-    v = Variable('x', client=c)
+    v = Variable("x", client=c)
     x = yield c.scatter(1)
     yield v.set(x)
 
@@ -175,7 +174,7 @@ def test_race(c, s, *workers):
     assert all(r > NITERS * 0.8 for r in results)
 
     start = time()
-    while len(s.wants_what['variable-x']) != 1:
+    while len(s.wants_what["variable-x"]) != 1:
         yield gen.sleep(0.01)
         assert time() - start < 2
 
@@ -183,20 +182,20 @@ def test_race(c, s, *workers):
 @gen_cluster(client=True)
 def test_Future_knows_status_immediately(c, s, a, b):
     x = yield c.scatter(123)
-    v = Variable('x')
+    v = Variable("x")
     yield v.set(x)
 
     c2 = yield Client(s.address, asynchronous=True)
-    v2 = Variable('x', client=c2)
+    v2 = Variable("x", client=c2)
     future = yield v2.get()
-    assert future.status == 'finished'
+    assert future.status == "finished"
 
     x = c.submit(div, 1, 0)
     yield wait(x)
     yield v.set(x)
 
     future2 = yield v2.get()
-    assert future2.status == 'error'
+    assert future2.status == "error"
     with pytest.raises(Exception):
         yield future2
 

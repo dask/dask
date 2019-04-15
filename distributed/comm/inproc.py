@@ -21,9 +21,9 @@ from .core import Comm, Connector, Listener, CommClosedError
 
 logger = logging.getLogger(__name__)
 
-ConnectionRequest = namedtuple('ConnectionRequest',
-                               ('c2s_q', 's2c_q', 'c_loop', 'c_addr',
-                                'conn_event'))
+ConnectionRequest = namedtuple(
+    "ConnectionRequest", ("c2s_q", "s2c_q", "c_loop", "c_addr", "conn_event")
+)
 
 
 class Manager(object):
@@ -62,10 +62,12 @@ class Manager(object):
         """
         Validate the address' IP and pid.
         """
-        ip, pid, suffix = addr.split('/')
+        ip, pid, suffix = addr.split("/")
         if ip != self.ip or int(pid) != os.getpid():
-            raise ValueError("inproc address %r does not match host (%r) or pid (%r)"
-                             % (addr, self.ip, os.getpid()))
+            raise ValueError(
+                "inproc address %r does not match host (%r) or pid (%r)"
+                % (addr, self.ip, os.getpid())
+            )
 
 
 global_manager = Manager()
@@ -75,7 +77,7 @@ def new_address():
     """
     Generate a new address.
     """
-    return 'inproc://' + global_manager.new_address()
+    return "inproc://" + global_manager.new_address()
 
 
 class QueueEmpty(Exception):
@@ -144,10 +146,12 @@ class InProc(Comm):
     Reminder: a Comm must always be used from a single thread.
     Its peer Comm can be running in any thread.
     """
+
     _initialized = False
 
-    def __init__(self, local_addr, peer_addr, read_q, write_q, write_loop,
-                 deserialize=True):
+    def __init__(
+        self, local_addr, peer_addr, read_q, write_q, write_loop, deserialize=True
+    ):
         self._local_addr = local_addr
         self._peer_addr = peer_addr
         self.deserialize = deserialize
@@ -161,8 +165,7 @@ class InProc(Comm):
         self._initialized = True
 
     def _get_finalizer(self):
-        def finalize(write_q=self._write_q, write_loop=self._write_loop,
-                     r=repr(self)):
+        def finalize(write_q=self._write_q, write_loop=self._write_loop, r=repr(self)):
             logger.warning("Closing dangling queue in %s" % (r,))
             write_loop.add_callback(write_q.put_nowait, _EOF)
 
@@ -177,7 +180,7 @@ class InProc(Comm):
         return self._peer_addr
 
     @gen.coroutine
-    def read(self, deserializers='ignored'):
+    def read(self, deserializers="ignored"):
         if self._closed:
             raise CommClosedError
 
@@ -233,7 +236,7 @@ class InProc(Comm):
 
 
 class InProcListener(Listener):
-    prefix = 'inproc'
+    prefix = "inproc"
 
     def __init__(self, address, comm_handler, deserialize=True):
         self.manager = global_manager
@@ -248,12 +251,14 @@ class InProcListener(Listener):
             conn_req = yield self.listen_q.get()
             if conn_req is None:
                 break
-            comm = InProc(local_addr='inproc://' + self.address,
-                          peer_addr='inproc://' + conn_req.c_addr,
-                          read_q=conn_req.c2s_q,
-                          write_q=conn_req.s2c_q,
-                          write_loop=conn_req.c_loop,
-                          deserialize=self.deserialize)
+            comm = InProc(
+                local_addr="inproc://" + self.address,
+                peer_addr="inproc://" + conn_req.c_addr,
+                read_q=conn_req.c2s_q,
+                write_q=conn_req.s2c_q,
+                write_loop=conn_req.c_loop,
+                deserialize=self.deserialize,
+            )
             # Notify connector
             conn_req.c_loop.add_callback(conn_req.conn_event.set)
             self.comm_handler(comm)
@@ -272,15 +277,14 @@ class InProcListener(Listener):
 
     @property
     def listen_address(self):
-        return 'inproc://' + self.address
+        return "inproc://" + self.address
 
     @property
     def contact_address(self):
-        return 'inproc://' + self.address
+        return "inproc://" + self.address
 
 
 class InProcConnector(Connector):
-
     def __init__(self, manager):
         self.manager = manager
 
@@ -290,24 +294,27 @@ class InProcConnector(Connector):
         if listener is None:
             raise IOError("no endpoint for inproc address %r" % (address,))
 
-        conn_req = ConnectionRequest(c2s_q=Queue(),
-                                     s2c_q=Queue(),
-                                     c_loop=IOLoop.current(),
-                                     c_addr=self.manager.new_address(),
-                                     conn_event=locks.Event(),
-                                     )
+        conn_req = ConnectionRequest(
+            c2s_q=Queue(),
+            s2c_q=Queue(),
+            c_loop=IOLoop.current(),
+            c_addr=self.manager.new_address(),
+            conn_event=locks.Event(),
+        )
         listener.connect_threadsafe(conn_req)
         # Wait for connection acknowledgement
         # (do not pretend we're connected if the other comm never gets
         #  created, for example if the listener was stopped in the meantime)
         yield conn_req.conn_event.wait()
 
-        comm = InProc(local_addr='inproc://' + conn_req.c_addr,
-                      peer_addr='inproc://' + address,
-                      read_q=conn_req.s2c_q,
-                      write_q=conn_req.c2s_q,
-                      write_loop=listener.loop,
-                      deserialize=deserialize)
+        comm = InProc(
+            local_addr="inproc://" + conn_req.c_addr,
+            peer_addr="inproc://" + address,
+            read_q=conn_req.s2c_q,
+            write_q=conn_req.c2s_q,
+            write_loop=listener.loop,
+            deserialize=deserialize,
+        )
         raise gen.Return(comm)
 
 
@@ -336,4 +343,4 @@ class InProcBackend(Backend):
         return self.manager.new_address()
 
 
-backends['inproc'] = InProcBackend()
+backends["inproc"] = InProcBackend()

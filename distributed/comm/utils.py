@@ -17,10 +17,12 @@ logger = logging.getLogger(__name__)
 # Offload (de)serializing large frames to improve event loop responsiveness.
 # We use at most 4 threads to allow for parallel processing of large messages.
 
-FRAME_OFFLOAD_THRESHOLD = 10 * 1024 ** 2   # 10 MB
+FRAME_OFFLOAD_THRESHOLD = 10 * 1024 ** 2  # 10 MB
 
 try:
-    _offload_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='Dask-Offload')
+    _offload_executor = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="Dask-Offload"
+    )
 except TypeError:
     _offload_executor = ThreadPoolExecutor(max_workers=1)
 finalize(_offload_executor, _offload_executor.shutdown)
@@ -31,16 +33,18 @@ def offload(fn, *args, **kwargs):
 
 
 @gen.coroutine
-def to_frames(msg, serializers=None, on_error='message', context=None):
+def to_frames(msg, serializers=None, on_error="message", context=None):
     """
     Serialize a message into a list of Distributed protocol frames.
     """
+
     def _to_frames():
         try:
-            return list(protocol.dumps(msg,
-                                       serializers=serializers,
-                                       on_error=on_error,
-                                       context=context))
+            return list(
+                protocol.dumps(
+                    msg, serializers=serializers, on_error=on_error, context=context
+                )
+            )
         except Exception as e:
             logger.info("Unserializable Message: %s", msg)
             logger.exception(e)
@@ -63,17 +67,16 @@ def from_frames(frames, deserialize=True, deserializers=None):
 
     def _from_frames():
         try:
-            return protocol.loads(frames,
-                                  deserialize=deserialize,
-                                  deserializers=deserializers)
+            return protocol.loads(
+                frames, deserialize=deserialize, deserializers=deserializers
+            )
         except EOFError:
             if size > 1000:
                 datastr = "[too large to display]"
             else:
                 datastr = frames
             # Aid diagnosing
-            logger.error("truncated data stream (%d bytes): %s", size,
-                         datastr)
+            logger.error("truncated data stream (%d bytes): %s", size, datastr)
             raise
 
     if deserialize and size > FRAME_OFFLOAD_THRESHOLD:
@@ -114,9 +117,9 @@ def ensure_concrete_host(host):
     Ensure the given host string (or IP) denotes a concrete host, not a
     wildcard listening address.
     """
-    if host in ('0.0.0.0', ''):
+    if host in ("0.0.0.0", ""):
         return get_ip()
-    elif host == '::':
+    elif host == "::":
         return get_ipv6()
     else:
         return host

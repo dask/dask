@@ -10,16 +10,15 @@ from tornado import gen
 
 from distributed import Nanny, worker_client, Queue
 from distributed.client import wait
-from distributed.utils_test import (gen_tls_cluster, inc, double, slowinc,
-        slowadd)
+from distributed.utils_test import gen_tls_cluster, inc, double, slowinc, slowadd
 
 
 @gen_tls_cluster(client=True)
 def test_Queue(c, s, a, b):
-    assert s.address.startswith('tls://')
+    assert s.address.startswith("tls://")
 
-    x = Queue('x')
-    y = Queue('y')
+    x = Queue("x")
+    y = Queue("y")
 
     size = yield x.qsize()
     assert size == 0
@@ -34,7 +33,7 @@ def test_Queue(c, s, a, b):
 
 @gen_tls_cluster(client=True, timeout=None)
 def test_client_submit(c, s, a, b):
-    assert s.address.startswith('tls://')
+    assert s.address.startswith("tls://")
 
     x = c.submit(inc, 10)
     result = yield x
@@ -49,7 +48,7 @@ def test_client_submit(c, s, a, b):
 
 @gen_tls_cluster(client=True)
 def test_gather(c, s, a, b):
-    assert s.address.startswith('tls://')
+    assert s.address.startswith("tls://")
 
     x = c.submit(inc, 10)
     y = c.submit(inc, x)
@@ -58,29 +57,29 @@ def test_gather(c, s, a, b):
     assert result == 11
     result = yield c._gather([x])
     assert result == [11]
-    result = yield c._gather({'x': x, 'y': [y]})
-    assert result == {'x': 11, 'y': [12]}
+    result = yield c._gather({"x": x, "y": [y]})
+    assert result == {"x": 11, "y": [12]}
 
 
 @gen_tls_cluster(client=True)
 def test_scatter(c, s, a, b):
-    assert s.address.startswith('tls://')
+    assert s.address.startswith("tls://")
 
-    d = yield c._scatter({'y': 20})
-    ts = s.tasks['y']
+    d = yield c._scatter({"y": 20})
+    ts = s.tasks["y"]
     assert ts.who_has
     assert ts.nbytes > 0
-    yy = yield c._gather([d['y']])
+    yy = yield c._gather([d["y"]])
     assert yy == [20]
 
 
 @gen_tls_cluster(client=True, Worker=Nanny)
 def test_nanny(c, s, a, b):
-    assert s.address.startswith('tls://')
+    assert s.address.startswith("tls://")
     for n in [a, b]:
         assert isinstance(n, Nanny)
-        assert n.address.startswith('tls://')
-        assert n.worker_address.startswith('tls://')
+        assert n.address.startswith("tls://")
+        assert n.worker_address.startswith("tls://")
     assert s.ncores == {n.worker_address: n.ncores for n in [a, b]}
 
     x = c.submit(inc, 10)
@@ -100,7 +99,7 @@ def test_rebalance(c, s, a, b):
     assert len(b.data) == 1
 
 
-@gen_tls_cluster(client=True, ncores=[('tls://127.0.0.1', 2)] * 2)
+@gen_tls_cluster(client=True, ncores=[("tls://127.0.0.1", 2)] * 2)
 def test_work_stealing(c, s, a, b):
     [x] = yield c._scatter([1], workers=a.address)
     futures = c.map(slowadd, range(50), [x] * 50, delay=0.1)
@@ -126,12 +125,12 @@ def test_worker_client(c, s, a, b):
     assert yy == 20 + 1 + (20 + 1) * 2
 
 
-@gen_tls_cluster(client=True, ncores=[('tls://127.0.0.1', 1)] * 2)
+@gen_tls_cluster(client=True, ncores=[("tls://127.0.0.1", 1)] * 2)
 def test_worker_client_gather(c, s, a, b):
     a_address = a.address
     b_address = b.address
-    assert a_address.startswith('tls://')
-    assert b_address.startswith('tls://')
+    assert a_address.startswith("tls://")
+    assert b_address.startswith("tls://")
     assert a_address != b_address
 
     def func():

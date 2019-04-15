@@ -10,8 +10,14 @@ from dask import delayed
 import pytest
 from tornado import gen
 
-from distributed import (worker_client, Client, as_completed, get_worker, wait,
-                         get_client)
+from distributed import (
+    worker_client,
+    Client,
+    as_completed,
+    get_worker,
+    wait,
+    get_client,
+)
 from distributed.metrics import time
 from distributed.utils_test import double, gen_cluster, inc
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
@@ -33,11 +39,10 @@ def test_submit_from_worker(c, s, a, b):
     assert yy == 20 + 1 + (20 + 1) * 2
 
     assert len(s.transition_log) > 10
-    assert len([id for id in s.wants_what
-                if id.lower().startswith('client')]) == 1
+    assert len([id for id in s.wants_what if id.lower().startswith("client")]) == 1
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
 def test_scatter_from_worker(c, s, a, b):
     def func():
         with worker_client() as c:
@@ -64,8 +69,8 @@ def test_scatter_from_worker(c, s, a, b):
                 correct &= type(futures) == type(data)
 
             o = object()
-            futures = c.scatter({'x': o})
-            correct &= get_worker().data['x'] is o
+            futures = c.scatter({"x": o})
+            correct &= get_worker().data["x"] is o
             return correct
 
     future = c.submit(func)
@@ -78,9 +83,9 @@ def test_scatter_from_worker(c, s, a, b):
         assert time() < start + 5
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
 def test_scatter_singleton(c, s, a, b):
-    np = pytest.importorskip('numpy')
+    np = pytest.importorskip("numpy")
 
     def func():
         with worker_client() as c:
@@ -91,7 +96,7 @@ def test_scatter_singleton(c, s, a, b):
     yield c.submit(func)
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
 def test_gather_multi_machine(c, s, a, b):
     a_address = a.address
     b_address = b.address
@@ -157,7 +162,7 @@ def test_async(c, s, a, b):
         assert time() < start + 3
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 3)])
+@gen_cluster(client=True, ncores=[("127.0.0.1", 3)])
 def test_separate_thread_false(c, s, a):
     a.count = 0
 
@@ -230,13 +235,13 @@ def test_closing_worker_doesnt_close_client(c, s, a, b):
 
     yield wait(c.map(func, range(10)))
     yield a._close()
-    assert c.status == 'running'
+    assert c.status == "running"
 
 
 def test_timeout(client):
     def func():
         with worker_client(timeout=0) as wc:
-            print('hello')
+            print("hello")
 
     future = client.submit(func)
     with pytest.raises(EnvironmentError):
@@ -254,12 +259,13 @@ def test_secede_without_stealing_issue_1262():
 
     # run the loop as an inner function so all workers are closed
     # and exceptions can be examined
-    @gen_cluster(client=True, scheduler_kwargs={'extensions': extensions})
+    @gen_cluster(client=True, scheduler_kwargs={"extensions": extensions})
     def secede_test(c, s, a, b):
         def func(x):
             with worker_client() as wc:
                 y = wc.submit(lambda: 1 + x)
                 return wc.gather(y)
+
         f = yield c.gather(c.submit(func, 1))
 
         raise gen.Return((c, s, a, b, f))
@@ -273,7 +279,6 @@ def test_secede_without_stealing_issue_1262():
 
 @gen_cluster(client=True)
 def test_compute_within_worker_client(c, s, a, b):
-
     @dask.delayed
     def f():
         with worker_client():
@@ -298,9 +303,10 @@ def test_worker_client_rejoins(c, s, a, b):
 @gen_cluster()
 def test_submit_different_names(s, a, b):
     # https://github.com/dask/distributed/issues/2058
-    da = pytest.importorskip('dask.array')
-    c = yield Client('localhost:' + s.address.split(":")[-1], loop=s.loop,
-                     asynchronous=True)
+    da = pytest.importorskip("dask.array")
+    c = yield Client(
+        "localhost:" + s.address.split(":")[-1], loop=s.loop, asynchronous=True
+    )
     try:
         X = c.persist(da.random.uniform(size=(100, 10), chunks=50))
         yield wait(X)

@@ -116,6 +116,7 @@ def test_simple():
     if wr1() is not None:
         # Help diagnosing
         from types import FrameType
+
         p = wr1()
         if p is not None:
             rc = sys.getrefcount(p)
@@ -124,8 +125,12 @@ def test_simple():
             print("refs to proc:", rc, refs)
             frames = [r for r in refs if isinstance(r, FrameType)]
             for i, f in enumerate(frames):
-                print("frames #%d:" % i,
-                      f.f_code.co_name, f.f_code.co_filename, sorted(f.f_locals))
+                print(
+                    "frames #%d:" % i,
+                    f.f_code.co_name,
+                    f.f_code.co_filename,
+                    sorted(f.f_locals),
+                )
         pytest.fail("AsyncProcess should have been destroyed")
     t1 = time()
     while wr2() is not None:
@@ -139,7 +144,7 @@ def test_simple():
 def test_exitcode():
     q = mp_context.Queue()
 
-    proc = AsyncProcess(target=exit, kwargs={'q': q})
+    proc = AsyncProcess(target=exit, kwargs={"q": q})
     proc.daemon = True
     assert not proc.is_alive()
     assert proc.exitcode is None
@@ -154,7 +159,7 @@ def test_exitcode():
     assert proc.exitcode == 5
 
 
-@pytest.mark.skipif(os.name == 'nt', reason="POSIX only")
+@pytest.mark.skipif(os.name == "nt", reason="POSIX only")
 @gen_test()
 def test_signal():
     proc = AsyncProcess(target=exit_with_signal, args=(signal.SIGINT,))
@@ -274,11 +279,12 @@ def test_child_main_thread():
     q._writer.close()
 
 
-@pytest.mark.skipif(sys.platform.startswith('win'),
-                    reason="num_fds not supported on windows")
+@pytest.mark.skipif(
+    sys.platform.startswith("win"), reason="num_fds not supported on windows"
+)
 @gen_test()
 def test_num_fds():
-    psutil = pytest.importorskip('psutil')
+    psutil = pytest.importorskip("psutil")
 
     # Warm up
     proc = AsyncProcess(target=exit_now)
@@ -324,7 +330,7 @@ def _worker_process(worker_ready, child_pipe):
 
     # The parent exiting should cause this process to os._exit from a monitor
     # thread. This sleep should never return.
-    shorter_timeout = 2.5 # timeout shorter than that in the spawning test.
+    shorter_timeout = 2.5  # timeout shorter than that in the spawning test.
     sleep(shorter_timeout)
 
     # Unreachable if functioning correctly.
@@ -336,11 +342,11 @@ def _parent_process(child_pipe):
 
     The child_alive pipe is held open for as long as the child is alive, and can
     be used to determine if it exited correctly. """
+
     def parent_process_coroutine():
         worker_ready = mp_context.Event()
 
-        worker = AsyncProcess(target=_worker_process,
-                              args=(worker_ready, child_pipe))
+        worker = AsyncProcess(target=_worker_process, args=(worker_ready, child_pipe))
 
         yield worker.start()
 
@@ -394,7 +400,7 @@ def test_asyncprocess_child_teardown_on_parent_exit():
         # when the child is ready to enter the sleep, so all of the slow things
         # (process startup, etc) should have happened by now, even on a busy
         # system. A short timeout should therefore be appropriate.
-        short_timeout = 5.
+        short_timeout = 5.0
         # Poll is used to allow other tests to proceed after this one in case of
         # test failure.
         try:
@@ -402,7 +408,7 @@ def test_asyncprocess_child_teardown_on_parent_exit():
         except EnvironmentError:
             # Windows can raise BrokenPipeError. EnvironmentError is caught for
             # Python2/3 portability.
-            assert sys.platform.startswith('win'), "should only raise on windows"
+            assert sys.platform.startswith("win"), "should only raise on windows"
             # Broken pipe implies closed, which is readable.
             readable = True
 
@@ -415,11 +421,11 @@ def test_asyncprocess_child_teardown_on_parent_exit():
             # This won't block due to the above 'assert readable'.
             result = children_alive.recv()
         except EOFError:
-            pass # Test passes.
+            pass  # Test passes.
         except EnvironmentError:
             # Windows can raise BrokenPipeError. EnvironmentError is caught for
             # Python2/3 portability.
-            assert sys.platform.startswith('win'), "should only raise on windows"
+            assert sys.platform.startswith("win"), "should only raise on windows"
             # Test passes.
         else:
             # Oops, children_alive read something. It should be closed. If

@@ -16,7 +16,7 @@ def enable_proctitle_on_children():
     Enable setting the process title on this process' children and
     grandchildren.
     """
-    os.environ['DASK_PARENT'] = str(os.getpid())
+    os.environ["DASK_PARENT"] = str(os.getpid())
 
 
 def enable_proctitle_on_current():
@@ -37,7 +37,7 @@ def setproctitle(title):
     enabled = _enabled
     if not enabled:
         try:
-            enabled = int(os.environ.get('DASK_PARENT', '')) != os.getpid()
+            enabled = int(os.environ.get("DASK_PARENT", "")) != os.getpid()
         except ValueError:
             pass
     if enabled:

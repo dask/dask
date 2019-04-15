@@ -22,9 +22,9 @@ class EventStream(SchedulerPlugin):
             scheduler.add_plugin(self)
 
     def transition(self, key, start, finish, *args, **kwargs):
-        if start == 'processing':
-            kwargs['key'] = key
-            if finish == 'memory' or finish == 'erred':
+        if start == "processing":
+            kwargs["key"] = key
+            if finish == "memory" or finish == "erred":
                 self.buffer.append(kwargs)
 
 
@@ -66,9 +66,13 @@ def eventstream(address, interval):
     """
     address = coerce_to_address(address)
     comm = yield connect(address)
-    yield comm.write({'op': 'feed',
-                      'setup': dumps_function(EventStream),
-                      'function': dumps_function(swap_buffer),
-                      'interval': interval,
-                      'teardown': dumps_function(teardown)})
+    yield comm.write(
+        {
+            "op": "feed",
+            "setup": dumps_function(EventStream),
+            "function": dumps_function(swap_buffer),
+            "interval": interval,
+            "teardown": dumps_function(teardown),
+        }
+    )
     raise gen.Return(comm)

@@ -55,8 +55,7 @@ class AsyncProcess(object):
 
     def __init__(self, loop=None, target=None, name=None, args=(), kwargs={}):
         if not callable(target):
-            raise TypeError("`target` needs to be callable, not %r"
-                            % (type(target),))
+            raise TypeError("`target` needs to be callable, not %r" % (type(target),))
         self._state = _ProcessState()
         self._loop = loop or IOLoop.current(instance=False)
 
@@ -71,10 +70,11 @@ class AsyncProcess(object):
         # for the assignment here.
         parent_alive_pipe, self._keep_child_alive = mp_context.Pipe(duplex=False)
 
-        self._process = mp_context.Process(target=self._run, name=name,
-                                           args=(target, args, kwargs,
-                                                 parent_alive_pipe,
-                                                 self._keep_child_alive))
+        self._process = mp_context.Process(
+            target=self._run,
+            name=name,
+            args=(target, args, kwargs, parent_alive_pipe, self._keep_child_alive),
+        )
         _dangling.add(self._process)
         self._name = self._process.name
         self._watch_q = PyQueue()
@@ -95,13 +95,20 @@ class AsyncProcess(object):
         self._watch_message_thread = threading.Thread(
             target=self._watch_message_queue,
             name="AsyncProcess %s watch message queue" % self.name,
-            args=(weakref.ref(self), self._process, self._loop,
-                  self._state, self._watch_q, self._exit_future,))
+            args=(
+                weakref.ref(self),
+                self._process,
+                self._loop,
+                self._state,
+                self._watch_q,
+                self._exit_future,
+            ),
+        )
         self._watch_message_thread.daemon = True
         self._watch_message_thread.start()
 
         def stop_thread(q):
-            q.put_nowait({'op': 'stop'})
+            q.put_nowait({"op": "stop"})
             # We don't join the thread here as a finalizer can be called
             # asynchronously from anywhere
 
@@ -120,6 +127,7 @@ class AsyncProcess(object):
         """
         Immediately exit the process when parent_alive_pipe is closed.
         """
+
         def monitor_parent():
             try:
                 # The parent_alive_pipe should be held open as long as the
@@ -186,7 +194,8 @@ class AsyncProcess(object):
             thread = threading.Thread(
                 target=AsyncProcess._watch_process,
                 name="AsyncProcess %s watch process join" % name,
-                args=(selfref, process, state, q))
+                args=(selfref, process, state, q),
+            )
             thread.daemon = True
             thread.start()
 
@@ -197,12 +206,12 @@ class AsyncProcess(object):
         while True:
             msg = q.get()
             logger.debug("[%s] got message %r" % (r, msg))
-            op = msg['op']
-            if op == 'start':
-                _call_and_set_future(loop, msg['future'], _start)
-            elif op == 'terminate':
-                _call_and_set_future(loop, msg['future'], process.terminate)
-            elif op == 'stop':
+            op = msg["op"]
+            if op == "start":
+                _call_and_set_future(loop, msg["future"], _start)
+            elif op == "terminate":
+                _call_and_set_future(loop, msg["future"], process.terminate)
+            elif op == "stop":
                 break
             else:
                 assert 0, msg
@@ -213,8 +222,7 @@ class AsyncProcess(object):
         process.join()
         exitcode = process.exitcode
         assert exitcode is not None
-        logger.debug("[%s] process %r exited with code %r",
-                     r, state.pid, exitcode)
+        logger.debug("[%s] process %r exited with code %r", r, state.pid, exitcode)
         state.is_alive = False
         state.exitcode = exitcode
         # Make sure the process is removed from the global list
@@ -235,7 +243,7 @@ class AsyncProcess(object):
         """
         self._check_closed()
         fut = Future()
-        self._watch_q.put_nowait({'op': 'start', 'future': fut})
+        self._watch_q.put_nowait({"op": "start", "future": fut})
         return fut
 
     def terminate(self):
@@ -246,7 +254,7 @@ class AsyncProcess(object):
         """
         self._check_closed()
         fut = Future()
-        self._watch_q.put_nowait({'op': 'terminate', 'future': fut})
+        self._watch_q.put_nowait({"op": "terminate", "future": fut})
         return fut
 
     @gen.coroutine
@@ -257,7 +265,7 @@ class AsyncProcess(object):
         This method is a coroutine.
         """
         self._check_closed()
-        assert self._state.pid is not None, 'can only join a started process'
+        assert self._state.pid is not None, "can only join a started process"
         if self._state.exitcode is not None:
             return
         if timeout is None:
@@ -287,7 +295,9 @@ class AsyncProcess(object):
         """
         # XXX should this be a property instead?
         assert callable(func), "exit callback should be callable"
-        assert self._state.pid is None, "cannot set exit callback when process already started"
+        assert (
+            self._state.pid is None
+        ), "cannot set exit callback when process already started"
         self._exit_callback = func
 
     def is_alive(self):

@@ -46,30 +46,34 @@ def identifier(frame):
     Strings are cheaper to use as indexes into dicts than tuples or dicts
     """
     if frame is None:
-        return 'None'
+        return "None"
     else:
-        return ';'.join((frame.f_code.co_name,
-                         frame.f_code.co_filename,
-                         str(frame.f_code.co_firstlineno)))
+        return ";".join(
+            (
+                frame.f_code.co_name,
+                frame.f_code.co_filename,
+                str(frame.f_code.co_firstlineno),
+            )
+        )
 
 
 def repr_frame(frame):
     """ Render a frame as a line for inclusion into a text traceback """
     co = frame.f_code
-    text = '  File "%s", line %s, in %s' % (co.co_filename,
-                                            frame.f_lineno,
-                                            co.co_name)
+    text = '  File "%s", line %s, in %s' % (co.co_filename, frame.f_lineno, co.co_name)
     line = linecache.getline(co.co_filename, frame.f_lineno, frame.f_globals).lstrip()
-    return text + '\n\t' + line
+    return text + "\n\t" + line
 
 
 def info_frame(frame):
     co = frame.f_code
     line = linecache.getline(co.co_filename, frame.f_lineno, frame.f_globals).lstrip()
-    return {'filename': co.co_filename,
-            'name': co.co_name,
-            'line_number': frame.f_lineno,
-            'line': line}
+    return {
+        "filename": co.co_filename,
+        "name": co.co_name,
+        "line_number": frame.f_lineno,
+        "line": line,
+    }
 
 
 def process(frame, child, state, stop=None, omit=None):
@@ -96,7 +100,9 @@ def process(frame, child, state, stop=None, omit=None):
         return False
 
     prev = frame.f_back
-    if prev is not None and (stop is None or not prev.f_code.co_filename.endswith(stop)):
+    if prev is not None and (
+        stop is None or not prev.f_code.co_filename.endswith(stop)
+    ):
         state = process(prev, frame, state, stop=stop)
         if state is False:
             return False
@@ -104,45 +110,53 @@ def process(frame, child, state, stop=None, omit=None):
     ident = identifier(frame)
 
     try:
-        d = state['children'][ident]
+        d = state["children"][ident]
     except KeyError:
-        d = {'count': 0,
-             'description': info_frame(frame),
-             'children': {},
-             'identifier': ident}
-        state['children'][ident] = d
+        d = {
+            "count": 0,
+            "description": info_frame(frame),
+            "children": {},
+            "identifier": ident,
+        }
+        state["children"][ident] = d
 
-    state['count'] += 1
+    state["count"] += 1
 
     if child is not None:
         return d
     else:
-        d['count'] += 1
+        d["count"] += 1
 
 
 def merge(*args):
     """ Merge multiple frame states together """
     if not args:
         return create()
-    s = {arg['identifier'] for arg in args}
+    s = {arg["identifier"] for arg in args}
     if len(s) != 1:
         raise ValueError("Expected identifiers, got %s" % str(s))
     children = defaultdict(list)
     for arg in args:
-        for child in arg['children']:
-            children[child].append(arg['children'][child])
+        for child in arg["children"]:
+            children[child].append(arg["children"][child])
 
     children = {k: merge(*v) for k, v in children.items()}
-    count = sum(arg['count'] for arg in args)
-    return {'description': args[0]['description'],
-            'children': dict(children),
-            'count': count,
-            'identifier': args[0]['identifier']}
+    count = sum(arg["count"] for arg in args)
+    return {
+        "description": args[0]["description"],
+        "children": dict(children),
+        "count": count,
+        "identifier": args[0]["identifier"],
+    }
 
 
 def create():
-    return {'count': 0, 'children': {}, 'identifier': 'root', 'description':
-            {'filename': '', 'name': '', 'line_number': 0, 'line': ''}}
+    return {
+        "count": 0,
+        "children": {},
+        "identifier": "root",
+        "description": {"filename": "", "name": "", "line_number": 0, "line": ""},
+    }
 
 
 def call_stack(frame):
@@ -180,7 +194,7 @@ def plot_data(state, profile_interval=0.010):
     names = []
 
     def traverse(state, start, stop, height):
-        if not state['count']:
+        if not state["count"]:
             return
         starts.append(start)
         stops.append(stop)
@@ -188,49 +202,50 @@ def plot_data(state, profile_interval=0.010):
         width = stop - start
         widths.append(width)
         states.append(state)
-        times.append(format_time(state['count'] * profile_interval))
+        times.append(format_time(state["count"] * profile_interval))
 
-        desc = state['description']
-        filenames.append(desc['filename'])
-        lines.append(desc['line'])
-        line_numbers.append(desc['line_number'])
-        names.append(desc['name'])
+        desc = state["description"]
+        filenames.append(desc["filename"])
+        lines.append(desc["line"])
+        line_numbers.append(desc["line_number"])
+        names.append(desc["name"])
 
-        ident = state['identifier']
+        ident = state["identifier"]
 
         try:
-            colors.append(color_of(desc['filename']))
+            colors.append(color_of(desc["filename"]))
         except IndexError:
-            colors.append('gray')
+            colors.append("gray")
 
-        delta = (stop - start) / state['count']
+        delta = (stop - start) / state["count"]
 
         x = start
 
-        for name, child in state['children'].items():
-            width = child['count'] * delta
+        for name, child in state["children"].items():
+            width = child["count"] * delta
             traverse(child, x, x + width, height + 1)
             x += width
 
     traverse(state, 0, 1, 0)
     percentages = ["{:.2f}%".format(100 * w) for w in widths]
-    return {'left': starts,
-            'right': stops,
-            'bottom': heights,
-            'width': widths,
-            'top': [x + 1 for x in heights],
-            'color': colors,
-            'states': states,
-            'filename': filenames,
-            'line': lines,
-            'line_number': line_numbers,
-            'name': names,
-            'time': times,
-            'percentage': percentages}
+    return {
+        "left": starts,
+        "right": stops,
+        "bottom": heights,
+        "width": widths,
+        "top": [x + 1 for x in heights],
+        "color": colors,
+        "states": states,
+        "filename": filenames,
+        "line": lines,
+        "line_number": line_numbers,
+        "name": names,
+        "time": times,
+        "percentage": percentages,
+    }
 
 
-def _watch(thread_id, log, interval='20ms', cycle='2s', omit=None,
-           stop=lambda: False):
+def _watch(thread_id, log, interval="20ms", cycle="2s", omit=None, stop=lambda: False):
     interval = parse_timedelta(interval)
     cycle = parse_timedelta(cycle)
 
@@ -251,21 +266,31 @@ def _watch(thread_id, log, interval='20ms', cycle='2s', omit=None,
         sleep(interval)
 
 
-def watch(thread_id=None, interval='20ms', cycle='2s', maxlen=1000, omit=None,
-          stop=lambda: False):
+def watch(
+    thread_id=None,
+    interval="20ms",
+    cycle="2s",
+    maxlen=1000,
+    omit=None,
+    stop=lambda: False,
+):
     if thread_id is None:
         thread_id = get_thread_identity()
 
     log = deque(maxlen=maxlen)
 
-    thread = threading.Thread(target=_watch,
-                              name='Profile',
-                              kwargs={'thread_id': thread_id,
-                                      'interval': interval,
-                                      'cycle': cycle,
-                                      'log': log,
-                                      'omit': omit,
-                                      'stop': stop})
+    thread = threading.Thread(
+        target=_watch,
+        name="Profile",
+        kwargs={
+            "thread_id": thread_id,
+            "interval": interval,
+            "cycle": cycle,
+            "log": log,
+            "omit": omit,
+            "stop": stop,
+        },
+    )
     thread.daemon = True
     thread.start()
 
@@ -307,14 +332,22 @@ def plot_figure(data, **kwargs):
     from bokeh.plotting import ColumnDataSource, figure
     from bokeh.models import HoverTool
 
-    if 'states' in data:
-        data = toolz.dissoc(data, 'states')
+    if "states" in data:
+        data = toolz.dissoc(data, "states")
 
     source = ColumnDataSource(data=data)
 
-    fig = figure(tools='tap', **kwargs)
-    r = fig.quad('left', 'right', 'top', 'bottom', color='color',
-             line_color='black', line_width=2, source=source)
+    fig = figure(tools="tap", **kwargs)
+    r = fig.quad(
+        "left",
+        "right",
+        "top",
+        "bottom",
+        color="color",
+        line_color="black",
+        line_width=2,
+        source=source,
+    )
 
     r.selection_glyph = None
     r.nonselection_glyph = None
@@ -346,7 +379,7 @@ def plot_figure(data, **kwargs):
                 <span style="font-size: 14px; font-weight: bold;">Percentage:</span>&nbsp;
                 <span style="font-size: 10px; font-family: Monaco, monospace;">@width</span>
             </div>
-            """
+            """,
     )
     fig.add_tools(hover)
 

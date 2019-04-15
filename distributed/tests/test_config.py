@@ -8,8 +8,12 @@ import os
 
 import pytest
 
-from distributed.utils_test import (captured_handler, captured_logger,
-                                    new_config, new_config_file)
+from distributed.utils_test import (
+    captured_handler,
+    captured_logger,
+    new_config,
+    new_config_file,
+)
 from distributed.config import initialize_logging
 
 
@@ -20,12 +24,15 @@ def dump_logger_list():
     print("== Loggers (name, level, effective level, propagate) ==")
 
     def logger_info(name, logger):
-        return (name, logging.getLevelName(logger.level),
-                logging.getLevelName(logger.getEffectiveLevel()),
-                logger.propagate)
+        return (
+            name,
+            logging.getLevelName(logger.level),
+            logging.getLevelName(logger.getEffectiveLevel()),
+            logger.propagate,
+        )
 
     infos = []
-    infos.append(logger_info('<root>', root))
+    infos.append(logger_info("<root>", root))
 
     for name, logger in sorted(loggers.items()):
         if not isinstance(logger, logging.Logger):
@@ -44,28 +51,28 @@ def test_logging_default():
     """
     Test default logging configuration.
     """
-    d = logging.getLogger('distributed')
+    d = logging.getLogger("distributed")
     assert len(d.handlers) == 1
     assert isinstance(d.handlers[0], logging.StreamHandler)
 
     # Work around Bokeh messing with the root logger level
     # https://github.com/bokeh/bokeh/issues/5793
-    root = logging.getLogger('')
+    root = logging.getLogger("")
     old_root_level = root.level
-    root.setLevel('WARN')
+    root.setLevel("WARN")
 
     for handler in d.handlers:
-        handler.setLevel('INFO')
+        handler.setLevel("INFO")
 
     try:
-        dfb = logging.getLogger('distributed.foo.bar')
-        f = logging.getLogger('foo')
-        fb = logging.getLogger('foo.bar')
+        dfb = logging.getLogger("distributed.foo.bar")
+        f = logging.getLogger("foo")
+        fb = logging.getLogger("foo.bar")
 
         with captured_handler(d.handlers[0]) as distributed_log:
             with captured_logger(root, level=logging.ERROR) as foreign_log:
                 h = logging.StreamHandler(foreign_log)
-                fmt = '[%(levelname)s in %(name)s] - %(message)s'
+                fmt = "[%(levelname)s in %(name)s] - %(message)s"
                 h.setFormatter(logging.Formatter(fmt))
                 fb.addHandler(h)
                 fb.propagate = False
@@ -92,10 +99,7 @@ def test_logging_default():
 
         # foreign logs should be unaffected by distributed's logging
         # configuration.  They get the default ERROR level from logging.
-        assert foreign_log == [
-            "[ERROR in foo.bar] - 5: error",
-            "7: error",
-        ]
+        assert foreign_log == ["[ERROR in foo.bar] - 5: error", "7: error"]
 
     finally:
         root.setLevel(old_root_level)
@@ -110,12 +114,7 @@ def test_logging_simple():
     """
     Test simple ("old-style") logging configuration.
     """
-    c = {
-        'logging': {
-            'distributed.foo': 'info',
-            'distributed.foo.bar': 'error',
-        }
-    }
+    c = {"logging": {"distributed.foo": "info", "distributed.foo.bar": "error"}}
     # Must test using a subprocess to avoid wrecking pre-existing configuration
     with new_config_file(c):
         code = """if 1:
@@ -151,35 +150,30 @@ def test_logging_extended():
     Test extended ("new-style") logging configuration.
     """
     c = {
-        'logging': {
-            'version': '1',
-            'formatters': {
-                'simple': {
-                    'format': '%(levelname)s: %(name)s: %(message)s',
-                },
+        "logging": {
+            "version": "1",
+            "formatters": {
+                "simple": {"format": "%(levelname)s: %(name)s: %(message)s"}
             },
-            'handlers': {
-                'console': {
-                    'class': 'logging.StreamHandler',
-                    'stream': 'ext://sys.stderr',
-                    'formatter': 'simple',
-                },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                    "formatter": "simple",
+                }
             },
-            'loggers': {
-                'distributed.foo': {
-                    'level': 'INFO',
+            "loggers": {
+                "distributed.foo": {
+                    "level": "INFO",
                     #'handlers': ['console'],
                 },
-                'distributed.foo.bar': {
-                    'level': 'ERROR',
+                "distributed.foo.bar": {
+                    "level": "ERROR",
                     #'handlers': ['console'],
                 },
             },
-            'root': {
-                'level': 'WARNING',
-                'handlers': ['console'],
-            },
-        },
+            "root": {"level": "WARNING", "handlers": ["console"]},
+        }
     }
     # Must test using a subprocess to avoid wrecking pre-existing configuration
     with new_config_file(c):
@@ -217,7 +211,7 @@ def test_logging_mutual_exclusive():
     """
     Ensure that 'logging-file-config' and 'logging' have to be mutual exclusive.
     """
-    config = {'logging': {'dask': 'warning'}, 'logging-file-config': '/path/to/config'}
+    config = {"logging": {"dask": "warning"}, "logging-file-config": "/path/to/config"}
     with pytest.raises(RuntimeError):
         initialize_logging(config)
 
@@ -259,9 +253,9 @@ level=ERROR
 handlers=console
 qualname=foo.bar
 """
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as logging_config:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as logging_config:
         logging_config.write(logging_config_contents)
-    dask_config = {'logging-file-config': logging_config.name}
+    dask_config = {"logging-file-config": logging_config.name}
     with new_config_file(dask_config):
         code = """if 1:
             import logging

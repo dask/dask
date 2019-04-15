@@ -11,7 +11,7 @@ class RequestHandler(web.RequestHandler):
         self.extra = extra or {}
 
     def get_template_path(self):
-        return os.path.join(dirname, 'templates')
+        return os.path.join(dirname, "templates")
 
 
 class _PrometheusCollector(object):
@@ -39,6 +39,7 @@ class PrometheusHandler(RequestHandler):
 
     def __init__(self, *args, **kwargs):
         import prometheus_client  # keep out of global namespace
+
         self.prometheus_client = prometheus_client
 
         super(PrometheusHandler, self).__init__(*args, **kwargs)
@@ -50,30 +51,24 @@ class PrometheusHandler(RequestHandler):
             return
 
         self.prometheus_client.REGISTRY.register(
-            _PrometheusCollector(
-                self.server,
-                self.prometheus_client,
-            )
+            _PrometheusCollector(self.server, self.prometheus_client)
         )
 
         PrometheusHandler._initialized = True
 
     def get(self):
         self.write(self.prometheus_client.generate_latest())
-        self.set_header('Content-Type', 'text/plain; version=0.0.4')
+        self.set_header("Content-Type", "text/plain; version=0.0.4")
 
 
 class HealthHandler(RequestHandler):
     def get(self):
-        self.write('ok')
-        self.set_header('Content-Type', 'text/plain')
+        self.write("ok")
+        self.set_header("Content-Type", "text/plain")
 
 
-routes = [
-        (r'metrics', PrometheusHandler),
-        (r'health', HealthHandler),
-]
+routes = [(r"metrics", PrometheusHandler), (r"health", HealthHandler)]
 
 
 def get_handlers(server):
-    return [(url, cls, {'server': server}) for url, cls in routes]
+    return [(url, cls, {"server": server}) for url, cls in routes]
