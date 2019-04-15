@@ -648,11 +648,11 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
     (pd.DataFrame({'x': [3, 2, 1]}), {}, {}),
-    (pd.DataFrame({'x': ['c', 'a', 'b']}), {'object_encoding': 'utf8'}, {}),
-    (pd.DataFrame({'x': ['cc', 'a', 'bbb']}), {'object_encoding': 'utf8'}, {}),
-    (pd.DataFrame({'x': [b'a', b'b', b'c']}), {'object_encoding': 'bytes'}, {}),
+    (pd.DataFrame({'x': ['c', 'a', 'b']}), {}, {}),
+    (pd.DataFrame({'x': ['cc', 'a', 'bbb']}), {}, {}),
+    (pd.DataFrame({'x': [b'a', b'b', b'c']}), {}, {}),
     (pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}),
-     {'object_encoding': 'utf8'}, {'categories': ['x']}),
+     {}, {'categories': ['x']}),
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
@@ -675,14 +675,14 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     (pd.DataFrame({'.': [3., 2., None]}), {}, {}),
     (pd.DataFrame({' ': [3., 2., None]}), {}, {}),
 ])
-def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs):
+def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = 'index'
     ddf = dd.from_pandas(df, npartitions=2)
 
-    dd.to_parquet(ddf, tmp, **write_kwargs)
-    ddf2 = dd.read_parquet(tmp, index=df.index.name, **read_kwargs)
+    dd.to_parquet(ddf, tmp, engine=engine, **write_kwargs)
+    ddf2 = dd.read_parquet(tmp, index=df.index.name, engine=engine, **read_kwargs)
     assert_eq(ddf, ddf2)
 
 
