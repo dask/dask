@@ -2171,7 +2171,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, 
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
     name : str, optional
-         An optional keyname for the dataframe.  Defaults to hashing the input
+         An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
     """
     import zarr
