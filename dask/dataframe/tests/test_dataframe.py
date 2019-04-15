@@ -812,6 +812,17 @@ def test_quantile():
     assert result.iloc[0] == 0
     assert 5 < result.iloc[1] < 6
 
+    result = d.b.quantile([.3, .7], method='tdigest')
+    assert len(result) == 2
+    assert result.divisions == (.3, .7)
+    assert_eq(result.index, exp.index)
+    assert isinstance(result, dd.Series)
+
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert result.iloc[0] == pytest.approx(exp.iloc[0], abs=0.1)
+    assert result.iloc[1] == pytest.approx(exp.iloc[1], abs=0.21)
+
     # index
     s = pd.Series(np.arange(10), index=np.arange(10))
     ds = dd.from_pandas(s, 2)
@@ -828,12 +839,30 @@ def test_quantile():
     assert 1 < result.iloc[0] < 2
     assert 7 < result.iloc[1] < 8
 
+    result = ds.index.quantile([.3, .7], method='tdigest')
+    exp = s.quantile([.3, .7])
+    assert len(result) == 2
+    assert result.divisions == (.3, .7)
+    assert_eq(result.index, exp.index)
+    assert isinstance(result, dd.Series)
+
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert result.iloc[0] == pytest.approx(exp.iloc[0], abs=0.2)
+    assert result.iloc[1] == pytest.approx(exp.iloc[1], abs=0.21)
+
     # series / single
     result = d.b.quantile(.5)
     exp = full.b.quantile(.5)  # result may different
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
     assert 4 < result < 6
+
+    result = d.b.quantile(.5, method='tdigest')
+    exp = full.b.quantile(.5)
+    assert isinstance(result, dd.core.Scalar)
+    result = result.compute()
+    assert result == exp
 
 
 def test_quantile_missing():
@@ -843,14 +872,27 @@ def test_quantile_missing():
     result = ddf.quantile()
     assert_eq(result, expected)
 
+    result = ddf.quantile(method='tdigest')
+    assert_eq(result, expected)
+
     expected = df.A.quantile()
     result = ddf.A.quantile()
+    assert_eq(result, expected)
+
+    result = ddf.A.quantile(method='tdigest')
     assert_eq(result, expected)
 
 
 def test_empty_quantile():
     result = d.b.quantile([])
     exp = full.b.quantile([])
+    assert result.divisions == (None, None)
+
+    assert result.name == 'b'
+    assert result.compute().name == 'b'
+    assert_eq(result, exp)
+
+    result = d.b.quantile([], method='tdigest')
     assert result.divisions == (None, None)
 
     assert result.name == 'b'
