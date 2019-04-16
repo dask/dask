@@ -35,6 +35,8 @@ distributed:
     profile:
       interval: 10ms        # Time between statistical profiling queries
       cycle: 1000ms         # Time between starting new profile
+      low-level: False      # Whether or not to include low-level functions
+                            # Requires https://github.com/numba/stacktrace
 
     # Fractions of worker memory at which we take action to avoid memory blowup
     # Set any of the lower three values to False to turn off the behavior entirely

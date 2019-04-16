@@ -54,6 +54,11 @@ conda install -q \
     tornado=$TORNADO \
     $PACKAGES
 
+# For low-level profiler, install libunwind and stacktrace from conda-forge
+# For stacktrace we use --no-deps to avoid upgrade of python
+conda install -c defaults -c conda-forge libunwind
+conda install --no-deps -c defaults -c numba -c conda-forge stacktrace
+
 pip install -q pytest-repeat pytest-faulthandler
 
 pip install -q git+https://github.com/dask/dask.git --upgrade --no-deps

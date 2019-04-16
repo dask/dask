@@ -30,10 +30,10 @@ def test_basic(Component):
 @gen_cluster(client=True, check_new_threads=False)
 def test_profile_plot(c, s, a, b):
     p = ProfilePlot()
-    assert len(p.source.data["left"]) <= 1
+    assert not p.source.data["left"]
     yield c.map(slowinc, range(10), delay=0.05)
     p.update(a.profile_recent)
-    assert len(p.source.data["left"]) > 1
+    assert len(p.source.data["left"]) >= 1
 
 
 @gen_cluster(client=True, check_new_threads=False)

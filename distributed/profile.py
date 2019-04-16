@@ -178,6 +178,7 @@ def plot_data(state, profile_interval=0.010):
 
     See Also
     --------
+    plot_figure
     distributed.bokeh.components.ProfilePlot
     """
     starts = []
@@ -213,9 +214,14 @@ def plot_data(state, profile_interval=0.010):
         ident = state["identifier"]
 
         try:
-            colors.append(color_of(desc["filename"]))
+            fn = desc["filename"]
         except IndexError:
             colors.append("gray")
+        else:
+            if fn == "<low-level>":
+                colors.append("lightgray")
+            else:
+                colors.append(color_of(fn))
 
         delta = (stop - start) / state["count"]
 
@@ -274,6 +280,29 @@ def watch(
     omit=None,
     stop=lambda: False,
 ):
+    """ Gather profile information on a particular thread
+
+    This starts a new thread to watch a particular thread and returns a deque
+    that holds periodic profile information.
+
+    Parameters
+    ----------
+    thread_id: int
+    interval: str
+        Time per sample
+    cycle: str
+        Time per refreshing to a new profile state
+    maxlen: int
+        Passed onto deque, maximum number of periods
+    omit: str
+        Don't include entries that start with this filename
+    stop: callable
+        Function to call to see if we should stop
+
+    Returns
+    -------
+    deque
+    """
     if thread_id is None:
         thread_id = get_thread_identity()
 
@@ -298,6 +327,17 @@ def watch(
 
 
 def get_profile(history, recent=None, start=None, stop=None, key=None):
+    """ Collect profile information from a sequence of profile states
+
+    Parameters
+    ----------
+    history: Sequence[Tuple[time, Dict]]
+        A list or deque of profile states
+    recent: dict
+        The most recent accumulating state
+    start: time
+    stop: time
+    """
     now = time()
     if start is None:
         istart = 0
@@ -329,6 +369,15 @@ def get_profile(history, recent=None, start=None, stop=None, key=None):
 
 
 def plot_figure(data, **kwargs):
+    """ Plot profile data using Bokeh
+
+    This takes the output from the function ``plot_data`` and produces a Bokeh
+    figure
+
+    See Also
+    --------
+    plot_data
+    """
     from bokeh.plotting import ColumnDataSource, figure
     from bokeh.models import HoverTool
 
@@ -388,3 +437,65 @@ def plot_figure(data, **kwargs):
     fig.grid.visible = False
 
     return fig, source
+
+
+def _remove_py_stack(frames):
+    for entry in frames:
+        if entry.is_python:
+            break
+        yield entry
+
+
+def llprocess(frames, child, state):
+    """ Add counts from low level profile information onto existing state
+
+    This uses the ``stacktrace`` module to collect low level stack trace
+    information and place it onto the given sttate.
+
+    It is configured with the ``distributed.worker.profile.low-level`` config
+    entry.
+
+    See Also
+    --------
+    process
+    ll_get_stack
+    """
+    if not frames:
+        return
+    frame = frames.pop()
+    if frames:
+        state = llprocess(frames, frame, state)
+
+    addr = hex(frame.addr - frame.offset)
+    ident = ";".join(map(str, (frame.name, "<low-level>", addr)))
+    try:
+        d = state["children"][ident]
+    except KeyError:
+        d = {
+            "count": 0,
+            "description": {
+                "filename": "<low-level>",
+                "name": frame.name,
+                "line_number": 0,
+                "line": str(frame),
+            },
+            "children": {},
+            "identifier": ident,
+        }
+        state["children"][ident] = d
+
+    state["count"] += 1
+
+    if child is not None:
+        return d
+    else:
+        d["count"] += 1
+
+
+def ll_get_stack(tid):
+    """ Collect low level stack information from thread id """
+    from stacktrace import get_thread_stack
+
+    frames = get_thread_stack(tid, show_python=False)
+    llframes = list(_remove_py_stack(frames))[::-1]
+    return llframes

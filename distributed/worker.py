@@ -294,6 +294,7 @@ class Worker(ServerNode):
         extensions=None,
         metrics=None,
         data=None,
+        low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
         **kwargs
     ):
         self.tasks = dict()
@@ -510,6 +511,8 @@ class Worker(ServerNode):
         self.service_ports = service_ports or {}
         self.service_specs = services or {}
         self.metrics = dict(metrics) if metrics else {}
+
+        self.low_level_profiler = low_level_profiler
 
         handlers = {
             "gather": self.gather,
@@ -2464,15 +2467,22 @@ class Worker(ServerNode):
             active_threads = self.active_threads.copy()
         frames = sys._current_frames()
         frames = {ident: frames[ident] for ident in active_threads}
+        llframes = {}
+        if self.low_level_profiler:
+            llframes = {ident: profile.ll_get_stack(ident) for ident in active_threads}
         for ident, frame in frames.items():
             if frame is not None:
                 key = key_split(active_threads[ident])
-                profile.process(
-                    frame, None, self.profile_recent, stop="distributed/worker.py"
+                llframe = llframes.get(ident)
+
+                state = profile.process(
+                    frame, True, self.profile_recent, stop="distributed/worker.py"
                 )
+                profile.llprocess(llframe, None, state)
                 profile.process(
-                    frame, None, self.profile_keys[key], stop="distributed/worker.py"
+                    frame, True, self.profile_keys[key], stop="distributed/worker.py"
                 )
+
         stop = time()
         if self.digests is not None:
             self.digests["profile-duration"].add(stop - start)

@@ -1,11 +1,22 @@
+import pytest
 import sys
 import time
 from toolz import first
 import threading
 
-from distributed.compatibility import get_thread_identity
+from distributed.compatibility import get_thread_identity, WINDOWS
 from distributed import metrics
-from distributed.profile import process, merge, create, call_stack, identifier, watch
+from distributed.profile import (
+    process,
+    merge,
+    create,
+    call_stack,
+    identifier,
+    watch,
+    llprocess,
+    ll_get_stack,
+    plot_data,
+)
 
 
 def test_basic():
@@ -43,6 +54,37 @@ def test_basic():
 
     assert g["count"] < h["count"]
     assert 95 < g["count"] + h["count"] <= 100
+
+    pd = plot_data(state)
+    assert len(set(map(len, pd.values()))) == 1  # all same length
+    assert len(set(pd["color"])) > 1  # different colors
+
+
+@pytest.mark.skipif(
+    WINDOWS, reason="no low-level profiler support for Windows available"
+)
+def test_basic_low_level():
+    pytest.importorskip("stacktrace")
+
+    state = create()
+
+    for i in range(100):
+        time.sleep(0.02)
+        frame = sys._current_frames()[threading.get_ident()]
+        llframes = {threading.get_ident(): ll_get_stack(threading.get_ident())}
+        for f in llframes.values():
+            if f is not None:
+                llprocess(f, None, state)
+
+    assert state["count"] == 100
+    children = state.get("children")
+    assert children
+    expected = "<low-level>"
+    for k, v in zip(children.keys(), children.values()):
+        desc = v.get("description")
+        assert desc
+        filename = desc.get("filename")
+        assert expected in k and filename == expected
 
 
 def test_merge():
