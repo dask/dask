@@ -331,7 +331,7 @@ def get_engine(engine):
         return _ENGINES[engine]
 
     if engine == "auto":
-        for eng in ["fastparquet", "pyarrow"]:
+        for eng in ["pyarrow", "fastparquet"]:
             try:
                 return get_engine(eng)
             except RuntimeError:
