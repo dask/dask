@@ -23,7 +23,7 @@ from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, funcname, Dispatch, deepmap
-from .. import config
+from .. import config, core
 
 # Generic functions to support chunks of different types
 empty_lookup = Dispatch('empty')
@@ -146,11 +146,12 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
 
-    reduced_meta = None
     if hasattr(x, '_meta'):
         meta_inds = tuple(range(x._meta.ndim))
         reduced_meta = blockwise(chunk, meta_inds, x._meta, meta_inds, axis=axis,
                                  keepdims=True, dtype=x.dtype)
+    else:
+        reduced_meta = None
 
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
                           combine, name=name, concatenate=concatenate,
@@ -238,10 +239,10 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
     meta = x._meta
     if reduced_meta is not None:
         try:
-            meta = func(reduced_meta.compute(), meta=True)
+            meta = func(reduced_meta.compute(scheduler=core.get), meta=True)
         # no meta keyword argument exists for func, and it isn't required
         except TypeError:
-            meta = func(reduced_meta.compute())
+            meta = func(reduced_meta.compute(scheduler=core.get))
         # when no work can be computed on the empty array (e.g., func is a ufunc)
         except ValueError:
             pass
