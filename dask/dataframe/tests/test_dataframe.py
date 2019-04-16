@@ -320,6 +320,29 @@ def test_describe_empty():
     assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
 
 
+def test_describe_for_possibly_unsorted_q():
+    '''make sure describe is sorting percentiles parameter, q, properly and can
+    handle lists, tuples and ndarrays.
+
+    See https://github.com/dask/dask/issues/4642.
+    '''
+    # prepare test case where quantiles should equal values
+    A = da.arange(0, 101)
+    ds = dd.from_dask_array(A)
+
+    for q in [None, [0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99],
+              [0.75, 0.5, 0.25]]:
+        for f_convert in [list, tuple, np.array]:
+            if q is None:
+                r = ds.describe(percentiles=q).compute()
+            else:
+                r = ds.describe(percentiles=f_convert(q)).compute()
+
+            assert_eq(r['25%'], 25.0)
+            assert_eq(r['50%'], 50.0)
+            assert_eq(r['75%'], 75.0)
+
+
 def test_cumulative():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     df_out = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
@@ -392,7 +415,7 @@ def test_cumulative():
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2, 3, 4, np.nan, 6],
                        'y': [1, 2, np.nan, 4, np.nan, np.nan],
-                       'z': [1, 2, 3, 4, np.nan, np.nan]},
+                       'z': [1, 2, 3, 4, np.nan, 6]},
                       index=[10, 20, 30, 40, 50, 60])
     ddf = dd.from_pandas(df, 3)
 
@@ -406,6 +429,22 @@ def test_dropna():
     assert_eq(ddf.dropna(subset=['y', 'z']), df.dropna(subset=['y', 'z']))
     assert_eq(ddf.dropna(subset=['y', 'z'], how='all'),
               df.dropna(subset=['y', 'z'], how='all'))
+
+    # threshold
+    assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
+    assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None))
+
+    assert_eq(df.dropna(thresh=0), df.loc[:])
+    assert_eq(ddf.dropna(thresh=0), df.dropna(thresh=0))
+
+    assert_eq(df.dropna(thresh=1), df.loc[[10, 20, 30, 40, 60]])
+    assert_eq(ddf.dropna(thresh=1), df.dropna(thresh=1))
+
+    assert_eq(df.dropna(thresh=2), df.loc[[10, 20, 30, 40, 60]])
+    assert_eq(ddf.dropna(thresh=2), df.dropna(thresh=2))
+
+    assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
+    assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
 
 
 @pytest.mark.parametrize('lower, upper', [(2, 5), (2.5, 3.5)])

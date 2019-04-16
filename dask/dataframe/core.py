@@ -1548,7 +1548,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if percentiles is None:
             percentiles = [0.25, 0.5, 0.75]
         else:
-            percentiles = list(set(sorted(percentiles + [0.5])))
+            # always include the the 50%tle to calculate the median
+            # unique removes duplicates and sorts quantiles
+            percentiles = np.array(percentiles)
+            percentiles = np.append(percentiles, 0.5)
+            percentiles = np.unique(percentiles)
+            percentiles = list(percentiles)
         stats = [num.count(split_every=split_every),
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
@@ -2811,8 +2816,8 @@ class DataFrame(_Frame):
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def dropna(self, how='any', subset=None):
-        return self.map_partitions(M.dropna, how=how, subset=subset)
+    def dropna(self, how='any', subset=None, thresh=None):
+        return self.map_partitions(M.dropna, how=how, subset=subset, thresh=thresh)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):

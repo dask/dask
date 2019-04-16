@@ -299,7 +299,10 @@ def test_plot_multiple():
             get(dsk2, 'c')
     p = visualize([prof, rprof], label_size=50,
                   title="Not the default", show=False, save=False)
-    if LooseVersion(bokeh.__version__) >= '0.12.0':
+    bokeh_version = LooseVersion(bokeh.__version__)
+    if bokeh_version >= '1.1.0':
+        figures = [r[0] for r in p.children[1].children]
+    elif bokeh_version >= '0.12.0':
         figures = [r.children[0] for r in p.children[1].children]
     else:
         figures = [r[0] for r in p.children]
