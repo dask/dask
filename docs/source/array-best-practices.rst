@@ -22,7 +22,7 @@ aligned with their data (leading to inefficient reading).
 
 While optimal sizes and shapes are highly problem specific, it is rare to see
 chunk sizes below 100 MB in size.  If you are dealing with float64 data then
-this is around ``(5000, 5000)`` in size.
+this is around ``(4000, 4000)`` in size.
 
 
 Orient your chunks
@@ -71,7 +71,7 @@ may vary depending on your operating system).
    export OMP_NUM_THREADS=1
    export MKL_NUM_THREADS=1
 
-You to run this before you start your Python process for it to take effect.
+You need to run this before you start your Python process for it to take effect.
 
 
 Consider Xarray
@@ -82,7 +82,7 @@ functions.
 
 1.  Manage multiple arrays together as a consistent dataset
 2.  Read from a stack of HDF or NetCDF files at once
-3.  Consistent API regardless of wheter or not you're backed by NumPy or Pandas
+3.  Consistent API regardless of whether or not you're backed by NumPy or Pandas
 
 Xarray was originally designed for atmospheric and oceanographic science, but
 is general purpose enough to be of use to other disciplines.  It also has a
