@@ -300,12 +300,32 @@ def test_describe():
     assert ds.describe(split_every=2)._name != ds.describe()._name
     assert ddf.describe(split_every=2)._name != ddf.describe()._name
 
+    s = pd.Series(list(range(10)) * 6)
+    df = pd.DataFrame({'a': list(range(10)) * 6, 'b': list(range(6)) * 10})
+
+    ds = dd.from_pandas(s, 6)
+    ddf = dd.from_pandas(df, 6)
+
+    assert_eq(df.describe(), ddf.describe(percentiles_method='tdigest'))
+    assert_eq(s.describe(), ds.describe(percentiles_method='tdigest'))
+
+    assert_eq(df.describe(percentiles=test_quantiles),
+              ddf.describe(percentiles=test_quantiles, percentiles_method='tdigest'))
+    assert_eq(s.describe(), ds.describe(split_every=2, percentiles_method='tdigest'))
+    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method='tdigest'))
+
     # remove string columns
     df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20,
                        'c': list('abcd') * 20})
     ddf = dd.from_pandas(df, 4)
     assert_eq(df.describe(), ddf.describe())
     assert_eq(df.describe(), ddf.describe(split_every=2))
+
+    df = pd.DataFrame({'a': list(range(10)) * 6, 'b': list(range(6)) * 10,
+                       'c': list('abcdef') * 10})
+    ddf = dd.from_pandas(df, 6)
+    assert_eq(df.describe(), ddf.describe(percentiles_method='tdigest'))
+    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method='tdigest'))
 
 
 def test_describe_empty():
