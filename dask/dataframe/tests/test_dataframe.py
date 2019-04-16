@@ -920,6 +920,17 @@ def test_dataframe_quantile():
     assert (result > pd.Series([16, 36, 26], index=['A', 'X', 'B'])).all()
     assert (result < pd.Series([17, 37, 27], index=['A', 'X', 'B'])).all()
 
+    result = ddf.quantile(method='tdigest')
+    exp = df.quantile()
+    assert result.npartitions == 1
+    assert result.divisions == ('A', 'X')
+
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert result.name == 0.5
+    tm.assert_index_equal(result.index, pd.Index(['A', 'X', 'B']))
+    assert (result == exp).all()
+
     result = ddf.quantile([0.25, 0.75])
     assert result.npartitions == 1
     assert result.divisions == (0.25, 0.75)
@@ -935,7 +946,21 @@ def test_dataframe_quantile():
                           index=[0.25, 0.75], columns=['A', 'X', 'B'])
     assert (result < maxexp).all().all()
 
+    result = ddf.quantile([0.25, 0.75], method='tdigest')
+    assert result.npartitions == 1
+    assert result.divisions == (0.25, 0.75)
+
+    result = result.compute()
+    assert isinstance(result, pd.DataFrame)
+    tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
+    tm.assert_index_equal(result.columns, pd.Index(['A', 'X', 'B']))
+    exp = pd.DataFrame([[4.5, 24.5, 14.5], [14.5, 34.5, 24.5]],
+                       index=[0.25, 0.75], columns=['A', 'X', 'B'])
+
+    assert (result == exp).all().all()
+
     assert_eq(ddf.quantile(axis=1), df.quantile(axis=1))
+    assert_eq(ddf.quantile(axis=1, method='tdigest'), df.quantile(axis=1))
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
 
 
