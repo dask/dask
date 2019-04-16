@@ -98,5 +98,3 @@ def test_unknown_chunk_sizes():
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
-
-
