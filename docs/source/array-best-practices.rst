@@ -77,12 +77,14 @@ You need to run this before you start your Python process for it to take effect.
 Consider Xarray
 ---------------
 
-The `Xarray <http://xarray.pydata.org/en/stable/>`_ package wraps around Dask Array, but adds a variety of convenience
-functions.
+The `Xarray <http://xarray.pydata.org/en/stable/>`_ package wraps around Dask
+Array, and so offers the same scalability, but also adds convenience when
+dealing with complex datasets.  In particular Xarray can help with the
+following:
 
 1.  Manage multiple arrays together as a consistent dataset
 2.  Read from a stack of HDF or NetCDF files at once
-3.  Consistent API regardless of whether or not you're backed by NumPy or Pandas
+3.  Switch between Dask Array and NumPy with a consistent API
 
 Xarray was originally designed for atmospheric and oceanographic science, but
 is general purpose enough to be of use to other disciplines.  It also has a
