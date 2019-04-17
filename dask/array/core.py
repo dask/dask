@@ -2074,7 +2074,7 @@ def round_to(c, s):
         return c // s * s
 
 
-def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
+def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True,
                getitem=None):
     """ Create dask array from something that looks like an array
 
@@ -2089,6 +2089,10 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -   A blockshape like (1000, 1000).
         -   Explicit sizes of all blocks along all dimensions like
             ((1000, 1000, 500), (400, 400)).
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
 
         -1 or None as a blocksize indicate the size of the corresponding
         dimension.
@@ -2119,11 +2123,26 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     arrays to coordinate around the same lock.
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
+
+    If your underlying datastore has a ``.chunks`` attribute (as h5py and zarr
+    datasets do) then a multiple of that chunk shape will be used if you
+    do not provide a chunk shape.
+
+    >>> a = da.from_array(x, chunks='auto')  # doctest: +SKIP
+    >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
+    >>> a = da.from_array(x)  # doctest: +SKIP
     """
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
-    chunks = normalize_chunks(chunks, x.shape, dtype=x.dtype)
+    previous_chunks = getattr(x, 'chunks', None)
+
+    chunks = normalize_chunks(
+        chunks,
+        x.shape,
+        dtype=x.dtype,
+        previous_chunks=previous_chunks
+    )
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token

@@ -1210,11 +1210,6 @@ def test_map_blocks_dtype_inference():
     assert 'RuntimeError' in msg
 
 
-def test_from_function_requires_block_args():
-    x = np.arange(10)
-    pytest.raises(Exception, lambda: from_array(x))
-
-
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
     assert key_split(d.name) in repr(d)
@@ -3740,3 +3735,23 @@ def test_nbytes_auto():
         normalize_chunks(("100B", "10B"), shape=(10, 10), dtype='float64')
     with pytest.raises(ValueError):
         normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype='float64')
+
+
+def test_auto_chunks_h5py():
+    h5py = pytest.importorskip('h5py')
+
+    with tmpfile('.hdf5') as fn:
+        with h5py.File(fn) as f:
+            d = f.create_dataset(
+                '/x',
+                shape=(1000, 1000),
+                chunks=(32, 64),
+                dtype='float64'
+            )
+            d[:] = 1
+
+        with h5py.File(fn) as f:
+            d = f['x']
+            with dask.config.set({'array.chunk-size': '1 MiB'}):
+                x = da.from_array(d)
+                assert x.chunks == ((256, 256, 256, 232), (512, 488))
