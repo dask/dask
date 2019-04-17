@@ -28,7 +28,7 @@ jobs:
     - env:
       - PYTHON=3.5
       - NUMPY=1.13.0
-      - PANDAS=0.19.2
+      - PANDAS=0.20.2
       - *test_and_lint
       - *no_coverage
       - *no_optimize
