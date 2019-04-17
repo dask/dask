@@ -61,7 +61,11 @@ conda install -q -c conda-forge \
     scikit-learn \
     scipy \
     sqlalchemy \
-    toolz
+    toolz \
+    tiledb-py \
+    zarr
+
+pip install --upgrade codecov
 
 pip install --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict
@@ -75,7 +79,11 @@ if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.
 fi
 
 if [[ $NUMPY > '1.13.0' ]]; then
-    pip install sparse 
+    if [[ ${UPSTREAM_DEV} ]]; then
+        pip install --upgrade git+https://github.com/pydata/sparse
+    else
+        pip install sparse
+    fi
 fi
 
 if [[ $PYTHON == '2.7' ]]; then

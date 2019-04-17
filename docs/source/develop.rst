@@ -19,7 +19,7 @@ and Github issues over gitter chat.  Github and StackOverflow are more easily
 searchable by future users and so is more efficient for everyone's time.
 Gitter chat is generally reserved for community discussion.
 
-.. _`StackOverflow #dask tag`: http://stackoverflow.com/questions/tagged/dask
+.. _`StackOverflow #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`Github Issue Tracker`: https://github.com/dask/dask/issues/
 .. _`Gitter chat`: https://gitter.im/dask/dask
 
@@ -28,23 +28,23 @@ Separate Code Repositories
 --------------------------
 
 Dask maintains code and documentation in a few git repositories hosted on the
-Github ``dask`` organization, http://github.com/dask.  This includes the primary
+Github ``dask`` organization, https://github.com/dask.  This includes the primary
 repository and several other repositories for different components.  A
 non-exhaustive list follows:
 
-*  http://github.com/dask/dask: The main code repository holding parallel
+*  https://github.com/dask/dask: The main code repository holding parallel
    algorithms, the single-machine scheduler, and most documentation
-*  http://github.com/dask/distributed: The distributed memory scheduler
-*  http://github.com/dask/dask-ml: Machine learning algorithms
-*  http://github.com/dask/s3fs: S3 Filesystem interface
-*  http://github.com/dask/gcsfs: GCS Filesystem interface
-*  http://github.com/dask/hdfs3: Hadoop Filesystem interface
+*  https://github.com/dask/distributed: The distributed memory scheduler
+*  https://github.com/dask/dask-ml: Machine learning algorithms
+*  https://github.com/dask/s3fs: S3 Filesystem interface
+*  https://github.com/dask/gcsfs: GCS Filesystem interface
+*  https://github.com/dask/hdfs3: Hadoop Filesystem interface
 *  ...
 
 Git and Github can be challenging at first.  Fortunately good materials exist
 on the internet.  Rather than repeat these materials here, we refer you to
 Pandas' documentation and links on this subject at
-http://pandas.pydata.org/pandas-docs/stable/contributing.html
+https://pandas.pydata.org/pandas-docs/stable/contributing.html
 
 
 Issues
@@ -55,11 +55,11 @@ The community discusses and tracks known bugs and potential features in the
 you should raise it there to start public discussion.
 
 If you are looking for an introductory issue to get started with development,
-then check out the `introductory label`_, which contains issues that are good
+then check out the `"good first issue" label`_, which contains issues that are good
 for starting developers.  Generally, familiarity with Python, NumPy, Pandas, and
 some parallel computing are assumed.
 
-.. _`introductory label`: https://github.com/dask/dask/issues?q=is%3Aissue+is%3Aopen+label%3Aintroductory
+.. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
 
 
 Development Environment
@@ -68,9 +68,12 @@ Development Environment
 Download code
 ~~~~~~~~~~~~~
 
-Clone the main Dask git repository (or whatever repository you're working on)::
+Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
+clone the fork::
 
-   git clone git@github.com:dask/dask.git
+   git clone https://github.com/<your-github-username>/dask
+
+Contributions to Dask can then be made by submitting pull requests on GitHub.
 
 
 Install
@@ -83,7 +86,7 @@ environment on your computer to compile them when installing with ``pip``::
 
    conda install -y numpy pandas scipy bokeh
 
-.. _conda: http://conda.pydata.org/docs/
+.. _conda: https://conda.io/
 
 Install Dask and dependencies::
 
@@ -103,7 +106,7 @@ as follows::
 
    py.test dask --verbose --doctest-modules
 
-.. _py.test: http://pytest.org/latest/
+.. _py.test: https://docs.pytest.org/en/latest/
 
 
 Contributing to Code
@@ -257,7 +260,7 @@ Request in Github, please add to that file explaining what was added/modified.
 Contributing to Documentation
 -----------------------------
 
-Dask uses Sphinx_ for documentation, hosted on http://readthedocs.org .
+Dask uses Sphinx_ for documentation, hosted on https://readthedocs.org .
 Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
@@ -276,4 +279,4 @@ The resulting HTML files end up in the ``build/html`` directory.
 You can now make edits to rst files and run ``make html`` again to update
 the affected pages.
 
-.. _Sphinx: http://www.sphinx-doc.org/
+.. _Sphinx: https://www.sphinx-doc.org/

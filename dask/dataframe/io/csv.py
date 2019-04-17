@@ -249,7 +249,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     if collection:
         if path:
             head = head.assign(**{
-                colname: pd.Categorical.from_codes(np.zeros(len(head)), paths)
+                colname: pd.Categorical.from_codes(
+                    np.zeros(len(head), dtype=int), paths)
             })
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
@@ -288,8 +289,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = 'path'
     if 'index' in kwargs or 'index_col' in kwargs:
-        raise ValueError("Keyword 'index' not supported "
-                         "dd.{0}(...).set_index('my-index') "
+        raise ValueError("Keywords 'index' and 'index_col' not supported. "
+                         "Use dd.{0}(...).set_index('my-index') "
                          "instead".format(reader_name))
     for kw in ['iterator', 'chunksize']:
         if kw in kwargs:
@@ -331,7 +332,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if compression not in seekable_files and compression not in cfiles:
         raise NotImplementedError("Compression format %s not installed" %
                                   compression)
-    if blocksize and blocksize < sample and lastskiprow != 0:
+    if blocksize and sample and blocksize < sample and lastskiprow != 0:
         warn("Unexpected behavior can result from passing skiprows when\n"
              "blocksize is smaller than sample size.\n"
              "Setting ``sample=blocksize``")
@@ -355,6 +356,10 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
+    # If we have not sampled, then use the first row of the first values
+    # as a representative sample.
+    if b_sample is False and len(values[0]):
+        b_sample = values[0][0].compute()
 
     # Get header row, and check that sample is long enough. If the file
     # contains a header row, we need at least 2 nonempty rows + the number of
@@ -366,7 +371,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    if nparts < lastskiprow + need and len(b_sample) >= sample:
+    if sample is not False and nparts < lastskiprow + need and len(b_sample) >= sample:
         raise ValueError("Sample is not large enough to include at least one "
                          "row of data. Please increase the number of bytes "
                          "in `sample` in the call to `read_csv`/`read_table`")

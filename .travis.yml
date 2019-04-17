@@ -52,15 +52,16 @@ jobs:
       - *no_optimize
       - *imports
 
-    - env: &py36_dev
+    - env: &py37_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - NUMPY=1.13.0    # these are overridden later
-      - PANDAS=0.20.3
+      - NUMPY=1.16.2    # these are overridden later
+      - PANDAS>=0.24.2
       - *test_and_lint
       - *no_coverage
       - *no_optimize
       - *no_imports
-      if: type != pull_request
+      - *array_function
+      if: type == cron OR commit_message =~ test-upstream  # Run on cron jobs or any builds where commit message contains "test-upstream"
 
     - env: *py36_env
       if: type != pull_request
@@ -76,7 +77,7 @@ jobs:
         - source continuous_integration/hdfs/startup_hdfs.sh
 
   allow_failures:
-    - env: *py36_dev
+    - env: *py37_dev
     - os: osx
 
 
@@ -91,6 +92,7 @@ script:
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 
 after_success:
+  - codecov
   - source continuous_integration/travis/after_success.sh
 
 notifications:

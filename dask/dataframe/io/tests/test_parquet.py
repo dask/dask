@@ -295,7 +295,8 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     # No Index
     # --------
     # All columns, none as index
-    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine, infer_divisions=False),
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine,
+                              infer_divisions=False),
               ddf2, check_index=False, check_divisions=True)
 
     # Two columns, none as index
@@ -327,6 +328,8 @@ def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
 
 @write_read_engines_xfail
 def test_infer_divisions_no_index(tmpdir, write_engine, read_engine):
+    if read_engine == 'pyarrow' and pa.__version__ >= LooseVersion('0.13.0'):
+        pytest.skip("No longer an error from pyarrow 0.13.0")
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine, write_index=False)
 
@@ -1032,7 +1035,6 @@ def test_columns_name(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
-
     if engine == 'fastparquet' and compression in ['snappy', 'default']:
         pytest.importorskip('snappy')
 
@@ -1047,8 +1049,10 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
         pf = fastparquet.ParquetFile(fn)
         assert pf.row_groups[0].columns[0].meta_data.codec == 1
 
-    out = dd.read_parquet(fn, engine=engine, infer_divisions=should_check_divs(engine))
-    assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
+    out = dd.read_parquet(fn, engine=engine,
+                          infer_divisions=should_check_divs(engine))
+    assert_eq(out, ddf, check_index=(engine != 'fastparquet'),
+              check_divisions=should_check_divs(engine))
 
 
 @pytest.fixture(params=[
@@ -1320,6 +1324,20 @@ def test_select_partitioned_column(tmpdir, engine):
 
     df_partitioned = dd.read_parquet(fn, engine=engine)
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
+
+
+def test_with_tz(tmpdir, engine):
+    if engine == 'pyarrow' and pa.__version__ < LooseVersion('0.11.0'):
+        pytest.skip("pyarrow<0.11.0 did not support this")
+    if engine == 'fastparquet' and fastparquet.__version__ < LooseVersion(
+            '0.3.0'):
+        pytest.skip("fastparquet<0.3.0 did not support this")
+    fn = str(tmpdir)
+    df = pd.DataFrame([[0]], columns=['a'], dtype='datetime64[ns, UTC]')
+    df = dd.from_pandas(df, 1)
+    df.to_parquet(fn, engine=engine)
+    df2 = dd.read_parquet(fn, engine=engine)
+    assert_eq(df, df2, check_divisions=False, check_index=False)
 
 
 def test_arrow_partitioning(tmpdir):
