@@ -524,9 +524,9 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-def _bincount_sum(bincounts):
+def _bincount_sum(bincounts, dtype=int):
     n = max(map(len, bincounts))
-    out = np.zeros(n, dtype=int)
+    out = np.zeros(n, dtype=dtype)
     for b in bincounts:
         out[:len(b)] += b[:len(b)]
     return out
@@ -553,7 +553,7 @@ def bincount(x, weights=None, minlength=0):
 
     bincount_list = [i for i in list(dsk) if i[0] == 'bincount-' + token]
     name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (_bincount_sum, bincount_list)
+    dsk[(name, 0)] = (_bincount_sum, bincount_list, dtype)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
