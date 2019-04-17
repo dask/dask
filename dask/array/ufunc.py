@@ -7,6 +7,7 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
+from .utils import IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
@@ -29,7 +30,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            if array_wrap:
+            if array_wrap and not IS_NEP18_ACTIVE:
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
@@ -268,8 +269,8 @@ absolute = ufunc(np.absolute)
 clip = wrap_elemwise(np.clip)
 isreal = wrap_elemwise(np.isreal, array_wrap=True)
 iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
-isneginf = wrap_elemwise(np.isneginf, array_wrap=True)
-isposinf = wrap_elemwise(np.isposinf, array_wrap=True)
+isneginf = partial(wrap_elemwise(np.equal, array_wrap=True), -np.inf)
+isposinf = partial(wrap_elemwise(np.equal, array_wrap=True), np.inf)
 real = wrap_elemwise(np.real, array_wrap=True)
 imag = wrap_elemwise(np.imag, array_wrap=True)
 fix = wrap_elemwise(np.fix, array_wrap=True)
