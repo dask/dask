@@ -507,12 +507,12 @@ def test_bincount_with_weights():
 
 
 def test_bincount_unspecified_minlength():
-    x = np.array([1, 1, 3, 7, 0])
+    x = np.array([1, 1, 3, 7, 0], dtype=np.uint8)
     d = da.from_array(x, chunks=2)
     e = da.bincount(d)
-    assert len(e) == 8
     assert_eq(e, np.bincount(x))
     assert same_keys(da.bincount(d), e)
+    assert len(e.compute()) == 8  # shape is (nan,) so must compute for len()
 
 
 def test_digitize():
