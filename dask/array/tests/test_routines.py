@@ -507,7 +507,7 @@ def test_bincount_with_weights():
 
 
 def test_bincount_unspecified_minlength():
-    x = np.array([1, 1, 3, 7, 0], dtype=np.uint8)
+    x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
     e = da.bincount(d)
     assert_eq(e, np.bincount(x))
