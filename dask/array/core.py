@@ -2091,6 +2091,8 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
             ((1000, 1000, 500), (400, 400)).
         -   A size in bytes, like "100 MiB" which will choose a uniform
             block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
 
         -1 or None as a blocksize indicate the size of the corresponding
         dimension.
@@ -2133,10 +2135,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
-    if hasattr(x, 'chunks'):
-        previous_chunks = x.chunks
-    else:
-        previous_chunks = None
+    previous_chunks = getattr(x, 'chunks', None)
 
     chunks = normalize_chunks(
         chunks,
