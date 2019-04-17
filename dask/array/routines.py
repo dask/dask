@@ -2,7 +2,6 @@ from __future__ import division, print_function, absolute_import
 
 import inspect
 import math
-from operator import sub
 import warnings
 from distutils.version import LooseVersion
 from functools import wraps, partial
