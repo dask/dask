@@ -55,8 +55,6 @@ functions = [
     lambda x: x.rechunk((2, 2, 1)),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
-    lambda x: np.real(x),
-    lambda x: np.imag(x),
 ]
 
 
