@@ -524,6 +524,14 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
+def _bincount_sum(bincounts):
+    n = max(map(len, bincounts))
+    out = np.zeros(n, dtype=int)
+    for b in bincounts:
+        out[:len(b)] += b[:len(b)]
+    return out
+
+
 @wraps(np.bincount)
 def bincount(x, weights=None, minlength=0):
     assert x.ndim == 1
@@ -542,35 +550,15 @@ def bincount(x, weights=None, minlength=0):
             dsk[('bincount-' + token, i)] = (np.bincount, (x.name, i),
                                              None, minlength)
             dtype = np.bincount([]).dtype
-        if minlength == 0:
-            dsk[('length-' + token, i)] = (len, ('bincount-' + token, i))
 
-    # Define length of output array
-    if minlength == 0:
-        lengths_list = [i for i in list(dsk) if i[0] == 'length-' + token]
-        dsk[('minlength-' + token, 0)] = (np.max, lengths_list)
-        # Zero-pad ragged bincount results to the same length
-        for i, _ in enumerate(x.__dask_keys__()):
-            dsk[('padding-' + token, i)] = (sub, ('minlength-' + token, 0),
-                                                 ('length-' + token, i))
-            dsk[('zeropad-bincount-' + token, i)] = (
-                np.pad, ('bincount-' + token, i), [0, ('padding-' + token, i)],
-                'constant')
-
-    # Sum up all of the intermediate bincounts per block
-    if minlength == 0:
-        name = 'zeropad-bincount-' + token
-    else:
-        name = 'bincount-' + token
-    bincount_list = [i for i in list(dsk) if i[0] == name]
+    bincount_list = [i for i in list(dsk) if i[0] == 'bincount-' + token]
     name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, bincount_list, 0)
+    dsk[(name, 0)] = (_bincount_sum, bincount_list)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
     if minlength == 0:
-        chunksize = Array(graph, 'minlength-' + token, ((0,),), dtype)
-        chunks = ((chunksize,),)
+        chunks = ((np.nan,),)
     else:
         chunks = ((minlength,),)
 
