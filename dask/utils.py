@@ -498,6 +498,25 @@ def derived_from(original_klass, version=None, ua_args=[]):
             if doc is None:
                 doc = ''
 
+            # Insert disclaimer near the top, after the title.
+            if doc:
+                copied = (
+                    "This docstring was copied from %s.%s.%s\n"
+                    "Some inconsistencies with the Dask version may exist. "
+                    % (original_klass.__module__, original_klass.__name__,
+                        method_name)
+                )
+
+                lines = doc.split('\n')
+                empty = 0
+                for i, line in enumerate(lines):
+                    if not line.strip():
+                        empty += 1
+                    if empty == 2:
+                        break
+                lines[i:i+1] = [''] + copied.split('\n') + ['']
+                doc = '\n'.join(lines)
+
             try:
                 method_args = get_named_args(method)
                 original_args = get_named_args(original_method)
@@ -509,9 +528,9 @@ def derived_from(original_klass, version=None, ua_args=[]):
                 not_supported.extend(ua_args)
 
             if len(not_supported) > 0:
-                note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't support the following argument(s).\n\n")
-                args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
+                note = ("\nNotes\n-----\n"
+                        "Dask doesn't support the following argument(s).\n\n")
+                args = ''.join(['- {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
             doc = skip_doctest(doc)
             doc = extra_titles(doc)

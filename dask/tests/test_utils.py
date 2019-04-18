@@ -10,7 +10,7 @@ from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
                         extra_titles, asciitable, itemgetter, partial_by_order,
-                        has_keyword)
+                        has_keyword, derived_from)
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
 
@@ -378,3 +378,28 @@ def test_has_keyword():
     bar = functools.partial(foo, a=1)
     assert has_keyword(bar, 'b')
     assert has_keyword(bar, 'c')
+
+
+def test_derived_from():
+    class Foo:
+        def f(a, b):
+            """ A super docstring
+
+            An explanation
+
+            Parameters
+            ----------
+            a: int
+                an explanation of a
+            b: float
+                an explanation of b
+            """
+
+    class Bar:
+        @derived_from(Foo)
+        def f(a, c):
+            pass
+
+    assert Bar.f.__doc__.strip().startswith('A super docstring')
+    assert "Foo.f" in Bar.f.__doc__
+    assert any("inconsistencies" in line for line in Bar.f.__doc__.split('\n')[:7])
