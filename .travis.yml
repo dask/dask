@@ -21,10 +21,9 @@ matrix:
   #- os: osx
     #env: PYTHON=3.6 RUNSLOW=false
   # Together with fast_finish, allow build to be marked successful before the OS X job finishes
-  #allow_failures:
-  #- os: osx
+  allow_failures:
     ## This needs to be the exact same line as above
-    #env: PYTHON=3.6 RUNSLOW=false
+    env: PYTHON=2.7 TESTS=true PACKAGES="python-blosc futures faulthandler lz4"
 
 install:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/install.sh ; fi
@@ -32,7 +31,7 @@ install:
 script:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/run_tests.sh ; fi
   - if [[ $LINT == true ]]; then pip install flake8 ; flake8 distributed ; fi
-  - if [[ $LINT == true ]]; then pip install black; black distributed ; fi
+  - if [[ $LINT == true ]]; then pip install black; black distributed --check; fi
 
 after_success:
   - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi
