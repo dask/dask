@@ -514,7 +514,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
                         empty += 1
                     if empty == 2:
                         break
-                lines[i:i+1] = [''] + copied.split('\n') + ['']
+                lines[i:i + 1] = [''] + copied.split('\n') + ['']
                 doc = '\n'.join(lines)
 
             try:

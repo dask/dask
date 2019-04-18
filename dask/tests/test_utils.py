@@ -380,6 +380,7 @@ def test_has_keyword():
     assert has_keyword(bar, 'c')
 
 
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
 def test_derived_from():
     class Foo:
         def f(a, b):
