@@ -1210,6 +1210,16 @@ def test_map_blocks_dtype_inference():
     assert 'RuntimeError' in msg
 
 
+def test_map_blocks_no_array_args():
+    def func(dtype, block_info=None):
+        loc = block_info[None]['array-location']
+        return np.arange(loc[0][0], loc[0][1], dtype=dtype)
+
+    x = da.map_blocks(func, np.float32, new_axis=[0], chunks=((5, 3),), dtype=np.float32)
+    assert x.chunks == ((5, 3),)
+    assert_eq(x, np.arange(8, dtype=np.float32))
+
+
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
     assert key_split(d.name) in repr(d)
