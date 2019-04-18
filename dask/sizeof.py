@@ -28,6 +28,15 @@ def sizeof_python_collection(seq):
     return getsizeof(seq) + sum(map(sizeof, seq))
 
 
+@sizeof.register_lazy("cupy")
+def register_cupy():
+    import cupy
+
+    @sizeof.register(cupy.ndarray)
+    def sizeof_cupy_ndarray(x):
+        return int(x.nbytes)
+
+
 @sizeof.register_lazy("numpy")
 def register_numpy():
     import numpy as np

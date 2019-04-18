@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.sizeof import sizeof
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip('cupy')
@@ -60,3 +61,10 @@ def test_basic(func):
     if ddc.shape:
         result = ddc.compute(scheduler='single-threaded')
         assert isinstance(result, cupy.ndarray)
+
+
+@pytest.mark.parametrize('dtype', ['f4', 'f8'])
+def test_sizeof(dtype):
+    c = cupy.random.random((2, 3, 4), dtype=dtype)
+
+    assert sizeof(c) == c.nbytes
