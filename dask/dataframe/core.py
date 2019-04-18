@@ -1109,6 +1109,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self._meta, self.divisions)
 
+    def replace(self, to_replace=None, value=None, regex=False):
+        return self.map_partitions(M.replace, to_replace=to_replace,
+                                   value=value, regex=regex)
+
     def to_dask_array(self, lengths=None):
         """Convert a dask DataFrame to a dask array.
 
