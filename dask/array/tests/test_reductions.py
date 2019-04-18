@@ -566,3 +566,25 @@ def test_regres_3940(func):
     assert func(a).name != func(a + 1).name
     assert func(a, axis=0).name != func(a).name
     assert func(a, axis=0).name != func(a, axis=1).name
+
+
+def test_trace():
+    def _assert_eq(a, b, dtype=np.int64):
+        return assert_eq(a.compute(), np.asarray(b, dtype))
+
+    a = da.from_array(np.arange(12).reshape((3, 4)), 1)
+    _assert_eq(a.trace(), 15)
+    _assert_eq(a.trace(0), 15)
+    _assert_eq(a.trace(1), 18)
+    _assert_eq(a.trace(-1), 13)
+
+    b = da.from_array(np.arange(8).reshape((2, 2, 2)), 2)
+    _assert_eq(b.trace(), [6, 8])
+    _assert_eq(b.trace(0), [6, 8])
+    _assert_eq(b.trace(1), [2, 3])
+    _assert_eq(b.trace(-1), [4, 5])
+    _assert_eq(b.trace(0, 0, 1), [6, 8])
+    _assert_eq(b.trace(0, 0, 2), [5, 9])
+    _assert_eq(b.trace(0, 1, 2), [3, 11])
+    _assert_eq(b.trace(offset=1, axis1=0, axis2=2), [1, 3])
+    _assert_eq(b.trace(offset=1, axis1=0, axis2=2, dtype=float), [1., 3.], float)
