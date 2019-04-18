@@ -3527,3 +3527,13 @@ def test_index_divisions():
     assert_eq(ddf.index + 1, df.index + 1)
     assert_eq(10 * ddf.index, 10 * df.index)
     assert_eq(-ddf.index, -df.index)
+
+
+def test_replace():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(df.replace(1, 10), ddf.replace(1, 10))
+    assert_eq(df.replace({1: 10, 2: 20}), ddf.replace({1: 10, 2: 20}))
+    assert_eq(df.x.replace(1, 10), ddf.x.replace(1, 10))
+    assert_eq(df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}))
