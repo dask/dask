@@ -1,13 +1,13 @@
 import textwrap
-from distutils.version import LooseVersion
+import warnings
 from itertools import product
 from operator import add
-import warnings
 
+import pytest
+import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-import numpy as np
-import pytest
+from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
@@ -21,11 +21,6 @@ from dask.dataframe.core import (repartition_divisions, aca, _concat, Scalar,
 from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
-
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.io.formats import format as pandas_format
-else:
-    from pandas.formats import format as pandas_format
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -360,25 +355,23 @@ def test_cumulative():
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
 
-    # testing out parameter if out parameter supported
-    if LooseVersion(np.__version__) >= '1.13.0':
-        np.cumsum(ddf, out=ddf_out)
-        assert_eq(ddf_out, df.cumsum())
-        np.cumprod(ddf, out=ddf_out)
-        assert_eq(ddf_out, df.cumprod())
-        ddf.cummin(out=ddf_out)
-        assert_eq(ddf_out, df.cummin())
-        ddf.cummax(out=ddf_out)
-        assert_eq(ddf_out, df.cummax())
+    np.cumsum(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumsum())
+    np.cumprod(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumprod())
+    ddf.cummin(out=ddf_out)
+    assert_eq(ddf_out, df.cummin())
+    ddf.cummax(out=ddf_out)
+    assert_eq(ddf_out, df.cummax())
 
-        np.cumsum(ddf, out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cumsum(axis=1))
-        np.cumprod(ddf, out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cumprod(axis=1))
-        ddf.cummin(out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cummin(axis=1))
-        ddf.cummax(out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cummax(axis=1))
+    np.cumsum(ddf, out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cumsum(axis=1))
+    np.cumprod(ddf, out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cumprod(axis=1))
+    ddf.cummin(out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cummin(axis=1))
+    ddf.cummax(out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cummax(axis=1))
 
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
@@ -1739,13 +1732,6 @@ def test_eval():
     with pytest.raises(NotImplementedError):
         d.eval('z = x + y', inplace=True)
 
-    # catch FutureWarning from pandas about assignment in eval
-    with pytest.warns(None):
-        if PANDAS_VERSION < '0.21.0':
-            if p.eval('z = x + y', inplace=None) is None:
-                with pytest.raises(NotImplementedError):
-                    d.eval('z = x + y', inplace=None)
-
 
 @pytest.mark.parametrize('include, exclude', [
     ([int], None),
@@ -2537,8 +2523,6 @@ def test_astype_categoricals():
     assert dx.compute().dtype == 'category'
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="No CategoricalDtype with categories")
 def test_astype_categoricals_known():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'b', 'c'],
                        'y': ['x', 'y', 'z', 'y', 'z'],
