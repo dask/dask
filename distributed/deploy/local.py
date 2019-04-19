@@ -62,7 +62,7 @@ class LocalCluster(Cluster):
     asynchronous: bool (False by default)
         Set to True if using this cluster within async/await functions or within
         Tornado gen.coroutines.  This should remain False for normal use.
-    kwargs: dict
+    worker_kwargs: dict
         Extra worker arguments, will be passed to the Worker constructor.
     blocked_handlers: List[str]
         A list of strings specifying a blacklist of handlers to disallow on the Scheduler,
