@@ -8,7 +8,7 @@ from . import methods
 from .utils import (
     is_categorical_dtype, is_scalar, has_known_categories, PANDAS_VERSION
 )
-
+from ..utils import M
 
 ###############################################################
 # Dummies
@@ -239,7 +239,6 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
          value_name='value', col_level=None):
 
     from dask.dataframe.core import no_default
-    from ..utils import M
 
     return frame.map_partitions(M.melt, meta=no_default, id_vars=id_vars,
                                 value_vars=value_vars,
