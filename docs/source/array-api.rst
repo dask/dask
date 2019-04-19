@@ -177,6 +177,7 @@ Top level user functions:
    tensordot
    tile
    topk
+   trace
    transpose
    tril
    triu

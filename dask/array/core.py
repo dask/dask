@@ -1512,6 +1512,11 @@ class Array(DaskMethodsMixin):
                    split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
+    def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
+        from .reductions import trace
+        return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
+
+    @derived_from(np.ndarray)
     def prod(self, axis=None, dtype=None, keepdims=False, split_every=None,
              out=None):
         from .reductions import prod

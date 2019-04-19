@@ -37,7 +37,7 @@ try:
         # Absent for NumPy versions prior to 1.12.
         pass
     from .reductions import (sum, prod, mean, std, var, any, all, min, max,
-                             moment,
+                             moment, trace,
                              argmin, argmax,
                              nansum, nanmean, nanstd, nanvar, nanmin,
                              nanmax, nanargmin, nanargmax,
