@@ -569,22 +569,25 @@ def test_regres_3940(func):
 
 
 def test_trace():
-    def _assert_eq(a, b, dtype=np.int64):
-        return assert_eq(a.compute(), np.asarray(b, dtype))
+    def _assert(a, b, *args, **kwargs):
+        return assert_eq(a.trace(*args, **kwargs), b.trace(*args, **kwargs))
 
-    a = da.from_array(np.arange(12).reshape((3, 4)), 1)
-    _assert_eq(a.trace(), 15)
-    _assert_eq(a.trace(0), 15)
-    _assert_eq(a.trace(1), 18)
-    _assert_eq(a.trace(-1), 13)
+    b = np.arange(12).reshape((3, 4))
+    a = da.from_array(b, 1)
+    _assert(a, b)
+    _assert(a, b, 0)
+    _assert(a, b, 1)
+    _assert(a, b, -1)
 
-    b = da.from_array(np.arange(8).reshape((2, 2, 2)), 2)
-    _assert_eq(b.trace(), [6, 8])
-    _assert_eq(b.trace(0), [6, 8])
-    _assert_eq(b.trace(1), [2, 3])
-    _assert_eq(b.trace(-1), [4, 5])
-    _assert_eq(b.trace(0, 0, 1), [6, 8])
-    _assert_eq(b.trace(0, 0, 2), [5, 9])
-    _assert_eq(b.trace(0, 1, 2), [3, 11])
-    _assert_eq(b.trace(offset=1, axis1=0, axis2=2), [1, 3])
-    _assert_eq(b.trace(offset=1, axis1=0, axis2=2, dtype=float), [1., 3.], float)
+    b = np.arange(8).reshape((2, 2, 2))
+    a = da.from_array(b, 2)
+    _assert(a, b)
+    _assert(a, b, 0)
+    _assert(a, b, 1)
+    _assert(a, b, -1)
+    _assert(a, b, 0, 0, 1)
+    _assert(a, b, 0, 0, 2)
+    _assert(a, b, 0, 1, 2, int)
+    _assert(a, b, 0, 1, 2, float)
+    _assert(a, b, offset=1, axis1=0, axis2=2, dtype=int)
+    _assert(a, b, offset=1, axis1=0, axis2=2, dtype=float)
