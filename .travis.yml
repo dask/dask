@@ -6,7 +6,6 @@ dist: trusty
 
 env:
   matrix:
-    - PYTHON=2.7 TESTS=true PACKAGES="python-blosc futures faulthandler lz4"
     - PYTHON=3.5.4 TESTS=true COVERAGE=true PACKAGES="python-blosc lz4" CRICK=true
     - PYTHON=3.6 TESTS=true PACKAGES="scikit-learn lz4" TORNADO=5
     - PYTHON=3.7 TESTS=true PACKAGES="scikit-learn python-snappy python-blosc" TORNADO=6
@@ -15,15 +14,8 @@ matrix:
   fast_finish: true
   include:
   - os: linux
-    # Using Travis-CI's python makes job faster by not downloading miniconda
     python: 3.6
     env: LINT=true
-  #- os: osx
-    #env: PYTHON=3.6 RUNSLOW=false
-  # Together with fast_finish, allow build to be marked successful before the OS X job finishes
-  allow_failures:
-    ## This needs to be the exact same line as above
-    env: PYTHON=2.7 TESTS=true PACKAGES="python-blosc futures faulthandler lz4"
 
 install:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/install.sh ; fi
