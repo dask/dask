@@ -2133,7 +2133,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.Series)
     def isin(self, values):
-        return elemwise(M.isin, self, list(values))
+        return elemwise(M.isin, self, list(values), meta=pd.Series(dtype=bool))
 
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
@@ -3401,7 +3401,7 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
+    **kwargs: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
