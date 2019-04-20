@@ -123,7 +123,7 @@ def read_parquet(
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
-    meta, statistics, parts = engine.read_metadata(
+    meta, statistics, parts, args = engine.read_metadata(
         fs,
         fs_token,
         paths,
