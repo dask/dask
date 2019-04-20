@@ -122,7 +122,6 @@ class ArrowEngine(Engine):
 
         else:
             stats = None
-
         # TODO: these are both sets, maybe not safe to zip over them
         if dataset.partitions:
             for name, partition_set in zip(dataset.partitions.partition_names, dataset.partitions.levels):

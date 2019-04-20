@@ -586,3 +586,132 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 
     fn = sep.join([path, "_common_metadata"])
     fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open)
+
+
+from .utils import Engine, _normalize_index_columns, _parse_pandas_metadata
+
+
+class FastParquetEngine:
+    """ The API necessary to provide a new Parquet reader/writer """
+
+    @staticmethod
+    def read_metadata(
+        fs, fs_token, paths, categories=None, index=None, gather_statistics=None
+    ):
+        """
+
+        Returns
+        -------
+        meta: pandas.DataFrame
+            An empty DataFrame object to use for metadata.
+            Should have appropriate column names and dtypes but need not have
+            any actual data
+        statistics: Optional[List[Dict]]
+            Either none, if no statistics were found, or a list of dictionaries
+            of statistics data, one dict for every partition (see the next
+            return value).  The statistics should look like the following:
+
+                [
+                    {'num-rows': 1000, 'columns': [
+                        {'name': 'id', 'min': 0, 'max': 100, 'null-count': 0},
+                        {'name': 'value', 'min': 0.0, 'max': 1.0, 'null-count': 5},
+                        ]},  # TODO: we might want to rethink this oranization
+                    ...
+                ]
+        parts: List[object]
+            A list of objects to be passed to ``Engine.read_partition``.
+            Each object should represent a row group of data.
+            We don't care about the type of this object, as long as the
+            read_partition function knows how to interpret it.
+        """
+        import fastparquet
+        if len(paths) > 1:
+            if gather_statistics is not False:
+                # this scans all the files, allowing index/divisions
+                # and filtering
+                pf = fastparquet.ParquetFile(paths, open_with=fs.open,
+                                             sep=fs.sep)
+            else:
+                base, fns = analyse_paths(paths)
+                scheme = get_file_scheme(fns)
+                pf = ParquetFile(paths[0], open_with=fs.open)
+                pf.file_scheme = scheme
+                pf.cats = _paths_to_cats(fns, scheme)
+                relpath = path.replace(base, "").lstrip("/")
+                for rg in pf.row_groups:
+                    rg.cats = pf.cats
+                    rg.scheme = pf.scheme
+                    for ch in rg.columns:
+                        ch.file_path = relpath
+        else:
+            try:
+                pf = fastparquet.ParquetFile(
+                    paths[0] + fs.sep + "_metadata", open_with=fs.open,
+                    sep=fs.sep
+                )
+            except Exception:
+                pf = fastparquet.ParquetFile(paths[0], open_with=fs.open,
+                                             sep=fs.sep)
+        statistics = None  # TODO pf.statistics
+        meta = pf.pre_allocate(0, pf.columns, categories, index)[0]
+        pieces = [{'piece': rg,
+                   'kwargs': {'pf': pf, 'categories': categories}}
+                  for rg in pf.row_groups]
+        pf.row_groups = None  # for serialisation
+        pf.fmd.row_groups = None  # for serialisation
+        return meta, statistics, pieces
+
+    @staticmethod
+    def read_partition(fs, piece, columns, **kwargs):
+        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
+
+        This function is called many times in individual tasks
+
+        Parameters
+        ----------
+        fs: FileSystem
+        piece: object
+            This is some token that is returned by Engine.read_metadata.
+            Typically it represents a row group in a Parquet dataset
+        columns: List[str]
+            List of column names to pull out of that row group
+        partitions:
+        categories:
+
+        Returns
+        -------
+        A Pandas DataFrame
+        """
+        pf = kwargs['pf']
+        categories = kwargs['categories']
+        return pf.read_row_group_file(piece, columns, categories)
+
+    @staticmethod
+    def write(df, fs, fs_token, path, append=False, partition_on=None, **kwargs):
+        """
+        Write a Dask DataFrame to Parquet
+
+        Parameters
+        ----------
+        df: dask.dataframe.DataFrame
+        fs: FileSystem
+        fs_token:
+        path: str
+        append: boolean
+            Whether or not to append to a previous dataset
+        partition_on:
+        **kwargs:
+            Other keywords as needed by the engine
+
+        Returns
+        -------
+        out: List[delayed]
+            A list of dask.delayed objects, one for each partition
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def write_partition(
+        df, path, fs, filename, partition_on, metadata_path=None, **kwargs
+    ):
+        pass
