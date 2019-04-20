@@ -24,10 +24,8 @@ except ImportError:
 
 try:
     import pyarrow as pa
-    pa_version = LooseVersion(pa.__version__)
-    check_pa_divs = pa_version >= '0.9.0'
+    check_pa_divs = pa.__version__ >= LooseVersion('0.9.0')
 except ImportError:
-    pa_version = None
     check_pa_divs = False
 
 
@@ -41,7 +39,7 @@ SKIP_FASTPARQUET = not fastparquet
 SKIP_FASTPARQUET_REASON = 'fastparquet not found'
 FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason=SKIP_FASTPARQUET_REASON)
 
-if pa_version == '0.13.0':
+if pq and pa.__version__ == LooseVersion('0.13.0'):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = 'pyarrow 0.13.0 not supported'
 else:
