@@ -28,7 +28,7 @@ from ..compatibility import (apply, operator_div, bind_method, string_types,
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
-                     is_arraylike, typename)
+                     is_arraylike, typename, skip_doctest)
 from ..array.core import Array, normalize_arg
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
@@ -2216,7 +2216,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
-        meth.__doc__ = op.__doc__
+        meth.__doc__ = skip_doctest(op.__doc__)
         bind_method(cls, name, meth)
 
     @classmethod
@@ -2233,7 +2233,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 op = partial(comparison, fill_value=fill_value)
                 return elemwise(op, self, other, axis=axis)
 
-        meth.__doc__ = comparison.__doc__
+        meth.__doc__ = skip_doctest(comparison.__doc__)
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
@@ -3044,7 +3044,7 @@ class DataFrame(_Frame):
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
-        meth.__doc__ = op.__doc__
+        meth.__doc__ = skip_doctest(op.__doc__)
         bind_method(cls, name, meth)
 
     @classmethod
@@ -3057,7 +3057,7 @@ class DataFrame(_Frame):
             axis = self._validate_axis(axis)
             return elemwise(comparison, self, other, axis=axis)
 
-        meth.__doc__ = comparison.__doc__
+        meth.__doc__ = skip_doctest(comparison.__doc__)
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
