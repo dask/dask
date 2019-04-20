@@ -742,5 +742,35 @@ def test_protocol_ip(loop):
         assert cluster.scheduler.address.startswith("tcp://127.0.0.2")
 
 
+class MyWorker(Worker):
+    pass
+
+
+def test_worker_class_worker(loop):
+    with LocalCluster(
+        n_workers=2,
+        loop=loop,
+        worker_class=MyWorker,
+        processes=False,
+        scheduler_port=0,
+        dashboard_address=None,
+    ) as cluster:
+        assert all(isinstance(w, MyWorker) for w in cluster.workers)
+
+
+def test_worker_class_nanny(loop):
+    class MyNanny(Nanny):
+        pass
+
+    with LocalCluster(
+        n_workers=2,
+        loop=loop,
+        worker_class=MyNanny,
+        scheduler_port=0,
+        dashboard_address=None,
+    ) as cluster:
+        assert all(isinstance(w, MyNanny) for w in cluster.workers)
+
+
 if sys.version_info >= (3, 5):
     from distributed.deploy.tests.py3_test_deploy import *  # noqa F401
