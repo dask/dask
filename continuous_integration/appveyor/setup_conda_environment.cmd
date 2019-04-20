@@ -20,7 +20,7 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% pytest toolz
 call activate %CONDA_ENV%
 
 @rem Install optional dependencies for tests
-%CONDA_INSTALL% -c conda-forge numpy>=1.13 pandas>=0.21.0 cloudpickle distributed bcolz bokeh h5py ipython lz4 psutil pytables s3fs scipy fastparquet python-snappy zarr
+%CONDA_INSTALL% -c conda-forge "numpy>=1.13" "pandas>=0.21.0" cloudpickle distributed bcolz bokeh h5py ipython lz4 psutil pytables s3fs scipy fastparquet python-snappy zarr
 %PIP_INSTALL% --no-deps --upgrade locket git+https://github.com/dask/partd
 %PIP_INSTALL% --no-deps --upgrade heapdict git+https://github.com/dask/cachey
 %PIP_INSTALL%           --upgrade git+https://github.com/dask/distributed
