@@ -51,11 +51,13 @@ class Engine:
             Each object should represent a row group of data.
             We don't care about the type of this object, as long as the
             read_partition function knows how to interpret it.
+        args: any
+            Other things to include in the calls to read_partition
         """
         raise NotImplementedError()
 
     @staticmethod
-    def read_partition(fs, piece, columns, partitions, categories):
+    def read_partition(fs, piece, columns, partitions, categories, args):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
