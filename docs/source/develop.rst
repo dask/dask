@@ -95,7 +95,9 @@ Install Dask and dependencies::
 
 For development, Dask uses the following additional dependencies::
 
-   pip install pytest moto mock
+   pip install pytest moto mock ipython graphviz
+
+You will also need graphviz installed on your system.
 
 
 Run Tests
