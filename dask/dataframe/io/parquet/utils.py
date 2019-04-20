@@ -51,8 +51,6 @@ class Engine:
             Each object should represent a row group of data.
             We don't care about the type of this object, as long as the
             read_partition function knows how to interpret it.
-        args: any
-            Other things to include in the calls to read_partition
         """
         raise NotImplementedError()
 
