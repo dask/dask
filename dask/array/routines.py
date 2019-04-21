@@ -552,7 +552,7 @@ def bincount(x, weights=None, minlength=0):
 
     bincount_list = [i for i in list(dsk) if i[0] == 'bincount-' + token]
     name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (_bincount_sum, bincount_list, dtype)
+    dsk[(name, 0)] = (_bincount_sum, list(dsk), dtype)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
