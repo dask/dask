@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import atexit
 import dask
 import logging
+import gc
 import os
 import shutil
 import sys
@@ -137,6 +138,8 @@ def main(
     tls_key,
     dashboard_address,
 ):
+    g0, g1, g2 = gc.get_threshold()  # https://github.com/dask/distributed/issues/1653
+    gc.set_threshold(g0 * 3, g1 * 3, g2 * 3)
 
     enable_proctitle_on_current()
     enable_proctitle_on_children()
