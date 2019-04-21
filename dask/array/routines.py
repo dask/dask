@@ -550,7 +550,6 @@ def bincount(x, weights=None, minlength=0):
                                              None, minlength)
             dtype = np.bincount([]).dtype
 
-    bincount_list = [i for i in list(dsk) if i[0] == 'bincount-' + token]
     name = 'bincount-sum-' + token
     dsk[(name, 0)] = (_bincount_sum, list(dsk), dtype)
 
