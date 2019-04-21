@@ -540,6 +540,7 @@ def bincount(x, weights=None, minlength=0):
     # Call np.bincount on each block, possibly with weights
     dsk = {}
     token = tokenize(x, weights, minlength)
+    name = 'bincount-sum-' + token
     for i, _ in enumerate(x.__dask_keys__()):
         if weights is not None:
             dsk[('bincount-' + token, i)] = (np.bincount, (x.name, i),
@@ -550,9 +551,7 @@ def bincount(x, weights=None, minlength=0):
                                              None, minlength)
             dtype = np.bincount([]).dtype
 
-    name = 'bincount-sum-' + token
     dsk[(name, 0)] = (_bincount_sum, list(dsk), dtype)
-
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
     if minlength == 0:
