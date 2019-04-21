@@ -15,6 +15,7 @@ from .cluster import Cluster
 from ..compatibility import get_thread_identity
 from ..core import CommClosedError
 from ..utils import (
+    get_ip_interface,
     sync,
     ignoring,
     All,
@@ -74,6 +75,8 @@ class LocalCluster(Cluster):
         Protocol to use like ``tcp://``, ``tls://``, ``inproc://``
         This defaults to sensible choice given other keyword arguments like
         ``processes`` and ``security``
+    interface: str (optional)
+        Network interface to use.  Defaults to lo/localhost
     worker_class: Worker
         Worker class used to instantiate workers from.
 
@@ -117,6 +120,7 @@ class LocalCluster(Cluster):
         security=None,
         protocol=None,
         blocked_handlers=None,
+        interface=None,
         worker_class=None,
         **worker_kwargs
     ):
@@ -155,6 +159,7 @@ class LocalCluster(Cluster):
         self.silence_logs = silence_logs
         self._asynchronous = asynchronous
         self.security = security
+        self.interface = interface
         services = services or {}
         worker_services = worker_services or {}
         if silence_logs:
@@ -262,7 +267,10 @@ class LocalCluster(Cluster):
             address = self.protocol
         else:
             if ip is None:
-                ip = "127.0.0.1"
+                if self.interface:
+                    ip = get_ip_interface(self.interface)
+                else:
+                    ip = "127.0.0.1"
 
             if "://" in ip:
                 address = ip

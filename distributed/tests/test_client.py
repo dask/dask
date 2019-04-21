@@ -5061,8 +5061,9 @@ def test_call_stack_future(c, s, a, b):
 
 @gen_cluster([("127.0.0.1", 4)] * 2, client=True)
 def test_call_stack_all(c, s, a, b):
-    future = c.submit(slowinc, 1, delay=0.5)
-    yield gen.sleep(0.1)
+    future = c.submit(slowinc, 1, delay=0.8)
+    while not a.executing and not b.executing:
+        yield gen.sleep(0.01)
     result = yield c.call_stack()
     w = a if a.executing else b
     assert list(result) == [w.address]
