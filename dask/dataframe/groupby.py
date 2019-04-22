@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 
 from .core import (DataFrame, Series, aca, map_partitions,
-                   new_dd_object, no_default, split_out_on_index)
+                   new_dd_object, no_default, split_out_on_index,
+                   _extract_meta)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
@@ -821,7 +822,7 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        meta = func(self._meta)
+        meta = func(self._meta_nonempty)
         columns = meta.name if is_series_like(meta) else meta.columns
 
         token = self._token_prefix + token
@@ -1116,15 +1117,16 @@ class _GroupBy(object):
         meta = kwargs.get('meta', no_default)
 
         if meta is no_default:
+            with raise_on_meta_error("groupby.apply({0})".format(funcname(func)), udf=True):
+                meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
+                meta = self._meta_nonempty.apply(func, *meta_args, **meta_kwargs)
+
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
                    "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg, stacklevel=2)
-
-            with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
-                meta = self._meta_nonempty.apply(func, *args, **kwargs)
 
         meta = make_meta(meta)
 

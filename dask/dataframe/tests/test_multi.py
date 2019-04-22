@@ -436,6 +436,14 @@ def test_merge_by_index_patterns(how, shuffle):
                           'd': [5, 4, 3, 2]},
                          index=list('fghi'))
 
+    def pd_merge(left, right, **kwargs):
+        # Workaround pandas bug where output dtype of empty index will be int64
+        # even if input was object.
+        out = pd.merge(left, right, **kwargs)
+        if len(out) == 0:
+            return out.set_index(out.index.astype(left.index.dtype))
+        return out
+
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
                      (pdf7l, pdf7r)]:
@@ -449,22 +457,22 @@ def test_merge_by_index_patterns(how, shuffle):
 
             assert_eq(dd.merge(ddl, ddr, how=how, left_index=True,
                                right_index=True, shuffle=shuffle),
-                      pd.merge(pdl, pdr, how=how, left_index=True,
+                      pd_merge(pdl, pdr, how=how, left_index=True,
                                right_index=True))
             assert_eq(dd.merge(ddr, ddl, how=how, left_index=True,
                                right_index=True, shuffle=shuffle),
-                      pd.merge(pdr, pdl, how=how, left_index=True,
+                      pd_merge(pdr, pdl, how=how, left_index=True,
                                right_index=True))
 
             assert_eq(dd.merge(ddl, ddr, how=how, left_index=True,
                                right_index=True, shuffle=shuffle,
                                indicator=True),
-                      pd.merge(pdl, pdr, how=how, left_index=True,
+                      pd_merge(pdl, pdr, how=how, left_index=True,
                                right_index=True, indicator=True))
             assert_eq(dd.merge(ddr, ddl, how=how, left_index=True,
                                right_index=True, shuffle=shuffle,
                                indicator=True),
-                      pd.merge(pdr, pdl, how=how, left_index=True,
+                      pd_merge(pdr, pdl, how=how, left_index=True,
                                right_index=True, indicator=True))
 
             assert_eq(ddr.merge(ddl, how=how, left_index=True,

@@ -150,25 +150,38 @@ def test_full_groupby_apply_multiarg():
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        for c_lazy, d_lazy in [(c_scalar, d_scalar),
-                               (c_delayed, d_delayed)]:
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_scalar))
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c))
 
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d))
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_scalar), check_dtype=False)
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c_lazy, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_scalar, meta=meta))
 
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_scalar, meta=meta))
+
+    # Delayed arguments work, but only if metadata is provided
+    with pytest.raises(ValueError) as exc:
+        ddf.groupby('a').apply(func, c, d=d_delayed)
+    assert 'dask.delayed' in str(exc.value) and 'meta'in str(exc.value)
+
+    with pytest.raises(ValueError) as exc:
+        ddf.groupby('a').apply(func, c_delayed, d=d)
+    assert 'dask.delayed' in str(exc.value) and 'meta'in str(exc.value)
+
+    assert_eq(df.groupby('a').apply(func, c),
+              ddf.groupby('a').apply(func, c_delayed, meta=meta))
+
+    assert_eq(df.groupby('a').apply(func, c, d=d),
+              ddf.groupby('a').apply(func, c, d=d_delayed, meta=meta))
 
 
 @pytest.mark.parametrize('grouper', [

@@ -957,46 +957,54 @@ def test_index():
 
 
 def test_assign():
-    d_unknown = dd.from_pandas(full, npartitions=3, sort=False)
-    assert not d_unknown.known_divisions
-    res = d.assign(c=1,
-                   d='string',
-                   e=d.a.sum(),
-                   f=d.a + d.b,
-                   g=lambda x: x.a + x.b,
-                   dt=pd.Timestamp(2018, 2, 13))
-    res_unknown = d_unknown.assign(c=1,
-                                   d='string',
-                                   e=d_unknown.a.sum(),
-                                   f=d_unknown.a + d_unknown.b,
-                                   g=lambda x: x.a + x.b,
-                                   dt=pd.Timestamp(2018, 2, 13))
-    sol = full.assign(c=1,
-                      d='string',
-                      e=full.a.sum(),
-                      f=full.a + full.b,
-                      g=lambda x: x.a + x.b,
-                      dt=pd.Timestamp(2018, 2, 13))
+    df = pd.DataFrame({'a': range(8),
+                       'b': [float(i) for i in range(10, 18)]},
+                      index=pd.Index(list('abcdefgh')))
+    ddf = dd.from_pandas(df, npartitions=3)
+    ddf_unknown = dd.from_pandas(df, npartitions=3, sort=False)
+    assert not ddf_unknown.known_divisions
+
+    res = ddf.assign(c=1,
+                     d='string',
+                     e=ddf.a.sum(),
+                     f=ddf.a + ddf.b,
+                     g=lambda x: x.a + x.b,
+                     dt=pd.Timestamp(2018, 2, 13))
+    res_unknown = ddf_unknown.assign(c=1,
+                                     d='string',
+                                     e=ddf_unknown.a.sum(),
+                                     f=ddf_unknown.a + ddf_unknown.b,
+                                     g=lambda x: x.a + x.b,
+                                     dt=pd.Timestamp(2018, 2, 13))
+    sol = df.assign(c=1,
+                    d='string',
+                    e=df.a.sum(),
+                    f=df.a + df.b,
+                    g=lambda x: x.a + x.b,
+                    dt=pd.Timestamp(2018, 2, 13))
     assert_eq(res, sol)
     assert_eq(res_unknown, sol)
 
-    res = d.assign(c=full.a + 1)
-    assert_eq(res, full.assign(c=full.a + 1))
+    res = ddf.assign(c=df.a + 1)
+    assert_eq(res, df.assign(c=df.a + 1))
+
+    res = ddf.assign(c=ddf.index)
+    assert_eq(res, df.assign(c=df.index))
 
     # divisions unknown won't work with pandas
     with pytest.raises(ValueError):
-        d_unknown.assign(c=full.a + 1)
+        ddf_unknown.assign(c=df.a + 1)
 
     # unsupported type
     with pytest.raises(TypeError):
-        d.assign(c=list(range(9)))
+        ddf.assign(c=list(range(9)))
 
     # Fails when assigning known divisions to unknown divisions
     with pytest.raises(ValueError):
-        d_unknown.assign(foo=d.a)
+        ddf_unknown.assign(foo=ddf.a)
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
-        d.assign(foo=d_unknown.a)
+        ddf.assign(foo=ddf_unknown.a)
 
 
 def test_assign_callable():
