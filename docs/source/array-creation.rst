@@ -2,7 +2,7 @@ Create Dask Arrays
 ==================
 
 You can load or store Dask arrays from a variety of common sources like HDF5,
-NetCDF, `Zarr <http://zarr.readthedocs.io/en/stable/>`_, or any format that
+NetCDF, `Zarr <https://zarr.readthedocs.io/en/stable/>`_, or any format that
 supports NumPy-style slicing.
 
 .. currentmodule:: dask.array
@@ -23,7 +23,7 @@ NumPy Slicing
 
 Many storage formats have Python projects that expose storage using NumPy
 slicing syntax.  These include HDF5, NetCDF, BColz, Zarr, GRIB, etc.  For
-example, we can load a Dask array from an HDF5 file using `h5py <http://www.h5py.org/>`_:
+example, we can load a Dask array from an HDF5 file using `h5py <https://www.h5py.org/>`_:
 
 .. code-block:: Python
 
@@ -325,6 +325,31 @@ or your own custom zarr Array:
 To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
 chunking of the resultant Dask array is defined by how the files were saved, unless
 otherwise specified.
+
+
+TileDB
+------
+
+`TileDB <https://docs.tiledb.io>`_  is a binary array format and storage manager with
+tunable chunking, layout, and compression options. The TileDB storage manager library
+includes support for scalable storage backends such as S3 API compatible object stores
+and HDFS, with automatic scaling, and supports multi-threaded and multi-process
+reads (consistent) and writes (eventually-consistent).
+
+To save data to a local TileDB array:
+
+.. code-block:: Python
+
+  >>> arr.to_tiledb('output.tdb')
+
+or to save to a bucket on S3:
+
+  >>> arr.to_tiledb('s3://mybucket/output.tdb',
+                    storage_options={'vfs.s3.aws_access_key_id': 'mykey',
+                                     'vfs.s3.aws_secret_access_key': 'mysecret'})
+
+Files may be retrieved by running `da.from_tiledb` with the same URI, and any
+necessary arguments.
 
 
 Plugins

@@ -436,6 +436,14 @@ def test_merge_by_index_patterns(how, shuffle):
                           'd': [5, 4, 3, 2]},
                          index=list('fghi'))
 
+    def pd_merge(left, right, **kwargs):
+        # Workaround pandas bug where output dtype of empty index will be int64
+        # even if input was object.
+        out = pd.merge(left, right, **kwargs)
+        if len(out) == 0:
+            return out.set_index(out.index.astype(left.index.dtype))
+        return out
+
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
                      (pdf7l, pdf7r)]:
@@ -449,22 +457,22 @@ def test_merge_by_index_patterns(how, shuffle):
 
             assert_eq(dd.merge(ddl, ddr, how=how, left_index=True,
                                right_index=True, shuffle=shuffle),
-                      pd.merge(pdl, pdr, how=how, left_index=True,
+                      pd_merge(pdl, pdr, how=how, left_index=True,
                                right_index=True))
             assert_eq(dd.merge(ddr, ddl, how=how, left_index=True,
                                right_index=True, shuffle=shuffle),
-                      pd.merge(pdr, pdl, how=how, left_index=True,
+                      pd_merge(pdr, pdl, how=how, left_index=True,
                                right_index=True))
 
             assert_eq(dd.merge(ddl, ddr, how=how, left_index=True,
                                right_index=True, shuffle=shuffle,
                                indicator=True),
-                      pd.merge(pdl, pdr, how=how, left_index=True,
+                      pd_merge(pdl, pdr, how=how, left_index=True,
                                right_index=True, indicator=True))
             assert_eq(dd.merge(ddr, ddl, how=how, left_index=True,
                                right_index=True, shuffle=shuffle,
                                indicator=True),
-                      pd.merge(pdr, pdl, how=how, left_index=True,
+                      pd_merge(pdr, pdl, how=how, left_index=True,
                                right_index=True, indicator=True))
 
             assert_eq(ddr.merge(ddl, how=how, left_index=True,
@@ -748,6 +756,25 @@ def test_cheap_single_partition_merge_divisions():
     actual = bb.merge(aa, on='x', how='inner')
     assert not actual.known_divisions
     assert_divisions(actual)
+
+
+@pytest.mark.parametrize('how', ['left', 'right'])
+def test_cheap_single_parition_merge_left_right(how):
+    a = pd.DataFrame({'x':range(8), 'z': list('ababbdda')}, index=range(8))
+    aa = dd.from_pandas(a, npartitions=1)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')}, index=range(4))
+    bb = dd.from_pandas(b, npartitions=1)
+
+    actual = aa.merge(bb, left_index=True, right_on='x', how=how)
+    expected = a.merge(b, left_index=True, right_on='x', how=how)
+
+    assert_eq(actual, expected)
+
+    actual = aa.merge(bb, left_on='x', right_index=True, how=how)
+    expected = a.merge(b, left_on='x', right_index=True, how=how)
+
+    assert_eq(actual, expected)
 
 
 def test_cheap_single_partition_merge_on_index():

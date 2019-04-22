@@ -13,14 +13,8 @@ from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-from pandas.api.types import (
-    is_categorical_dtype, is_scalar, is_sparse, is_period_dtype,
-)
-try:
-    from pandas.api.types import is_datetime64tz_dtype
-except ImportError:
-    # pandas < 0.19.2
-    from pandas.core.common import is_datetime64tz_dtype
+from pandas.api.types import (is_categorical_dtype, is_scalar, is_sparse,
+                              is_period_dtype, is_datetime64tz_dtype)
 
 try:
     from pandas.api.types import is_interval_dtype
@@ -338,11 +332,7 @@ def make_meta_object(x, index=None):
     raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 
-if PANDAS_VERSION >= "0.20.0":
-    _numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
-else:
-    _numeric_index_types = (pd.Int64Index, pd.Float64Index)
-
+_numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
 
 meta_nonempty = Dispatch('meta_nonempty')
 
@@ -563,10 +553,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         if isinstance(a, str) and a == '-' or isinstance(b, str) and b == '-':
             return False
         if is_categorical_dtype(a) and is_categorical_dtype(b):
-            # Pandas 0.21 CategoricalDtype compat
-            if (PANDAS_VERSION >= '0.21.0' and
-                    (UNKNOWN_CATEGORIES in a.categories or
-                     UNKNOWN_CATEGORIES in b.categories)):
+            if UNKNOWN_CATEGORIES in a.categories or UNKNOWN_CATEGORIES in b.categories:
                 return True
             return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
@@ -581,7 +568,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
                   "`%s`" % (type(meta).__name__, type(x).__name__))
     elif is_dataframe_like(meta):
         kwargs = dict()
-        if PANDAS_VERSION >= LooseVersion('0.23.0'):
+        if PANDAS_VERSION >= '0.23.0':
             kwargs['sort'] = True
         dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, **kwargs)
         bad_dtypes = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
@@ -683,7 +670,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
 def _maybe_sort(a):
     # sort by value, then index
     try:
-        if isinstance(a, pd.DataFrame):
+        if is_dataframe_like(a):
             if set(a.index.names) & set(a.columns):
                 a.index.names = ['-overlapped-index-name-%d' % i
                                  for i in range(len(a.index.names))]
@@ -756,7 +743,7 @@ def assert_divisions(ddf):
         return
 
     def index(x):
-        if isinstance(x, pd.Index):
+        if is_index_like(x):
             return x
         try:
             return x.index.get_level_values(0)
@@ -794,18 +781,22 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
     useful due to the implicit conversion of integer to floating upon
     encountering missingness, which is hard to infer statically."""
 
-    eq_types = {'O', 'S', 'U', 'a'}     # treat object and strings alike
+    eq_type_sets = [{'O', 'S', 'U', 'a'}]     # treat object and strings alike
     if numeric_equal:
-        eq_types.update(('i', 'f'))
+        eq_type_sets.append({'i', 'f', 'u'})
 
-    if isinstance(res, pd.DataFrame):
+    def eq_dtypes(a, b):
+        return any(a.kind in eq_types and b.kind in eq_types
+                   for eq_types in eq_type_sets) or (a == b)
+
+    if not is_dask_collection(res) and is_dataframe_like(res):
         for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes],
                                    axis=1).itertuples():
-            assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
-    elif isinstance(res, (pd.Series, pd.Index)):
+            assert eq_dtypes(a, b)
+    elif not is_dask_collection(res) and (is_index_like(res) or is_series_like(res)):
         a = ddf._meta.dtype
         b = res.dtype
-        assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+        assert eq_dtypes(a, b)
     else:
         if hasattr(ddf._meta, 'dtype'):
             a = ddf._meta.dtype
@@ -814,7 +805,7 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
                 b = np.dtype(type(res))
             else:
                 b = res.dtype
-            assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
+            assert eq_dtypes(a, b)
         else:
             assert type(ddf._meta) == type(res)
 

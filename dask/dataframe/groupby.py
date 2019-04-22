@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 
 from .core import (DataFrame, Series, aca, map_partitions,
-                   new_dd_object, no_default, split_out_on_index)
+                   new_dd_object, no_default, split_out_on_index,
+                   _extract_meta)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
@@ -513,7 +514,8 @@ def _build_agg_args_single(result_column, func, input_column):
         'count': (M.count, M.sum),
         'size': (M.size, M.sum),
         'first': (M.first, M.first),
-        'last': (M.last, M.last)
+        'last': (M.last, M.last),
+        'prod': (M.prod, M.prod)
     }
 
     if func in simple_impl.keys():
@@ -820,7 +822,7 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        meta = func(self._meta)
+        meta = func(self._meta_nonempty)
         columns = meta.name if is_series_like(meta) else meta.columns
 
         token = self._token_prefix + token
@@ -925,9 +927,24 @@ class _GroupBy(object):
                              initial=-1)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1):
-        return self._aca_agg(token='sum', func=M.sum, split_every=split_every,
-                             split_out=split_out)
+    def sum(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='sum', func=M.sum, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def prod(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='prod', func=M.prod, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self, split_every=None, split_out=1):
@@ -1100,15 +1117,16 @@ class _GroupBy(object):
         meta = kwargs.get('meta', no_default)
 
         if meta is no_default:
+            with raise_on_meta_error("groupby.apply({0})".format(funcname(func)), udf=True):
+                meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
+                meta = self._meta_nonempty.apply(func, *meta_args, **meta_kwargs)
+
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
                    "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg, stacklevel=2)
-
-            with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
-                meta = self._meta_nonempty.apply(func, *args, **kwargs)
 
         meta = make_meta(meta)
 

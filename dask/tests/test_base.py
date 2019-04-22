@@ -6,6 +6,7 @@ from operator import add, mul
 import subprocess
 import sys
 import time
+from collections import OrderedDict
 
 from toolz import merge
 
@@ -383,14 +384,15 @@ def test_unpack_collections():
     c = a + 2
 
     def build(a, b, c, iterator):
-        t = (a, b,                  # Top-level collections
-                {'a': a,            # dict
-                 a: b,              # collections as keys
-                 'b': [1, 2, [b]],  # list
-                 'c': 10,           # other builtins pass through unchanged
-                 'd': (c, 2),       # tuple
-                 'e': {a, 2, 3}},   # set
-                iterator)           # Iterator
+        t = (a, b,                              # Top-level collections
+                {'a': a,                        # dict
+                 a: b,                          # collections as keys
+                 'b': [1, 2, [b]],              # list
+                 'c': 10,                       # other builtins pass through unchanged
+                 'd': (c, 2),                   # tuple
+                 'e': {a, 2, 3},                # set
+                 'f': OrderedDict([('a', a)])}, # OrderedDict
+                iterator)                       # Iterator
 
         if dataclasses is not None:
             t[2]['f'] = ADataClass(a=a)
@@ -666,6 +668,7 @@ def test_visualize_lists(tmpdir):
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
+    pytest.importorskip('graphviz')
     pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:

@@ -201,7 +201,7 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
     dtype : dtype, optional
-        The type of the output array. Default is given by ``numpy.dtype(float)``.
+        The type of the output array.
 
     Returns
     -------
@@ -216,15 +216,15 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
     """
     num = int(num)
 
-    chunks = normalize_chunks(chunks, (num,))
+    if dtype is None:
+        dtype = np.linspace(0, 1, 1).dtype
+
+    chunks = normalize_chunks(chunks, (num,), dtype=dtype)
 
     range_ = stop - start
 
     div = (num - 1) if endpoint else num
     step = float(range_) / div
-
-    if dtype is None:
-        dtype = np.linspace(0, 1, 1).dtype
 
     name = 'linspace-' + tokenize((start, stop, num, endpoint, chunks, dtype))
 
@@ -675,7 +675,7 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
 
 @wraps(np.fromfunction)
 def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
-    chunks = normalize_chunks(chunks, shape)
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]

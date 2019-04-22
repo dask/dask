@@ -48,7 +48,6 @@ from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
 from .blockwise import blockwise
 
-
 config.update_defaults({'array': {
     'chunk-size': '128MiB',
     'rechunk-threshold': 4
@@ -1513,6 +1512,11 @@ class Array(DaskMethodsMixin):
                    split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
+    def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
+        from .reductions import trace
+        return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
+
+    @derived_from(np.ndarray)
     def prod(self, axis=None, dtype=None, keepdims=False, split_every=None,
              out=None):
         from .reductions import prod
@@ -1779,6 +1783,16 @@ class Array(DaskMethodsMixin):
         """
         return to_zarr(self, *args, **kwargs)
 
+    def to_tiledb(self, uri, *args, **kwargs):
+        """Save array to the TileDB storage manager
+
+        See function ``to_tiledb()`` for argument documentation.
+
+        See https://docs.tiledb.io for details about the format and engine.
+        """
+        from .tiledb_io import to_tiledb
+        return to_tiledb(self, uri, *args, **kwargs)
+
 
 def ensure_int(f):
     i = int(f)
@@ -1837,7 +1851,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     >>> normalize_chunks({0: 2, 1: 3}, shape=(6, 6))
     ((2, 2, 2), (3, 3))
 
-    The value -1 gets mapped to full size
+    The values -1 and None get mapped to full size
 
     >>> normalize_chunks((5, -1), shape=(10, 10))
     ((5, 5), (10,))
@@ -1850,6 +1864,12 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
+
+    You can also use byte sizes (see ``dask.utils.parse_bytes``) in place of
+    "auto" to ask for a particular size
+
+    >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
+    ((250, 250, 250, 250, 250, 250, 250, 250),)
 
     Respects null dimensions
 
@@ -1879,8 +1899,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         raise ValueError(
             "Chunks and shape must be of the same length/dimension. "
             "Got chunks=%s, shape=%s" % (chunks, shape))
-    if -1 in chunks:
-        chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
+    if -1 in chunks or None in chunks:
+        chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
 
     # If specifying chunk size in bytes, use that value to set the limit.
     # Verify there is only one consistent value of limit or chunk-bytes used.
@@ -1941,7 +1961,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         A tuple of either dimensions or tuples of explicit chunk dimensions
         Some entries should be "auto"
     shape: Tuple[int]
-    limit: int
+    limit: int, str
         The maximum allowable size of a chunk in bytes
     previous_chunks: Tuple[Tuple[int]]
 
@@ -1977,7 +1997,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             raise ValueError("Can not perform automatic rechunking with unknown "
                              "(nan) chunk sizes")
 
-    limit = max(1, limit // dtype.itemsize)
+    limit = max(1, limit)
 
     largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
                              for cs in chunks if cs != 'auto'])
@@ -1996,7 +2016,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = limit / largest_block / np.prod(list(result.values()))
+        multiplier = limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
         last_multiplier = 0
         last_autos = set()
 
@@ -2017,14 +2037,14 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
-            multiplier = limit / largest_block / np.prod(list(result.values()))
+            multiplier = limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
 
         for k, v in result.items():
             chunks[k] = v
         return tuple(chunks)
 
     else:
-        size = (limit / largest_block) ** (1 / len(autos))
+        size = (limit / dtype.itemsize / largest_block) ** (1 / len(autos))
         small = [i for i in autos if shape[i] < size]
         if small:
             for i in small:
@@ -2059,7 +2079,7 @@ def round_to(c, s):
         return c // s * s
 
 
-def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
+def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True,
                getitem=None):
     """ Create dask array from something that looks like an array
 
@@ -2074,8 +2094,13 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -   A blockshape like (1000, 1000).
         -   Explicit sizes of all blocks along all dimensions like
             ((1000, 1000, 500), (400, 400)).
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
 
-        -1 as a blocksize indicates the size of the corresponding dimension.
+        -1 or None as a blocksize indicate the size of the corresponding
+        dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
         By default, hash uses python's standard sha1. This behaviour can be
@@ -2103,11 +2128,26 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     arrays to coordinate around the same lock.
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
+
+    If your underlying datastore has a ``.chunks`` attribute (as h5py and zarr
+    datasets do) then a multiple of that chunk shape will be used if you
+    do not provide a chunk shape.
+
+    >>> a = da.from_array(x, chunks='auto')  # doctest: +SKIP
+    >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
+    >>> a = da.from_array(x)  # doctest: +SKIP
     """
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
-    chunks = normalize_chunks(chunks, x.shape, dtype=x.dtype)
+    previous_chunks = getattr(x, 'chunks', None)
+
+    chunks = normalize_chunks(
+        chunks,
+        x.shape,
+        dtype=x.dtype,
+        previous_chunks=previous_chunks
+    )
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2142,7 +2182,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
-def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
+def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):
     """Load array from the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2163,6 +2203,8 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         Passed to ``da.from_array``, allows setting the chunks on
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
+    name : str, optional
+         An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
     """
     import zarr
@@ -2179,7 +2221,9 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         mapper = url
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
-    return from_array(z, chunks, name='zarr-%s' % url)
+    if name is None:
+        name = 'from-zarr-' + tokenize(z, component, storage_options, chunks, **kwargs)
+    return from_array(z, chunks, name=name )
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
