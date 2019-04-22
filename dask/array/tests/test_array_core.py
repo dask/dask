@@ -427,8 +427,6 @@ def test_concatenate_fixlen_strings():
               da.concatenate([a, b]))
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_simple_row_wise():
     a1 = np.ones((2, 2))
     a2 = 2 * a1
@@ -442,8 +440,6 @@ def test_block_simple_row_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_simple_column_wise():
     a1 = np.ones((2, 2))
     a2 = 2 * a1
@@ -457,8 +453,6 @@ def test_block_simple_column_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_with_1d_arrays_row_wise():
     # # # 1-D vectors are treated as row arrays
     a1 = np.array([1, 2, 3])
@@ -473,8 +467,6 @@ def test_block_with_1d_arrays_row_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_with_1d_arrays_multiple_rows():
     a1 = np.array([1, 2, 3])
     a2 = np.array([2, 3, 4])
@@ -488,8 +480,6 @@ def test_block_with_1d_arrays_multiple_rows():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_with_1d_arrays_column_wise():
     # # # 1-D vectors are treated as row arrays
     a1 = np.array([1, 2, 3])
@@ -504,8 +494,6 @@ def test_block_with_1d_arrays_column_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_mixed_1d_and_2d():
     a1 = np.ones((2, 2))
     a2 = np.array([2, 2])
@@ -519,8 +507,6 @@ def test_block_mixed_1d_and_2d():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_complicated():
     # a bit more complicated
     a1 = np.array([[1, 1, 1]])
@@ -553,8 +539,6 @@ def test_block_complicated():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_nested():
     a1 = np.array([1, 1, 1])
     a2 = np.array([[2, 2, 2], [2, 2, 2], [2, 2, 2]])
@@ -600,8 +584,6 @@ def test_block_nested():
     assert_eq(expected, result)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_3d():
     a000 = np.ones((2, 2, 2), int) * 1
 
@@ -661,8 +643,6 @@ def test_block_with_mismatched_shape():
             da.block(arrays)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="NumPy doesn't support `block` yet")
 def test_block_no_lists():
     assert_eq(da.block(1),         np.block(1))
     assert_eq(da.block(np.eye(3)), np.block(np.eye(3)))
@@ -933,9 +913,7 @@ def test_broadcast_to_chunks():
 
 
 def test_broadcast_arrays():
-    # Calling `broadcast_arrays` with no arguments only works in NumPy 1.13.0+.
-    if LooseVersion(np.__version__) >= LooseVersion("1.13.0"):
-        assert np.broadcast_arrays() == da.broadcast_arrays()
+    assert np.broadcast_arrays() == da.broadcast_arrays()
 
     a = np.arange(4)
     d_a = da.from_array(a, chunks=tuple(s // 2 for s in a.shape))
@@ -3172,21 +3150,6 @@ def test_setitem_2d():
     dx[dx > 6] = -1
     dx[dx % 2 == 0] = -2
 
-    assert_eq(x, dx)
-
-
-@pytest.mark.skipif(np.__version__ >= '1.13.0',
-                    reason='boolean slicing rules changed')
-def test_setitem_mixed_d():
-    x = np.arange(24).reshape((4, 6))
-    dx = da.from_array(x, chunks=(2, 2))
-
-    x[x[0, None] > 2] = -1
-    dx[dx[0, None] > 2] = -1
-    assert_eq(x, dx)
-
-    x[x[None, 0] > 2] = -1
-    dx[dx[None, 0] > 2] = -1
     assert_eq(x, dx)
 
 

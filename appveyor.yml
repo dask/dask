@@ -21,9 +21,7 @@ init:
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # Update to a known good conda
-  # (to workaround https://help.appveyor.com/discussions/problems/4910)
-  - conda install -q -y conda=4.2.9
+  - conda update conda -y -q
   - continuous_integration\\appveyor\\setup_conda_environment.cmd
 
 build_script:
