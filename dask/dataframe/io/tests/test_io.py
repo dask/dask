@@ -494,12 +494,7 @@ def test_to_bag():
     assert ddf.x.to_bag().compute() == list(a.x)
 
 
-@pytest.mark.parametrize('lengths', [
-    None,
-    [2, 3],
-    True,
-])
-def test_to_records(lengths):
+def test_to_records():
     pytest.importorskip('dask.array')
     from dask.array.utils import assert_eq
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -507,16 +502,29 @@ def test_to_records(lengths):
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
     ddf = dd.from_pandas(df, 2)
 
-    assert_eq(df.to_records(), ddf.to_records(lengths=lengths))
+    assert_eq(df.to_records(), ddf.to_records())
 
-    # assert isinstance(result, da.Array)
-    #
-    # expected_chunks = ((2, 3),)
-    #
-    # if as_frame:
-    #     expected_chunks = expected_chunks + ((1,),)
-    #
-    # assert result.chunks == expected_chunks
+
+@pytest.mark.parametrize('lengths', [
+    [2, 2],
+    True,
+])
+def test_to_records_with_lengths(lengths):
+    pytest.importorskip('dask.array')
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.to_records(lengths=lengths)
+    # assert_eq(df.to_records(), result)
+
+    assert isinstance(result, da.Array)
+
+    expected_chunks = ((2, 2), (2,))
+
+    assert result.chunks == expected_chunks
 
 
 def test_from_delayed():
