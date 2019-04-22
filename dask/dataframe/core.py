@@ -1129,31 +1129,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Returns
         -------
         """
-        from dask.array.core import normalize_chunks
-
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
         arr = self.map_partitions(np.array, )
 
-        if isinstance(lengths, Sequence):
-            lengths = tuple(lengths)
+        chunks = self._validate_chunks(arr, lengths)
+        arr._chunks = chunks
 
-            if len(lengths) != self.npartitions:
-                raise ValueError(
-                    "The number of items in 'lengths' does not match "
-                    "the number of partitions. "
-                    "{} != {}".format(len(lengths), self.npartitions)
-                )
-
-            if self.ndim == 1:
-                chunks = normalize_chunks((lengths,))
-            else:
-                chunks = normalize_chunks((lengths, (len(self.columns),)))
-
-            arr._chunks = chunks
-        elif lengths is not None:
-            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
         return arr
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
@@ -1831,6 +1814,30 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         will not work.
         """
         return self.map_partitions(methods.values)
+
+    def _validate_chunks(self, arr, lengths):
+        from dask.array.core import normalize_chunks
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            return chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+
+        return arr._chunks
 
 
 def _raise_if_object_series(x, funcname):
@@ -3250,31 +3257,15 @@ class DataFrame(_Frame):
 
     def to_records(self, index=False, lengths=None):
         from .io import to_records
-        from dask.array.core import normalize_chunks
 
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
         records = to_records(self)
 
-        if isinstance(lengths, Sequence):
-            lengths = tuple(lengths)
+        chunks = self._validate_chunks(records, lengths)
+        records._chunks = chunks
 
-            if len(lengths) != self.npartitions:
-                raise ValueError(
-                    "The number of items in 'lengths' does not match "
-                    "the number of partitions. "
-                    "{} != {}".format(len(lengths), self.npartitions)
-                )
-
-            if self.ndim == 1:
-                chunks = normalize_chunks((lengths,))
-            else:
-                chunks = normalize_chunks((lengths, (len(self.columns),)))
-
-            records._chunks = chunks
-        elif lengths is not None:
-            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
         return records
 
     @derived_from(pd.DataFrame)
