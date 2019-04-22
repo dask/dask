@@ -410,8 +410,6 @@ def test_to_series():
     assert_eq(df.index.to_series(), ddf.index.to_series())
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="No index.to_frame method")
 def test_to_frame():
 
     # Test for time index
