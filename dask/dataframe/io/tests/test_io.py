@@ -527,6 +527,20 @@ def test_to_records_with_lengths(lengths):
     assert result.chunks == expected_chunks
 
 
+def test_to_records_raises():
+    pytest.importorskip('dask.array')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    with pytest.raises(ValueError, message="3 != 2"):
+        ddf.to_records(lengths=[2, 2, 2])
+
+    with pytest.raises(ValueError, message="Unexpected value"):
+        ddf.to_records(lengths=5)
+
+
 def test_from_delayed():
     df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list('abcd'))
     parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
