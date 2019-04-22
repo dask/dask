@@ -18,7 +18,7 @@ import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
-from dask.dataframe.utils import assert_eq, has_known_categories, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from dask.bytes.compression import compress, files as cfiles, seekable_files
@@ -511,8 +511,6 @@ def test_consistent_dtypes_2():
         assert df.name.compute().dtype == object
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.19.2',
-                    reason="Not available in pandas <= 0.19.2")
 def test_categorical_dtypes():
     text1 = normalize_text("""
     fruit,count
@@ -540,8 +538,6 @@ def test_categorical_dtypes():
                 ['apple', 'banana', 'orange', 'pear'])
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Uses CategoricalDtype")
 def test_categorical_known():
     text1 = normalize_text("""
     A,B

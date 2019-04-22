@@ -28,10 +28,15 @@ Release per project:
         python setup.py sdist bdist_wheel --universal
         twine upload dist/*
 
-*   Update `dask-core` feedstock on [conda-forge](https://conda-forge.github.io)
+*   Wait for [conda-forge](https://conda-forge.github.io) bots to track the
+    change to PyPI
 
-    Typically this is handled by a conda-forge bot within an hour or two,
-    but in some cases you have to modify version or build numbers.
+    This will typically happen in an hour or two.  There will be two PRs, one
+    to `dask-core`, which you will likely be able to merge after tests pass,
+    and another to `dask`, for which you might have to change version numbers
+    if other packages (like `distributed`) are changing at the same time.
+
+    In some cases you may also have to zero out build numbers.
 
     If for some reason you have to do this manually, then follow these steps:
 
@@ -46,12 +51,6 @@ Release per project:
     *  Update version number and hash in recipe
     *  Check dependencies
     *  Do the same for the dask-feedstock meta-package
-
-*   Update `dask` feedstock after `dask-core` feedstock has been merged and is
-    available through conda.
-
-    Usually this only means updating the version in the top line, and then
-    submitting a PR.
 
 *   Automated systems internal to Anaconda Inc then handle updating the
     Anaconda defaults channel
