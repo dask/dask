@@ -1063,7 +1063,7 @@ def get_engine(engine):
         if pa_version < '0.8.0':
             raise RuntimeError("PyArrow version >= 0.8.0 required")
         elif pa_version == '0.13.0':
-            raise RuntimeError("PyArrow versino 0.13.0 isn't supported, please "
+            raise RuntimeError("PyArrow version 0.13.0 isn't supported, please "
                                "upgrade or downgrade")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
