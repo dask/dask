@@ -3248,7 +3248,7 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
-    def to_records(self, lengths=None, index=False):
+    def to_records(self, index=False, lengths=None):
         from .io import to_records
         from dask.array.core import normalize_chunks
 
