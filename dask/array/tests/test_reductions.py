@@ -338,7 +338,6 @@ def test_nan():
     assert_eq(np.nanprod(x), da.nanprod(d))
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='nanmax/nanmin for object dtype')
 @pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
                                   'nanmax', 'max'])
 def test_nan_object(func):
@@ -439,7 +438,6 @@ def test_reduction_names():
     assert x.mean().name.startswith('mean')
 
 
-@pytest.mark.skipif(np.__version__ < '1.12.0', reason='argmax out parameter')
 @pytest.mark.parametrize('func', [np.sum,
                                   np.argmax])
 def test_array_reduction_out(func):
@@ -449,12 +447,7 @@ def test_array_reduction_out(func):
     assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
-cum_funcs = ["cumsum", "cumprod"]
-if np.__version__ >= '1.12.0':
-    cum_funcs += ["nancumsum", "nancumprod"]
-
-
-@pytest.mark.parametrize("func", cum_funcs)
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
 def test_array_cumreduction_axis(func, use_nan, axis):

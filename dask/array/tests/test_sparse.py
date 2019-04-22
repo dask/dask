@@ -1,5 +1,4 @@
 import random
-from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
@@ -13,10 +12,6 @@ if sparse:
     # Conda-Forge provides 0.35.0 on windows right now, causing failures like
     # searchsorted() got an unexpected keyword argument 'side'
     pytest.importorskip("numba", minversion="0.40.0")
-
-
-if LooseVersion(np.__version__) < '1.11.2':
-    pytestmark = pytest.mark.skip
 
 
 functions = [

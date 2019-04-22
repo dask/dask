@@ -302,8 +302,6 @@ def test_from_pandas_single_row():
     assert_eq(ddf, df)
 
 
-@pytest.mark.skipif(np.__version__ < '1.11',
-                    reason='datetime unit unsupported in NumPy < 1.11')
 def test_from_pandas_with_datetime_index():
     df = pd.DataFrame({"Date": ["2015-08-28", "2015-08-27", "2015-08-26",
                                 "2015-08-25", "2015-08-24", "2015-08-21",

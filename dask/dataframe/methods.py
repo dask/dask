@@ -4,15 +4,12 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
 from .utils import PANDAS_VERSION, is_series_like
 from ..utils import Dispatch
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.api.types import union_categoricals
-else:
-    from pandas.types.concat import union_categoricals
+
 if PANDAS_VERSION >= '0.23':
     concat_kwargs = {'sort': False}
 else:
@@ -240,13 +237,6 @@ def pivot_count(df, index, columns, values):
 # concat
 # ---------------------------------
 
-if PANDAS_VERSION < '0.20.0':
-    def _get_level_values(x, n):
-        return x.get_level_values(n)
-else:
-    def _get_level_values(x, n):
-        return x._get_level_values(n)
-
 
 concat_dispatch = Dispatch('concat')
 
@@ -289,7 +279,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
             first, rest = dfs[0], dfs[1:]
             if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
                     for o in rest):
-                arrays = [concat([_get_level_values(i, n) for i in dfs])
+                arrays = [concat([i._get_level_values(n) for i in dfs])
                           for n in range(first.nlevels)]
                 return pd.MultiIndex.from_arrays(arrays, names=first.names)
 

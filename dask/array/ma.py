@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps
-from distutils.version import LooseVersion
 
 import numpy as np
 
@@ -9,10 +8,6 @@ from ..base import normalize_token
 from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
                    asanyarray, blockwise)
 from .routines import _average
-
-
-if LooseVersion(np.__version__) < '1.11.2':
-    raise ImportError("dask.array.ma requires numpy >= 1.11.2")
 
 
 @normalize_token.register(np.ma.masked_array)

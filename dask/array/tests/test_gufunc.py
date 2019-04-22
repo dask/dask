@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from distutils.version import LooseVersion
 import pytest
 from numpy.testing import assert_equal
 import dask.array as da
@@ -129,8 +128,6 @@ def test_apply_gufunc_01b():
     assert std.compute().shape == (10, 20)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="`np.vectorize(..., signature=...)` not supported yet")
 @pytest.mark.parametrize('vectorize', [False, True])
 def test_apply_gufunc_output_dtypes_string(vectorize):
     def stats(x):
@@ -140,8 +137,6 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
     assert mean.compute().shape == (10, 20)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="`np.vectorize(..., signature=...)` not supported yet")
 @pytest.mark.parametrize('vectorize', [False, True])
 def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
@@ -290,8 +285,6 @@ def test_gufunc_mixed_inputs():
     assert_eq(x, 2 * np.ones((2, 8), dtype=int))
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
@@ -305,8 +298,6 @@ def test_gufunc():
     assert valy.shape == (10,)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_as_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
@@ -507,8 +498,6 @@ def test_apply_gufunc_axes_02():
     assert_eq(m, dm)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_apply_gufunc_axes_two_kept_coredims():
     a = da.random.normal(size=(   20, 30), chunks=(10, 30))
     b = da.random.normal(size=(10, 1, 40), chunks=(5, 1, 40))
@@ -520,8 +509,6 @@ def test_apply_gufunc_axes_two_kept_coredims():
     assert c.compute().shape == (10, 20, 30, 40)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="Additional kwargs for this version not supported")
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip('numba')
 
@@ -539,8 +526,6 @@ def test_apply_gufunc_via_numba_01():
     assert_eq(x, y)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="Additional kwargs for this version not supported")
 def test_apply_gufunc_via_numba_02():
     numba = pytest.importorskip('numba')
 

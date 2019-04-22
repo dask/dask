@@ -407,11 +407,7 @@ def test_groupby_set_index():
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-@pytest.mark.parametrize('empty', [
-    pytest.param(True, marks=pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                 reason="Empty groupby-reductions fail for older pandas")),
-    pytest.param(False)
-])
+@pytest.mark.parametrize('empty', [True, False])
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
@@ -824,9 +820,7 @@ def test_series_aggregate__examples(spec, split_every, grouper):
     # but we should still test it for now
     with pytest.warns(None):
         assert_eq(ps.groupby(grouper(pdf)).agg(spec),
-                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-                  # pandas < 0.20.0 does not propagate the name for size
-                  check_names=(spec != 'size'))
+                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
 
 def test_aggregate__single_element_groups(agg_func):
@@ -1288,9 +1282,6 @@ def test_groupby_agg_grouper_multiple(slice_):
     assert_eq(result, expected)
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Need pandas groupby bug fix "
-                           "(pandas-dev/pandas#16859)")
 @pytest.mark.parametrize('agg_func', [
     'cumprod', 'cumcount', 'cumsum', 'var', 'sum', 'mean', 'count', 'size',
     'std', 'min', 'max', 'first', 'last', 'prod'
@@ -1366,8 +1357,6 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         assert_eq(expected, result)
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Need 0.21.0 for mixed column/index grouping")
 @pytest.mark.parametrize(
     'group_args', [['idx', 'a'], ['a', 'idx'], ['idx'], 'idx'])
 @pytest.mark.parametrize(
