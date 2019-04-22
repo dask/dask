@@ -5,13 +5,13 @@ from operator import getitem
 import uuid
 import warnings
 
+import toolz
 import numpy as np
 import pandas as pd
-import toolz
+from pandas._libs.algos import groupsort_indexer
+from pandas.util import hash_pandas_object
 
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
-from .hashing import hash_pandas_object
-from .utils import PANDAS_VERSION
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
@@ -19,11 +19,6 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
-
-if PANDAS_VERSION >= '0.20.0':
-    from pandas._libs.algos import groupsort_indexer
-else:
-    from pandas.algos import groupsort_indexer
 
 
 def set_index(df, index, npartitions=None, shuffle=None, compute=False,
