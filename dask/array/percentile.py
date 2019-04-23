@@ -49,7 +49,7 @@ def _percentiles_from_tdigest(qs, digests):
     t = TDigest()
     t.merge(*digests)
 
-    return np.array([t.quantile(q / 100.0) for q in qs])
+    return np.array(t.quantile(qs / 100.0))
 
 
 def percentile(a, q, interpolation='linear', method='default'):
