@@ -371,6 +371,9 @@ def map_blocks(func, *args, **kwargs):
     >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
     ...                  new_axis=[0, 2])
 
+    If ``chunks`` is specified but ``new_axis`` is not, then it is inferred to
+    add the necessary number of axes on the left.
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
@@ -430,7 +433,7 @@ def map_blocks(func, *args, **kwargs):
     ...     loc = block_info[None]['array-location'][0]
     ...     return np.arange(loc[0], loc[1])
 
-    >>> da.map_blocks(func, new_axis=[0], chunks=((4, 4),), dtype=np.float_)
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
     dask.array<func, shape=(8,), dtype=float64, chunksize=(4,)>
 
     >>> _.compute()
@@ -457,7 +460,7 @@ def map_blocks(func, *args, **kwargs):
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
-    new_axis = kwargs.pop('new_axis', [])
+    new_axis = kwargs.pop('new_axis', None)
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -488,6 +491,8 @@ def map_blocks(func, *args, **kwargs):
 
     if drop_axis:
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
+    if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
+        new_axis = range(len(chunks) - len(out_ind))
     if new_axis:
         # new_axis = [x + len(drop_axis) for x in new_axis]
         out_ind = list(out_ind)
@@ -519,7 +524,7 @@ def map_blocks(func, *args, **kwargs):
             v.dsk[key] = task
             dsk[k] = (v,) + vv[1:]
 
-    if chunks:
+    if chunks is not None:
         if len(chunks) != len(out.numblocks):
             raise ValueError("Provided chunks have {0} dims, expected {1} "
                              "dims.".format(len(chunks), len(out.numblocks)))

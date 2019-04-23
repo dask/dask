@@ -1210,12 +1210,18 @@ def test_map_blocks_dtype_inference():
     assert 'RuntimeError' in msg
 
 
+def test_map_blocks_infer_newaxis():
+    x = da.ones((5, 3), chunks=(2, 2))
+    y = da.map_blocks(lambda x: x[None], x, chunks=((1,), (2, 2, 1), (2, 1)))
+    assert_eq(y, da.ones((1, 5, 3)))
+
+
 def test_map_blocks_no_array_args():
     def func(dtype, block_info=None):
         loc = block_info[None]['array-location']
         return np.arange(loc[0][0], loc[0][1], dtype=dtype)
 
-    x = da.map_blocks(func, np.float32, new_axis=[0], chunks=((5, 3),), dtype=np.float32)
+    x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
     assert x.chunks == ((5, 3),)
     assert_eq(x, np.arange(8, dtype=np.float32))
 
@@ -2622,7 +2628,7 @@ def test_map_blocks_with_changed_dimension():
 
     # Provided chunks have wrong shape
     with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b.sum(axis=0), chunks=(7, 4), drop_axis=0)
+        d.map_blocks(lambda b: b.sum(axis=0), chunks=(), drop_axis=0)
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
