@@ -417,14 +417,17 @@ def map_blocks(func, *args, **kwargs):
      None: {'shape': (1000,),
             'num-chunks': (10,),
             'chunk-location': (4,),
-            array-location: [(400, 500)]}}
+            'array-location': [(400, 500)],
+            'chunk-shape': (100,),
+            'dtype': dtype('float64')}}
 
     For each argument and keyword arguments that are dask arrays (the positions
     of which are the first index), you will receive the shape of the full
     array, the number of chunks of the full array in each dimension, the chunk
     location (for example the fourth chunk over in the first dimension), and
     the array location (for example the slice corresponding to ``40:50``). The
-    same information is provided for the output, with the key ``None``.
+    same information is provided for the output, with the key ``None``, plus
+    the shape and dtype that should be returned.
 
     These features can be combined to synthesize an array from scratch, for
     example:
@@ -584,7 +587,10 @@ def map_blocks(func, *args, **kwargs):
                           'num-chunks': out.numblocks,
                           'array-location': [(out_starts[ij][j], out_starts[ij][j + 1])
                                              for ij, j in enumerate(k[1:])],
-                          'chunk-location': k[1:]}
+                          'chunk-location': k[1:],
+                          'chunk-shape': tuple(out.chunks[ij][j]
+                                               for ij, j in enumerate(k[1:])),
+                          'dtype': dtype}
 
             v = copy.copy(v)  # Need to copy and unpack subgraph callable
             v.dsk = copy.copy(v.dsk)
