@@ -184,9 +184,8 @@ class FastParquetEngine:
                    'kwargs': {'pf': pf, 'categories': categories}}
                   for rg in pf.row_groups]
         pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
-        del pf.row_groups  # del unneeded attributes for serialisation
-        del pf.fmd.row_groups
-        del pf._schema
+        pf.fmd.row_groups = None
+        del pf._schema, pf.row_groups
         return meta, stats, pieces
 
     @staticmethod
