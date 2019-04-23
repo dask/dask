@@ -518,7 +518,7 @@ def test_to_records_with_lengths(lengths):
     ddf = dd.from_pandas(df, 2)
 
     result = ddf.to_records(lengths=lengths)
-    # assert_eq(df.to_records(), result)
+    assert_eq(df.to_records(), result)
 
     assert isinstance(result, da.Array)
 
