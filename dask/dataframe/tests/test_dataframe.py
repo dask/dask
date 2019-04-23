@@ -1,13 +1,13 @@
 import textwrap
-from distutils.version import LooseVersion
+import warnings
 from itertools import product
 from operator import add
-import warnings
 
+import pytest
+import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-import numpy as np
-import pytest
+from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
@@ -21,11 +21,6 @@ from dask.dataframe.core import (repartition_divisions, aca, _concat, Scalar,
 from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
-
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.io.formats import format as pandas_format
-else:
-    from pandas.formats import format as pandas_format
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -380,25 +375,23 @@ def test_cumulative():
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
 
-    # testing out parameter if out parameter supported
-    if LooseVersion(np.__version__) >= '1.13.0':
-        np.cumsum(ddf, out=ddf_out)
-        assert_eq(ddf_out, df.cumsum())
-        np.cumprod(ddf, out=ddf_out)
-        assert_eq(ddf_out, df.cumprod())
-        ddf.cummin(out=ddf_out)
-        assert_eq(ddf_out, df.cummin())
-        ddf.cummax(out=ddf_out)
-        assert_eq(ddf_out, df.cummax())
+    np.cumsum(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumsum())
+    np.cumprod(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumprod())
+    ddf.cummin(out=ddf_out)
+    assert_eq(ddf_out, df.cummin())
+    ddf.cummax(out=ddf_out)
+    assert_eq(ddf_out, df.cummax())
 
-        np.cumsum(ddf, out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cumsum(axis=1))
-        np.cumprod(ddf, out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cumprod(axis=1))
-        ddf.cummin(out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cummin(axis=1))
-        ddf.cummax(out=ddf_out, axis=1)
-        assert_eq(ddf_out, df.cummax(axis=1))
+    np.cumsum(ddf, out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cumsum(axis=1))
+    np.cumprod(ddf, out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cumprod(axis=1))
+    ddf.cummin(out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cummin(axis=1))
+    ddf.cummax(out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cummax(axis=1))
 
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
@@ -1051,46 +1044,54 @@ def test_index():
 
 
 def test_assign():
-    d_unknown = dd.from_pandas(full, npartitions=3, sort=False)
-    assert not d_unknown.known_divisions
-    res = d.assign(c=1,
-                   d='string',
-                   e=d.a.sum(),
-                   f=d.a + d.b,
-                   g=lambda x: x.a + x.b,
-                   dt=pd.Timestamp(2018, 2, 13))
-    res_unknown = d_unknown.assign(c=1,
-                                   d='string',
-                                   e=d_unknown.a.sum(),
-                                   f=d_unknown.a + d_unknown.b,
-                                   g=lambda x: x.a + x.b,
-                                   dt=pd.Timestamp(2018, 2, 13))
-    sol = full.assign(c=1,
-                      d='string',
-                      e=full.a.sum(),
-                      f=full.a + full.b,
-                      g=lambda x: x.a + x.b,
-                      dt=pd.Timestamp(2018, 2, 13))
+    df = pd.DataFrame({'a': range(8),
+                       'b': [float(i) for i in range(10, 18)]},
+                      index=pd.Index(list('abcdefgh')))
+    ddf = dd.from_pandas(df, npartitions=3)
+    ddf_unknown = dd.from_pandas(df, npartitions=3, sort=False)
+    assert not ddf_unknown.known_divisions
+
+    res = ddf.assign(c=1,
+                     d='string',
+                     e=ddf.a.sum(),
+                     f=ddf.a + ddf.b,
+                     g=lambda x: x.a + x.b,
+                     dt=pd.Timestamp(2018, 2, 13))
+    res_unknown = ddf_unknown.assign(c=1,
+                                     d='string',
+                                     e=ddf_unknown.a.sum(),
+                                     f=ddf_unknown.a + ddf_unknown.b,
+                                     g=lambda x: x.a + x.b,
+                                     dt=pd.Timestamp(2018, 2, 13))
+    sol = df.assign(c=1,
+                    d='string',
+                    e=df.a.sum(),
+                    f=df.a + df.b,
+                    g=lambda x: x.a + x.b,
+                    dt=pd.Timestamp(2018, 2, 13))
     assert_eq(res, sol)
     assert_eq(res_unknown, sol)
 
-    res = d.assign(c=full.a + 1)
-    assert_eq(res, full.assign(c=full.a + 1))
+    res = ddf.assign(c=df.a + 1)
+    assert_eq(res, df.assign(c=df.a + 1))
+
+    res = ddf.assign(c=ddf.index)
+    assert_eq(res, df.assign(c=df.index))
 
     # divisions unknown won't work with pandas
     with pytest.raises(ValueError):
-        d_unknown.assign(c=full.a + 1)
+        ddf_unknown.assign(c=df.a + 1)
 
     # unsupported type
     with pytest.raises(TypeError):
-        d.assign(c=list(range(9)))
+        ddf.assign(c=list(range(9)))
 
     # Fails when assigning known divisions to unknown divisions
     with pytest.raises(ValueError):
-        d_unknown.assign(foo=d.a)
+        ddf_unknown.assign(foo=ddf.a)
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
-        d.assign(foo=d_unknown.a)
+        ddf.assign(foo=ddf_unknown.a)
 
 
 def test_assign_callable():
@@ -1825,13 +1826,6 @@ def test_eval():
               d.eval('z = x + y', inplace=False))
     with pytest.raises(NotImplementedError):
         d.eval('z = x + y', inplace=True)
-
-    # catch FutureWarning from pandas about assignment in eval
-    with pytest.warns(None):
-        if PANDAS_VERSION < '0.21.0':
-            if p.eval('z = x + y', inplace=None) is None:
-                with pytest.raises(NotImplementedError):
-                    d.eval('z = x + y', inplace=None)
 
 
 @pytest.mark.parametrize('include, exclude', [
@@ -2624,8 +2618,6 @@ def test_astype_categoricals():
     assert dx.compute().dtype == 'category'
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="No CategoricalDtype with categories")
 def test_astype_categoricals_known():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'b', 'c'],
                        'y': ['x', 'y', 'z', 'y', 'z'],
@@ -3614,3 +3606,13 @@ def test_index_divisions():
     assert_eq(ddf.index + 1, df.index + 1)
     assert_eq(10 * ddf.index, 10 * df.index)
     assert_eq(-ddf.index, -df.index)
+
+
+def test_replace():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(df.replace(1, 10), ddf.replace(1, 10))
+    assert_eq(df.replace({1: 10, 2: 20}), ddf.replace({1: 10, 2: 20}))
+    assert_eq(df.x.replace(1, 10), ddf.x.replace(1, 10))
+    assert_eq(df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}))

@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
 
-from functools import wraps, partial
 import operator
+import warnings
+from functools import wraps, partial
+from numbers import Number, Integral
 from operator import getitem
 from pprint import pformat
-import warnings
 
-from toolz import merge, first, unique, partition_all, remove
-import pandas as pd
 import numpy as np
-from numbers import Number, Integral
+import pandas as pd
+from pandas.util import cache_readonly, hash_pandas_object
+from toolz import merge, first, unique, partition_all, remove
 
 try:
     from chest import Chest as Cache
@@ -27,7 +28,7 @@ from ..compatibility import (apply, operator_div, bind_method, string_types,
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
-                     is_arraylike, typename)
+                     is_arraylike, typename, skip_doctest)
 from ..array.core import Array, normalize_arg
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
@@ -38,7 +39,6 @@ from ..highlevelgraph import HighLevelGraph
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
-from .hashing import hash_pandas_object
 from .optimize import optimize
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
@@ -48,12 +48,7 @@ from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
 
 no_default = '__no_default__'
 
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.util import cache_readonly
-    pd.set_option('compute.use_numexpr', False)
-else:
-    from pandas.util.decorators import cache_readonly
-    pd.computation.expressions.set_use_numexpr(False)
+pd.set_option('compute.use_numexpr', False)
 
 
 def _concat(args):
@@ -1109,6 +1104,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self._meta, self.divisions)
 
+    @derived_from(pd.DataFrame)
+    def replace(self, to_replace=None, value=None, regex=False):
+        return self.map_partitions(M.replace, to_replace=to_replace,
+                                   value=value, regex=regex)
+
     def to_dask_array(self, lengths=None):
         """Convert a dask DataFrame to a dask array.
 
@@ -1565,7 +1565,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'describe--' + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        return new_dd_object(graph, name, num._meta, divisions=[None, None])
+        meta = num._meta.describe()
+        return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
                  chunk_kwargs=None, out=None):
@@ -1686,11 +1687,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             meta = self._meta.astype(dtype)
         if hasattr(dtype, 'items'):
-            # Pandas < 0.21.0, no `categories` attribute, so unknown
-            # Pandas >= 0.21.0, known if `categories` attribute is not None
-            set_unknown = [k for k, v in dtype.items()
-                           if (is_categorical_dtype(v) and
-                               getattr(v, 'categories', None) is None)]
+            set_unknown = [
+                k for k, v in dtype.items()
+                if is_categorical_dtype(v) and getattr(v, 'categories', None) is None
+            ]
             meta = clear_known_categories(meta, cols=set_unknown)
         elif (is_categorical_dtype(dtype) and
               getattr(dtype, 'categories', None) is None):
@@ -2226,7 +2226,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
-        meth.__doc__ = op.__doc__
+        meth.__doc__ = skip_doctest(op.__doc__)
         bind_method(cls, name, meth)
 
     @classmethod
@@ -2243,7 +2243,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 op = partial(comparison, fill_value=fill_value)
                 return elemwise(op, self, other, axis=axis)
 
-        meth.__doc__ = comparison.__doc__
+        meth.__doc__ = skip_doctest(comparison.__doc__)
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
@@ -2446,9 +2446,6 @@ class Index(Series):
         if PANDAS_VERSION >= '0.24.0':
             return self.map_partitions(M.to_frame, index, name,
                                        meta=self._meta.to_frame(index, name))
-        elif PANDAS_VERSION < '0.21.0':
-            raise NotImplementedError("The 'Index.to_frame' method was added in pandas 0.21.0 "
-                                      "Your version of pandas is '{}'.".format(PANDAS_VERSION))
         else:
             if name is not None:
                 raise ValueError("The 'name' keyword was added in pandas 0.24.0. "
@@ -2774,7 +2771,7 @@ class DataFrame(_Frame):
         pairs = list(sum(kwargs.items(), ()))
 
         # Figure out columns of the output
-        df2 = self._meta.assign(**_extract_meta(kwargs))
+        df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
     @derived_from(pd.DataFrame, ua_args=['index'])
@@ -2807,8 +2804,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def eval(self, expr, inplace=None, **kwargs):
         if inplace is None:
-            if PANDAS_VERSION >= '0.21.0':
-                inplace = False
+            inplace = False
         if '=' in expr and inplace in (True, None):
             raise NotImplementedError("Inplace eval not supported."
                                       " Please use inplace=False")
@@ -3058,7 +3054,7 @@ class DataFrame(_Frame):
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
-        meth.__doc__ = op.__doc__
+        meth.__doc__ = skip_doctest(op.__doc__)
         bind_method(cls, name, meth)
 
     @classmethod
@@ -3071,7 +3067,7 @@ class DataFrame(_Frame):
             axis = self._validate_axis(axis)
             return elemwise(comparison, self, other, axis=axis)
 
-        meth.__doc__ = comparison.__doc__
+        meth.__doc__ = skip_doctest(comparison.__doc__)
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
@@ -3212,10 +3208,7 @@ class DataFrame(_Frame):
             lines.append(index_summary(index))
             lines.append('Data columns (total {} columns):'.format(len(self.columns)))
 
-            if PANDAS_VERSION >= '0.20.0':
-                from pandas.io.formats.printing import pprint_thing
-            else:
-                from pandas.formats.printing import pprint_thing
+            from pandas.io.formats.printing import pprint_thing
             space = max([len(pprint_thing(k)) for k in self.columns]) + 3
             column_template = '{!s:<%d} {} non-null {}' % space
             column_info = [column_template.format(pprint_thing(x[0]), x[1], x[2])
@@ -3741,6 +3734,8 @@ def _extract_meta(x, nonempty=False):
         for k in x:
             res[k] = _extract_meta(x[k], nonempty)
         return res
+    elif isinstance(x, Delayed):
+        raise ValueError("Cannot infer dataframe metadata with a `dask.delayed` argument")
     else:
         return x
 
@@ -3790,7 +3785,9 @@ def map_partitions(func, *args, **kwargs):
     meta_index = getattr(make_meta(dfs[0]), 'index', None) if dfs else None
 
     if meta is no_default:
-        meta = _emulate(func, *args, udf=True, **kwargs2)
+        # Use non-normalized kwargs here, as we want the real values (not
+        # delayed values)
+        meta = _emulate(func, *args, udf=True, **kwargs)
     else:
         meta = make_meta(meta, index=meta_index)
 

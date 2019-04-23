@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 try:
-    from ..utils import ignoring
     from .blockwise import blockwise, atop
     from .core import (Array, block, concatenate, stack, from_array, store,
                        map_blocks, to_hdf5, to_npy_stack, from_npy_stack,
@@ -30,24 +29,17 @@ try:
             isreal, iscomplex, isfinite, isinf, isneginf, isposinf, isnan, signbit,
             copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
             radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
-            i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc)
-    try:
-        from .ufunc import float_power
-    except ImportError:
-        # Absent for NumPy versions prior to 1.12.
-        pass
+            i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc, float_power)
     from .reductions import (sum, prod, mean, std, var, any, all, min, max,
-                             moment,
+                             moment, trace,
                              argmin, argmax,
                              nansum, nanmean, nanstd, nanvar, nanmin,
                              nanmax, nanargmin, nanargmax,
                              cumsum, cumprod,
-                             topk, argtopk)
+                             topk, argtopk,
+                             nanprod, nancumprod, nancumsum)
     from .percentile import percentile
-    with ignoring(ImportError):
-        from .reductions import nanprod, nancumprod, nancumsum
-    with ignoring(ImportError):
-        from . import ma
+    from . import ma
     from . import random, linalg, overlap, fft, backends
     from .overlap import map_overlap
     from .wrap import ones, zeros, empty, full

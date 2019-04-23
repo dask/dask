@@ -1512,6 +1512,11 @@ class Array(DaskMethodsMixin):
                    split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
+    def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
+        from .reductions import trace
+        return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
+
+    @derived_from(np.ndarray)
     def prod(self, axis=None, dtype=None, keepdims=False, split_every=None,
              out=None):
         from .reductions import prod
@@ -2074,7 +2079,7 @@ def round_to(c, s):
         return c // s * s
 
 
-def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
+def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True,
                getitem=None):
     """ Create dask array from something that looks like an array
 
@@ -2089,6 +2094,10 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -   A blockshape like (1000, 1000).
         -   Explicit sizes of all blocks along all dimensions like
             ((1000, 1000, 500), (400, 400)).
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
 
         -1 or None as a blocksize indicate the size of the corresponding
         dimension.
@@ -2119,11 +2128,26 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     arrays to coordinate around the same lock.
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
+
+    If your underlying datastore has a ``.chunks`` attribute (as h5py and zarr
+    datasets do) then a multiple of that chunk shape will be used if you
+    do not provide a chunk shape.
+
+    >>> a = da.from_array(x, chunks='auto')  # doctest: +SKIP
+    >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
+    >>> a = da.from_array(x)  # doctest: +SKIP
     """
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
-    chunks = normalize_chunks(chunks, x.shape, dtype=x.dtype)
+    previous_chunks = getattr(x, 'chunks', None)
+
+    chunks = normalize_chunks(
+        chunks,
+        x.shape,
+        dtype=x.dtype,
+        previous_chunks=previous_chunks
+    )
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2158,7 +2182,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
-def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
+def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):
     """Load array from the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2179,6 +2203,8 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         Passed to ``da.from_array``, allows setting the chunks on
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
+    name : str, optional
+         An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
     """
     import zarr
@@ -2195,7 +2221,9 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         mapper = url
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
-    return from_array(z, chunks, name='zarr-%s' % url)
+    if name is None:
+        name = 'from-zarr-' + tokenize(z, component, storage_options, chunks, **kwargs)
+    return from_array(z, chunks, name=name )
 
 
 def to_zarr(arr, url, component=None, storage_options=None,

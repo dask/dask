@@ -150,25 +150,38 @@ def test_full_groupby_apply_multiarg():
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        for c_lazy, d_lazy in [(c_scalar, d_scalar),
-                               (c_delayed, d_delayed)]:
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_scalar))
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c))
 
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d))
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_scalar), check_dtype=False)
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c_lazy, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_scalar, meta=meta))
 
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_scalar, meta=meta))
+
+    # Delayed arguments work, but only if metadata is provided
+    with pytest.raises(ValueError) as exc:
+        ddf.groupby('a').apply(func, c, d=d_delayed)
+    assert 'dask.delayed' in str(exc.value) and 'meta'in str(exc.value)
+
+    with pytest.raises(ValueError) as exc:
+        ddf.groupby('a').apply(func, c_delayed, d=d)
+    assert 'dask.delayed' in str(exc.value) and 'meta'in str(exc.value)
+
+    assert_eq(df.groupby('a').apply(func, c),
+              ddf.groupby('a').apply(func, c_delayed, meta=meta))
+
+    assert_eq(df.groupby('a').apply(func, c, d=d),
+              ddf.groupby('a').apply(func, c, d=d_delayed, meta=meta))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -407,11 +420,7 @@ def test_groupby_set_index():
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-@pytest.mark.parametrize('empty', [
-    pytest.param(True, marks=pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                 reason="Empty groupby-reductions fail for older pandas")),
-    pytest.param(False)
-])
+@pytest.mark.parametrize('empty', [True, False])
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
@@ -824,9 +833,7 @@ def test_series_aggregate__examples(spec, split_every, grouper):
     # but we should still test it for now
     with pytest.warns(None):
         assert_eq(ps.groupby(grouper(pdf)).agg(spec),
-                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-                  # pandas < 0.20.0 does not propagate the name for size
-                  check_names=(spec != 'size'))
+                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
 
 def test_aggregate__single_element_groups(agg_func):
@@ -1288,9 +1295,6 @@ def test_groupby_agg_grouper_multiple(slice_):
     assert_eq(result, expected)
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Need pandas groupby bug fix "
-                           "(pandas-dev/pandas#16859)")
 @pytest.mark.parametrize('agg_func', [
     'cumprod', 'cumcount', 'cumsum', 'var', 'sum', 'mean', 'count', 'size',
     'std', 'min', 'max', 'first', 'last', 'prod'
@@ -1366,8 +1370,6 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         assert_eq(expected, result)
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Need 0.21.0 for mixed column/index grouping")
 @pytest.mark.parametrize(
     'group_args', [['idx', 'a'], ['a', 'idx'], ['idx'], 'idx'])
 @pytest.mark.parametrize(

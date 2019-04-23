@@ -21,17 +21,41 @@ try:
 except ImportError:
     fastparquet = False
 
-try:
-    import pyarrow.parquet as pq
-except ImportError:
-    pq = False
-
 
 try:
     import pyarrow as pa
     check_pa_divs = pa.__version__ >= LooseVersion('0.9.0')
 except ImportError:
     check_pa_divs = False
+
+
+try:
+    import pyarrow.parquet as pq
+except ImportError:
+    pq = False
+
+
+SKIP_FASTPARQUET = not fastparquet
+SKIP_FASTPARQUET_REASON = 'fastparquet not found'
+FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason=SKIP_FASTPARQUET_REASON)
+
+if pq and pa.__version__ == LooseVersion('0.13.0'):
+    SKIP_PYARROW = True
+    SKIP_PYARROW_REASON = 'pyarrow 0.13.0 not supported'
+else:
+    SKIP_PYARROW = not pq
+    SKIP_PYARROW_REASON = 'pyarrow not found'
+PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
+
+
+def check_fastparquet():
+    if SKIP_FASTPARQUET:
+        pytest.skip(SKIP_FASTPARQUET_REASON)
+
+
+def check_pyarrow():
+    if SKIP_PYARROW:
+        pytest.skip(SKIP_PYARROW_REASON)
 
 
 def should_check_divs(engine):
@@ -53,20 +77,10 @@ ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
 @pytest.fixture(params=[
-    pytest.param('fastparquet', marks=pytest.mark.skipif(not fastparquet, reason='fastparquet not found')),
-    pytest.param('pyarrow', marks=pytest.mark.skipif(not pq, reason='pyarrow not found'))])
+    pytest.param('fastparquet', marks=FASTPARQUET_MARK),
+    pytest.param('pyarrow', marks=PYARROW_MARK)])
 def engine(request):
     return request.param
-
-
-def check_fastparquet():
-    if not fastparquet:
-        pytest.skip('fastparquet not found')
-
-
-def check_pyarrow():
-    if not pq:
-        pytest.skip('pyarrow not found')
 
 
 def write_read_engines(**kwargs):
@@ -78,9 +92,10 @@ def write_read_engines(**kwargs):
     marks = {(w, r): [] for w in backends for r in backends}
 
     # Skip if uninstalled
-    for name, exists in [('fastparquet', fastparquet), ('pyarrow', pq)]:
-        val = pytest.mark.skip(reason='%s not found' % name)
-        if not exists:
+    for name, skip, reason in [('fastparquet', SKIP_FASTPARQUET, SKIP_FASTPARQUET_REASON),
+                               ('pyarrow', SKIP_PYARROW, SKIP_PYARROW_REASON)]:
+        if skip:
+            val = pytest.mark.skip(reason=reason)
             for k in marks:
                 if name in k:
                     marks[k].append(val)
@@ -1177,8 +1192,7 @@ def test_parse_pandas_metadata_null_index():
 def test_read_no_metadata(tmpdir, engine):
     # use pyarrow.parquet to create a parquet file without
     # pandas metadata
-    pa = pytest.importorskip("pyarrow")
-    import pyarrow.parquet as pq
+    check_pyarrow()
     tmp = str(tmpdir) + "table.parq"
 
     table = pa.Table.from_arrays([pa.array([1, 2, 3]),
@@ -1342,7 +1356,7 @@ def test_with_tz(tmpdir, engine):
 
 def test_arrow_partitioning(tmpdir):
     # Issue #3518
-    pytest.importorskip('pyarrow')
+    check_pyarrow()
     path = str(tmpdir)
     data = {
         'p': np.repeat(np.arange(3), 2).astype(np.int8),
@@ -1369,7 +1383,7 @@ def test_informative_error_messages():
 
 
 def test_append_cat_fp(tmpdir):
-    pytest.importorskip('fastparquet')
+    check_fastparquet()
     path = str(tmpdir)
     # https://github.com/dask/dask/issues/4120
     df = pd.DataFrame({"x": ["a", "a", "b", "a", "b"]})
@@ -1386,13 +1400,13 @@ def test_append_cat_fp(tmpdir):
 
 def test_passing_parquetfile(tmpdir):
     import shutil
-    fp = pytest.importorskip('fastparquet')
+    check_fastparquet()
     path = str(tmpdir)
     df = pd.DataFrame({"x": [1, 3, 2, 4]})
     ddf = dd.from_pandas(df, npartitions=1)
 
     dd.to_parquet(ddf, path)
-    pf = fp.ParquetFile(path)
+    pf = fastparquet.ParquetFile(path)
     shutil.rmtree(path)
 
     # should pass, because no need to re-read metadata
