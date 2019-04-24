@@ -404,3 +404,18 @@ def test_derived_from():
     assert Bar.f.__doc__.strip().startswith('A super docstring')
     assert "Foo.f" in Bar.f.__doc__
     assert any("inconsistencies" in line for line in Bar.f.__doc__.split('\n')[:7])
+
+    [b_arg] = [line for line in Bar.f.__doc__.split('\n') if 'b:' in line]
+    assert "not supported" in b_arg.lower()
+    assert "dask" in b_arg.lower()
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from_dask_dataframe():
+    dd = pytest.importorskip('dask.dataframe')
+
+    assert "inconsistencies" in dd.Series.dropna.__doc__
+
+    [axis_arg] = [line for line in dd.Series.dropna.__doc__.split('\n') if 'axis :' in line]
+    assert "not supported" in axis_arg.lower()
+    assert "dask" in axis_arg.lower()
