@@ -315,8 +315,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = broadcast_dimensions(argpairs, numblocks)
-    for k in new_axes:
-        dims[k] = 1
+    for k, v in new_axes.items():
+        dims[k] = len(v) if isinstance(v, tuple) else 1
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
     keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))

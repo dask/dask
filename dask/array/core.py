@@ -371,6 +371,9 @@ def map_blocks(func, *args, **kwargs):
     >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
     ...                  new_axis=[0, 2])
 
+    If ``chunks`` is specified but ``new_axis`` is not, then it is inferred to
+    add the necessary number of axes on the left.
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
@@ -410,13 +413,34 @@ def map_blocks(func, *args, **kwargs):
     {0: {'shape': (1000,),
          'num-chunks': (10,),
          'chunk-location': (4,),
-         'array-location': [(400, 500)]}}
+         'array-location': [(400, 500)]},
+     None: {'shape': (1000,),
+            'num-chunks': (10,),
+            'chunk-location': (4,),
+            'array-location': [(400, 500)],
+            'chunk-shape': (100,),
+            'dtype': dtype('float64')}}
 
     For each argument and keyword arguments that are dask arrays (the positions
     of which are the first index), you will receive the shape of the full
     array, the number of chunks of the full array in each dimension, the chunk
     location (for example the fourth chunk over in the first dimension), and
-    the array location (for example the slice corresponding to ``40:50``).
+    the array location (for example the slice corresponding to ``40:50``). The
+    same information is provided for the output, with the key ``None``, plus
+    the shape and dtype that should be returned.
+
+    These features can be combined to synthesize an array from scratch, for
+    example:
+
+    >>> def func(block_info=None):
+    ...     loc = block_info[None]['array-location'][0]
+    ...     return np.arange(loc[0], loc[1])
+
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
+    dask.array<func, shape=(8,), dtype=float64, chunksize=(4,)>
+
+    >>> _.compute()
+    array([0, 1, 2, 3, 4, 5, 6, 7])
 
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
@@ -439,7 +463,7 @@ def map_blocks(func, *args, **kwargs):
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
-    new_axis = kwargs.pop('new_axis', [])
+    new_axis = kwargs.pop('new_axis', None)
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -453,7 +477,10 @@ def map_blocks(func, *args, **kwargs):
                 if isinstance(a, Array)
                 else (a, None)
                 for a in args]
-    out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
+    if arrs:
+        out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
+    else:
+        out_ind = ()
 
     if has_keyword(func, 'block_id'):
         kwargs['block_id'] = '__block_id_dummy__'
@@ -467,6 +494,8 @@ def map_blocks(func, *args, **kwargs):
 
     if drop_axis:
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
+    if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
+        new_axis = range(len(chunks) - len(out_ind))
     if new_axis:
         # new_axis = [x + len(drop_axis) for x in new_axis]
         out_ind = list(out_ind)
@@ -498,50 +527,7 @@ def map_blocks(func, *args, **kwargs):
             v.dsk[key] = task
             dsk[k] = (v,) + vv[1:]
 
-    # If func has block_info as an argument, add it to the kwargs for each call
-    if has_keyword(func, 'block_info'):
-        starts = {}
-        num_chunks = {}
-        shapes = {}
-
-        for i, arg in enumerate(args):
-            if isinstance(arg, Array):
-                starts[i] = [np.cumsum((0,) + c) for c in arg.chunks]
-                shapes[i] = arg.shape
-                num_chunks[i] = arg.numblocks
-        for k, v in kwargs.items():
-            if isinstance(v, Array):
-                starts[k] = [np.cumsum((0,) + c) for c in v.chunks]
-                shapes[k] = arg.shape
-                num_chunks[i] = arg.numblocks
-
-        for k, v in dsk.items():
-            vv = v
-            v = v[0]
-            [(key, task)] = v.dsk.items()  # unpack subgraph callable
-
-            if new_axis:
-                # anything using the keys in dsk is incorrect, as the
-                # original array doesn't have values for `new_axis`.
-                old_k = tuple(x for i, x in enumerate(k) if i not in new_axis)
-            else:
-                old_k = k
-
-            info = {i: {'shape': shapes[i],
-                        'num-chunks': num_chunks[i],
-                        'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
-                                           for ij, j in enumerate(old_k[1:])],
-                        'chunk-location': old_k[1:]}
-                    for i in shapes}
-
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {'__block_info_dummy__': info})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
-
-    if chunks:
+    if chunks is not None:
         if len(chunks) != len(out.numblocks):
             raise ValueError("Provided chunks have {0} dims, expected {1} "
                              "dims.".format(len(chunks), len(out.numblocks)))
@@ -560,6 +546,58 @@ def map_blocks(func, *args, **kwargs):
             else:
                 chunks2.append(nb * (c,))
         out._chunks = normalize_chunks(chunks2)
+
+    # If func has block_info as an argument, add it to the kwargs for each call
+    if has_keyword(func, 'block_info'):
+        starts = {}
+        num_chunks = {}
+        shapes = {}
+
+        for i, arg in enumerate(args):
+            if isinstance(arg, Array):
+                starts[i] = [np.cumsum((0,) + c) for c in arg.chunks]
+                shapes[i] = arg.shape
+                num_chunks[i] = arg.numblocks
+        for k, v in kwargs.items():
+            if isinstance(v, Array):
+                starts[k] = [np.cumsum((0,) + c) for c in v.chunks]
+                shapes[k] = arg.shape
+                num_chunks[i] = arg.numblocks
+        out_starts = [np.cumsum((0,) + c) for c in out.chunks]
+
+        for k, v in dsk.items():
+            vv = v
+            v = v[0]
+            [(key, task)] = v.dsk.items()  # unpack subgraph callable
+
+            if new_axis:
+                # anything using the keys in dsk is incorrect, as the
+                # original array doesn't have values for `new_axis`.
+                old_k = tuple(x for i, x in enumerate(k[1:]) if i not in new_axis)
+            else:
+                old_k = k[1:]
+
+            info = {i: {'shape': shapes[i],
+                        'num-chunks': num_chunks[i],
+                        'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
+                                           for ij, j in enumerate(old_k)],
+                        'chunk-location': old_k}
+                    for i in shapes}
+            info[None] = {'shape': out.shape,
+                          'num-chunks': out.numblocks,
+                          'array-location': [(out_starts[ij][j], out_starts[ij][j + 1])
+                                             for ij, j in enumerate(k[1:])],
+                          'chunk-location': k[1:],
+                          'chunk-shape': tuple(out.chunks[ij][j]
+                                               for ij, j in enumerate(k[1:])),
+                          'dtype': dtype}
+
+            v = copy.copy(v)  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {'__block_info_dummy__': info})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
 
     return out
 
@@ -2468,9 +2506,12 @@ def unify_chunks(*args, **kwargs):
 
     >>> x = da.ones((100, 10), chunks=(20, 5))
     >>> y = da.ones((10, 100), chunks=(4, 50))
-    >>> chunkss, arrays = unify_chunks(x, 'ij', y, 'jk')
+    >>> chunkss, arrays = unify_chunks(x, 'ij', y, 'jk', 'constant', None)
     >>> chunkss  # doctest: +SKIP
     {'k': (50, 50), 'i': (20, 20, 20, 20, 20), 'j': (4, 1, 3, 2)}
+
+    >>> unify_chunks(0, None)
+    ({}, [0])
 
     Returns
     -------
@@ -2492,6 +2533,8 @@ def unify_chunks(*args, **kwargs):
     warn = kwargs.get('warn', True)
 
     arrays, inds = zip(*arginds)
+    if all(ind is None for ind in inds):
+        return {}, list(arrays)
     if all(ind == inds[0] for ind in inds) and all(a.chunks == arrays[0].chunks for a in arrays):
         return dict(zip(inds[0], arrays[0].chunks)), arrays
 
