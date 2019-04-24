@@ -311,6 +311,7 @@ redirect_files = [
     ('array-overview.html', 'array.html'),
     ('array-ghost.html', 'array-overlap.html'),
     ('dataframe-overview.html', 'dataframe.html'),
+    ('dataframe-performance.html', 'dataframe-best-practices.html'),
     ('delayed-overview.html', 'delayed.html'),
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
