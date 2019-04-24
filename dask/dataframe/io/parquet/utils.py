@@ -55,7 +55,7 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def read_partition(fs, piece, columns, partitions, categories):
+    def read_partition(fs, piece, columns, partitions, categories, *args):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -101,6 +101,30 @@ class Engine:
         """
         raise NotImplementedError()
 
+    @staticmethod
+    def write_partition(
+        df, path, fs, filename, partition_on, metadata_path=None, **kwargs
+    ):
+        """
+        Output a partition of a dask.DataFrame. This will correspond to
+        one output file, unless partition_on is set, in which case, it will
+        correspond to up to one file in each sub-directory.
+
+        Parameters
+        ----------
+        df
+        path
+        fs
+        filename
+        partition_on
+        metadata_path
+        kwargs
+
+        Returns
+        -------
+
+        """
+        raise NotImplementedError
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
