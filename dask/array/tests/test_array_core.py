@@ -1119,7 +1119,7 @@ def test_map_blocks_block_info():
     x = da.arange(50, chunks=10)
 
     def func(a, b, c, block_info=None):
-        for idx in [0, 2]:  # positions in args
+        for idx in [0, 2, None]:  # positions in args
             assert block_info[idx]['shape'] == (50,)
             assert block_info[idx]['num-chunks'] == (5,)
             start, stop = block_info[idx]['array-location'][0]
@@ -1128,6 +1128,8 @@ def test_map_blocks_block_info():
             assert 10 <= stop <= 50
 
             assert 0 <= block_info[idx]['chunk-location'][0] <= 4
+        assert block_info[None]['chunk-shape'] == (10,)
+        assert block_info[None]['dtype'] == x.dtype
 
         return a + b + c
 
@@ -1140,20 +1142,29 @@ def test_map_blocks_block_info_with_axis():
     values = da.from_array(np.array(['a', 'a', 'b', 'c']), 2)
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0}
+        assert set(block_info.keys()) == {0, None}
         assert block_info[0]['shape'] == (4,)
-        assert block_info[0]['num_chunks'] == (2,)
+        assert block_info[0]['num-chunks'] == (2,)
+        assert block_info[None]['shape'] == (4, 3)
+        assert block_info[None]['num-chunks'] == (2, 1)
+        assert block_info[None]['chunk-shape'] == (2, 3)
+        assert block_info[None]['dtype'] == np.dtype('f8')
 
-        assert block_info['chunk-location'] in {(0,), (1,)}
+        assert block_info[0]['chunk-location'] in {(0,), (1,)}
 
-        if block_info['chunk-location'] == (0,):
-            assert block_info['array-location'] == [(0, 2)]
-        elif block_info['chunk-location'] == (1,):
-            assert block_info['array-location'] == [(2, 4)]
+        if block_info[0]['chunk-location'] == (0,):
+            assert block_info[0]['array-location'] == [(0, 2)]
+            assert block_info[None]['chunk-location'] == (0, 0)
+            assert block_info[None]['array-location'] == [(0, 2), (0, 3)]
+        elif block_info[0]['chunk-location'] == (1,):
+            assert block_info[0]['array-location'] == [(2, 4)]
+            assert block_info[None]['chunk-location'] == (1, 0)
+            assert block_info[None]['array-location'] == [(2, 4), (0, 3)]
 
         return np.ones((len(x), 3))
 
-    values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
+    z = values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
+    assert_eq(z, np.ones((4, 3), dtype='f8'))
 
 
 def test_map_blocks_with_constants():
