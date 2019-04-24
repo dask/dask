@@ -1669,7 +1669,20 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def isin(self, values):
-        return elemwise(M.isin, self, list(values))
+        if is_dataframe_like(self._meta):
+            # DataFrame.isin does weird alignment stuff
+            bad_types = (_Frame, pd.Series, pd.DataFrame)
+        else:
+            bad_types = (_Frame,)
+        if isinstance(values, bad_types):
+            raise NotImplementedError(
+                "Passing a %r to `isin`" % typename(type(values))
+            )
+        meta = self._meta_nonempty.isin(values)
+        # We wrap values in a delayed for two reasons:
+        # - avoid serializing data in every task
+        # - avoid cost of traversal of large list in optimizations
+        return self.map_partitions(M.isin, delayed(values), meta=meta)
 
     @derived_from(pd.DataFrame)
     def astype(self, dtype):
@@ -2128,7 +2141,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.Series)
     def isin(self, values):
-        return elemwise(M.isin, self, list(values))
+        # Added just to get the different docstring for Series
+        return super(Series, self).isin(values)
 
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
