@@ -7,7 +7,7 @@ DataFrame
 
    dataframe-api.rst
    dataframe-create.rst
-   dataframe-performance.rst
+   dataframe-best-practices.rst
    dataframe-design.rst
    dataframe-groupby.rst
    dataframe-joins.rst
