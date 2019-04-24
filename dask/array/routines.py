@@ -3,7 +3,6 @@ from __future__ import division, print_function, absolute_import
 import inspect
 import math
 import warnings
-from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Real, Integral
 
@@ -323,13 +322,6 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     test_data = np.ones((1,), dtype=arr.dtype)
     test_result = np.array(func1d(test_data, *args, **kwargs))
 
-    if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
-            (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-        raise ValueError(
-            "No more than one non-trivial dimension allowed in result. "
-            "Need NumPy 1.13.0+ for this functionality."
-        )
-
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
         arr.chunks[:axis] + (arr.shape[axis:axis + 1],) + arr.chunks[axis + 1:]
@@ -527,7 +519,7 @@ def _bincount_sum(bincounts, dtype=int):
     n = max(map(len, bincounts))
     out = np.zeros(n, dtype=dtype)
     for b in bincounts:
-        out[:len(b)] += b[:len(b)]
+        out[:len(b)] += b
     return out
 
 
