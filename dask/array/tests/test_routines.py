@@ -477,6 +477,9 @@ def test_bincount():
     assert_eq(e, np.bincount(x, minlength=6))
     assert same_keys(da.bincount(d, minlength=6), e)
 
+    assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
+    assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
+
 
 def test_bincount_with_weights():
     x = np.array([2, 1, 5, 2, 1])
@@ -489,15 +492,13 @@ def test_bincount_with_weights():
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
-def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
-    x = np.array([2, 1, 5, 2, 1])
+def test_bincount_unspecified_minlength():
+    x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
-    try:
-        da.bincount(d)
-    except Exception as e:
-        assert 'minlength' in str(e)
-    else:
-        assert False
+    e = da.bincount(d)
+    assert_eq(e, np.bincount(x))
+    assert same_keys(da.bincount(d), e)
+    assert len(e.compute()) == 8  # shape is (nan,) so must compute for len()
 
 
 def test_digitize():
