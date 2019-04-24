@@ -533,9 +533,12 @@ def _bincount_sum(bincounts, dtype=int):
 
 @wraps(np.bincount)
 def bincount(x, weights=None, minlength=0):
-    assert x.ndim == 1
+    if x.ndim != 1:
+        raise ValueError('Input array must be one dimensional. '
+                         'Try using x.ravel()')
     if weights is not None:
-        assert weights.chunks == x.chunks
+        if weights.chunks != x.chunks:
+            raise ValueError('Chunks of input array x and weights must match.')
 
     name = 'bincount-sum-'
     # Call np.bincount on each block, possibly with weights
