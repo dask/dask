@@ -795,13 +795,28 @@ def test_unique():
 
 
 def test_isin():
-    # Series test
-    assert_eq(d.a.isin([0, 1, 2]), full.a.isin([0, 1, 2]))
-    assert_eq(d.a.isin(pd.Series([0, 1, 2])),
-              full.a.isin(pd.Series([0, 1, 2])))
+    f_list = [1, 2, 3]
+    f_series = pd.Series(f_list)
+    f_dict = {'a': [0, 3], 'b': [1, 2]}
+
+    # Series
+    assert_eq(d.a.isin(f_list), full.a.isin(f_list))
+    assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    with pytest.raises(NotImplementedError):
+        d.a.isin(d.a)
+
+    # Index
+    da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
+    da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+    with pytest.raises(NotImplementedError):
+        d.a.isin(d.a)
 
     # DataFrame test
-    assert_eq(d.isin([0, 1, 2]), full.isin([0, 1, 2]))
+    assert_eq(d.isin(f_list), full.isin(f_list))
+    assert_eq(d.isin(f_dict), full.isin(f_dict))
+    for obj in [d, f_series, full]:
+        with pytest.raises(NotImplementedError):
+            d.isin(obj)
 
 
 def test_len():
