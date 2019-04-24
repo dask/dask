@@ -88,6 +88,13 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
 
+    New dimensions can also be multi-chunk by specifying a tuple of chunk
+    sizes.  This has limited utility as is (because the chunks are all the
+    same), but the resulting graph can be modified to achieve more useful
+    results (see ``da.map_blocks``).
+
+    >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)  # doctest: +SKIP
+
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
     that modifies the dimension size in that index.
@@ -101,10 +108,6 @@ def blockwise(func, out_ind, *args, **kwargs):
     Include literals by indexing with None
 
     >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
-
-    See Also
-    --------
-    top - dict formulation of this function, contains most logic
     """
     out = kwargs.pop('name', None)      # May be None at this point
     token = kwargs.pop('token', None)
@@ -131,9 +134,12 @@ def blockwise(func, out_ind, *args, **kwargs):
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        arg, ind = max([(a, i) for (a, i) in toolz.partition(2, args) if i is not None],
-                       key=lambda ai: len(ai[1]))
-        chunkss = dict(zip(ind, arg.chunks))
+        arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
+        if arginds:
+            arg, ind = max(arginds, key=lambda ai: len(ai[1]))
+            chunkss = dict(zip(ind, arg.chunks))
+        else:
+            chunkss = {}
         arrays = args[::2]
 
     for k, v in new_axes.items():
