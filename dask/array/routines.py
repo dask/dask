@@ -532,26 +532,28 @@ def bincount(x, weights=None, minlength=0):
         if weights.chunks != x.chunks:
             raise ValueError('Chunks of input array x and weights must match.')
 
-    name = 'bincount-sum-'
+    token = tokenize(x, weights, minlength)
+    name = 'bincount-' + token
+    final_name = 'bincount-sum' + token
     # Call np.bincount on each block, possibly with weights
     if weights is not None:
-        dsk = {('bincount-', i): (np.bincount, (x.name, i), (weights.name, i), minlength)
+        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
                for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([1], weights=[1]).dtype
     else:
-        dsk = {('bincount-', i): (np.bincount, (x.name, i), None, minlength)
+        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
                for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
-    dsk[(name, 0)] = (_bincount_sum, list(dsk), dtype)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
+    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[x] if weights is None else [x, weights])
 
     if minlength == 0:
         chunks = ((np.nan,),)
     else:
         chunks = ((minlength,),)
 
-    return Array(graph, name, chunks, dtype)
+    return Array(graph, final_name, chunks, dtype)
 
 
 @wraps(np.digitize)
