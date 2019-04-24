@@ -519,7 +519,7 @@ def _bincount_sum(bincounts, dtype=int):
     n = max(map(len, bincounts))
     out = np.zeros(n, dtype=dtype)
     for b in bincounts:
-        out[:len(b)] += b[:len(b)]
+        out[:len(b)] += b
     return out
 
 
