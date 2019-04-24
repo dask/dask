@@ -462,8 +462,7 @@ def test_append_create(tmp_path, engine):
     assert_eq(df, ddf3)
 
 
-def test_append_with_partition(tmpdir):
-    check_fastparquet()
+def test_append_with_partition(tmpdir, engine):
     tmp = str(tmpdir)
     df0 = pd.DataFrame({'lat': np.arange(0, 10), 'lon': np.arange(10, 20),
                         'value': np.arange(100, 110)})
@@ -473,11 +472,10 @@ def test_append_with_partition(tmpdir):
     df1.index.name = 'index'
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
-    dd.to_parquet(dd_df0, tmp, partition_on=['lon'])
-    dd.to_parquet(dd_df1, tmp, partition_on=['lon'], append=True,
-                  ignore_divisions=True)
+    dd.to_parquet(dd_df0, tmp, partition_on=['lon'], engine=engine)
+    dd.to_parquet(dd_df1, tmp, partition_on=['lon'], append=True, engine=engine)
 
-    out = dd.read_parquet(tmp).compute()
+    out = dd.read_parquet(tmp, engine=engine).compute()
     out['lon'] = out.lon.astype('int')  # just to pass assert
     # sort required since partitioning breaks index order
     assert_eq(out.sort_values('value'), pd.concat([df0, df1])[out.columns],
@@ -733,6 +731,7 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
+@write_read_engines()
 def test_partition_on(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
@@ -862,6 +861,7 @@ def test_divisions_are_known_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
+@pytest.mark.xfail(reason="No longer accept ParquetFile objects")
 def test_read_from_fastparquet_parquetfile(tmpdir):
     check_fastparquet()
     fn = str(tmpdir)

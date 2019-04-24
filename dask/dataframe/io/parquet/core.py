@@ -434,21 +434,21 @@ def apply_filters(parts, statistics, filters):
             except KeyError:
                 out_parts.append(part)
                 out_statistics.append(stats)
-
-            if (
-                operator == "=="
-                and min <= value <= max
-                or operator == "<"
-                and min < value
-                or operator == "<="
-                and min <= value
-                or operator == ">"
-                and max > value
-                or operator == ">="
-                and max >= value
-            ):
-                out_parts.append(part)
-                out_statistics.append(stats)
+            else:
+                if (
+                    operator == "=="
+                    and min <= value <= max
+                    or operator == "<"
+                    and min < value
+                    or operator == "<="
+                    and min <= value
+                    or operator == ">"
+                    and max > value
+                    or operator == ">="
+                    and max >= value
+                ):
+                    out_parts.append(part)
+                    out_statistics.append(stats)
 
         parts, statistics = out_parts, out_statistics
 
