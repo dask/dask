@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from time import sleep
 
-import pytest
 from toolz import frequencies, pluck
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -331,7 +330,6 @@ def test_adapt_down():
         yield cluster.close()
 
 
-@pytest.mark.xfail(reason="we currently only judge occupancy, not ntasks")
 @gen_test(timeout=30)
 def test_no_more_workers_than_tasks():
     loop = IOLoop.current()
