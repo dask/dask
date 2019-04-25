@@ -1027,10 +1027,6 @@ def test_concat4_interleave_partitions():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with pytest.raises(ValueError) as err:
-            dd.concat(case)
-        assert msg in str(err.value)
-
         assert_eq(dd.concat(case, interleave_partitions=True),
                   pd.concat(pdcase, **concat_kwargs))
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
@@ -1231,13 +1227,6 @@ def test_append():
     check_with_warning(ddf, df3, df, df3)
     check_with_warning(ddf.a, df3.b, df.a, df3.b)
 
-    df4 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
-                        'b': [1, 2, 3, 4, 5, 6]},
-                       index=[4, 5, 6, 7, 8, 9])
-    ddf4 = dd.from_pandas(df4, 2)
-    with pytest.raises(ValueError):
-        ddf.append(ddf4)
-
 
 @pytest.mark.filterwarnings("ignore")
 def test_append2():
@@ -1330,6 +1319,15 @@ def test_append_categorical():
         res = ddf1.index.append(ddf2.index)
         assert_eq(res, df1.index.append(df2.index))
         assert has_known_categories(res) == known
+
+
+def test_append_lose_divisions():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[1, 2, 3, 4])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf2 = ddf.append(ddf)
+    df2 = df.append(df)
+    assert_eq(ddf2, df2)
 
 
 def test_singleton_divisions():

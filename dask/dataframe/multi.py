@@ -517,7 +517,6 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     Parameters
     ----------
-
     dfs : list
         List of dask.DataFrames to be concatenated
     axis : {0, 1, 'index', 'columns'}, default 0
@@ -538,7 +537,6 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     Examples
     --------
-
     If all divisions are known and ordered, divisions are kept.
 
     >>> a                                               # doctest: +SKIP
@@ -625,9 +623,8 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             elif interleave_partitions:
                 return concat_indexed_dataframes(dfs, join=join)
             else:
-                raise ValueError('All inputs have known divisions which '
-                                 'cannot be concatenated in order. Specify '
-                                 'interleave_partitions=True to ignore order')
+                divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+                return stack_partitions(dfs, divisions, join=join)
         else:
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
             return stack_partitions(dfs, divisions, join=join)
