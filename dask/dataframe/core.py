@@ -4205,10 +4205,10 @@ def _take_last(a, skipna=True):
 
     """
 
-    def _collect_series_last_valid(s):
+    def _last_valid(s):
         size = len(s)
-        for i in range(size - 1, max(size - 11, 0) - 1, -1):
-            val = s.iloc[i]
+        for i in range(1, min(10, size)):
+            val = s.iloc[-i]
             if not pd.isnull(val):
                 return val
         else:
@@ -4217,24 +4217,15 @@ def _take_last(a, skipna=True):
                 return nonnull.iloc[-1]
         return None
 
-    def _collect_frame_last_valid(frame):
-        last_valid_rows = {}
-        for col in a.columns:
-            last_val = _collect_series_last_valid(a[col])
-            last_valid_rows[col] = last_val
-        return last_valid_rows
-
     if skipna is False:
         return a.iloc[-1]
     else:
         # take last valid value excluding NaN, NaN location may be different
         # in each column
         if is_dataframe_like(a):
-            last_valid_rows = _collect_frame_last_valid(a)
-            return pd.Series(last_valid_rows, index=a.columns)
+            return pd.Series({col: _last_valid(a[col]) for col in a.columns}, columns=a.columns)
         else:
-            last_valid = _collect_series_last_valid(a)
-            return last_valid
+            return _last_valid(a)
 
 
 def check_divisions(divisions):
