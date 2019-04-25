@@ -1706,7 +1706,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.astype, dtype=dtype, meta=meta)
 
     @derived_from(pd.Series)
-    def append(self, other):
+    def append(self, other, interleave_partitions=False):
         # because DataFrame.append will override the method,
         # wrap by pd.Series.append docstring
         from .multi import concat
@@ -1715,7 +1715,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             msg = "append doesn't support list or dict input"
             raise NotImplementedError(msg)
 
-        return concat([self, other], join='outer', interleave_partitions=False)
+        return concat([self, other], join='outer',
+                      interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def align(self, other, join='outer', axis=None, fill_value=None):
@@ -3006,14 +3007,15 @@ class DataFrame(_Frame):
                      npartitions=npartitions, shuffle=shuffle)
 
     @derived_from(pd.DataFrame)
-    def append(self, other):
+    def append(self, other, interleave_partitions=False):
         if isinstance(other, Series):
             msg = ('Unable to appending dd.Series to dd.DataFrame.'
                    'Use pd.Series to append as row.')
             raise ValueError(msg)
         elif is_series_like(other):
             other = other.to_frame().T
-        return super(DataFrame, self).append(other)
+        return super(DataFrame, self).append(
+            other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
