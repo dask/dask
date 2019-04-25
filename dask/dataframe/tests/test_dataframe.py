@@ -3552,5 +3552,7 @@ def test_map_partitions_delays_lists():
 
     L = list(range(100))
     out = ddf.map_partitions(lambda x, y: x + sum(y), y=L)
+    assert any(str(L) == str(v) for v in out.__dask_graph__().values())
 
+    out = ddf.map_partitions(lambda x, y: x + sum(y), L)
     assert any(str(L) == str(v) for v in out.__dask_graph__().values())
