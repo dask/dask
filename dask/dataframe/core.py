@@ -4205,7 +4205,7 @@ def _take_last(a, skipna=True):
 
     """
     def _last_valid(s):
-        for i in range(1, min(10, len(s)+1)):
+        for i in range(1, min(10, len(s) + 1)):
             val = s.iloc[-i]
             if not pd.isnull(val):
                 return val
