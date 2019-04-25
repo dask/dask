@@ -414,8 +414,8 @@ def test_derived_from():
 def test_derived_from_dask_dataframe():
     dd = pytest.importorskip('dask.dataframe')
 
-    assert "inconsistencies" in dd.Series.dropna.__doc__
+    assert "inconsistencies" in dd.DataFrame.dropna.__doc__
 
-    [axis_arg] = [line for line in dd.Series.dropna.__doc__.split('\n') if 'axis :' in line]
+    [axis_arg] = [line for line in dd.DataFrame.dropna.__doc__.split('\n') if 'axis :' in line]
     assert "not supported" in axis_arg.lower()
     assert "dask" in axis_arg.lower()
