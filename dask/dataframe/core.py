@@ -4204,9 +4204,8 @@ def _take_last(a, skipna=True):
         Whether to exclude NaN
 
     """
-
     def _last_valid(s):
-        for i in range(1, min(10, len(s))):
+        for i in range(1, min(10, len(s)+1)):
             val = s.iloc[-i]
             if not pd.isnull(val):
                 return val
@@ -4222,7 +4221,9 @@ def _take_last(a, skipna=True):
         # take last valid value excluding NaN, NaN location may be different
         # in each column
         if is_dataframe_like(a):
-            return pd.Series({col: _last_valid(a[col]) for col in a.columns}, index=a.columns)
+            # create Series of appropriate backend dataframe library
+            series_typ = type(a.iloc[0])
+            return series_typ({col: _last_valid(a[col]) for col in a.columns}, index=a.columns)
         else:
             return _last_valid(a)
 
