@@ -4204,17 +4204,37 @@ def _take_last(a, skipna=True):
         Whether to exclude NaN
 
     """
+
+    def _collect_series_last_valid(s):
+        size = len(s)
+        for i in range(size - 1, max(size - 11, 0) - 1, -1):
+            val = s.iloc[i]
+            if not pd.isnull(val):
+                return val
+        else:
+            nonnull = s[s.notna()]
+            if not nonnull.empty:
+                return nonnull.iloc[-1]
+        return None
+
+    def _collect_frame_last_valid(frame):
+        last_valid_rows = {}
+        for col in a.columns:
+            last_val = _collect_series_last_valid(a[col])
+            last_valid_rows[col] = last_val
+        return last_valid_rows
+
     if skipna is False:
         return a.iloc[-1]
     else:
         # take last valid value excluding NaN, NaN location may be different
-        # in each columns
-        group_dummy = np.ones(len(a.index))
-        last_row = a.groupby(group_dummy).last()
-        if isinstance(a, pd.DataFrame):  # TODO: handle explicit pandas reference
-            return pd.Series(last_row.values[0], index=a.columns)
+        # in each column
+        if is_dataframe_like(a):
+            last_valid_rows = _collect_frame_last_valid(a)
+            return pd.Series(last_valid_rows, index=a.columns)
         else:
-            return last_row.values[0]
+            last_valid = _collect_series_last_valid(a)
+            return last_valid
 
 
 def check_divisions(divisions):
