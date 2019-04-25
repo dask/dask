@@ -4222,7 +4222,7 @@ def _take_last(a, skipna=True):
         # take last valid value excluding NaN, NaN location may be different
         # in each column
         if is_dataframe_like(a):
-            return pd.Series({col: _last_valid(a[col]) for col in a.columns}, columns=a.columns)
+            return pd.Series({col: _last_valid(a[col]) for col in a.columns}, index=a.columns)
         else:
             return _last_valid(a)
 
