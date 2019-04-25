@@ -275,63 +275,45 @@ def test_rename_series_method():
     assert_eq(ds, s)
 
 
-def test_describe():
+@pytest.mark.parametrize('method,test_values', [('tdigest', (6, 10)), ('dask', (4, 20))])
+def test_describe(method, test_values):
     # prepare test case which approx quantiles will be the same as actuals
-    s = pd.Series(list(range(20)) * 4)
-    df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20})
+    s = pd.Series(list(range(test_values[1])) * test_values[0])
+    df = pd.DataFrame({'a': list(range(test_values[1])) * test_values[0],
+                       'b': list(range(test_values[0])) * test_values[1]})
 
-    ds = dd.from_pandas(s, 4)
-    ddf = dd.from_pandas(df, 4)
-
-    assert_eq(df.describe(), ddf.describe())
-    assert_eq(s.describe(), ds.describe())
+    ds = dd.from_pandas(s, test_values[0])
+    ddf = dd.from_pandas(df, test_values[0])
 
     test_quantiles = [0.25, 0.75]
-    assert_eq(df.describe(percentiles=test_quantiles),
-              ddf.describe(percentiles=test_quantiles))
-    assert_eq(s.describe(), ds.describe(split_every=2))
-    assert_eq(df.describe(), ddf.describe(split_every=2))
 
-    assert ds.describe(split_every=2)._name != ds.describe()._name
-    assert ddf.describe(split_every=2)._name != ddf.describe()._name
-
-    s = pd.Series(list(range(10)) * 6)
-    df = pd.DataFrame({'a': list(range(10)) * 6, 'b': list(range(6)) * 10})
-
-    ds = dd.from_pandas(s, 6)
-    ddf = dd.from_pandas(df, 6)
-
-    assert_eq(df.describe(), ddf.describe(percentiles_method='tdigest'))
-    assert_eq(s.describe(), ds.describe(percentiles_method='tdigest'))
+    assert_eq(df.describe(), ddf.describe(percentiles_method=method))
+    assert_eq(s.describe(), ds.describe(percentiles_method=method))
 
     assert_eq(df.describe(percentiles=test_quantiles),
-              ddf.describe(percentiles=test_quantiles, percentiles_method='tdigest'))
-    assert_eq(s.describe(), ds.describe(split_every=2, percentiles_method='tdigest'))
-    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method='tdigest'))
+              ddf.describe(percentiles=test_quantiles, percentiles_method=method))
+    assert_eq(s.describe(), ds.describe(split_every=2, percentiles_method=method))
+    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
     # remove string columns
-    df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20,
-                       'c': list('abcd') * 20})
-    ddf = dd.from_pandas(df, 4)
-    assert_eq(df.describe(), ddf.describe())
-    assert_eq(df.describe(), ddf.describe(split_every=2))
-
-    df = pd.DataFrame({'a': list(range(10)) * 6, 'b': list(range(6)) * 10,
-                       'c': list('abcdef') * 10})
-    ddf = dd.from_pandas(df, 6)
-    assert_eq(df.describe(), ddf.describe(percentiles_method='tdigest'))
-    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method='tdigest'))
+    df = pd.DataFrame({'a': list(range(test_values[1])) * test_values[0],
+                       'b': list(range(test_values[0])) * test_values[1],
+                       'c': list('abcdef'[:test_values[0]]) * test_values[1]})
+    ddf = dd.from_pandas(df, test_values[0])
+    assert_eq(df.describe(), ddf.describe(percentiles_method=method))
+    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-def test_describe_empty():
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_describe_empty(method):
     # https://github.com/dask/dask/issues/2326
     ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
     with pytest.raises(ValueError) as rec:
-        ddf.describe()
+        ddf.describe(percentiles_method=method)
     assert 'DataFrame contains only non-numeric data.' in str(rec)
 
     with pytest.raises(ValueError) as rec:
-        ddf.A.describe()
+        ddf.A.describe(percentiles_method=method)
     assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
 
 
@@ -850,9 +832,12 @@ def test_nbytes():
     assert_eq(d.index.nbytes, full.index.nbytes)
 
 
-def test_quantile():
+@pytest.mark.parametrize('method,expected', [('tdigest', (0.35, 3.80, 2.5, 6.5, 2.0)),
+                                             ('dask', (0.0, 5.4, 1.2, 7.8, 5.0))])
+def test_quantile(method, expected):
     # series / multiple
-    result = d.b.quantile([.3, .7])
+    result = d.b.quantile([.3, .7], method=method)
+
     exp = full.b.quantile([.3, .7])  # result may different
     assert len(result) == 2
     assert result.divisions == (.3, .7)
@@ -861,25 +846,15 @@ def test_quantile():
 
     result = result.compute()
     assert isinstance(result, pd.Series)
-    assert result.iloc[0] == 0
-    assert 5 < result.iloc[1] < 6
 
-    result = d.b.quantile([.3, .7], method='tdigest')
-    assert len(result) == 2
-    assert result.divisions == (.3, .7)
-    assert_eq(result.index, exp.index)
-    assert isinstance(result, dd.Series)
-
-    result = result.compute()
-    assert isinstance(result, pd.Series)
-    assert result.iloc[0] == pytest.approx(exp.iloc[0], abs=0.1)
-    assert result.iloc[1] == pytest.approx(exp.iloc[1], abs=0.21)
+    assert result.iloc[0] == pytest.approx(expected[0])
+    assert result.iloc[1] == pytest.approx(expected[1])
 
     # index
     s = pd.Series(np.arange(10), index=np.arange(10))
     ds = dd.from_pandas(s, 2)
 
-    result = ds.index.quantile([.3, .7])
+    result = ds.index.quantile([.3, .7], method=method)
     exp = s.quantile([.3, .7])
     assert len(result) == 2
     assert result.divisions == (.3, .7)
@@ -888,55 +863,32 @@ def test_quantile():
 
     result = result.compute()
     assert isinstance(result, pd.Series)
-    assert 1 < result.iloc[0] < 2
-    assert 7 < result.iloc[1] < 8
-
-    result = ds.index.quantile([.3, .7], method='tdigest')
-    exp = s.quantile([.3, .7])
-    assert len(result) == 2
-    assert result.divisions == (.3, .7)
-    assert_eq(result.index, exp.index)
-    assert isinstance(result, dd.Series)
-
-    result = result.compute()
-    assert isinstance(result, pd.Series)
-    assert result.iloc[0] == pytest.approx(exp.iloc[0], abs=0.2)
-    assert result.iloc[1] == pytest.approx(exp.iloc[1], abs=0.21)
+    assert result.iloc[0] == pytest.approx(expected[2])
+    assert result.iloc[1] == pytest.approx(expected[3])
 
     # series / single
-    result = d.b.quantile(.5)
-    exp = full.b.quantile(.5)  # result may different
+    result = d.b.quantile(.5, method=method)
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
-    assert 4 < result < 6
-
-    result = d.b.quantile(.5, method='tdigest')
-    exp = full.b.quantile(.5)
-    assert isinstance(result, dd.core.Scalar)
-    result = result.compute()
-    assert result == exp
+    assert result == expected[4]
 
 
-def test_quantile_missing():
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_quantile_missing(method):
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     ddf = dd.from_pandas(df, 2)
     expected = df.quantile()
-    result = ddf.quantile()
-    assert_eq(result, expected)
-
-    result = ddf.quantile(method='tdigest')
+    result = ddf.quantile(method=method)
     assert_eq(result, expected)
 
     expected = df.A.quantile()
-    result = ddf.A.quantile()
-    assert_eq(result, expected)
-
-    result = ddf.A.quantile(method='tdigest')
+    result = ddf.A.quantile(method=method)
     assert_eq(result, expected)
 
 
-def test_empty_quantile():
-    result = d.b.quantile([])
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_empty_quantile(method):
+    result = d.b.quantile([], method=method)
     exp = full.b.quantile([])
     assert result.divisions == (None, None)
 
@@ -944,15 +896,20 @@ def test_empty_quantile():
     assert result.compute().name == 'b'
     assert_eq(result, exp)
 
-    result = d.b.quantile([], method='tdigest')
-    assert result.divisions == (None, None)
 
-    assert result.name == 'b'
-    assert result.compute().name == 'b'
-    assert_eq(result, exp)
-
-
-def test_dataframe_quantile():
+@pytest.mark.parametrize('method,expected', [('tdigest', (pd.Series([9.5, 29.5, 19.5],
+                                                                    index=['A', 'X', 'B']),
+                                                          pd.DataFrame([[4.5, 24.5, 14.5],
+                                                                        [14.5, 34.5, 24.5]],
+                                                                       index=[0.25, 0.75],
+                                                                       columns=['A', 'X', 'B']))),
+                                             ('dask', (pd.Series([16.5, 36.5, 26.5],
+                                                                 index=['A', 'X', 'B']),
+                                                       pd.DataFrame([[1.50, 21.50, 11.50],
+                                                                     [17.75, 37.75, 27.75]],
+                                                                    index=[0.25, 0.75],
+                                                                    columns=['A', 'X', 'B'])))])
+def test_dataframe_quantile(method, expected):
     # column X is for test column order and result division
     df = pd.DataFrame({'A': np.arange(20),
                        'X': np.arange(20, 40),
@@ -961,7 +918,7 @@ def test_dataframe_quantile():
                       columns=['A', 'X', 'B', 'C'])
     ddf = dd.from_pandas(df, 3)
 
-    result = ddf.quantile()
+    result = ddf.quantile(method=method)
     assert result.npartitions == 1
     assert result.divisions == ('A', 'X')
 
@@ -969,21 +926,9 @@ def test_dataframe_quantile():
     assert isinstance(result, pd.Series)
     assert result.name == 0.5
     tm.assert_index_equal(result.index, pd.Index(['A', 'X', 'B']))
-    assert (result > pd.Series([16, 36, 26], index=['A', 'X', 'B'])).all()
-    assert (result < pd.Series([17, 37, 27], index=['A', 'X', 'B'])).all()
+    assert (result == expected[0]).all()
 
-    result = ddf.quantile(method='tdigest')
-    exp = df.quantile()
-    assert result.npartitions == 1
-    assert result.divisions == ('A', 'X')
-
-    result = result.compute()
-    assert isinstance(result, pd.Series)
-    assert result.name == 0.5
-    tm.assert_index_equal(result.index, pd.Index(['A', 'X', 'B']))
-    assert (result == exp).all()
-
-    result = ddf.quantile([0.25, 0.75])
+    result = ddf.quantile([0.25, 0.75], method=method)
     assert result.npartitions == 1
     assert result.divisions == (0.25, 0.75)
 
@@ -991,29 +936,11 @@ def test_dataframe_quantile():
     assert isinstance(result, pd.DataFrame)
     tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
     tm.assert_index_equal(result.columns, pd.Index(['A', 'X', 'B']))
-    minexp = pd.DataFrame([[1, 21, 11], [17, 37, 27]],
-                          index=[0.25, 0.75], columns=['A', 'X', 'B'])
-    assert (result > minexp).all().all()
-    maxexp = pd.DataFrame([[2, 22, 12], [18, 38, 28]],
-                          index=[0.25, 0.75], columns=['A', 'X', 'B'])
-    assert (result < maxexp).all().all()
 
-    result = ddf.quantile([0.25, 0.75], method='tdigest')
-    assert result.npartitions == 1
-    assert result.divisions == (0.25, 0.75)
+    assert (result == expected[1]).all().all()
 
-    result = result.compute()
-    assert isinstance(result, pd.DataFrame)
-    tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
-    tm.assert_index_equal(result.columns, pd.Index(['A', 'X', 'B']))
-    exp = pd.DataFrame([[4.5, 24.5, 14.5], [14.5, 34.5, 24.5]],
-                       index=[0.25, 0.75], columns=['A', 'X', 'B'])
-
-    assert (result == exp).all().all()
-
-    assert_eq(ddf.quantile(axis=1), df.quantile(axis=1))
-    assert_eq(ddf.quantile(axis=1, method='tdigest'), df.quantile(axis=1))
-    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
+    assert_eq(ddf.quantile(axis=1, method=method), df.quantile(axis=1))
+    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
 
 
 def test_quantile_for_possibly_unsorted_q():
