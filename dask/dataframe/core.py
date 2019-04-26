@@ -4221,9 +4221,12 @@ def _take_last(a, skipna=True):
         # take last valid value excluding NaN, NaN location may be different
         # in each column
         if is_dataframe_like(a):
-            # create Series of appropriate backend dataframe library
-            series_typ = type(a.iloc[0])
-            return series_typ({col: _last_valid(a[col]) for col in a.columns}, index=a.columns)
+            # create Series from appropriate backend dataframe library
+            series_typ = type(a.loc[0:1, a.columns[0]])
+            if a.empty:
+                return series_typ([])
+            return series_typ({col: _last_valid(a[col]) for col in a.columns},
+                              index=a.columns)
         else:
             return _last_valid(a)
 
