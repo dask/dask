@@ -1141,6 +1141,13 @@ class _GroupBy(object):
                               df._contains_index_name(self.index))
 
         if should_shuffle:
+            if isinstance(self.obj, Series):
+                # Temporarily convert series to dataframe for shuffle
+                df = df.to_frame('__series__')
+                convert_back_to_series = True
+            else:
+                convert_back_to_series = False
+
             if isinstance(self.index, DataFrame):  # add index columns to dataframe
                 df2 = df.assign(**{'_index_' + c: self.index[c]
                                    for c in self.index.columns})
@@ -1153,27 +1160,32 @@ class _GroupBy(object):
                 index = df._select_columns_or_index(self.index)
 
             df3 = shuffle(df2, index)  # shuffle dataframe and index
-        else:
-            df3 = df
 
-        if should_shuffle and isinstance(self.index, DataFrame):
-            # extract index from dataframe
-            cols = ['_index_' + c for c in self.index.columns]
-            index2 = df3[cols]
-            if is_dataframe_like(meta):
-                df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+            if isinstance(self.index, DataFrame):
+                # extract index from dataframe
+                cols = ['_index_' + c for c in self.index.columns]
+                index2 = df3[cols]
+                if is_dataframe_like(meta):
+                    df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+                else:
+                    df4 = df3.drop(cols, axis=1)
+            elif isinstance(self.index, Series):
+                index2 = df3['_index']
+                index2.name = self.index.name
+                if is_dataframe_like(meta):
+                    df4 = df3.map_partitions(drop_columns, '_index',
+                                             meta.columns.dtype)
+                else:
+                    df4 = df3.drop('_index', axis=1)
             else:
-                df4 = df3.drop(cols, axis=1)
-        elif should_shuffle and isinstance(self.index, Series):
-            index2 = df3['_index']
-            index2.name = self.index.name
-            if is_dataframe_like(meta):
-                df4 = df3.map_partitions(drop_columns, '_index',
-                                         meta.columns.dtype)
-            else:
-                df4 = df3.drop('_index', axis=1)
+                df4 = df3
+                index2 = self.index
+
+            if convert_back_to_series:
+                df4 = df4['__series__'].rename(self.obj.name)
+
         else:
-            df4 = df3
+            df4 = df
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply

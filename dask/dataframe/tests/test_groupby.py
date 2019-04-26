@@ -239,6 +239,9 @@ def test_groupby_on_index(scheduler):
     def func2(df):
         return df[['b']] - df[['b']].mean()
 
+    def func3(df):
+        return df.mean()
+
     with dask.config.set(scheduler=scheduler):
         with pytest.warns(None):
             assert_eq(ddf.groupby('a').apply(func),
@@ -249,6 +252,12 @@ def test_groupby_on_index(scheduler):
 
             assert_eq(pdf2.groupby(pdf2.index).apply(func2),
                       ddf2.groupby(ddf2.index).apply(func2))
+
+            assert_eq(ddf2.b.groupby('a').apply(func3),
+                      pdf2.b.groupby('a').apply(func3))
+
+            assert_eq(ddf2.b.groupby(ddf2.index).apply(func3),
+                      pdf2.b.groupby(pdf2.index).apply(func3))
 
 
 @pytest.mark.parametrize('grouper',
@@ -672,6 +681,13 @@ def test_apply_shuffle():
 
         assert_eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
                   pdf.groupby(pdf['A'] + 1)['B'].apply(lambda x: x.sum()))
+
+        # Series.groupby
+        assert_eq(ddf.B.groupby(ddf['A']).apply(lambda x: x.sum()),
+                  pdf.B.groupby(pdf['A']).apply(lambda x: x.sum()))
+
+        assert_eq(ddf.B.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
+                  pdf.B.groupby(pdf['A'] + 1).apply(lambda x: x.sum()))
 
         # DataFrameGroupBy with column slice
         assert_eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
