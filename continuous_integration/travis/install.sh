@@ -45,6 +45,7 @@ conda install -q -c conda-forge \
     chest \
     cloudpickle \
     coverage \
+    crick \
     cytoolz \
     distributed \
     graphviz \

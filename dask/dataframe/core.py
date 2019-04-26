@@ -1493,16 +1493,19 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
-    def quantile(self, q=0.5, axis=0):
+    def quantile(self, q=0.5, axis=0, method='default'):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
 
         Parameters
         ----------
-
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
         axis : {0, 1, 'index', 'columns'} (default 0)
             0 or 'index' for row-wise, 1 or 'columns' for column-wise
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use dask's internal custom
+            algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
+            for floats and ints and fallback to the ``'dask'`` otherwise.
         """
         axis = self._validate_axis(axis)
         keyname = 'quantiles-concat--' + tokenize(self, q, axis)
@@ -1517,7 +1520,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             _raise_if_object_series(self, "quantile")
             meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
-            quantiles = tuple(quantile(self[c], q) for c in num.columns)
+            quantiles = tuple(quantile(self[c], q, method) for c in num.columns)
 
             qnames = [(_q._name, 0) for _q in quantiles]
 
@@ -1532,7 +1535,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False, percentiles=None):
+    def describe(self, split_every=False, percentiles=None, percentiles_method='default'):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
         if self.ndim == 2 and len(num.columns) == 0:
@@ -1552,7 +1555,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
                  num.min(split_every=split_every),
-                 num.quantile(percentiles),
+                 num.quantile(percentiles, method=percentiles_method),
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -2050,13 +2053,19 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    def quantile(self, q=0.5):
+    def quantile(self, q=0.5, method='default'):
         """ Approximate quantiles of Series
 
+        Parameters
+        ----------
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use dask's internal custom
+            algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
+            for floats and ints and fallback to the ``'dask'`` otherwise.
         """
-        return quantile(self, q)
+        return quantile(self, q, method=method)
 
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """ Approximate quantiles of Series used for repartitioning
@@ -3952,13 +3961,17 @@ def _rename_dask(df, names):
     return new_dd_object(graph, name, metadata, df.divisions)
 
 
-def quantile(df, q):
+def quantile(df, q, method='default'):
     """Approximate quantiles of Series.
 
     Parameters
     ----------
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
+    method : {'default', 'tdigest', 'dask'}, optional
+        What method to use. By default will use dask's internal custom
+        algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
+        floats and ints and fallback to the ``'dask'`` otherwise.
     """
     # current implementation needs q to be sorted so
     # sort if array-like, otherwise leave it alone
@@ -3968,7 +3981,15 @@ def quantile(df, q):
         q = q_ndarray
 
     assert isinstance(df, Series)
-    from dask.array.percentile import _percentile, merge_percentiles
+
+    allowed_methods = ['default', 'dask', 'tdigest']
+    if method not in allowed_methods:
+        raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
+
+    if method == 'default':
+        internal_method = 'dask'
+    else:
+        internal_method = method
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
@@ -4000,17 +4021,39 @@ def quantile(df, q):
         new_divisions = [np.min(q), np.max(q)]
 
     df = df.dropna()
-    name = 'quantiles-1-' + token
-    val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
-               for i, key in enumerate(df.__dask_keys__())}
 
-    name3 = 'quantiles-3-' + token
-    merge_dsk = {(name3, 0): finalize_tsk((merge_percentiles, qs,
-                                           [qs] * df.npartitions,
-                                           sorted(val_dsk)))}
+    if (internal_method == 'tdigest' and
+            (np.issubdtype(df.dtype, np.floating) or np.issubdtype(df.dtype, np.integer))):
+
+        from dask.utils import import_required
+        import_required('crick',
+                        'crick is a required dependency for using the t-digest '
+                        'method.')
+
+        from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
+
+        name = 'quantiles_tdigest-1-' + token
+        val_dsk = {(name, i): (_tdigest_chunk, (getattr, key, 'values'))
+                   for i, key in enumerate(df.__dask_keys__())}
+
+        name2 = 'quantiles_tdigest-2-' + token
+        merge_dsk = {(name2, 0): finalize_tsk((_percentiles_from_tdigest, qs,
+                                               sorted(val_dsk)))}
+    else:
+
+        from dask.array.percentile import _percentile, merge_percentiles
+
+        name = 'quantiles-1-' + token
+        val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
+                   for i, key in enumerate(df.__dask_keys__())}
+
+        name2 = 'quantiles-2-' + token
+        merge_dsk = {(name2, 0): finalize_tsk((merge_percentiles, qs,
+                                               [qs] * df.npartitions,
+                                               sorted(val_dsk)))}
     dsk = merge(val_dsk, merge_dsk)
-    graph = HighLevelGraph.from_collections(name3, dsk, dependencies=[df])
-    return return_type(graph, name3, meta, new_divisions)
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[df])
+    return return_type(graph, name2, meta, new_divisions)
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
