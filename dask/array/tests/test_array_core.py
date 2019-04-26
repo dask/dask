@@ -1145,6 +1145,51 @@ def test_map_blocks_block_info_with_axis():
     assert_eq(z, np.ones((4, 3), dtype='f8'))
 
 
+def test_map_blocks_block_info_with_broadcast():
+    expected0 = [
+        {'shape': (3, 4), 'num-chunks': (1, 2), 'array-location': [(0, 3), (0, 2)], 'chunk-location': (0, 0)},
+        {'shape': (3, 4), 'num-chunks': (1, 2), 'array-location': [(0, 3), (2, 4)], 'chunk-location': (0, 1)}
+    ]
+    expected1 = [
+        {'shape': (6, 2), 'num-chunks': (2, 1), 'array-location': [(0, 3), (0, 2)], 'chunk-location': (0, 0)},
+        {'shape': (6, 2), 'num-chunks': (2, 1), 'array-location': [(3, 6), (0, 2)], 'chunk-location': (1, 0)}
+    ]
+    expected2 = [
+        {'shape': (4,), 'num-chunks': (2,), 'array-location': [(0, 2)], 'chunk-location': (0,)},
+        {'shape': (4,), 'num-chunks': (2,), 'array-location': [(2, 4)], 'chunk-location': (1,)}
+    ]
+    expected = [
+        {0: expected0[0], 1: expected1[0], 2: expected2[0],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(0, 3), (0, 2)], 'chunk-location': (0, 0)}},
+        {0: expected0[1], 1: expected1[0], 2: expected2[1],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(0, 3), (2, 4)], 'chunk-location': (0, 1)}},
+        {0: expected0[0], 1: expected1[1], 2: expected2[0],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(3, 6), (0, 2)], 'chunk-location': (1, 0)}},
+        {0: expected0[1], 1: expected1[1], 2: expected2[1],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(3, 6), (2, 4)], 'chunk-location': (1, 1)}}
+    ]
+
+    def func(x, y, z, block_info=None):
+        for info in expected:
+            if block_info[None]['chunk-location'] == info[None]['chunk-location']:
+                assert block_info == info
+                break
+        else:
+            assert False
+        return x + y + z
+
+    a = da.ones((3, 4), chunks=(3, 2))
+    b = da.ones((6, 2), chunks=(3, 2))
+    c = da.ones((4,), chunks=(2,))
+    d = da.map_blocks(func, a, b, c, chunks=((3, 3), (2, 2)), dtype=a.dtype)
+    assert d.chunks == ((3, 3), (2, 2))
+    assert_eq(d, 3 * np.ones((6, 4)))
+
+
 def test_map_blocks_with_constants():
     d = da.arange(10, chunks=3)
     e = d.map_blocks(add, 100, dtype=d.dtype)
