@@ -1848,6 +1848,28 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """
         return self.map_partitions(methods.values)
 
+    def _is_index_level_reference(self, key):
+        """
+        Test whether a key is an index level reference
+
+        To be considered an index level reference, `key` must match the index name
+        and must NOT match the name of any column (if a dataframe).
+        """
+        return (self.index.name is not None and
+                not is_dask_collection(key) and
+                (np.isscalar(key) or isinstance(key, tuple)) and
+                key == self.index.name and
+                key not in getattr(self, 'columns', ()))
+
+    def _contains_index_name(self, columns_or_index):
+        """
+        Test whether the input contains a reference to the index of the DataFrame/Series
+        """
+        if isinstance(columns_or_index, list):
+            return any(self._is_index_level_reference(n) for n in columns_or_index)
+        else:
+            return self._is_index_level_reference(columns_or_index)
+
 
 def _raise_if_object_series(x, funcname):
     """
@@ -3342,28 +3364,6 @@ class DataFrame(_Frame):
         return (not is_dask_collection(key) and
                 (np.isscalar(key) or isinstance(key, tuple)) and
                 key in self.columns)
-
-    def _is_index_level_reference(self, key):
-        """
-        Test whether a key is an index level reference
-
-        To be considered an index level reference, `key` must match the index name
-        and must NOT match the name of any column.
-        """
-        return (self.index.name is not None and
-                not is_dask_collection(key) and
-                (np.isscalar(key) or isinstance(key, tuple)) and
-                key == self.index.name and
-                key not in self.columns)
-
-    def _contains_index_name(self, columns_or_index):
-        """
-        Test whether the input contains a reference to the index of the DataFrame
-        """
-        if isinstance(columns_or_index, list):
-            return any(self._is_index_level_reference(n) for n in columns_or_index)
-        else:
-            return self._is_index_level_reference(columns_or_index)
 
 
 # bind operators
