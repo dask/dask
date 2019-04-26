@@ -404,6 +404,98 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                          how, npartitions, suffixes, shuffle=shuffle,
                          indicator=indicator)
 
+def validate_arguments(msg, *dfs):
+    if not all(isinstance(df, _Frame) for df in dfs):
+        raise ValueError(msg, "only callable on Frames")
+    if not all(df.known_divisions for df in dfs):
+        raise ValueError("Not all divisions are known for", msg)
+
+def refine_partition(*dfs):
+    """ Refine the partition of first DataFrame to include the divisions of the
+    rest
+    Like align_partition but only modifying the first one
+    """
+    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+    if len(divisions) == 1:  # single value for index
+        divisions = (divisions[0], divisions[0])
+    dfs2 = [df.repartition(divisions, force=True) if i == 0 else df for i, df in enumerate(dfs)]
+
+    result = list()
+    inds = [-1 for df in dfs2]
+    for d in divisions[:-1]:
+        L = list()
+        for i, df in enumerate(dfs2):
+            if isinstance(df, _Frame):
+                j = inds[i]
+                divs = df.divisions
+                if j < len(divs) - 2 and divs[j+1] == d:
+                    inds[i] += 1
+                    j += 1
+                if j >= 0 and j < len(divs) - 1:
+                    L.append((df._name, j))
+                else:
+                    L.append(None)
+            else:    # Scalar has no divisions
+                L.append(None)
+        result.append(L)
+    return dfs2, tuple(divisions), result
+
+def help(x, y, **kwargs):
+    print ("merging")
+    print (x)
+    print (y)
+    return pd.merge_asof(x, y)
+
+def merge_asof_indexed(left, right, **kwargs):
+    """ Asof join two partitioned dataframes along their index """
+    validate_arguments('merge_asof_indexed', left, right)
+
+    original_divisions = left.divisions
+    (left, right), divisions, parts = refine_partition(left, right)
+    print (divisions)
+    for (a,b) in parts:
+        print (a, b)
+    divisions, parts = require(divisions, parts, [0,1])
+
+    name = 'merge_asof-indexed-' + tokenize(left, right, **kwargs)
+
+    dsk = dict()
+    for i, (a, b) in enumerate(parts):
+        dsk[(name, i)] = (apply, pd.merge_asof, [a, b], kwargs)
+
+    meta = pd.merge_asof(left._meta, right._meta, left_index=True, right_index=True)
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
+    result = new_dd_object(graph, name, meta, divisions)
+    return result.repartition(original_divisions, force=True)
+
+def merge_asof(left, right, on=None, left_on=None, right_on=None,
+               left_index=False, right_index=False, by=None, left_by=None,
+               right_by=None, suffixes=('_x','_y'), tolerance=None,
+               allow_exact_matches=True, direction='backward',
+               npartitions=None, shuffle=None):
+    if any([on!=None, left_on!=None, right_on!=None, left_index==False,
+            right_index==False, by!=None, left_by!=None, right_by!=None,
+            suffixes!=('_x','_y'), tolerance!=None, allow_exact_matches!=True,
+            direction!='backward', npartitions!=None, shuffle!=None]):
+        raise NotImplementedError("haven't implemented that yet... baby steps")
+
+    validate_arguments('merge_asof', left, right)
+
+    # Both sides are now dd.DataFrame or dd.Series objects
+    merge_indexed_left = left_index and left.known_divisions
+    merge_indexed_right = right_index and right.known_divisions
+    # TODO: handle multi-index case??
+
+    # Both sides indexed
+    if merge_indexed_left and merge_indexed_right:
+        return merge_asof_indexed(left, right, on=None, left_on=None,
+                                  right_on=None, left_index=left_index,
+                                  right_index=right_index, by=by,
+                                  left_by=left_by, right_by=right_by,
+                                  suffixes=suffixes, tolerance=tolerance,
+                                  allow_exact_matches=allow_exact_matches,
+                                  direction=direction)
 
 ###############################################################
 # Concat
