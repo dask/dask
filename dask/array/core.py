@@ -299,6 +299,8 @@ def normalize_arg(x):
         return x
     elif isinstance(x, str) and re.match(r'_\d+', x):
         return delayed(x)
+    elif isinstance(x, list) and len(x) >= 10:
+        return delayed(x)
     elif sizeof(x) > 1e6:
         return delayed(x)
     else:
