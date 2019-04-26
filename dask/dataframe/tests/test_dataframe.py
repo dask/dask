@@ -405,6 +405,25 @@ def test_cumulative():
     assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
 
 
+@pytest.mark.parametrize(
+    'func',
+    [M.cumsum,
+     M.cumprod,
+     pytest.param(M.cummin, marks=[pytest.mark.xfail(
+         reason='ValueError: Can only compare identically-labeled Series objects')]),
+     pytest.param(M.cummax, marks=[pytest.mark.xfail(
+         reason='ValueError: Can only compare identically-labeled Series objects')])]
+)
+def test_cumulative_empty_partitions(func):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]))
+
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 5, 6, None, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]))
+
+
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2, 3, 4, np.nan, 6],
                        'y': [1, 2, np.nan, 4, np.nan, np.nan],
