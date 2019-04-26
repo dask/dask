@@ -1499,15 +1499,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         Parameters
         ----------
-
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
         axis : {0, 1, 'index', 'columns'} (default 0)
             0 or 'index' for row-wise, 1 or 'columns' for column-wise
-        method : {'default', 'tdigest', 'dask'}:
-            What method to use. By default will use dask's internal custom algorithm (``'dask'``).
-            If set to ``'tdigest'`` will use tdigest for floats and ints and fallback to the ``'dask'``
-            otherwise.
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use dask's internal custom
+            algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
+            for floats and ints and fallback to the ``'dask'`` otherwise.
         """
         axis = self._validate_axis(axis)
         keyname = 'quantiles-concat--' + tokenize(self, q, axis)
@@ -2044,12 +2043,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def quantile(self, q=0.5, method='default'):
         """ Approximate quantiles of Series
 
+        Parameters
+        ----------
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
-        method : {'default', 'tdigest', 'dask'}:
-            What method to use. By default will use dask's internal custom algorithm (``'dask'``).
-            If set to ``'tdigest'`` will use tdigest for floats and ints and fallback to the ``'dask'``
-            otherwise.
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use dask's internal custom
+            algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest
+            for floats and ints and fallback to the ``'dask'`` otherwise.
         """
         return quantile(self, q, method=method)
 
@@ -3955,10 +3956,10 @@ def quantile(df, q, method='default'):
     ----------
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
-    method : {'default', 'tdigest', 'dask'}:
-        What method to use. By default will use dask's internal custom algorithm (``'dask'``).
-        If set to ``'tdigest'`` will use tdigest for floats and ints and fallback to the ``'dask'``
-        otherwise.
+    method : {'default', 'tdigest', 'dask'}, optional
+        What method to use. By default will use dask's internal custom
+        algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
+        floats and ints and fallback to the ``'dask'`` otherwise.
     """
     # current implementation needs q to be sorted so
     # sort if array-like, otherwise leave it alone

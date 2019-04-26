@@ -55,13 +55,32 @@ def _percentiles_from_tdigest(qs, digests):
 def percentile(a, q, interpolation='linear', method='default'):
     """ Approximate percentile of 1-D array
 
-    See :func:`numpy.percentile` for more information
+    Parameters
+    ----------
+    a : Array
+    q : array_like of float
+        Percentile or sequence of percentiles to compute, which must be between
+        0 and 100 inclusive.
+    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}, optional
+        The interpolation method to use when the desired percentile lies
+        between two data points ``i < j``. Only valid for ``method='dask'``.
 
-    Note: this implementation will use t-digest for calculating the percentile
-          only if `method` is set to `tdigest`, the dtype of the array is integer
-          or floating type and interpolation is set to linear. Otherwise it falls
-          back to the internal implementation.
+        * 'linear': ``i + (j - i) * fraction``, where ``fraction``
+        is the fractional part of the index surrounded by ``i``
+        and ``j``.
+        * 'lower': ``i``.
+        * 'higher': ``j``.
+        * 'nearest': ``i`` or ``j``, whichever is nearest.
+        * 'midpoint': ``(i + j) / 2``.
 
+    method : {'default', 'dask', 'tdigest'}, optional
+        What method to use. By default will use dask's internal custom
+        algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
+        floats and ints and fallback to the ``'dask'`` otherwise.
+
+    See Also
+    --------
+    numpy.percentile : Numpy's equivalent Percentile function
     """
     if not a.ndim == 1:
         raise NotImplementedError(
@@ -69,7 +88,7 @@ def percentile(a, q, interpolation='linear', method='default'):
     if isinstance(q, Number):
         q = [q]
     q = np.array(q)
-    token = tokenize(a, list(q), interpolation)
+    token = tokenize(a, q, interpolation)
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):

@@ -277,6 +277,8 @@ def test_rename_series_method():
 
 @pytest.mark.parametrize('method,test_values', [('tdigest', (6, 10)), ('dask', (4, 20))])
 def test_describe(method, test_values):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # prepare test case which approx quantiles will be the same as actuals
     s = pd.Series(list(range(test_values[1])) * test_values[0])
     df = pd.DataFrame({'a': list(range(test_values[1])) * test_values[0],
@@ -306,6 +308,8 @@ def test_describe(method, test_values):
 
 @pytest.mark.parametrize('method', ['tdigest', 'dask'])
 def test_describe_empty(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # https://github.com/dask/dask/issues/2326
     ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
     with pytest.raises(ValueError) as rec:
@@ -835,6 +839,8 @@ def test_nbytes():
 @pytest.mark.parametrize('method,expected', [('tdigest', (0.35, 3.80, 2.5, 6.5, 2.0)),
                                              ('dask', (0.0, 5.4, 1.2, 7.8, 5.0))])
 def test_quantile(method, expected):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # series / multiple
     result = d.b.quantile([.3, .7], method=method)
 
@@ -875,6 +881,8 @@ def test_quantile(method, expected):
 
 @pytest.mark.parametrize('method', ['tdigest', 'dask'])
 def test_quantile_missing(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     ddf = dd.from_pandas(df, 2)
     expected = df.quantile()
@@ -888,6 +896,8 @@ def test_quantile_missing(method):
 
 @pytest.mark.parametrize('method', ['tdigest', 'dask'])
 def test_empty_quantile(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     result = d.b.quantile([], method=method)
     exp = full.b.quantile([])
     assert result.divisions == (None, None)
@@ -910,6 +920,8 @@ def test_empty_quantile(method):
                                                                     index=[0.25, 0.75],
                                                                     columns=['A', 'X', 'B'])))])
 def test_dataframe_quantile(method, expected):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # column X is for test column order and result division
     df = pd.DataFrame({'A': np.arange(20),
                        'X': np.arange(20, 40),

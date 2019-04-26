@@ -6,8 +6,19 @@ import numpy as np
 import dask.array as da
 from dask.array.utils import assert_eq, same_keys
 
+try:
+    import crick
+except ImportError:
+    crick = None
 
-@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+
+percentile_methods = pytest.mark.parametrize('method', [
+    pytest.param("tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")),
+    "dask"
+])
+
+
+@percentile_methods
 def test_percentile(method):
     d = da.ones((16,), chunks=(4,))
     qs = [0, 50, 100]
@@ -54,37 +65,30 @@ def test_percentile_with_categoricals():
                      da.percentile(x, [50]))
 
 
-@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+@percentile_methods
 def test_percentiles_with_empty_arrays(method):
     x = da.ones(10, chunks=((5, 0, 5),))
     assert_eq(da.percentile(x, [10, 50, 90], method=method), np.array([1, 1, 1], dtype=x.dtype))
 
 
+@percentile_methods
 @pytest.mark.parametrize('q', [5, 5.0, np.int64(5), np.float64(5)])
-def test_percentiles_with_scaler_percentile(q):
+def test_percentiles_with_scaler_percentile(method, q):
     # Regression test to ensure da.percentile works with scalar percentiles
     # See #3020
     d = da.ones((16,), chunks=(4,))
-    assert_eq(da.percentile(d, q), np.array([1], dtype=d.dtype))
-    assert_eq(da.percentile(d, q, method='tdigest'), np.array([1], dtype=d.dtype))
+    assert_eq(da.percentile(d, q, method=method), np.array([1], dtype=d.dtype))
 
 
-def test_unknown_chunk_sizes():
+@percentile_methods
+def test_unknown_chunk_sizes(method):
     x = da.random.random(1000, chunks=(100,))
     x._chunks = ((np.nan,) * 10,)
 
-    result = da.percentile(x, 50).compute()
+    result = da.percentile(x, 50, method=method).compute()
     assert 0.1 < result < 0.9
 
-    result = da.percentile(x, 50, method='tdigest').compute()
-    assert 0.1 < result < 0.9
-
-    a, b = da.percentile(x, [40, 60]).compute()
-    assert 0.1 < a < 0.9
-    assert 0.1 < b < 0.9
-    assert a < b
-
-    a, b = da.percentile(x, [40, 60], method='tdigest').compute()
+    a, b = da.percentile(x, [40, 60], method=method).compute()
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
