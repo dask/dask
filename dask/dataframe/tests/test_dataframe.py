@@ -3544,3 +3544,15 @@ def test_replace():
     assert_eq(df.replace({1: 10, 2: 20}), ddf.replace({1: 10, 2: 20}))
     assert_eq(df.x.replace(1, 10), ddf.x.replace(1, 10))
     assert_eq(df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}))
+
+
+def test_map_partitions_delays_lists():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    L = list(range(100))
+    out = ddf.map_partitions(lambda x, y: x + sum(y), y=L)
+    assert any(str(L) == str(v) for v in out.__dask_graph__().values())
+
+    out = ddf.map_partitions(lambda x, y: x + sum(y), L)
+    assert any(str(L) == str(v) for v in out.__dask_graph__().values())
