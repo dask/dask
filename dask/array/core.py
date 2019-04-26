@@ -577,12 +577,20 @@ def map_blocks(func, *args, **kwargs):
             else:
                 old_k = k[1:]
 
-            info = {i: {'shape': shapes[i],
-                        'num-chunks': num_chunks[i],
-                        'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
-                                           for ij, j in enumerate(old_k)],
-                        'chunk-location': old_k}
-                    for i in shapes}
+            info = {}
+            for i, shape in shapes.items():
+                # Compute chunk key in the array, taking broadcasting into
+                # account. We don't directly know which dimensions are
+                # broadcast, but any dimension with only one chunk can be
+                # treated as broadcast.
+                arr_k = old_k[-len(shape):]
+                arr_k = tuple(j if num_chunks[i][ij] > 1 else 0 for ij, j in enumerate(arr_k))
+                info[i] = {'shape': shape,
+                           'num-chunks': num_chunks[i],
+                           'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
+                                              for ij, j in enumerate(arr_k)],
+                           'chunk-location': arr_k}
+
             info[None] = {'shape': out.shape,
                           'num-chunks': out.numblocks,
                           'array-location': [(out_starts[ij][j], out_starts[ij][j + 1])
