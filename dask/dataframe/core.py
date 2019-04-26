@@ -32,7 +32,6 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
 from ..array.core import Array, normalize_arg
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
-from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 
@@ -3774,15 +3773,12 @@ def map_partitions(func, *args, **kwargs):
     name = kwargs.pop('token', None)
     transform_divisions = kwargs.pop('transform_divisions', True)
 
-    # Normalize keyword arguments
-    kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
-
     assert callable(func)
     if name is not None:
-        token = tokenize(meta, *args, **kwargs2)
+        token = tokenize(meta, *args, **kwargs)
     else:
         name = funcname(func)
-        token = tokenize(func, meta, *args, **kwargs2)
+        token = tokenize(func, meta, *args, **kwargs)
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
@@ -3818,8 +3814,7 @@ def map_partitions(func, *args, **kwargs):
             args2.append(arg)
             dependencies.append(arg)
             continue
-        if not is_dask_collection(arg) and sizeof(arg) > 1e6:
-            arg = delayed(arg)
+        arg = normalize_arg(arg)
         arg2, collections = unpack_collections(arg)
         if collections:
             args2.append(arg2)
@@ -3828,7 +3823,8 @@ def map_partitions(func, *args, **kwargs):
             args2.append(arg)
 
     kwargs3 = {}
-    for k, v in kwargs2.items():
+    for k, v in kwargs.items():
+        v = normalize_arg(v)
         v, collections = unpack_collections(v)
         dependencies.extend(collections)
         kwargs3[k] = v
