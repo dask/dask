@@ -12,6 +12,9 @@ If your data fits comfortably in RAM and you are not performance bound, then
 using NumPy might be the right choice.  Dask adds another layer of complexity
 which may get in the way.
 
+If you are just looking for speedups rather than scalability then you may want
+to consider a project like `Numba <https://numba.pydata.org>`_
+
 
 Select a good chunk size
 ------------------------
@@ -22,7 +25,13 @@ aligned with their data (leading to inefficient reading).
 
 While optimal sizes and shapes are highly problem specific, it is rare to see
 chunk sizes below 100 MB in size.  If you are dealing with float64 data then
-this is around ``(4000, 4000)`` in size.
+this is around ``(4000, 4000)`` in size for a 2D array or ``(100, 400, 400)``
+for a 3D array.
+
+You want to choose a chunk size that is large in order to reduce the number of
+chunks that Dask has to think about (which affects overhead) but also small
+enough so that many of them can fit in memory at once.  Dask will often have as
+many chunks in memory as twice the number of active threads.
 
 
 Orient your chunks
@@ -33,9 +42,9 @@ Most array storage formats store data in chunks themselves.  If your Dask array
 chunks aren't multiples of these chunk shapes then you will have to read the
 same data repeatedly, which can be very expensive.  Note though that often
 storage formats choose chunk sizes that are much smaller than is ideal for
-Dask.  In these cases you should choose a Dask chunk size that aligns with the
-storage chunk size and that every Dask chunk dimension is a multiple of the
-storage chunk dimension.
+Dask, closer to 1MB than 100MB.  In these cases you should choose a Dask chunk
+size that aligns with the storage chunk size and that every Dask chunk
+dimension is a multiple of the storage chunk dimension.
 
 So for example if we have an HDF file that has chunks of size ``(128, 64)``, we
 might choose a chunk shape of ``(1280, 6400)``.
@@ -54,8 +63,8 @@ Note that if you provide ``chunks='auto'`` then Dask Array will look for a
 ``.chunks`` attribute and use that to provide a good chunking.
 
 
-Avoid Oversubscription
-----------------------
+Avoid Oversubscribing Threads
+-----------------------------
 
 By default Dask will run as many concurrent tasks as you have logical cores.
 It assumes that each task will consume about one core.  However, many
@@ -86,6 +95,25 @@ following:
 2.  Read from a stack of HDF or NetCDF files at once
 3.  Switch between Dask Array and NumPy with a consistent API
 
-Xarray was originally designed for atmospheric and oceanographic science, but
-is general purpose enough to be of use to other disciplines.  It also has a
-thriving user community that is good at supporting each other.
+Xarray is used in wide range of fields, including physics, astronomy, geoscience,
+bioinformatics, engineering, finance, and deep learning.
+Xarray also has a thriving user community that is good at providing support.
+
+
+Build your own Operations
+-------------------------
+
+Often we want to perform computations for which there is no exact function
+in Dask Array.  In these cases we may be able to use some of the more generic
+functions to build our own.  These include:
+
+.. currentmodule:: dask.array
+
+.. autosummary::
+   map_blocks
+   reduction
+   map_overlap
+   blockwise
+
+These functions may help you to apply a function that you write for NumPy
+functions onto larger Dask arrays.
