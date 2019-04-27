@@ -3,7 +3,6 @@ from __future__ import division, print_function, absolute_import
 import inspect
 import math
 import warnings
-from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Real, Integral
 
@@ -323,13 +322,6 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     test_data = np.ones((1,), dtype=arr.dtype)
     test_result = np.array(func1d(test_data, *args, **kwargs))
 
-    if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
-            (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-        raise ValueError(
-            "No more than one non-trivial dimension allowed in result. "
-            "Need NumPy 1.13.0+ for this functionality."
-        )
-
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
         arr.chunks[:axis] + (arr.shape[axis:axis + 1],) + arr.chunks[axis + 1:]
@@ -523,17 +515,27 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-@wraps(np.bincount)
-def bincount(x, weights=None, minlength=None):
-    if minlength is None:
-        raise TypeError("Must specify minlength argument in da.bincount")
-    assert x.ndim == 1
-    if weights is not None:
-        assert weights.chunks == x.chunks
+def _bincount_sum(bincounts, dtype=int):
+    n = max(map(len, bincounts))
+    out = np.zeros(n, dtype=dtype)
+    for b in bincounts:
+        out[:len(b)] += b
+    return out
 
-    # Call np.bincount on each block, possibly with weights
+
+@wraps(np.bincount)
+def bincount(x, weights=None, minlength=0):
+    if x.ndim != 1:
+        raise ValueError('Input array must be one dimensional. '
+                         'Try using x.ravel()')
+    if weights is not None:
+        if weights.chunks != x.chunks:
+            raise ValueError('Chunks of input array x and weights must match.')
+
     token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
+    final_name = 'bincount-sum' + token
+    # Call np.bincount on each block, possibly with weights
     if weights is not None:
         dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
                for i, _ in enumerate(x.__dask_keys__())}
@@ -543,15 +545,15 @@ def bincount(x, weights=None, minlength=None):
                for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
-    # Sum up all of the intermediate bincounts per block
-    name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, list(dsk), 0)
+    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[x] if weights is None else [x, weights])
 
-    chunks = ((minlength,),)
+    if minlength == 0:
+        chunks = ((np.nan,),)
+    else:
+        chunks = ((minlength,),)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
-
-    return Array(graph, name, chunks, dtype)
+    return Array(graph, final_name, chunks, dtype)
 
 
 @wraps(np.digitize)
