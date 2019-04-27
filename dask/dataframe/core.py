@@ -4243,17 +4243,31 @@ def _take_last(a, skipna=True):
         Whether to exclude NaN
 
     """
+    def _last_valid(s):
+        for i in range(1, min(10, len(s) + 1)):
+            val = s.iloc[-i]
+            if not pd.isnull(val):
+                return val
+        else:
+            nonnull = s[s.notna()]
+            if not nonnull.empty:
+                return nonnull.iloc[-1]
+        return None
+
     if skipna is False:
         return a.iloc[-1]
     else:
         # take last valid value excluding NaN, NaN location may be different
-        # in each columns
-        group_dummy = np.ones(len(a.index))
-        last_row = a.groupby(group_dummy).last()
-        if isinstance(a, pd.DataFrame):  # TODO: handle explicit pandas reference
-            return pd.Series(last_row.values[0], index=a.columns)
+        # in each column
+        if is_dataframe_like(a):
+            # create Series from appropriate backend dataframe library
+            series_typ = type(a.loc[0:1, a.columns[0]])
+            if a.empty:
+                return series_typ([])
+            return series_typ({col: _last_valid(a[col]) for col in a.columns},
+                              index=a.columns)
         else:
-            return last_row.values[0]
+            return _last_valid(a)
 
 
 def check_divisions(divisions):
