@@ -479,11 +479,7 @@ def ignore_warning(doc, cls, name):
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find('\n\n')
-    if i == -1:
-        # No blank lines found
-        # Add our warning to the end with no blank line after
-        doc = '\n\n'.join([doc, '\n\n', l1, l2])
-    else:
+    if i != -1:
         # Insert our warning
         head = doc[:i + 2]
         tail = doc[i + 2:]
