@@ -103,7 +103,7 @@ def _initialize_logging_old_style(config):
 def _initialize_logging_new_style(config):
     """
     Initialize logging using logging's "Configuration dictionary schema".
-    (ref.: https://docs.python.org/2/library/logging.config.html#logging-config-dictschema)
+    (ref.: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema)
     """
     logging.config.dictConfig(config.get("logging"))
 
@@ -111,7 +111,7 @@ def _initialize_logging_new_style(config):
 def _initialize_logging_file_config(config):
     """
     Initialize logging using logging's "Configuration file format".
-    (ref.: https://docs.python.org/2/library/logging.config.html#configuration-file-format)
+    (ref.: https://docs.python.org/3/howto/logging.html#configuring-logging)
     """
     logging.config.fileConfig(
         config.get("logging-file-config"), disable_existing_loggers=False

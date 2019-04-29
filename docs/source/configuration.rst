@@ -156,7 +156,7 @@ for each logger.  It also sets default values for several loggers such
 as ``distributed`` unless explicitly configured.
 
 A more extended format is possible following the :mod:`logging` module's
-`Configuration dictionary schema <https://docs.python.org/2/library/logging.config.html#logging-config-dictschema>`_.
+`Configuration dictionary schema <https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema>`_.
 To enable this extended format, there must be a ``version`` sub-key as
 mandated by the schema.  The extended format does not set any default values.
 
@@ -173,7 +173,7 @@ mandated by the schema.  The extended format does not set any default values.
 As an alternative to the two logging settings formats discussed above,
 you can specify a logging config file.
 Its format adheres to the :mod:`logging` module's
-`Configuration file format <https://docs.python.org/2/library/logging.config.html#configuration-file-format>`_.
+`Configuration file format <https://docs.python.org/3/howto/logging.html#configuring-logging>`_.
 
 .. note::
    The configuration options `logging-file-config` and `logging` are mutually exclusive.
