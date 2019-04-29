@@ -1,10 +1,26 @@
 Changelog
 =========
 
+1.27.1 - 2019-04-29
+-------------------
+
+-  Adaptive: recommend close workers when any are idle (:pr:`2330`) `Michael Delgado`_
+-  Increase GC thresholds (:pr:`2624`) `Matthew Rocklin`_
+-  Add interface= keyword to LocalCluster (:pr:`2629`) `Matthew Rocklin`_
+-  Add worker_class argument to LocalCluster (:pr:`2625`) `Matthew Rocklin`_
+-  Remove Python 2.7 from testing matrix (:pr:`2631`) `Matthew Rocklin`_
+-  Add number of trials to diskutils test (:pr:`2630`) `Matthew Rocklin`_
+-  Fix parameter name in LocalCluster docstring (:pr:`2626`) `Loïc Estève`_
+-  Integrate stacktrace for low-level profiling (:pr:`2575`) `Peter Andreas Entschev`_
+-  Apply Black to standardize code styling (:pr:`2614`) `Matthew Rocklin`_
+-  added missing whitespace to start_worker cmd (:pr:`2613`) `condoratberlin`_
+-  Updated logging module doc links from docs.python.org/2 to docs.python.org/3. (:pr:`2635`) `Brett Randall`_
+
+
 1.27.0 - 2019-04-12
 -------------------
 
-   Add basic health endpoints to scheduler and worker bokeh. (#2607) `amerkel2`_
+   Add basic health endpoints to scheduler and worker bokeh. (:pr:`2607) `amerkel2`_
 -  Improved description accuracy of --memory-limit option. (:pr:`2601`) `Brett Randall`_
 -  Check self.dependencies when looking at dependent tasks in memory (:pr:`2606`) `deepthirajagopalan7`_
 -  Add RabbitMQ SchedulerPlugin example (:pr:`2604`) `Matt Nicolls`_
@@ -986,3 +1002,6 @@ significantly without many new features.
 .. _`Brian Chu`: https://github.com/bchu
 .. _`James Bourbeau`: https://github.com/jrbourbeau
 .. _`amerkel2`: https://github.com/amerkel2
+.. _`Michael Delgado`: https://github.com/delgadom
+.. _`Peter Andreas Entschev`: https://github.com/pentschev
+.. _`condoratberlin`: https://github.com/condoratberlin
