@@ -473,7 +473,7 @@ def _serialize_bytes(obj):
 
 @dask_deserialize.register((bytes, bytearray))
 def _deserialize_bytes(header, frames):
-    return frames[0]
+    return b"".join(frames)
 
 
 #########################

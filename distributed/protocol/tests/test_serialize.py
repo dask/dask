@@ -192,7 +192,7 @@ def test_empty_loads_deep():
 
 
 def test_serialize_bytes():
-    for x in [1, "abc", np.arange(5)]:
+    for x in [1, "abc", np.arange(5), b"ab" * int(40e6)]:
         b = serialize_bytes(x)
         assert isinstance(b, bytes)
         y = deserialize_bytes(b)
