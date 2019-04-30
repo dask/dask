@@ -996,7 +996,12 @@ class Worker(ServerNode):
             self.status = "closed"
 
             if nanny and "nanny" in self.service_ports:
-                with self.rpc((self.ip, self.service_ports["nanny"])) as r:
+                nanny_address = "%s%s:%d" % (
+                    self.listener.prefix,
+                    self.ip,
+                    self.service_ports["nanny"],
+                )
+                with self.rpc(nanny_address) as r:
                     yield r.terminate()
 
             if self.batched_stream and not self.batched_stream.comm.closed():

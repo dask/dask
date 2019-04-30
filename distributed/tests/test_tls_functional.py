@@ -10,6 +10,8 @@ from tornado import gen
 
 from distributed import Nanny, worker_client, Queue
 from distributed.client import wait
+from distributed.metrics import time
+from distributed.nanny import Nanny
 from distributed.utils_test import gen_tls_cluster, inc, double, slowinc, slowadd
 
 
@@ -157,3 +159,15 @@ def test_worker_client_executor(c, s, a, b):
     future = c.submit(mysum)
     result = yield future
     assert result == 30 * 29
+
+
+@gen_tls_cluster(client=True, Worker=Nanny)
+def test_retire_workers(c, s, a, b):
+    assert set(s.workers) == {a.worker_address, b.worker_address}
+    yield c.retire_workers(workers=[a.worker_address], close_workers=True)
+    assert set(s.workers) == {b.worker_address}
+
+    start = time()
+    while a.status != "closed":
+        yield gen.sleep(0.01)
+        assert time() < start + 5
