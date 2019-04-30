@@ -323,3 +323,5 @@ def test_auto_chunks():
 def test_randint_dtype():
     x = da.random.randint(0, 255, size=10, dtype='uint8')
     assert_eq(x, x)
+    assert x.dtype == 'uint8'
+    assert x.compute().dtype == 'uint8'
