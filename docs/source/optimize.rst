@@ -67,14 +67,18 @@ Here we are counting the occurrence of the words ``'orange``, ``'apple'``, and
 ``'pear'`` in the list of words, formatting an output string reporting the
 results, printing the output, and then returning the output string.
 
-To perform the computation, we pass the Dask graph and the desired output keys
-to a scheduler ``get`` function:
+To perform the computation, we first remove unnecessary components from the
+graph using the ``cull`` function and then pass the Dask graph and the desired
+output keys to a scheduler ``get`` function:
 
 .. code-block:: python
 
     >>> from dask.threaded import get
+    >>> from dask.optimization import cull
 
     >>> outputs = ['print1', 'print2']
+    >>> dsk2, _ = cull(dsk, outputs)  # remove unnecessary tasks from the graph
+
     >>> results = get(dsk, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
@@ -84,10 +88,12 @@ to a scheduler ``get`` function:
      'word list has 2 occurrences of apple, out of 7 words')
 
 As can be seen above, the scheduler computed only the requested outputs
-(``'print3'`` was never computed). This is because the scheduler internally
-calls ``cull``, which removes the unnecessary tasks from the graph. Even though
-this is done internally in the scheduler, it can be beneficial to call it at
-the start of a series of optimizations to reduce the amount of work done in
+(``'print3'`` was never computed). This is because we called the
+``dask.optimization.cull`` function, which removes the unnecessary tasks from
+the graph.
+
+Culling is part of the default optimization pass of almost all collections.
+Often you want to call it somewhat early to reduce the amount of work done in
 later steps:
 
 .. code-block:: python
