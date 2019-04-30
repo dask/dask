@@ -1,5 +1,6 @@
 import warnings
 
+import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -338,6 +339,10 @@ def test_concat_different_dtypes(join):
 
     expected = pd.concat([pdf1, pdf2], join=join)
     result = dd.concat([ddf1, ddf2], join=join)
+    assert_eq(expected, result)
+
+    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
+    assert len(set(map(str, dtypes_list))) == 1  # all the same
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
