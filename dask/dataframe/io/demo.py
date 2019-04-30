@@ -15,8 +15,8 @@ def make_float(n, rstate):
     return rstate.rand(n) * 2 - 1
 
 
-def make_int(n, rstate):
-    return rstate.poisson(1000, size=n)
+def make_int(n, rstate, lam=1000):
+    return rstate.poisson(lam, size=n)
 
 
 names = ['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank', 'George',
@@ -41,10 +41,15 @@ make = {float: make_float,
         'category': make_categorical}
 
 
-def make_timeseries_part(start, end, dtypes, freq, state_data):
-    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name='timestamp')
+def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
+    index = pd.date_range(start=start, end=end, freq=freq, name='timestamp')
     state = np.random.RandomState(state_data)
-    columns = dict((k, make[dt](len(index), state)) for k, dt in dtypes.items())
+    columns = {}
+    for k, dt in dtypes.items():
+        kws = {kk.rsplit('_', 1)[1]: v
+               for kk, v in kwargs.items()
+               if kk.rsplit('_', 1)[0] == k}
+        columns[k] = make[dt](len(index), state, **kws)
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
@@ -56,7 +61,8 @@ def make_timeseries(start='2000-01-01',
                     dtypes={'name': str, 'id': int, 'x': float, 'y': float},
                     freq='10s',
                     partition_freq='1M',
-                    seed=None):
+                    seed=None,
+                    **kwargs):
     """ Create timeseries dataframe with random data
 
     Parameters
@@ -74,7 +80,12 @@ def make_timeseries(start='2000-01-01',
         String like '1M' or '2Y' to divide the dataframe into partitions
     seed: int (optional)
         Randomstate seed
+    kwargs:
+        Keywords to pass down to individual column creation functions.
+        Keywords should be prefixed by the column name and then an underscore.
 
+    Examples
+    --------
     >>> import dask.dataframe as dd
     >>> df = dd.demo.make_timeseries('2000', '2010',
     ...                              {'value': float, 'name': str, 'id': int},
@@ -87,15 +98,15 @@ def make_timeseries(start='2000-01-01',
     2000-01-01 06:00:00   960   Charlie  0.788245
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
-    divisions = list(pd.DatetimeIndex(start=start, end=end,
-                                      freq=partition_freq))
+    divisions = list(pd.date_range(start=start, end=end,
+                                   freq=partition_freq))
     state_data = random_state_data(len(divisions) - 1, seed)
     name = 'make-timeseries-' + tokenize(start, end, dtypes, freq,
                                          partition_freq, state_data)
     dsk = {(name, i): (make_timeseries_part, divisions[i], divisions[i + 1],
-                       dtypes, freq, state_data[i])
+                       dtypes, freq, state_data[i], kwargs)
            for i in range(len(divisions) - 1)}
-    head = make_timeseries_part('2000', '2000', dtypes, '1H', state_data[0])
+    head = make_timeseries_part('2000', '2000', dtypes, '1H', state_data[0], kwargs)
     return DataFrame(dsk, name, head, divisions)
 
 
@@ -197,9 +208,11 @@ def daily_stock(symbol, start, stop, freq=pd.Timedelta(seconds=1),
         s = df.iloc[i]
         if s.isnull().any():
             continue
-        part = delayed(generate_day)(s.name, s.loc['Open'], s.loc['High'], s.loc['Low'],
-                                     s.loc['Close'], s.loc['Volume'],
-                                     freq=freq, random_state=seed)
+        part = delayed(generate_day)(
+            s.name, s.loc['Open'], s.loc['High'], s.loc['Low'],
+            s.loc['Close'], s.loc['Volume'],
+            freq=freq, random_state=seed
+        )
         parts.append(part)
         divisions.append(s.name + pd.Timedelta(hours=9))
 

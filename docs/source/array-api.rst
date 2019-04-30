@@ -58,6 +58,7 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   diagonal
    diff
    digitize
    dot
@@ -176,6 +177,7 @@ Top level user functions:
    tensordot
    tile
    topk
+   trace
    transpose
    tril
    triu
@@ -277,6 +279,7 @@ Random
    random.pareto
    random.poisson
    random.power
+   random.randint
    random.random
    random.random_sample
    random.rayleigh
@@ -333,10 +336,12 @@ Create and Store Arrays
    from_delayed
    from_npy_stack
    from_zarr
+   from_tiledb
    store
    to_hdf5
    to_zarr
    to_npy_stack
+   to_tiledb
 
 Generalized Ufuncs
 ~~~~~~~~~~~~~~~~~~
@@ -423,6 +428,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diagonal
 .. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot
@@ -598,10 +604,12 @@ Other functions
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
 .. autofunction:: from_zarr
+.. autofunction:: from_tiledb
 .. autofunction:: store
 .. autofunction:: to_hdf5
 .. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
+.. autofunction:: to_tiledb
 
 .. currentmodule:: dask.array.fft
 
@@ -648,6 +656,7 @@ Other functions
 .. autofunction:: pareto
 .. autofunction:: poisson
 .. autofunction:: power
+.. autofunction:: randint
 .. autofunction:: random
 .. autofunction:: random_sample
 .. autofunction:: rayleigh

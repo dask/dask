@@ -170,6 +170,6 @@ then you should forget both Spark and Dask and use Postgres_ or MongoDB_.
 
 .. _Spark: https://spark.apache.org/
 .. _PySpark: https://spark.apache.org/docs/latest/api/python/
-.. _Postgres: http://www.postgresql.org/
+.. _Postgres: https://www.postgresql.org/
 .. _MongoDB: https://www.mongodb.org/
 .. _`complex algorithms`: http://matthewrocklin.com/blog/work/2015/06/26/Complex-Graphs

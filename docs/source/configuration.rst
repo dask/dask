@@ -126,8 +126,8 @@ resulting in configuration values like the following:
    }
 
 Dask searches for all environment variables that start with ``DASK_``, then
-transforms keys by converting to lower case, changing double-underscores to
-nested structures, and changing single underscores to hyphens.
+transforms keys by converting to lower case and changing double-underscores to
+nested structures.
 
 Dask tries to parse all values with `ast.literal_eval
 <https://docs.python.org/3/library/ast.html#ast.literal_eval>`_, letting users
@@ -367,7 +367,7 @@ Downstream projects typically follow the following convention:
               ...)
 
 This process keeps configuration in a central place, but also keeps it safe
-within namespaces.  It places config files in an easy to access location 
+within namespaces.  It places config files in an easy to access location
 by default (``~/.config/dask/\*.yaml``), so that users can easily discover what
 they can change, but maintains the actual defaults within the source code, so
 that they more closely track changes in the library.

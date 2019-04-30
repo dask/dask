@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .core import new_dd_object, Series
+from .utils import is_index_like
 from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -47,15 +48,15 @@ class _iLocIndexer(_IndexerBase):
         msg = ("'DataFrame.iloc' only supports selecting columns. "
                "It must be used like 'df.iloc[:, column_indexer]'.")
         if not isinstance(key, tuple):
-            raise ValueError(msg)
+            raise NotImplementedError(msg)
 
-        if len(key) != 2:
-            raise ValueError(msg)
+        if len(key) > 2:
+            raise ValueError("Too many indexers")
 
         iindexer, cindexer = key
 
         if iindexer != slice(None):
-            raise ValueError(msg)
+            raise NotImplementedError(msg)
 
         return self._iloc(iindexer, cindexer)
 
@@ -301,7 +302,7 @@ def _maybe_partial_time_string(index, indexer, kind):
     if data has DatetimeIndex/PeriodIndex
     """
     # do not pass dd.Index
-    assert isinstance(index, pd.Index)
+    assert is_index_like(index)
 
     if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
         return indexer

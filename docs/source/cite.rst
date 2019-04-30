@@ -29,7 +29,7 @@ Papers about parts of Dask
 
 Rocklin, Matthew. "Dask: Parallel Computation with Blocked algorithms and Task
 Scheduling." (2015).
-`PDF <http://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
+`PDF <https://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
 
 ::
 

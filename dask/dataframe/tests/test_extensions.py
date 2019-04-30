@@ -3,6 +3,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.compatibility import PY2
 
 pd = pytest.importorskip("pandas", minversion="0.23.4")
 
@@ -25,6 +26,7 @@ def _(x):
     return Decimal('1')
 
 
+@pytest.mark.skipif(PY2, reason="unhashable Context")
 def test_register_extension_type():
     arr = DecimalArray._from_sequence([Decimal('1.0')] * 10)
     ser = pd.Series(arr)

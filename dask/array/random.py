@@ -237,10 +237,10 @@ class RandomState(object):
 
             chunks = normalize_chunks(chunks, size, dtype=np.float64)
             if not replace and len(chunks[0]) > 1:
-                    err_msg = ('replace=False is not currently supported for '
-                               'dask.array.choice with multi-chunk output '
-                               'arrays')
-                    raise NotImplementedError(err_msg)
+                err_msg = ('replace=False is not currently supported for '
+                           'dask.array.choice with multi-chunk output '
+                           'arrays')
+                raise NotImplementedError(err_msg)
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
 

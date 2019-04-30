@@ -6,6 +6,7 @@ from operator import add, mul
 import subprocess
 import sys
 import time
+from collections import OrderedDict
 
 from toolz import merge
 
@@ -215,6 +216,12 @@ def test_tokenize_pandas_invalid_unicode():
 
 
 @pytest.mark.skipif('not pd')
+def test_tokenize_pandas_mixed_unicode_bytes():
+    df = pd.DataFrame({u'ö'.encode('utf8'): [1, 2, 3], u'ö': [u'ö', u'ö'.encode('utf8'), None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
 def test_tokenize_pandas_no_pickle():
     class NoPickle(object):
         # pickling not supported because it is a local class
@@ -377,14 +384,15 @@ def test_unpack_collections():
     c = a + 2
 
     def build(a, b, c, iterator):
-        t = (a, b,                  # Top-level collections
-                {'a': a,            # dict
-                 a: b,              # collections as keys
-                 'b': [1, 2, [b]],  # list
-                 'c': 10,           # other builtins pass through unchanged
-                 'd': (c, 2),       # tuple
-                 'e': {a, 2, 3}},   # set
-                iterator)           # Iterator
+        t = (a, b,                              # Top-level collections
+                {'a': a,                        # dict
+                 a: b,                          # collections as keys
+                 'b': [1, 2, [b]],              # list
+                 'c': 10,                       # other builtins pass through unchanged
+                 'd': (c, 2),                   # tuple
+                 'e': {a, 2, 3},                # set
+                 'f': OrderedDict([('a', a)])}, # OrderedDict
+                iterator)                       # Iterator
 
         if dataclasses is not None:
             t[2]['f'] = ADataClass(a=a)
@@ -505,17 +513,17 @@ def test_compute_no_opt():
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(scheduler='single-threaded', optimize_graph=False)
-    assert len([k for k in keys if '-mul-' in k[0]]) == 4
-    assert len([k for k in keys if '-add-' in k[0]]) == 4
+    assert len([k for k in keys if 'mul' in k[0]]) == 4
+    assert len([k for k in keys if 'add' in k[0]]) == 4
     # Check that without the kwarg, the optimization does happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(scheduler='single-threaded')
     # Names of fused tasks have been merged, and the original key is an alias.
     # Otherwise, the lengths below would be 4 and 0.
-    assert len([k for k in keys if '-mul-' in k[0]]) == 8
-    assert len([k for k in keys if '-add-' in k[0]]) == 4
-    assert len([k for k in keys if 'add-map-mul' in k[0]]) == 4  # See? Renamed
+    assert len([k for k in keys if 'mul' in k[0]]) == 8
+    assert len([k for k in keys if 'add' in k[0]]) == 4
+    assert len([k for k in keys if 'add-from_sequence-mul' in k[0]]) == 4  # See? Renamed
 
 
 @pytest.mark.skipif('not da')
@@ -645,10 +653,22 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
 
 
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_lists(tmpdir):
+    pytest.importorskip('graphviz')
+    fn = os.path.join(str(tmpdir), 'myfile.dot')
+    dask.visualize([{'abc-xyz': (add, 1, 2)}], filename=fn)
+    with open(fn) as f:
+        text = f.read()
+    assert 'abc-xyz' in text
+
+
 @pytest.mark.skipif('not da')
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
+    pytest.importorskip('graphviz')
     pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:

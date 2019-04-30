@@ -404,6 +404,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []
         succeeded = False
+        # if start_state_from_dask fails, we will have something
+        # to pass to the final block.
+        state = {}
         try:
             for cb in callbacks:
                 if cb[0]:
