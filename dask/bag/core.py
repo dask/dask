@@ -19,13 +19,13 @@ _implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
 try:
     import cytoolz
     from cytoolz import (frequencies, merge_with, join, reduceby,
-                         count, pluck, groupby, topk)
+                         count, pluck, groupby, topk, unique)
     if LooseVersion(cytoolz.__version__) > '0.7.3':
         from cytoolz import accumulate  # noqa: F811
         _implement_accumulate = True
 except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
-                       count, pluck, groupby, topk)
+                       count, pluck, groupby, topk, unique)
 
 from .. import config
 from .avro import to_avro
@@ -839,13 +839,9 @@ class Bag(DaskMethodsMixin):
         >>> b.distinct(key='name').compute()
         [{'name': 'Alice'}, {'name': 'Bob'}]
         """
-        key_func = key if callable(key) or key is None else lambda x: x[key]
-        perpartition = lambda seq: list(toolz.unique(seq, key=key_func))
-        aggregate = merge_distinct(key=key_func)
-        return self.reduction(perpartition,
-                              aggregate,
-                              out_type=Bag,
-                              name='distinct')
+        func = chunk_distinct if key is None else partial(chunk_distinct, key=key)
+        agg = merge_distinct if key is None else partial(merge_distinct, key=key)
+        return self.reduction(func, agg, out_type=Bag, name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
                   out_type=Item, name=None):
@@ -1648,14 +1644,15 @@ def from_delayed(values):
     return Bag(graph, name, len(values))
 
 
-@curry
+def chunk_distinct(seq, key=None):
+    key2 = key
+    if key is not None and not callable(key):
+        key2 = lambda x: x[key]
+    return list(unique(seq, key=key2))
+
+
 def merge_distinct(seqs, key=None):
-    if key is None:
-        return list(toolz.unique(toolz.concat(seqs)))
-    elif callable(key):
-        return list(toolz.unique(toolz.concat(seqs), key=key))
-    else:
-        return list(toolz.unique(toolz.concat(seqs), key=lambda x: x[key]))
+    return chunk_distinct(toolz.concat(seqs), key=key)
 
 
 def merge_frequencies(seqs):

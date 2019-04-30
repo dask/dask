@@ -8,13 +8,13 @@ import random
 
 import partd
 import pytest
-from toolz import merge, join, filter, identity, valmap, groupby, pluck
+from toolz import merge, join, filter, identity, valmap, groupby, pluck, unique
 
 import dask
 import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
-                           optimize, from_delayed, merge_distinct)
+                           optimize, from_delayed)
 from dask.bag.utils import assert_eq
 from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
@@ -228,21 +228,11 @@ def test_distinct():
 
 
 def test_distinct_with_key():
-    bag = db.from_sequence([{'a': 0}, {'a': 0}, {'a': 1}])
-    expected = [{'a': 0}, {'a': 1}]
-    key = 'a'
-    key_func = lambda x: x[key]
-    assert_eq(bag.distinct(key_func), expected)
-    assert_eq(bag.distinct(key), expected)
-
-
-def test_merge_distinct():
-    a = [[0, 1], [1, 2]]
-    b = [[{'a': 0}, {'a': 1}], [{'a': 1}, {'a': 2}]]
-    key = 'a'
-    key_func = lambda x: x[key]
-    assert merge_distinct(a) == [0, 1, 2]
-    assert merge_distinct(b, key_func) == [{'a': 0}, {'a': 1}, {'a': 2}]
+    seq = [{'a': i} for i in [0, 1, 2, 1, 2, 3, 2, 3, 4, 5]]
+    bag = db.from_sequence(seq, npartitions=3)
+    expected = list(unique(seq, key=lambda x: x['a']))
+    assert_eq(bag.distinct(key='a'), expected)
+    assert_eq(bag.distinct(key=lambda x: x['a']), expected)
 
 
 def test_frequencies():
