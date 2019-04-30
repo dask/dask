@@ -3635,3 +3635,26 @@ def test_describe_doc():
     # tests the addition of text into a dataframe method
     assert ("Currently, only numeric describe is supported"
             in dd.DataFrame.describe.__doc__)
+
+
+def test_dtype_cast():
+    df = pd.DataFrame({
+        'A': np.arange(10, dtype=np.int32),
+        'B': np.arange(10, dtype=np.int64),
+        'C': np.arange(10, dtype=np.float32),
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.A.dtype == np.int32
+    assert ddf.B.dtype == np.int64
+    assert ddf.C.dtype == np.float32
+
+    col = pd.Series(np.arange(10, dtype=np.float32)) / 2
+    assert col.dtype == np.float32
+
+    ddf = ddf.assign(D=col)
+    assert ddf.D.dtype == np.float32
+    assert ddf.C.dtype == np.float32
+    # fails
+    assert ddf.B.dtype == np.int64
+    # fails
+    assert ddf.A.dtype == np.int32
