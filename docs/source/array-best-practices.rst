@@ -40,7 +40,7 @@ Orient your chunks
 When reading data you should align your chunks with your storage format.
 Most array storage formats store data in chunks themselves.  If your Dask array
 chunks aren't multiples of these chunk shapes then you will have to read the
-same data repeatedly, which can be very expensive.  Note though that often
+same data repeatedly, which can be expensive.  Note though that often
 storage formats choose chunk sizes that are much smaller than is ideal for
 Dask, closer to 1MB than 100MB.  In these cases you should choose a Dask chunk
 size that aligns with the storage chunk size and that every Dask chunk
