@@ -79,6 +79,7 @@ may vary depending on your operating system).
 
    export OMP_NUM_THREADS=1
    export MKL_NUM_THREADS=1
+   export OPENBLAS_NUM_THREADS=1
 
 You need to run this before you start your Python process for it to take effect.
 
