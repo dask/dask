@@ -201,43 +201,6 @@ on your Dask array to turn in to a normal NumPy array:
    array([0, 1, 4, 9, 16, 25])
 
 
-Intermediate storage
---------------------
-
-.. autosummary::
-   store
-
-In some cases, one may wish to store an intermediate result in long term
-storage. This differs from ``persist``, which is mainly used to manage
-intermediate results within Dask that don't necessarily have longevity.
-Intermediate storage is mainly useful in cases where the data is needed
-outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
-be useful as a checkpoint for long running or flaky computations.
-
-The intermediate storage use case differs from the typical storage use case as
-a Dask Array is returned to the user that represents the result of that
-storage operation. This is typically done by setting the ``store`` function's
-``return_stored`` flag to ``True``. The user can then decide whether the
-storage operation happens immediately (by setting the ``compute`` flag to
-``True``) or later (by setting the ``compute`` flag to ``False``). In all
-other ways, this behaves the same as a normal call to ``store``. Some examples
-are shown below.
-
-.. code-block:: Python
-
-   >>> import dask.array as da
-   >>> import zarr as zr
-   >>> c = (2, 2)
-   >>> d = da.ones((10, 11), chunks=c)
-   >>> z1 = zr.open_array('lazy.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
-   >>> z2 = zr.open_array('eager.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
-   >>> d1 = d.store(z1, compute=False, return_stored=True)
-   >>> d2 = d.store(z2, compute=True, return_stored=True)
-
-This can be combined with any other storage strategies either noted above, in
-the docs or for any specialized storage types.
-
-
 Numpy style slicing
 -------------------
 
@@ -316,6 +279,43 @@ or your own custom zarr Array:
 To retrieve those data, you would do ``da.read_zarr`` with exactly the same arguments. The
 chunking of the resultant dask.Array is defined by how the files were saved, unless
 otherwise specified.
+
+
+Intermediate storage
+--------------------
+
+.. autosummary::
+   store
+
+In some cases, one may wish to store an intermediate result in long term
+storage. This differs from ``persist``, which is mainly used to manage
+intermediate results within Dask that don't necessarily have longevity.
+Intermediate storage is mainly useful in cases where the data is needed
+outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
+be useful as a checkpoint for long running or flaky computations.
+
+The intermediate storage use case differs from the typical storage use case as
+a Dask Array is returned to the user that represents the result of that
+storage operation. This is typically done by setting the ``store`` function's
+``return_stored`` flag to ``True``. The user can then decide whether the
+storage operation happens immediately (by setting the ``compute`` flag to
+``True``) or later (by setting the ``compute`` flag to ``False``). In all
+other ways, this behaves the same as a normal call to ``store``. Some examples
+are shown below.
+
+.. code-block:: Python
+
+   >>> import dask.array as da
+   >>> import zarr as zr
+   >>> c = (2, 2)
+   >>> d = da.ones((10, 11), chunks=c)
+   >>> z1 = zr.open_array('lazy.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> z2 = zr.open_array('eager.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> d1 = d.store(z1, compute=False, return_stored=True)
+   >>> d2 = d.store(z2, compute=True, return_stored=True)
+
+This can be combined with any other storage strategies either noted above, in
+the docs or for any specialized storage types.
 
 
 Plugins
