@@ -3629,3 +3629,9 @@ def test_str_expand_more_columns():
     ds = dd.from_pandas(s, npartitions=2)
 
     s.str.split(n=10, expand=True).compute()
+
+
+def test_describe_doc():
+    # tests the addition of text into a dataframe method
+    assert ("Currently, only numeric describe is supported"
+            in dd.DataFrame.describe.__doc__)
