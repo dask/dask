@@ -63,7 +63,6 @@ def test_loc(dir_server):
         assert f.loc == 4
 
 
-
 def test_fetch_range_with_headers(dir_server):
     # https://github.com/dask/dask/issues/4479
     root = 'http://localhost:8999/'
