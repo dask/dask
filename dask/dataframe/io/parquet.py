@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import re
+from collections import OrderedDict
 import copy
 import json
 import os
@@ -53,8 +54,9 @@ def _parse_pandas_metadata(pandas_metadata):
     * fastparquet>=0.1.3
     * pyarrow>=0.7.0
     """
-    index_storage_names = pandas_metadata['index_columns']
-    index_name_xpr = re.compile('__index_level_\d+__')
+    index_storage_names = [n['name'] if isinstance(n, dict) else n
+                           for n in pandas_metadata['index_columns']]
+    index_name_xpr = re.compile(r'__index_level_\d+__')
 
     # older metadatas will not have a 'field_name' field so we fall back
     # to the 'name' field
@@ -176,12 +178,16 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                       categories=None, index=None, infer_divisions=None):
     import fastparquet
-    from fastparquet.util import check_column_names
 
-    if isinstance(paths,fastparquet.api.ParquetFile):
+    if isinstance(paths, fastparquet.api.ParquetFile):
         pf = paths
     elif len(paths) > 1:
-        pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
+        if infer_divisions is not False:
+            # this scans all the files, allowing index/divisions and filtering
+            pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
+        else:
+            return _read_fp_multifile(fs, fs_token, paths, columns=columns,
+                                      categories=categories, index=index)
     else:
         try:
             pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
@@ -192,9 +198,73 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
 
     # Validate infer_divisions
     if os.path.split(pf.fn)[-1] != '_metadata' and infer_divisions is True:
-        raise NotImplementedError("infer_divisions=True is not supported by the fastparquet engine for datasets "
-                                  "that do not contain a global '_metadata' file")
+        raise NotImplementedError("infer_divisions=True is not supported by the "
+                                  "fastparquet engine for datasets that "
+                                  "do not contain a global '_metadata' file")
 
+    (meta, filters, index_name, out_type, all_columns, index_names,
+     storage_name_mapping) = _pf_validation(
+        pf, columns, index, categories, filters)
+    rgs = [rg for rg in pf.row_groups if
+           not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
+           not (fastparquet.api.filter_out_cats(rg, filters))]
+
+    name = 'read-parquet-' + tokenize(fs_token, paths, all_columns, filters,
+                                      categories)
+    dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
+                       index_names, all_columns, rg, out_type == Series,
+                       categories, pf.schema, pf.cats, pf.dtypes,
+                       pf.file_scheme, storage_name_mapping,
+                       getattr(pf, 'tz', {}))
+           for i, rg in enumerate(rgs)}
+    if not dsk:
+        # empty dataframe
+        dsk = {(name, 0): meta}
+        divisions = (None, None)
+        return out_type(dsk, name, meta, divisions)
+
+    if index_names and infer_divisions is not False:
+        index_name = meta.index.name
+        try:
+            # is https://github.com/dask/fastparquet/pull/371 available in
+            # current fastparquet installation?
+            minmax = fastparquet.api.sorted_partitioned_columns(pf, filters)
+        except TypeError:
+            minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        if index_name in minmax:
+            divisions = minmax[index_name]
+            divisions = divisions['min'] + [divisions['max'][-1]]
+        else:
+            if infer_divisions is True:
+                raise ValueError(
+                    ("Unable to infer divisions for index of '{index_name}'"
+                     " because it is not known to be "
+                     "sorted across partitions").format(index_name=index_name))
+
+            divisions = (None,) * (len(rgs) + 1)
+    else:
+        if infer_divisions is True:
+            raise ValueError(
+                'Unable to infer divisions for because no index column'
+                ' was discovered')
+
+        divisions = (None,) * (len(rgs) + 1)
+
+    if isinstance(divisions[0], np.datetime64):
+        divisions = [pd.Timestamp(d) for d in divisions]
+
+    return out_type(dsk, name, meta, divisions)
+
+
+def _pf_validation(pf, columns, index, categories, filters):
+    """Validate user options against metadata in dataset
+
+     columns, index and categories must be in the list of columns available
+     (both data columns and path-based partitioning - subject to possible
+     renaming, if pandas metadata is present). The output index will
+     be inferred from any available pandas metadata, if not given.
+     """
+    from fastparquet.util import check_column_names
     check_column_names(pf.columns, categories)
     check_column_names(pf.columns + list(pf.cats or []), columns)
     if isinstance(columns, tuple):
@@ -202,7 +272,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         columns = list(columns)
 
     if pf.fmd.key_value_metadata:
-        pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
+        pandas_md = [x.value for x in pf.fmd.key_value_metadata
+                     if x.key == 'pandas']
     else:
         pandas_md = []
 
@@ -217,6 +288,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
+        #  auto-ranges should not be created by fastparquet
+        index_names = [n for n in index_names if n is not None]
         column_names.extend(pf.cats)
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
@@ -240,14 +313,11 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     all_columns = list(column_names)
     all_columns.extend(x for x in index_names if x not in column_names)
 
-    rgs = [rg for rg in pf.row_groups if
-           not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
-           not (fastparquet.api.filter_out_cats(rg, filters))]
-
     dtypes = pf._dtypes(categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, [None])
+
     # fastparquet doesn't handle multiindex
     if len(index_names) > 1:
         raise ValueError("Cannot read DataFrame with MultiIndex.")
@@ -269,54 +339,156 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if out_type == Series:
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
+    return (meta, filters, index_names, out_type, all_columns, index_names,
+            storage_name_mapping)
 
-    name = 'read-parquet-' + tokenize(fs_token, paths, all_columns, filters,
+
+def _read_fp_multifile(fs, fs_token, paths, columns=None,
+                       categories=None, index=None):
+    """Read dataset with fastparquet by assuming metadata from first file"""
+    from fastparquet import ParquetFile
+    from fastparquet.util import analyse_paths, get_file_scheme, join_path
+    base, fns = analyse_paths(paths)
+    parsed_paths = [join_path(p) for p in paths]
+    scheme = get_file_scheme(fns)
+    pf = ParquetFile(paths[0], open_with=fs.open)
+    pf.file_scheme = scheme
+    pf.cats = _paths_to_cats(fns, scheme)
+    (meta, _, index_name, out_type, all_columns, index_names,
+     storage_name_mapping) = _pf_validation(
+        pf, columns, index, categories, [])
+    name = 'read-parquet-' + tokenize(fs_token, paths, all_columns,
                                       categories)
-
-    dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
-                       index_names, all_columns, rg, out_type == Series,
-                       categories, pf.schema, pf.cats, pf.dtypes,
+    dsk = {(name, i): (_read_pf_simple, fs, path, base,
+                       index_names, all_columns, out_type == Series,
+                       categories, pf.cats,
                        pf.file_scheme, storage_name_mapping)
-           for i, rg in enumerate(rgs)}
-    if not dsk:
-        # empty dataframe
-        dsk = {(name, 0): meta}
-        divisions = (None, None)
-        return out_type(dsk, name, meta, divisions)
-
-    if index_names and infer_divisions is not False:
-        index_name = meta.index.name
-        try:
-            # is https://github.com/dask/fastparquet/pull/371 available in
-            # current fastparquet installation?
-            minmax = fastparquet.api.sorted_partitioned_columns(pf, filters)
-        except TypeError:
-            minmax = fastparquet.api.sorted_partitioned_columns(pf)
-        if index_name in minmax:
-            divisions = minmax[index_name]
-            divisions = divisions['min'] + [divisions['max'][-1]]
-        else:
-            if infer_divisions is True:
-                raise ValueError(
-                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
-                     "sorted across partitions").format(index_name=index_name))
-
-            divisions = (None,) * (len(rgs) + 1)
-    else:
-        if infer_divisions is True:
-            raise ValueError(
-                'Unable to infer divisions for because no index column was discovered')
-
-        divisions = (None,) * (len(rgs) + 1)
-
-    if isinstance(divisions[0], np.datetime64):
-        divisions = [pd.Timestamp(d) for d in divisions]
-
+           for i, path in enumerate(parsed_paths)}
+    divisions = (None, ) * (len(paths) + 1)
     return out_type(dsk, name, meta, divisions)
 
 
+def _read_pf_simple(fs, path, base, index_names, all_columns, is_series,
+                    categories, cats, scheme, storage_name_mapping):
+    """Read dataset with fastparquet using ParquetFile machinery"""
+    from fastparquet import ParquetFile
+    pf = ParquetFile(path, open_with=fs.open)
+    relpath = path.replace(base, '').lstrip('/')
+    for rg in pf.row_groups:
+        for ch in rg.columns:
+            ch.file_path = relpath
+    pf.file_scheme = scheme
+    pf.cats = cats
+    pf.fn = base
+    df = pf.to_pandas(all_columns, categories, index=index_names)
+    if df.index.nlevels == 1:
+        if index_names:
+            df.index.name = storage_name_mapping.get(index_names[0],
+                                                     index_names[0])
+    else:
+        if index_names:
+            df.index.names = [storage_name_mapping.get(name, name)
+                              for name in index_names]
+    df.columns = [storage_name_mapping.get(col, col)
+                  for col in all_columns
+                  if col not in (index_names or [])]
+
+    if is_series:
+        return df[df.columns[0]]
+    else:
+        return df
+
+
+def _paths_to_cats(paths, scheme):
+    """Extract out fields and labels from directory names"""
+    # can be factored out in fastparquet
+    from fastparquet.util import ex_from_sep, val_to_num, groupby_types
+    cats = OrderedDict()
+    raw_cats = OrderedDict()
+
+    for path in paths:
+        s = ex_from_sep('/')
+        if scheme == 'hive':
+            partitions = s.findall(path)
+            for key, val in partitions:
+                cats.setdefault(key, set()).add(val_to_num(val))
+                raw_cats.setdefault(key, set()).add(val)
+        else:
+            for i, val in enumerate(path.split('/')[:-1]):
+                key = 'dir%i' % i
+                cats.setdefault(key, set()).add(val_to_num(val))
+                raw_cats.setdefault(key, set()).add(val)
+
+    for key, v in cats.items():
+        # Check that no partition names map to the same value after
+        # transformation by val_to_num
+        raw = raw_cats[key]
+        if len(v) != len(raw):
+            conflicts_by_value = OrderedDict()
+            for raw_val in raw_cats[key]:
+                conflicts_by_value.setdefault(val_to_num(raw_val),
+                                              set()).add(raw_val)
+            conflicts = [c for k in conflicts_by_value.values()
+                         if len(k) > 1 for c in k]
+            raise ValueError("Partition names map to the same value: %s"
+                             % conflicts)
+        vals_by_type = groupby_types(v)
+
+        # Check that all partition names map to the same type after
+        # transformation by val_to_num
+        if len(vals_by_type) > 1:
+            import warnings
+            examples = [x[0] for x in vals_by_type.values()]
+            warnings.warn("Partition names coerce to values of different"
+                          " types, e.g. %s" % examples)
+    return {k: list(v) for k, v in cats.items()}
+
+
+def _read_parquet_file(fs, base, fn, index, columns, series, categories,
+                       cs, dt, scheme, storage_name_mapping, *args):
+    """Read a single file with fastparquet, to be used in a task"""
+    from fastparquet.api import ParquetFile
+    from collections import OrderedDict
+
+    name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
+    if not isinstance(columns, (tuple, list)):
+        columns = [columns,]
+        series = True
+    if index:
+        index, = index
+        if index not in columns:
+            columns = columns + [index]
+    columns = [name_storage_mapping.get(col, col) for col in columns]
+    index = name_storage_mapping.get(index, index)
+    cs = OrderedDict([(k, v) for k, v in cs.items() if k in columns])
+    pf = ParquetFile(fn, open_with=fs.open)
+    pf.file_scheme = scheme
+    for rg in pf.row_groups:
+        for ch in rg.columns:
+            ch.file_path = fn.replace(base, "").lstrip('/')
+    pf.fn = base
+    df = pf.to_pandas(columns=columns, index=index, categories=categories)
+
+    if df.index.nlevels == 1:
+        if index:
+            df.index.name = storage_name_mapping.get(index, index)
+    else:
+        if index:
+            df.index.names = [storage_name_mapping.get(name, name)
+                              for name in index]
+    df.columns = [storage_name_mapping.get(col, col)
+                  for col in columns
+                  if col != index]
+
+    if series:
+        return df[df.columns[0]]
+    else:
+        return df
+
+
 def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
-                            schema, cs, dt, scheme, storage_name_mapping, *args):
+                            schema, cs, dt, scheme, storage_name_mapping, tz,
+                            *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
     from collections import OrderedDict
@@ -334,7 +506,8 @@ def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
     index = name_storage_mapping.get(index, index)
     cs = OrderedDict([(k, v) for k, v in cs.items() if k in columns])
 
-    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
+    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt,
+                              tz)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=fs.open, assign=views, scheme=scheme)
 
@@ -415,9 +588,9 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
                              'but existing file scheme is not.')
         elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or (set(partition_on) != set(pf.cats))):
             raise ValueError('Appended columns not the same.\n'
-                             'New: {} | Previous: {}'
+                             'Previous: {} | New: {}'
                              .format(pf.columns, list(df.columns)))
-        elif set(pf.dtypes[c] for c in pf.columns) != set(df[pf.columns].dtypes):
+        elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
             raise ValueError('Appended dtypes differ.\n{}'
                              .format(set(pf.dtypes.items()) ^
                                      set(df.dtypes.iteritems())))
@@ -433,7 +606,7 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
             if divisions[0] < old_end:
                 raise ValueError(
                     'Appended divisions overlapping with the previous ones.\n'
-                    'New: {} | Previous: {}'.format(old_end, divisions[0]))
+                    'Previous: {} | New: {}'.format(old_end, divisions[0]))
     else:
         fmd = fastparquet.writer.make_metadata(df._meta,
                                                object_encoding=object_encoding,
@@ -493,9 +666,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     # We would like to resolve these to the correct dataframe names
     # as soon as possible.
 
-    if filters is not None:
-        raise NotImplementedError("Predicate pushdown not implemented")
-
     if isinstance(categories, string_types):
         categories = [categories]
     elif categories is None:
@@ -506,7 +676,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
+    dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs),
+                                filters=filters)
     if dataset.partitions is not None:
         partitions = [n for n in dataset.partitions.partition_names
                       if n is not None]
@@ -651,16 +822,31 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     import pyarrow.parquet as pq
 
     if infer_divisions is True and pa.__version__ < LooseVersion('0.9.0'):
-        raise NotImplementedError('infer_divisions=True requires pyarrow >=0.9.0')
+        raise NotImplementedError('infer_divisions=True requires'
+                                  ' pyarrow >=0.9.0')
 
     # Check whether divisions_name is in the schema
     # Note: get_field_index returns -1 if not found, but it does not accept None
     if infer_divisions is True:
-        divisions_name_in_schema = divisions_name is not None and pa_schema.get_field_index(divisions_name) >= 0
+        divisions_name_in_schema = (
+            divisions_name is not None
+            and pa_schema.get_field_index(divisions_name) >= 0
+        )
 
-        if divisions_name_in_schema is False and infer_divisions is True:
-            raise ValueError(
-                'Unable to infer divisions for because no index column was discovered')
+        if divisions_name_in_schema is False:
+            if (divisions_name is None and pa.__version__ >= LooseVersion(
+                    '0.13.0')):
+                # pyarrow < 0.13 does not expose num_rows
+                divisions = [0]
+                for piece in pa_pieces:
+                    divisions.append(divisions[-1]
+                                     + piece.get_metadata().num_rows)
+                divisions[-1] -= 1  # non-include on final div
+                return divisions
+            else:   # pragma: no cover
+                raise ValueError(
+                    'Unable to infer divisions for because no index column'
+                    ' was discovered')
     else:
         divisions_name_in_schema = None
 
@@ -713,11 +899,13 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
                 encoding = 'utf-8'
                 divisions = [d.decode(encoding).strip() for d in divisions]
 
-        else:
+        else:   # pragma: no cover
             if infer_divisions is True:
                 raise ValueError(
-                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
-                     "sorted across partitions").format(index_name=divisions_name_in_schema))
+                    ("Unable to infer divisions for index of '{index_name}' "
+                     "because it is not known to be "
+                     "sorted across partitions").format(
+                        index_name=divisions_name_in_schema))
 
             divisions = (None,) * (len(pa_pieces) + 1)
     elif pa_pieces:
@@ -741,9 +929,11 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
         df = table.to_pandas()
         for cat in categories:
             df[cat] = df[cat].astype('category')
-    else:
+    elif pa.__version__ < LooseVersion('0.11.0'):
         df = table.to_pandas(categories=categories)
-    has_index = not isinstance(df.index, pd.RangeIndex)
+    else:
+        df = table.to_pandas(categories=categories, date_as_object=False)
+    has_index = not isinstance(df.index, pd.RangeIndex) or df.index.names
 
     if not has_index and index_cols:
         # Index should be set, but it isn't
@@ -869,8 +1059,12 @@ def get_engine(engine):
     elif engine == 'pyarrow':
         pa = import_required('pyarrow', "`pyarrow` not installed")
 
-        if LooseVersion(pa.__version__) < '0.8.0':
+        pa_version = LooseVersion(pa.__version__)
+        if pa_version < '0.8.0':
             raise RuntimeError("PyArrow version >= 0.8.0 required")
+        elif pa_version == '0.13.0':
+            raise RuntimeError("PyArrow version 0.13.0 isn't supported, please "
+                               "upgrade or downgrade")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
                                      'write': _write_pyarrow}
@@ -956,7 +1150,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                     'when reading from fastparquet.ParquetFile')
             is_ParquetFile = True
     except ImportError:
-            pass
+        pass
 
     if is_ParquetFile:
         read = get_engine('fastparquet')['read']
@@ -971,6 +1165,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
             mode='rb',
             storage_options=storage_options
         )
+        paths = path
     else:
         read = get_engine(engine)['read']
         fs, fs_token, paths = get_fs_token_paths(
@@ -1035,7 +1230,7 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
-    >>> to_parquet('/path/to/output/', df, compression='snappy')  # doctest: +SKIP
+    >>> dd.to_parquet(df, '/path/to/output/', compression='snappy')  # doctest: +SKIP
 
     See Also
     --------

@@ -18,7 +18,7 @@ import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
-from dask.dataframe.utils import assert_eq, has_known_categories, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from dask.bytes.compression import compress, files as cfiles, seekable_files
@@ -94,6 +94,16 @@ csv_files = {'2014-01-01.csv': (b'name,amount,id\n'
 
 tsv_files = {k: v.replace(b',', b'\t') for (k, v) in csv_files.items()}
 
+fwf_files = {'2014-01-01.csv': (b'    name  amount  id\n'
+                                b'   Alice     100   1\n'
+                                b'     Bob     200   2\n'
+                                b' Charlie     300   3\n'),
+             '2014-01-02.csv': (b'    name  amount  id\n'),
+             '2014-01-03.csv': (b'    name  amount  id\n'
+                                b'  Dennis     400   4\n'
+                                b'   Edith     500   5\n'
+                                b'   Frank     600   6\n')}
+
 expected = pd.concat([pd.read_csv(BytesIO(csv_files[k]))
                       for k in sorted(csv_files)])
 
@@ -105,9 +115,17 @@ comment_header = b"""# some header lines
 csv_units_row = b'str, int, int\n'
 tsv_units_row = csv_units_row.replace(b',', b'\t')
 
-csv_and_table = pytest.mark.parametrize('reader,files',
-                                        [(pd.read_csv, csv_files),
-                                         (pd.read_table, tsv_files)])
+
+# Pandas has deprecated read_table
+read_table_mark = pytest.mark.filterwarnings("ignore:read_table:FutureWarning")
+
+
+csv_and_table = pytest.mark.parametrize('reader,files', [
+    (pd.read_csv, csv_files),
+    pytest.param(pd.read_table, tsv_files,
+                 marks=read_table_mark),
+    (pd.read_fwf, fwf_files),
+])
 
 
 @csv_and_table
@@ -204,6 +222,7 @@ def test_text_blocks_to_pandas_blocked(reader, files):
 @pytest.mark.parametrize('dd_read,pd_read,files',
                          [(dd.read_csv, pd.read_csv, csv_files),
                           (dd.read_table, pd.read_table, tsv_files)])
+@read_table_mark
 def test_skiprows(dd_read, pd_read, files):
     files = {name: comment_header + b'\n' + content for name, content in files.items()}
     skip = len(comment_header.splitlines())
@@ -216,6 +235,7 @@ def test_skiprows(dd_read, pd_read, files):
 @pytest.mark.parametrize('dd_read,pd_read,files,units',
                          [(dd.read_csv, pd.read_csv, csv_files, csv_units_row),
                           (dd.read_table, pd.read_table, tsv_files, tsv_units_row)])
+@read_table_mark
 def test_skiprows_as_list(dd_read, pd_read, files, units):
     files = {name: (comment_header + b'\n' +
                     content.replace(b'\n', b'\n' + units, 1)) for name, content in files.items()}
@@ -265,7 +285,8 @@ def test_enforce_columns(reader, blocks):
 @pytest.mark.parametrize('dd_read,pd_read,text,sep',
                          [(dd.read_csv, pd.read_csv, csv_text, ','),
                           (dd.read_table, pd.read_table, tsv_text, '\t'),
-                          (dd.read_table, pd.read_table, tsv_text2, '\s+')])
+                          (dd.read_table, pd.read_table, tsv_text2, r'\s+')])
+@read_table_mark
 def test_read_csv(dd_read, pd_read, text, sep):
     with filetext(text) as fn:
         f = dd_read(fn, blocksize=30, lineterminator=os.linesep, sep=sep)
@@ -278,6 +299,7 @@ def test_read_csv(dd_read, pd_read, text, sep):
 @pytest.mark.parametrize('dd_read,pd_read,text,skip',
                          [(dd.read_csv, pd.read_csv, csv_text, 7),
                           (dd.read_table, pd.read_table, tsv_text, [1, 13])])
+@read_table_mark
 def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
     names = ['name', 'amount']
     with filetext(text) as fn:
@@ -288,15 +310,13 @@ def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
 @pytest.mark.parametrize('dd_read,pd_read,text,skip',
                          [(dd.read_csv, pd.read_csv, csv_text, 7),
                           (dd.read_table, pd.read_table, tsv_text, [1, 12])])
+@read_table_mark
 def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip):
     names = ['name', 'amount']
     with filetext(text) as fn:
-        with pytest.warns(UserWarning) as w:
+        with pytest.warns(UserWarning, match='sample=blocksize'):
             actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
             assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
-            assert len(w) == 1
-            msg = str(w[0].message)
-            assert 'sample=blocksize' in msg
 
         with pytest.warns(UserWarning):
             # if new sample does not contain all the skiprows, raise error
@@ -307,6 +327,7 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
 @pytest.mark.parametrize('dd_read,pd_read,files',
                          [(dd.read_csv, pd.read_csv, csv_files),
                           (dd.read_table, pd.read_table, tsv_files)])
+@read_table_mark
 def test_read_csv_files(dd_read, pd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv')
@@ -321,6 +342,7 @@ def test_read_csv_files(dd_read, pd_read, files):
 @pytest.mark.parametrize('dd_read,pd_read,files',
                          [(dd.read_csv, pd.read_csv, csv_files),
                           (dd.read_table, pd.read_table, tsv_files)])
+@read_table_mark
 def test_read_csv_files_list(dd_read, pd_read, files):
     with filetexts(files, mode='b'):
         subset = sorted(files)[:2]  # Just first 2
@@ -335,6 +357,7 @@ def test_read_csv_files_list(dd_read, pd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
+@read_table_mark
 def test_read_csv_include_path_column(dd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', include_path_column=True,
@@ -348,6 +371,7 @@ def test_read_csv_include_path_column(dd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
+@read_table_mark
 def test_read_csv_include_path_column_as_str(dd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', include_path_column='filename',
@@ -361,6 +385,7 @@ def test_read_csv_include_path_column_as_str(dd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
+@read_table_mark
 def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
     with filetexts(files, mode='b'):
         with pytest.raises(ValueError):
@@ -370,6 +395,7 @@ def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
+@read_table_mark
 def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', include_path_column=True)
@@ -405,11 +431,29 @@ def test_read_csv_index():
         assert_eq(result, expected)
 
 
+def test_read_csv_skiprows_range():
+    with filetext(csv_text) as fn:
+        f = dd.read_csv(fn, skiprows=range(5))
+        result = f
+        expected = pd.read_csv(fn, skiprows=range(5))
+        assert_eq(result, expected)
+
+
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=['High', 'Low'])
         expected = pd.read_csv(fn, usecols=['High', 'Low'])
         assert (df.compute().values == expected.values).all()
+
+
+def test_string_blocksize():
+    with filetext(timeseries) as fn:
+        a = dd.read_csv(fn, blocksize='30B')
+        b = dd.read_csv(fn, blocksize='30')
+        assert a.npartitions == b.npartitions
+
+        c = dd.read_csv(fn, blocksize='64MiB')
+        assert c.npartitions == 1
 
 
 def test_skipinitialspace():
@@ -467,8 +511,6 @@ def test_consistent_dtypes_2():
         assert df.name.compute().dtype == object
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.19.2',
-                    reason="Not available in pandas <= 0.19.2")
 def test_categorical_dtypes():
     text1 = normalize_text("""
     fruit,count
@@ -496,8 +538,6 @@ def test_categorical_dtypes():
                 ['apple', 'banana', 'orange', 'pear'])
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Uses CategoricalDtype")
 def test_categorical_known():
     text1 = normalize_text("""
     A,B
@@ -575,6 +615,12 @@ def test_empty_csv_file():
         df = dd.read_csv(fn, header=0)
         assert len(df.compute()) == 0
         assert list(df.columns) == ['a', 'b']
+
+
+def test_read_csv_no_sample():
+    with filetexts(csv_files, mode='b') as fn:
+        df = dd.read_csv(fn, sample=False)
+        assert list(df.columns) == ['name', 'amount', 'id']
 
 
 def test_read_csv_sensitive_to_enforce():
@@ -1149,7 +1195,7 @@ def test_to_csv_series():
     df = dd.from_pandas(df0, npartitions=2)
     with tmpdir() as dir:
         dir = str(dir)
-        df.to_csv(dir)
+        df.to_csv(dir, header=False)
         assert os.listdir(dir)
         result = dd.read_csv(os.path.join(dir, '*'), header=None,
                              names=['x']).compute()
@@ -1169,7 +1215,7 @@ def test_to_csv_with_get():
     ddf = dd.from_pandas(df, npartitions=2)
 
     with tmpdir() as dn:
-        ddf.to_csv(dn, index=False, get=my_get)
+        ddf.to_csv(dn, index=False, scheduler=my_get)
         assert flag[0]
         result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
         assert_eq(result, df)
@@ -1181,3 +1227,51 @@ def test_to_csv_paths():
     assert ddf.to_csv("foo*.csv") == ['foo0.csv', 'foo1.csv']
     os.remove('foo0.csv')
     os.remove('foo1.csv')
+
+
+@pytest.mark.parametrize("header, expected", [(False, ""), (True, "x,y\n")])
+def test_to_csv_header_empty_dataframe(header, expected):
+    dfe = pd.DataFrame({'x': [],
+                       'y': []})
+    ddfe = dd.from_pandas(dfe, npartitions=1)
+
+    with tmpdir() as dn:
+        ddfe.to_csv(os.path.join(dn, "fooe*.csv"), index=False, header=header)
+        assert not os.path.exists(os.path.join(dn, "fooe1.csv"))
+        filename = os.path.join(dn, 'fooe0.csv')
+        with open(filename, 'r') as fp:
+            line = fp.readline()
+            assert line == expected
+        os.remove(filename)
+
+
+@pytest.mark.parametrize("header,header_first_partition_only,expected_first,expected_next",
+                         [
+                             (False, False, "a,1\n", "d,4\n"),
+                             (True, False, "x,y\n", "x,y\n"),
+                             (False, True, "a,1\n", "d,4\n"),
+                             (True, True, "x,y\n", "d,4\n"),
+                             (['aa', 'bb'], False, "aa,bb\n", "aa,bb\n"),
+                             (['aa', 'bb'], True, "aa,bb\n", "d,4\n")])
+def test_to_csv_header(header, header_first_partition_only, expected_first, expected_next):
+    partition_count = 2
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f'],
+                       'y': [1, 2, 3, 4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=partition_count)
+
+    with tmpdir() as dn:
+        # Test NO header case
+        # (header=False, header_first_chunk_only not passed)
+        ddf.to_csv(os.path.join(dn, "fooa*.csv"), index=False, header=header,
+                   header_first_partition_only=header_first_partition_only)
+        filename = os.path.join(dn, 'fooa0.csv')
+        with open(filename, 'r') as fp:
+            line = fp.readline()
+            assert line == expected_first
+        os.remove(filename)
+
+        filename = os.path.join(dn, 'fooa1.csv')
+        with open(filename, 'r') as fp:
+            line = fp.readline()
+            assert line == expected_next
+        os.remove(filename)

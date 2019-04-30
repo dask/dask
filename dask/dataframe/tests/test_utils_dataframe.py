@@ -4,7 +4,8 @@ import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
-                                  UNKNOWN_CATEGORIES, PANDAS_VERSION)
+                                  UNKNOWN_CATEGORIES, is_dataframe_like,
+                                  is_series_like, is_index_like)
 
 import pytest
 
@@ -66,10 +67,11 @@ def test_make_meta():
     assert meta.name == 'a'
 
     # With index
-    meta = make_meta({'a': 'i8', 'b': 'i4'}, pd.Int64Index([1, 2], name='foo'))
+    meta = make_meta({'a': 'i8', 'b': 'i4'},
+                     index=pd.Int64Index([1, 2], name='foo'))
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
-    meta = make_meta(('a', 'i8'), pd.Int64Index([1, 2], name='foo'))
+    meta = make_meta(('a', 'i8'), index=pd.Int64Index([1, 2], name='foo'))
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
 
@@ -151,7 +153,7 @@ def test_meta_duplicated():
 
 
 def test_meta_nonempty_empty_categories():
-    for dtype in ['O', 'f8', 'M8']:
+    for dtype in ['O', 'f8', 'M8[ns]']:
         # Index
         idx = pd.CategoricalIndex([], pd.Index([], dtype=dtype),
                                   ordered=True, name='foo')
@@ -206,7 +208,7 @@ def test_meta_nonempty_index():
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.CategoricalIndex(['a'], ['a', 'b'], ordered=True, name='foo')
+    idx = pd.CategoricalIndex(['xyx'], ['xyx', 'zzz'], ordered=True, name='foo')
     res = meta_nonempty(idx)
     assert type(res) is pd.CategoricalIndex
     assert (res.categories == idx.categories).all()
@@ -230,7 +232,7 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
     levels = [pd.Int64Index([1], name='a'),
-              pd.CategoricalIndex(data=['b'], categories=['b'], name='b'),
+              pd.CategoricalIndex(data=['xyx'], categories=['xyx'], name='b'),
               pd.TimedeltaIndex([np.timedelta64(1, 'D')], name='timedelta')]
     idx = pd.MultiIndex(levels=levels, labels=[[0], [0], [0]], names=['a', 'b', 'timedelta'])
     res = meta_nonempty(idx)
@@ -241,8 +243,6 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
-                    reason="Pandas < 0.20.0 doesn't support UInt64Index")
 def test_meta_nonempty_uint64index():
     idx = pd.UInt64Index([1], name='foo')
     res = meta_nonempty(idx)
@@ -284,7 +284,8 @@ def test_check_meta():
                        'b': [True, False, True],
                        'c': [1, 2.5, 3.5],
                        'd': [1, 2, 3],
-                       'e': pd.Categorical(['x', 'y', 'z'])})
+                       'e': pd.Categorical(['x', 'y', 'z']),
+                       'f': pd.Series([1, 2, 3], dtype=np.uint64)})
     meta = df.iloc[:0]
 
     # DataFrame metadata passthrough if correct
@@ -294,7 +295,10 @@ def test_check_meta():
     assert check_meta(e, meta.e) is e
     # numeric_equal means floats and ints are equivalent
     d = df.d
+    f = df.f
     assert check_meta(d, meta.d.astype('f8'), numeric_equal=True) is d
+    assert check_meta(f, meta.f.astype('f8'), numeric_equal=True) is f
+    assert check_meta(f, meta.f.astype('i8'), numeric_equal=True) is f
 
     # Series metadata error
     with pytest.raises(ValueError) as err:
@@ -327,3 +331,31 @@ def test_check_meta():
         '| e      | category | -        |\n'
         '+--------+----------+----------+')
     assert str(err.value) == exp
+
+
+def test_is_dataframe_like():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert is_dataframe_like(df)
+    assert is_dataframe_like(ddf)
+    assert not is_dataframe_like(df.x)
+    assert not is_dataframe_like(ddf.x)
+    assert not is_dataframe_like(df.index)
+    assert not is_dataframe_like(ddf.index)
+    assert not is_dataframe_like(pd.DataFrame)
+
+    assert not is_series_like(df)
+    assert not is_series_like(ddf)
+    assert is_series_like(df.x)
+    assert is_series_like(ddf.x)
+    assert not is_series_like(df.index)
+    assert not is_series_like(ddf.index)
+    assert not is_series_like(pd.Series)
+
+    assert not is_index_like(df)
+    assert not is_index_like(ddf)
+    assert not is_index_like(df.x)
+    assert not is_index_like(ddf.x)
+    assert is_index_like(df.index)
+    assert is_index_like(ddf.index)
+    assert not is_index_like(pd.Index)

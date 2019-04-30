@@ -1089,10 +1089,6 @@ def test_fuse_reductions_multiple_input():
     })
 
 
-def dontcall(x):
-    raise ValueError("shouldn't be called")
-
-
 def func_with_kwargs(a, b, c=2):
     return a + b + c
 
@@ -1108,7 +1104,6 @@ def test_SubgraphCallable():
            'd': (inc, 'a'),
            'e': (add, 'c', 'd'),
            'f': ['a', 2, 'b', (add, 'b', (sum, non_hashable))],
-           'g': (dontcall, 'in1'),
            'h': (add, (sum, 'f'), (sum, ['a', 'b']))}
 
     f = SubgraphCallable(dsk, 'h', ['in1', 'in2'], name='test')
@@ -1200,3 +1195,27 @@ def test_fuse_subgraphs():
             'inc-6': (inc, (inc, 'add-2'))
         }))
     assert res in sols
+
+
+def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
+    dsk = {'x-1': 1,
+           'add-1': (add, 'x-1', 'x-1'),
+           'add-2': (add, 'add-1', 'add-1'),
+           'add-3': (add, 'add-2', 'add-2'),
+           'add-4': (add, 'add-3', 'add-3'),
+           'add-5': (add, 'add-4', 'add-4')}
+
+    res = fuse(dsk, 'add-5', fuse_subgraphs=True)
+    sol = with_deps({
+        'add-x-1': (
+            SubgraphCallable({
+                'x-1': 1,
+                'add-1': (add, 'x-1', 'x-1'),
+                'add-2': (add, 'add-1', 'add-1'),
+                'add-3': (add, 'add-2', 'add-2'),
+                'add-4': (add, 'add-3', 'add-3'),
+                'add-5': (add, 'add-4', 'add-4')
+            }, 'add-5', ()),),
+        'add-5': 'add-x-1'
+    })
+    assert res == sol

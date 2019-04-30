@@ -262,6 +262,7 @@ def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove)
         assert optimize_slices({'a': orig}) == {'a': final}
 
 
+@pytest.mark.xfail(reason='blockwise fusion doesnt respect this, which is ok')
 def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)
@@ -285,3 +286,12 @@ def test_gh3937():
     y = da.coarsen(np.sum, y, {0: 2})
     # How to trigger the optimizer explicitly?
     y.compute()
+
+
+def test_double_dependencies():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    X = d + 1
+    X = da.dot(X, X.T)
+
+    assert_eq(X.compute(optimize_graph=False), X)

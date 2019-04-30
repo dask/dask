@@ -139,7 +139,7 @@ def get_context():
 
 
 def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
-        optimize_graph=True, **kwargs):
+        optimize_graph=True, pool=None, **kwargs):
     """ Multiprocessed get function appropriate for Bags
 
     Parameters
@@ -159,7 +159,8 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """
-    pool = config.get('pool', None)
+    pool = pool or config.get('pool', None)
+    num_workers = num_workers or config.get('num_workers', None)
     if pool is None:
         context = get_context()
         pool = context.Pool(num_workers,

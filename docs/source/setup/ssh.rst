@@ -39,7 +39,7 @@ flags to adjust how many dask-worker process are run on each host
 
 Options:
 
-..note:: 
+.. note::
 
    This table may grow out of date, you should check ``dask-ssh --help`` to get an up-to-date listing of all options.
 

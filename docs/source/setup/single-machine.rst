@@ -35,13 +35,14 @@ use this scheduler. However, you do have a choice between threads and processes:
 Selecting Threads, Processes, or Single Threaded
 ------------------------------------------------
 
-Currently, these options are available by selecting different ``get`` functions:
+You can select between these options by specifying one of the following three
+values to the ``scheduler=`` keyword:
 
--  ``dask.threaded.get``: The threaded scheduler
--  ``dask.multiprocessing.get``: The multiprocessing scheduler
--  ``dask.local.get_sync``: The single-threaded scheduler
+-  ``"threads"``: Uses a ThreadPool in the local process
+-  ``"processes"``: Uses a ProcessPool to spread work between processes
+-  ``"single-threaded"``: Uses a for-loop in the current thread
 
-You can specify these functions in any of the following ways:
+You can specify these options in any of the following ways:
 
 -   When calling ``.compute()``
 

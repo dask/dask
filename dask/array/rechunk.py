@@ -18,11 +18,12 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
 from .utils import validate_axis
 from .wrap import empty
-from .. import config, sharedict
+from .. import config
 
 
 def cumdims_label(chunks, const):
@@ -522,8 +523,8 @@ def _compute_rechunk(x, chunks):
     x2 = dict()
     intermediates = dict()
     token = tokenize(x, chunks)
-    merge_temp_name = 'rechunk-merge-' + token
-    split_temp_name = 'rechunk-split-' + token
+    merge_name = 'rechunk-merge-' + token
+    split_name = 'rechunk-split-' + token
     split_name_suffixes = count()
 
     # Pre-allocate old block references, to allow re-use and reduce the
@@ -536,7 +537,7 @@ def _compute_rechunk(x, chunks):
     new_index = product(*(range(len(c)) for c in chunks))
 
     for new_idx, cross1 in zip(new_index, crossed):
-        key = (merge_temp_name,) + new_idx
+        key = (merge_name,) + new_idx
         old_block_indices = [[cr[i][0] for cr in cross1] for i in range(ndim)]
         subdims1 = [len(set(old_block_indices[i]))
                     for i in range(ndim)]
@@ -547,7 +548,7 @@ def _compute_rechunk(x, chunks):
         # Iterate over the old blocks required to build the new block
         for rec_cat_index, ind_slices in enumerate(cross1):
             old_block_index, slices = zip(*ind_slices)
-            name = (split_temp_name, next(split_name_suffixes))
+            name = (split_name, next(split_name_suffixes))
             old_index = old_blocks[old_block_index][1:]
             if all(slc.start == 0 and slc.stop == x.chunks[i][ind]
                    for i, (slc, ind) in enumerate(zip(slices, old_index))):
@@ -566,8 +567,9 @@ def _compute_rechunk(x, chunks):
 
     del old_blocks, new_index
 
-    x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
-    return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
+    layer = toolz.merge(x2, intermediates)
+    graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
+    return Array(graph, merge_name, chunks, dtype=x.dtype)
 
 
 class _PrettyBlocks(object):

@@ -1,7 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import pytest
 np = pytest.importorskip('numpy')
+
+import itertools
 
 import dask.array as da
 from dask.array.utils import assert_eq as _assert_eq, same_keys
@@ -11,6 +15,26 @@ import dask.config as config
 
 def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
+
+
+@pytest.mark.parametrize('dtype', ['f4', 'i4'])
+@pytest.mark.parametrize('keepdims', [True, False])
+def test_numel(dtype, keepdims):
+    x = np.ones((2, 3, 4))
+
+    assert_eq(da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
+              np.sum(x, axis=0, keepdims=keepdims, dtype=dtype))
+
+    for length in range(x.ndim):
+        for sub in itertools.combinations([d for d in range(x.ndim)], length):
+            assert_eq(da.reductions.numel(x, axis=sub, keepdims=keepdims, dtype=dtype),
+                      np.sum(x, axis=sub, keepdims=keepdims, dtype=dtype))
+
+    for length in range(x.ndim):
+        for sub in itertools.combinations([d for d in range(x.ndim)], length):
+            ssub = np.random.shuffle(list(sub))
+            assert_eq(da.reductions.numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
+                      np.sum(x, axis=ssub, keepdims=keepdims, dtype=dtype))
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
@@ -58,37 +82,38 @@ def test_reductions_1D(dtype):
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
                       split_every=True):
-    assert_eq(da_func(darr), np_func(narr))
-    assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
-    assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
-    assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
-    assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
-    assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
-    assert_eq(da_func(darr, axis=1, keepdims=True),
-              np_func(narr, axis=1, keepdims=True))
-    assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
-
-    assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
-    assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
-
-    if use_dtype:
-        assert_eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
-        assert_eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
-
-    if split_every:
-        a1 = da_func(darr, split_every=4)
-        a2 = da_func(darr, split_every={0: 2, 1: 2})
-        assert same_keys(a1, a2)
-        assert_eq(a1, np_func(narr))
-        assert_eq(a2, np_func(narr))
-        assert_eq(da_func(darr, keepdims=True, split_every=4),
-                  np_func(narr, keepdims=True))
-        assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
-        assert_eq(da_func(darr, axis=0, keepdims=True, split_every=2),
-                  np_func(narr, axis=0, keepdims=True))
-        assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
-        assert_eq(da_func(darr, axis=1, keepdims=True, split_every=2),
+    with warnings.catch_warnings(record=True):
+        assert_eq(da_func(darr), np_func(narr))
+        assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+        assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
+        assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
+        assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
+        assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
+        assert_eq(da_func(darr, axis=1, keepdims=True),
                   np_func(narr, axis=1, keepdims=True))
+        assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
+
+        assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
+        assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
+
+        if use_dtype:
+            assert_eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
+            assert_eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
+
+        if split_every:
+            a1 = da_func(darr, split_every=4)
+            a2 = da_func(darr, split_every={0: 2, 1: 2})
+            assert same_keys(a1, a2)
+            assert_eq(a1, np_func(narr))
+            assert_eq(a2, np_func(narr))
+            assert_eq(da_func(darr, keepdims=True, split_every=4),
+                      np_func(narr, keepdims=True))
+            assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
+            assert_eq(da_func(darr, axis=0, keepdims=True, split_every=2),
+                      np_func(narr, axis=0, keepdims=True))
+            assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
+            assert_eq(da_func(darr, axis=1, keepdims=True, split_every=2),
+                      np_func(narr, axis=1, keepdims=True))
 
 
 def test_reduction_errors():
@@ -178,6 +203,37 @@ def test_nanarg_reductions(dfunc, func):
     with pytest.raises(ValueError):
         with pytest.warns(None):  # All NaN axis
             dfunc(a).compute()
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_chunksize(func):
+    x = da.arange(10, chunks=5)
+    x = x[x > 1]
+
+    with pytest.raises(ValueError) as info:
+        getattr(da, func)(x)
+
+    assert "unknown chunksize" in str(info.value)
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_chunksize_2d(func):
+    x = da.ones((10, 10), chunks=(5, 5))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    with pytest.raises(ValueError):
+        getattr(da, func)(x, axis=0)
+
+    getattr(da, func)(x, axis=1).compute()
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_single_chunksize(func):
+    x = da.ones((10, 10), chunks=(10, 10))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    getattr(da, func)(x, axis=0).compute()
+    getattr(da, func)(x, axis=1).compute()
 
 
 def test_reductions_2D_nans():
@@ -282,7 +338,6 @@ def test_nan():
     assert_eq(np.nanprod(x), da.nanprod(d))
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='nanmax/nanmin for object dtype')
 @pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
                                   'nanmax', 'max'])
 def test_nan_object(func):
@@ -383,7 +438,6 @@ def test_reduction_names():
     assert x.mean().name.startswith('mean')
 
 
-@pytest.mark.skipif(np.__version__ < '1.12.0', reason='argmax out parameter')
 @pytest.mark.parametrize('func', [np.sum,
                                   np.argmax])
 def test_array_reduction_out(func):
@@ -393,14 +447,17 @@ def test_array_reduction_out(func):
     assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
+@pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
-def test_array_cumreduction_axis(func, axis):
+def test_array_cumreduction_axis(func, use_nan, axis):
     np_func = getattr(np, func)
     da_func = getattr(da, func)
 
     s = (10, 11, 12)
     a = np.arange(np.prod(s)).reshape(s)
+    if use_nan:
+        a[1] = np.nan
     d = da.from_array(a, chunks=(4, 5, 6))
 
     a_r = np_func(a, axis=axis)
@@ -426,35 +483,38 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
     k = 5
     # Test at least 3 levels of aggregation when split_every=2
     # to stress the different chunk, combine, aggregate kernels
-    a = da.random.random(800, chunks=((120, 80, 100, 200, 300), ))
-    b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    npa = np.random.random(800)
+    npb = np.random.random((10, 20, 30))
+
+    a = da.from_array(npa, chunks=((120, 80, 100, 200, 300), ))
+    b = da.from_array(npb, chunks=(4, 8, 8))
 
     # 1-dimensional arrays
     # top 5 elements, sorted descending
-    assert_eq(npfunc(a)[-k:][::-1],
+    assert_eq(npfunc(npa)[-k:][::-1],
               daskfunc(a, k, split_every=split_every))
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(a)[:k],
+    assert_eq(npfunc(npa)[:k],
               daskfunc(a, -k, split_every=split_every))
 
     # n-dimensional arrays
     # also testing when k > chunk
     # top 5 elements, sorted descending
-    assert_eq(npfunc(b, axis=0)[-k:, :, :][::-1, :, :],
+    assert_eq(npfunc(npb, axis=0)[-k:, :, :][::-1, :, :],
               daskfunc(b, k, axis=0, split_every=split_every))
-    assert_eq(npfunc(b, axis=1)[:, -k:, :][:, ::-1, :],
+    assert_eq(npfunc(npb, axis=1)[:, -k:, :][:, ::-1, :],
               daskfunc(b, k, axis=1, split_every=split_every))
-    assert_eq(npfunc(b, axis=-1)[:, :, -k:][:, :, ::-1],
+    assert_eq(npfunc(npb, axis=-1)[:, :, -k:][:, :, ::-1],
               daskfunc(b, k, axis=-1, split_every=split_every))
     with pytest.raises(ValueError):
         daskfunc(b, k, axis=3, split_every=split_every)
 
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(b, axis=0)[:k, :, :],
+    assert_eq(npfunc(npb, axis=0)[:k, :, :],
               daskfunc(b, -k, axis=0, split_every=split_every))
-    assert_eq(npfunc(b, axis=1)[:, :k, :],
+    assert_eq(npfunc(npb, axis=1)[:, :k, :],
               daskfunc(b, -k, axis=1, split_every=split_every))
-    assert_eq(npfunc(b, axis=-1)[:, :, :k],
+    assert_eq(npfunc(npb, axis=-1)[:, :, :k],
               daskfunc(b, -k, axis=-1, split_every=split_every))
     with pytest.raises(ValueError):
         daskfunc(b, -k, axis=3, split_every=split_every)
@@ -468,14 +528,15 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 @pytest.mark.parametrize('chunksize', [1, 2, 3, 4, 5, 10])
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
-    a = da.random.random((10, ), chunks=chunksize)
+    npa = np.random.random((10, ))
+    a = da.from_array(npa, chunks=chunksize)
     k = 5
 
     # top 5 elements, sorted descending
-    assert_eq(npfunc(a)[-k:][::-1],
+    assert_eq(npfunc(npa)[-k:][::-1],
               daskfunc(a, k, split_every=split_every))
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(a)[:k],
+    assert_eq(npfunc(npa)[:k],
               daskfunc(a, -k, split_every=split_every))
 
 
@@ -498,3 +559,28 @@ def test_regres_3940(func):
     assert func(a).name != func(a + 1).name
     assert func(a, axis=0).name != func(a).name
     assert func(a, axis=0).name != func(a, axis=1).name
+
+
+def test_trace():
+    def _assert(a, b, *args, **kwargs):
+        return assert_eq(a.trace(*args, **kwargs), b.trace(*args, **kwargs))
+
+    b = np.arange(12).reshape((3, 4))
+    a = da.from_array(b, 1)
+    _assert(a, b)
+    _assert(a, b, 0)
+    _assert(a, b, 1)
+    _assert(a, b, -1)
+
+    b = np.arange(8).reshape((2, 2, 2))
+    a = da.from_array(b, 2)
+    _assert(a, b)
+    _assert(a, b, 0)
+    _assert(a, b, 1)
+    _assert(a, b, -1)
+    _assert(a, b, 0, 0, 1)
+    _assert(a, b, 0, 0, 2)
+    _assert(a, b, 0, 1, 2, int)
+    _assert(a, b, 0, 1, 2, float)
+    _assert(a, b, offset=1, axis1=0, axis2=2, dtype=int)
+    _assert(a, b, offset=1, axis1=0, axis2=2, dtype=float)

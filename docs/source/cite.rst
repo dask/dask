@@ -21,8 +21,7 @@ A BibTeX entry for LaTeX users follows::
      url = {https://dask.org},
    }
 
-The full author list is available using git, or by looking at the `AUTHORS file
-<https://raw.githubusercontent.com/dask/dask/master/AUTHORS.md>`_.
+The full author list is available using ``git`` (e.g. ``git shortlog -ns``).
 
 Papers about parts of Dask
 --------------------------
@@ -30,7 +29,7 @@ Papers about parts of Dask
 
 Rocklin, Matthew. "Dask: Parallel Computation with Blocked algorithms and Task
 Scheduling." (2015).
-`PDF <http://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
+`PDF <https://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
 
 ::
 

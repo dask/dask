@@ -38,7 +38,6 @@ _BASE_UFUNCS = ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
                                       index=list('abcdefghijklmnopqrst'))])
 @pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_ufunc(pandas_input, ufunc):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -53,7 +52,7 @@ def test_ufunc(pandas_input, ufunc):
         assert_eq(dafunc(dask_input), npfunc(pandas_input))
 
         # applying NumPy ufunc is lazy
-        if isinstance(npfunc, np.ufunc) and np.__version__ >= '1.13.0':
+        if isinstance(npfunc, np.ufunc):
             assert isinstance(npfunc(dask_input), dask_type)
         else:
             assert isinstance(npfunc(dask_input), pandas_type)
@@ -71,15 +70,17 @@ def test_ufunc(pandas_input, ufunc):
 
     with pytest.warns(None):
         assert isinstance(dafunc(dask_input.index), dd.Index)
-        assert_eq(dafunc(dask_input.index), npfunc(pandas_input.index))
+        assert_eq(dafunc(dask_input.index), npfunc(pandas_input.index),
+                  check_divisions=ufunc != 'spacing')
 
         # applying NumPy ufunc is lazy
-        if isinstance(npfunc, np.ufunc) and np.__version__ >= '1.13.0':
+        if isinstance(npfunc, np.ufunc):
             assert isinstance(npfunc(dask_input.index), dd.Index)
         else:
             assert isinstance(npfunc(dask_input.index), pd.Index)
 
-        assert_eq(npfunc(dask_input.index), npfunc(dask_input.index))
+        assert_eq(npfunc(dask_input.index), npfunc(dask_input.index),
+                  check_divisions=ufunc != 'spacing')
 
     # applying Dask ufunc to normal Series triggers computation
     with pytest.warns(None):
@@ -178,7 +179,7 @@ def test_ufunc_with_2args(ufunc, make_pandas_input):
     assert_eq(dafunc(dask1, pandas2), npfunc(pandas1, pandas2))
 
     # applying NumPy ufunc is lazy
-    if isinstance(npfunc, np.ufunc) and np.__version__ >= '1.13.0':
+    if isinstance(npfunc, np.ufunc):
         assert isinstance(npfunc(dask1, dask2), dask_type)
         assert isinstance(npfunc(dask1, pandas2), dask_type)
     else:
@@ -219,7 +220,6 @@ def test_clip(pandas, min, max):
     assert_eq(da.clip(pandas, min, max), np.clip(pandas, min, max))
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
 @pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_frame_ufunc_out(ufunc):
     npfunc = getattr(np, ufunc)
@@ -244,7 +244,6 @@ def test_frame_ufunc_out(ufunc):
         assert_eq(ddf_out_np, expected)
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
 def test_frame_2ufunc_out():
     input_matrix = np.random.randint(1, 100, size=(20, 2))
 
@@ -276,7 +275,6 @@ def test_frame_2ufunc_out():
     assert_eq(ddf_out, expected)
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
 @pytest.mark.parametrize('arg1', [
     pd.Series(np.abs(np.random.randn(100))),
     pd.DataFrame({'A': np.random.randint(1, 100, size=20),
@@ -324,7 +322,6 @@ def test_mixed_types(ufunc, arg1, arg2):
     assert_eq(dafunc(arg2, arg1), npfunc(arg2, arg1))
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
 @pytest.mark.parametrize('ufunc', _UFUNCS_2ARG)
 @pytest.mark.parametrize('pandas,darray',
                          [(pd.Series(np.random.randint(1, 100, size=(100,))),

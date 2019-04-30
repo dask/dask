@@ -331,3 +331,34 @@ def test_set_fill_value():
 
     with pytest.raises(ValueError):
         da.ma.set_fill_value(dmx, dx)
+
+
+def test_average_weights_with_masked_array():
+    mask = np.array([[True, False],
+                     [True, True],
+                     [False, True]])
+    data = np.arange(6).reshape((3, 2))
+    a = np.ma.array(data, mask=mask)
+    d_a = da.ma.masked_array(data=data, mask=mask, chunks=2)
+
+    weights = np.array([0.25, 0.75])
+    d_weights = da.from_array(weights, chunks=2)
+
+    np_avg = np.ma.average(a, weights=weights, axis=1)
+    da_avg = da.ma.average(d_a, weights=d_weights, axis=1)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_arithmetic_results_in_masked():
+    mask = np.array([[True, False],
+                     [True, True],
+                     [False, True]])
+    x = np.arange(6).reshape((3, 2))
+    masked = np.ma.array(x, mask=mask)
+    dx = da.from_array(x, chunks=(2, 2))
+
+    res = dx + masked
+    sol = x + masked
+    assert_eq(res, sol)
+    assert isinstance(res.compute(), np.ma.masked_array)

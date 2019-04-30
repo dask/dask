@@ -10,7 +10,7 @@ import numpy as np
 from toolz import memoize, merge, pluck, concat
 
 from .. import core
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
 
 colon = slice(None, None, None)
@@ -728,6 +728,8 @@ def normalize_slice(idx, dim):
                 stop = None
             if step == 1:
                 step = None
+            if stop is not None and start is not None and stop < start:
+                stop = start
         elif step < 0:
             if start >= dim - 1:
                 start = None
@@ -922,7 +924,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
-    from .core import Array, atop, from_array
+    from .core import Array, blockwise, from_array
     from . import chunk
 
     assert 0 <= axis < x.ndim
@@ -936,11 +938,11 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     offset = np.roll(np.cumsum(x.chunks[axis]), 1)
     offset[0] = 0
     offset = from_array(offset, chunks=1)
-    # Tamper with the declared chunks of offset to make atop align it with
+    # Tamper with the declared chunks of offset to make blockwise align it with
     # x[axis]
     offset = Array(offset.dask, offset.name, (x.chunks[axis], ), offset.dtype)
 
-    # Define axis labels for atop
+    # Define axis labels for blockwise
     x_axes = tuple(range(x.ndim))
     idx_axes = (x.ndim, )  # arbitrary index not already in x_axes
     offset_axes = (axis, )
@@ -948,15 +950,15 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1:]
 
     # Calculate the cartesian product of every chunk of x vs every chunk of idx
-    p = atop(chunk.slice_with_int_dask_array,
-             p_axes, x, x_axes, idx, idx_axes, offset, offset_axes,
-             x_size=x.shape[axis], axis=axis, dtype=x.dtype)
+    p = blockwise(chunk.slice_with_int_dask_array,
+                  p_axes, x, x_axes, idx, idx_axes, offset, offset_axes,
+                  x_size=x.shape[axis], axis=axis, dtype=x.dtype)
 
     # Aggregate on the chunks of x along axis
-    y = atop(chunk.slice_with_int_dask_array_aggregate,
-             y_axes, idx, idx_axes, p, p_axes,
-             concatenate=True, x_chunks=x.chunks[axis], axis=axis,
-             dtype=x.dtype)
+    y = blockwise(chunk.slice_with_int_dask_array_aggregate,
+                  y_axes, idx, idx_axes, p, p_axes,
+                  concatenate=True, x_chunks=x.chunks[axis], axis=axis,
+                  dtype=x.dtype)
     return y
 
 
@@ -980,7 +982,7 @@ def slice_with_bool_dask_array(x, index):
 
     Note: The sliced x will have nan chunks on the sliced axes.
     """
-    from .core import Array, atop, elemwise
+    from .core import Array, blockwise, elemwise
 
     out_index = [slice(None)
                  if isinstance(ind, Array) and ind.dtype == bool
@@ -992,8 +994,8 @@ def slice_with_bool_dask_array(x, index):
         name = 'getitem-' + tokenize(x, index)
         dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
         chunks = ((np.nan,) * y.npartitions,)
-        return (Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype),
-                out_index)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[y])
+        return Array(graph, name, chunks, x.dtype), out_index
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
            for ind in index):
@@ -1019,7 +1021,8 @@ def slice_with_bool_dask_array(x, index):
 
     arginds = list(concat(arginds))
 
-    out = atop(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)), *arginds, dtype=x.dtype)
+    out = blockwise(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)),
+                    *arginds, dtype=x.dtype)
 
     chunks = []
     for ind, chunk in zip(index, out.chunks):

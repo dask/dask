@@ -8,6 +8,7 @@ from numbers import Integral
 
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
+from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
 
@@ -85,14 +86,14 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop('meta')
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta)
+    meta = make_meta(meta, index=df._meta.index)
 
     name = '{0}-{1}'.format(func_name, token)
     name_a = 'overlap-prepend-' + tokenize(df, before)
     name_b = 'overlap-append-' + tokenize(df, after)
     df_name = df._name
 
-    dsk = df.dask.copy()
+    dsk = {}
 
     # Have to do the checks for too large windows in the time-delta case
     # here instead of in `overlap_chunk`, since we can't rely on fix-frequency
@@ -138,7 +139,8 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 
-    return df._constructor(dsk, name, meta, df.divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    return df._constructor(graph, name, meta, df.divisions)
 
 
 def _head_timedelta(current, next_, after):

@@ -10,7 +10,7 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..sharedict import ShareDict
+from ..highlevelgraph import HighLevelGraph
 
 try:
     AxisError = np.AxisError
@@ -21,7 +21,16 @@ except AttributeError:
         AxisError = type(e)
 
 
+def normalize_to_array(x):
+    if 'cupy' in str(type(x)):  # TODO: avoid explicit reference to cupy
+        return x.get()
+    else:
+        return x
+
+
 def allclose(a, b, equal_nan=False, **kwargs):
+    a = normalize_to_array(a)
+    b = normalize_to_array(b)
     if getattr(a, 'dtype', None) != 'O':
         return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
     if equal_nan:
@@ -46,10 +55,10 @@ def _not_empty(x):
 
 def _check_dsk(dsk):
     """ Check that graph is well named and non-overlapping """
-    if not isinstance(dsk, ShareDict):
+    if not isinstance(dsk, HighLevelGraph):
         return
 
-    assert all(isinstance(k, (tuple, str)) for k in dsk.dicts)
+    assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one
@@ -64,13 +73,14 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def assert_eq(a, b, check_shape=True, **kwargs):
+def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
     a_original = a
     b_original = b
     if isinstance(a, Array):
         assert a.dtype is not None
         adt = a.dtype
-        _check_dsk(a.dask)
+        if check_graph:
+            _check_dsk(a.dask)
         a = a.compute(scheduler='sync')
         if hasattr(a, 'todense'):
             a = a.todense()
@@ -88,7 +98,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
     if isinstance(b, Array):
         assert b.dtype is not None
         bdt = b.dtype
-        _check_dsk(b.dask)
+        if check_graph:
+            _check_dsk(b.dask)
         b = b.compute(scheduler='sync')
         if not hasattr(b, 'dtype'):
             b = np.array(b, dtype='O')
@@ -148,3 +159,17 @@ def validate_axis(axis, ndim):
     if axis < 0:
         axis += ndim
     return axis
+
+
+def _is_nep18_active():
+    class A():
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()

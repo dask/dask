@@ -3,21 +3,23 @@ from __future__ import absolute_import, division, print_function
 import operator
 import types
 import uuid
+import warnings
 
 try:
-    from cytoolz import curry, pluck
+    from cytoolz import curry, concat, unique, merge
 except ImportError:
-    from toolz import curry, pluck
+    from toolz import curry, concat, unique, merge
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply, Iterator
+from .compatibility import apply, Iterator, is_dataclass, dataclass_fields
+
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin
-from . import sharedict
+from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
+from .highlevelgraph import HighLevelGraph
 
 __all__ = ['Delayed', 'delayed']
 
@@ -28,6 +30,89 @@ def unzip(ls, nout):
     if not out:
         out = [()] * nout
     return out
+
+
+def finalize(collection):
+    assert is_dask_collection(collection)
+
+    name = 'finalize-' + tokenize(collection)
+    keys = collection.__dask_keys__()
+    finalize, args = collection.__dask_postcompute__()
+    layer = {name: (finalize, keys) + args}
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[collection])
+    return Delayed(name, graph)
+
+
+def unpack_collections(expr):
+    """Normalize a python object and merge all sub-graphs.
+
+    - Replace ``Delayed`` with their keys
+    - Convert literals to things the schedulers can handle
+    - Extract dask graphs from all enclosed values
+
+    Parameters
+    ----------
+    expr : object
+        The object to be normalized. This function knows how to handle
+        dask collections, as well as most builtin python types.
+
+    Returns
+    -------
+    task : normalized task to be run
+    collections : a tuple of collections
+
+    Examples
+    --------
+    >>> a = delayed(1, 'a')
+    >>> b = delayed(2, 'b')
+    >>> task, collections = unpack_collections([a, b, 3])
+    >>> task  # doctest: +SKIP
+    ['a', 'b', 3]
+    >>> collections  # doctest: +SKIP
+    (a, b)
+
+    >>> task, collections = unpack_collections({a: 1, b: 2})
+    >>> task  # doctest: +SKIP
+    (dict, [['a', 1], ['b', 2]])
+    >>> collections  # doctest: +SKIP
+    {a, b}
+    """
+    if isinstance(expr, Delayed):
+        return expr._key, (expr,)
+
+    if is_dask_collection(expr):
+        finalized = finalize(expr)
+        return finalized._key, (finalized,)
+
+    if isinstance(expr, Iterator):
+        expr = tuple(expr)
+
+    typ = type(expr)
+
+    if typ in (list, tuple, set):
+        args, collections = unzip((unpack_collections(e) for e in expr), 2)
+        args = list(args)
+        collections = tuple(unique(concat(collections), key=id))
+        # Ensure output type matches input type
+        if typ is not list:
+            args = (typ, args)
+        return args, collections
+
+    if typ is dict:
+        args, collections = unpack_collections([[k, v] for k, v in expr.items()])
+        return (dict, args), collections
+
+    if typ is slice:
+        args, collections = unpack_collections([expr.start, expr.stop, expr.step])
+        return (slice,) + tuple(args), collections
+
+    if is_dataclass(expr):
+        args, collections = unpack_collections([[f.name, getattr(expr, f.name)] for f in
+                                               dataclass_fields(expr)])
+
+        return (apply, typ, (), (dict, args)), collections
+
+    return expr, ()
 
 
 def to_task_dask(expr):
@@ -64,6 +149,9 @@ def to_task_dask(expr):
     >>> dict(dask)  # doctest: +SKIP
     {'a': 1, 'b': 2}
     """
+    warnings.warn("The dask.delayed.to_dask_dask function has been "
+                  "Deprecated in favor of unpack_collections", stacklevel=2)
+
     if isinstance(expr, Delayed):
         return expr.key, expr.dask
 
@@ -83,13 +171,19 @@ def to_task_dask(expr):
     if typ in (list, tuple, set):
         args, dasks = unzip((to_task_dask(e) for e in expr), 2)
         args = list(args)
-        dsk = sharedict.merge(*dasks)
+        dsk = merge(dasks)
         # Ensure output type matches input type
         return (args, dsk) if typ is list else ((typ, args), dsk)
 
     if typ is dict:
         args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
+
+    if is_dataclass(expr):
+        args, dsk = to_task_dask([[f.name, getattr(expr, f.name)] for f in
+                                  dataclass_fields(expr)])
+
+        return (apply, typ, (), (dict, args)), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])
@@ -311,10 +405,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         return obj
 
     if is_dask_collection(obj) or traverse:
-        task, dsk = to_task_dask(obj)
+        task, collections = unpack_collections(obj)
     else:
         task = quote(obj)
-        dsk = {}
+        collections = set()
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
@@ -331,8 +425,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
-        dsk = sharedict.merge(dsk, (name, {name: task}))
-        return Delayed(name, dsk)
+        layer = {name: task}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
+        return Delayed(name, graph)
 
 
 def right(method):
@@ -343,6 +438,7 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
+    dsk = ensure_dict(dsk)
     dsk2, _ = cull(dsk, keys)
     return dsk2
 
@@ -360,8 +456,6 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __init__(self, key, dsk, length=None):
         self._key = key
-        if type(dsk) is list:  # compatibility with older versions
-            dsk = sharedict.merge(*dsk)
         self.dask = dsk
         self._length = length
 
@@ -370,6 +464,9 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __dask_keys__(self):
         return [self.key]
+
+    def __dask_layers__(self):
+        return (self.key,)
 
     def __dask_tokenize__(self):
         return self.key
@@ -466,28 +563,20 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     else:
         name = dask_key_name
 
-    dsk = sharedict.ShareDict()
-    args_dasks = list(map(to_task_dask, args))
-    for arg, d in args_dasks:
-        if isinstance(d, sharedict.ShareDict):
-            dsk.update_with_key(d)
-        elif isinstance(arg, (str, tuple)):
-            dsk.update_with_key(d, key=arg)
-        else:
-            dsk.update(d)
-
-    args = tuple(pluck(0, args_dasks))
+    args2, collections = unzip(map(unpack_collections, args), 2)
+    collections = list(concat(collections))
 
     if kwargs:
-        dask_kwargs, dsk2 = to_task_dask(kwargs)
-        dsk.update(dsk2)
-        task = (apply, func, list(args), dask_kwargs)
+        dask_kwargs, collections2 = unpack_collections(kwargs)
+        collections.extend(collections2)
+        task = (apply, func, list(args2), dask_kwargs)
     else:
-        task = (func,) + args
+        task = (func,) + args2
 
-    dsk.update_with_key({name: task}, key=name)
+    graph = HighLevelGraph.from_collections(name, {name: task},
+                                            dependencies=collections)
     nout = nout if nout is not None else None
-    return Delayed(name, dsk, length=nout)
+    return Delayed(name, graph, length=nout)
 
 
 class DelayedLeaf(Delayed):
@@ -501,7 +590,8 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return {self._key: self._obj}
+        return HighLevelGraph.from_collections(self._key, {self._key: self._obj},
+                                               dependencies=())
 
     def __call__(self, *args, **kwargs):
         return call_function(self._obj, self._key, args, kwargs,
@@ -516,10 +606,21 @@ class DelayedAttr(Delayed):
         self._attr = attr
         self._key = 'getattr-%s' % tokenize(obj, attr, pure=True)
 
+    def __getattr__(self, attr):
+        # Calling np.dtype(dask.delayed(...)) used to result in a segfault, as
+        # numpy recursively tries to get `dtype` from the object. This is
+        # likely a bug in numpy. For now, we can do a dumb for if
+        # `x.dtype().dtype()` is called (which shouldn't ever show up in real
+        # code). See https://github.com/dask/dask/pull/4374#issuecomment-454381465
+        if attr == 'dtype' and self._attr == 'dtype':
+            raise AttributeError("Attribute %s not found" % attr)
+        return super(DelayedAttr, self).__getattr__(attr)
+
     @property
     def dask(self):
-        dsk = {self._key: (getattr, self._obj._key, self._attr)}
-        return sharedict.merge(self._obj.dask, (self._key, dsk))
+        layer = {self._key: (getattr, self._obj._key, self._attr)}
+        return HighLevelGraph.from_collections(self._key, layer,
+                                               dependencies=[self._obj])
 
     def __call__(self, *args, **kwargs):
         return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)

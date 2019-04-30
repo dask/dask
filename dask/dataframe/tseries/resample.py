@@ -2,16 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import pandas as pd
 import numpy as np
+from pandas.core.resample import Resampler as pd_Resampler
 
 from ..core import DataFrame, Series
-from ..utils import PANDAS_VERSION
 from ...base import tokenize
 from ...utils import derived_from
-
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.core.resample import Resampler as pd_Resampler
-else:
-    from pandas.tseries.resample import Resampler as pd_Resampler
+from ...highlevelgraph import HighLevelGraph
 
 
 def getnanos(rule):
@@ -74,7 +70,7 @@ class Resampler(object):
     def __init__(self, obj, rule, **kwargs):
         if not obj.known_divisions:
             msg = ("Can only resample dataframes with known divisions\n"
-                   "See dask.pydata.org/en/latest/dataframe-design.html#partitions\n"
+                   "See https://docs.dask.org/en/latest/dataframe-design.html#partitions\n"
                    "for more information.")
             raise ValueError(msg)
         self.obj = obj
@@ -102,7 +98,7 @@ class Resampler(object):
         partitioned = self.obj.repartition(newdivs, force=True)
 
         keys = partitioned.__dask_keys__()
-        dsk = partitioned.dask
+        dsk = {}
 
         args = zip(keys, outdivs, outdivs[1:], ['left'] * (len(keys) - 1) + [None])
         for i, (k, s, e, c) in enumerate(args):
@@ -114,9 +110,10 @@ class Resampler(object):
         meta_r = self.obj._meta_nonempty.resample(self._rule, **self._kwargs)
         meta = getattr(meta_r, how)(*how_args, **how_kwargs)
 
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[partitioned])
         if isinstance(meta, pd.DataFrame):
-            return DataFrame(dsk, name, meta, outdivs)
-        return Series(dsk, name, meta, outdivs)
+            return DataFrame(graph, name, meta, outdivs)
+        return Series(graph, name, meta, outdivs)
 
     @derived_from(pd_Resampler)
     def agg(self, agg_funcs, *args, **kwargs):

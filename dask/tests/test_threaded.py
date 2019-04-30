@@ -7,7 +7,7 @@ from time import time, sleep
 
 import pytest
 
-from dask.context import set_options
+import dask
 from dask.compatibility import PY2
 from dask.threaded import get
 from dask.utils_test import inc, add
@@ -29,6 +29,23 @@ def test_get_without_computation():
     assert get(dsk, 'x') == 1
 
 
+def test_broken_callback():
+    from dask.callbacks import Callback
+
+    def _f_ok(*args, **kwargs):
+        pass
+
+    def _f_broken(*args, **kwargs):
+        raise ValueError('my_exception')
+
+    dsk = {'x': 1}
+
+    with Callback(start=_f_broken, finish=_f_ok):
+        with Callback(start=_f_ok, finish=_f_ok):
+            with pytest.raises(ValueError, match='my_exception'):
+                get(dsk, 'x')
+
+
 def bad(x):
     raise ValueError()
 
@@ -40,9 +57,22 @@ def test_exceptions_rise_to_top():
 
 def test_reuse_pool():
     pool = ThreadPool()
-    with set_options(pool=pool):
+    with dask.config.set(pool=pool):
         assert get({'x': (inc, 1)}, 'x') == 2
         assert get({'x': (inc, 1)}, 'x') == 2
+
+
+@pytest.mark.skipif(PY2, reason="threading API changed")
+def test_pool_kwarg():
+    def f():
+        sleep(0.01)
+        return threading.get_ident()
+
+    dsk = {('x', i): (f,) for i in range(30)}
+    dsk['x'] = (len, (set, [('x', i) for i in range(len(dsk))]))
+
+    with ThreadPool(3) as pool:
+        assert get(dsk, 'x', pool=pool) == 3
 
 
 def test_threaded_within_thread():

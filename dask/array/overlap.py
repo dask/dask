@@ -9,7 +9,7 @@ from toolz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
@@ -148,9 +148,9 @@ def overlap_internal(x, axes):
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
-    dsk = sharedict.merge(x.dask, (name, dsk))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
-    return Array(dsk, name, chunks, dtype=x.dtype)
+    return Array(graph, name, chunks, dtype=x.dtype)
 
 
 def trim_overlap(x, depth, boundary=None):
@@ -512,8 +512,11 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
+    assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
+    assert all(type(c) is int for cc in g.chunks for c in cc)
     g2 = g.map_blocks(func, **kwargs)
+    assert all(type(c) is int for cc in g2.chunks for c in cc)
     if trim:
         return trim_internal(g2, depth2, boundary2)
     else:
