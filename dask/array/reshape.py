@@ -136,7 +136,7 @@ def reshape(x, shape):
     This is a parallelized version of the ``np.reshape`` function with the
     following limitations:
 
-    1.  It assumes that the array is stored in `column-major order`_
+    1.  It assumes that the array is stored in `row-major order`_
     2.  It only allows for reshapings that collapse or merge dimensions like
         ``(1, 2, 3, 4) -> (1, 6, 4)`` or ``(64,) -> (4, 4, 4)``
 
