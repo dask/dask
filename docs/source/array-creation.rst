@@ -207,11 +207,11 @@ Intermediate storage
 .. autosummary::
    store
 
-In some cases, one may wish to store an intermediate value that will be used in
-later computations. This could be useful for a variety of cases like saving
-work before a flaky step, as a simple form of caching, a useful
-restore/stopping point in a long computation, inclusion of the intermediate
-value in later analysis, etc.
+In some cases, one may wish to store an intermediate result in long term
+storage. This intermediate result can then be used in later computation.
+This could be useful for a variety of cases like saving work before a flaky
+step, as a simple form of caching, a useful restore/stopping point in a long
+computation, inclusion of the intermediate value in later analysis, etc.
 
 This uses ``store`` or anything that builds off of ``store`` to provide this
 functionality. The intermediate storage operation can be done in one of two
