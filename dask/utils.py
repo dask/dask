@@ -486,15 +486,15 @@ def ignore_warning(doc, cls, name, extra=""):
         # Indentation of next line
         indent = re.match(r'\s*', tail).group(0)
         # Insert the warning, indented, with a blank line before and after
+        if extra:
+            more = [indent, extra.rstrip('\n') + '\n\n']
+        else:
+            more = []
         bits = [
             head,
             indent, l1,
-            indent, l2, '\n\n',
-            tail
-        ]
-        if extra:
-            bits.insert(1, extra.rstrip('\n') + '\n\n')
-            bits.insert(1, indent)
+            indent, l2, '\n\n'
+        ] + more + [tail]
         doc = ''.join(bits)
 
     return doc
