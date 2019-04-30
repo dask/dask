@@ -97,7 +97,7 @@ following:
 3.  Switch between Dask Array and NumPy with a consistent API
 
 Xarray is used in wide range of fields, including physics, astronomy, geoscience,
-bioinformatics, engineering, finance, and deep learning.
+microscopy, bioinformatics, engineering, finance, and deep learning.
 Xarray also has a thriving user community that is good at providing support.
 
 
