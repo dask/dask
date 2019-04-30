@@ -7,10 +7,12 @@ DataFrame
 
    dataframe-api.rst
    dataframe-create.rst
-   dataframe-performance.rst
+   dataframe-best-practices.rst
    dataframe-design.rst
    dataframe-groupby.rst
+   dataframe-joins.rst
    dataframe-indexing.rst
+   dataframe-categoricals.rst
    dataframe-extend.rst
 
 A Dask DataFrame is a large parallel DataFrame composed of many smaller Pandas

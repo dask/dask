@@ -44,7 +44,6 @@ def blockwise_token(i, prefix='_'):
 def blockwise(func, output, output_indices, *arrind_pairs, **kwargs):
     """ Create a Blockwise symbolic mutable mapping
 
-
     This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
     returns a symbolic Blockwise object.
 
@@ -120,6 +119,28 @@ class Blockwise(Mapping):
     dictionaries because we are able to fuse them during optimization,
     sometimes resulting in much lower overhead.
 
+    Parameters
+    ----------
+    output: str
+        The name of the output collection.  Used in keynames
+    output_indices: tuple
+        The output indices, like ``('i', 'j', 'k')`` used to determine the
+        structure of the block computations
+    dsk: dict
+        A small graph to apply per-output-block.  May include keys from the
+        input indices.
+    indices: Tuple[str, Tuple[str, str]]
+        An ordered mapping from input key name, like ``'x'``
+        to input indices, like ``('i', 'j')``
+        Or includes literals, which have ``None`` for an index value
+    numblocks: Dict[key, Sequence[int]]
+        Number of blocks along each dimension for each input
+    concatenate: boolean
+        Whether or not to pass contracted dimensions as a list of inputs or a
+        single input to the block function
+    new_axes: Dict
+        New index dimensions that may have been created, and their extent
+
     See Also
     --------
     dask.blockwise.blockwise
@@ -177,8 +198,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
     Applies a function, ``func``, across blocks from many different input
-    dasks.  We arrange the pattern with which those blocks interact with sets
-    of matching indices.  E.g.::
+    collections.  We arrange the pattern with which those blocks interact with
+    sets of matching indices.  E.g.::
 
         make_blockwise_graph(func, 'z', 'i', 'x', 'i', 'y', 'i')
 
@@ -294,8 +315,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = broadcast_dimensions(argpairs, numblocks)
-    for k in new_axes:
-        dims[k] = 1
+    for k, v in new_axes.items():
+        dims[k] = len(v) if isinstance(v, tuple) else 1
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
     keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))
@@ -390,7 +411,7 @@ def lol_tuples(head, ind, values, dummies):
                 for v in dummies[ind[0]]]
 
 
-def optimize_blockwise(full_graph, keys=()):
+def optimize_blockwise(graph, keys=()):
     """ High level optimization of stacked Blockwise layers
 
     For operations that have multiple Blockwise operations one after the other, like
@@ -415,6 +436,14 @@ def optimize_blockwise(full_graph, keys=()):
     --------
     rewrite_blockwise
     """
+    out = _optimize_blockwise(graph, keys=keys)
+    while out.dependencies != graph.dependencies:
+        graph = out
+        out = _optimize_blockwise(graph, keys=keys)
+    return out
+
+
+def _optimize_blockwise(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
     dependents = core.reverse_dict(full_graph.dependencies)
@@ -448,6 +477,9 @@ def optimize_blockwise(full_graph, keys=()):
                     stack.append(dep)
                     continue
                 if layers[dep].concatenate != layers[layer].concatenate:
+                    stack.append(dep)
+                    continue
+                if sum(k == dep for k, ind in layers[layer].indices if ind is not None) > 1:
                     stack.append(dep)
                     continue
 

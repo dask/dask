@@ -122,7 +122,6 @@ def test_optimize_blockwise():
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)]) == 1
 
 
-@pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
 def test_blockwise_diamond_fusion():
     x = da.ones(10, chunks=(5,))
     y = (((x + 1) + 2) + 3)
@@ -289,6 +288,34 @@ def test_blockwise_stacked_new_axes_same_dim(concatenate):
     c = a + b
     assert c.chunks == ((2, 2, 1), (7,))
     assert_eq(c, np.ones((5, 7)))
+
+
+def test_blockwise_new_axes_chunked():
+    def f(x):
+        return x[None, :] * 2
+
+    x = da.arange(0, 6, 1, chunks=2, dtype=np.int32)
+    y = da.blockwise(f, 'qa', x, 'a', new_axes={'q': (1, 1)}, dtype=x.dtype)
+    assert y.chunks == ((1, 1), (2, 2, 2))
+    assert_eq(y, np.array([[0, 2, 4, 6, 8, 10], [0, 2, 4, 6, 8, 10]], np.int32))
+
+
+def test_blockwise_no_args():
+    def f():
+        return np.ones((2, 3), np.float32)
+
+    x = da.blockwise(f, 'ab', new_axes={'a': 2, 'b': (3, 3)}, dtype=np.float32)
+    assert x.chunks == ((2,), (3, 3))
+    assert_eq(x, np.ones((2, 6), np.float32))
+
+
+def test_blockwise_no_array_args():
+    def f(dtype):
+        return np.ones((2, 3), dtype)
+
+    x = da.blockwise(f, 'ab', np.float32, None, new_axes={'a': 2, 'b': (3, 3)}, dtype=np.float32)
+    assert x.chunks == ((2,), (3, 3))
+    assert_eq(x, np.ones((2, 6), np.float32))
 
 
 def test_blockwise_kwargs():

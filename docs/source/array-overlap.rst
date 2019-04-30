@@ -178,5 +178,5 @@ and ``trim_internal``:
    >>> g2 = g.map_blocks(myfunc)
    >>> result = da.overlap.trim_internal(g2, {0: 2, 1: 2})
 
-.. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
-.. _Numba: http://numba.pydata.org/
+.. _Life: https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
+.. _Numba: https://numba.pydata.org/

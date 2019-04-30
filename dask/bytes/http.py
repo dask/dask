@@ -112,8 +112,17 @@ class HTTPFile(object):
                                   **self.kwargs)
         except ValueError:
             # No size information - only allow read() and no seek()
-            self.size = None
-        self.cache = None
+            self.size = None  # pragma: no cover
+        except requests.HTTPError as err:
+            # If we got an HTTP error, it may be due to HEAD being unsupported,
+            # or it may be due to server/permissions/not-found errors. In the former
+            # case we disable read() and seek(), in the latter we re-raise.
+            code = err.response.status_code
+            if code >= 500 or code in (401, 403, 404):
+                raise err
+            self.size = None  # pragma: no cover
+
+        self.cache = b''
         self.closed = False
         self.start = None
         self.end = None
@@ -137,7 +146,7 @@ class HTTPFile(object):
         if whence == 0:
             nloc = where
         elif whence == 1:
-            nloc += where
+            nloc = self.loc + where
         elif whence == 2:
             nloc = self.size + where
         else:
@@ -165,7 +174,7 @@ class HTTPFile(object):
             # asked for no data, so supply no data and shortcut doing work
             return b''
         if self.size is None:
-            if length >= 0:
+            if length >= 0:  # pragma: no cover
                 # asked for specific amount of data, but we don't know how
                 # much is available
                 raise ValueError('File size is unknown, must read all data')
