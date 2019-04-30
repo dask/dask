@@ -361,6 +361,8 @@ Intermediate storage
 In some cases, one may wish to store an intermediate result in long term
 storage. This differs from ``persist``, which is mainly used to manage
 intermediate results within Dask that don't necessarily have longevity.
+Also it differs from storing final results as these mark the end of the Dask
+graph. So lack anyway to be reused in other graphs without reloading the data.
 Intermediate storage is mainly useful in cases where the data is needed
 outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
 be useful as a checkpoint for long running or flaky computations.
