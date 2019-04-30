@@ -570,10 +570,6 @@ def test_histogram_extra_args_and_shapes():
 
     for v, bins, w in data:
         # density
-        assert_eq(da.histogram(v, bins=bins, normed=True)[0],
-                  np.histogram(v, bins=bins, normed=True)[0])
-
-        # normed
         assert_eq(da.histogram(v, bins=bins, density=True)[0],
                   np.histogram(v, bins=bins, density=True)[0])
 
