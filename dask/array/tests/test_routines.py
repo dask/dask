@@ -581,6 +581,15 @@ def test_histogram_extra_args_and_shapes():
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
 
 
+def test_histogram_normed_deprecation():
+    x = da.arange(10)
+    with pytest.raises(ValueError) as info:
+        da.histogram(x, bins=[1, 2, 3], normed=True)
+
+    assert 'density' in str(info.value)
+    assert 'deprecated' in str(info.value).lower()
+
+
 @pytest.mark.parametrize("bins, hist_range", [
     (None, None),
     (10, None),
