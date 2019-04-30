@@ -37,6 +37,7 @@ try:
                              nanmax, nanargmin, nanargmax,
                              cumsum, cumprod,
                              topk, argtopk,
+                             reduction,
                              nanprod, nancumprod, nancumsum)
     from .percentile import percentile
     from . import ma
