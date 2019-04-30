@@ -107,19 +107,17 @@ See the function ``inline_functions`` for more information.
 from __future__ import absolute_import, division, print_function
 
 import os
-import sys
 
-from .compatibility import Queue, Empty, reraise
-from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
-                   has_tasks)
+from .compatibility import Queue, Empty, reraise, PY2
+from .core import (flatten, reverse_dict, get_dependencies,
+                   has_tasks, _execute_task)
 from . import config
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
-from .optimization import cull
 from .utils_test import add, inc  # noqa: F401
 
 
-if sys.version_info.major < 3:
+if PY2:
     # Due to a bug in python 2.7 Queue.get, if a timeout isn't specified then
     # `Queue.get` can't be interrupted. A workaround is to specify an extremely
     # long timeout, which then allows it to be interrupted.
@@ -217,48 +215,6 @@ When we execute tasks we both
 1.  Perform the actual work of collecting the appropriate data and calling the function
 2.  Manage administrative state to coordinate with the scheduler
 '''
-
-
-def _execute_task(arg, cache, dsk=None):
-    """ Do the actual work of collecting data and executing a function
-
-    Examples
-    --------
-
-    >>> cache = {'x': 1, 'y': 2}
-
-    Compute tasks against a cache
-    >>> _execute_task((add, 'x', 1), cache)  # Compute task in naive manner
-    2
-    >>> _execute_task((add, (inc, 'x'), 1), cache)  # Support nested computation
-    3
-
-    Also grab data from cache
-    >>> _execute_task('x', cache)
-    1
-
-    Support nested lists
-    >>> list(_execute_task(['x', 'y'], cache))
-    [1, 2]
-
-    >>> list(map(list, _execute_task([['x', 'y'], ['y', 'x']], cache)))
-    [[1, 2], [2, 1]]
-
-    >>> _execute_task('foo', cache)  # Passes through on non-keys
-    'foo'
-    """
-    if isinstance(arg, list):
-        return [_execute_task(a, cache) for a in arg]
-    elif istask(arg):
-        func, args = arg[0], arg[1:]
-        args2 = [_execute_task(a, cache) for a in args]
-        return func(*args2)
-    elif not ishashable(arg):
-        return arg
-    elif arg in cache:
-        return cache[arg]
-    else:
-        return arg
 
 
 def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
@@ -448,13 +404,14 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []
         succeeded = False
+        # if start_state_from_dask fails, we will have something
+        # to pass to the final block.
+        state = {}
         try:
             for cb in callbacks:
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
-
-            dsk, dependencies = cull(dsk, list(results))
 
             keyorder = order(dsk)
 

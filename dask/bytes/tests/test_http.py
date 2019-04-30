@@ -47,6 +47,33 @@ def test_simple(dir_server):
     assert data == open(os.path.join(dir_server, fn), 'rb').read()
 
 
+def test_loc(dir_server):
+    root = 'http://localhost:8999/'
+    fn = files[0]
+    f = open_files(root + fn)[0]
+    expected = open(os.path.join(dir_server, fn), 'rb').read()
+    with f as f:
+        data = f.read(2)
+        assert data == expected[:2]
+        assert f.loc == 2
+        f.seek(0)
+        data = f.read(3)
+        assert data == expected[:3]
+        f.seek(1, 1)
+        assert f.loc == 4
+
+
+def test_fetch_range_with_headers(dir_server):
+    # https://github.com/dask/dask/issues/4479
+    root = 'http://localhost:8999/'
+    fn = files[0]
+    headers = {'Date': 'Wed, 21 Oct 2015 07:28:00 GMT'}
+    f = open_files(root + fn, headers=headers)[0]
+    with f as f:
+        data = f.read(length=1) + f.read(length=-1)
+    assert data == open(os.path.join(dir_server, fn), 'rb').read()
+
+
 @pytest.mark.parametrize('block_size', [None, 99999])
 def test_ops(dir_server, block_size):
     root = 'http://localhost:8999/'

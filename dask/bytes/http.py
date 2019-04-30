@@ -8,7 +8,7 @@ from . import core
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
 
-class HTTPFileSystem(core.FileSystem):
+class HTTPFileSystem(object):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -21,9 +21,12 @@ class HTTPFileSystem(core.FileSystem):
         """
         Parameters
         ----------
+        block_size: int
+            Blocks to read bytes; if 0, will default to raw requests file-like
+            objects instead of HTTPFile instances
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
-            other parameters for requests
+            other parameters passed on to requests
         """
         self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
         self.kwargs = storage_options
@@ -52,7 +55,15 @@ class HTTPFileSystem(core.FileSystem):
         if mode != 'rb':
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        return HTTPFile(url, self.session, block_size, **self.kwargs)
+        if block_size:
+            return HTTPFile(url, self.session, block_size, **self.kwargs)
+        else:
+            kw = self.kwargs.copy()
+            kw['stream'] = True
+            r = self.session.get(url, **kw)
+            r.raise_for_status()
+            r.raw.decode_content = True
+            return r.raw
 
     def ukey(self, url):
         """Unique identifier, implied file might have changed every time"""
@@ -85,7 +96,7 @@ class HTTPFile(object):
         connections where the server allows this
     block_size: int or None
         The amount of read-ahead to do, in bytes. Default is 5MB, or the value
-        configured for the FileSystem creating this file
+        configured for the FileSystem creating this file.
     kwargs: all other key-values are passed to reqeuests calls.
     """
 
@@ -101,8 +112,17 @@ class HTTPFile(object):
                                   **self.kwargs)
         except ValueError:
             # No size information - only allow read() and no seek()
-            self.size = None
-        self.cache = None
+            self.size = None  # pragma: no cover
+        except requests.HTTPError as err:
+            # If we got an HTTP error, it may be due to HEAD being unsupported,
+            # or it may be due to server/permissions/not-found errors. In the former
+            # case we disable read() and seek(), in the latter we re-raise.
+            code = err.response.status_code
+            if code >= 500 or code in (401, 403, 404):
+                raise err
+            self.size = None  # pragma: no cover
+
+        self.cache = b''
         self.closed = False
         self.start = None
         self.end = None
@@ -126,7 +146,7 @@ class HTTPFile(object):
         if whence == 0:
             nloc = where
         elif whence == 1:
-            nloc += where
+            nloc = self.loc + where
         elif whence == 2:
             nloc = self.size + where
         else:
@@ -154,7 +174,7 @@ class HTTPFile(object):
             # asked for no data, so supply no data and shortcut doing work
             return b''
         if self.size is None:
-            if length >= 0:
+            if length >= 0:  # pragma: no cover
                 # asked for specific amount of data, but we don't know how
                 # much is available
                 raise ValueError('File size is unknown, must read all data')
@@ -233,7 +253,7 @@ class HTTPFile(object):
         requested, an exception is raised.
         """
         kwargs = self.kwargs.copy()
-        headers = self.kwargs.pop('headers', {})
+        headers = kwargs.pop('headers', {})
         headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
         r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
         r.raise_for_status()

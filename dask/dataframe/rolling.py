@@ -4,9 +4,11 @@ import datetime
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
+from numbers import Integral
 
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
+from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
 
@@ -18,11 +20,11 @@ def overlap_chunk(func, prev_part, current_part, next_part, before, after,
            "window size. Try using ``df.repartition`` "
            "to increase the partition size.")
 
-    if prev_part is not None and isinstance(before, int):
+    if prev_part is not None and isinstance(before, Integral):
         if prev_part.shape[0] != before:
             raise NotImplementedError(msg)
 
-    if next_part is not None and isinstance(after, int):
+    if next_part is not None and isinstance(after, Integral):
         if next_part.shape[0] != after:
             raise NotImplementedError(msg)
     # We validate that the window isn't too large for tiemdeltas in map_overlap
@@ -69,8 +71,8 @@ def map_overlap(func, df, before, after, *args, **kwargs):
             raise TypeError("Must have a `DatetimeIndex` when using string offset "
                             "for `before` and `after`")
     else:
-        if not (isinstance(before, int) and before >= 0 and
-                isinstance(after, int) and after >= 0):
+        if not (isinstance(before, Integral) and before >= 0 and
+                isinstance(after, Integral) and after >= 0):
             raise ValueError("before and after must be positive integers")
 
     if 'token' in kwargs:
@@ -84,14 +86,14 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop('meta')
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta)
+    meta = make_meta(meta, index=df._meta.index)
 
     name = '{0}-{1}'.format(func_name, token)
     name_a = 'overlap-prepend-' + tokenize(df, before)
     name_b = 'overlap-append-' + tokenize(df, after)
     df_name = df._name
 
-    dsk = df.dask.copy()
+    dsk = {}
 
     # Have to do the checks for too large windows in the time-delta case
     # here instead of in `overlap_chunk`, since we can't rely on fix-frequency
@@ -102,7 +104,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         "Try using ``df.repartition`` to increase the partition size"
     )
 
-    if before and isinstance(before, int):
+    if before and isinstance(before, Integral):
         dsk.update({(name_a, i): (M.tail, (df_name, i), before)
                     for i in range(df.npartitions - 1)})
         prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
@@ -117,7 +119,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     else:
         prevs = [None] * df.npartitions
 
-    if after and isinstance(after, int):
+    if after and isinstance(after, Integral):
         dsk.update({(name_b, i): (M.head, (df_name, i), after)
                     for i in range(1, df.npartitions)})
         nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
@@ -137,7 +139,8 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 
-    return df._constructor(dsk, name, meta, df.divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    return df._constructor(graph, name, meta, df.divisions)
 
 
 def _head_timedelta(current, next_, after):
@@ -219,7 +222,7 @@ class Rolling(object):
         or multiple (False).
         """
         return (self.axis in (1, 'columns') or
-                (isinstance(self.window, int) and self.window <= 1) or
+                (isinstance(self.window, Integral) and self.window <= 1) or
                 self.obj.npartitions == 1)
 
     def _call_method(self, method_name, *args, **kwargs):

@@ -1,13 +1,18 @@
+import itertools
+import pickle
 from operator import getitem
 from functools import partial
 
 import pytest
 
 from dask.utils_test import add, inc
+from dask.compatibility import apply
 from dask.core import get_dependencies
+from dask.local import get_sync
 from dask.optimization import (cull, fuse, inline, inline_functions,
                                functions_of, fuse_getitem, fuse_selections,
-                               fuse_linear)
+                               fuse_linear, SubgraphCallable)
+from dask.utils import partial_by_order
 
 
 def double(x):
@@ -270,6 +275,26 @@ def test_inline_ignores_curries_and_partials():
     result = inline_functions(dsk, [], fast_functions=set([add]))
     assert result['b'] == (inc, dsk['a'])
     assert 'a' not in result
+
+
+def test_inline_functions_non_hashable():
+    class NonHashableCallable(object):
+        def __call__(self, a):
+            return a + 1
+
+        def __hash__(self):
+            raise TypeError("Not hashable")
+
+    nohash = NonHashableCallable()
+
+    dsk = {'a': 1,
+           'b': (inc, 'a'),
+           'c': (nohash, 'b'),
+           'd': (inc, 'c')}
+
+    result = inline_functions(dsk, [], fast_functions={inc})
+    assert result['c'] == (nohash, dsk['b'])
+    assert 'b' not in result
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
@@ -1062,3 +1087,135 @@ def test_fuse_reductions_multiple_input():
         'b1-b3-c1-c2-d': (f, (f, (f, 'a1'), 'b2'), (f, 'b2', (f, 'a2'))),
         'd': 'b1-b3-c1-c2-d',
     })
+
+
+def func_with_kwargs(a, b, c=2):
+    return a + b + c
+
+
+def test_SubgraphCallable():
+    non_hashable = [1, 2, 3]
+
+    dsk = {'a': (apply, add, ['in1', 2]),
+           'b': (apply, partial_by_order, ['in2'],
+                 {'function': func_with_kwargs, 'other': [(1, 20)], 'c': 4}),
+           'c': (apply, partial_by_order, ['in2', 'in1'],
+                 {'function': func_with_kwargs, 'other': [(1, 20)]}),
+           'd': (inc, 'a'),
+           'e': (add, 'c', 'd'),
+           'f': ['a', 2, 'b', (add, 'b', (sum, non_hashable))],
+           'h': (add, (sum, 'f'), (sum, ['a', 'b']))}
+
+    f = SubgraphCallable(dsk, 'h', ['in1', 'in2'], name='test')
+    assert f.name == 'test'
+    assert repr(f) == 'test'
+
+    dsk2 = dsk.copy()
+    dsk2.update({'in1': 1, 'in2': 2})
+    assert f(1, 2) == get_sync(cull(dsk2, ['h'])[0], ['h'])[0]
+    assert f(1, 2) == f(1, 2)
+
+    f2 = pickle.loads(pickle.dumps(f))
+    assert f2(1, 2) == f(1, 2)
+
+
+def test_fuse_subgraphs():
+    dsk = {'x-1': 1,
+           'inc-1': (inc, 'x-1'),
+           'inc-2': (inc, 'inc-1'),
+           'add-1': (add, 'x-1', 'inc-2'),
+           'inc-3': (inc, 'add-1'),
+           'inc-4': (inc, 'inc-3'),
+           'add-2': (add, 'add-1', 'inc-4'),
+           'inc-5': (inc, 'add-2'),
+           'inc-6': (inc, 'inc-5')}
+
+    res = fuse(dsk, 'inc-6', fuse_subgraphs=True)
+    sol = with_deps({
+        'inc-6': 'add-inc-x-1',
+        'add-inc-x-1': (SubgraphCallable({
+            'x-1': 1,
+            'add-1': (add, 'x-1', (inc, (inc, 'x-1'))),
+            'inc-6': (inc, (inc, (add, 'add-1', (inc, (inc, 'add-1')))))
+        }, 'inc-6', ()),)
+    })
+    assert res == sol
+
+    res = fuse(dsk, 'inc-6', fuse_subgraphs=True, rename_keys=False)
+    sol = with_deps({
+        'inc-6': (SubgraphCallable({
+            'x-1': 1,
+            'add-1': (add, 'x-1', (inc, (inc, 'x-1'))),
+            'inc-6': (inc, (inc, (add, 'add-1', (inc, (inc, 'add-1')))))
+        }, 'inc-6', ()),)
+    })
+    assert res == sol
+
+    res = fuse(dsk, 'add-2', fuse_subgraphs=True)
+    sol = with_deps({
+        'add-inc-x-1': (SubgraphCallable({
+            'x-1': 1,
+            'add-1': (add, 'x-1', (inc, (inc, 'x-1'))),
+            'add-2': (add, 'add-1', (inc, (inc, 'add-1')))
+        }, 'add-2', ()),),
+        'add-2': 'add-inc-x-1',
+        'inc-6': (inc, (inc, 'add-2'))
+    })
+    assert res == sol
+
+    res = fuse(dsk, 'inc-2', fuse_subgraphs=True)
+    # ordering of arguements is unstable, check all permutations
+    sols = []
+    for inkeys in itertools.permutations(('x-1', 'inc-2')):
+        sols.append(with_deps({
+            'x-1': 1,
+            'inc-2': (inc, (inc, 'x-1')),
+            'inc-6': 'inc-add-1',
+            'inc-add-1': (
+                SubgraphCallable({
+                    'add-1': (add, 'x-1', 'inc-2'),
+                    'inc-6': (inc, (inc, (add, 'add-1', (inc, (inc, 'add-1')))))
+                }, 'inc-6', inkeys),) + inkeys
+        }))
+    assert res in sols
+
+    res = fuse(dsk, ['inc-2', 'add-2'], fuse_subgraphs=True)
+    # ordering of arguements is unstable, check all permutations
+    sols = []
+    for inkeys in itertools.permutations(('x-1', 'inc-2')):
+        sols.append(with_deps({
+            'x-1': 1,
+            'inc-2': (inc, (inc, 'x-1')),
+            'inc-add-1': (
+                SubgraphCallable({
+                    'add-1': (add, 'x-1', 'inc-2'),
+                    'add-2': (add, 'add-1', (inc, (inc, 'add-1')))
+                }, 'add-2', inkeys),) + inkeys,
+            'add-2': 'inc-add-1',
+            'inc-6': (inc, (inc, 'add-2'))
+        }))
+    assert res in sols
+
+
+def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
+    dsk = {'x-1': 1,
+           'add-1': (add, 'x-1', 'x-1'),
+           'add-2': (add, 'add-1', 'add-1'),
+           'add-3': (add, 'add-2', 'add-2'),
+           'add-4': (add, 'add-3', 'add-3'),
+           'add-5': (add, 'add-4', 'add-4')}
+
+    res = fuse(dsk, 'add-5', fuse_subgraphs=True)
+    sol = with_deps({
+        'add-x-1': (
+            SubgraphCallable({
+                'x-1': 1,
+                'add-1': (add, 'x-1', 'x-1'),
+                'add-2': (add, 'add-1', 'add-1'),
+                'add-3': (add, 'add-2', 'add-2'),
+                'add-4': (add, 'add-3', 'add-3'),
+                'add-5': (add, 'add-4', 'add-4')
+            }, 'add-5', ()),),
+        'add-5': 'add-x-1'
+    })
+    assert res == sol

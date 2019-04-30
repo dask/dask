@@ -6,12 +6,11 @@ try:
                        bag_zip as zip, bag_map as map)
     from .text import read_text
     from .utils import assert_eq
-    from ..context import set_options
+    from .avro import read_avro
     from ..base import compute
 except ImportError as e:
     msg = ("Dask bag requirements are not installed.\n\n"
            "Please either conda or pip install as follows:\n\n"
            "  conda install dask               # either conda install\n"
            "  pip install dask[bag] --upgrade  # or pip install")
-    e.msg += "\n\n" + msg
-    raise e
+    raise ImportError(str(e) + '\n\n' + msg)

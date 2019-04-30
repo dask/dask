@@ -1,6 +1,16 @@
 Presentations On Dask
 =====================
-    
+
+* SciPy 2018, July 2018
+
+  * `Scalable Machine Learning with Dask (30 minutes)
+    <https://www.youtube.com/watch?v=ccfsbuqsjgI>`__
+
+* PyCon 2018, May 2018
+
+  * `Democratizing Distributed Computing with Dask and JupyterHub (32 minutes)
+    <https://www.youtube.com/watch?v=Iq72dt1gO9c>`__
+
 * AMS & ESIP, January 2018
 
   * `Pangeo quick demo: Dask, XArray, Zarr on the cloud with JupyterHub (3 minutes)

@@ -5,7 +5,7 @@ The :doc:`Dask distributed scheduler <scheduling>` provides feedback in two
 forms:
 
 1.  A progress bar suitable for interactive use in consoles or notebooks
-2.  An interactive dashboard, containing several plots and tables with live
+2.  An interactive dashboard containing several plots and tables with live
     information
 
 
@@ -17,14 +17,14 @@ Progress bar
 .. autosummary::
    progress
 
-The dask.distributed progress bar differs from the ``ProgressBar`` used for
+The ``dask.distributed`` progress bar differs from the ``ProgressBar`` used for
 :doc:`local diagnostics <diagnostics-local>`.
-The ``progress`` function takes a Dask object that is executing in the background.
+The ``progress`` function takes a Dask object that is executing in the background:
 
 .. code-block:: python
 
    # Single machine progress bar
-   from dask.diagnosics import ProgressBar
+   from dask.diagnostics import ProgressBar
 
    with ProgressBar():
        x.compute()
@@ -51,7 +51,7 @@ Dashboard
 
 If `Bokeh <https://bokeh.pydata.org/en/latest/>`_ is installed
 then the dashboard will start up automatically whenever the scheduler is created.
-For local use this happens automatically when you create a client with no arguments
+For local use this happens automatically when you create a client with no arguments:
 
 .. code-block:: python
 
@@ -80,7 +80,7 @@ External Documentation
 ----------------------
 
 More in-depth technical documentation about Dask's distributed scheduler is
-available at https://distributed.readthedocs.io/en/latest
+available at https://distributed.dask.org/en/latest
 
 API
 ---

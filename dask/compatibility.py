@@ -16,7 +16,50 @@ class LZMAFile:
                             "To use, install lzmaffi or backports.lzma.")
 LZMA_AVAILABLE = False
 
+
+# From 3.8, Collections Abstract Base Classes will be visible only
+# from collections.abc.
+try:
+    from collections.abc import (
+        Container,
+        Hashable,
+        Iterable,
+        Iterator,
+        Sized,
+        Callable,
+        Sequence,
+        MutableSequence,
+        Set,
+        MutableSet,
+        Mapping,
+        MutableMapping,
+        MappingView,
+        ItemsView,
+        KeysView,
+        ValuesView,
+    )
+except ImportError:
+    from collections import (
+        Container,
+        Hashable,
+        Iterable,
+        Iterator,
+        Sized,
+        Callable,
+        Sequence,
+        MutableSequence,
+        Set,
+        MutableSet,
+        Mapping,
+        MutableMapping,
+        MappingView,
+        ItemsView,
+        KeysView,
+        ValuesView,
+    )
+
 if PY3:
+    import copyreg
     import builtins
     from queue import Queue, Empty
     from itertools import zip_longest
@@ -68,8 +111,11 @@ if PY3:
             raise exc.with_traceback(tb)
         raise exc
 
+    import pickle as cPickle
+
 else:
     import __builtin__ as builtins
+    import copy_reg as copyreg
     from Queue import Queue, Empty
     from itertools import izip_longest as zip_longest, izip as zip
     from StringIO import StringIO
@@ -99,7 +145,7 @@ else:
 
     def _make_reraise():
         _code = ("def reraise(exc, tb=None):"
-                "    raise type(exc), exc, tb")
+                 "    raise type(exc), exc, tb")
         namespace = {}
         exec("exec _code in namespace")
         return namespace['reraise']
@@ -259,15 +305,19 @@ else:
         pass
 
 
+    import cPickle
+
+
 def getargspec(func):
-    """Version of inspect.getargspec that works for functools.partial objects"""
+    """Version of inspect.getargspec that works with partial and warps."""
     if isinstance(func, functools.partial):
-        return _getargspec(func.func)
+        return getargspec(func.func)
+
+    func = getattr(func, '__wrapped__', func)
+    if isinstance(func, type):
+        return _getargspec(func.__init__)
     else:
-        if isinstance(func, type):
-            return _getargspec(func.__init__)
-        else:
-            return _getargspec(func)
+        return _getargspec(func)
 
 
 def bind_method(cls, name, func):
@@ -292,3 +342,14 @@ def bind_method(cls, name, func):
         setattr(cls, name, types.MethodType(func, None, cls))
     else:
         setattr(cls, name, func)
+
+
+try:
+    from dataclasses import is_dataclass, fields as dataclass_fields
+
+except ImportError:
+    def is_dataclass(x):
+        return False
+
+    def dataclass_fields(x):
+        return []

@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-import sys
 import os
 import dask
 import pytest
@@ -358,8 +357,6 @@ def test_to_hdf_kwargs():
         tm.assert_frame_equal(df, df2)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 3),
-                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_fmt_warns():
     pytest.importorskip('tables')
     df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',

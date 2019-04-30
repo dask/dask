@@ -1,15 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
-from collections import Iterable, Mapping
-from collections import Iterator
+import copy
 from functools import partial, wraps
 from itertools import product
 import math
-from numbers import Number
+from numbers import Number, Integral
 import operator
 from operator import add, getitem, mul
 import os
+import re
 import sys
 import traceback
 import pickle
@@ -18,37 +18,35 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, join, first,
-                         groupby, valmap, accumulate, assoc)
-    from cytoolz.curried import filter, pluck
-
+    from cytoolz import (partition, concat, first, groupby, accumulate)
+    from cytoolz.curried import pluck
 except ImportError:
-    from toolz import (partition, concat, join, first,
-                       groupby, valmap, accumulate, assoc)
-    from toolz.curried import filter, pluck
-from toolz import pipe, map, reduce, frequencies
+    from toolz import (partition, concat, first, groupby, accumulate)
+    from toolz.curried import pluck
+from toolz import map, reduce, frequencies
 import numpy as np
 
 from . import chunk
-from .numpy_compat import _make_sliced_dtype
-from .slicing import slice_array, replace_ellipsis
 from .. import config
 from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
+from ..blockwise import broadcast_dimensions, subs
 from ..context import globalmethod
-from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
+from ..utils import (ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, Dispatch, factors,
-                     parse_bytes, has_keyword)
-from ..compatibility import unicode, long, zip_longest, apply
+                     SerializableLock, Dispatch, factors,
+                     parse_bytes, has_keyword, M, ndimlist)
+from ..compatibility import (unicode, zip_longest,
+                             Iterable, Iterator, Mapping)
 from ..core import quote
-from ..delayed import Delayed, to_task_dask
+from ..delayed import delayed, Delayed
 from .. import threaded, core
-from .. import sharedict
-from ..sharedict import ShareDict
-from .numpy_compat import _Recurser
+from ..sizeof import sizeof
+from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
-
+from .numpy_compat import _Recurser, _make_sliced_dtype
+from .slicing import slice_array, replace_ellipsis
+from .blockwise import blockwise
 
 config.update_defaults({'array': {
     'chunk-size': '128MiB',
@@ -58,16 +56,10 @@ config.update_defaults({'array': {
 
 concatenate_lookup = Dispatch('concatenate')
 tensordot_lookup = Dispatch('tensordot')
+einsum_lookup = Dispatch('einsum')
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
-
-
-@tensordot_lookup.register_lazy('sparse')
-@concatenate_lookup.register_lazy('sparse')
-def register_sparse():
-    import sparse
-    concatenate_lookup.register(sparse.COO, sparse.concatenate)
-    tensordot_lookup.register(sparse.COO, sparse.tensordot)
+einsum_lookup.register((object, np.ndarray), np.einsum)
 
 
 class PerformanceWarning(Warning):
@@ -78,7 +70,7 @@ def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
         b3 = tuple(None if x is None else slice(None, None)
-                   for x in b if not isinstance(x, (int, long)))
+                   for x in b if not isinstance(x, Integral))
         return getter(a, b2, asarray=asarray, lock=lock)[b3]
 
     if lock:
@@ -167,7 +159,7 @@ def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if not asarray or lock:
+    if getitem is not operator.getitem and (not asarray or lock):
         values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
         # Common case, drop extra parameters
@@ -196,304 +188,6 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     if rightfunc:
         B = map(rightfunc, B)
     return sum(map(partial(np.dot, **kwargs), A, B))
-
-
-def lol_tuples(head, ind, values, dummies):
-    """ List of list of tuple keys
-
-    Parameters
-    ----------
-
-    head : tuple
-        The known tuple so far
-    ind : Iterable
-        An iterable of indices not yet covered
-    values : dict
-        Known values for non-dummy indices
-    dummies : dict
-        Ranges of values for dummy indices
-
-    Examples
-    --------
-
-    >>> lol_tuples(('x',), 'ij', {'i': 1, 'j': 0}, {})
-    ('x', 1, 0)
-
-    >>> lol_tuples(('x',), 'ij', {'i': 1}, {'j': range(3)})
-    [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
-
-    >>> lol_tuples(('x',), 'ij', {'i': 1}, {'j': range(3)})
-    [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
-
-    >>> lol_tuples(('x',), 'ijk', {'i': 1}, {'j': [0, 1, 2], 'k': [0, 1]}) # doctest: +NORMALIZE_WHITESPACE
-    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 1, 0), ('x', 1, 1, 1)],
-     [('x', 1, 2, 0), ('x', 1, 2, 1)]]
-    """
-    if not ind:
-        return head
-    if ind[0] not in dummies:
-        return lol_tuples(head + (values[ind[0]],), ind[1:], values, dummies)
-    else:
-        return [lol_tuples(head + (v,), ind[1:], values, dummies)
-                for v in dummies[ind[0]]]
-
-
-def zero_broadcast_dimensions(lol, nblocks):
-    """
-
-    >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
-    >>> nblocks = (4, 1, 2)  # note singleton dimension in second place
-    >>> lol = [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-    ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
-    ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
-
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
-    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 0, 0), ('x', 1, 0, 1)]]
-
-    See Also
-    --------
-    lol_tuples
-    """
-    f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return homogeneous_deepmap(f, lol)
-
-
-def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
-                         consolidate=None):
-    """ Find block dimensions from arguments
-
-    Parameters
-    ----------
-    argpairs: iterable
-        name, ijk index pairs
-    numblocks: dict
-        maps {name: number of blocks}
-    sentinels: iterable (optional)
-        values for singleton dimensions
-    consolidate: func (optional)
-        use this to reduce each set of common blocks into a smaller set
-
-    Examples
-    --------
-    >>> argpairs = [('x', 'ij'), ('y', 'ji')]
-    >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
-    >>> broadcast_dimensions(argpairs, numblocks)
-    {'i': 2, 'j': 3}
-
-    Supports numpy broadcasting rules
-
-    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
-    >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
-    >>> broadcast_dimensions(argpairs, numblocks)
-    {'i': 2, 'j': 3}
-
-    Works in other contexts too
-
-    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
-    >>> d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
-    >>> broadcast_dimensions(argpairs, d)
-    {'i': 'Hello', 'j': (2, 3)}
-    """
-    # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
-    argpairs2 = [(a, ind) for a, ind in argpairs if ind is not None]
-    L = concat([zip(inds, dims) for (x, inds), (x, dims)
-                in join(first, argpairs2, first, numblocks.items())])
-
-    g = groupby(0, L)
-    g = dict((k, set([d for i, d in v])) for k, v in g.items())
-
-    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
-
-    if consolidate:
-        return valmap(consolidate, g2)
-
-    if g2 and not set(map(len, g2.values())) == set([1]):
-        raise ValueError("Shapes do not align %s" % g)
-
-    return valmap(first, g2)
-
-
-def top(func, output, out_indices, *arrind_pairs, **kwargs):
-    """ Tensor operation
-
-    Applies a function, ``func``, across blocks from many different input
-    dasks.  We arrange the pattern with which those blocks interact with sets
-    of matching indices.  E.g.::
-
-        top(func, 'z', 'i', 'x', 'i', 'y', 'i')
-
-    yield an embarrassingly parallel communication pattern and is read as
-
-        $$ z_i = func(x_i, y_i) $$
-
-    More complex patterns may emerge, including multiple indices::
-
-        top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
-
-        $$ z_{ij} = func(x_{ij}, y_{ji}) $$
-
-    Indices missing in the output but present in the inputs results in many
-    inputs being sent to one function (see examples).
-
-    Examples
-    --------
-
-    Simple embarrassing map operation
-
-    >>> inc = lambda x: x + 1
-    >>> top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)})  # doctest: +SKIP
-    {('z', 0, 0): (inc, ('x', 0, 0)),
-     ('z', 0, 1): (inc, ('x', 0, 1)),
-     ('z', 1, 0): (inc, ('x', 1, 0)),
-     ('z', 1, 1): (inc, ('x', 1, 1))}
-
-    Simple operation on two datasets
-
-    >>> add = lambda x, y: x + y
-    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (2, 2),
-    ...                                                      'y': (2, 2)})  # doctest: +SKIP
-    {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
-     ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
-     ('z', 1, 0): (add, ('x', 1, 0), ('y', 1, 0)),
-     ('z', 1, 1): (add, ('x', 1, 1), ('y', 1, 1))}
-
-    Operation that flips one of the datasets
-
-    >>> addT = lambda x, y: x + y.T  # Transpose each chunk
-    >>> #                                        z_ij ~ x_ij y_ji
-    >>> #               ..         ..         .. notice swap
-    >>> top(addT, 'z', 'ij', 'x', 'ij', 'y', 'ji', numblocks={'x': (2, 2),
-    ...                                                       'y': (2, 2)})  # doctest: +SKIP
-    {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
-     ('z', 0, 1): (add, ('x', 0, 1), ('y', 1, 0)),
-     ('z', 1, 0): (add, ('x', 1, 0), ('y', 0, 1)),
-     ('z', 1, 1): (add, ('x', 1, 1), ('y', 1, 1))}
-
-    Dot product with contraction over ``j`` index.  Yields list arguments
-
-    >>> top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk', numblocks={'x': (2, 2),
-    ...                                                          'y': (2, 2)})  # doctest: +SKIP
-    {('z', 0, 0): (dotmany, [('x', 0, 0), ('x', 0, 1)],
-                            [('y', 0, 0), ('y', 1, 0)]),
-     ('z', 0, 1): (dotmany, [('x', 0, 0), ('x', 0, 1)],
-                            [('y', 0, 1), ('y', 1, 1)]),
-     ('z', 1, 0): (dotmany, [('x', 1, 0), ('x', 1, 1)],
-                            [('y', 0, 0), ('y', 1, 0)]),
-     ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
-                            [('y', 0, 1), ('y', 1, 1)])}
-
-    Pass ``concatenate=True`` to concatenate arrays ahead of time
-
-    >>> top(f, 'z', 'i', 'x', 'ij', 'y', 'ij', concatenate=True,
-    ...     numblocks={'x': (2, 2), 'y': (2, 2,)})  # doctest: +SKIP
-    {('z', 0): (f, (concatenate_axes, [('x', 0, 0), ('x', 0, 1)], (1,)),
-                   (concatenate_axes, [('y', 0, 0), ('y', 0, 1)], (1,)))
-     ('z', 1): (f, (concatenate_axes, [('x', 1, 0), ('x', 1, 1)], (1,)),
-                   (concatenate_axes, [('y', 1, 0), ('y', 1, 1)], (1,)))}
-
-    Supports Broadcasting rules
-
-    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (1, 2),
-    ...                                                      'y': (2, 2)})  # doctest: +SKIP
-    {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
-     ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
-     ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
-     ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 1))}
-
-    Support keyword arguments with apply
-
-    >>> def f(a, b=0): return a + b
-    >>> top(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,)}, b=10)  # doctest: +SKIP
-    {('z', 0): (apply, f, [('x', 0)], {'b': 10}),
-     ('z', 1): (apply, f, [('x', 1)], {'b': 10})}
-
-    Include literals by indexing with ``None``
-
-    >>> top(add, 'z', 'i', 'x', 'i', 100, None,  numblocks={'x': (2,)})  # doctest: +SKIP
-    {('z', 0): (add, ('x', 0), 100),
-     ('z', 1): (add, ('x', 1), 100)}
-
-
-    See Also
-    --------
-    atop
-    """
-    numblocks = kwargs.pop('numblocks')
-    concatenate = kwargs.pop('concatenate', None)
-    new_axes = kwargs.pop('new_axes', {})
-    argpairs = list(partition(2, arrind_pairs))
-
-    assert set(numblocks) == {name for name, ind in argpairs if ind is not None}
-
-    all_indices = pipe(argpairs, pluck(1), filter(None), concat, set)
-    dummy_indices = all_indices - set(out_indices)
-
-    # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    dims = broadcast_dimensions(argpairs, numblocks)
-    for k in new_axes:
-        dims[k] = 1
-
-    # (0, 0), (0, 1), (0, 2), (1, 0), ...
-    keytups = list(product(*[range(dims[i]) for i in out_indices]))
-    # {i: 0, j: 0}, {i: 0, j: 1}, ...
-    keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
-
-    # {j: [1, 2, 3], ...}  For j a dummy index of dimension 3
-    dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
-
-    dsk = {}
-
-    # Unpack dask values in non-array arguments
-    for i, (arg, ind) in enumerate(argpairs):
-        if ind is None:
-            arg2, dsk2 = to_task_dask(arg)
-            if dsk2:
-                dsk.update(ensure_dict(dsk2))
-                argpairs[i] = (arg2, ind)
-
-    # Create argument lists
-    valtups = []
-    for kd in keydicts:
-        args = []
-        for arg, ind in argpairs:
-            if ind is None:
-                args.append(arg)
-            else:
-                tups = lol_tuples((arg,), ind, kd, dummies)
-                if any(nb == 1 for nb in numblocks[arg]):
-                    tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
-                else:
-                    tups2 = tups
-                if concatenate and isinstance(tups2, list):
-                    axes = [n for n, i in enumerate(ind) if i in dummies]
-                    tups2 = (concatenate_axes, tups2, axes)
-                args.append(tups2)
-        valtups.append(args)
-
-    if not kwargs:  # will not be used in an apply, should be a tuple
-        valtups = [tuple(vt) for vt in valtups]
-
-    # Add heads to tuples
-    keys = [(output,) + kt for kt in keytups]
-
-    # Unpack delayed objects in kwargs
-    if kwargs:
-        task, dsk2 = to_task_dask(kwargs)
-        if dsk2:
-            dsk.update(ensure_dict(dsk2))
-            kwargs2 = task
-        else:
-            kwargs2 = kwargs
-        vals = [(apply, func, vt, kwargs2) for vt in valtups]
-    else:
-        vals = [(func,) + vt for vt in valtups]
-
-    dsk.update(dict(zip(keys, vals)))
-
-    return dsk
 
 
 def _concatenate2(arrays, axes=[]):
@@ -534,7 +228,38 @@ def _concatenate2(arrays, axes=[]):
     return concatenate(arrays, axis=axes[0])
 
 
-def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
+def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=None):
+    """
+    Tries to infer output dtype of ``func`` for a small set of input arguments.
+
+    Parameters
+    ----------
+    func: Callable
+        Function for which output dtype is to be determined
+
+    args: List of array like
+        Arguments to the function, which would usually be used. Only attributes
+        ``ndim`` and ``dtype`` are used.
+
+    kwargs: dict
+        Additional ``kwargs`` to the ``func``
+
+    funcname: String
+        Name of calling function to improve potential error messages
+
+    suggest_dtype: None/False or String
+        If not ``None`` adds suggestion to potential error message to specify a dtype
+        via the specified kwarg. Defaults to ``'dtype'``.
+
+    nout: None or Int
+        ``None`` if function returns single output, integer if many.
+        Deafults to ``None``.
+
+    Returns
+    -------
+    : dtype or List of dtype
+        One or many dtypes (depending on ``nout``)
+    """
     args = [np.ones((1,) * x.ndim, dtype=x.dtype)
             if isinstance(x, Array) else x for x in args]
     try:
@@ -544,7 +269,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         suggest = ("Please specify the dtype explicitly using the "
-                   "`dtype` kwarg.\n\n") if suggest_dtype else ""
+                   "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)) if suggest_dtype else ""
         msg = ("`dtype` inference failed in `{0}`.\n\n"
                "{1}"
                "Original error is below:\n"
@@ -557,7 +282,29 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
         msg = None
     if msg is not None:
         raise ValueError(msg)
-    return o.dtype
+    return o.dtype if nout is None else tuple(e.dtype for e in o)
+
+
+def normalize_arg(x):
+    """ Normalize user provided arguments to blockwise or map_blocks
+
+    We do a few things:
+
+    1.  If they are string literals that might collide with blockwise_token then we
+        quote them
+    2.  IF they are large (as defined by sizeof) then we put them into the
+        graph on their own by using dask.delayed
+    """
+    if is_dask_collection(x):
+        return x
+    elif isinstance(x, str) and re.match(r'_\d+', x):
+        return delayed(x)
+    elif isinstance(x, list) and len(x) >= 10:
+        return delayed(x)
+    elif sizeof(x) > 1e6:
+        return delayed(x)
+    else:
+        return x
 
 
 def map_blocks(func, *args, **kwargs):
@@ -567,7 +314,7 @@ def map_blocks(func, *args, **kwargs):
     ----------
     func : callable
         Function to apply to every block in the array.
-    args : dask arrays or constants
+    args : dask arrays or other objects
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
         If not provided, will be inferred by applying the function to a small
@@ -626,6 +373,9 @@ def map_blocks(func, *args, **kwargs):
     >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
     ...                  new_axis=[0, 2])
 
+    If ``chunks`` is specified but ``new_axis`` is not, then it is inferred to
+    add the necessary number of axes on the left.
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
@@ -665,13 +415,34 @@ def map_blocks(func, *args, **kwargs):
     {0: {'shape': (1000,),
          'num-chunks': (10,),
          'chunk-location': (4,),
-         'array-location': [(400, 500)]}}
+         'array-location': [(400, 500)]},
+     None: {'shape': (1000,),
+            'num-chunks': (10,),
+            'chunk-location': (4,),
+            'array-location': [(400, 500)],
+            'chunk-shape': (100,),
+            'dtype': dtype('float64')}}
 
     For each argument and keyword arguments that are dask arrays (the positions
     of which are the first index), you will receive the shape of the full
     array, the number of chunks of the full array in each dimension, the chunk
     location (for example the fourth chunk over in the first dimension), and
-    the array location (for example the slice corresponding to ``40:50``).
+    the array location (for example the slice corresponding to ``40:50``). The
+    same information is provided for the output, with the key ``None``, plus
+    the shape and dtype that should be returned.
+
+    These features can be combined to synthesize an array from scratch, for
+    example:
+
+    >>> def func(block_info=None):
+    ...     loc = block_info[None]['array-location'][0]
+    ...     return np.arange(loc[0], loc[1])
+
+    >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
+    dask.array<func, shape=(8,), dtype=float64, chunksize=(4,)>
+
+    >>> _.compute()
+    array([0, 1, 2, 3, 4, 5, 6, 7])
 
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
@@ -694,34 +465,89 @@ def map_blocks(func, *args, **kwargs):
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
-    new_axis = kwargs.pop('new_axis', [])
+    new_axis = kwargs.pop('new_axis', None)
+    new_axes = {}
+
     if isinstance(drop_axis, Number):
         drop_axis = [drop_axis]
     if isinstance(new_axis, Number):
-        new_axis = [new_axis]
+        new_axis = [new_axis]  # TODO: handle new_axis
 
     arrs = [a for a in args if isinstance(a, Array)]
 
-    argpairs = [(a.name, tuple(range(a.ndim))[::-1])
+    argpairs = [(a, tuple(range(a.ndim))[::-1])
                 if isinstance(a, Array)
                 else (a, None)
                 for a in args]
-    numblocks = {a.name: a.numblocks for a in arrs}
-    arginds = list(concat(argpairs))
-    out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
+    if arrs:
+        out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
+    else:
+        out_ind = ()
 
     if has_keyword(func, 'block_id'):
-        kwargs['block_id'] = '__dummy__'
+        kwargs['block_id'] = '__block_id_dummy__'
     if has_keyword(func, 'block_info'):
-        kwargs['block_info'] = '__dummy__'
+        kwargs['block_info'] = '__block_info_dummy__'
 
-    dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
-              **kwargs)
+    original_kwargs = kwargs
 
-    # If func has block_id as an argument, add it to the kwargs for each call
+    if dtype is None:
+        dtype = apply_infer_dtype(func, args, original_kwargs, 'map_blocks')
+
+    if drop_axis:
+        out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
+    if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
+        new_axis = range(len(chunks) - len(out_ind))
+    if new_axis:
+        # new_axis = [x + len(drop_axis) for x in new_axis]
+        out_ind = list(out_ind)
+        for ax in sorted(new_axis):
+            n = len(out_ind) + len(drop_axis)
+            out_ind.insert(ax, n)
+            if chunks is not None:
+                new_axes[n] = chunks[ax]
+            else:
+                new_axes[n] = 1
+        out_ind = tuple(out_ind)
+        if max(new_axis) > max(out_ind):
+            raise ValueError("New_axis values do not fill in all dimensions")
+    out = blockwise(func, out_ind, *concat(argpairs), name=name,
+                    new_axes=new_axes, dtype=dtype, concatenate=True,
+                    align_arrays=False, **kwargs)
+
+    if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
+        dsk = out.dask.layers[out.name]
+        dsk = dict(dsk)
+        out.dask.layers[out.name] = dsk
+
     if has_keyword(func, 'block_id'):
-        for k in dsk.keys():
-            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
+        for k, vv in dsk.items():
+            v = copy.copy(vv[0])  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {'__block_id_dummy__': k[1:]})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
+
+    if chunks is not None:
+        if len(chunks) != len(out.numblocks):
+            raise ValueError("Provided chunks have {0} dims, expected {1} "
+                             "dims.".format(len(chunks), len(out.numblocks)))
+        chunks2 = []
+        for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
+            if isinstance(c, tuple):
+                # We only check cases where numblocks > 1. Becuase of
+                # broadcasting, we can't (easily) validate the chunks
+                # when the number of blocks is 1.
+                # See https://github.com/dask/dask/issues/4299 for more.
+                if nb > 1 and len(c) != nb:
+                    raise ValueError("Dimension {0} has {1} blocks, "
+                                     "chunks specified with "
+                                     "{2} blocks".format(i, nb, len(c)))
+                chunks2.append(c)
+            else:
+                chunks2.append(nb * (c,))
+        out._chunks = normalize_chunks(chunks2)
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_info'):
@@ -739,93 +565,51 @@ def map_blocks(func, *args, **kwargs):
                 starts[k] = [np.cumsum((0,) + c) for c in v.chunks]
                 shapes[k] = arg.shape
                 num_chunks[i] = arg.numblocks
+        out_starts = [np.cumsum((0,) + c) for c in out.chunks]
 
-        first_info = None
-        for k in dsk.keys():
-            info = {i: {'shape': shapes[i],
-                        'num-chunks': num_chunks[i],
-                        'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
-                                           for ij, j in enumerate(k[1:])],
-                        'chunk-location': k[1:]}
-                    for i in shapes}
-            if first is None:
-                first_info = info  # for the dtype computation just below
+        for k, v in dsk.items():
+            vv = v
+            v = v[0]
+            [(key, task)] = v.dsk.items()  # unpack subgraph callable
 
-            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_info', info),)
-
-    if dtype is None:
-        kwargs2 = kwargs
-        if has_keyword(func, 'block_id'):
-            kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
-        if has_keyword(func, 'block_info'):
-            kwargs2 = assoc(kwargs, 'block_info', first_info)
-        dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
-
-    if len(arrs) == 1:
-        numblocks = list(arrs[0].numblocks)
-    else:
-        dims = broadcast_dimensions(argpairs, numblocks)
-        numblocks = [b for (_, b) in sorted(dims.items(), reverse=True)]
-
-    if drop_axis:
-        if any(numblocks[i] > 1 for i in drop_axis):
-            raise ValueError("Can't drop an axis with more than 1 block. "
-                             "Please use `atop` instead.")
-        dsk = dict((tuple(k for i, k in enumerate(k)
-                          if i - 1 not in drop_axis), v)
-                   for k, v in dsk.items())
-        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
-    if new_axis:
-        new_axis = sorted(new_axis)
-        for i in new_axis:
-            if not 0 <= i <= len(numblocks):
-                ndim = len(numblocks)
-                raise ValueError("Can't add axis %d when current "
-                                 "axis are %r. Missing axis: "
-                                 "%r" % (i, list(range(ndim)),
-                                         list(range(ndim, i))))
-            numblocks.insert(i, 1)
-        dsk, old_dsk = dict(), dsk
-        for key in old_dsk:
-            new_key = list(key)
-            for i in new_axis:
-                new_key.insert(i + 1, 0)
-            dsk[tuple(new_key)] = old_dsk[key]
-
-    if chunks:
-        if len(chunks) != len(numblocks):
-            raise ValueError("Provided chunks have {0} dims, expected {1} "
-                             "dims.".format(len(chunks), len(numblocks)))
-        chunks2 = []
-        for i, (c, nb) in enumerate(zip(chunks, numblocks)):
-            if isinstance(c, tuple):
-                if not len(c) == nb:
-                    raise ValueError("Dimension {0} has {1} blocks, "
-                                     "chunks specified with "
-                                     "{2} blocks".format(i, nb, len(c)))
-                chunks2.append(c)
+            if new_axis:
+                # anything using the keys in dsk is incorrect, as the
+                # original array doesn't have values for `new_axis`.
+                old_k = tuple(x for i, x in enumerate(k[1:]) if i not in new_axis)
             else:
-                chunks2.append(nb * (c,))
-    else:
-        if len(arrs) == 1:
-            chunks2 = list(arrs[0].chunks)
-        else:
-            try:
-                chunks2 = list(broadcast_chunks(*[a.chunks for a in arrs]))
-            except Exception:
-                raise ValueError("Arrays in `map_blocks` don't align, can't "
-                                 "infer output chunks. Please provide "
-                                 "`chunks` kwarg.")
-        if drop_axis:
-            chunks2 = [c for (i, c) in enumerate(chunks2) if i not in drop_axis]
-        if new_axis:
-            for i in sorted(new_axis):
-                chunks2.insert(i, (1,))
+                old_k = k[1:]
 
-    chunks = tuple(chunks2)
+            info = {}
+            for i, shape in shapes.items():
+                # Compute chunk key in the array, taking broadcasting into
+                # account. We don't directly know which dimensions are
+                # broadcast, but any dimension with only one chunk can be
+                # treated as broadcast.
+                arr_k = old_k[-len(shape):]
+                arr_k = tuple(j if num_chunks[i][ij] > 1 else 0 for ij, j in enumerate(arr_k))
+                info[i] = {'shape': shape,
+                           'num-chunks': num_chunks[i],
+                           'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
+                                              for ij, j in enumerate(arr_k)],
+                           'chunk-location': arr_k}
 
-    return Array(sharedict.merge((name, dsk), *[a.dask for a in arrs]),
-                 name, chunks, dtype)
+            info[None] = {'shape': out.shape,
+                          'num-chunks': out.numblocks,
+                          'array-location': [(out_starts[ij][j], out_starts[ij][j + 1])
+                                             for ij, j in enumerate(k[1:])],
+                          'chunk-location': k[1:],
+                          'chunk-shape': tuple(out.chunks[ij][j]
+                                               for ij, j in enumerate(k[1:])),
+                          'dtype': dtype}
+
+            v = copy.copy(v)  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {'__block_info_dummy__': info})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
+
+    return out
 
 
 def broadcast_chunks(*chunkss):
@@ -942,7 +726,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                          % (len(sources), len(targets), len(regions)))
 
     # Optimize all sources together
-    sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
+    sources_dsk = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
@@ -965,25 +749,25 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         else:
             targets2.append(e)
 
-    targets_dsk = sharedict.merge(*targets_dsk)
+    targets_dsk = HighLevelGraph.merge(*targets_dsk)
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
     toks = [str(uuid.uuid1()) for _ in range(len(sources))]
-    store_dsk = sharedict.merge(*[
+    store_dsk = HighLevelGraph.merge(*[
         insert_to_ooc(s, t, lock, r, return_stored, load_stored, tok)
         for s, t, r, tok in zip(sources2, targets2, regions, toks)
     ])
     store_keys = list(store_dsk.keys())
 
-    store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
+    store_dsk = HighLevelGraph.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
         load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
-            store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
 
             load_store_dsk = retrieve_from_ooc(
                 store_keys, store_dsk, store_dsk_2
@@ -997,7 +781,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         return result
     else:
         name = 'store-' + str(uuid.uuid1())
-        dsk = sharedict.merge({name: store_keys}, store_dsk)
+        dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
         if compute:
@@ -1050,7 +834,7 @@ You must specify a chunks= keyword argument.
 This specifies the chunksize of your array blocks.
 
 See the following documentation page for details:
-  http://dask.pydata.org/en/latest/array-creation.html#chunks
+  https://docs.dask.org/en/latest/array-creation.html#chunks
 """.strip()
 
 
@@ -1083,10 +867,8 @@ class Array(DaskMethodsMixin):
     def __new__(cls, dask, name, chunks, dtype, shape=None):
         self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
-        if not isinstance(dask, ShareDict):
-            s = ShareDict()
-            s.update_with_key(dask, key=name)
-            dask = s
+        if not isinstance(dask, HighLevelGraph):
+            dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
         if dtype is None:
@@ -1109,6 +891,9 @@ class Array(DaskMethodsMixin):
 
     def __dask_graph__(self):
         return self.dask
+
+    def __dask_layers__(self):
+        return (self.name,)
 
     def __dask_keys__(self):
         if self._cached_keys is not None:
@@ -1184,6 +969,10 @@ class Array(DaskMethodsMixin):
                 return NotImplemented
 
         if method == '__call__':
+            if numpy_ufunc is np.matmul:
+                from .routines import matmul
+                # special case until apply_gufunc handles optional dimensions
+                return matmul(*inputs, **kwargs)
             if numpy_ufunc.signature is not None:
                 from .gufunc import apply_gufunc
                 return apply_gufunc(numpy_ufunc,
@@ -1260,6 +1049,20 @@ class Array(DaskMethodsMixin):
             x = np.array(x)
         return x
 
+    def __array_function__(self, func, types, args, kwargs):
+        import dask.array as module
+        for submodule in func.__module__.split('.')[1:]:
+            try:
+                module = getattr(module, submodule)
+            except AttributeError:
+                return NotImplemented
+        if not hasattr(module, func.__name__):
+            return NotImplemented
+        da_func = getattr(module, func.__name__)
+        if da_func is func:
+            return NotImplemented
+        return da_func(*args, **kwargs)
+
     @property
     def _elemwise(self):
         return elemwise
@@ -1289,20 +1092,31 @@ class Array(DaskMethodsMixin):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
-    def to_dask_dataframe(self, columns=None):
+    def to_dask_dataframe(self, columns=None, index=None):
         """ Convert dask Array to dask Dataframe
 
         Parameters
         ----------
         columns: list or string
             list of column names if DataFrame, single string if Series
+        index : dask.dataframe.Index, optional
+            An optional *dask* Index to use for the output Series or DataFrame.
+
+            The default output index depends on whether the array has any unknown
+            chunks. If there are any unknown chunks, the output has ``None``
+            for all the divisions (one per chunk). If all the chunks are known,
+            a default index with known divsions is created.
+
+            Specifying ``index`` can be useful if you're conforming a Dask Array
+            to an existing dask Series or DataFrame, and you would like the
+            indices to match.
 
         See Also
         --------
         dask.dataframe.from_dask_array
         """
         from ..dataframe import from_dask_array
-        return from_dask_array(self, columns=columns)
+        return from_dask_array(self, columns=columns, index=index)
 
     def __bool__(self):
         if self.size > 1:
@@ -1371,6 +1185,11 @@ class Array(DaskMethodsMixin):
         from .slicing import normalize_index, slice_with_int_dask_array, slice_with_bool_dask_array
         index2 = normalize_index(index, self.shape)
 
+        dependencies = {self.name}
+        for i in index2:
+            if isinstance(i, Array):
+                dependencies.add(i.name)
+
         if any(isinstance(i, Array) and i.dtype.kind in 'iu' for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
@@ -1382,9 +1201,8 @@ class Array(DaskMethodsMixin):
         out = 'getitem-' + tokenize(self, index2)
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
-        dsk2 = sharedict.merge(self.dask, (out, dsk))
-
-        return Array(dsk2, out, chunks, dtype=self.dtype)
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+        return Array(graph, out, chunks, dtype=self.dtype)
 
     def _vindex(self, key):
         if not isinstance(key, tuple):
@@ -1450,9 +1268,10 @@ class Array(DaskMethodsMixin):
 
         keys = list(product(*[range(len(c)) for c in chunks]))
 
-        dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        return Array(sharedict.merge(self.dask, (name, dsk)), name, chunks, self.dtype)
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
+        return Array(graph, name, chunks, self.dtype)
 
     @property
     def blocks(self):
@@ -1741,6 +1560,11 @@ class Array(DaskMethodsMixin):
                    split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
+    def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
+        from .reductions import trace
+        return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
+
+    @derived_from(np.ndarray)
     def prod(self, axis=None, dtype=None, keepdims=False, split_every=None,
              out=None):
         from .reductions import prod
@@ -1808,13 +1632,6 @@ class Array(DaskMethodsMixin):
         return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
                       ddof=ddof, split_every=split_every, out=out)
 
-    def vnorm(self, ord=None, axis=None, keepdims=False, split_every=None,
-              out=None):
-        """ Vector norm """
-        from .reductions import vnorm
-        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims,
-                     split_every=split_every, out=out)
-
     @wraps(map_blocks)
     def map_blocks(self, func, *args, **kwargs):
         return map_blocks(func, self, *args, **kwargs)
@@ -1872,7 +1689,7 @@ class Array(DaskMethodsMixin):
                [20,  21,  22,  23],
                [24,  25,  26,  27]])
         """
-        from .ghost import map_overlap
+        from .overlap import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
     def cumsum(self, axis, dtype=None, out=None):
@@ -1964,7 +1781,7 @@ class Array(DaskMethodsMixin):
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
         if self.npartitions == 1:
-            return self.map_blocks(np.copy)
+            return self.map_blocks(M.copy)
         else:
             return Array(self.dask, self.name, self.chunks, self.dtype)
 
@@ -1986,12 +1803,13 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.from_delayed
         """
-        from ..delayed import Delayed
         keys = self.__dask_keys__()
-        dsk = self.__dask_graph__()
+        graph = self.__dask_graph__()
         if optimize_graph:
-            dsk = self.__dask_optimize__(dsk, keys)
-        L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), keys)
+            graph = self.__dask_optimize__(graph, keys)  # TODO, don't collape graph
+            name = 'delayed-' + self.name
+            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
         return np.array(L, dtype=object)
 
     @derived_from(np.ndarray)
@@ -2012,6 +1830,16 @@ class Array(DaskMethodsMixin):
         See function ``to_zarr()`` for parameters.
         """
         return to_zarr(self, *args, **kwargs)
+
+    def to_tiledb(self, uri, *args, **kwargs):
+        """Save array to the TileDB storage manager
+
+        See function ``to_tiledb()`` for argument documentation.
+
+        See https://docs.tiledb.io for details about the format and engine.
+        """
+        from .tiledb_io import to_tiledb
+        return to_tiledb(self, uri, *args, **kwargs)
 
 
 def ensure_int(f):
@@ -2071,7 +1899,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     >>> normalize_chunks({0: 2, 1: 3}, shape=(6, 6))
     ((2, 2, 2), (3, 3))
 
-    The value -1 gets mapped to full size
+    The values -1 and None get mapped to full size
 
     >>> normalize_chunks((5, -1), shape=(10, 10))
     ((5, 5), (10,))
@@ -2084,6 +1912,12 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
+
+    You can also use byte sizes (see ``dask.utils.parse_bytes``) in place of
+    "auto" to ask for a particular size
+
+    >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
+    ((250, 250, 250, 250, 250, 250, 250, 250),)
 
     Respects null dimensions
 
@@ -2100,6 +1934,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         chunks = (chunks,) * len(shape)
     if isinstance(chunks, dict):
         chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
+    if isinstance(chunks, np.ndarray):
+        chunks = chunks.tolist()
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
 
@@ -2111,8 +1947,22 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         raise ValueError(
             "Chunks and shape must be of the same length/dimension. "
             "Got chunks=%s, shape=%s" % (chunks, shape))
-    if -1 in chunks:
-        chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
+    if -1 in chunks or None in chunks:
+        chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
+
+    # If specifying chunk size in bytes, use that value to set the limit.
+    # Verify there is only one consistent value of limit or chunk-bytes used.
+    for c in chunks:
+        if isinstance(c, str) and c != 'auto':
+            parsed = parse_bytes(c)
+            if limit is None:
+                limit = parsed
+            elif parsed != limit:
+                raise ValueError(
+                    "Only one consistent value of limit or chunk is allowed."
+                    "Used %s != %s" % (parsed, limit))
+    # Substitute byte limits with 'auto' now that limit is set.
+    chunks = tuple('auto' if isinstance(c, str) and c != 'auto' else c for c in chunks)
 
     if any(c == 'auto' for c in chunks):
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
@@ -2159,7 +2009,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         A tuple of either dimensions or tuples of explicit chunk dimensions
         Some entries should be "auto"
     shape: Tuple[int]
-    limit: int
+    limit: int, str
         The maximum allowable size of a chunk in bytes
     previous_chunks: Tuple[Tuple[int]]
 
@@ -2195,7 +2045,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             raise ValueError("Can not perform automatic rechunking with unknown "
                              "(nan) chunk sizes")
 
-    limit = max(1, limit // dtype.itemsize)
+    limit = max(1, limit)
 
     largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
                              for cs in chunks if cs != 'auto'])
@@ -2214,7 +2064,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = limit / largest_block / np.prod(list(result.values()))
+        multiplier = limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
         last_multiplier = 0
         last_autos = set()
 
@@ -2235,14 +2085,14 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
-            multiplier = limit / largest_block / np.prod(list(result.values()))
+            multiplier = limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
 
         for k, v in result.items():
             chunks[k] = v
         return tuple(chunks)
 
     else:
-        size = (limit / largest_block) ** (1 / len(autos))
+        size = (limit / dtype.itemsize / largest_block) ** (1 / len(autos))
         small = [i for i in autos if shape[i] < size]
         if small:
             for i in small:
@@ -2277,7 +2127,7 @@ def round_to(c, s):
         return c // s * s
 
 
-def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
+def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True,
                getitem=None):
     """ Create dask array from something that looks like an array
 
@@ -2292,10 +2142,18 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -   A blockshape like (1000, 1000).
         -   Explicit sizes of all blocks along all dimensions like
             ((1000, 1000, 500), (400, 400)).
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
 
-        -1 as a blocksize indicates the size of the corresponding dimension.
+        -1 or None as a blocksize indicate the size of the corresponding
+        dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
+        By default, hash uses python's standard sha1. This behaviour can be
+        changed by installing cityhash, xxhash or murmurhash. If installed,
+        a large-factor speedup can be obtained in the tokenisation step.
         Use ``name=False`` to generate a random name instead of hashing (fast)
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
@@ -2318,11 +2176,26 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     arrays to coordinate around the same lock.
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
+
+    If your underlying datastore has a ``.chunks`` attribute (as h5py and zarr
+    datasets do) then a multiple of that chunk shape will be used if you
+    do not provide a chunk shape.
+
+    >>> a = da.from_array(x, chunks='auto')  # doctest: +SKIP
+    >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
+    >>> a = da.from_array(x)  # doctest: +SKIP
     """
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
-    chunks = normalize_chunks(chunks, x.shape, dtype=x.dtype)
+    previous_chunks = getattr(x, 'chunks', None)
+
+    chunks = normalize_chunks(
+        chunks,
+        x.shape,
+        dtype=x.dtype,
+        previous_chunks=previous_chunks
+    )
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2341,7 +2214,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         dsk = {(name, ) + (0, ) * x.ndim: x}
     else:
         if getitem is None:
-            if type(x) is np.ndarray:
+            if type(x) is np.ndarray and not lock:
                 # simpler and cleaner, but missing all the nuances of getter
                 getitem = operator.getitem
             elif fancy:
@@ -2357,7 +2230,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
-def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
+def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):
     """Load array from the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2378,6 +2251,8 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         Passed to ``da.from_array``, allows setting the chunks on
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
+    name : str, optional
+         An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
     """
     import zarr
@@ -2394,7 +2269,9 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         mapper = url
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
-    return from_array(z, chunks, name='zarr-%s' % url)
+    if name is None:
+        name = 'from-zarr-' + tokenize(z, component, storage_options, chunks, **kwargs)
+    return from_array(z, chunks, name=name )
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
@@ -2521,7 +2398,10 @@ def from_delayed(value, shape, dtype, name=None):
     name = name or 'from-value-' + tokenize(value, shape, dtype)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
-    return Array(sharedict.merge(value.dask, (name, dsk)), name, chunks, dtype)
+    # TODO: value._key may not be the name of the layer in value.dask
+    # This should be fixed after we build full expression graphs
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
+    return Array(graph, name, chunks, dtype)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
@@ -2636,9 +2516,12 @@ def unify_chunks(*args, **kwargs):
 
     >>> x = da.ones((100, 10), chunks=(20, 5))
     >>> y = da.ones((10, 100), chunks=(4, 50))
-    >>> chunkss, arrays = unify_chunks(x, 'ij', y, 'jk')
+    >>> chunkss, arrays = unify_chunks(x, 'ij', y, 'jk', 'constant', None)
     >>> chunkss  # doctest: +SKIP
     {'k': (50, 50), 'i': (20, 20, 20, 20, 20), 'j': (4, 1, 3, 2)}
+
+    >>> unify_chunks(0, None)
+    ({}, [0])
 
     Returns
     -------
@@ -2654,12 +2537,14 @@ def unify_chunks(*args, **kwargs):
     if not args:
         return {}, []
 
-    arginds = [(asarray(a) if ind is not None else a, ind)
+    arginds = [(asanyarray(a) if ind is not None else a, ind)
                for a, ind in partition(2, args)]  # [x, ij, y, jk]
     args = list(concat(arginds))  # [(x, ij), (y, jk)]
     warn = kwargs.get('warn', True)
 
     arrays, inds = zip(*arginds)
+    if all(ind is None for ind in inds):
+        return {}, list(arrays)
     if all(ind == inds[0] for ind in inds) and all(a.chunks == arrays[0].chunks for a in arrays):
         return dict(zip(inds[0], arrays[0].chunks)), arrays
 
@@ -2690,150 +2575,6 @@ def unify_chunks(*args, **kwargs):
             else:
                 arrays.append(a)
     return chunkss, arrays
-
-
-def atop(func, out_ind, *args, **kwargs):
-    """ Tensor operation: Generalized inner and outer products
-
-    A broad class of blocked algorithms and patterns can be specified with a
-    concise multi-index notation.  The ``atop`` function applies an in-memory
-    function across multiple blocks of multiple inputs in a variety of ways.
-    Many dask.array operations are special cases of atop including elementwise,
-    broadcasting, reductions, tensordot, and transpose.
-
-    Parameters
-    ----------
-    func : callable
-        Function to apply to individual tuples of blocks
-    out_ind : iterable
-        Block pattern of the output, something like 'ijk' or (1, 2, 3)
-    *args : sequence of Array, index pairs
-        Sequence like (x, 'ij', y, 'jk', z, 'i')
-    **kwargs : dict
-        Extra keyword arguments to pass to function
-    dtype : np.dtype
-        Datatype of resulting array.
-    concatenate : bool, keyword only
-        If true concatenate arrays along dummy indices, else provide lists
-    adjust_chunks : dict
-        Dictionary mapping index to function to be applied to chunk sizes
-    new_axes : dict, keyword only
-        New indexes and their dimension lengths
-
-    Examples
-    --------
-    2D embarrassingly parallel operation from two arrays, x, and y.
-
-    >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')  # z = x + y  # doctest: +SKIP
-
-    Outer product multiplying x by y, two 1-d vectors
-
-    >>> z = atop(operator.mul, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
-
-    z = x.T
-
-    >>> z = atop(np.transpose, 'ji', x, 'ij', dtype=x.dtype)  # doctest: +SKIP
-
-    The transpose case above is illustrative because it does same transposition
-    both on each in-memory block by calling ``np.transpose`` and on the order
-    of the blocks themselves, by switching the order of the index ``ij -> ji``.
-
-    We can compose these same patterns with more variables and more complex
-    in-memory functions
-
-    z = X + Y.T
-
-    >>> z = atop(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')  # doctest: +SKIP
-
-    Any index, like ``i`` missing from the output index is interpreted as a
-    contraction (note that this differs from Einstein convention; repeated
-    indices do not imply contraction.)  In the case of a contraction the passed
-    function should expect an iterable of blocks on any array that holds that
-    index.  To receive arrays concatenated along contracted dimensions instead
-    pass ``concatenate=True``.
-
-    Inner product multiplying x by y, two 1-d vectors
-
-    >>> def sequence_dot(x_blocks, y_blocks):
-    ...     result = 0
-    ...     for x, y in zip(x_blocks, y_blocks):
-    ...         result += x.dot(y)
-    ...     return result
-
-    >>> z = atop(sequence_dot, '', x, 'i', y, 'i', dtype='f8')  # doctest: +SKIP
-
-    Add new single-chunk dimensions with the ``new_axes=`` keyword, including
-    the length of the new dimension.  New dimensions will always be in a single
-    chunk.
-
-    >>> def f(x):
-    ...     return x[:, None] * np.ones((1, 5))
-
-    >>> z = atop(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
-
-    If the applied function changes the size of each chunk you can specify this
-    with a ``adjust_chunks={...}`` dictionary holding a function for each index
-    that modifies the dimension size in that index.
-
-    >>> def double(x):
-    ...     return np.concatenate([x, x])
-
-    >>> y = atop(double, 'ij', x, 'ij',
-    ...          adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)  # doctest: +SKIP
-
-    Include literals by indexing with None
-
-    >>> y = atop(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
-
-    See Also
-    --------
-    top - dict formulation of this function, contains most logic
-    """
-    out = kwargs.pop('name', None)      # May be None at this point
-    token = kwargs.pop('token', None)
-    dtype = kwargs.pop('dtype', None)
-    adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.get('new_axes', {})
-
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
-
-    chunkss, arrays = unify_chunks(*args)
-    for k, v in new_axes.items():
-        chunkss[k] = (v,)
-    arginds = list(zip(arrays, args[1::2]))
-
-    for arg, ind in arginds:
-        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
-            raise ValueError("Index string %s does not match array dimension %d"
-                             % (ind, arg.ndim))
-
-    numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
-    # Finish up the name
-    if not out:
-        out = '%s-%s' % (token or funcname(func).strip('_'),
-                         tokenize(func, out_ind, argindsstr, dtype, **kwargs))
-
-    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
-    dsks = [a.dask for a, ind in arginds if ind is not None]
-
-    chunks = [chunkss[i] for i in out_ind]
-    if adjust_chunks:
-        for i, ind in enumerate(out_ind):
-            if ind in adjust_chunks:
-                if callable(adjust_chunks[ind]):
-                    chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], int):
-                    chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
-                elif isinstance(adjust_chunks[ind], (tuple, list)):
-                    chunks[i] = tuple(adjust_chunks[ind])
-                else:
-                    raise NotImplementedError(
-                        "adjust_chunks values must be callable, int, or tuple")
-    chunks = tuple(chunks)
-
-    return Array(sharedict.merge((out, dsk), *dsks), out, chunks, dtype=dtype)
 
 
 def unpack_singleton(x):
@@ -3129,9 +2870,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
               key[axis + 2:] for key in keys]
 
     dsk = dict(zip(keys, values))
-    dsk2 = sharedict.merge((name, dsk), * [a.dask for a in seq])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
 
-    return Array(dsk2, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, dtype=dt)
 
 
 def load_store_chunk(x, out, index, lock, return_stored, load_stored):
@@ -3279,7 +3020,7 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a):
+def asarray(a, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
@@ -3306,11 +3047,13 @@ def asarray(a):
     """
     if isinstance(a, Array):
         return a
-    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+    elif hasattr(a, 'to_dask_array'):
+        return a.to_dask_array()
+    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
-    return from_array(a, chunks=a.shape, getitem=getter_inline)
+    return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
 
 
 def asanyarray(a):
@@ -3342,7 +3085,9 @@ def asanyarray(a):
     """
     if isinstance(a, Array):
         return a
-    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+    elif hasattr(a, 'to_dask_array'):
+        return a.to_dask_array()
+    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asanyarray(a)
@@ -3370,8 +3115,14 @@ def is_scalar_for_elemwise(arg):
     >>> is_scalar_for_elemwise(np.dtype('i4'))
     True
     """
+    # the second half of shape_condition is essentially just to ensure that
+    # dask series / frame are treated as scalars in elemwise.
+    maybe_shape = getattr(arg, 'shape', None)
+    shape_condition = (not isinstance(maybe_shape, Iterable) or
+                       any(is_dask_collection(x) for x in maybe_shape))
+
     return (np.isscalar(arg) or
-            not isinstance(getattr(arg, 'shape', None), Iterable) or
+            shape_condition or
             isinstance(arg, np.dtype) or
             (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
@@ -3398,7 +3149,10 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        dim = 0 if 0 in sizes else np.max(sizes)
+        if np.isnan(sizes).any():
+            dim = np.nan
+        else:
+            dim = 0 if 0 in sizes else np.max(sizes)
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
@@ -3418,7 +3172,7 @@ def elemwise(op, *args, **kwargs):
 
     See Also
     --------
-    atop
+    blockwise
     """
     out = kwargs.pop('out', None)
     if not set(['name', 'dtype']).issuperset(kwargs):
@@ -3427,7 +3181,14 @@ def elemwise(op, *args, **kwargs):
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
-    shapes = [getattr(arg, 'shape', ()) for arg in args]
+    shapes = []
+    for arg in args:
+        shape = getattr(arg, "shape", ())
+        if any(is_dask_collection(x) for x in shape):
+            # Want to excluded Delayed shapes and dd.Scalar
+            shape = ()
+        shapes.append(shape)
+
     shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
@@ -3456,16 +3217,16 @@ def elemwise(op, *args, **kwargs):
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
                                                   tokenize(op, dt, *args))
 
-    atop_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
+    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
     if need_enforce_dtype:
-        atop_kwargs['enforce_dtype'] = dt
-        atop_kwargs['enforce_dtype_function'] = op
+        blockwise_kwargs['enforce_dtype'] = dt
+        blockwise_kwargs['enforce_dtype_function'] = op
         op = _enforce_dtype
-    result = atop(op, expr_inds,
-                  *concat((a, tuple(range(a.ndim)[::-1])
-                           if not is_scalar_for_elemwise(a)
-                           else None) for a in args),
-                  **atop_kwargs)
+    result = blockwise(op, expr_inds,
+                       *concat((a, tuple(range(a.ndim)[::-1])
+                                if not is_scalar_for_elemwise(a)
+                                else None) for a in args),
+                       **blockwise_kwargs)
 
     return handle_out(out, result)
 
@@ -3504,7 +3265,7 @@ def _enforce_dtype(*args, **kwargs):
     """Calls a function and converts its result to the given dtype.
 
     The parameters have deliberately been given unwieldy names to avoid
-    clashes with keyword arguments consumed by atop
+    clashes with keyword arguments consumed by blockwise
 
     A dtype of `object` is treated as a special case and not enforced,
     because it is used as a dummy value in some places when the result will
@@ -3521,7 +3282,7 @@ def _enforce_dtype(*args, **kwargs):
     function = kwargs.pop('enforce_dtype_function')
 
     result = function(*args, **kwargs)
-    if dtype != result.dtype and dtype != object:
+    if hasattr(result, 'dtype') and dtype != result.dtype and dtype != object:
         if not np.can_cast(result, dtype, casting='same_kind'):
             raise ValueError("Inferred dtype from function %r was %r "
                              "but got %r, which can't be cast using "
@@ -3600,10 +3361,10 @@ def broadcast_to(x, shape, chunks=None):
                           for bd, i in zip(x.chunks, new_index[ndim_new:]))
         old_key = (x.name,) + old_index
         new_key = (name,) + new_index
-        dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
+        dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
-    return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
-                 dtype=x.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    return Array(graph, name, chunks, dtype=x.dtype)
 
 
 @wraps(np.broadcast_arrays)
@@ -3690,15 +3451,6 @@ def deepfirst(seq):
         return seq
     else:
         return deepfirst(seq[0])
-
-
-def ndimlist(seq):
-    if not isinstance(seq, (list, tuple)):
-        return 0
-    elif not seq:
-        return 1
-    else:
-        return 1 + ndimlist(seq[0])
 
 
 def shapelist(a):
@@ -3817,10 +3569,10 @@ def stack(seq, axis=0):
               (None, ) + (slice(None, None, None), ) * (ndim - axis))
               for inp in inputs]
 
-    dsk = dict(zip(keys, values))
-    dsk2 = sharedict.merge((name, dsk), *[a.dask for a in seq])
+    layer = dict(zip(keys, values))
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
 
-    return Array(dsk2, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, dtype=dt)
 
 
 def concatenate3(arrays):
@@ -4080,7 +3832,8 @@ def _vindex_array(x, dict_indexes):
                    for okey in other_blocks)
 
         result_1d = Array(
-            sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks, x.dtype
+            HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
+            out_name, chunks, x.dtype
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
@@ -4205,7 +3958,8 @@ def to_npy_stack(dirname, x, axis=0):
     dsk = {(name, i): (np.save, os.path.join(dirname, '%d.npy' % i), key)
            for i, key in enumerate(core.flatten(xx.__dask_keys__()))}
 
-    compute_as_if_collection(Array, sharedict.merge(dsk, xx.dask), list(dsk))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[xx])
+    compute_as_if_collection(Array, graph, list(dsk))
 
 
 def from_npy_stack(dirname, mmap_mode='r'):

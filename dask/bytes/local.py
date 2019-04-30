@@ -7,7 +7,7 @@ from . import core
 from ..base import tokenize
 
 
-class LocalFileSystem(core.FileSystem):
+class LocalFileSystem(object):
     """API spec for the methods a filesystem
 
     A filesystem must provide these methods, if it is to be registered as
@@ -33,7 +33,10 @@ class LocalFileSystem(core.FileSystem):
 
     def glob(self, path):
         """For a template path, return matching files"""
-        return sorted(glob(self._normalize_path(path)))
+        try:
+            return sorted(glob(self._normalize_path(path), recursive=True))
+        except TypeError:  # recursive kwarg is new in Python 3.5
+            return sorted(glob(self._normalize_path(path)))
 
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""

@@ -4,12 +4,12 @@ Generalized Ufuncs
 EXPERIMENTAL FEATURE added to Version 0.18.0 and above - see :ref:`disclaimer<disclaimer>`.
 
 
-`numpy <http://www.numpy.org>`_ provides the concept of `generalized ufuncs <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html>`_. Generalized ufuncs are functions
+`NumPy <https://www.numpy.org>`_ provides the concept of `generalized ufuncs <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html>`_. Generalized ufuncs are functions
 that distinguish the various dimensions of passed arrays in the two classes loop dimensions
-and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_ is specified for numpy generalized ufuncs.
+and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_ is specified for NumPy generalized ufuncs.
 
-`dask <https://dask.pydata.org/>`_ integrates interoperability with numpy's generalized ufuncs
-by adhering to respective `ufunc protocol <https://docs.scipy.org/doc/numpy/reference/arrays.classes.html#numpy.class.__array_ufunc__>`_, as well as provides a wrapper to make a Python function a generalized ufunc.
+`Dask <https://dask.org/>`_ integrates interoperability with NumPy's generalized ufuncs
+by adhering to respective `ufunc protocol <https://docs.scipy.org/doc/numpy/reference/arrays.classes.html#numpy.class.__array_ufunc__>`_, and provides a wrapper to make a Python function a generalized ufunc.
 
 
 Usage
@@ -17,8 +17,10 @@ Usage
 
 NumPy generalized ufunc
 ~~~~~~~~~~~~~~~~~~~~~~~
-Note: `numpy <http://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
-inside ``np.linalg._umath_linalg`` and might change in the future.
+.. note::
+
+    `NumPy <https://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
+    inside ``np.linalg._umath_linalg`` and might change in the future.
 
 
 .. code-block:: python
@@ -66,10 +68,10 @@ Disclaimer
 ----------
 This experimental generalized ufunc integration is not complete:
 
-* ``gufunc`` does not create a true generalized ufunc to be used with other input arrays, but dask.
-  I.e. at the moment ``gufunc`` casts all input arguments to ``dask.array.Array``.
+* ``gufunc`` does not create a true generalized ufunc to be used with other input arrays besides Dask.
+  I.e., at the moment, ``gufunc`` casts all input arguments to ``dask.array.Array``
 
-* Inferring ``output_dtypes`` automatically is not implemented yet.
+* Inferring ``output_dtypes`` automatically is not implemented yet
 
 
 API

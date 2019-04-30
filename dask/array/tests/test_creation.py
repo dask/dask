@@ -5,21 +5,24 @@ import numpy as np
 import pytest
 from toolz import concat
 
+import dask
 import dask.array as da
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys, AxisError
 
 
 @pytest.mark.parametrize(
     "funcname", [
-        "empty_like",
-        "ones_like",
-        "zeros_like",
-        "full_like",
+        "empty_like", "empty",
+        "ones_like", "ones",
+        "zeros_like", "zeros",
+        "full_like", "full",
     ]
 )
+@pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
+@pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize(
     "shape, chunks", [
-        ((10, 10), (4, 4)),
+        ((10, 10), (4, 4))
     ]
 )
 @pytest.mark.parametrize(
@@ -27,11 +30,13 @@ from dask.array.utils import assert_eq, same_keys
         "i4",
     ]
 )
-def test_arr_like(funcname, shape, dtype, chunks):
+def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
+    shape = cast_shape(shape)
+    chunks = cast_chunks(chunks)
 
-    if funcname == "full_like":
+    if "full" in funcname:
         old_np_func = np_func
         old_da_func = da_func
 
@@ -40,15 +45,19 @@ def test_arr_like(funcname, shape, dtype, chunks):
 
     dtype = np.dtype(dtype)
 
-    a = np.random.randint(0, 10, shape).astype(dtype)
+    if "like" in funcname:
+        a = np.random.randint(0, 10, shape).astype(dtype)
 
-    np_r = np_func(a)
-    da_r = da_func(a, chunks=chunks)
+        np_r = np_func(a)
+        da_r = da_func(a, chunks=chunks)
+    else:
+        np_r = np_func(shape, dtype=dtype)
+        da_r = da_func(shape, dtype=dtype, chunks=chunks)
 
     assert np_r.shape == da_r.shape
     assert np_r.dtype == da_r.dtype
 
-    if funcname != "empty_like":
+    if "empty" not in funcname:
         assert (np_r == np.asarray(da_r)).all()
 
 
@@ -123,9 +132,8 @@ def test_arange():
     with pytest.raises(TypeError) as exc:
         da.arange(10, chunks=-1, whatsthis=1)
     assert 'whatsthis' in str(exc)
-    with pytest.raises(TypeError) as exc:
-        da.arange(10)
-    assert 'chunks' in str(exc)
+
+    assert da.arange(10).chunks == ((10,),)
 
 
 @pytest.mark.parametrize("start,stop,step,dtype", [
@@ -370,13 +378,108 @@ def test_diag():
     assert_eq(da.diag(d), np.diag(x))
 
 
-def test_fromfunction():
-    def f(x, y):
-        return x + y
-    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+def test_diagonal():
+    v = np.arange(11)
+    with pytest.raises(ValueError):
+        da.diagonal(v)
 
-    assert_eq(d, np.fromfunction(f, shape=(5, 5)))
-    assert same_keys(d, da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
+    v = np.arange(4).reshape((2, 2))
+    with pytest.raises(ValueError):
+        da.diagonal(v, axis1=0, axis2=0)
+
+    with pytest.raises(AxisError):
+        da.diagonal(v, axis1=-4)
+
+    with pytest.raises(AxisError):
+        da.diagonal(v, axis2=-4)
+
+    v = np.arange(4 * 5 * 6).reshape((4, 5, 6))
+    v = da.from_array(v, chunks=2)
+    assert_eq(da.diagonal(v), np.diagonal(v))
+    # Empty diagonal.
+    assert_eq(da.diagonal(v, offset=10), np.diagonal(v, offset=10))
+    assert_eq(da.diagonal(v, offset=-10), np.diagonal(v, offset=-10))
+
+    with pytest.raises(ValueError):
+        da.diagonal(v, axis1=-2)
+
+    # Negative axis.
+    assert_eq(da.diagonal(v, axis1=-1), np.diagonal(v, axis1=-1))
+    assert_eq(da.diagonal(v, offset=1, axis1=-1), np.diagonal(v, offset=1, axis1=-1))
+
+    # Heterogenous chunks.
+    v = np.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
+    v = da.from_array(v, chunks=(1, (1, 2), (1, 2, 1), (2, 1, 2), (5, 1)))
+
+    assert_eq(da.diagonal(v), np.diagonal(v))
+    assert_eq(da.diagonal(v, offset=2, axis1=3, axis2=1),
+              np.diagonal(v, offset=2, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-2, axis1=3, axis2=1),
+              np.diagonal(v, offset=-2, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-2, axis1=3, axis2=4),
+              np.diagonal(v, offset=-2, axis1=3, axis2=4))
+
+    assert_eq(da.diagonal(v, 1), np.diagonal(v, 1))
+    assert_eq(da.diagonal(v, -1), np.diagonal(v, -1))
+    # Positional arguments
+    assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
+
+    v = np.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
+    assert_eq(da.diagonal(v, axis1=1, axis2=3), np.diagonal(v, axis1=1, axis2=3))
+    assert_eq(da.diagonal(v, offset=1, axis1=1, axis2=3),
+              np.diagonal(v, offset=1, axis1=1, axis2=3))
+
+    assert_eq(da.diagonal(v, offset=1, axis1=3, axis2=1),
+              np.diagonal(v, offset=1, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-5, axis1=3, axis2=1),
+              np.diagonal(v, offset=-5, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-6, axis1=3, axis2=1),
+              np.diagonal(v, offset=-6, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-6, axis1=-3, axis2=1),
+              np.diagonal(v, offset=-6, axis1=-3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-6, axis1=-3, axis2=1),
+              np.diagonal(v, offset=-6, axis1=-3, axis2=1))
+
+    v = da.from_array(v, chunks=2)
+    assert_eq(da.diagonal(v, offset=1, axis1=3, axis2=1),
+              np.diagonal(v, offset=1, axis1=3, axis2=1))
+    assert_eq(da.diagonal(v, offset=-1, axis1=3, axis2=1),
+              np.diagonal(v, offset=-1, axis1=3, axis2=1))
+
+    v = np.arange(384).reshape((8, 8, 6))
+    assert_eq(da.diagonal(v, offset=-1, axis1=2),
+              np.diagonal(v, offset=-1, axis1=2))
+
+    v = da.from_array(v, chunks=(4, 4, 2))
+    assert_eq(da.diagonal(v, offset=-1, axis1=2),
+              np.diagonal(v, offset=-1, axis1=2))
+
+
+@pytest.mark.parametrize('dtype', [None, 'f8', 'i8'])
+@pytest.mark.parametrize('func, kwargs', [
+    (lambda x, y: x + y, {}),
+    (lambda x, y, c=1: x + c * y, {}),
+    (lambda x, y, c=1: x + c * y, {"c": 3}),
+])
+def test_fromfunction(func, dtype, kwargs):
+    a = np.fromfunction(func, shape=(5, 5), dtype=dtype, **kwargs)
+    d = da.fromfunction(
+        func, shape=(5, 5), chunks=(2, 2), dtype=dtype, **kwargs
+    )
+
+    assert_eq(d, a)
+
+    d2 = da.fromfunction(
+        func, shape=(5, 5), chunks=(2, 2), dtype=dtype, **kwargs
+    )
+
+    assert same_keys(d, d2)
 
 
 def test_repeat():
@@ -463,6 +566,10 @@ def test_tile_array_reps(shape, chunks, reps):
     ((10,), (3,), 3, 'edge', {}),
     ((10,), (3,), 3, 'linear_ramp', {}),
     ((10,), (3,), 3, 'linear_ramp', {'end_values': 0}),
+    (
+        (10, 11), (4, 5), ((1, 4), (2, 3)), 'linear_ramp',
+        {'end_values': ((-1, -2), (4, 3))}
+    ),
     ((10, 11), (4, 5), ((1, 4), (2, 3)), 'reflect', {}),
     ((10, 11), (4, 5), ((1, 4), (2, 3)), 'symmetric', {}),
     ((10, 11), (4, 5), ((1, 4), (2, 3)), 'wrap', {}),
@@ -505,3 +612,9 @@ def test_pad_udf(kwargs):
     da_r = da.pad(da_a, pad_width, udf_pad, kwargs=kwargs)
 
     assert_eq(np_r, da_r)
+
+
+def test_auto_chunks():
+    with dask.config.set({'array.chunk-size': '50 MiB'}):
+        x = da.ones((10000, 10000))
+        assert 4 < x.npartitions < 32

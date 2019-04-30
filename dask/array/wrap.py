@@ -24,10 +24,17 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     else:
         shape = kwargs.pop('shape')
 
+    if isinstance(shape, Array):
+        raise TypeError('Dask array input not supported. '
+                        'Please use tuple, list, or a 1D numpy array instead.')
+
+    if isinstance(shape, np.ndarray):
+        shape = shape.tolist()
+
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
-    chunks = kwargs.pop('chunks', None)
+    chunks = kwargs.pop('chunks', 'auto')
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:

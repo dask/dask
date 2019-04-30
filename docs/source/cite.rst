@@ -10,7 +10,7 @@ blanket citation for all developers past and present.
 To cite Dask in publications, please use the following::
 
    Dask Development Team (2016). Dask: Library for dynamic task scheduling
-   URL http://dask.pydata.org
+   URL https://dask.org
 
 A BibTeX entry for LaTeX users follows::
 
@@ -18,11 +18,10 @@ A BibTeX entry for LaTeX users follows::
      title = {Dask: Library for dynamic task scheduling},
      author = {{Dask Development Team}},
      year = {2016},
-     url = {http://dask.pydata.org},
+     url = {https://dask.org},
    }
 
-The full author list is available using git, or by looking at the `AUTHORS file
-<https://raw.githubusercontent.com/dask/dask/master/AUTHORS.md>`_.
+The full author list is available using ``git`` (e.g. ``git shortlog -ns``).
 
 Papers about parts of Dask
 --------------------------
@@ -30,7 +29,7 @@ Papers about parts of Dask
 
 Rocklin, Matthew. "Dask: Parallel Computation with Blocked algorithms and Task
 Scheduling." (2015).
-`PDF <http://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
+`PDF <https://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
 
 ::
 

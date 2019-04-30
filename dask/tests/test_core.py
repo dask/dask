@@ -56,14 +56,6 @@ class TestGet(GetFunctionTestMixin):
     get = staticmethod(core.get)
 
 
-class TestRecursiveGet(GetFunctionTestMixin):
-    get = staticmethod(lambda d, k: core.get(d, k, recursive=True))
-
-    def test_get_stack_limit(self):
-        # will blow stack in recursive mode
-        pass
-
-
 def test_GetFunctionTestMixin_class():
     class TestCustomGetFail(GetFunctionTestMixin):
         get = staticmethod(lambda x, y: 1)

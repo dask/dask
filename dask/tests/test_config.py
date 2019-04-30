@@ -1,18 +1,35 @@
 import yaml
 import os
+import stat
+import sys
+from collections import OrderedDict
+from contextlib import contextmanager
 
 import pytest
 
 import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
-                         update_defaults, refresh)
+                         update_defaults, refresh, expand_environment_variables,
+                         canonical_name)
+
 from dask.utils import tmpfile
+
+
+def test_canonical_name():
+    c = {'foo-bar': 1,
+         'fizz_buzz': 2}
+    assert canonical_name('foo-bar', c) == 'foo-bar'
+    assert canonical_name('foo_bar', c) == 'foo-bar'
+    assert canonical_name('fizz-buzz', c) == 'fizz_buzz'
+    assert canonical_name('fizz_buzz', c) == 'fizz_buzz'
+    assert canonical_name('new-key', c) == 'new-key'
+    assert canonical_name('new_key', c) == 'new_key'
 
 
 def test_update():
     a = {'x': 1, 'y': {'a': 1}}
-    b = {'x': 2, 'z': 3, 'y': {'b': 2}}
+    b = {'x': 2, 'z': 3, 'y': OrderedDict({'b': 2})}
     update(b, a)
     assert b == {'x': 1, 'y': {'a': 1, 'b': 2}, 'z': 3}
 
@@ -78,6 +95,45 @@ def test_collect_yaml_dir():
         assert config == expected
 
 
+@contextmanager
+def no_read_permissions(path):
+    perm_orig = stat.S_IMODE(os.stat(path).st_mode)
+    perm_new = perm_orig ^ stat.S_IREAD
+    try:
+        os.chmod(path, perm_new)
+        yield
+    finally:
+        os.chmod(path, perm_orig)
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="Can't make writeonly file on windows")
+@pytest.mark.parametrize('kind', ['directory', 'file'])
+def test_collect_yaml_permission_errors(tmpdir, kind):
+    a = {'x': 1, 'y': 2}
+    b = {'y': 3, 'z': 4}
+
+    dir_path = str(tmpdir)
+    a_path = os.path.join(dir_path, 'a.yaml')
+    b_path = os.path.join(dir_path, 'b.yaml')
+
+    with open(a_path, mode='w') as f:
+        yaml.dump(a, f)
+    with open(b_path, mode='w') as f:
+        yaml.dump(b, f)
+
+    if kind == 'directory':
+        cant_read = dir_path
+        expected = {}
+    else:
+        cant_read = a_path
+        expected = b
+
+    with no_read_permissions(cant_read):
+        config = merge(*collect_yaml(paths=[dir_path]))
+        assert config == expected
+
+
 def test_env():
     env = {'DASK_A_B': '123',
            'DASK_C': 'True',
@@ -90,7 +146,7 @@ def test_env():
            }
 
     expected = {
-        'a-b': 123,
+        'a_b': 123,
         'c': True,
         'd': 'hello',
         'e': {'x': 123, 'y': 456},
@@ -98,7 +154,8 @@ def test_env():
         'g': '/not/parsable/as/literal',
     }
 
-    assert collect_env(env) == expected
+    res = collect_env(env)
+    assert res == expected
 
 
 def test_collect():
@@ -157,7 +214,7 @@ def test_ensure_file(tmpdir):
     ensure_file(source=source, destination=dest, comment=False)
 
     with open(destination) as f:
-        result = yaml.load(f)
+        result = yaml.safe_load(f)
     assert result == a
 
     # don't overwrite old config files
@@ -167,7 +224,7 @@ def test_ensure_file(tmpdir):
     ensure_file(source=source, destination=dest, comment=False)
 
     with open(destination) as f:
-        result = yaml.load(f)
+        result = yaml.safe_load(f)
     assert result == a
 
     os.remove(destination)
@@ -180,7 +237,7 @@ def test_ensure_file(tmpdir):
     assert '123' in text
 
     with open(destination) as f:
-        result = yaml.load(f)
+        result = yaml.safe_load(f)
     assert not result
 
 
@@ -279,3 +336,59 @@ def test_refresh():
 
     refresh(paths=[], env={'DASK_C': '3'}, config=config, defaults=defaults)
     assert config == {'a': 1, 'c': 3}
+
+
+@pytest.mark.parametrize('inp,out', [
+    ('1', '1'),
+    (1, 1),
+    ('$FOO', 'foo'),
+    ([1, '$FOO'], [1, 'foo']),
+    ((1, '$FOO'), (1, 'foo')),
+    ({1, '$FOO'}, {1, 'foo'}),
+    ({'a': '$FOO'}, {'a': 'foo'}),
+    ({'a': 'A', 'b': [1, '2', '$FOO']}, {'a': 'A', 'b': [1, '2', 'foo']})
+])
+def test_expand_environment_variables(inp, out):
+    try:
+        os.environ["FOO"] = "foo"
+        assert expand_environment_variables(inp) == out
+    finally:
+        del os.environ['FOO']
+
+
+def test_env_var_canonical_name(monkeypatch):
+    value = 3
+    monkeypatch.setenv('DASK_A_B', str(value))
+    d = {}
+    dask.config.refresh(config=d)
+    assert get('a_b', config=d) == value
+    assert get('a-b', config=d) == value
+
+
+def test_get_set_canonical_name():
+    c = {'x-y': {'a_b': 123}}
+
+    keys = ['x_y.a_b', 'x-y.a-b', 'x_y.a-b']
+    for k in keys:
+        assert dask.config.get(k, config=c) == 123
+
+    with dask.config.set({'x_y': {'a-b': 456}}, config=c):
+        for k in keys:
+            assert dask.config.get(k, config=c) == 456
+
+    # No change to new keys in sub dicts
+    with dask.config.set({'x_y': {'a-b': {'c_d': 1}, 'e-f': 2}}, config=c):
+        assert dask.config.get('x_y.a-b', config=c) == {'c_d': 1}
+        assert dask.config.get('x_y.e_f', config=c) == 2
+
+
+@pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
+def test_get_set_roundtrip(key):
+    value = 123
+    with dask.config.set({key: value}):
+        assert dask.config.get('custom_key') == value
+        assert dask.config.get('custom-key') == value
+
+
+def test_merge_None_to_dict():
+    assert dask.config.merge({'a': None, 'c': 0}, {'a': {'b': 1}}) == {'a': {'b': 1}, 'c': 0}

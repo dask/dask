@@ -3,10 +3,11 @@ import pandas as pd
 from textwrap import dedent
 
 import dask.dataframe as dd
-from dask.dataframe.utils import PANDAS_VERSION
+import dask.array as da
+import numpy as np
 
-if PANDAS_VERSION >= '0.21.0':
-    style = """<style scoped>
+
+style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
     }
@@ -20,23 +21,6 @@ if PANDAS_VERSION >= '0.21.0':
     }
 </style>
 """
-elif PANDAS_VERSION >= '0.20.0':
-    style = """<style>
-    .dataframe thead tr:only-child th {
-        text-align: right;
-    }
-
-    .dataframe thead th {
-        text-align: left;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-</style>
-"""
-else:
-    style = ""
 
 
 def test_repr():
@@ -487,3 +471,9 @@ def test_categorical_format():
            "dtype: category\n"
            "Dask Name: from_pandas, 1 tasks")
     assert repr(unknown) == exp
+
+
+def test_duplicate_columns_repr():
+    arr = da.from_array(np.arange(10).reshape(5, 2), chunks=(5, 2))
+    frame = dd.from_dask_array(arr, columns=['a', 'a'])
+    repr(frame)
