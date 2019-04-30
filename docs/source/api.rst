@@ -152,7 +152,9 @@ Future
 Other
 -----
 
-.. autofunction:: as_completed
+.. autoclass:: as_completed
+   :members:
+
 .. autofunction:: distributed.diagnostics.progress
 .. autofunction:: wait
 .. autofunction:: fire_and_forget

@@ -4122,7 +4122,7 @@ class as_completed(object):
             self.thread_condition.notify()
 
     @gen.coroutine
-    def track_future(self, future):
+    def _track_future(self, future):
         try:
             yield _wait(future)
         except CancelledError:
@@ -4148,7 +4148,7 @@ class as_completed(object):
                 if not isinstance(f, Future):
                     raise TypeError("Input must be a future, got %s" % f)
                 self.futures[f] += 1
-                self.loop.add_callback(self.track_future, f)
+                self.loop.add_callback(self._track_future, f)
 
     def add(self, future):
         """ Add a future to the collection
@@ -4158,8 +4158,12 @@ class as_completed(object):
         self.update((future,))
 
     def is_empty(self):
-        """Return True if there no waiting futures, False otherwise"""
+        """Returns True if there no completed or computing futures"""
         return not self.count()
+
+    def has_ready(self):
+        """Returns True if there are completed futures available."""
+        return not self.queue.empty()
 
     def count(self):
         """ Return the number of futures yet to be returned
@@ -4207,7 +4211,7 @@ class as_completed(object):
     next = __next__
 
     def next_batch(self, block=True):
-        """ Get next batch of futures from as_completed iterator
+        """ Get the next batch of completed futures.
 
         Parameters
         ----------

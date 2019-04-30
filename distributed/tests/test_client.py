@@ -3590,8 +3590,13 @@ def test_as_completed_batches(c, with_results):
 def test_as_completed_next_batch(c):
     futures = c.map(slowinc, range(2), delay=0.1)
     ac = as_completed(futures)
+    assert not ac.is_empty()
     assert ac.next_batch(block=False) == []
     assert set(ac.next_batch(block=True)).issubset(futures)
+    while not ac.is_empty():
+        assert set(ac.next_batch(block=True)).issubset(futures)
+    assert ac.is_empty()
+    assert not ac.has_ready()
 
 
 @gen_test()
