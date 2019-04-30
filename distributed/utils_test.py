@@ -974,7 +974,7 @@ def gen_cluster(
                                 if s.validate:
                                     s.validate_state()
                             finally:
-                                if client:
+                                if client and c.status not in ("closing", "closed"):
                                     yield c._close(fast=s.status == "closed")
                                 yield end_cluster(s, workers)
                                 yield gen.with_timeout(

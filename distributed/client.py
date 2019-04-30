@@ -954,9 +954,10 @@ class Client(Node):
         raise gen.Return(self)
 
     @gen.coroutine
-    def _reconnect(self, timeout=0.1):
+    def _reconnect(self):
         with log_errors():
             assert self.scheduler_comm.comm.closed()
+
             self.status = "connecting"
             self.scheduler_comm = None
 
@@ -964,12 +965,23 @@ class Client(Node):
                 st.cancel()
             self.futures.clear()
 
-            while self.status == "connecting":
+            timeout = self._timeout
+            deadline = self.loop.time() + timeout
+            while timeout > 0 and self.status == "connecting":
                 try:
-                    yield self._ensure_connected()
+                    yield self._ensure_connected(timeout=timeout)
                     break
                 except EnvironmentError:
-                    yield gen.sleep(timeout)
+                    # Wait a bit before retrying
+                    yield gen.sleep(0.1)
+                    timeout = deadline - self.loop.time()
+            else:
+                logger.error(
+                    "Failed to reconnect to scheduler after %.2f "
+                    "seconds, closing client",
+                    self._timeout,
+                )
+                yield self._close()
 
     @gen.coroutine
     def _ensure_connected(self, timeout=None):
