@@ -88,7 +88,6 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
     reading (see ``read_json()``). All other options require blocksize=None,
     i.e., one partition per input file.
 
-
     Parameters
     ----------
     url_path: str, list of str
@@ -115,6 +114,7 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
         Text conversion, ``see bytes.decode()``
     compression : string or None
         String like 'gzip' or 'xz'.
+    $META
 
     Returns
     -------
@@ -152,20 +152,19 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
                                    sample=sample, compression=compression,
                                    **storage_options)
         chunks = list(dask.core.flatten(chunks))
-        first = read_json_chunk(first, encoding, errors, kwargs)
         if meta is None:
-            meta = first[:0]
+            meta = read_json_chunk(first, encoding, errors, kwargs)
         meta = make_meta(meta)
         parts = [dask.delayed(read_json_chunk)(
             chunk, encoding, errors, kwargs, meta=meta
         ) for chunk in chunks]
-
+        return dd.from_delayed(parts, meta=meta)
     else:
         files = open_files(url_path, 'rt', encoding=encoding, errors=errors,
                            compression=compression, **storage_options)
         parts = [dask.delayed(read_json_file)(f, orient, lines, kwargs)
                  for f in files]
-    return dd.from_delayed(parts)
+        return dd.from_delayed(parts, meta=meta)
 
 
 def read_json_chunk(chunk, encoding, errors, kwargs, meta=None):
