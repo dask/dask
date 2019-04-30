@@ -214,14 +214,14 @@ Intermediate storage is mainly useful in cases where the data is needed
 outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
 be useful as a checkpoint for long running or flaky computations.
 
-This uses ``store`` or anything that builds off of ``store`` to provide this
-functionality. The intermediate storage operation can be done in one of two
-ways. Triggering a computation immediately, which behaves like ``persist``
-except the computed value is placed in the ``targets`` instead. Alternatively
-computation can be delayed, which merely includes the storage step in the Dask
-graph. Both options allow this intermediate value to be used in later
-computations and both place the value in the ``targets``, which it reads the
-result from later.
+The intermediate storage use case differs from the typical storage use case as
+a Dask Array is returned to the user that represents the result of that
+storage operation. This is typically done by setting the ``store`` function's
+``return_stored`` flag to ``True``. The user can then decide whether the
+storage operation happens immediately (by setting the ``compute`` flag to
+``True``) or later (by setting the ``compute`` flag to ``False``). In all
+other ways, this behaves the same as a normal call to ``store``. Some examples
+are shown below.
 
 .. code-block:: Python
 
