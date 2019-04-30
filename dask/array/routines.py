@@ -609,6 +609,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         raise ValueError('Input array and weights must have the same '
                          'chunked structure')
 
+    if normed is not False:
+        raise ValueError(
+            "The normed= keyword argument has been deprecated. "
+            "Please use density instead. "
+            "See the numpy.histogram docstring for more information."
+        )
+
     if not np.iterable(bins):
         bin_token = bins
         mn, mx = range
@@ -619,7 +626,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
     else:
         bin_token = bins
-    token = tokenize(a, bin_token, range, normed, weights, density)
+    token = tokenize(a, bin_token, range, weights, density)
 
     nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
@@ -654,12 +661,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         else:
             return n, bins
     else:
-        # deprecated, will be removed from Numpy 2.0
-        if normed:
-            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
-            return n / (n * db).sum(), bins
-        else:
-            return n, bins
+        return n, bins
 
 
 @wraps(np.cov)
