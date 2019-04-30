@@ -146,7 +146,7 @@ class HTTPFile(object):
         if whence == 0:
             nloc = where
         elif whence == 1:
-            nloc += where
+            nloc = self.loc + where
         elif whence == 2:
             nloc = self.size + where
         else:
