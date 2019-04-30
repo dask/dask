@@ -208,10 +208,11 @@ Intermediate storage
    store
 
 In some cases, one may wish to store an intermediate result in long term
-storage. This intermediate result can then be used in later computation.
-This could be useful for a variety of cases like saving work before a flaky
-step, as a simple form of caching, a useful restore/stopping point in a long
-computation, inclusion of the intermediate value in later analysis, etc.
+storage. This differs from ``persist``, which is mainly used to manage
+intermediate results within Dask that don't necessarily have longevity.
+Intermediate storage is mainly useful in cases where the data is needed
+outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
+be useful as a checkpoint for long running or flaky computations.
 
 This uses ``store`` or anything that builds off of ``store`` to provide this
 functionality. The intermediate storage operation can be done in one of two
