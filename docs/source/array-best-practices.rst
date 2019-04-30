@@ -111,10 +111,10 @@ functions to build our own.  These include:
 .. currentmodule:: dask.array
 
 .. autosummary::
-   map_blocks
-   reduction
-   map_overlap
    blockwise
+   map_blocks
+   map_overlap
+   reduction
 
 These functions may help you to apply a function that you write for NumPy
 functions onto larger Dask arrays.
