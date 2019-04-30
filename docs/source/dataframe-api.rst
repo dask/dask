@@ -65,6 +65,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -179,6 +180,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index

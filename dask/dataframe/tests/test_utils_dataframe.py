@@ -4,9 +4,8 @@ import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
-                                  UNKNOWN_CATEGORIES, PANDAS_VERSION,
-                                  is_dataframe_like, is_series_like,
-                                  is_index_like)
+                                  UNKNOWN_CATEGORIES, is_dataframe_like,
+                                  is_series_like, is_index_like)
 
 import pytest
 
@@ -244,8 +243,6 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
-                    reason="Pandas < 0.20.0 doesn't support UInt64Index")
 def test_meta_nonempty_uint64index():
     idx = pd.UInt64Index([1], name='foo')
     res = meta_nonempty(idx)
