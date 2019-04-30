@@ -108,7 +108,7 @@ def _safe_isdir(fs, dirname):
 def _glob_pattern(fs, path_impl, dirname, pattern):
     names = [path_impl.split(f)[1] for f in fs.ls(dirname)]
     if not _ishidden(pattern):
-        names = [x for x in names if not _ishidden(x)]
+        names = [x for x in names if x and not _ishidden(x)]
     return fnmatch.filter(names, pattern)
 
 
