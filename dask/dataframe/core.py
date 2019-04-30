@@ -495,7 +495,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Arguments and keywords to pass to the function. The partition will
             be the first argument, and these will be passed *after*. Arguments
             and keywords may contain ``Scalar``, ``Delayed`` or regular
-            python objects.
+            python objects. DataFrame-like args (both dask and pandas) will be
+            repartitioned to align (if necessary) before applying the function.
         $META
 
         Examples
@@ -3775,7 +3776,9 @@ def map_partitions(func, *args, **kwargs):
     args, kwargs :
         Arguments and keywords to pass to the function.  At least one of the
         args should be a Dask.dataframe. Arguments and keywords may contain
-        ``Scalar``, ``Delayed`` or regular python objects.
+        ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
+        (both dask and pandas) will be repartitioned to align (if necessary)
+        before applying the function.
     $META
     """
     meta = kwargs.pop('meta', no_default)
