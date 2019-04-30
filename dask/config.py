@@ -41,7 +41,7 @@ defaults = []
 def canonical_name(k, config):
     """Return the canonical name for a key.
 
-    Handles user choose of '-' or '_' conventions by standardizing on whichever
+    Handles user choice of '-' or '_' conventions by standardizing on whichever
     version was set first. If a key already exists in either hyphen or
     underscore form, the existing version is the canonical name. If neither
     version exists the original key is used as is.
