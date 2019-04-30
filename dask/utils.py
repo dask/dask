@@ -475,6 +475,7 @@ def extra_titles(doc):
 
 
 def ignore_warning(doc, cls, name, extra=""):
+    """Expand docstring by adding disclaimer and extra text"""
     l1 = "This docstring was copied from %s.%s.%s. \n\n" % (cls.__module__, cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
@@ -546,6 +547,11 @@ def _derived_from(cls, method, ua_args=[], extra=""):
 
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
+
+    The output structure will be: top line of docstring, disclaimer about this
+    being auto-derived, any extra text associated with the method being patched,
+    the body of the docstring and finally, the list of keywords that exist in
+    the original method but not in the dask version.
 
     Parameters
     ----------
