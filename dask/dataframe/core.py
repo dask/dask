@@ -1537,7 +1537,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def describe(self, split_every=False, percentiles=None, percentiles_method='default'):
-        """ currently, only numeric describe is supported """
+        """Currently, only numeric describe is supported """
         num = self._get_numeric_data()
         if self.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
