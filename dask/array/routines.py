@@ -515,17 +515,27 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-@wraps(np.bincount)
-def bincount(x, weights=None, minlength=None):
-    if minlength is None:
-        raise TypeError("Must specify minlength argument in da.bincount")
-    assert x.ndim == 1
-    if weights is not None:
-        assert weights.chunks == x.chunks
+def _bincount_sum(bincounts, dtype=int):
+    n = max(map(len, bincounts))
+    out = np.zeros(n, dtype=dtype)
+    for b in bincounts:
+        out[:len(b)] += b
+    return out
 
-    # Call np.bincount on each block, possibly with weights
+
+@wraps(np.bincount)
+def bincount(x, weights=None, minlength=0):
+    if x.ndim != 1:
+        raise ValueError('Input array must be one dimensional. '
+                         'Try using x.ravel()')
+    if weights is not None:
+        if weights.chunks != x.chunks:
+            raise ValueError('Chunks of input array x and weights must match.')
+
     token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
+    final_name = 'bincount-sum' + token
+    # Call np.bincount on each block, possibly with weights
     if weights is not None:
         dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
                for i, _ in enumerate(x.__dask_keys__())}
@@ -535,15 +545,15 @@ def bincount(x, weights=None, minlength=None):
                for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
-    # Sum up all of the intermediate bincounts per block
-    name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, list(dsk), 0)
+    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[x] if weights is None else [x, weights])
 
-    chunks = ((minlength,),)
+    if minlength == 0:
+        chunks = ((np.nan,),)
+    else:
+        chunks = ((minlength,),)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
-
-    return Array(graph, name, chunks, dtype)
+    return Array(graph, final_name, chunks, dtype)
 
 
 @wraps(np.digitize)
@@ -599,6 +609,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         raise ValueError('Input array and weights must have the same '
                          'chunked structure')
 
+    if normed is not False:
+        raise ValueError(
+            "The normed= keyword argument has been deprecated. "
+            "Please use density instead. "
+            "See the numpy.histogram docstring for more information."
+        )
+
     if not np.iterable(bins):
         bin_token = bins
         mn, mx = range
@@ -609,7 +626,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
     else:
         bin_token = bins
-    token = tokenize(a, bin_token, range, normed, weights, density)
+    token = tokenize(a, bin_token, range, weights, density)
 
     nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
@@ -644,12 +661,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         else:
             return n, bins
     else:
-        # deprecated, will be removed from Numpy 2.0
-        if normed:
-            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
-            return n / (n * db).sum(), bins
-        else:
-            return n, bins
+        return n, bins
 
 
 @wraps(np.cov)

@@ -1097,7 +1097,7 @@ def test_map_blocks_block_info():
     x = da.arange(50, chunks=10)
 
     def func(a, b, c, block_info=None):
-        for idx in [0, 2]:  # positions in args
+        for idx in [0, 2, None]:  # positions in args
             assert block_info[idx]['shape'] == (50,)
             assert block_info[idx]['num-chunks'] == (5,)
             start, stop = block_info[idx]['array-location'][0]
@@ -1106,6 +1106,8 @@ def test_map_blocks_block_info():
             assert 10 <= stop <= 50
 
             assert 0 <= block_info[idx]['chunk-location'][0] <= 4
+        assert block_info[None]['chunk-shape'] == (10,)
+        assert block_info[None]['dtype'] == x.dtype
 
         return a + b + c
 
@@ -1118,20 +1120,74 @@ def test_map_blocks_block_info_with_axis():
     values = da.from_array(np.array(['a', 'a', 'b', 'c']), 2)
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0}
+        assert set(block_info.keys()) == {0, None}
         assert block_info[0]['shape'] == (4,)
-        assert block_info[0]['num_chunks'] == (2,)
+        assert block_info[0]['num-chunks'] == (2,)
+        assert block_info[None]['shape'] == (4, 3)
+        assert block_info[None]['num-chunks'] == (2, 1)
+        assert block_info[None]['chunk-shape'] == (2, 3)
+        assert block_info[None]['dtype'] == np.dtype('f8')
 
-        assert block_info['chunk-location'] in {(0,), (1,)}
+        assert block_info[0]['chunk-location'] in {(0,), (1,)}
 
-        if block_info['chunk-location'] == (0,):
-            assert block_info['array-location'] == [(0, 2)]
-        elif block_info['chunk-location'] == (1,):
-            assert block_info['array-location'] == [(2, 4)]
+        if block_info[0]['chunk-location'] == (0,):
+            assert block_info[0]['array-location'] == [(0, 2)]
+            assert block_info[None]['chunk-location'] == (0, 0)
+            assert block_info[None]['array-location'] == [(0, 2), (0, 3)]
+        elif block_info[0]['chunk-location'] == (1,):
+            assert block_info[0]['array-location'] == [(2, 4)]
+            assert block_info[None]['chunk-location'] == (1, 0)
+            assert block_info[None]['array-location'] == [(2, 4), (0, 3)]
 
         return np.ones((len(x), 3))
 
-    values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
+    z = values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
+    assert_eq(z, np.ones((4, 3), dtype='f8'))
+
+
+def test_map_blocks_block_info_with_broadcast():
+    expected0 = [
+        {'shape': (3, 4), 'num-chunks': (1, 2), 'array-location': [(0, 3), (0, 2)], 'chunk-location': (0, 0)},
+        {'shape': (3, 4), 'num-chunks': (1, 2), 'array-location': [(0, 3), (2, 4)], 'chunk-location': (0, 1)}
+    ]
+    expected1 = [
+        {'shape': (6, 2), 'num-chunks': (2, 1), 'array-location': [(0, 3), (0, 2)], 'chunk-location': (0, 0)},
+        {'shape': (6, 2), 'num-chunks': (2, 1), 'array-location': [(3, 6), (0, 2)], 'chunk-location': (1, 0)}
+    ]
+    expected2 = [
+        {'shape': (4,), 'num-chunks': (2,), 'array-location': [(0, 2)], 'chunk-location': (0,)},
+        {'shape': (4,), 'num-chunks': (2,), 'array-location': [(2, 4)], 'chunk-location': (1,)}
+    ]
+    expected = [
+        {0: expected0[0], 1: expected1[0], 2: expected2[0],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(0, 3), (0, 2)], 'chunk-location': (0, 0)}},
+        {0: expected0[1], 1: expected1[0], 2: expected2[1],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(0, 3), (2, 4)], 'chunk-location': (0, 1)}},
+        {0: expected0[0], 1: expected1[1], 2: expected2[0],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(3, 6), (0, 2)], 'chunk-location': (1, 0)}},
+        {0: expected0[1], 1: expected1[1], 2: expected2[1],
+         None: {'shape': (6, 4), 'num-chunks': (2, 2), 'dtype': np.float_, 'chunk-shape': (3, 2),
+                'array-location': [(3, 6), (2, 4)], 'chunk-location': (1, 1)}}
+    ]
+
+    def func(x, y, z, block_info=None):
+        for info in expected:
+            if block_info[None]['chunk-location'] == info[None]['chunk-location']:
+                assert block_info == info
+                break
+        else:
+            assert False
+        return x + y + z
+
+    a = da.ones((3, 4), chunks=(3, 2))
+    b = da.ones((6, 2), chunks=(3, 2))
+    c = da.ones((4,), chunks=(2,))
+    d = da.map_blocks(func, a, b, c, chunks=((3, 3), (2, 2)), dtype=a.dtype)
+    assert d.chunks == ((3, 3), (2, 2))
+    assert_eq(d, 3 * np.ones((6, 4)))
 
 
 def test_map_blocks_with_constants():
@@ -1186,6 +1242,22 @@ def test_map_blocks_dtype_inference():
     assert msg.startswith("`dtype` inference failed")
     assert "Please specify the dtype explicitly" in msg
     assert 'RuntimeError' in msg
+
+
+def test_map_blocks_infer_newaxis():
+    x = da.ones((5, 3), chunks=(2, 2))
+    y = da.map_blocks(lambda x: x[None], x, chunks=((1,), (2, 2, 1), (2, 1)))
+    assert_eq(y, da.ones((1, 5, 3)))
+
+
+def test_map_blocks_no_array_args():
+    def func(dtype, block_info=None):
+        loc = block_info[None]['array-location']
+        return np.arange(loc[0][0], loc[0][1], dtype=dtype)
+
+    x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
+    assert x.chunks == ((5, 3),)
+    assert_eq(x, np.arange(8, dtype=np.float32))
 
 
 def test_repr():
@@ -2590,7 +2662,7 @@ def test_map_blocks_with_changed_dimension():
 
     # Provided chunks have wrong shape
     with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b.sum(axis=0), chunks=(7, 4), drop_axis=0)
+        d.map_blocks(lambda b: b.sum(axis=0), chunks=(), drop_axis=0)
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)

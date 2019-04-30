@@ -275,43 +275,49 @@ def test_rename_series_method():
     assert_eq(ds, s)
 
 
-def test_describe():
+@pytest.mark.parametrize('method,test_values', [('tdigest', (6, 10)), ('dask', (4, 20))])
+def test_describe(method, test_values):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # prepare test case which approx quantiles will be the same as actuals
-    s = pd.Series(list(range(20)) * 4)
-    df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20})
+    s = pd.Series(list(range(test_values[1])) * test_values[0])
+    df = pd.DataFrame({'a': list(range(test_values[1])) * test_values[0],
+                       'b': list(range(test_values[0])) * test_values[1]})
 
-    ds = dd.from_pandas(s, 4)
-    ddf = dd.from_pandas(df, 4)
-
-    assert_eq(df.describe(), ddf.describe())
-    assert_eq(s.describe(), ds.describe())
+    ds = dd.from_pandas(s, test_values[0])
+    ddf = dd.from_pandas(df, test_values[0])
 
     test_quantiles = [0.25, 0.75]
-    assert_eq(df.describe(percentiles=test_quantiles),
-              ddf.describe(percentiles=test_quantiles))
-    assert_eq(s.describe(), ds.describe(split_every=2))
-    assert_eq(df.describe(), ddf.describe(split_every=2))
 
-    assert ds.describe(split_every=2)._name != ds.describe()._name
-    assert ddf.describe(split_every=2)._name != ddf.describe()._name
+    assert_eq(df.describe(), ddf.describe(percentiles_method=method))
+    assert_eq(s.describe(), ds.describe(percentiles_method=method))
+
+    assert_eq(df.describe(percentiles=test_quantiles),
+              ddf.describe(percentiles=test_quantiles, percentiles_method=method))
+    assert_eq(s.describe(), ds.describe(split_every=2, percentiles_method=method))
+    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
     # remove string columns
-    df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20,
-                       'c': list('abcd') * 20})
-    ddf = dd.from_pandas(df, 4)
-    assert_eq(df.describe(), ddf.describe())
-    assert_eq(df.describe(), ddf.describe(split_every=2))
+    df = pd.DataFrame({'a': list(range(test_values[1])) * test_values[0],
+                       'b': list(range(test_values[0])) * test_values[1],
+                       'c': list('abcdef'[:test_values[0]]) * test_values[1]})
+    ddf = dd.from_pandas(df, test_values[0])
+    assert_eq(df.describe(), ddf.describe(percentiles_method=method))
+    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-def test_describe_empty():
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_describe_empty(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # https://github.com/dask/dask/issues/2326
     ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
     with pytest.raises(ValueError) as rec:
-        ddf.describe()
+        ddf.describe(percentiles_method=method)
     assert 'DataFrame contains only non-numeric data.' in str(rec)
 
     with pytest.raises(ValueError) as rec:
-        ddf.A.describe()
+        ddf.A.describe(percentiles_method=method)
     assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
 
 
@@ -403,6 +409,25 @@ def test_cumulative():
     assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
     assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
     assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+
+
+@pytest.mark.parametrize(
+    'func',
+    [M.cumsum,
+     M.cumprod,
+     pytest.param(M.cummin, marks=[pytest.mark.xfail(
+         reason='ValueError: Can only compare identically-labeled Series objects')]),
+     pytest.param(M.cummax, marks=[pytest.mark.xfail(
+         reason='ValueError: Can only compare identically-labeled Series objects')])]
+)
+def test_cumulative_empty_partitions(func):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]))
+
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 5, 6, None, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]))
 
 
 def test_dropna():
@@ -795,13 +820,28 @@ def test_unique():
 
 
 def test_isin():
-    # Series test
-    assert_eq(d.a.isin([0, 1, 2]), full.a.isin([0, 1, 2]))
-    assert_eq(d.a.isin(pd.Series([0, 1, 2])),
-              full.a.isin(pd.Series([0, 1, 2])))
+    f_list = [1, 2, 3]
+    f_series = pd.Series(f_list)
+    f_dict = {'a': [0, 3], 'b': [1, 2]}
+
+    # Series
+    assert_eq(d.a.isin(f_list), full.a.isin(f_list))
+    assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    with pytest.raises(NotImplementedError):
+        d.a.isin(d.a)
+
+    # Index
+    da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
+    da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+    with pytest.raises(NotImplementedError):
+        d.a.isin(d.a)
 
     # DataFrame test
-    assert_eq(d.isin([0, 1, 2]), full.isin([0, 1, 2]))
+    assert_eq(d.isin(f_list), full.isin(f_list))
+    assert_eq(d.isin(f_dict), full.isin(f_dict))
+    for obj in [d, f_series, full]:
+        with pytest.raises(NotImplementedError):
+            d.isin(obj)
 
 
 def test_len():
@@ -830,9 +870,14 @@ def test_nbytes():
     assert_eq(d.index.nbytes, full.index.nbytes)
 
 
-def test_quantile():
+@pytest.mark.parametrize('method,expected', [('tdigest', (0.35, 3.80, 2.5, 6.5, 2.0)),
+                                             ('dask', (0.0, 5.4, 1.2, 7.8, 5.0))])
+def test_quantile(method, expected):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # series / multiple
-    result = d.b.quantile([.3, .7])
+    result = d.b.quantile([.3, .7], method=method)
+
     exp = full.b.quantile([.3, .7])  # result may different
     assert len(result) == 2
     assert result.divisions == (.3, .7)
@@ -841,14 +886,15 @@ def test_quantile():
 
     result = result.compute()
     assert isinstance(result, pd.Series)
-    assert result.iloc[0] == 0
-    assert 5 < result.iloc[1] < 6
+
+    assert result.iloc[0] == pytest.approx(expected[0])
+    assert result.iloc[1] == pytest.approx(expected[1])
 
     # index
     s = pd.Series(np.arange(10), index=np.arange(10))
     ds = dd.from_pandas(s, 2)
 
-    result = ds.index.quantile([.3, .7])
+    result = ds.index.quantile([.3, .7], method=method)
     exp = s.quantile([.3, .7])
     assert len(result) == 2
     assert result.divisions == (.3, .7)
@@ -857,31 +903,36 @@ def test_quantile():
 
     result = result.compute()
     assert isinstance(result, pd.Series)
-    assert 1 < result.iloc[0] < 2
-    assert 7 < result.iloc[1] < 8
+    assert result.iloc[0] == pytest.approx(expected[2])
+    assert result.iloc[1] == pytest.approx(expected[3])
 
     # series / single
-    result = d.b.quantile(.5)
-    exp = full.b.quantile(.5)  # result may different
+    result = d.b.quantile(.5, method=method)
     assert isinstance(result, dd.core.Scalar)
     result = result.compute()
-    assert 4 < result < 6
+    assert result == expected[4]
 
 
-def test_quantile_missing():
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_quantile_missing(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     ddf = dd.from_pandas(df, 2)
     expected = df.quantile()
-    result = ddf.quantile()
+    result = ddf.quantile(method=method)
     assert_eq(result, expected)
 
     expected = df.A.quantile()
-    result = ddf.A.quantile()
+    result = ddf.A.quantile(method=method)
     assert_eq(result, expected)
 
 
-def test_empty_quantile():
-    result = d.b.quantile([])
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_empty_quantile(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
+    result = d.b.quantile([], method=method)
     exp = full.b.quantile([])
     assert result.divisions == (None, None)
 
@@ -890,7 +941,21 @@ def test_empty_quantile():
     assert_eq(result, exp)
 
 
-def test_dataframe_quantile():
+@pytest.mark.parametrize('method,expected', [('tdigest', (pd.Series([9.5, 29.5, 19.5],
+                                                                    index=['A', 'X', 'B']),
+                                                          pd.DataFrame([[4.5, 24.5, 14.5],
+                                                                        [14.5, 34.5, 24.5]],
+                                                                       index=[0.25, 0.75],
+                                                                       columns=['A', 'X', 'B']))),
+                                             ('dask', (pd.Series([16.5, 36.5, 26.5],
+                                                                 index=['A', 'X', 'B']),
+                                                       pd.DataFrame([[1.50, 21.50, 11.50],
+                                                                     [17.75, 37.75, 27.75]],
+                                                                    index=[0.25, 0.75],
+                                                                    columns=['A', 'X', 'B'])))])
+def test_dataframe_quantile(method, expected):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
     # column X is for test column order and result division
     df = pd.DataFrame({'A': np.arange(20),
                        'X': np.arange(20, 40),
@@ -899,7 +964,7 @@ def test_dataframe_quantile():
                       columns=['A', 'X', 'B', 'C'])
     ddf = dd.from_pandas(df, 3)
 
-    result = ddf.quantile()
+    result = ddf.quantile(method=method)
     assert result.npartitions == 1
     assert result.divisions == ('A', 'X')
 
@@ -907,10 +972,9 @@ def test_dataframe_quantile():
     assert isinstance(result, pd.Series)
     assert result.name == 0.5
     tm.assert_index_equal(result.index, pd.Index(['A', 'X', 'B']))
-    assert (result > pd.Series([16, 36, 26], index=['A', 'X', 'B'])).all()
-    assert (result < pd.Series([17, 37, 27], index=['A', 'X', 'B'])).all()
+    assert (result == expected[0]).all()
 
-    result = ddf.quantile([0.25, 0.75])
+    result = ddf.quantile([0.25, 0.75], method=method)
     assert result.npartitions == 1
     assert result.divisions == (0.25, 0.75)
 
@@ -918,15 +982,11 @@ def test_dataframe_quantile():
     assert isinstance(result, pd.DataFrame)
     tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
     tm.assert_index_equal(result.columns, pd.Index(['A', 'X', 'B']))
-    minexp = pd.DataFrame([[1, 21, 11], [17, 37, 27]],
-                          index=[0.25, 0.75], columns=['A', 'X', 'B'])
-    assert (result > minexp).all().all()
-    maxexp = pd.DataFrame([[2, 22, 12], [18, 38, 28]],
-                          index=[0.25, 0.75], columns=['A', 'X', 'B'])
-    assert (result < maxexp).all().all()
 
-    assert_eq(ddf.quantile(axis=1), df.quantile(axis=1))
-    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
+    assert (result == expected[1]).all().all()
+
+    assert_eq(ddf.quantile(axis=1, method=method), df.quantile(axis=1))
+    pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
 
 
 def test_quantile_for_possibly_unsorted_q():
@@ -3529,3 +3589,43 @@ def test_replace():
     assert_eq(df.replace({1: 10, 2: 20}), ddf.replace({1: 10, 2: 20}))
     assert_eq(df.x.replace(1, 10), ddf.x.replace(1, 10))
     assert_eq(df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}))
+
+
+def test_map_partitions_delays_lists():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    L = list(range(100))
+    out = ddf.map_partitions(lambda x, y: x + sum(y), y=L)
+    assert any(str(L) == str(v) for v in out.__dask_graph__().values())
+
+    out = ddf.map_partitions(lambda x, y: x + sum(y), L)
+    assert any(str(L) == str(v) for v in out.__dask_graph__().values())
+
+
+def test_str_expand():
+    s = pd.Series(['a b c d', 'aa bb cc dd', 'aaa bbb ccc dddd'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(s.str.split(n=n, expand=True),
+                  ds.str.split(n=n, expand=True))
+
+    with pytest.raises(NotImplementedError) as info:
+        ds.str.split(expand=True)
+
+    assert "n=" in str(info.value)
+
+
+@pytest.mark.xfail(reason="Need to pad columns")
+def test_str_expand_more_columns():
+    s = pd.Series(['a b c d', 'aa', 'aaa bbb ccc dddd'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(s.str.split(n=3, expand=True),
+              ds.str.split(n=3, expand=True))
+
+    s = pd.Series(['a b c', 'aa bb cc', 'aaa bbb ccc'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    s.str.split(n=10, expand=True).compute()

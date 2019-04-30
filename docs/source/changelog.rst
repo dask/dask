@@ -1,6 +1,53 @@
 Changelog
 =========
 
+1.2.1 / 2019-04-29
+------------------
+
+Array
++++++
+
+-  Fix map_blocks with block_info and broadcasting (:pr:`4737`) `Bruce Merry`_
+-  Make 'minlength' keyword argument optional in da.bincount (:pr:`4684`) `Genevieve Buckley`_
+-  Add support for map_blocks with no array arguments (:pr:`4713`) `Bruce Merry`_
+-  Add dask.array.trace (:pr:`4717`) `Danilo Horta`_
+-  Add sizeof support for cupy.ndarray (:pr:`4715`) `Peter Andreas Entschev`_
+-  Add name kwarg to from_zarr (:pr:`4663`) `Michael Eaton`_
+-  Add chunks='auto' to from_array (:pr:`4704`) `Matthew Rocklin`_
+-  Raise TypeError if dask array is given as shape for da.ones, zeros, empty or full (:pr:`4707`) `Genevieve Buckley`_
+-  Add TileDB backend (:pr:`4679`) `Isaiah Norton`_
+
+Core
+++++
+
+-  Delay long list arguments (:pr:`4735`) `Matthew Rocklin`_
+-  Bump to numpy >= 1.13, pandas >= 0.21.0 (:pr:`4720`) `Jim Crist`_
+-  Remove file "test" (:pr:`4710`) `James Bourbeau`_
+-  Reenable development build, uses upstream libraries (:pr:`4696`) `Peter Andreas Entschev`_
+-  Remove assertion in HighLevelGraph constructor (:pr:`4699`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Change cum-aggregation last-nonnull-value algorithm (:pr:`4736`) `Nick Becker`_
+-  Fixup series-groupby-apply (:pr:`4738`) `Jim Crist`_
+-  Refactor array.percentile and dataframe.quantile to use t-digest (:pr:`4677`) `Janne Vuorela`_
+-  Allow naive concatenation of sorted dataframes (:pr:`4725`) `Matthew Rocklin`_
+-  Fix perf issue in dd.Series.isin (:pr:`4727`) `Jim Crist`_
+-  Remove hard pandas dependency for melt by using methodcaller (:pr:`4719`) `Nick Becker`_
+-  A few dataframe metadata fixes (:pr:`4695`) `Jim Crist`_
+-  Add Dataframe.replace (:pr:`4714`) `Matthew Rocklin`_
+-  Add 'threshold' parameter to pd.DataFrame.dropna (:pr:`4625`) `Nathan Matare`_
+
+Documentation
++++++++++++++
+
+-   Add warning about derived docstrings early in the docstring (:pr:`4716`) `Matthew Rocklin`_
+-   Create dataframe best practices doc (:pr:`4703`) `Matthew Rocklin`_
+-   Uncomment dask_sphinx_theme (:pr:`4728`) `James Bourbeau`_
+-   Fix minor typo fix in a Queue/fire_and_forget example (:pr:`4709`) `Matthew Rocklin`_
+-   Update from_pandas docstring to match signature (:pr:`4698`) `James Bourbeau`_
+
 1.2.0 / 2019-04-12
 ------------------
 
@@ -1995,3 +2042,8 @@ Other
 .. _`Philipp Rudiger`: https://github.com/philippjfr
 .. _`gregrf`: https://github.com/gregrf
 .. _`Ian Rose`: https://github.com/ian-r-rose
+.. _`Genevieve Buckley`: https://github.com/GenevieveBuckley
+.. _`Michael Eaton`: https://github.com/mpeaton
+.. _`Isaiah Norton`: https://github.com/hnorton
+.. _`Nick Becker`: https://github.com/beckernick
+.. _`Nathan Matare`: https://github.com/nmatare
