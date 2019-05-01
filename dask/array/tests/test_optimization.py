@@ -262,6 +262,7 @@ def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove)
         assert optimize_slices({'a': orig}) == {'a': final}
 
 
+@pytest.mark.xfail(reason='blockwise fusion doesnt respect this, which is ok')
 def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)
@@ -273,3 +274,24 @@ def test_turn_off_fusion():
 
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)
+
+
+def test_gh3937():
+    # test for github issue #3937
+    x = da.from_array([1, 2, 3.], (2,))
+    x = da.concatenate((x, [x[-1]]))
+    y = x.rechunk((2,))
+    # This will produce Integral type indices that are not ints (np.int64), failing
+    # the optimizer
+    y = da.coarsen(np.sum, y, {0: 2})
+    # How to trigger the optimizer explicitly?
+    y.compute()
+
+
+def test_double_dependencies():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    X = d + 1
+    X = da.dot(X, X.T)
+
+    assert_eq(X.compute(optimize_graph=False), X)

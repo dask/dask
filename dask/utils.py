@@ -12,9 +12,7 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
 from threading import Lock
-import multiprocessing as mp
 import uuid
-import warnings
 from weakref import WeakValueDictionary
 
 from .compatibility import (get_named_args, getargspec, PY3, unicode,
@@ -198,6 +196,10 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """
     with (tmp_cwd() if use_tmpdir else noop_context()):
         for filename, text in d.items():
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError:
+                pass
             f = open(filename, 'w' + mode)
             try:
                 f.write(text)
@@ -269,7 +271,7 @@ def random_state_data(n, random_state=None):
     """
     import numpy as np
 
-    if not isinstance(random_state, np.random.RandomState):
+    if not all(hasattr(random_state, attr) for attr in ['normal', 'beta', 'bytes', 'uniform']):
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
@@ -407,12 +409,20 @@ class Dispatch(object):
                 return lk[cls2]
         raise TypeError("No dispatch for {0}".format(cls))
 
-    def __call__(self, arg):
+    def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
         meth = self.dispatch(type(arg))
-        return meth(arg)
+        return meth(arg, *args, **kwargs)
+
+    @property
+    def __doc__(self):
+        try:
+            func = self.dispatch(object)
+            return func.__doc__
+        except TypeError:
+            return "Single Dispatch for %s" % self.__name__
 
 
 def ensure_not_exists(filename):
@@ -432,7 +442,10 @@ def _skip_doctest(line):
     if stripped == '>>>' or stripped.startswith('>>> #'):
         return stripped
     elif '>>>' in stripped and '+SKIP' not in stripped:
-        return line + '  # doctest: +SKIP'
+        if '# doctest:' in line:
+            return line + ', +SKIP'
+        else:
+            return line + '  # doctest: +SKIP'
     else:
         return line
 
@@ -461,6 +474,70 @@ def extra_titles(doc):
     return '\n'.join(lines)
 
 
+def ignore_warning(doc, cls, name):
+    l1 = "This docstring was copied from %s.%s.%s\n" % (cls.__module__, cls.__name__, name)
+    l2 = "Some inconsistencies with the Dask version may exist."
+
+    i = doc.find('\n\n')
+    if i != -1:
+        # Insert our warning
+        head = doc[:i + 2]
+        tail = doc[i + 2:]
+        # Indentation of next line
+        indent = re.match(r'\s*', tail).group(0)
+        # Insert the warning, indented, with a blank line before and after
+        doc = ''.join([
+            head,
+            indent, l1,
+            indent, l2, '\n\n',
+            tail
+        ])
+
+    return doc
+
+
+def unsupported_arguments(doc, args):
+    """ Mark unsupported arguments with a disclaimer """
+    lines = doc.split('\n')
+    for arg in args:
+        subset = [(i, line) for i, line in enumerate(lines) if re.match(r'^\s*' + arg + ' ?:', line)]
+        if len(subset) == 1:
+            [(i, line)] = subset
+            lines[i] = line + "  (Not supported in Dask)"
+    return '\n'.join(lines)
+
+
+def _derived_from(cls, method, ua_args=[]):
+    """ Helper function for derived_from to ease testing """
+    # do not use wraps here, as it hides keyword arguments displayed
+    # in the doc
+    original_method = getattr(cls, method.__name__)
+    doc = original_method.__doc__
+    if doc is None:
+        doc = ''
+
+    # Insert disclaimer that this is a copied docstring
+    if doc:
+        doc = ignore_warning(doc, cls, method.__name__)
+
+    # Mark unsupported arguments
+    try:
+        method_args = get_named_args(method)
+        original_args = get_named_args(original_method)
+        not_supported = [m for m in original_args if m not in method_args]
+    except ValueError:
+        not_supported = []
+    if len(ua_args) > 0:
+        not_supported.extend(ua_args)
+    if len(not_supported) > 0:
+        doc = unsupported_arguments(doc, not_supported)
+
+    doc = skip_doctest(doc)
+    doc = extra_titles(doc)
+
+    return doc
+
+
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
 
@@ -475,35 +552,8 @@ def derived_from(original_klass, version=None, ua_args=[]):
         original but not in Dask will automatically be added.
     """
     def wrapper(method):
-        method_name = method.__name__
-
         try:
-            # do not use wraps here, as it hides keyword arguments displayed
-            # in the doc
-            original_method = getattr(original_klass, method_name)
-            doc = original_method.__doc__
-            if doc is None:
-                doc = ''
-
-            try:
-                method_args = get_named_args(method)
-                original_args = get_named_args(original_method)
-                not_supported = [m for m in original_args if m not in method_args]
-            except ValueError:
-                not_supported = []
-
-            if len(ua_args) > 0:
-                not_supported.extend(ua_args)
-
-            if len(not_supported) > 0:
-                note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't support the following argument(s).\n\n")
-                args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
-                doc = doc + note + args
-            doc = skip_doctest(doc)
-            doc = extra_titles(doc)
-
-            method.__doc__ = doc
+            method.__doc__ = _derived_from(original_klass, method, ua_args=ua_args)
             return method
 
         except AttributeError:
@@ -511,7 +561,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method_name)
+                msg = "Base package doesn't support '{0}'.".format(method.__name__)
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -547,6 +597,25 @@ def funcname(func):
         return name
     except AttributeError:
         return str(func)
+
+
+def typename(typ):
+    """
+    Return the name of a type
+
+    Examples
+    --------
+    >>> typename(int)
+    'int'
+
+    >>> from dask.core import literal
+    >>> typename(literal)
+    'dask.core.literal'
+    """
+    if not typ.__module__ or typ.__module__ == 'builtins':
+        return typ.__name__
+    else:
+        return typ.__module__ + '.' + typ.__name__
 
 
 def ensure_bytes(s):
@@ -771,11 +840,11 @@ class SerializableLock(object):
             self.lock = Lock()
             SerializableLock._locks[self.token] = self.lock
 
-    def acquire(self, *args):
-        return self.lock.acquire(*args)
+    def acquire(self, *args, **kwargs):
+        return self.lock.acquire(*args, **kwargs)
 
-    def release(self, *args):
-        return self.lock.release(*args)
+    def release(self, *args, **kwargs):
+        return self.lock.release(*args, **kwargs)
 
     def __enter__(self):
         self.lock.__enter__()
@@ -783,9 +852,8 @@ class SerializableLock(object):
     def __exit__(self, *args):
         self.lock.__exit__(*args)
 
-    @property
     def locked(self):
-        return self.locked
+        return self.lock.locked()
 
     def __getstate__(self):
         return self.token
@@ -799,17 +867,16 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def get_scheduler_lock(get=None, collection=None, scheduler=None):
+def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
     from .base import get_scheduler
-    actual_get = get_scheduler(get=get,
-                               collections=[collection],
+    actual_get = get_scheduler(collections=[collection],
                                scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
 
     return SerializableLock()
 
@@ -928,7 +995,7 @@ def natural_sort_key(s):
     ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     """
     return [int(part) if part.isdigit() else part
-            for part in re.split('(\d+)', s)]
+            for part in re.split(r'(\d+)', s)]
 
 
 def factors(n):
@@ -1009,19 +1076,23 @@ byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k}
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
 
 
-def effective_get(get=None, collection=None):
-    """ Deprecated: see dask.base.get_scheduler """
-    warnings.warn("Deprecated, see dask.base.get_scheduler instead")
-
-    from dask.base import get_scheduler
-    return get_scheduler(get=get, collections=[collection])
-
-
 def has_keyword(func, keyword):
     try:
         if PY3:
             return keyword in inspect.signature(func).parameters
         else:
-            return keyword in inspect.getargspec(func).args
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
     except Exception:
         return False
+
+
+def ndimlist(seq):
+    if not isinstance(seq, (list, tuple)):
+        return 0
+    elif not seq:
+        return 1
+    else:
+        return 1 + ndimlist(seq[0])

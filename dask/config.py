@@ -9,7 +9,7 @@ try:
 except ImportError:
     yaml = None
 
-from .compatibility import makedirs
+from .compatibility import makedirs, builtins, Mapping
 
 
 no_default = '__no_default__'
@@ -36,6 +36,29 @@ config_lock = threading.Lock()
 
 
 defaults = []
+
+
+def canonical_name(k, config):
+    """Return the canonical name for a key.
+
+    Handles user choice of '-' or '_' conventions by standardizing on whichever
+    version was set first. If a key already exists in either hyphen or
+    underscore form, the existing version is the canonical name. If neither
+    version exists the original key is used as is.
+    """
+    try:
+        if k in config:
+            return k
+    except TypeError:
+        # config is not a mapping, return the same name as provided
+        return k
+
+    altk = k.replace('_', '-') if '_' in k else k.replace('-', '_')
+
+    if altk in config:
+        return altk
+
+    return k
 
 
 def update(old, new, priority='new'):
@@ -68,10 +91,11 @@ def update(old, new, priority='new'):
     dask.config.merge
     """
     for k, v in new.items():
-        if k not in old and type(v) is dict:
-            old[k] = {}
+        k = canonical_name(k, old)
 
-        if type(v) is dict:
+        if isinstance(v, Mapping):
+            if k not in old or old[k] is None:
+                old[k] = {}
             update(old[k], v, priority=priority)
         else:
             if priority == 'new' or k not in old:
@@ -113,11 +137,15 @@ def collect_yaml(paths=paths):
     for path in paths:
         if os.path.exists(path):
             if os.path.isdir(path):
-                file_paths.extend(sorted([
-                    os.path.join(path, p)
-                    for p in os.listdir(path)
-                    if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
-                ]))
+                try:
+                    file_paths.extend(sorted([
+                        os.path.join(path, p)
+                        for p in os.listdir(path)
+                        if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
+                    ]))
+                except OSError:
+                    # Ignore permission errors
+                    pass
             else:
                 file_paths.append(path)
 
@@ -125,9 +153,13 @@ def collect_yaml(paths=paths):
 
     # Parse yaml files
     for path in file_paths:
-        with open(path) as f:
-            data = yaml.load(f.read()) or {}
-            configs.append(data)
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f.read()) or {}
+                configs.append(data)
+        except (OSError, IOError):
+            # Ignore permission errors
+            pass
 
     return configs
 
@@ -141,7 +173,6 @@ def collect_env(env=None):
 
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
-    -  Replaces ``_`` (underscore) with a hyphen.
     -  Calls ``ast.literal_eval`` on the value
     """
     if env is None:
@@ -149,7 +180,7 @@ def collect_env(env=None):
     d = {}
     for name, value in env.items():
         if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('__', '.').replace('_', '-')
+            varname = name[5:].lower().replace('__', '.')
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
@@ -285,16 +316,16 @@ class set(object):
         path: List[str]
             Used internally to hold the path of old values
         """
+        key = canonical_name(keys[0], d)
         if len(keys) == 1:
             if old is not None:
-                path_key = tuple(path + [keys[0]])
-                if keys[0] in d:
-                    old[path_key] = d[keys[0]]
+                path_key = tuple(path + [key])
+                if key in d:
+                    old[path_key] = d[key]
                 else:
                     old[path_key] = '--delete--'
-            d[keys[0]] = value
+            d[key] = value
         else:
-            key = keys[0]
             if key not in d:
                 d[key] = {}
                 if old is not None:
@@ -392,6 +423,7 @@ def get(key, default=no_default, config=config):
     keys = key.split('.')
     result = config
     for k in keys:
+        k = canonical_name(k, result)
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
@@ -407,8 +439,8 @@ def rename(aliases, config=config):
 
     This helps migrate older configuration versions over time
     """
-    old = list()
-    new = dict()
+    old = []
+    new = {}
     for o, n in aliases.items():
         value = get(o, None, config=config)
         if value is not None:
@@ -432,6 +464,36 @@ def update_defaults(new, config=config, defaults=defaults):
     """
     defaults.append(new)
     update(config, new, priority='old')
+
+
+def expand_environment_variables(config):
+    ''' Expand environment variables in a nested config dictionary
+
+    This function will recursively search through any nested dictionaries
+    and/or lists.
+
+    Parameters
+    ----------
+    config : dict, iterable, or str
+        Input object to search for environment variables
+
+    Returns
+    -------
+    config : same type as input
+
+    Examples
+    --------
+    >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
+    {'x': [1, 2, 'my-username']}
+    '''
+    if isinstance(config, Mapping):
+        return {k: expand_environment_variables(v) for k, v in config.items()}
+    elif isinstance(config, str):
+        return os.path.expandvars(config)
+    elif isinstance(config, (list, tuple, builtins.set)):
+        return type(config)([expand_environment_variables(v) for v in config])
+    else:
+        return config
 
 
 refresh()

@@ -1,9 +1,12 @@
+import itertools
 import os
+import sys
 import pandas as pd
 import pytest
 import pickle
 import numpy as np
 import string
+import multiprocessing as mp
 from copy import copy
 import pandas.util.testing as tm
 
@@ -150,7 +153,7 @@ def test_partitioning_index_categorical_on_values():
     assert (res == res2).all()
 
 
-@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])
+@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)])
 def test_set_index_tasks(npartitions):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
@@ -246,9 +249,9 @@ def test_shuffle_sort(shuffle):
 def test_rearrange(shuffle, scheduler):
     df = pd.DataFrame({'x': np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
-    ddf2 = ddf.assign(y=ddf.x % 4)
+    ddf2 = ddf.assign(_partitions=ddf.x % 4)
 
-    result = rearrange_by_column(ddf2, 'y', max_branch=32, shuffle=shuffle)
+    result = rearrange_by_column(ddf2, '_partitions', max_branch=32, shuffle=shuffle)
     assert result.npartitions == ddf.npartitions
     assert set(ddf.dask).issubset(result.dask)
 
@@ -256,8 +259,9 @@ def test_rearrange(shuffle, scheduler):
     a = result.compute(scheduler=scheduler)
     get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
-    for i in a.y.drop_duplicates():
-        assert sum(i in part.y for part in parts) == 1
+
+    for i in a._partitions.drop_duplicates():
+        assert sum(i in set(part._partitions) for part in parts) == 1
 
 
 def test_rearrange_by_column_with_narrow_divisions():
@@ -356,6 +360,28 @@ def test_set_index_divisions_sorted():
     # Divisions must be sorted
     with pytest.raises(ValueError):
         ddf.set_index('y', divisions=['a', 'b', 'd', 'c'], sorted=True)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(sys.version_info < (3, 4),
+                    reason="multiprocessing spawn only after Py3.4")
+def test_set_index_consistent_divisions():
+    # See https://github.com/dask/dask/issues/3867
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                      index=np.random.random(100))
+    ddf = dd.from_pandas(df, npartitions=4)
+    ddf = ddf.clear_divisions()
+
+    ctx = mp.get_context('spawn')
+    pool = ctx.Pool(processes=8)
+    results = [pool.apply_async(_set_index, (ddf, 'x')) for _ in range(100)]
+    divisions_set = set(result.get() for result in results)
+    assert len(divisions_set) == 1
+
+
+def _set_index(df, *args, **kwargs):
+    return df.set_index(*args, **kwargs).divisions
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
@@ -556,7 +582,7 @@ def test_set_index_raises_error_on_bad_input():
 
 def test_set_index_sorted_true():
     df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
+                       'y': [10, 20, 20, 40],
                        'z': [4, 3, 2, 1]})
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
@@ -575,6 +601,9 @@ def test_set_index_sorted_true():
 
     with pytest.raises(ValueError):
         a.set_index(a.z, sorted=True)
+
+    with pytest.warns(UserWarning):
+        a.set_index(a.y, sorted=True)
 
 
 def test_set_index_sorted_single_partition():
@@ -644,7 +673,7 @@ def test_set_index_on_empty():
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
+                       'y': [10, 20, 20, 40],
                        'z': [4, 3, 2, 1]},
                       index=[1, 3, 10, 20])
     a = dd.from_pandas(df, 2, sort=False)
@@ -656,6 +685,11 @@ def test_compute_divisions():
 
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
+
+    c = dd.from_pandas(df.set_index('y'), 2, sort=False)
+    # Partitions overlap warning
+    with pytest.warns(UserWarning):
+        compute_divisions(c)
 
 
 def test_temporary_directory(tmpdir):
@@ -731,3 +765,42 @@ def test_gh_2730():
         result.sort_values('KEY').reset_index(drop=True),
         expected
     )
+
+
+@pytest.mark.parametrize('npartitions', [None, 'auto'])
+def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
+    # Atomic counter
+    count = itertools.count()
+
+    def increment():
+        next(count)
+
+    def make_part(dummy, n):
+        return pd.DataFrame({'x': np.random.random(n),
+                             'y': np.random.random(n)})
+
+    nbytes = 1e6
+    nparts = 50
+    n = int(nbytes / (nparts * 8))
+
+    dsk = {('inc', i): (increment,) for i in range(nparts)}
+    dsk.update({('x', i): (make_part, ('inc', i), n) for i in range(nparts)})
+    ddf = dd.DataFrame(dsk, 'x', make_part(None, 1), [None] * (nparts + 1))
+
+    ddf.set_index('x', npartitions=npartitions)
+    ntimes = next(count)
+    assert ntimes == nparts
+
+
+def test_set_index_errors_with_inplace_kwarg():
+    df = pd.DataFrame({
+        'a': [9, 8, 7],
+        'b': [6, 5, 4],
+        'c': [3, 2, 1]
+    })
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    ddf.set_index('a')
+
+    with pytest.raises(NotImplementedError):
+        ddf.set_index('a', inplace=True)

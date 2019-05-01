@@ -3,12 +3,13 @@ from operator import add, setitem
 import pickle
 from random import random
 import types
+import warnings
 
 from toolz import identity, partial, merge
 import pytest
 
 import dask
-from dask import set_options, compute
+from dask import compute
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
@@ -40,45 +41,46 @@ class Tuple(object):
 
 
 def test_to_task_dask():
-    a = delayed(1, name='a')
-    b = delayed(2, name='b')
-    task, dask = to_task_dask([a, b, 3])
-    assert task == ['a', 'b', 3]
+    with warnings.catch_warnings(record=True):
+        a = delayed(1, name='a')
+        b = delayed(2, name='b')
+        task, dask = to_task_dask([a, b, 3])
+        assert task == ['a', 'b', 3]
 
-    task, dask = to_task_dask((a, b, 3))
-    assert task == (tuple, ['a', 'b', 3])
-    assert dict(dask) == merge(a.dask, b.dask)
+        task, dask = to_task_dask((a, b, 3))
+        assert task == (tuple, ['a', 'b', 3])
+        assert dict(dask) == merge(a.dask, b.dask)
 
-    task, dask = to_task_dask({a: 1, b: 2})
-    assert (task == (dict, [['b', 2], ['a', 1]]) or
-            task == (dict, [['a', 1], ['b', 2]]))
-    assert dict(dask) == merge(a.dask, b.dask)
+        task, dask = to_task_dask({a: 1, b: 2})
+        assert (task == (dict, [['b', 2], ['a', 1]]) or
+                task == (dict, [['a', 1], ['b', 2]]))
+        assert dict(dask) == merge(a.dask, b.dask)
 
-    f = namedtuple('f', ['x', 'y'])
-    x = f(1, 2)
-    task, dask = to_task_dask(x)
-    assert task == x
-    assert dict(dask) == {}
+        f = namedtuple('f', ['x', 'y'])
+        x = f(1, 2)
+        task, dask = to_task_dask(x)
+        assert task == x
+        assert dict(dask) == {}
 
-    task, dask = to_task_dask(slice(a, b, 3))
-    assert task == (slice, 'a', 'b', 3)
-    assert dict(dask) == merge(a.dask, b.dask)
+        task, dask = to_task_dask(slice(a, b, 3))
+        assert task == (slice, 'a', 'b', 3)
+        assert dict(dask) == merge(a.dask, b.dask)
 
-    # Issue https://github.com/dask/dask/issues/2107
-    class MyClass(dict):
-        pass
+        # Issue https://github.com/dask/dask/issues/2107
+        class MyClass(dict):
+            pass
 
-    task, dask = to_task_dask(MyClass())
-    assert type(task) is MyClass
-    assert dict(dask) == {}
+        task, dask = to_task_dask(MyClass())
+        assert type(task) is MyClass
+        assert dict(dask) == {}
 
-    # Custom dask objects
-    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
-    task, dask = to_task_dask(x)
-    assert task in dask
-    f = dask.pop(task)
-    assert f == (tuple, ['a', 'b', 'c'])
-    assert dask == x._dask
+        # Custom dask objects
+        x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+        task, dask = to_task_dask(x)
+        assert task in dask
+        f = dask.pop(task)
+        assert f == (tuple, ['a', 'b', 'c'])
+        assert dask == x._dask
 
 
 def test_delayed():
@@ -92,6 +94,23 @@ def test_delayed():
     assert 1 in a.dask.values()
     b = add2(add2(a, 2), 3)
     assert a.key in b.dask
+
+
+def test_delayed_with_dataclass():
+    dataclasses = pytest.importorskip("dataclasses")
+
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+
+    literal = dask.delayed(3)
+    with_class = dask.delayed({"a": ADataClass(a=literal)})
+
+    def return_nested(obj):
+        return obj["a"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
 
 
 def test_operators():
@@ -140,6 +159,16 @@ def test_method_getattr_call_same_task():
     o = a.index(1)
     # Don't getattr the method, then call in separate task
     assert getattr not in set(v[0] for v in o.__dask_graph__().values())
+
+
+def test_np_dtype_of_delayed():
+    # This used to result in a segfault due to recursion, see
+    # https://github.com/dask/dask/pull/4374#issuecomment-454381465
+    np = pytest.importorskip('numpy')
+    x = delayed(1)
+    with pytest.raises(TypeError):
+        np.dtype(x)
+    assert delayed(np.array([1], dtype='f8')).dtype.compute() == np.dtype('f8')
 
 
 def test_delayed_errors():
@@ -275,37 +304,37 @@ def test_pure_global_setting():
     # delayed functions
     func = delayed(add)
 
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert func(1, 2).key == func(1, 2).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert func(1, 2).key != func(1, 2).key
 
     func = delayed(add, pure=True)
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert func(1, 2).key == func(1, 2).key
 
     # delayed objects
     assert delayed(1).key != delayed(1).key
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert delayed(1).key == delayed(1).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert delayed(1, pure=True).key == delayed(1, pure=True).key
 
     # delayed methods
     data = delayed([1, 2, 3])
     assert data.index(1).key != data.index(1).key
 
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert data.index(1).key == data.index(1).key
         assert data.index(1, pure=False).key != data.index(1, pure=False).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert data.index(1, pure=True).key == data.index(1, pure=True).key
 
     # magic methods always pure
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert data.index.key == data.index.key
         element = data[0]
         assert (element + element).key == (element + element).key
@@ -382,7 +411,8 @@ def test_array_delayed():
     assert val.sum().compute() == (arr + arr + 1).sum()
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
-    task, dsk = to_task_dask(darr)
+    with warnings.catch_warnings(record=True):
+        task, dsk = to_task_dask(darr)
     orig = set(darr.dask)
     final = set(dsk)
     assert orig.issubset(final)
@@ -570,3 +600,10 @@ def test_delayed_decorator_on_method():
     # For static methods (and regular functions), the decorated methods should
     # be Delayed objects.
     assert isinstance(A.addstatic, Delayed)
+
+
+def test_attribute_of_attribute():
+    x = delayed(123)
+    assert isinstance(x.a, Delayed)
+    assert isinstance(x.a.b, Delayed)
+    assert isinstance(x.a.b.c, Delayed)

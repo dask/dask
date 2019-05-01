@@ -1,18 +1,18 @@
 Kubernetes and Helm
 ===================
 
-It is easy to launch a Dask cluster and Jupyter notebook server on cloud
+It is easy to launch a Dask cluster and a Jupyter notebook server on cloud
 resources using Kubernetes_ and Helm_.
 
 .. _Kubernetes: https://kubernetes.io/
 .. _Helm: https://helm.sh/
 
 This is particularly useful when you want to deploy a fresh Python environment
-on Cloud services, like Amazon Web Services, Google Compute Engine, or
+on Cloud services like Amazon Web Services, Google Compute Engine, or
 Microsoft Azure.
 
 If you already have Python environments running in a pre-existing Kubernetes
-cluster then you may prefer the :doc:`Kubernetes native<kubernetes-native>`
+cluster, then you may prefer the :doc:`Kubernetes native<kubernetes-native>`
 documentation, which is a bit lighter weight.
 
 
@@ -21,17 +21,17 @@ Launch Kubernetes Cluster
 
 This document assumes that you have a Kubernetes cluster and Helm installed.
 
-If this is not the case then you might consider setting up a Kubernetes cluster
-either on one of the common cloud providers like Google, Amazon, or
-Microsoft's.  We recommend the first part of the documentation in the guide
-`Zero to JupyterHub <http://zero-to-jupyterhub.readthedocs.io/en/latest/>`_
-that focuses on Kubernetes and Helm.  You do not need to follow all of these
-instructions.  JupyterHub is not necessary to deploy Dask:
+If this is not the case, then you might consider setting up a Kubernetes cluster
+on one of the common cloud providers like Google, Amazon, or
+Microsoft.  We recommend the first part of the documentation in the guide
+`Zero to JupyterHub <https://zero-to-jupyterhub.readthedocs.io/en/latest/>`_
+that focuses on Kubernetes and Helm (you do not need to follow all of these
+instructions).  Also, JupyterHub is not necessary to deploy Dask:
 
 - `Creating a Kubernetes Cluster <https://zero-to-jupyterhub.readthedocs.io/en/v0.4-doc/create-k8s-cluster.html>`_
 - `Setting up Helm <https://zero-to-jupyterhub.readthedocs.io/en/v0.4-doc/setup-helm.html>`_
 
-Alternatively you may want to experiment with Kubernetes locally using
+Alternatively, you may want to experiment with Kubernetes locally using
 `Minikube <https://kubernetes.io/docs/getting-started-guides/minikube/>`_.
 
 
@@ -45,7 +45,7 @@ You can update the known channels to make sure you have up-to-date charts as fol
 
    helm repo update
 
-Now you can launch Dask on your Kubernetes cluster using the Dask Helm_ chart::
+Now, you can launch Dask on your Kubernetes cluster using the Dask Helm_ chart::
 
    helm install stable/dask
 
@@ -56,7 +56,7 @@ also an optional Jupyter server.
 Verify Deployment
 -----------------
 
-This might make a minute to deploy.  You can check on the status with
+This might take a minute to deploy.  You can check its status with
 ``kubectl``::
 
    kubectl get pods
@@ -82,9 +82,9 @@ Jupyter and Dask systems.
 
 Notice the name ``bald-eel``.  This is the name that Helm has given to your
 particular deployment of Dask.  You could, for example, have multiple
-Dask-and-Jupyter clusters running at once and each would be given a different
-name.  You will use this name to refer to your deployment in the future.  You
-can list all active helm deployments with::
+Dask-and-Jupyter clusters running at once, and each would be given a different
+name.  Note that you will need to use this name to refer to your deployment in the future.  
+Additionally, you can list all active helm deployments with::
 
    helm list
 
@@ -95,7 +95,7 @@ can list all active helm deployments with::
 Connect to Dask and Jupyter
 ---------------------------
 
-When we ran ``kubectl get services`` we saw some externally visible IPs
+When we ran ``kubectl get services``, we saw some externally visible IPs:
 
 .. code-block:: bash
 
@@ -105,8 +105,8 @@ When we ran ``kubectl get services`` we saw some externally visible IPs
    bald-eel-scheduler   LoadBalancer   10.11.245.241   35.202.201.129   8786:31166/TCP,80:31626/TCP   2m
    kubernetes           ClusterIP      10.11.240.1     <none>           443/TCP                       48m
 
-We can navigate to these from any web browser.  One is the Dask diagnostic
-dashboard.  The other is the Jupyter server.  You can log into the Jupyter
+We can navigate to these services from any web browser. Here, one is the Dask diagnostic
+dashboard, and the other is the Jupyter server.  You can log into the Jupyter
 notebook server with the password, ``dask``.
 
 You can create a notebook and create a Dask client from there.  The
@@ -131,12 +131,12 @@ variable automatically.
 Configure Environment
 ---------------------
 
-By default the Helm deployment launches three workers using two cores each and
+By default, the Helm deployment launches three workers using two cores each and
 a standard conda environment.  We can customize this environment by creating a
 small yaml file that implements a subset of the values in the
-`dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_
+`dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_.
 
-For example we can increase the number of workers, and include extra conda and
+For example, we can increase the number of workers, and include extra conda and
 pip packages to install on the both the workers and Jupyter server (these two
 environments should be matched).
 
@@ -168,13 +168,13 @@ environments should be matched).
        - name: EXTRA_PIP_PACKAGES
          value: s3fs dask-ml --upgrade
 
-This config file overrides configuration for number and size of workers and the
+This config file overrides the configuration for the number and size of workers and the
 conda and pip packages installed on the worker and Jupyter containers.  In
-general we will want to make sure that these two software environments match.
+general, we will want to make sure that these two software environments match.
 
 Update your deployment to use this configuration file.  Note that *you will not
-use helm install* for this stage.   That would create a *new* deployment on the
-same Kubernetes cluster.  Instead you will upgrade your existing deployment by
+use helm install* for this stage: that would create a *new* deployment on the
+same Kubernetes cluster.  Instead, you will upgrade your existing deployment by
 using the current name::
 
     helm upgrade bald-eel stable/dask -f config.yaml
@@ -188,10 +188,10 @@ list``
 Check status and logs
 ---------------------
 
-For standard issues you should be able to see worker status and logs using the
-Dask dashboard (in particular see the worker links from the ``info/`` page).
-However if your workers aren't starting you can check on the status of pods and
-their logs with the following commands
+For standard issues, you should be able to see the worker status and logs using the
+Dask dashboard (in particular, you can see the worker links from the ``info/`` page).
+However, if your workers aren't starting, you can check the status of pods and
+their logs with the following commands:
 
 .. code-block:: bash
 
@@ -228,15 +228,15 @@ their logs with the following commands
    ...
 
 
-Delete Helm deployment
-----------------------
+Delete a Helm deployment
+------------------------
 
 You can always delete a helm deployment using its name::
 
    helm delete bald-eel --purge
 
 Note that this does not destroy any clusters that you may have allocated on a
-Cloud service, you will need to delete those explicitly.
+Cloud service (you will need to delete those explicitly).
 
 
 Avoid the Jupyter Server

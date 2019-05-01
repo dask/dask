@@ -32,7 +32,8 @@ def test_column_optimizations_with_bcolz_and_rewrite():
                                     bc, slice(0, 2), ['a', 'b'], {}))
                         for i in [1, 2, 3])
 
-        result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
+        with dask.config.set(fuse_ave_width=0):
+            result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
 
 
@@ -47,5 +48,18 @@ def test_fuse_ave_width():
 
     b = s.__dask_optimize__(s.dask, s.__dask_keys__())
 
-    assert len(a) < len(b)
     assert len(a) <= 15
+    assert len(b) <= 15
+
+
+def test_optimize_blockwise():
+    from dask.array.optimization import optimize_blockwise
+    df = pd.DataFrame({'x': range(10), 'y': range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for i in range(10):
+        ddf['x'] = ddf.x + 1 + ddf.y
+
+    graph = optimize_blockwise(ddf.dask)
+
+    assert len(graph) <= 4

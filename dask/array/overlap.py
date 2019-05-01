@@ -9,7 +9,7 @@ from toolz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
@@ -148,12 +148,30 @@ def overlap_internal(x, axes):
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
-    dsk = sharedict.merge(x.dask, (name, dsk))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
-    return Array(dsk, name, chunks, dtype=x.dtype)
+    return Array(graph, name, chunks, dtype=x.dtype)
 
 
-def trim_internal(x, axes):
+def trim_overlap(x, depth, boundary=None):
+    """Trim sides from each block.
+
+    This couples well with the ``map_overlap`` operation which may leave
+    excess data on each block.
+
+    See also
+    --------
+    dask.array.overlap.map_overlap
+
+    """
+
+    # parameter to be passed to trim_internal
+    axes = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
+    return trim_internal(x, axes=axes, boundary=boundary2)
+
+
+def trim_internal(x, axes, boundary=None):
     """ Trim sides from each block
 
     This couples well with the overlap operation, which may leave excess data on
@@ -164,17 +182,52 @@ def trim_internal(x, axes):
     dask.array.chunk.trim
     dask.array.map_blocks
     """
+    boundary = coerce_boundary(x.ndim, boundary)
+
     olist = []
     for i, bd in enumerate(x.chunks):
+        bdy = boundary.get(i, 'none')
         ilist = []
-        for d in bd:
-            ilist.append(d - axes.get(i, 0) * 2)
+        for j, d in enumerate(bd):
+            if bdy != 'none':
+                d = d - axes.get(i, 0) * 2
+            else:
+                d = d - axes.get(i, 0) if j != 0 else d
+                d = d - axes.get(i, 0) if j != len(bd) - 1 else d
+            ilist.append(d)
         olist.append(tuple(ilist))
 
     chunks = tuple(olist)
 
-    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks,
-                      dtype=x.dtype)
+    return map_blocks(partial(_trim, axes=axes, boundary=boundary),
+                      x, chunks=chunks, dtype=x.dtype)
+
+
+def _trim(x, axes, boundary, block_info):
+    """Similar to dask.array.chunk.trim but requires one to specificy the
+    boundary condition.
+
+    ``axes``, and ``boundary`` are assumed to have been coerced.
+
+    """
+    axes = [axes.get(i, 0) for i in range(x.ndim)]
+    axes_back = (-ax if ax else None for ax in axes)
+
+    trim_front = (
+        0 if (chunk_location == 0 and
+              boundary.get(i, 'none') == 'none') else ax
+        for i, (chunk_location, ax) in enumerate(
+            zip(block_info[0]['chunk-location'], axes)))
+    trim_back = (
+        None if (chunk_location == chunks - 1 and
+                 boundary.get(i, 'none') == 'none') else ax
+        for i, (chunks, chunk_location, ax) in enumerate(zip(
+            block_info[0]['num-chunks'],
+            block_info[0]['chunk-location'],
+            axes_back)))
+
+    return x[tuple(slice(front, back)
+             for front, back in zip(trim_front, trim_back))]
 
 
 def periodic(x, axis, depth):
@@ -459,11 +512,13 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
+    assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
+    assert all(type(c) is int for cc in g.chunks for c in cc)
     g2 = g.map_blocks(func, **kwargs)
+    assert all(type(c) is int for cc in g2.chunks for c in cc)
     if trim:
-        g3 = add_dummy_padding(g2, depth2, boundary2)
-        return trim_internal(g3, depth2)
+        return trim_internal(g2, depth2, boundary2)
     else:
         return g2
 

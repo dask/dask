@@ -169,7 +169,10 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         _dtype = dtype
         if _dtype is None:
             sample = np.ones(a.ndim * (8,), dtype=a.dtype)
-            _dtype = fft_func(sample).dtype
+            try:
+                _dtype = fft_func(sample, axes=axes).dtype
+            except TypeError:
+                _dtype = fft_func(sample).dtype
 
         for each_axis in axes:
             if len(a.chunks[each_axis]) != 1:
@@ -234,7 +237,7 @@ def _fftfreq_block(i, n, d):
 
 
 @wraps(np.fft.fftfreq)
-def fftfreq(n, d=1.0, chunks=None):
+def fftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
 
@@ -244,7 +247,7 @@ def fftfreq(n, d=1.0, chunks=None):
 
 
 @wraps(np.fft.rfftfreq)
-def rfftfreq(n, d=1.0, chunks=None):
+def rfftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
 

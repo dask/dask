@@ -22,10 +22,10 @@ body {
   border-radius: 0.3rem;
 }
 .navbar li:hover {
-  background-color: #ECB172;
+  background-color: #FDA061;
 }
 .navbar li .nav-link{
-  color: #ECB172;
+  color: #FDA061;
 }
 .navbar li:hover .nav-link{
   color: #212529;
@@ -36,11 +36,11 @@ body {
 }
 
 .dropdown-item {
-  color: #ECB172;
+  color: #FDA061;
 }
 
 .dropdown-item:hover {
-  background-color: #ECB172D0;
+  background-color: #FDA061D0;
 }
 
 .hero {
@@ -56,15 +56,26 @@ body {
 
 
 .outline-dask {
-  color: #ECB172;
+  color: #FDA061;
   background-color: transparent;
-  border-color: #ECB172;
+  border-color: #FDA061;
 }
+
 
 .outline-dask:hover {
   color: #212529;
-  background-color: #ECB172;
-  border-color: #ECB172;
+  background-color: #FDA061;
+  border-color: #FDA061;
+}
+
+.solid-dask {
+  color: #212529;
+  background-color: #FDA061;
+}
+
+.solid-dask:hover {
+  color: #212529;
+  background-color: #EC9050;
 }
 
 
