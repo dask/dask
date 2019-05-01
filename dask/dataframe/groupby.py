@@ -760,6 +760,8 @@ class _GroupBy(object):
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
+    group_keys: bool
+        Passed to pandas.DataFrame.groupby()
     """
     def __init__(self, df, by=None, slice=None, group_keys=True):
 
@@ -1208,7 +1210,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, by=None, slice=None, group_keys=True):
+    def __init__(self, df, by=None, slice=None, **kwargs):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1226,7 +1228,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, group_keys=group_keys)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
