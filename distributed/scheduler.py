@@ -260,6 +260,20 @@ class WorkerState(object):
     def host(self):
         return get_address_host(self.address)
 
+    def clean(self):
+        """ Return a version of this object that is appropriate for serialization """
+        ws = WorkerState(
+            address=self.address,
+            pid=self.pid,
+            name=self.name,
+            ncores=self.ncores,
+            memory_limit=self.memory_limit,
+            local_directory=self.local_directory,
+            services=self.services,
+        )
+        ws.processing = {ts.key for ts in self.processing}
+        return ws
+
     def __repr__(self):
         return "<Worker %r, memory: %d, processing: %d>" % (
             self.address,
@@ -1872,7 +1886,9 @@ class Scheduler(ServerNode):
                     ts.suspicious += 1
                     if ts.suspicious > self.allowed_failures:
                         del recommendations[k]
-                        e = pickle.dumps(KilledWorker(k, address))
+                        e = pickle.dumps(
+                            KilledWorker(task=k, last_worker=ws.clean()), -1
+                        )
                         r = self.transition(k, "erred", exception=e, cause=k)
                         recommendations.update(r)
 
@@ -4827,4 +4843,7 @@ def heartbeat_interval(n):
 
 
 class KilledWorker(Exception):
-    pass
+    def __init__(self, task, last_worker):
+        super(KilledWorker, self).__init__(task, last_worker)
+        self.task = task
+        self.last_worker = last_worker

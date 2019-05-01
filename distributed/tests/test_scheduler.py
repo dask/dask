@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import cloudpickle
+import pickle
 from collections import defaultdict
 from datetime import timedelta
 import json
@@ -1496,3 +1497,11 @@ def test_gh2187(c, s, a, b):
     yield gen.sleep(0.1)
     f = c.submit(bar, x, key="y")
     yield f
+
+
+@gen_cluster()
+def test_workerstate_clean(s, a, b):
+    ws = s.workers[a.address].clean()
+    assert ws.address == a.address
+    b = pickle.dumps(ws)
+    assert len(b) < 1000

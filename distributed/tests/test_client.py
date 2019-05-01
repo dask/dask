@@ -3479,8 +3479,10 @@ def test_get_foo_lost_keys(c, s, u, v, w):
 @gen_cluster(client=True, Worker=Nanny, check_new_threads=False)
 def test_bad_tasks_fail(c, s, a, b):
     f = c.submit(sys.exit, 1)
-    with pytest.raises(KilledWorker):
+    with pytest.raises(KilledWorker) as info:
         yield f
+
+    assert info.value.last_worker.services["nanny"] in {a.port, b.port}
 
 
 def test_get_processing_sync(c, s, a, b):

@@ -959,7 +959,7 @@ def clean_exception(exception, traceback, **kwargs):
     --------
     error_message: create and serialize errors into message
     """
-    if isinstance(exception, bytes):
+    if isinstance(exception, bytes) or isinstance(exception, bytearray):
         try:
             exception = protocol.pickle.loads(exception)
         except Exception:
