@@ -365,7 +365,7 @@ Also it differs from storing final results as these mark the end of the Dask
 graph. Thus intermediate results are easier to reuse without reloading data.
 Intermediate storage is mainly useful in cases where the data is needed
 outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
-be useful as a checkpoint for long running or flaky computations.
+be useful as a checkpoint for long running or error-prone computations.
 
 The intermediate storage use case differs from the typical storage use case as
 a Dask Array is returned to the user that represents the result of that
