@@ -4,6 +4,7 @@ import io
 import pandas as pd
 from dask.bytes import open_files, read_bytes
 import dask
+from ..utils import insert_meta_param_description, make_meta
 
 
 def to_json(df, url_path, orient='records', lines=None, storage_options=None,
@@ -72,9 +73,10 @@ def write_json_partition(df, openfile, kwargs):
         df.to_json(f, **kwargs)
 
 
+@insert_meta_param_description
 def read_json(url_path, orient='records', lines=None, storage_options=None,
               blocksize=None, sample=2**20, encoding='utf-8', errors='strict',
-              compression='infer', **kwargs):
+              compression='infer', meta=None, **kwargs):
     """Create a dataframe from a set of JSON files
 
     This utilises ``pandas.read_json()``, and most parameters are
@@ -85,7 +87,6 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
     that is most common in big-data scenarios, and which can be chunked when
     reading (see ``read_json()``). All other options require blocksize=None,
     i.e., one partition per input file.
-
 
     Parameters
     ----------
@@ -113,6 +114,7 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
         Text conversion, ``see bytes.decode()``
     compression : string or None
         String like 'gzip' or 'xz'.
+    $META
 
     Returns
     -------
@@ -150,17 +152,19 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
                                    sample=sample, compression=compression,
                                    **storage_options)
         chunks = list(dask.core.flatten(chunks))
-        first = read_json_chunk(first, encoding, errors, kwargs)
+        if meta is None:
+            meta = read_json_chunk(first, encoding, errors, kwargs)
+        meta = make_meta(meta)
         parts = [dask.delayed(read_json_chunk)(
-            chunk, encoding, errors, kwargs, meta=first[:0]
+            chunk, encoding, errors, kwargs, meta=meta
         ) for chunk in chunks]
-
+        return dd.from_delayed(parts, meta=meta)
     else:
         files = open_files(url_path, 'rt', encoding=encoding, errors=errors,
                            compression=compression, **storage_options)
         parts = [dask.delayed(read_json_file)(f, orient, lines, kwargs)
                  for f in files]
-    return dd.from_delayed(parts)
+        return dd.from_delayed(parts, meta=meta)
 
 
 def read_json_chunk(chunk, encoding, errors, kwargs, meta=None):
