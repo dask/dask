@@ -16,12 +16,7 @@ import pandas.util.testing as tm
 from pandas.api.types import (is_categorical_dtype, is_scalar, is_sparse,
                               is_period_dtype, is_datetime64tz_dtype)
 
-try:
-    from pandas.api.types import is_interval_dtype
-    HAS_INTERVAL = True
-except ImportError:
-    is_interval_dtype = lambda dtype: False
-    HAS_INTERVAL= False
+from pandas.api.types import is_interval_dtype
 
 from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
@@ -456,10 +451,9 @@ def _(x):
     return x
 
 
-if HAS_INTERVAL:
-    @make_scalar.register(pd.Interval)
-    def _(x):
-        return x
+@make_scalar.register(pd.Interval)
+def _(x):
+    return x
 
 
 def _nonempty_scalar(x):
