@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like
+from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like
 from ..utils import Dispatch
 
 if PANDAS_VERSION >= '0.23':
@@ -145,14 +145,14 @@ def describe_aggregate(values):
 
 
 def cummin_aggregate(x, y):
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
     else:       # scalar
         return x if x < y else y
 
 
 def cummax_aggregate(x, y):
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if is_series_like(x) or is_dataframe_like(x):
         return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
     else:       # scalar
         return x if x > y else y
