@@ -1075,7 +1075,6 @@ def make_block_sorted_slices(index, chunks):
 
     offsets = np.roll(np.cumsum(chunks[0]), 1)
     offsets[0] = 0
-    offsets
 
     index2 = np.empty_like(index)
     index3 = np.empty_like(index)
