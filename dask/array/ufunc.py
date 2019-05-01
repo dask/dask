@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 
 from operator import getitem
 from functools import partial, wraps
@@ -12,6 +11,7 @@ from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import skip_doctest, funcname
+from ..dataframe import core as ddcore
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -30,7 +30,8 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            if array_wrap and not IS_NEP18_ACTIVE:
+            if (array_wrap and (isinstance(dsk[0], ddcore._Frame)
+                                or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
@@ -224,6 +225,8 @@ less = ufunc(np.less)
 less_equal = ufunc(np.less_equal)
 not_equal = ufunc(np.not_equal)
 equal = ufunc(np.equal)
+isneginf = partial(equal, -np.inf)
+isposinf = partial(equal, np.inf)
 logical_and = ufunc(np.logical_and)
 logical_or = ufunc(np.logical_or)
 logical_xor = ufunc(np.logical_xor)
@@ -269,8 +272,6 @@ absolute = ufunc(np.absolute)
 clip = wrap_elemwise(np.clip)
 isreal = wrap_elemwise(np.isreal, array_wrap=True)
 iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
-isneginf = partial(wrap_elemwise(np.equal, array_wrap=True), -np.inf)
-isposinf = partial(wrap_elemwise(np.equal, array_wrap=True), np.inf)
 real = wrap_elemwise(np.real, array_wrap=True)
 imag = wrap_elemwise(np.imag, array_wrap=True)
 fix = wrap_elemwise(np.fix, array_wrap=True)
