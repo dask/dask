@@ -96,7 +96,7 @@ from distributed.cli.utils import check_python_3
 )
 @click.option(
     "--remote-dask-worker",
-    default=None,
+    default="distributed.cli.dask_worker",
     type=str,
     help="Worker to run. Defaults to distributed.cli.dask_worker",
 )
