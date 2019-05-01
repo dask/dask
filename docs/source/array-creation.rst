@@ -370,7 +370,14 @@ be useful as a checkpoint for long running or error-prone computations.
 The intermediate storage use case differs from the typical storage use case as
 a Dask Array is returned to the user that represents the result of that
 storage operation. This is typically done by setting the ``store`` function's
-``return_stored`` flag to ``True``. The user can then decide whether the
+``return_stored`` flag to ``True``. 
+
+.. code-block:: python
+
+   x.store()  # stores data, returns nothing
+   x = x.store(return_stored=True)  # stores data, returns new dask array backed by that data
+
+The user can then decide whether the
 storage operation happens immediately (by setting the ``compute`` flag to
 ``True``) or later (by setting the ``compute`` flag to ``False``). In all
 other ways, this behaves the same as a normal call to ``store``. Some examples
