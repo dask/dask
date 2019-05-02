@@ -1540,3 +1540,19 @@ def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby('name').std(),
               df.groupby('name').std())
+
+
+def test_groupby_group_keys():
+    df = pd.DataFrame({
+        'a': [1, 2, 2, 3],
+        'b': [2, 3, 4, 5],
+    })
+    ddf = dd.from_pandas(df, npartitions=2).set_index('a')
+    pdf = df.set_index('a')
+
+    func = lambda g: g.copy()
+    expected = pdf.groupby('a').apply(func)
+    assert_eq(expected, ddf.groupby('a').apply(func, meta=expected))
+
+    expected = pdf.groupby('a', group_keys=False).apply(func)
+    assert_eq(expected, ddf.groupby('a', group_keys=False).apply(func, meta=expected))
