@@ -54,7 +54,8 @@ def _parse_pandas_metadata(pandas_metadata):
     * fastparquet>=0.1.3
     * pyarrow>=0.7.0
     """
-    index_storage_names = pandas_metadata['index_columns']
+    index_storage_names = [n['name'] if isinstance(n, dict) else n
+                           for n in pandas_metadata['index_columns']]
     index_name_xpr = re.compile(r'__index_level_\d+__')
 
     # older metadatas will not have a 'field_name' field so we fall back
@@ -213,7 +214,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
                        index_names, all_columns, rg, out_type == Series,
                        categories, pf.schema, pf.cats, pf.dtypes,
-                       pf.file_scheme, storage_name_mapping)
+                       pf.file_scheme, storage_name_mapping,
+                       getattr(pf, 'tz', {}))
            for i, rg in enumerate(rgs)}
     if not dsk:
         # empty dataframe
@@ -286,6 +288,8 @@ def _pf_validation(pf, columns, index, categories, filters):
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
+        #  auto-ranges should not be created by fastparquet
+        index_names = [n for n in index_names if n is not None]
         column_names.extend(pf.cats)
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
@@ -483,7 +487,8 @@ def _read_parquet_file(fs, base, fn, index, columns, series, categories,
 
 
 def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
-                            schema, cs, dt, scheme, storage_name_mapping, *args):
+                            schema, cs, dt, scheme, storage_name_mapping, tz,
+                            *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
     from collections import OrderedDict
@@ -501,7 +506,8 @@ def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
     index = name_storage_mapping.get(index, index)
     cs = OrderedDict([(k, v) for k, v in cs.items() if k in columns])
 
-    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
+    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt,
+                              tz)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=fs.open, assign=views, scheme=scheme)
 
@@ -816,16 +822,31 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     import pyarrow.parquet as pq
 
     if infer_divisions is True and pa.__version__ < LooseVersion('0.9.0'):
-        raise NotImplementedError('infer_divisions=True requires pyarrow >=0.9.0')
+        raise NotImplementedError('infer_divisions=True requires'
+                                  ' pyarrow >=0.9.0')
 
     # Check whether divisions_name is in the schema
     # Note: get_field_index returns -1 if not found, but it does not accept None
     if infer_divisions is True:
-        divisions_name_in_schema = divisions_name is not None and pa_schema.get_field_index(divisions_name) >= 0
+        divisions_name_in_schema = (
+            divisions_name is not None
+            and pa_schema.get_field_index(divisions_name) >= 0
+        )
 
-        if divisions_name_in_schema is False and infer_divisions is True:
-            raise ValueError(
-                'Unable to infer divisions for because no index column was discovered')
+        if divisions_name_in_schema is False:
+            if (divisions_name is None and pa.__version__ >= LooseVersion(
+                    '0.13.0')):
+                # pyarrow < 0.13 does not expose num_rows
+                divisions = [0]
+                for piece in pa_pieces:
+                    divisions.append(divisions[-1]
+                                     + piece.get_metadata().num_rows)
+                divisions[-1] -= 1  # non-include on final div
+                return divisions
+            else:   # pragma: no cover
+                raise ValueError(
+                    'Unable to infer divisions for because no index column'
+                    ' was discovered')
     else:
         divisions_name_in_schema = None
 
@@ -878,11 +899,13 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
                 encoding = 'utf-8'
                 divisions = [d.decode(encoding).strip() for d in divisions]
 
-        else:
+        else:   # pragma: no cover
             if infer_divisions is True:
                 raise ValueError(
-                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
-                     "sorted across partitions").format(index_name=divisions_name_in_schema))
+                    ("Unable to infer divisions for index of '{index_name}' "
+                     "because it is not known to be "
+                     "sorted across partitions").format(
+                        index_name=divisions_name_in_schema))
 
             divisions = (None,) * (len(pa_pieces) + 1)
     elif pa_pieces:
@@ -910,7 +933,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
         df = table.to_pandas(categories=categories)
     else:
         df = table.to_pandas(categories=categories, date_as_object=False)
-    has_index = not isinstance(df.index, pd.RangeIndex)
+    has_index = not isinstance(df.index, pd.RangeIndex) or df.index.names
 
     if not has_index and index_cols:
         # Index should be set, but it isn't
@@ -1036,8 +1059,12 @@ def get_engine(engine):
     elif engine == 'pyarrow':
         pa = import_required('pyarrow', "`pyarrow` not installed")
 
-        if LooseVersion(pa.__version__) < '0.8.0':
+        pa_version = LooseVersion(pa.__version__)
+        if pa_version < '0.8.0':
             raise RuntimeError("PyArrow version >= 0.8.0 required")
+        elif pa_version == '0.13.0':
+            raise RuntimeError("PyArrow version 0.13.0 isn't supported, please "
+                               "upgrade or downgrade")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
                                      'write': _write_pyarrow}
@@ -1203,7 +1230,7 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
-    >>> to_parquet('/path/to/output/', df, compression='snappy')  # doctest: +SKIP
+    >>> dd.to_parquet(df, '/path/to/output/', compression='snappy')  # doctest: +SKIP
 
     See Also
     --------

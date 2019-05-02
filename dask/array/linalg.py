@@ -58,7 +58,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         Direct QR factorizations for tall-and-skinny matrices in
         MapReduce architectures.
         IEEE International Conference on Big Data, 2013.
-        http://arxiv.org/abs/1301.1071
+        https://arxiv.org/abs/1301.1071
 
     This algorithm is used to compute both the QR decomposition and the
     Singular Value Decomposition.  It requires that the input array have a
@@ -540,7 +540,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
     constructing approximate matrix decompositions.
     SIAM Rev., Survey and Review section, Vol. 53, num. 2,
     pp. 217-288, June 2011
-    http://arxiv.org/abs/0909.4061
+    https://arxiv.org/abs/0909.4061
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
@@ -591,7 +591,7 @@ def svd_compressed(a, k, n_power_iter=0, seed=None):
     constructing approximate matrix decompositions.
     SIAM Rev., Survey and Review section, Vol. 53, num. 2,
     pp. 217-288, June 2011
-    http://arxiv.org/abs/0909.4061
+    https://arxiv.org/abs/0909.4061
     """
     comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
     a_compressed = comp.dot(a)

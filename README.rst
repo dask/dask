@@ -18,7 +18,7 @@ New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt
 .. |Coverage| image:: https://coveralls.io/repos/dask/dask/badge.svg
    :target: https://coveralls.io/r/dask/dask
    :alt: Coverage status
-.. |Doc Status| image:: http://readthedocs.org/projects/dask/badge/?version=latest
+.. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
    :target: https://dask.org
    :alt: Documentation Status
 .. |Gitter| image:: https://badges.gitter.im/Join%20Chat.svg

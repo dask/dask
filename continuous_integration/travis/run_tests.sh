@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -e
+
 # Need to make test order deterministic when parallelizing tests, hence PYTHONHASHSEED
 # (see https://github.com/pytest-dev/pytest-xdist/issues/63)
 if [[ $PARALLEL == 'true' ]]; then
@@ -14,6 +17,4 @@ else
     py.test dask --runslow $XTRATESTARGS
 fi
 
-# This needs to be enabled to test __array_function__ protocol with
-# NumPy v1.16.x, enabled by default starting in v1.17
-export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+set +e

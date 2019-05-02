@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 
 from .core import (DataFrame, Series, aca, map_partitions,
-                   new_dd_object, no_default, split_out_on_index)
+                   new_dd_object, no_default, split_out_on_index,
+                   _extract_meta)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
@@ -513,7 +514,8 @@ def _build_agg_args_single(result_column, func, input_column):
         'count': (M.count, M.sum),
         'size': (M.size, M.sum),
         'first': (M.first, M.first),
-        'last': (M.last, M.last)
+        'last': (M.last, M.last),
+        'prod': (M.prod, M.prod)
     }
 
     if func in simple_impl.keys():
@@ -823,7 +825,7 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        meta = func(self._meta)
+        meta = func(self._meta_nonempty)
         columns = meta.name if is_series_like(meta) else meta.columns
 
         token = self._token_prefix + token
@@ -928,9 +930,24 @@ class _GroupBy(object):
                              initial=-1)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1):
-        return self._aca_agg(token='sum', func=M.sum, split_every=split_every,
-                             split_out=split_out)
+    def sum(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='sum', func=M.sum, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def prod(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='prod', func=M.prod, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self, split_every=None, split_out=1):
@@ -1103,15 +1120,16 @@ class _GroupBy(object):
         meta = kwargs.get('meta', no_default)
 
         if meta is no_default:
+            with raise_on_meta_error("groupby.apply({0})".format(funcname(func)), udf=True):
+                meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
+                meta = self._meta_nonempty.apply(func, *meta_args, **meta_kwargs)
+
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
                    "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg, stacklevel=2)
-
-            with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
-                meta = self._meta_nonempty.apply(func, *args, **kwargs)
 
         meta = make_meta(meta)
 
@@ -1126,6 +1144,13 @@ class _GroupBy(object):
                               df._contains_index_name(self.index))
 
         if should_shuffle:
+            if isinstance(self.obj, Series):
+                # Temporarily convert series to dataframe for shuffle
+                df = df.to_frame('__series__')
+                convert_back_to_series = True
+            else:
+                convert_back_to_series = False
+
             if isinstance(self.index, DataFrame):  # add index columns to dataframe
                 df2 = df.assign(**{'_index_' + c: self.index[c]
                                    for c in self.index.columns})
@@ -1138,27 +1163,32 @@ class _GroupBy(object):
                 index = df._select_columns_or_index(self.index)
 
             df3 = shuffle(df2, index)  # shuffle dataframe and index
-        else:
-            df3 = df
 
-        if should_shuffle and isinstance(self.index, DataFrame):
-            # extract index from dataframe
-            cols = ['_index_' + c for c in self.index.columns]
-            index2 = df3[cols]
-            if is_dataframe_like(meta):
-                df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+            if isinstance(self.index, DataFrame):
+                # extract index from dataframe
+                cols = ['_index_' + c for c in self.index.columns]
+                index2 = df3[cols]
+                if is_dataframe_like(meta):
+                    df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+                else:
+                    df4 = df3.drop(cols, axis=1)
+            elif isinstance(self.index, Series):
+                index2 = df3['_index']
+                index2.name = self.index.name
+                if is_dataframe_like(meta):
+                    df4 = df3.map_partitions(drop_columns, '_index',
+                                             meta.columns.dtype)
+                else:
+                    df4 = df3.drop('_index', axis=1)
             else:
-                df4 = df3.drop(cols, axis=1)
-        elif should_shuffle and isinstance(self.index, Series):
-            index2 = df3['_index']
-            index2.name = self.index.name
-            if is_dataframe_like(meta):
-                df4 = df3.map_partitions(drop_columns, '_index',
-                                         meta.columns.dtype)
-            else:
-                df4 = df3.drop('_index', axis=1)
+                df4 = df3
+                index2 = self.index
+
+            if convert_back_to_series:
+                df4 = df4['__series__'].rename(self.obj.name)
+
         else:
-            df4 = df3
+            df4 = df
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
