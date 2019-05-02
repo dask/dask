@@ -248,10 +248,13 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
             pass
 
     # if out_chunks is scalar, transform _meta into scalar
-    if len(out_chunks) == 0 and meta.ndim == 1:
+    if len(out_chunks) == 0 and (np.isscalar(meta) or meta.ndim == 1):
         meta = np.sum(meta, keepdims=False)
 
-    return Array(graph, name, out_chunks, meta=meta.astype(dtype))
+    if np.isscalar(meta):
+        return Array(graph, name, out_chunks, dtype=dtype)
+    else:
+        return Array(graph, name, out_chunks, meta=meta.astype(dtype))
 
 
 @wraps(chunk.sum)
