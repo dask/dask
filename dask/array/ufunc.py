@@ -11,7 +11,10 @@ from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import skip_doctest, funcname
-from ..dataframe import core as ddcore
+try:
+    from ..dataframe import core as ddcore
+except ImportError:
+    pass
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -30,8 +33,12 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            if (array_wrap and (isinstance(dsk[0], ddcore._Frame)
-                                or not IS_NEP18_ACTIVE)):
+            try:
+                is_dataframe = isinstance(dsk[0], ddcore._Frame)
+            except NameError:
+                is_dataframe = False
+            if (array_wrap and
+                    (is_dataframe or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
