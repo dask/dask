@@ -137,7 +137,7 @@ have a cluster on which you run Spark workloads, it's likely easy to also run
 Dask workloads on your current infrastructure and vice versa.
 
 In particular, for users coming from traditional Hadoop/Spark clusters (such as
-those sold by Cloudera/Hortonworks) you are likely using the Yarn resource
+those sold by Cloudera/Hortonworks) you are using the Yarn resource
 manager.  You can deploy Dask on these systems using the `Dask Yarn
 <https://yarn.dask.org>`_ project, as well as other projects, like `JupyterHub
 on Hadoop <https://jcrist.github.io/jupyterhub-on-hadoop/>`_.
