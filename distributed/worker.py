@@ -674,6 +674,8 @@ class Worker(ServerNode):
                 comm = yield connect(
                     self.scheduler.address, connection_args=self.connection_args
                 )
+                comm.name = "Worker->Scheduler"
+                comm._server = weakref.ref(self)
                 yield comm.write(
                     dict(
                         op="register-worker",
@@ -993,8 +995,6 @@ class Worker(ServerNode):
             for k, v in self.services.items():
                 v.stop()
 
-            self.status = "closed"
-
             if nanny and "nanny" in self.service_ports:
                 nanny_address = "%s%s:%d" % (
                     self.listener.prefix,
@@ -1013,6 +1013,8 @@ class Worker(ServerNode):
             self.rpc.close()
             self._closed.set()
             self._remove_from_global_workers()
+
+            self.status = "closed"
             yield self.close()
 
             setproctitle("dask-worker [closed]")
@@ -1051,6 +1053,7 @@ class Worker(ServerNode):
                 comm = yield connect(
                     address, connection_args=self.connection_args  # TODO, serialization
                 )
+                comm.name = "Worker->Worker"
                 yield comm.write({"op": "connection_stream"})
 
                 bcomm.start(comm)
@@ -2952,6 +2955,7 @@ def get_data_from_worker(
         deserializers = rpc.deserializers
 
     comm = yield rpc.connect(worker)
+    comm.name = "Ephemeral Worker->Worker for gather"
     try:
         response = yield send_recv(
             comm,

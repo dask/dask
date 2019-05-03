@@ -2176,6 +2176,7 @@ class Scheduler(ServerNode):
         We listen to all future messages from this Comm.
         """
         assert client is not None
+        comm.name = "Scheduler->Client"
         logger.info("Receive client connection: %s", client)
         self.log_event(["all", client], {"action": "add-client", "client": client})
         self.clients[client] = ClientState(client)
@@ -2373,6 +2374,7 @@ class Scheduler(ServerNode):
         --------
         Scheduler.handle_client: Equivalent coroutine for clients
         """
+        comm.name = "Scheduler connection to worker"
         worker_comm = self.stream_comms[worker]
         worker_comm.start(comm)
         logger.info("Starting worker compute stream, %s", worker)
@@ -2633,6 +2635,7 @@ class Scheduler(ServerNode):
             comm = yield connect(
                 addr, deserialize=self.deserialize, connection_args=self.connection_args
             )
+            comm.name = "Scheduler Broadcast"
             resp = yield send_recv(comm, close=True, serializers=serializers, **msg)
             raise gen.Return(resp)
 

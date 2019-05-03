@@ -824,7 +824,7 @@ def test_file_descriptors(c, s):
     yield [n._close() for n in nannies]
 
     assert not s.rpc.open
-    assert not c.rpc.open
+    assert not c.rpc.active
     assert not s.stream_comms
 
     start = time()

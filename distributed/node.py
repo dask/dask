@@ -19,6 +19,7 @@ class Node(object):
         io_loop=None,
         serializers=None,
         deserializers=None,
+        timeout=None,
     ):
         self.io_loop = io_loop or IOLoop.current()
         self.rpc = ConnectionPool(
@@ -27,6 +28,8 @@ class Node(object):
             serializers=serializers,
             deserializers=deserializers,
             connection_args=connection_args,
+            timeout=timeout,
+            server=self,
         )
 
 
@@ -51,6 +54,7 @@ class ServerNode(Node, Server):
         io_loop=None,
         serializers=None,
         deserializers=None,
+        timeout=None,
     ):
         Node.__init__(
             self,
@@ -60,6 +64,7 @@ class ServerNode(Node, Server):
             io_loop=io_loop,
             serializers=serializers,
             deserializers=deserializers,
+            timeout=timeout,
         )
         Server.__init__(
             self,

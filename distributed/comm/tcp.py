@@ -152,6 +152,7 @@ class TCP(Comm):
     _iostream_has_read_into = hasattr(IOStream, "read_into")
 
     def __init__(self, stream, local_addr, peer_addr, deserialize=True):
+        Comm.__init__(self)
         self._local_addr = local_addr
         self._peer_addr = peer_addr
         self.stream = stream

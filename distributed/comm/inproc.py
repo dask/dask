@@ -152,6 +152,7 @@ class InProc(Comm):
     def __init__(
         self, local_addr, peer_addr, read_q, write_q, write_loop, deserialize=True
     ):
+        Comm.__init__(self)
         self._local_addr = local_addr
         self._peer_addr = peer_addr
         self.deserialize = deserialize

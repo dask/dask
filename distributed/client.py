@@ -703,6 +703,7 @@ class Client(Node):
             io_loop=self.loop,
             serializers=serializers,
             deserializers=deserializers,
+            timeout=timeout,
         )
 
         for ext in extensions:
@@ -947,13 +948,7 @@ class Client(Node):
             address = self.cluster.scheduler_address
 
         if self.scheduler is None:
-            self.scheduler = rpc(
-                address,
-                timeout=timeout,
-                connection_args=self.connection_args,
-                serializers=self._serializers,
-                deserializers=self._deserializers,
-            )
+            self.scheduler = self.rpc(address)
         self.scheduler_comm = None
 
         yield self._ensure_connected(timeout=timeout)
@@ -1014,6 +1009,7 @@ class Client(Node):
                 timeout=timeout,
                 connection_args=self.connection_args,
             )
+            comm.name = "Client->Scheduler"
             if timeout is not None:
                 yield gen.with_timeout(
                     timedelta(seconds=timeout), self._update_scheduler_info()
@@ -1238,6 +1234,7 @@ class Client(Node):
             if self._start_arg is None:
                 with ignoring(AttributeError):
                     yield self.cluster._close()
+            self.rpc.close()
             self.status = "closed"
             if _get_global_client() is self:
                 _set_global_client(None)

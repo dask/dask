@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from abc import ABCMeta, abstractmethod, abstractproperty
 from datetime import timedelta
 import logging
+import weakref
 
 import dask
 from six import with_metaclass
@@ -36,6 +37,12 @@ class Comm(with_metaclass(ABCMeta)):
     of this class can implement different serialization mechanisms
     depending on the underlying transport's characteristics.
     """
+
+    _instances = weakref.WeakSet()
+
+    def __init__(self):
+        self._instances.add(self)
+        self.name = None
 
     # XXX add set_close_callback()?
 
@@ -116,8 +123,9 @@ class Comm(with_metaclass(ABCMeta)):
         if self.closed():
             return "<closed %s>" % (clsname,)
         else:
-            return "<%s local=%s remote=%s>" % (
+            return "<%s %s local=%s remote=%s>" % (
                 clsname,
+                self.name or "",
                 self.local_address,
                 self.peer_address,
             )
