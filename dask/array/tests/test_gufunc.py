@@ -543,51 +543,38 @@ def test_apply_gufunc_via_numba_02():
     assert_eq(x, y)
 
 
-def run_mangled_dtype_test(reassign_vectorize_dtypes=None):
+def run_mangled_output_dtype_test(reassign_vectorize_dtypes=None):
+    def identity(x):
+        return x
 
-    def io_mapping():
-        # Create strings with sizes {8, 9, 10, 11}.  NOTE: '10' and '11' are
-        # 2-character strings.  If numpy changes the dtype to shorter strings
-        # (which it currently does, the output strings will be truncated to be
-        # 1 character in length.  This is bad and the behavior we want to
-        # correct.
-
-        output_dtype = "U2"  # Output SHOULD support length-2 strings.
-        sizes = np.arange(8, 12)
-        str_tpe = "U" + str(np.max(sizes))
-        inp = np.array(["-" * n for n in sizes], dtype=str_tpe).reshape(2, 2)
-        output = sizes.astype(output_dtype).reshape(2, 2)
-        return np.dtype(output_dtype), inp, output
-
-    output_dtypes, npa, expected_output = io_mapping()
+    o_dtype = np.dtype('U2')
 
     if reassign_vectorize_dtypes is None:
-        str_len = da.gufunc(lambda x: len(str(x)),
-                            output_dtypes=output_dtypes,
-                            signature="()->()",
-                            vectorize=True)
+        f = da.gufunc(identity,
+                      output_dtypes=(o_dtype,),
+                      signature="()->()",
+                      vectorize=True)
     else:
-        str_len = da.gufunc(lambda x: len(str(x)),
-                            output_dtypes=output_dtypes,
-                            signature="()->()",
-                            vectorize=True,
+        f = da.gufunc(identity,
+                      output_dtypes=(o_dtype,),
+                      signature="()->()",
+                      vectorize=True,
+                      reassign_vectorize_dtypes=reassign_vectorize_dtypes)
 
-                            # This assignment is what is under test.
-                            reassign_vectorize_dtypes=reassign_vectorize_dtypes)
-
-    out = str_len(da.array(npa)).compute()
-    np.testing.assert_array_equal(expected_output, out)
+    x = np.array(['12', '23'], dtype=o_dtype)
+    y = f(da.array(x)).compute()
+    np.testing.assert_array_equal(x, y)
 
 
 def test_unicode_dtypes_in_gufunc_with_fix_true():
-    run_mangled_dtype_test(reassign_vectorize_dtypes=True)
+    run_mangled_output_dtype_test(reassign_vectorize_dtypes=True)
 
 
 def test_unicode_dtypes_in_gufunc_with_fix_omitted():
     with pytest.raises(AssertionError):
-        run_mangled_dtype_test()
+        run_mangled_output_dtype_test()
 
 
 def test_unicode_dtypes_in_gufunc_with_fix_false():
     with pytest.raises(AssertionError):
-        run_mangled_dtype_test(reassign_vectorize_dtypes=False)
+        run_mangled_output_dtype_test(reassign_vectorize_dtypes=False)
