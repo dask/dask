@@ -212,6 +212,13 @@ def apply_gufunc(func, signature, *args, **kwargs):
     vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
+    reassign_vectorize_dtypes: bool, keyword only
+        If set to ``True``, after ``np.vectorize`` is applied to ``func``,
+        then the output dtypes are assigned to func.otypes.  This overcomes
+        a bug in numpy.vectorize that mangles dtypes.  This only matters if
+        ``vectorize`` is ``True``.  This should most likely be set to ``True``
+        but is defaults to ``False`` for backward compatibility.  Defaults
+        to ``False``.
     allow_rechunk: Optional, bool, keyword only
         Allows rechunking, otherwise chunk sizes need to match and core
         dimensions are to consist only of one chunk.
@@ -255,6 +262,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_dtypes = kwargs.pop("output_dtypes", None)
     output_sizes = kwargs.pop("output_sizes", None)
     vectorize = kwargs.pop("vectorize", None)
+    reassign_vectorize_dtypes = kwargs.pop("reassign_vectorize_dtypes", False)
+
     allow_rechunk = kwargs.pop("allow_rechunk", False)
 
     # Input processing:
@@ -291,6 +300,14 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Vectorize function, if required
     if vectorize:
         func = np.vectorize(func, signature=signature, otypes=otypes)
+
+        # This overcomes a bug in ``np.vectorize`` whereby unicode dtypes with
+        # prescribed lengths are mangled.  E.g., without reassigning output
+        # dtypes, a desired output dtype of "U2" will becomes "U1" in
+        # ``np.vectorize``.  To overcome this, simply reset the output dtypes
+        # to the ones supplied to ``np.vectorize``.
+        if reassign_vectorize_dtypes:
+            func.otypes = otypes
 
     ## Miscellaneous
     if output_sizes is None:
@@ -474,6 +491,13 @@ class gufunc(object):
     vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
+    reassign_vectorize_dtypes: bool, keyword only
+        If set to ``True``, after ``np.vectorize`` is applied to ``func``,
+        then the output dtypes are assigned to func.otypes.  This overcomes
+        a bug in numpy.vectorize that mangles dtypes.  This only matters if
+        ``vectorize`` is ``True``.  This should most likely be set to ``True``
+        but is defaults to ``False`` for backward compatibility.  Defaults
+        to ``False``.
     allow_rechunk: Optional, bool, keyword only
         Allows rechunking, otherwise chunk sizes need to match and core
         dimensions are to consist only of one chunk.
@@ -515,6 +539,7 @@ class gufunc(object):
         self.pyfunc = pyfunc
         self.signature = kwargs.pop("signature", None)
         self.vectorize = kwargs.pop("vectorize", False)
+        self.reassign_vectorize_dtypes = kwargs.pop("reassign_vectorize_dtypes", False)
         self.axes = kwargs.pop("axes", None)
         self.axis = kwargs.pop("axis", None)
         self.keepdims = kwargs.pop("keepdims", False)
@@ -547,6 +572,7 @@ class gufunc(object):
                             self.signature,
                             *args,
                             vectorize=self.vectorize,
+                            reassign_vectorize_dtypes=self.reassign_vectorize_dtypes or kwargs.pop("reassign_vectorize_dtypes", False),
                             axes=self.axes,
                             axis=self.axis,
                             keepdims=self.keepdims,
@@ -600,6 +626,13 @@ def as_gufunc(signature=None, **kwargs):
     vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
+    reassign_vectorize_dtypes: bool, keyword only
+        If set to ``True``, after ``np.vectorize`` is applied to ``func``,
+        then the output dtypes are assigned to func.otypes.  This overcomes
+        a bug in numpy.vectorize that mangles dtypes.  This only matters if
+        ``vectorize`` is ``True``.  This should most likely be set to ``True``
+        but is defaults to ``False`` for backward compatibility.  Defaults
+        to ``False``.
     allow_rechunk: Optional, bool, keyword only
         Allows rechunking, otherwise chunk sizes need to match and core
         dimensions are to consist only of one chunk.
