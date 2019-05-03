@@ -538,6 +538,9 @@ class Client(Node):
         the scheduler to serve as intermediary.
     heartbeat_interval: int
         Time in milliseconds between heartbeats to scheduler
+    **kwargs:
+        If you do not pass a scheduler address, Client will create a
+        ``LocalCluster`` object, passing any extra keyword arguments.
 
     Examples
     --------
@@ -559,9 +562,19 @@ class Client(Node):
     >>> client.gather(c)  # doctest: +SKIP
     33
 
+    You can also call Client with no arguments in order to create your own
+    local cluster.
+
+    >>> client = Client()  # makes your own local "cluster" # doctest: +SKIP
+
+    Extra keywords will be passed directly to LocalCluster
+
+    >>> client = Client(processes=False, threads_per_worker=1)  # doctest: +SKIP
+
     See Also
     --------
     distributed.scheduler.Scheduler: Internal scheduler
+    distributed.deploy.local.LocalCluster:
     """
 
     def __init__(
