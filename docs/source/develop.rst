@@ -97,6 +97,10 @@ For development, Dask uses the following additional dependencies::
 
    pip install pytest moto mock
 
+And the following dependencies are required to get all tests to pass::
+
+   conda install graphviz python-graphviz ipython
+
 
 Run Tests
 ~~~~~~~~~
@@ -118,7 +122,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 2.7, 3.4, 3.5, and 3.6 in a single codebase.
+Dask supports Python versions 2.7, 3.5, 3.6, and 3.7 in a single codebase.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
