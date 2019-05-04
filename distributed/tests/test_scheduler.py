@@ -1499,6 +1499,22 @@ def test_gh2187(c, s, a, b):
     yield f
 
 
+@gen_cluster(client=True, config={"distributed.scheduler.idle-timeout": "200ms"})
+def test_idle_timeout(c, s, a, b):
+    future = c.submit(slowinc, 1)
+    yield future
+
+    assert s.status != "closed"
+
+    start = time()
+    while s.status != "closed":
+        yield gen.sleep(0.01)
+    assert time() < start + 3
+
+    assert a.status == "closed"
+    assert b.status == "closed"
+
+
 @gen_cluster()
 def test_workerstate_clean(s, a, b):
     ws = s.workers[a.address].clean()

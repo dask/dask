@@ -16,6 +16,7 @@ distributed:
     # Number of seconds to wait until workers or clients are removed from the events log
     # after they have been removed from the scheduler
     events-cleanup-delay: 1h
+    idle-timeout: null      # Shut down after this duration, like "1h" or "30 minutes"
     transition-log-length: 100000
     work-stealing: True     # workers should steal tasks from each other
     worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this

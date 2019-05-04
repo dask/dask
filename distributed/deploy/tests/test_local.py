@@ -52,7 +52,7 @@ def test_simple(loop):
 
 
 def test_local_cluster_supports_blocked_handlers(loop):
-    with LocalCluster(blocked_handlers=["run_function"], loop=loop) as c:
+    with LocalCluster(blocked_handlers=["run_function"], n_workers=0, loop=loop) as c:
         with Client(c) as client:
             with pytest.raises(ValueError) as exc:
                 client.run_on_scheduler(lambda x: x, 42)
@@ -309,11 +309,11 @@ def test_cleanup():
 
 def test_repeated():
     with LocalCluster(
-        scheduler_port=8448, silence_logs=False, dashboard_address=None
+        0, scheduler_port=8448, silence_logs=False, dashboard_address=None
     ) as c:
         pass
     with LocalCluster(
-        scheduler_port=8448, silence_logs=False, dashboard_address=None
+        0, scheduler_port=8448, silence_logs=False, dashboard_address=None
     ) as c:
         pass
 
@@ -323,6 +323,7 @@ def test_bokeh(loop, processes):
     pytest.importorskip("bokeh")
     requests = pytest.importorskip("requests")
     with LocalCluster(
+        n_workers=0,
         scheduler_port=0,
         silence_logs=False,
         loop=loop,
@@ -405,14 +406,19 @@ def test_silent_startup():
 
 def test_only_local_access(loop):
     with LocalCluster(
-        scheduler_port=0, silence_logs=False, dashboard_address=None, loop=loop
+        0, scheduler_port=0, silence_logs=False, dashboard_address=None, loop=loop
     ) as c:
         sync(loop, assert_can_connect_locally_4, c.scheduler.port)
 
 
 def test_remote_access(loop):
     with LocalCluster(
-        scheduler_port=0, silence_logs=False, dashboard_address=None, ip="", loop=loop
+        0,
+        scheduler_port=0,
+        silence_logs=False,
+        dashboard_address=None,
+        ip="",
+        loop=loop,
     ) as c:
         sync(loop, assert_can_connect_from_everywhere_4_6, c.scheduler.port)
 
@@ -463,6 +469,7 @@ def test_death_timeout_raises(loop):
 def test_bokeh_kwargs(loop):
     pytest.importorskip("bokeh")
     with LocalCluster(
+        n_workers=0,
         scheduler_port=0,
         silence_logs=False,
         loop=loop,
@@ -496,6 +503,7 @@ def test_logging():
 def test_ipywidgets(loop):
     ipywidgets = pytest.importorskip("ipywidgets")
     with LocalCluster(
+        n_workers=0,
         scheduler_port=0,
         silence_logs=False,
         loop=loop,
@@ -607,6 +615,7 @@ def test_local_tls(loop):
 
     security = tls_only_security()
     with LocalCluster(
+        n_workers=0,
         scheduler_port=8786,
         silence_logs=False,
         security=security,
@@ -730,7 +739,9 @@ def test_protocol_inproc(loop):
 
 
 def test_protocol_tcp(loop):
-    with LocalCluster(protocol="tcp", loop=loop, processes=False) as cluster:
+    with LocalCluster(
+        protocol="tcp", loop=loop, n_workers=0, processes=False
+    ) as cluster:
         assert cluster.scheduler.address.startswith("tcp://")
 
 
@@ -738,7 +749,9 @@ def test_protocol_tcp(loop):
     not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
 )
 def test_protocol_ip(loop):
-    with LocalCluster(ip="tcp://127.0.0.2", loop=loop, processes=False) as cluster:
+    with LocalCluster(
+        ip="tcp://127.0.0.2", loop=loop, n_workers=0, processes=False
+    ) as cluster:
         assert cluster.scheduler.address.startswith("tcp://127.0.0.2")
 
 
