@@ -55,8 +55,8 @@ def test_add_remove_worker(s):
     b = Worker(s.address)
     yield a
     yield b
-    yield a._close()
-    yield b._close()
+    yield a.close()
+    yield b.close()
 
     assert events == [
         ("add_worker", a.address),
@@ -68,5 +68,5 @@ def test_add_remove_worker(s):
     events[:] = []
     s.remove_plugin(plugin)
     a = yield Worker(s.address)
-    yield a._close()
+    yield a.close()
     assert events == []

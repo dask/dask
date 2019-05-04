@@ -112,7 +112,7 @@ def invalid_python_script(tmpdir_factory):
 def cleanup_global_workers():
     for w in _global_workers:
         w = w()
-        w._close(report=False, executor_wait=False)
+        w.close(report=False, executor_wait=False)
 
 
 @pytest.fixture
@@ -526,7 +526,7 @@ def run_nanny(q, scheduler_q, **kwargs):
             try:
                 loop.start()
             finally:
-                loop.run_sync(worker._close)
+                loop.run_sync(worker.close)
                 loop.close(all_fds=True)
 
 
@@ -869,7 +869,7 @@ def start_cluster(
     ):
         yield gen.sleep(0.01)
         if time() - start > 5:
-            yield [w._close(timeout=1) for w in workers]
+            yield [w.close(timeout=1) for w in workers]
             yield s.close(fast=True)
             raise Exception("Cluster creation timeout")
     raise gen.Return((s, workers))
@@ -882,7 +882,7 @@ def end_cluster(s, workers):
     @gen.coroutine
     def end_worker(w):
         with ignoring(TimeoutError, CommClosedError, EnvironmentError):
-            yield w._close(report=False)
+            yield w.close(report=False)
 
     yield [end_worker(w) for w in workers]
     yield s.close()  # wait until scheduler stops completely
@@ -1031,7 +1031,7 @@ def gen_cluster(
                 DequeHandler.clear_all_instances()
                 for w in _global_workers:
                     w = w()
-                    w._close(report=False, executor_wait=False)
+                    w.close(report=False, executor_wait=False)
                     if w.status == "running":
                         w.close()
                 del _global_workers[:]

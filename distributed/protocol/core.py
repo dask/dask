@@ -11,27 +11,11 @@ except ImportError:
     from toolz import reduce
 
 from .compression import compressions, maybe_compress, decompress
-from .serialize import (
-    serialize,
-    deserialize,
-    Serialize,
-    Serialized,
-    extract_serialize,
-    msgpack_len_opts,
-)
-from .utils import frame_split_size, merge_frames
+from .serialize import serialize, deserialize, Serialize, Serialized, extract_serialize
+from .utils import frame_split_size, merge_frames, msgpack_opts
 from ..utils import nbytes
 
 _deserialize = deserialize
-
-
-try:
-    msgpack.loads(msgpack.dumps(""), raw=False, **msgpack_len_opts)
-    msgpack_opts = {"raw": False}
-    msgpack_opts.update(msgpack_len_opts)
-except TypeError:
-    # Backward compat with old msgpack (prior to 0.5.2)
-    msgpack_opts = {"encoding": "utf-8"}
 
 
 logger = logging.getLogger(__name__)

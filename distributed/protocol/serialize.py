@@ -16,7 +16,13 @@ from . import pickle
 from ..compatibility import PY2
 from ..utils import has_keyword
 from .compression import maybe_compress, decompress
-from .utils import unpack_frames, pack_frames_prelude, frame_split_size, ensure_bytes
+from .utils import (
+    unpack_frames,
+    pack_frames_prelude,
+    frame_split_size,
+    ensure_bytes,
+    msgpack_opts,
+)
 
 
 lazy_registrations = {}
@@ -58,11 +64,6 @@ def pickle_loads(header, frames):
     return pickle.loads(b"".join(frames))
 
 
-msgpack_len_opts = {
-    ("max_%s_len" % x): 2 ** 31 - 1 for x in ["str", "bin", "array", "map", "ext"]
-}
-
-
 def msgpack_dumps(x):
     try:
         frame = msgpack.dumps(x, use_bin_type=True)
@@ -73,9 +74,7 @@ def msgpack_dumps(x):
 
 
 def msgpack_loads(header, frames):
-    return msgpack.loads(
-        b"".join(frames), encoding="utf8", use_list=False, **msgpack_len_opts
-    )
+    return msgpack.loads(b"".join(frames), use_list=False, **msgpack_opts)
 
 
 def serialization_error_loads(header, frames):

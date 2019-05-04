@@ -338,7 +338,7 @@ class LocalCluster(Cluster):
 
     @gen.coroutine
     def _stop_worker(self, w):
-        yield w._close()
+        yield w.close()
         if w in self.workers:
             self.workers.remove(w)
 

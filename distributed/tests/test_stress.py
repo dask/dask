@@ -114,7 +114,7 @@ def test_stress_creation_and_deletion(c, s):
 
             yield gen.sleep(delay)
 
-            yield n._close()
+            yield n.close()
             print("Killed nanny")
 
     yield gen.with_timeout(
@@ -167,7 +167,7 @@ def test_stress_scatter_death(c, s, *workers):
             else:
                 raise
         w = random.choice(alive)
-        yield w._close()
+        yield w.close()
         alive.remove(w)
 
     try:

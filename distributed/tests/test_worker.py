@@ -193,8 +193,8 @@ def test_upload_file(c, s, a, b):
     result = yield future
     assert result == 123
 
-    yield a._close()
-    yield b._close()
+    yield a.close()
+    yield b.close()
     aa.close_rpc()
     bb.close_rpc()
     assert not os.path.exists(os.path.join(a.local_dir, "foobar.py"))
@@ -997,7 +997,7 @@ def test_start_services(s):
     yield w._start()
 
     assert w.services["bokeh"].server.port == 1234
-    yield w._close()
+    yield w.close()
 
 
 @gen_test()
@@ -1007,7 +1007,7 @@ def test_scheduler_file():
         s.start(8009)
         w = yield Worker(scheduler_file=fn)
         assert set(s.workers) == {w.address}
-        yield w._close()
+        yield w.close()
         s.stop()
 
 
@@ -1186,7 +1186,7 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
 
     yield c.submit(inc, 2)  # worker doesn't pause
 
-    yield worker._close()
+    yield worker.close()
 
 
 @gen_cluster(
@@ -1225,7 +1225,7 @@ def test_scheduler_address_config(c, s):
     with dask.config.set({"scheduler-address": s.address}):
         worker = yield Worker(loop=s.loop)
         assert worker.scheduler.address == s.address
-    yield worker._close()
+    yield worker.close()
 
 
 @slow
@@ -1321,7 +1321,7 @@ def test_register_worker_callbacks(c, s, a, b):
     worker = yield Worker(s.address, loop=s.loop)
     result = yield c.run(test_import, workers=[worker.address])
     assert list(result.values()) == [False]
-    yield worker._close()
+    yield worker.close()
 
     # Add a preload function
     response = yield c.register_worker_callbacks(setup=mystartup)
@@ -1336,7 +1336,7 @@ def test_register_worker_callbacks(c, s, a, b):
     worker = yield Worker(s.address, loop=s.loop)
     result = yield c.run(test_import, workers=[worker.address])
     assert list(result.values()) == [True]
-    yield worker._close()
+    yield worker.close()
 
     # Register another preload function
     response = yield c.register_worker_callbacks(setup=mystartup2)
@@ -1353,7 +1353,7 @@ def test_register_worker_callbacks(c, s, a, b):
     assert list(result.values()) == [True]
     result = yield c.run(test_startup2, workers=[worker.address])
     assert list(result.values()) == [True]
-    yield worker._close()
+    yield worker.close()
 
     # Final exception test
     with pytest.raises(ZeroDivisionError):
@@ -1364,12 +1364,12 @@ def test_register_worker_callbacks(c, s, a, b):
 def test_data_types(s):
     w = yield Worker(s.address, data=dict)
     assert isinstance(w.data, dict)
-    yield w._close()
+    yield w.close()
 
     data = dict()
     w = yield Worker(s.address, data=data)
     assert w.data is data
-    yield w._close()
+    yield w.close()
 
     class Data(dict):
         def __init__(self, x, y):
@@ -1379,4 +1379,4 @@ def test_data_types(s):
     w = yield Worker(s.address, data=(Data, {"x": 123, "y": 456}))
     assert w.data.x == 123
     assert w.data.y == 456
-    yield w._close()
+    yield w.close()

@@ -536,7 +536,7 @@ class Worker(ServerNode):
         }
 
         stream_handlers = {
-            "close": self._close,
+            "close": self.close,
             "compute-task": self.add_task,
             "release-task": partial(self.release_key, report=False),
             "delete-data": self.delete_data,
@@ -665,7 +665,7 @@ class Worker(ServerNode):
         logger.info("-" * 49)
         while True:
             if self.death_timeout and time() > start + self.death_timeout:
-                yield self._close(timeout=1)
+                yield self.close(timeout=1)
                 return
             if self.status in ("closed", "closing"):
                 raise gen.Return
@@ -775,7 +775,7 @@ class Worker(ServerNode):
                 logger.info("Connection to scheduler broken.  Reconnecting...")
                 self.loop.add_callback(self._register_with_scheduler)
             else:
-                yield self._close(report=False)
+                yield self.close(report=False)
 
     def start_ipython(self, comm):
         """Start an IPython kernel
@@ -958,8 +958,12 @@ class Worker(ServerNode):
     def start(self, port=0):
         self.loop.add_callback(self._start, port)
 
+    def _close(self, *args, **kwargs):
+        warnings.warn("Worker._close has moved to Worker.close")
+        return self.close(*args, **kwargs)
+
     @gen.coroutine
-    def _close(self, report=True, timeout=10, nanny=True, executor_wait=True):
+    def close(self, report=True, timeout=10, nanny=True, executor_wait=True):
         with log_errors():
             if self.status in ("closed", "closing"):
                 return
@@ -1015,7 +1019,7 @@ class Worker(ServerNode):
             self._remove_from_global_workers()
 
             self.status = "closed"
-            yield self.close()
+            yield ServerNode.close(self)
 
             setproctitle("dask-worker [closed]")
 
@@ -1031,7 +1035,7 @@ class Worker(ServerNode):
 
     @gen.coroutine
     def terminate(self, comm, report=True):
-        yield self._close(report=report)
+        yield self.close(report=report)
         raise Return("OK")
 
     @gen.coroutine

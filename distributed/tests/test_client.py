@@ -528,7 +528,7 @@ def test_gather_lost(c, s, a, b):
     [x] = yield c.scatter([1], workers=a.address)
     y = c.submit(inc, 1, workers=b.address)
 
-    yield a._close()
+    yield a.close()
 
     with pytest.raises(Exception):
         res = yield c.gather([x, y])
@@ -641,7 +641,7 @@ def test_gather_errors(c, s, a, b):
     with pytest.raises(AttributeError):
         yield c.gather(future_g)
 
-    yield a._close()
+    yield a.close()
 
 
 @gen_cluster(client=True)
@@ -946,7 +946,7 @@ def test_remove_worker(c, s, a, b):
     L = c.map(inc, range(20))
     yield wait(L)
 
-    yield b._close()
+    yield b.close()
 
     assert b.address not in s.workers
 
@@ -2845,7 +2845,7 @@ def test_worker_aliases():
         assert result == i + 1
 
     yield c.close()
-    yield [a._close(), b._close(), w._close()]
+    yield [a.close(), b.close(), w.close()]
     yield s.close()
 
 
@@ -3020,7 +3020,7 @@ def test_rebalance_unprepared(c, s, a, b):
 def test_receive_lost_key(c, s, a, b):
     x = c.submit(inc, 1, workers=[a.address])
     result = yield x
-    yield a._close()
+    yield a.close()
 
     start = time()
     while x.status == "finished":
@@ -3036,7 +3036,7 @@ def test_unrunnable_task_runs(c, s, a, b):
     x = c.submit(inc, 1, workers=[a.ip])
     result = yield x
 
-    yield a._close()
+    yield a.close()
     start = time()
     while x.status == "finished":
         assert time() < start + 5
@@ -3055,7 +3055,7 @@ def test_unrunnable_task_runs(c, s, a, b):
     assert s.tasks[x.key] not in s.unrunnable
     result = yield x
     assert result == 2
-    yield w._close()
+    yield w.close()
 
 
 @gen_cluster(client=True, ncores=[])
@@ -3067,7 +3067,7 @@ def test_add_worker_after_tasks(c, s):
 
     result = yield c.gather(futures)
 
-    yield n._close()
+    yield n.close()
 
 
 @pytest.mark.skipif(
@@ -3460,8 +3460,8 @@ def test_get_foo_lost_keys(c, s, u, v, w):
     d = yield c.scheduler.who_has(keys=[x.key, y.key])
     assert_dict_key_equal(d, {x.key: [ua], y.key: [va]})
 
-    yield u._close()
-    yield v._close()
+    yield u.close()
+    yield v.close()
 
     d = yield c.scheduler.has_what()
     assert_dict_key_equal(d, {wa: []})
@@ -3707,7 +3707,7 @@ def test_reconnect(loop):
         assert time() < start + 5
         sleep(0.1)
 
-    sync(loop, w._close)
+    sync(loop, w.close)
     c.close()
 
 
@@ -3753,7 +3753,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
                 addr = w.worker_address
                 running[w] = addr
                 yield gen.sleep(duration)
-                yield w._close()
+                yield w.close()
                 del w
                 yield gen.moment
             done.release()
@@ -3882,7 +3882,7 @@ def test_threaded_get_within_distributed(c):
 def test_lose_scattered_data(c, s, a, b):
     [x] = yield c.scatter([1], workers=a.address)
 
-    yield a._close()
+    yield a.close()
     yield gen.sleep(0.1)
 
     assert x.status == "cancelled"
@@ -3894,7 +3894,7 @@ def test_partially_lose_scattered_data(e, s, a, b, c):
     [x] = yield e.scatter([1], workers=a.address)
     yield e.replicate(x, n=2)
 
-    yield a._close()
+    yield a.close()
     yield gen.sleep(0.1)
 
     assert x.status == "finished"
@@ -3909,7 +3909,7 @@ def test_scatter_compute_lose(c, s, a, b):
     z = c.submit(slowadd, x, y, delay=0.2)
     yield gen.sleep(0.1)
 
-    yield a._close()
+    yield a.close()
 
     with pytest.raises(CancelledError):
         yield wait(z)
@@ -3935,7 +3935,7 @@ def test_scatter_compute_store_lose(c, s, a, b):
     z = c.submit(slowadd, xx, y, delay=0.2, workers=b.address)
     yield wait(z)
 
-    yield a._close()
+    yield a.close()
 
     start = time()
     while x.status == "finished":
@@ -3980,7 +3980,7 @@ def test_scatter_compute_store_lose_processing(c, s, a, b):
     y = c.submit(slowinc, x, delay=0.2)
     z = c.submit(inc, y)
     yield gen.sleep(0.1)
-    yield a._close()
+    yield a.close()
 
     start = time()
     while x.status == "finished":

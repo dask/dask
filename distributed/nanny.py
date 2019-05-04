@@ -8,6 +8,7 @@ import psutil
 import shutil
 import threading
 import uuid
+import warnings
 
 import dask
 from tornado import gen
@@ -122,7 +123,7 @@ class Nanny(ServerNode):
             "kill": self.kill,
             "restart": self.restart,
             # cannot call it 'close' on the rpc side for naming conflict
-            "terminate": self._close,
+            "terminate": self.close,
             "run": self.run,
         }
 
@@ -197,7 +198,7 @@ class Nanny(ServerNode):
             assert self.worker_address
             self.status = "running"
         else:
-            yield self._close()
+            yield self.close()
 
         self.start_periodic_callbacks()
 
@@ -275,7 +276,7 @@ class Nanny(ServerNode):
                     timedelta(seconds=self.death_timeout), self.process.start()
                 )
             except gen.TimeoutError:
-                yield self._close(timeout=self.death_timeout)
+                yield self.close(timeout=self.death_timeout)
                 raise gen.Return("timed out")
         else:
             result = yield self.process.start()
@@ -332,7 +333,7 @@ class Nanny(ServerNode):
                 yield self.scheduler.unregister(address=self.worker_address)
             except (EnvironmentError, CommClosedError):
                 if not self.reconnect:
-                    yield self._close()
+                    yield self.close()
                     return
 
             try:
@@ -349,8 +350,12 @@ class Nanny(ServerNode):
     def pid(self):
         return self.process and self.process.pid
 
+    def _close(self, *args, **kwargs):
+        warnings.warn("Worker._close has moved to Worker.close")
+        return self.close(*args, **kwargs)
+
     @gen.coroutine
-    def _close(self, comm=None, timeout=5, report=None):
+    def close(self, comm=None, timeout=5, report=None):
         """
         Close the worker process, stop all comms.
         """
@@ -584,7 +589,7 @@ class WorkerProcess(object):
         @gen.coroutine
         def do_stop(timeout=5, executor_wait=True):
             try:
-                yield worker._close(
+                yield worker.close(
                     report=False,
                     nanny=False,
                     executor_wait=executor_wait,

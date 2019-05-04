@@ -185,8 +185,8 @@ def test_AllProgress_lost_key(c, s, a, b, timeout=None):
     yield wait(futures)
     assert len(p.state["memory"]["inc"]) == 5
 
-    yield a._close()
-    yield b._close()
+    yield a.close()
+    yield b.close()
 
     start = time()
     while len(p.state["memory"]["inc"]) > 0:

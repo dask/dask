@@ -1,10 +1,23 @@
 from __future__ import print_function, division, absolute_import
 
 import struct
+import msgpack
 
 from ..utils import ensure_bytes, nbytes
 
 BIG_BYTES_SHARD_SIZE = 2 ** 26
+
+
+msgpack_opts = {
+    ("max_%s_len" % x): 2 ** 31 - 1 for x in ["str", "bin", "array", "map", "ext"]
+}
+
+try:
+    msgpack.loads(msgpack.dumps(""), raw=False, **msgpack_opts)
+    msgpack_opts["raw"] = False
+except TypeError:
+    # Backward compat with old msgpack (prior to 0.5.2)
+    msgpack_opts["encoding"] = "utf-8"
 
 
 def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):

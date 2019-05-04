@@ -48,7 +48,7 @@ def test_nanny(s):
         yield nn.terminate()
         assert not n.is_alive()
 
-    yield n._close()
+    yield n.close()
 
 
 @gen_cluster(ncores=[])
@@ -57,7 +57,7 @@ def test_many_kills(s):
     assert n.is_alive()
     yield [n.kill() for i in range(5)]
     yield [n.kill() for i in range(5)]
-    yield n._close()
+    yield n.close()
 
 
 @gen_cluster(Worker=Nanny)
@@ -102,7 +102,7 @@ def test_nanny_process_failure(c, s):
 
     second_dir = n.worker_dir
 
-    yield n._close()
+    yield n.close()
     assert not os.path.exists(second_dir)
     assert not os.path.exists(first_dir)
     assert first_dir != n.worker_dir
@@ -124,7 +124,7 @@ def test_run(s):
         assert response["status"] == "OK"
         assert response["result"] == 1
 
-    yield n._close()
+    yield n.close()
 
 
 @slow
@@ -194,7 +194,7 @@ def test_num_fds(s):
 
     # Warm up
     w = yield Nanny(s.address)
-    yield w._close()
+    yield w.close()
     del w
     gc.collect()
 
@@ -203,7 +203,7 @@ def test_num_fds(s):
     for i in range(3):
         w = yield Nanny(s.address)
         yield gen.sleep(0.1)
-        yield w._close()
+        yield w.close()
 
     start = time()
     while proc.num_fds() > before:
@@ -226,7 +226,7 @@ def test_worker_uses_same_host_as_nanny(c, s):
 
         result = yield c.run(func)
         assert host in first(result.values())
-        yield n._close()
+        yield n.close()
 
 
 @gen_test()
@@ -236,7 +236,7 @@ def test_scheduler_file():
         s.start(8008)
         w = yield Nanny(scheduler_file=fn)
         assert set(s.workers) == {w.worker_address}
-        yield w._close()
+        yield w.close()
         s.stop()
 
 
@@ -301,7 +301,7 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
 
     yield c.submit(inc, 2)  # worker doesn't pause
 
-    yield nanny._close()
+    yield nanny.close()
 
 
 @gen_cluster(ncores=[], client=True)
@@ -315,7 +315,7 @@ def test_scheduler_address_config(c, s):
             yield gen.sleep(0.1)
             assert time() < start + 10
 
-    yield nanny._close()
+    yield nanny.close()
 
 
 @slow
@@ -338,7 +338,7 @@ def test_environment_variable(c, s):
     yield [a, b]
     results = yield c.run(lambda: os.environ["FOO"])
     assert results == {a.worker_address: "123", b.worker_address: "456"}
-    yield [a._close(), b._close()]
+    yield [a.close(), b.close()]
 
 
 @gen_cluster(ncores=[], client=True)
@@ -346,4 +346,4 @@ def test_data_types(c, s):
     w = yield Nanny(s.address, data=dict)
     r = yield c.run(lambda dask_worker: type(dask_worker.data))
     assert r[w.worker_address] == dict
-    yield w._close()
+    yield w.close()

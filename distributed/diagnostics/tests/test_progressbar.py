@@ -63,7 +63,7 @@ def test_TextProgressBar_empty(loop, capsys):
         assert progress.status == "finished"
         check_bar_completed(capsys)
 
-        yield [a._close(), b._close()]
+        yield [a.close(), b.close()]
         s.close()
         yield done
 
