@@ -561,9 +561,18 @@ def run_mangled_output_dtype_test(reassign_vectorize_dtypes=None):
                       vectorize=True,
                       reassign_vectorize_dtypes=reassign_vectorize_dtypes)
 
-    x = np.array(['12', '23'], dtype=o_dtype)
+    x = np.array([['11', '12'], ['21', '22']], dtype=o_dtype)
     y = f(da.array(x)).compute()
-    np.testing.assert_array_equal(x, y)
+
+    np.testing.assert_array_equal(y, x)
+
+    # Check consistent with numpy.  This is not the same as testing the
+    # correctness of numpy.
+    g = np.vectorize(identity, otypes=(o_dtype,), signature="()->()")
+    if reassign_vectorize_dtypes is not True:
+        np.testing.assert_array_equal(g(x), y)
+    else:
+        assert not np.array_equal(g(x), y)
 
 
 def test_unicode_dtypes_in_gufunc_with_fix_true():
