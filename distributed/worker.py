@@ -3021,7 +3021,13 @@ def execute_task(task):
         return task
 
 
-cache = dict()
+try:
+    # a 10 MB cache of deserialized functions and their bytes
+    from zict import LRU
+
+    cache = LRU(10000000, dict(), weight=lambda k, v: len(v))
+except ImportError:
+    cache = dict()
 
 
 def dumps_function(func):
