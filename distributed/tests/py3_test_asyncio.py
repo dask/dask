@@ -299,15 +299,15 @@ async def test_asyncio_run_coroutine():
         raise RuntimeError("hello")
 
     async with AioClient(processes=False) as c:
-        results = await c.run_coroutine(aioinc, 1, delay=0.05)
+        results = await c.run(aioinc, 1, delay=0.05)
         assert len(results) > 0
         assert [value == 2 for value in results.values()]
 
-        results = await c.run_coroutine(aioinc, 1, workers=[])
+        results = await c.run(aioinc, 1, workers=[])
         assert results == {}
 
         with pytest.raises(RuntimeError) as exc_info:
-            await c.run_coroutine(aiothrows, 1)
+            await c.run(aiothrows, 1)
         assert "hello" in str(exc_info)
 
 

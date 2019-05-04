@@ -2391,7 +2391,8 @@ class Client(Node):
         warnings.warn(
             "This method has been deprecated. "
             "Instead use Client.run which detects async functions "
-            "automatically"
+            "automatically",
+            stacklevel=2,
         )
         return self.run(function, *args, **kwargs)
 

@@ -22,7 +22,7 @@ def test_basic(c, s, a, b):
         sub = Sub("a")
         return list(toolz.take(5, sub))
 
-    c.run_coroutine(publish, workers=[a.address])
+    c.run(publish, workers=[a.address])
 
     tasks = [c.submit(f, i) for i in range(4)]
     results = yield c.gather(tasks)
