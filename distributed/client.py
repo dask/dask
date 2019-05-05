@@ -591,7 +591,7 @@ class Client(Node):
         serializers=None,
         deserializers=None,
         extensions=DEFAULT_EXTENSIONS,
-        direct_to_workers=False,
+        direct_to_workers=None,
         **kwargs
     ):
         if timeout == no_default:
@@ -1608,6 +1608,8 @@ class Client(Node):
         data = {}
 
         if direct is None:
+            direct = self.direct_to_workers
+        if direct is None:
             try:
                 w = get_worker()
             except Exception:
@@ -1615,8 +1617,6 @@ class Client(Node):
             else:
                 if w.scheduler.address == self.scheduler.address:
                     direct = True
-        if direct is None:
-            direct = self.direct_to_workers
 
         @gen.coroutine
         def wait(k):
@@ -1867,6 +1867,8 @@ class Client(Node):
         types = valmap(type, data)
 
         if direct is None:
+            direct = self.direct_to_workers
+        if direct is None:
             try:
                 w = get_worker()
             except Exception:
@@ -1874,8 +1876,6 @@ class Client(Node):
             else:
                 if w.scheduler.address == self.scheduler.address:
                     direct = True
-        if direct is None:
-            direct = self.direct_to_workers
 
         if local_worker:  # running within task
             local_worker.update_data(data=data, report=False)

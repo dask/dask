@@ -5707,5 +5707,13 @@ def test_get_mix_futures_and_SubgraphCallable_dask_dataframe(c, s, a, b):
     assert result.equals(df.astype("f8"))
 
 
+def test_direct_to_workers(s, loop):
+    with Client(s["address"], loop=loop, direct_to_workers=True) as client:
+        future = client.scatter(1)
+        future.result()
+        resp = client.run_on_scheduler(lambda dask_scheduler: dask_scheduler.events)
+        assert "gather" not in str(resp)
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
