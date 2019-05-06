@@ -3631,6 +3631,8 @@ def test_str_expand_more_columns():
     s.str.split(n=10, expand=True).compute()
 
 
+@pytest.mark.skipif(PY2,
+                    reason="docstring not rendered on py2 build")
 def test_describe_doc():
     # tests the addition of text into a dataframe method
     assert ("Currently, only numeric describe is supported"
