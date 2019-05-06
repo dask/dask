@@ -141,9 +141,10 @@ def _groupby_raise_unaligned(df, **kwargs):
     return df.groupby(**kwargs)
 
 
-def _groupby_slice_apply(df, grouper, key, func, *args, group_keys=True, **kwargs):
+def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
+    group_keys = kwargs.pop('group_keys', True)
     g = df.groupby(grouper, group_keys=group_keys)
     if key:
         g = g[key]
