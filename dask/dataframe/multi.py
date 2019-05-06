@@ -415,7 +415,9 @@ def refine_partition(*dfs):
     rest
     Like align_partition but only modifying the first one
     """
+    m = dfs[0].divisions[-1]
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+    divisions = [d for d in divisions if d <= m]
     if len(divisions) == 1:  # single value for index
         divisions = (divisions[0], divisions[0])
     dfs2 = [df.repartition(divisions, force=True) if i == 0 else df for i, df in enumerate(dfs)]
@@ -435,27 +437,39 @@ def refine_partition(*dfs):
                     L.append((df._name, j))
                 else:
                     L.append(None)
-            else:    # Scalar has no divisions
+            else:
                 L.append(None)
         result.append(L)
-    return dfs2, tuple(divisions), result
+    return dfs2[0], tuple(divisions), result
 
-def help(x, y, **kwargs):
-    print ("merging")
-    print (x)
-    print (y)
-    return pd.merge_asof(x, y)
+def borrow_rows(curr, prev, next):
+    return curr
+
+def enforce_bounds(df):
+    """ Warning: don't ever use this function. It doesn't produce a valid
+    DataFrame. It's just a helper function for merge_asof.
+    """
+    name = 'enforce_bounds-' + tokenize(df)
+
+    n = len(df.divisions) - 1
+    dsk = dict()
+    for i in range(n):
+        curr = (df._name, i)
+        prev = (df._name, i-1) if i > 0 else None
+        next = (df._name, i+1) if i < n-1 else None
+        dsk[(name, i)] = (apply, borrow_rows, [curr, prev, next])
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    return new_dd_object(graph, name, df._meta, df.divisions)
 
 def merge_asof_indexed(left, right, **kwargs):
     """ Asof join two partitioned dataframes along their index """
     validate_arguments('merge_asof_indexed', left, right)
 
     original_divisions = left.divisions
-    (left, right), divisions, parts = refine_partition(left, right)
-    print (divisions)
-    for (a,b) in parts:
-        print (a, b)
-    divisions, parts = require(divisions, parts, [0,1])
+    left, divisions, parts = refine_partition(left, right)
+    divisions, parts = require(divisions, parts, [0])
+    right = enforce_bounds(right)
 
     name = 'merge_asof-indexed-' + tokenize(left, right, **kwargs)
 
@@ -467,7 +481,7 @@ def merge_asof_indexed(left, right, **kwargs):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
     result = new_dd_object(graph, name, meta, divisions)
-    return result.repartition(original_divisions, force=True)
+    return result.repartition(divisions=original_divisions, force=True)
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
