@@ -369,7 +369,7 @@ def main(
     def close_all():
         # Unregister all workers from scheduler
         if nanny:
-            yield [n._close(timeout=2) for n in nannies]
+            yield [n.close(timeout=2) for n in nannies]
 
     def on_signal(signum):
         logger.info("Exiting on signal %d", signum)

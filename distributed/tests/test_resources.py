@@ -27,12 +27,12 @@ def test_resources(c, s):
     assert s.resources == {"GPU": {a.address: 2, b.address: 1}, "DB": {b.address: 1}}
     assert s.worker_resources == {a.address: {"GPU": 2}, b.address: {"GPU": 1, "DB": 1}}
 
-    yield b._close()
+    yield b.close()
 
     assert s.resources == {"GPU": {a.address: 2}, "DB": {}}
     assert s.worker_resources == {a.address: {"GPU": 2}}
 
-    yield a._close()
+    yield a.close()
 
 
 @gen_cluster(
@@ -60,7 +60,7 @@ def test_resource_submit(c, s, a, b):
     yield wait(z)
     assert z.key in d.data
 
-    yield d._close()
+    yield d.close()
 
 
 @gen_cluster(

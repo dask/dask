@@ -543,8 +543,8 @@ def test_worker_name():
         w2 = yield Worker(s.ip, s.port, name="alice")
         yield w2.close()
 
-    yield s.close()
     yield w.close()
+    yield s.close()
 
 
 @gen_test()
@@ -1521,3 +1521,10 @@ def test_workerstate_clean(s, a, b):
     assert ws.address == a.address
     b = pickle.dumps(ws)
     assert len(b) < 1000
+
+
+@gen_cluster()
+def test_close_workers(s, a, b):
+    yield s.close(close_workers=True)
+    assert a.status == "closed"
+    assert b.status == "closed"

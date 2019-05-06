@@ -182,7 +182,7 @@ def test_new_worker_steals(c, s, a):
 
     assert b.data
 
-    yield b._close()
+    yield b.close()
 
 
 @gen_cluster(client=True, timeout=20)
@@ -287,7 +287,7 @@ def test_steal_resource_restrictions(c, s, a):
     assert len(b.task_state) > 0
     assert len(a.task_state) < 101
 
-    yield b._close()
+    yield b.close()
 
 
 @gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 5, timeout=20)
@@ -550,7 +550,7 @@ def test_steal_twice(c, s, a, b):
     assert max(map(len, has_what.values())) < 30
 
     yield c._close()
-    yield [w._close() for w in workers]
+    yield [w.close() for w in workers]
 
 
 @gen_cluster(client=True)

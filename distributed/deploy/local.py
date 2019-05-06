@@ -362,7 +362,11 @@ class LocalCluster(Cluster):
             return
         self.status = "closing"
 
-        self.scheduler.clear_task_state()
+        with ignoring(gen.TimeoutError, CommClosedError, OSError):
+            yield gen.with_timeout(
+                timedelta(seconds=parse_timedelta(timeout)),
+                self.scheduler.close(close_workers=True),
+            )
 
         with ignoring(gen.TimeoutError):
             yield gen.with_timeout(
@@ -370,13 +374,7 @@ class LocalCluster(Cluster):
                 All([self._stop_worker(w) for w in self.workers]),
             )
         del self.workers[:]
-
-        try:
-            with ignoring(gen.TimeoutError, CommClosedError, OSError):
-                yield self.scheduler.close(fast=True)
-            del self.workers[:]
-        finally:
-            self.status = "closed"
+        self.status = "closed"
 
     def close(self, timeout=20):
         """ Close the cluster """

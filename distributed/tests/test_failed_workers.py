@@ -53,14 +53,14 @@ def test_submit_after_failed_worker_async(c, s, a, b):
     result = yield total
     assert result == sum(map(inc, range(10)))
 
-    yield n._close()
+    yield n.close()
 
 
 @gen_cluster(client=True, timeout=60)
 def test_submit_after_failed_worker(c, s, a, b):
     L = c.map(inc, range(10))
     yield wait(L)
-    yield a._close()
+    yield a.close()
 
     total = c.submit(sum, L)
     result = yield total
@@ -353,7 +353,7 @@ def test_broken_worker_during_computation(c, s, a, b):
     assert isinstance(result, int)
     assert result == expected_result
 
-    yield n._close()
+    yield n.close()
 
 
 @gen_cluster(client=True, Worker=Nanny, timeout=60)
@@ -403,7 +403,7 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
     assert not a.has_what.get(n_worker_address)
     assert not any(n_worker_address in s for s in a.who_has.values())
 
-    yield n._close()
+    yield n.close()
 
 
 @slow

@@ -261,7 +261,7 @@ def test_failed_worker(c, s, a, b):
     yield wait(future)
     counter = yield future
 
-    yield a._close()
+    yield a.close()
 
     with pytest.raises(Exception) as info:
         yield counter.increment()

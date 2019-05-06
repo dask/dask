@@ -351,7 +351,7 @@ class Nanny(ServerNode):
         return self.process and self.process.pid
 
     def _close(self, *args, **kwargs):
-        warnings.warn("Worker._close has moved to Worker.close")
+        warnings.warn("Worker._close has moved to Worker.close", stacklevel=2)
         return self.close(*args, **kwargs)
 
     @gen.coroutine

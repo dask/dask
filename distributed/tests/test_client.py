@@ -3891,7 +3891,7 @@ def test_lose_scattered_data(c, s, a, b):
 
 @gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
 def test_partially_lose_scattered_data(e, s, a, b, c):
-    [x] = yield e.scatter([1], workers=a.address)
+    x = yield e.scatter(1, workers=a.address)
     yield e.replicate(x, n=2)
 
     yield a.close()
@@ -4713,20 +4713,16 @@ def test_quiet_client_close(loop):
             ), line
 
 
+@slow
 def test_quiet_client_close_when_cluster_is_closed_before_client(loop):
-    n_attempts = 5
-    # Trying a few times to reduce the flakiness of the test. Without the bug
-    # fix in #2477 and with 5 attempts, this test passes by chance in about 10%
-    # of the cases.
-    for _ in range(n_attempts):
-        with captured_logger(logging.getLogger("tornado.application")) as logger:
-            cluster = LocalCluster(loop=loop)
-            client = Client(cluster, loop=loop)
-            cluster.close()
-            client.close()
+    with captured_logger(logging.getLogger("tornado.application")) as logger:
+        cluster = LocalCluster(loop=loop, n_workers=1)
+        client = Client(cluster, loop=loop)
+        cluster.close()
+        client.close()
 
-        out = logger.getvalue()
-        assert "CancelledError" not in out
+    out = logger.getvalue()
+    assert "CancelledError" not in out
 
 
 @gen_cluster()

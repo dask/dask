@@ -234,7 +234,7 @@ def test_closing_worker_doesnt_close_client(c, s, a, b):
         return
 
     yield wait(c.map(func, range(10)))
-    yield a._close()
+    yield a.close()
     assert c.status == "running"
 
 

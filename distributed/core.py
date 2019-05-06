@@ -490,6 +490,11 @@ class Server(object):
     @gen.coroutine
     def close(self):
         self.listener.stop()
+        for i in range(20):  # let comms close naturally for a second
+            if not self._comms:
+                break
+            else:
+                yield gen.sleep(0.05)
         for comm in self._comms:
             comm.close()
         for cb in self._ongoing_coroutines:
