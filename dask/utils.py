@@ -524,7 +524,7 @@ def _derived_from(cls, method, ua_args=[], extra=""):
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(doc, cls, method.__name__, extra=extra)
-    else:
+    elif extra:
         doc += extra.rstrip('\n') + '\n\n'
 
     # Mark unsupported arguments
