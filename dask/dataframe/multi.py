@@ -469,7 +469,7 @@ def merge_asof_indexed(left, right, **kwargs):
     original_divisions = left.divisions
     left, divisions, parts = refine_partition(left, right)
     divisions, parts = require(divisions, parts, [0])
-    right = enforce_bounds(right)
+    #right = enforce_bounds(right)
 
     name = 'merge_asof-indexed-' + tokenize(left, right, **kwargs)
 
@@ -481,7 +481,8 @@ def merge_asof_indexed(left, right, **kwargs):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
     result = new_dd_object(graph, name, meta, divisions)
-    return result.repartition(divisions=original_divisions, force=True)
+    return result
+    #return result.repartition(divisions=original_divisions, force=True)
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
