@@ -297,15 +297,19 @@ def frexp(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = np.empty((1, ), dtype=x.dtype)
+    try:
+        a = np.empty_like(x._meta if hasattr(x, '_meta') else x,
+                          dtype=x.dtype, shape=(1, ))
+    except TypeError:
+        a = np.empty((1, ), dtype=x.dtype)
     l, r = np.frexp(a)
-    ldt = l.dtype
-    rdt = r.dtype
+    lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
+    rmeta = r[tuple(slice(0, 0, None) for _ in range(l.ndim))]
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    L = Array(graph, left, chunks=tmp.chunks, meta=lmeta)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
+    R = Array(graph, right, chunks=tmp.chunks, meta=rmeta)
     return L, R
 
 
@@ -320,13 +324,17 @@ def modf(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = np.empty((1,), dtype=x.dtype)
+    try:
+        a = np.empty_like(x._meta if hasattr(x, '_meta') else x,
+                          dtype=x.dtype, shape=(1, ))
+    except TypeError:
+        a = np.empty((1, ), dtype=x.dtype)
     l, r = np.modf(a)
-    ldt = l.dtype
-    rdt = r.dtype
+    lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
+    rmeta = r[tuple(slice(0, 0, None) for _ in range(l.ndim))]
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    L = Array(graph, left, chunks=tmp.chunks, meta=lmeta)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
+    R = Array(graph, right, chunks=tmp.chunks, meta=rmeta)
     return L, R
