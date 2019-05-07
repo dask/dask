@@ -1523,6 +1523,14 @@ def test_workerstate_clean(s, a, b):
     assert len(b) < 1000
 
 
+@gen_cluster(client=True)
+def test_result_type(c, s, a, b):
+    x = c.submit(lambda: 1)
+    yield x
+
+    assert "int" in s.tasks[x.key].type
+
+
 @gen_cluster()
 def test_close_workers(s, a, b):
     yield s.close(close_workers=True)

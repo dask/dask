@@ -1529,3 +1529,18 @@ def warn_on_duration(duration, msg):
     stop = time()
     if stop - start > parse_timedelta(duration):
         warnings.warn(msg, stacklevel=2)
+
+
+def typename(typ):
+    """ Return name of type
+
+    Examples
+    --------
+    >>> from distributed import Scheduler
+    >>> typename(Scheduler)
+    'distributed.scheduler.Scheduler'
+    """
+    try:
+        return typ.__module__ + "." + typ.__name__
+    except AttributeError:
+        return str(typ)

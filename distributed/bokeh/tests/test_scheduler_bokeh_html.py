@@ -11,7 +11,8 @@ pytest.importorskip("bokeh")
 from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 
-from distributed.utils_test import gen_cluster, slowinc
+from dask.sizeof import sizeof
+from distributed.utils_test import gen_cluster, slowinc, inc
 from distributed.bokeh.scheduler import BokehScheduler
 
 
@@ -105,3 +106,25 @@ def test_health(c, s, a, b):
 
     txt = response.body.decode("utf8")
     assert txt == "ok"
+
+
+@gen_cluster(client=True, scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}})
+def test_task_page(c, s, a, b):
+    future = c.submit(lambda x: x + 1, 1, workers=a.address)
+    x = c.submit(inc, 1)
+    yield future
+    http_client = AsyncHTTPClient()
+
+    "info/task/" + url_escape(future.key) + ".html",
+    response = yield http_client.fetch(
+        "http://localhost:%d/info/task/" % s.services["bokeh"].port
+        + url_escape(future.key)
+        + ".html"
+    )
+    assert response.code == 200
+    body = response.body.decode()
+
+    assert str(sizeof(1)) in body
+    assert "int" in body
+    assert a.address in body
+    assert "memory" in body

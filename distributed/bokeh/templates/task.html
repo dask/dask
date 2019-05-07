@@ -19,6 +19,12 @@
               <td><a class="button is-primary" href="../call-stack/{{ url_escape(Task) }}.html">Call Stack</a></td>
           </tr>
           {% end %}
+          {% if ts.type %}
+          <tr>
+              <th> Type </th>
+              <td> {{ ts.type }} </td>
+          </tr>
+          {% end %}
           {% if ts.nbytes %}
           <tr>
               <th> Bytes </th>

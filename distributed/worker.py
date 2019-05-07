@@ -44,6 +44,7 @@ from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (
     funcname,
+    typename,
     get_ip,
     has_arg,
     _maybe_complex,
@@ -671,6 +672,7 @@ class Worker(ServerNode):
                 raise gen.Return
             try:
                 _start = time()
+                types = {k: typename(v) for k, v in self.data.items()}
                 comm = yield connect(
                     self.scheduler.address, connection_args=self.connection_args
                 )
@@ -685,6 +687,7 @@ class Worker(ServerNode):
                         ncores=self.ncores,
                         name=self.name,
                         nbytes=self.nbytes,
+                        types=types,
                         now=time(),
                         resources=self.total_resources,
                         memory_limit=self.memory_limit,
@@ -1721,18 +1724,19 @@ class Worker(ServerNode):
             typ = self.types.get(key) or type(value)
             del value
             try:
-                typ = dumps_function(typ)
+                typ_serialized = dumps_function(typ)
             except PicklingError:
                 # Some types fail pickling (example: _thread.lock objects),
                 # send their name as a best effort.
-                typ = pickle.dumps(typ.__name__)
+                typ_serialized = pickle.dumps(typ.__name__)
             d = {
                 "op": "task-finished",
                 "status": "OK",
                 "key": key,
                 "nbytes": nbytes,
                 "thread": self.threads.get(key),
-                "type": typ,
+                "type": typ_serialized,
+                "typename": typename(typ),
             }
         elif key in self.exceptions:
             d = {

@@ -14,7 +14,7 @@ import msgpack
 
 from . import pickle
 from ..compatibility import PY2
-from ..utils import has_keyword
+from ..utils import has_keyword, typename
 from .compression import maybe_compress, decompress
 from .utils import (
     unpack_frames,
@@ -443,18 +443,6 @@ def register_serialization_lazy(toplevel, func):
     module is ever loaded.
     """
     raise Exception("Serialization registration has changed. See documentation")
-
-
-def typename(typ):
-    """ Return name of type
-
-    Examples
-    --------
-    >>> from distributed import Scheduler
-    >>> typename(Scheduler)
-    'distributed.scheduler.Scheduler'
-    """
-    return typ.__module__ + "." + typ.__name__
 
 
 @partial(normalize_token.register, Serialized)

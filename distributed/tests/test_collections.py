@@ -73,10 +73,11 @@ def test_dataframes(c, s, a, b):
 def test__dask_array_collections(c, s, a, b):
     import dask.array as da
 
+    s.validate = False
     x_dsk = {("x", i, j): np.random.random((3, 3)) for i in range(3) for j in range(2)}
     y_dsk = {("y", i, j): np.random.random((3, 3)) for i in range(2) for j in range(3)}
-    x_futures = yield c._scatter(x_dsk)
-    y_futures = yield c._scatter(y_dsk)
+    x_futures = yield c.scatter(x_dsk)
+    y_futures = yield c.scatter(y_dsk)
 
     dt = np.random.random(0).dtype
     x_local = da.Array(x_dsk, "x", ((3, 3, 3), (3, 3)), dt)
