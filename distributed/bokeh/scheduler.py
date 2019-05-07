@@ -1049,7 +1049,7 @@ class TaskProgress(DashboardComponent):
     def update(self):
         with log_errors():
             state = {"all": valmap(len, self.plugin.all), "nbytes": self.plugin.nbytes}
-            for k in ["memory", "erred", "released", "processing"]:
+            for k in ["memory", "erred", "released", "processing", "waiting"]:
                 state[k] = valmap(len, self.plugin.state[k])
             if not state["all"] and not len(self.source.data["all"]):
                 return
@@ -1060,7 +1060,7 @@ class TaskProgress(DashboardComponent):
 
             totals = {
                 k: sum(state[k].values())
-                for k in ["all", "memory", "erred", "released"]
+                for k in ["all", "memory", "erred", "released", "waiting"]
             }
             totals["processing"] = totals["all"] - sum(
                 v for k, v in totals.items() if k != "all"
@@ -1069,6 +1069,7 @@ class TaskProgress(DashboardComponent):
             self.root.title.text = (
                 "Progress -- total: %(all)s, "
                 "in-memory: %(memory)s, processing: %(processing)s, "
+                "waiting: %(waiting)s, "
                 "erred: %(erred)s" % totals
             )
 
