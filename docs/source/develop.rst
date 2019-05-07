@@ -97,10 +97,6 @@ For development, Dask uses the following additional dependencies::
 
    pip install pytest moto mock
 
-And the following dependencies are required to get all tests to pass::
-
-   conda install graphviz python-graphviz ipython
-
 
 Run Tests
 ~~~~~~~~~
