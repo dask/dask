@@ -401,6 +401,12 @@ def test_derived_from():
         def f(a, c):
             pass
 
+    class Zap:
+        @derived_from(Foo)
+        def f(a, c):
+            "extra docstring"
+            pass
+
     assert Bar.f.__doc__.strip().startswith('A super docstring')
     assert "Foo.f" in Bar.f.__doc__
     assert any("inconsistencies" in line for line in Bar.f.__doc__.split('\n')[:7])
@@ -408,6 +414,8 @@ def test_derived_from():
     [b_arg] = [line for line in Bar.f.__doc__.split('\n') if 'b:' in line]
     assert "not supported" in b_arg.lower()
     assert "dask" in b_arg.lower()
+
+    assert '  extra docstring\n\n' in Zap.f.__doc__
 
 
 @pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
