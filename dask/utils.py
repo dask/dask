@@ -474,8 +474,9 @@ def extra_titles(doc):
     return '\n'.join(lines)
 
 
-def ignore_warning(doc, cls, name):
-    l1 = "This docstring was copied from %s.%s.%s\n" % (cls.__module__, cls.__name__, name)
+def ignore_warning(doc, cls, name, extra=""):
+    """Expand docstring by adding disclaimer and extra text"""
+    l1 = "This docstring was copied from %s.%s.%s. \n\n" % (cls.__module__, cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find('\n\n')
@@ -486,12 +487,16 @@ def ignore_warning(doc, cls, name):
         # Indentation of next line
         indent = re.match(r'\s*', tail).group(0)
         # Insert the warning, indented, with a blank line before and after
-        doc = ''.join([
+        if extra:
+            more = [indent, extra.rstrip('\n') + '\n\n']
+        else:
+            more = []
+        bits = [
             head,
             indent, l1,
-            indent, l2, '\n\n',
-            tail
-        ])
+            indent, l2, '\n\n'
+        ] + more + [tail]
+        doc = ''.join(bits)
 
     return doc
 
@@ -507,7 +512,7 @@ def unsupported_arguments(doc, args):
     return '\n'.join(lines)
 
 
-def _derived_from(cls, method, ua_args=[]):
+def _derived_from(cls, method, ua_args=[], extra=""):
     """ Helper function for derived_from to ease testing """
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
@@ -518,7 +523,9 @@ def _derived_from(cls, method, ua_args=[]):
 
     # Insert disclaimer that this is a copied docstring
     if doc:
-        doc = ignore_warning(doc, cls, method.__name__)
+        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+    elif extra:
+        doc += extra.rstrip('\n') + '\n\n'
 
     # Mark unsupported arguments
     try:
@@ -541,6 +548,11 @@ def _derived_from(cls, method, ua_args=[]):
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
 
+    The output structure will be: top line of docstring, disclaimer about this
+    being auto-derived, any extra text associated with the method being patched,
+    the body of the docstring and finally, the list of keywords that exist in
+    the original method but not in the dask version.
+
     Parameters
     ----------
     original_klass: type
@@ -553,7 +565,10 @@ def derived_from(original_klass, version=None, ua_args=[]):
     """
     def wrapper(method):
         try:
-            method.__doc__ = _derived_from(original_klass, method, ua_args=ua_args)
+            extra = (getattr(method, '__doc__', None) or "")
+            method.__doc__ = _derived_from(
+                original_klass, method, ua_args=ua_args, extra=extra
+            )
             return method
 
         except AttributeError:
