@@ -52,4 +52,5 @@ setup(name='dask',
       setup_requires=setup_requires,
       tests_require=['pytest'],
       extras_require=extras_require,
+      include_package_data=True,
       zip_safe=False)
