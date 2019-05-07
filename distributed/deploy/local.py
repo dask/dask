@@ -82,19 +82,19 @@ class LocalCluster(Cluster):
 
     Examples
     --------
-    >>> c = LocalCluster()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
-    >>> c  # doctest: +SKIP
+    >>> cluster = LocalCluster()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
+    >>> cluster  # doctest: +SKIP
     LocalCluster("127.0.0.1:8786", workers=8, ncores=8)
 
-    >>> c = Client(c)  # connect to local cluster  # doctest: +SKIP
+    >>> c = Client(cluster)  # connect to local cluster  # doctest: +SKIP
 
     Add a new worker to the cluster
 
-    >>> w = c.start_worker(ncores=2)  # doctest: +SKIP
+    >>> w = cluster.start_worker(ncores=2)  # doctest: +SKIP
 
     Shut down the extra worker
 
-    >>> c.stop_worker(w)  # doctest: +SKIP
+    >>> cluster.stop_worker(w)  # doctest: +SKIP
 
     Pass extra keyword arguments to Bokeh
 
