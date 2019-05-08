@@ -4,6 +4,8 @@ from operator import getitem
 from itertools import product
 from numbers import Integral
 
+import numpy as np
+
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
@@ -301,9 +303,9 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     try:
-        c = wrap.full_like(x._meta, value, shape=tuple(map(sum, chunks)),
-                           chunks=tuple(chunks), dtype=x.dtype)
-    except AttributeError:
+        c = np.full_like(x._meta, value, shape=tuple(map(sum, chunks)),
+                         chunks=tuple(chunks), dtype=x.dtype)
+    except TypeError:
         c = wrap.full(tuple(map(sum, chunks)), value,
                       chunks=tuple(chunks), dtype=x.dtype)
 
