@@ -1,6 +1,57 @@
 Changelog
 =========
 
+1.2.2 / 2019-05-08
+------------------
+
+Array
++++++
+
+- Clarify regions kwarg to array.store (:pr:`4759`) `Martin Durant`_
+- Add dtype= parameter to da.random.randint (:pr:`4753`) `Matthew Rocklin`_
+- Use "row major" rather than "C order" in docstring (:pr:`4452`) `@asmith26`_
+- Normalize Xarray datasets to Dask arrays (:pr:`4756`) `Matthew Rocklin`_
+- Remove normed keyword in da.histogram (:pr:`4755`) `Matthew Rocklin`_
+
+Bag
++++
+
+- Add key argument to Bag.distinct (:pr:`4423`) `Daniel Severo`_
+
+Core
+++++
+
+- Add core dask config file (:pr:`4774`) `Matthew Rocklin`_
+- Add core dask config file to MANIFEST.in (:pr:`4780`) `James Bourbeau`_
+- Enabling glob with HTTP file-system (:pr:`3926`) `Martin Durant`_
+- HTTPFile.seek with whence=1 (:pr:`4751`) `Martin Durant`_
+- Remove config key normalization (:pr:`4742`) `Jim Crist`_
+
+DataFrame
++++++++++
+
+- Remove explicit references to Pandas in dask.dataframe.groupby (:pr:`4778`) `Matthew Rocklin`_
+- Add support for group_keys kwarg in DataFrame.groupby() (:pr:`4771`) `Brian Chu`_
+- Describe doc (:pr:`4762`) `Martin Durant`_
+- Remove explicit pandas check in cumulative aggregations (:pr:`4765`) `Nick Becker`_
+- Added meta for read_json and test (:pr:`4588`) `Abhinav Ralhan`_
+- Add test for dtype casting (:pr:`4760`) `Martin Durant`_
+- Document alignment in map_partitions (:pr:`4757`) `Jim Crist`_
+- Implement Series.str.split(expand=True) (:pr:`4744`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+- Tweaks to develop.rst from trying to run tests (:pr:`4772`) `Christian Hudon`_
+- Add document describing phases of computation (:pr:`4766`) `Matthew Rocklin`_
+- Point users to Dask-Yarn from spark documentation (:pr:`4770`) `Matthew Rocklin`_
+- Update images in delayed doc to remove labels (:pr:`4768`) `Martin Durant`_
+- Explain intermediate storage for dask arrays (:pr:`4025`) `John A Kirkham`_
+- Specify bash code-block in array best practices (:pr:`4764`) `James Bourbeau`_
+- Add array best practices doc (:pr:`4705`) `Matthew Rocklin`_
+- Update optimization docs now that cull is not automatic (:pr:`4752`) `Matthew Rocklin`_
+
+
 1.2.1 / 2019-04-29
 ------------------
 
@@ -2047,3 +2098,6 @@ Other
 .. _`Isaiah Norton`: https://github.com/hnorton
 .. _`Nick Becker`: https://github.com/beckernick
 .. _`Nathan Matare`: https://github.com/nmatare
+.. _`@asmith26`: https://github.com/asmith26
+.. _`Abhinav Ralhan`: https://github.com/abhinavralhan
+.. _`Christian Hudon`: https://github.com/chrish42
