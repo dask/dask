@@ -1,6 +1,30 @@
 Changelog
 =========
 
+1.28.0 - 2019-05-08
+-------------------
+
+- Add Type Attribute to TaskState (:pr:`2657`) `Matthew Rocklin`_
+- Add waiting task count to progress title bar (:pr:`2663`) `James Bourbeau`_
+- DOC: Clean up reference to cluster object (:pr:`2664`) `K.-Michael Aye`_
+- Allow scheduler to politely close workers as part of shutdown (:pr:`2651`) `Matthew Rocklin`_
+- Check direct_to_workers before using get_worker in Client (:pr:`2656`) `Matthew Rocklin`_
+- Fixed comment regarding keeping existing level if less verbose (:pr:`2655`) `Brett Randall`_
+- Add idle timeout to scheduler (:pr:`2652`) `Matthew Rocklin`_
+- Avoid deprecation warnings (:pr:`2653`) `Matthew Rocklin`_
+- Use an LRU cache for deserialized functions (:pr:`2623`) `Matthew Rocklin`_
+- Rename Worker._close to Worker.close (:pr:`2650`) `Matthew Rocklin`_
+- Add Comm closed bookkeeping (:pr:`2648`) `Matthew Rocklin`_
+- Explain LocalCluster behavior in Client docstring (:pr:`2647`) `Matthew Rocklin`_
+- Add last worker into KilledWorker exception to help debug (:pr:`2610`) `@plbertrand`_
+- Set working worker class for dask-ssh (:pr:`2646`) `Martin Durant`_
+- Add as_completed methods to docs (:pr:`2642`) `Jim Crist`_
+- Add timeout to Client._reconnect (:pr:`2639`) `Jim Crist`_
+- Limit test_spill_by_default memory, reenable it (:pr:`2633`) `Peter Andreas Entschev`_
+- Use proper address in worker -> nanny comms (:pr:`2640`) `Jim Crist`_
+- Fix deserialization of bytes chunks larger than 64MB (:pr:`2637`) `Peter Andreas Entschev`_
+
+
 1.27.1 - 2019-04-29
 -------------------
 
@@ -20,7 +44,7 @@ Changelog
 1.27.0 - 2019-04-12
 -------------------
 
-   Add basic health endpoints to scheduler and worker bokeh. (:pr:`2607) `amerkel2`_
+-  Add basic health endpoints to scheduler and worker bokeh. (:pr:`2607`) `amerkel2`_
 -  Improved description accuracy of --memory-limit option. (:pr:`2601`) `Brett Randall`_
 -  Check self.dependencies when looking at dependent tasks in memory (:pr:`2606`) `deepthirajagopalan7`_
 -  Add RabbitMQ SchedulerPlugin example (:pr:`2604`) `Matt Nicolls`_
@@ -28,7 +52,7 @@ Changelog
 -  Use ensure_bytes in serialize_error (:pr:`2588`) `Matthew Rocklin`_
 -  Specify data storage explicitly from Worker constructor (:pr:`2600`) `Matthew Rocklin`_
 -  Change bokeh port keywords to dashboard_address (:pr:`2589`) `Matthew Rocklin`_
--  .detach_(`) pytorch tensor to serialize data as numpy array. (:pr:`2586`) `Muammar El Khatib`_
+-  .detach_() pytorch tensor to serialize data as numpy array. (:pr:`2586`) `Muammar El Khatib`_
 -  Add warning if creating scratch directories takes a long time (:pr:`2561`) `Matthew Rocklin`_
 -  Fix typo in pub-sub doc. (:pr:`2599`) `Loïc Estève`_
 -  Allow return_when='FIRST_COMPLETED' in wait (:pr:`2598`) `Nikos Tsaousis`_
@@ -1005,3 +1029,5 @@ significantly without many new features.
 .. _`Michael Delgado`: https://github.com/delgadom
 .. _`Peter Andreas Entschev`: https://github.com/pentschev
 .. _`condoratberlin`: https://github.com/condoratberlin
+.. _`K.-Michael Aye`: https://github.com/michaelaye
+.. _`@plbertrand`: https://github.com/plbertrand
