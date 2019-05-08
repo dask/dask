@@ -208,6 +208,13 @@ def blockwise(func, out_ind, *args, **kwargs):
                      arg[tuple(slice(0, 0, None) for _ in range(nd))] if nd > 0 else arg
                      for arg, nd in zip(arrays, ndims)]
         kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
+
+        # TODO: look for alternative to this, causes issues when using map_blocks()
+        # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+        if isinstance(func, np.vectorize):
+            meta = func(*args_meta)
+            return Array(graph, out, chunks, meta=meta.astype(dtype))
+
         try:
             meta = func(*args_meta, **kwargs_meta)
         except TypeError:
