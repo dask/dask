@@ -1,5 +1,6 @@
 import warnings
 
+import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -321,6 +322,27 @@ def test_concat(join):
         expected = pd.concat([pd1, pd2])
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('join', ['inner', 'outer'])
+def test_concat_different_dtypes(join):
+    # check that the resulting dataframe has coherent dtypes
+    # refer to https://github.com/dask/dask/issues/4685
+    pdf1 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
+                         'y': list('abcdef')},
+                        index=[1, 2, 3, 4, 6, 7])
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({'x': [1.0, 2.0, 3.0, 4.0, 6.0, 7.0],
+                         'y': list('abcdef')},
+                        index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    expected = pd.concat([pdf1, pdf2], join=join)
+    result = dd.concat([ddf1, ddf2], join=join)
+    assert_eq(expected, result)
+
+    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
+    assert len(set(map(str, dtypes_list))) == 1  # all the same
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
