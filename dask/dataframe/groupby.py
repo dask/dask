@@ -674,6 +674,7 @@ def _groupby_apply_funcs(df, *index, **kwargs):
     if is_dataframe_like(df):
         return type(df)(result)
     else:
+        # Get the DataFrame type of this Series object
         return type(df.head(0).to_frame())(result)
 
 
