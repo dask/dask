@@ -11,7 +11,7 @@ import pandas as pd
 from .core import (DataFrame, Series, aca, map_partitions,
                    new_dd_object, no_default, split_out_on_index,
                    _extract_meta)
-from .methods import drop_columns
+from .methods import drop_columns, concat
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
                     raise_on_meta_error, is_series_like, is_dataframe_like)
@@ -265,7 +265,7 @@ def _var_chunk(df, *index):
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index
-    return pd.concat([x, x2, n], axis=1)
+    return concat([x, x2, n], axis=1)
 
 
 def _var_combine(g, levels):
@@ -299,7 +299,7 @@ def _nunique_df_chunk(df, *index, **kwargs):
 
     g = _groupby_raise_unaligned(df, by=index)
     if len(df) > 0:
-        grouped = g[[name]].apply(pd.DataFrame.drop_duplicates)
+        grouped = g[[name]].apply(M.drop_duplicates)
         # we set the index here to force a possibly duplicate index
         # for our reduce step
         if isinstance(levels, list):
@@ -672,7 +672,11 @@ def _groupby_apply_funcs(df, *index, **kwargs):
         else:
             result[result_column] = r
 
-    return pd.DataFrame(result)
+    if is_dataframe_like(df):
+        return type(df)(result)
+    else:
+        # Get the DataFrame type of this Series object
+        return type(df.head(0).to_frame())(result)
 
 
 def _compute_sum_of_squares(grouped, column):
@@ -689,7 +693,7 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level):
     for result_column, func, kwargs in finalize_funcs:
         result[result_column] = func(df, **kwargs)
 
-    return pd.DataFrame(result)
+    return type(df)(result)
 
 
 def _apply_func_to_column(df_like, column, func):
