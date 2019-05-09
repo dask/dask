@@ -276,7 +276,7 @@ def test_rename_series_method():
 
 
 @pytest.mark.parametrize('method,test_values', [('tdigest', (6, 10)), ('dask', (4, 20))])
-def test_describe(method, test_values):
+def test_describe_numeric(method, test_values):
     if method == 'tdigest':
         pytest.importorskip('crick')
     # prepare test case which approx quantiles will be the same as actuals
@@ -306,19 +306,76 @@ def test_describe(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-@pytest.mark.parametrize('method', ['tdigest', 'dask'])
-def test_describe_empty(method):
-    if method == 'tdigest':
-        pytest.importorskip('crick')
-    # https://github.com/dask/dask/issues/2326
-    ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
-    with pytest.raises(ValueError) as rec:
-        ddf.describe(percentiles_method=method)
-    assert 'DataFrame contains only non-numeric data.' in str(rec)
+@pytest.mark.parametrize('include,exclude,percentiles', [
+    (None, None, None),
+    ('all', None, None),
+    (['number'], None, [0.25, 0.5]),
+    ([np.timedelta64], None, None),
+    (['number', 'object'], None, [0.25, 0.75]),
+    (None, ['number', 'object'], None),
+    (['object', 'datetime', 'bool'], None, None)
+])
+def test_describe(include, exclude, percentiles):
+    data = {
+        'a': ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        'c': [None, 0, 1, 2, 3, 4] * 2,
+        'd': [None, 0, 1] * 4,
+        'e': [pd.Timestamp('2017-05-09 00:00:00.006000'),
+              pd.Timestamp('2017-05-09 00:00:00.006000'),
+              pd.Timestamp('2017-05-09 07:56:23.858694'),
+              pd.Timestamp('2017-05-09 05:59:58.938999'),
+              None,
+              None] * 2,
+        'f': [np.timedelta64(3, 'D'),
+              np.timedelta64(1, 'D'),
+              None,
+              None,
+              np.timedelta64(3, 'D'),
+              np.timedelta64(1, 'D')] * 2,
+        'g': [True, False, True] * 4
+    }
 
-    with pytest.raises(ValueError) as rec:
-        ddf.A.describe(percentiles_method=method)
-    assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
+    # Arrange
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, 2)
+
+    # Act
+    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
+    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    desc_ddf_computed = desc_ddf.compute()
+    print(desc_ddf_computed)
+    print(desc_df)
+
+    # TODO: for timedelta columns there's overflow in var function, see #4233
+    # causing std to be nan, ignoring this cell
+    if 'f' in desc_ddf_computed:
+        desc_df['f']['std'] = None
+        desc_ddf_computed['f']['std'] = None
+
+    # Assert
+    assert_eq(desc_df, desc_ddf_computed)
+
+    # Check series
+    for col in ['a', 'c', 'e']:
+        assert_eq(
+            df[col].describe(include=include, exclude=exclude),
+            ddf[col].describe(include=include, exclude=exclude).compute())
+
+
+def test_describe_empty():
+    df_none = pd.DataFrame({"A": [None, None]})
+    ddf_none = dd.from_pandas(pd.DataFrame({"A": [None, None]}), 2)
+    ddf_len0 = dd.from_pandas(pd.DataFrame({"A": []}), 2)
+    ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
+
+    print(ddf_none.describe().compute())
+    assert_eq(df_none.describe(), ddf_none.describe().compute())
+
+    with pytest.raises(ValueError):
+        ddf_len0.describe().compute()
+
+    with pytest.raises(ValueError):
+        ddf_nocols.describe().compute()
 
 
 def test_describe_for_possibly_unsorted_q():
@@ -3629,14 +3686,6 @@ def test_str_expand_more_columns():
     ds = dd.from_pandas(s, npartitions=2)
 
     s.str.split(n=10, expand=True).compute()
-
-
-@pytest.mark.skipif(PY2,
-                    reason="docstring not rendered on py2 build")
-def test_describe_doc():
-    # tests the addition of text into a dataframe method
-    assert ("Currently, only numeric describe is supported"
-            in dd.DataFrame.describe.__doc__)
 
 
 def test_dtype_cast():

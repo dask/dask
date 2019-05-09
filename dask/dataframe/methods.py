@@ -134,14 +134,85 @@ def var_aggregate(x2, x, n, ddof):
 
 
 def describe_aggregate(values):
-    assert len(values) == 6
-    count, mean, std, min, q, max = values
+    assert len(values) > 0
+
+    # arrange categorical and numeric stats
+    names = []
+    values_indexes = sorted((x.index for x in values), key=len)
+    for idxnames in values_indexes:
+        for name in idxnames:
+            if name not in names:
+                names.append(name)
+
+    return pd.concat(values, join_axes=pd.Index([names]), axis=1)
+
+
+def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
+    assert len(stats) == 6
+    count, mean, std, min, q, max = stats
+
     typ = pd.DataFrame if isinstance(count, pd.Series) else pd.Series
+
+    if is_timedelta_col:
+        mean = pd.to_timedelta(mean)
+        std = pd.to_timedelta(std)
+        min = pd.to_timedelta(min)
+        max = pd.to_timedelta(max)
+        q = q.apply(lambda x: pd.to_timedelta(x))
+
     part1 = typ([count, mean, std, min],
                 index=['count', 'mean', 'std', 'min'])
     q.index = ['{0:g}%'.format(l * 100) for l in q.index.tolist()]
     part3 = typ([max], index=['max'])
-    return pd.concat([part1, q, part3], **concat_kwargs)
+
+    result = pd.concat([part1, q, part3], **concat_kwargs)
+
+    if isinstance(result, pd.Series):
+        result.name = name
+
+    return result
+
+
+def describe_categorical_aggregate(stats, name):
+    args_len = len(stats)
+
+    is_datetime_column = args_len == 5
+    is_categorical_column = args_len == 3
+
+    assert is_datetime_column or is_categorical_column
+
+    if is_categorical_column:
+        nunique, count, top_freq = stats
+    else:
+        nunique, count, top_freq, min_ts, max_ts = stats
+
+    # input was empty dataframe/series
+    if len(top_freq) == 0:
+        return pd.Series([0, 0], index=['count','unique'], name=name)
+
+    top = top_freq.index[0]
+    freq = top_freq.iloc[0]
+
+    index = ['unique', 'count', 'top', 'freq']
+    values = [nunique, count]
+
+    if is_datetime_column:
+        tz = top.tz
+        top = pd.Timestamp(top)
+        if top.tzinfo is not None and tz is not None:
+            # Don't tz_localize(None) if key is already tz-aware
+            top = top.tz_convert(tz)
+        else:
+            top = top.tz_localize(tz)
+
+        first = pd.Timestamp(min_ts, tz=tz)
+        last = pd.Timestamp(max_ts, tz=tz)
+        index += ['first', 'last']
+        values += [top, freq, first, last]
+    else:
+        values += [top, freq]
+
+    return pd.Series(values, index=index, name=name)
 
 
 def cummin_aggregate(x, y):
