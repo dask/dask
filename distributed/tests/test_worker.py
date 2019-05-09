@@ -381,17 +381,22 @@ def test_spill_to_disk(c, s):
     yield wait(y)
 
     assert set(w.data) == {x.key, y.key}
-    assert set(w.data.fast) == {x.key, y.key}
+    assert set(w.data.memory) == {x.key, y.key}
+    assert set(w.data.fast) == set(w.data.memory)
 
     z = c.submit(np.random.randint, 0, 255, size=500, dtype="u1", key="z")
     yield wait(z)
     assert set(w.data) == {x.key, y.key, z.key}
-    assert set(w.data.fast) == {y.key, z.key}
-    assert set(w.data.slow) == {x.key} or set(w.data.slow) == {x.key, y.key}
+    assert set(w.data.memory) == {y.key, z.key}
+    assert set(w.data.disk) == {x.key} or set(w.data.slow) == {x.key, y.key}
+    assert set(w.data.fast) == set(w.data.memory)
+    assert set(w.data.slow) == set(w.data.disk)
 
     yield x
-    assert set(w.data.fast) == {x.key, z.key}
-    assert set(w.data.slow) == {y.key} or set(w.data.slow) == {x.key, y.key}
+    assert set(w.data.memory) == {x.key, z.key}
+    assert set(w.data.disk) == {y.key} or set(w.data.slow) == {x.key, y.key}
+    assert set(w.data.fast) == set(w.data.memory)
+    assert set(w.data.slow) == set(w.data.disk)
     yield w.close()
 
 
@@ -460,7 +465,7 @@ def test_spill_by_default(c, s, w):
     x = da.ones(int(10e6 * 0.7), chunks=1e6, dtype="u1")
     y = c.persist(x)
     yield wait(y)
-    assert len(w.data.slow)  # something is on disk
+    assert len(w.data.disk)  # something is on disk
     del x, y
 
 
@@ -1069,7 +1074,7 @@ def test_robust_to_bad_sizeof_estimates(c, s, a):
     futures = c.map(f, [100e6] * 8, pure=False)
 
     start = time()
-    while not a.data.slow:
+    while not a.data.disk:
         yield gen.sleep(0.1)
         assert time() < start + 5
 

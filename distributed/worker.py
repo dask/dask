@@ -156,7 +156,16 @@ class Worker(ServerNode):
     that we want to collect from others.
 
     * **data:** ``{key: object}``:
-        Dictionary mapping keys to actual values
+        Prefer using the **host** attribute instead of this, unless
+        memory_limit and at least one of memory_target_fraction or
+        memory_spill_fraction values are defined, in that case, this attribute
+        is a zict.Buffer, from which information on LRU cache can be queried.
+    * **data.memory:** ``{key: object}``:
+        Dictionary mapping keys to actual values stored in memory. Only
+        available if condition for **data** being a zict.Buffer is met.
+    * **data.disk:** ``{key: object}``:
+        Dictionary mapping keys to actual values stored on disk. Only
+        available if condition for **data** being a zict.Buffer is met.
     * **task_state**: ``{key: string}``:
         The state of all tasks that the scheduler has asked us to compute.
         Valid states include waiting, constrained, executing, memory, erred
@@ -498,6 +507,8 @@ class Worker(ServerNode):
             )
             target = int(float(self.memory_limit) * self.memory_target_fraction)
             self.data = Buffer({}, storage, target, weight)
+            self.data.memory = self.data.fast
+            self.data.disk = self.data.slow
         else:
             self.data = dict()
 
