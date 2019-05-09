@@ -5,6 +5,7 @@ import six
 import dask
 
 from . import registry
+from ..utils import get_ip_interface
 
 
 DEFAULT_SCHEME = dask.config.get("distributed.comm.default-scheme")
@@ -172,3 +173,71 @@ def resolve_address(addr):
     scheme, loc = parse_address(addr)
     backend = registry.get_backend(scheme)
     return unparse_address(scheme, backend.resolve_address(loc))
+
+
+def uri_from_host_port(host_arg, port_arg, default_port):
+    """
+    Process the *host* and *port* CLI options.
+    Return a URI.
+    """
+    # Much of distributed depends on a well-known IP being assigned to
+    # each entity (Worker, Scheduler, etc.), so avoid "universal" addresses
+    # like '' which would listen on all registered IPs and interfaces.
+    scheme, loc = parse_address(host_arg or "")
+
+    host, port = parse_host_port(
+        loc, port_arg if port_arg is not None else default_port
+    )
+
+    if port is None and port_arg is None:
+        port_arg = default_port
+
+    if port and port_arg and port != port_arg:
+        raise ValueError(
+            "port number given twice in options: "
+            "host %r and port %r" % (host_arg, port_arg)
+        )
+    if port is None and port_arg is not None:
+        port = port_arg
+    # Note `port = 0` means "choose a random port"
+    if port is None:
+        port = default_port
+    loc = unparse_host_port(host, port)
+    addr = unparse_address(scheme, loc)
+
+    return addr
+
+
+def address_from_user_args(
+    host=None, port=None, interface=None, protocol=None, peer=None, security=None
+):
+    """ Get an address to listen on from common user provided arguments """
+    if security and security.require_encryption and not protocol:
+        protocol = "tls"
+
+    if protocol and protocol.rstrip("://") == "inplace":
+        if host or port or interface:
+            raise ValueError(
+                "Can not specify inproc protocol and host or port or interface"
+            )
+        else:
+            return "inproc://"
+
+    if interface:
+        if host:
+            raise ValueError("Can not specify both interface and host", interface, host)
+        else:
+            host = get_ip_interface(interface)
+
+    if protocol and host and "://" not in host:
+        host = protocol.rstrip("://") + "://" + host
+
+    if host or port:
+        addr = uri_from_host_port(host, port, 0)
+    else:
+        addr = ""
+
+    if protocol and "://" not in addr:
+        addr = protocol.rstrip("://") + "://" + addr
+
+    return addr

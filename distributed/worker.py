@@ -30,6 +30,7 @@ from . import profile, comm
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
+from .comm.addressing import address_from_user_args
 from .compatibility import unicode, get_thread_identity, finalize, MutableMapping
 from .core import error_message, CommClosedError, send_recv, pingpong, coerce_to_address
 from .diskutils import WorkSpace
@@ -295,6 +296,10 @@ class Worker(ServerNode):
         extensions=None,
         metrics=None,
         data=None,
+        interface=None,
+        host=None,
+        port=None,
+        protocol=None,
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
         **kwargs
     ):
@@ -406,7 +411,16 @@ class Worker(ServerNode):
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
             scheduler_addr = coerce_to_address((scheduler_ip, scheduler_port))
-        self._port = 0
+        self.contact_address = contact_address
+
+        self._start_address = address_from_user_args(
+            host=host,
+            port=port,
+            interface=interface,
+            protocol=protocol,
+            security=security,
+        )
+
         self.ncores = ncores or _ncores
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
@@ -417,7 +431,6 @@ class Worker(ServerNode):
         self.preload_argv = preload_argv
         if self.preload_argv is None:
             self.preload_argv = dask.config.get("distributed.worker.preload-argv")
-        self.contact_address = contact_address
         self.memory_monitor_interval = parse_timedelta(
             memory_monitor_interval, default="ms"
         )
@@ -888,6 +901,7 @@ class Worker(ServerNode):
     @gen.coroutine
     def _start(self, addr_or_port=0):
         assert self.status is None
+        addr_or_port = addr_or_port or self._start_address
 
         enable_gc_diagnosis()
         thread_state.on_event_loop_thread = True

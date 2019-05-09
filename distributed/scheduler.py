@@ -35,6 +35,7 @@ from .comm import (
     get_address_host,
     unparse_host_port,
 )
+from .comm.addressing import address_from_user_args
 from .compatibility import finalize, unicode, Mapping, Set
 from .core import rpc, connect, send_recv, clean_exception, CommClosedError
 from . import profile
@@ -824,9 +825,12 @@ class Scheduler(ServerNode):
         security=None,
         worker_ttl=None,
         idle_timeout=None,
+        interface=None,
+        host=None,
+        port=8786,
+        protocol=None,
         **kwargs
     ):
-
         self._setup_logging()
 
         # Attributes
@@ -1056,6 +1060,14 @@ class Scheduler(ServerNode):
 
         connection_limit = get_fileno_limit() / 2
 
+        self._start_address = address_from_user_args(
+            host=host,
+            port=port,
+            interface=interface,
+            protocol=protocol,
+            security=security,
+        )
+
         super(Scheduler, self).__init__(
             handlers=self.handlers,
             stream_handlers=merge(worker_handlers, client_handlers),
@@ -1172,9 +1184,11 @@ class Scheduler(ServerNode):
         for service in self.services.values():
             service.stop()
 
-    def start(self, addr_or_port=8786, start_queues=True):
+    def start(self, addr_or_port=None, start_queues=True):
         """ Clear out old state and restart all running coroutines """
         enable_gc_diagnosis()
+
+        addr_or_port = addr_or_port or self._start_address
 
         self.clear_task_state()
 
@@ -1233,6 +1247,15 @@ class Scheduler(ServerNode):
         setproctitle("dask-scheduler [%s]" % (self.address,))
 
         return self.finished()
+
+    def __await__(self):
+        self.start()
+
+        @gen.coroutine
+        def _():
+            return self
+
+        return _().__await__()
 
     @gen.coroutine
     def finished(self):

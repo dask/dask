@@ -11,7 +11,6 @@ import itertools
 import logging
 import logging.config
 import os
-import psutil
 import re
 import shutil
 import signal
@@ -40,7 +39,7 @@ from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
 from .client import default_client, _global_clients, Client
-from .compatibility import PY3, Empty, WINDOWS, PY2
+from .compatibility import PY3, Empty, WINDOWS
 from .comm import Comm
 from .comm.utils import offload
 from .config import initialize_logging
@@ -156,10 +155,7 @@ def loop():
 
     _cleanup_dangling()
 
-    if PY2:  # no forkserver, so no extra procs
-        for child in psutil.Process().children(recursive=True):
-            with ignoring(psutil.NoSuchProcess):
-                child.terminate()
+    assert_no_leaked_processes()
 
     _global_clients.clear()
 
@@ -482,8 +478,8 @@ def run_scheduler(q, nputs, **kwargs):
     # On Python 2.7 and Unix, fork() is used to spawn child processes,
     # so avoid inheriting the parent's IO loop.
     with pristine_loop() as loop:
-        scheduler = Scheduler(validate=True, **kwargs)
-        done = scheduler.start("127.0.0.1")
+        scheduler = Scheduler(validate=True, host="127.0.0.1", **kwargs)
+        done = scheduler.start()
 
         for i in range(nputs):
             q.put(scheduler.address)
@@ -501,7 +497,7 @@ def run_worker(q, scheduler_q, **kwargs):
         with pristine_loop() as loop:
             scheduler_addr = scheduler_q.get()
             worker = Worker(scheduler_addr, validate=True, **kwargs)
-            loop.run_sync(lambda: worker._start(0))
+            loop.run_sync(lambda: worker._start())
             q.put(worker.address)
             try:
 
@@ -521,7 +517,7 @@ def run_nanny(q, scheduler_q, **kwargs):
         with pristine_loop() as loop:
             scheduler_addr = scheduler_q.get()
             worker = Nanny(scheduler_addr, validate=True, **kwargs)
-            loop.run_sync(lambda: worker._start(0))
+            loop.run_sync(lambda: worker._start())
             q.put(worker.address)
             try:
                 loop.start()
@@ -657,6 +653,7 @@ def cluster(
 
             # Launch scheduler
             scheduler = mp_context.Process(
+                name="Dask cluster test: Scheduler",
                 target=run_scheduler,
                 args=(scheduler_q, nworkers + 1),
                 kwargs=scheduler_kwargs,
@@ -675,7 +672,10 @@ def cluster(
                     worker_kwargs,
                 )
                 proc = mp_context.Process(
-                    target=_run_worker, args=(q, scheduler_q), kwargs=kwargs
+                    name="Dask cluster test: Worker",
+                    target=_run_worker,
+                    args=(q, scheduler_q),
+                    kwargs=kwargs,
                 )
                 ws.add(proc)
                 workers.append({"proc": proc, "queue": q, "dir": fn})
@@ -774,6 +774,16 @@ def cluster(
         print("Unclosed Comms", L)
         # raise ValueError("Unclosed Comms", L)
 
+    assert_no_leaked_processes()
+
+
+def assert_no_leaked_processes():
+    for i in range(20):
+        if mp_context.active_children():
+            sleep(0.1)
+    else:
+        assert not mp_context.active_children()
+
 
 @gen.coroutine
 def disconnect(addr, timeout=3, rpc_kwargs=None):
@@ -854,6 +864,7 @@ def start_cluster(
             security=security,
             loop=loop,
             validate=True,
+            host=ncore[0],
             **(merge(worker_kwargs, ncore[2]) if len(ncore) > 2 else worker_kwargs)
         )
         for i, ncore in enumerate(ncores)
@@ -861,7 +872,7 @@ def start_cluster(
     # for w in workers:
     #     w.rpc = workers[0].rpc
 
-    yield [w._start(ncore[0]) for ncore, w in zip(ncores, workers)]
+    yield workers
 
     start = time()
     while len(s.workers) < len(ncores) or any(
@@ -1061,6 +1072,9 @@ def gen_cluster(
             _cleanup_dangling()
             with ignoring(AttributeError):
                 del thread_state.on_event_loop_thread
+
+            assert_no_leaked_processes()
+
             return result
 
         return test_func

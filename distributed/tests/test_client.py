@@ -2824,8 +2824,7 @@ def test_diagnostic_nbytes(c, s, a, b):
 
 @gen_test()
 def test_worker_aliases():
-    s = Scheduler(validate=True)
-    s.start(0)
+    s = yield Scheduler(validate=True, port=0)
     a = Worker(s.ip, s.port, name="alice")
     b = Worker(s.ip, s.port, name="bob")
     w = Worker(s.ip, s.port, name=3)
@@ -3062,8 +3061,7 @@ def test_unrunnable_task_runs(c, s, a, b):
 def test_add_worker_after_tasks(c, s):
     futures = c.map(inc, range(10))
 
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
-    n.start(0)
+    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop, port=0)
 
     result = yield c.gather(futures)
 
@@ -3603,8 +3601,7 @@ def test_as_completed_next_batch(c):
 
 @gen_test()
 def test_status():
-    s = Scheduler()
-    s.start(0)
+    s = yield Scheduler(port=0)
 
     c = yield Client((s.ip, s.port), asynchronous=True)
     assert c.status == "running"

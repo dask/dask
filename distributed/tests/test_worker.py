@@ -304,8 +304,7 @@ def test_broadcast(s, a, b):
 
 @gen_test()
 def test_worker_with_port_zero():
-    s = Scheduler()
-    s.start(8007)
+    s = yield Scheduler(port=8007)
     w = yield Worker(s.address)
     assert isinstance(w.port, int)
     assert w.port > 1024
@@ -1007,8 +1006,7 @@ def test_start_services(s):
 @gen_test()
 def test_scheduler_file():
     with tmpfile() as fn:
-        s = Scheduler(scheduler_file=fn)
-        s.start(8009)
+        s = yield Scheduler(scheduler_file=fn, port=8009)
         w = yield Worker(scheduler_file=fn)
         assert set(s.workers) == {w.address}
         yield w.close()
@@ -1384,3 +1382,18 @@ def test_data_types(s):
     assert w.data.x == 123
     assert w.data.y == 456
     yield w.close()
+
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
+)
+@gen_cluster(ncores=[], client=True)
+def test_host_address(c, s):
+    w = yield Worker(s.address, host="127.0.0.2")
+    assert "127.0.0.2" in w.address
+    yield w.close()
+
+    n = yield Nanny(s.address, host="127.0.0.3")
+    assert "127.0.0.3" in n.address
+    assert "127.0.0.3" in n.worker_address
+    yield n.close()

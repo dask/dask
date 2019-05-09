@@ -533,8 +533,7 @@ def test_broadcast_nanny(s, a, b):
 
 @gen_test()
 def test_worker_name():
-    s = Scheduler(validate=True)
-    s.start(0)
+    s = yield Scheduler(validate=True, port=0)
     w = yield Worker(s.ip, s.port, name="alice")
     assert s.workers[w.address].name == "alice"
     assert s.aliases["alice"] == w.address
@@ -550,8 +549,7 @@ def test_worker_name():
 @gen_test()
 def test_coerce_address():
     with dask.config.set({"distributed.comm.timeouts.connect": "100ms"}):
-        s = Scheduler(validate=True)
-        s.start(0)
+        s = yield Scheduler(validate=True, port=0)
         print("scheduler:", s.address, s.listen_address)
         a = Worker(s.ip, s.port, name="alice")
         b = Worker(s.ip, s.port, name=123)
@@ -824,7 +822,7 @@ def test_file_descriptors(c, s):
     yield [n.close() for n in nannies]
 
     assert not s.rpc.open
-    assert not c.rpc.active
+    assert not c.rpc.active, list(c.rpc._created)
     assert not s.stream_comms
 
     start = time()
@@ -1133,8 +1131,7 @@ def test_fifo_submission(c, s, w):
 @gen_test()
 def test_scheduler_file():
     with tmpfile() as fn:
-        s = Scheduler(scheduler_file=fn)
-        s.start(0)
+        s = yield Scheduler(scheduler_file=fn, port=0)
         with open(fn) as f:
             data = json.load(f)
         assert data["address"] == s.address
@@ -1536,3 +1533,13 @@ def test_close_workers(s, a, b):
     yield s.close(close_workers=True)
     assert a.status == "closed"
     assert b.status == "closed"
+
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
+)
+@gen_test()
+def test_host_address():
+    s = yield Scheduler(host="127.0.0.2")
+    assert "127.0.0.2" in s.address
+    yield s.close()

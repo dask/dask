@@ -16,6 +16,7 @@ from tornado.ioloop import IOLoop, TimeoutError
 from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
+from .comm.addressing import address_from_user_args
 from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
 from .node import ServerNode
@@ -69,6 +70,10 @@ class Nanny(ServerNode):
         listen_address=None,
         worker_class=None,
         env=None,
+        interface=None,
+        host=None,
+        port=None,
+        protocol=None,
         **worker_kwargs
     ):
 
@@ -135,6 +140,14 @@ class Nanny(ServerNode):
             pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
             self.periodic_callbacks["memory"] = pc
 
+        self._start_address = address_from_user_args(
+            host=host,
+            port=port,
+            interface=interface,
+            protocol=protocol,
+            security=security,
+        )
+
         self._listen_address = listen_address
         self.status = "init"
 
@@ -175,6 +188,7 @@ class Nanny(ServerNode):
     @gen.coroutine
     def _start(self, addr_or_port=0):
         """ Start nanny, start local process, start watching """
+        addr_or_port = addr_or_port or self._start_address
 
         # XXX Factor this out
         if not addr_or_port:
@@ -419,6 +433,7 @@ class WorkerProcess(object):
 
         self.process = AsyncProcess(
             target=self._run,
+            name="Dask Worker process (from Nanny)",
             kwargs=dict(
                 worker_args=self.worker_args,
                 worker_kwargs=self.worker_kwargs,

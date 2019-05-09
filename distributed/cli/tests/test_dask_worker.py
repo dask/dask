@@ -7,7 +7,6 @@ pytest.importorskip("requests")
 import requests
 import sys
 from time import sleep
-from toolz import first
 
 from distributed import Client
 from distributed.metrics import time
@@ -52,7 +51,7 @@ def test_memory_limit(loop):
                 while not c.ncores():
                     sleep(0.1)
                 info = c.scheduler_info()
-                d = first(info["workers"].values())
+                [d] = info["workers"].values()
                 assert isinstance(d["memory_limit"], int)
                 assert d["memory_limit"] == 2e9
 

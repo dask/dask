@@ -10,14 +10,10 @@ import warnings
 import click
 from distributed import Nanny, Worker
 from distributed.config import config
-from distributed.utils import get_ip_interface, parse_timedelta
+from distributed.utils import parse_timedelta
 from distributed.worker import _ncores
 from distributed.security import Security
-from distributed.cli.utils import (
-    check_python_3,
-    uri_from_host_port,
-    install_signal_handlers,
-)
+from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
 from distributed.preloading import validate_preload_argv
 from distributed.proctitle import (
@@ -328,18 +324,6 @@ def main(
             "dask-worker SCHEDULER_ADDRESS:8786"
         )
 
-    if interface:
-        if host:
-            raise ValueError("Can not specify both interface and host")
-        else:
-            host = get_ip_interface(interface)
-
-    if host or port:
-        addr = uri_from_host_port(host, port, 0)
-    else:
-        # Choose appropriate address for scheduler
-        addr = None
-
     if death_timeout is not None:
         death_timeout = parse_timedelta(death_timeout, "s")
 
@@ -359,6 +343,9 @@ def main(
             preload_argv=preload_argv,
             security=sec,
             contact_address=contact_address,
+            interface=interface,
+            host=host,
+            port=port,
             name=name if nprocs == 1 or not name else name + "-" + str(i),
             **kwargs
         )
@@ -377,7 +364,7 @@ def main(
 
     @gen.coroutine
     def run():
-        yield [n._start(addr) for n in nannies]
+        yield nannies
         while all(n.status != "closed" for n in nannies):
             yield gen.sleep(0.2)
 
