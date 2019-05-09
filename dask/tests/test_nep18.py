@@ -64,11 +64,6 @@ def test_dask_glm_algorithms_nep18():
     assert_array_equal(asnumpy(result_cupy), asnumpy(result))
 
 
-def test_cupy_isclose_nep18():
-    x = cupy.random.random((5000, 1000))
-    assert_array_equal(np.isclose(x, x), asnumpy(cupy.isclose(x, x)))
-
-
 def test_cupy_types_nep18():
     x = cupy.random.random((5000, 1000))
     assert cupy.can_cast(x, np.float16, 'safe')
@@ -113,6 +108,11 @@ def test_dask_flatnonzero_nep18():
 
 
 ########################### PASSING ###########################
+
+
+def test_cupy_isclose_nep18():
+    x = cupy.random.random((5000, 1000))
+    assert_eq(np.isclose(x, x), cupy.isclose(x, x))
 
 
 def test_dask_sum_nep18():
