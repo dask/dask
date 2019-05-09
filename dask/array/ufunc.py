@@ -164,7 +164,7 @@ class ufunc(object):
 
 
 # ufuncs, copied from this page:
-# http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+# https://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
 # math operations
 add = ufunc(np.add)
@@ -177,11 +177,7 @@ true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
 power = ufunc(np.power)
-try:
-    float_power = ufunc(np.float_power)
-except AttributeError:
-    # Absent for NumPy versions prior to 1.12.
-    pass
+float_power = ufunc(np.float_power)
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below
@@ -256,7 +252,7 @@ ceil = ufunc(np.ceil)
 trunc = ufunc(np.trunc)
 
 # more math routines, from this page:
-# http://docs.scipy.org/doc/numpy/reference/routines.math.html
+# https://docs.scipy.org/doc/numpy/reference/routines.math.html
 degrees = ufunc(np.degrees)
 radians = ufunc(np.radians)
 rint = ufunc(np.rint)

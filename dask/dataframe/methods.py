@@ -4,15 +4,12 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION
+from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like
 from ..utils import Dispatch
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.api.types import union_categoricals
-else:
-    from pandas.types.concat import union_categoricals
+
 if PANDAS_VERSION >= '0.23':
     concat_kwargs = {'sort': False}
 else:
@@ -148,14 +145,14 @@ def describe_aggregate(values):
 
 
 def cummin_aggregate(x, y):
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
     else:       # scalar
         return x if x < y else y
 
 
 def cummax_aggregate(x, y):
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if is_series_like(x) or is_dataframe_like(x):
         return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
     else:       # scalar
         return x if x > y else y
@@ -167,8 +164,12 @@ def assign(df, *pairs):
 
 
 def unique(x, series_name=None):
-    # unique returns np.ndarray, it must be wrapped
-    return pd.Series(x.unique(), name=series_name)
+    out = x.unique()
+    # out can be either an np.ndarray or may already be a series
+    # like object.  When out is an np.ndarray, it must be wrapped.
+    if not is_series_like(out):
+        out = pd.Series(out, name=series_name)
+    return out
 
 
 def value_counts_combine(x):
@@ -236,13 +237,6 @@ def pivot_count(df, index, columns, values):
 # concat
 # ---------------------------------
 
-if PANDAS_VERSION < '0.20.0':
-    def _get_level_values(x, n):
-        return x.get_level_values(n)
-else:
-    def _get_level_values(x, n):
-        return x._get_level_values(n)
-
 
 concat_dispatch = Dispatch('concat')
 
@@ -285,7 +279,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
             first, rest = dfs[0], dfs[1:]
             if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
                     for o in rest):
-                arrays = [concat([_get_level_values(i, n) for i in dfs])
+                arrays = [concat([i._get_level_values(n) for i in dfs])
                           for n in range(first.nlevels)]
                 return pd.MultiIndex.from_arrays(arrays, names=first.names)
 
@@ -385,16 +379,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
     return out
 
 
-def merge(left, right, how, left_on, right_on,
-          left_index, right_index, indicator, suffixes,
-          default_left, default_right):
-
-    if not len(left):
-        left = default_left
-
-    if not len(right):
-        right = default_right
-
-    return pd.merge(left, right, how=how, left_on=left_on, right_on=right_on,
-                    left_index=left_index, right_index=right_index,
-                    suffixes=suffixes, indicator=indicator)
+def assign_index(df, ind):
+    df = df.copy()
+    df.index = ind
+    return df

@@ -37,6 +37,32 @@ def test_read_json_basic(orient):
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
                                     'values'])
+def test_read_json_meta(orient, tmpdir):
+    df = pd.DataFrame({'x': range(5), 'y': ['a', 'b', 'c', 'd', 'e']})
+    df2 = df.assign(x=df.x + 0.5)
+    lines = orient == 'records'
+    df.to_json(str(tmpdir.join("fil1.json")), orient=orient, lines=lines)
+    df2.to_json(str(tmpdir.join("fil2.json")), orient=orient, lines=lines)
+    sol = pd.concat([df, df2])
+    meta = df2.iloc[:0]
+
+    if orient == 'values':
+        # orient=values loses column names
+        sol.columns = meta.columns = [0, 1]
+
+    res = dd.read_json(str(tmpdir.join("fil*.json")), orient=orient,
+                       meta=meta, lines=lines)
+    assert_eq(res, sol)
+
+    if orient == 'records':
+        # Also check chunked version
+        res = dd.read_json(str(tmpdir.join("fil*.json")), orient=orient,
+                           meta=meta, lines=True, blocksize=50)
+        assert_eq(res, sol, check_index=False)
+
+
+@pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
+                                    'values'])
 def test_write_json_basic(orient):
     with tmpdir() as path:
         fn = os.path.join(path, '1.json')

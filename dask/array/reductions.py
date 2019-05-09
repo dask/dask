@@ -14,7 +14,7 @@ from . import chunk
 from .core import _concatenate2, Array, handle_out
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
-from .creation import arange
+from .creation import arange, diagonal
 from .ufunc import sqrt
 from .utils import validate_axis
 from .wrap import zeros, ones
@@ -320,7 +320,28 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(np.ones_like(x), **kwargs)
+
+    if hasattr(x, 'mask'):
+        return chunk.sum(np.ones_like(x), **kwargs)
+
+    shape = x.shape
+    keepdims = kwargs.get('keepdims', False)
+    axis = kwargs.get('axis', None)
+    dtype = kwargs.get('dtype', np.float64)
+
+    if axis is None:
+        prod = np.prod(shape, dtype=dtype)
+        return np.full((1,) * len(shape), prod, dtype=dtype) if keepdims is True else prod
+
+    if not isinstance(axis, tuple or list):
+        axis = [axis]
+
+    prod = np.prod([shape[dim] for dim in axis])
+    if keepdims is True:
+        new_shape = tuple(shape[dim] if dim not in axis else 1 for dim in range(len(shape)))
+    else:
+        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
+    return np.full(new_shape, prod, dtype=dtype)
 
 
 def nannumel(x, **kwargs):
@@ -885,3 +906,8 @@ def argtopk(a, k, axis=-1, split_every=None):
         a_plus_idx, chunk=chunk_combine, combine=chunk_combine,
         aggregate=aggregate, axis=axis, keepdims=True, dtype=np.intp,
         split_every=split_every, concatenate=False, output_size=abs(k))
+
+
+@wraps(np.trace)
+def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
+    return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)

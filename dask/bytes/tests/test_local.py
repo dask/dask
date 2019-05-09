@@ -31,7 +31,9 @@ files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
 csv_files = {'.test.fakedata.1.csv': (b'a,b\n'
                                       b'1,2\n'),
              '.test.fakedata.2.csv': (b'a,b\n'
-                                      b'3,4\n')}
+                                      b'3,4\n'),
+             'subdir/.test.fakedata.2.csv': (b'a,b\n'
+                                             b'5,6\n')}
 
 
 try:
@@ -101,6 +103,15 @@ def test_urlpath_expand_read():
         assert len(paths) == 2
 
 
+@pytest.mark.skipif(sys.version_info < (3, 5),
+                    reason="Recursive glob is new in Python 3.5")
+def test_recursive_glob_expand():
+    """Make sure * is expanded in file paths when reading."""
+    with filetexts(csv_files, mode='b'):
+        _, _, paths = get_fs_token_paths('**/.*.csv')
+        assert len(paths) == 3
+
+
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths('prefix-*.csv', mode='wb', num=2)
@@ -139,6 +150,18 @@ def test_read_bytes_sample_delimiter():
         sample, values = read_bytes('.test.accounts.1.json',
                                     sample=2, delimiter=b'\n')
         assert sample.endswith(b'\n')
+
+
+def test_parse_sample_bytes():
+    with filetexts(files, mode='b'):
+        sample, values = read_bytes('.test.accounts.*', sample='40 B')
+        assert len(sample) == 40
+
+
+def test_read_bytes_no_sample():
+    with filetexts(files, mode='b'):
+        sample, _ = read_bytes('.test.accounts.1.json', sample=False)
+        assert sample is False
 
 
 def test_read_bytes_blocksize_none():

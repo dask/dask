@@ -9,8 +9,9 @@ import numpy as np
 import pandas as pd
 
 from .core import (DataFrame, Series, aca, map_partitions,
-                   new_dd_object, no_default, split_out_on_index)
-from .methods import drop_columns
+                   new_dd_object, no_default, split_out_on_index,
+                   _extract_meta)
+from .methods import drop_columns, concat
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
                     raise_on_meta_error, is_series_like, is_dataframe_like)
@@ -143,7 +144,8 @@ def _groupby_raise_unaligned(df, **kwargs):
 def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    g = df.groupby(grouper)
+    group_keys = kwargs.pop('group_keys', True)
+    g = df.groupby(grouper, group_keys=group_keys)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
@@ -171,9 +173,13 @@ def _groupby_get_group(df, by_key, get_key, columns):
 # Aggregation
 ###############################################################
 
-# Implementation detail: use class to make it easier to pass inside spec
 class Aggregation(object):
-    """A user defined aggregation.
+    """User defined groupby-aggregation.
+
+    This class allows users to define their own custom aggregation in terms of
+    operations on Pandas dataframes in a map-reduce style. You need to specify
+    what operation to do on each chunk of data, how to combine those chunks of
+    data together, and then how to finalize the result.
 
     Parameters
     ----------
@@ -195,22 +201,27 @@ class Aggregation(object):
 
     Examples
     --------
+    We could implement ``sum`` as follows:
 
-    ``sum`` can be implemented as::
+    >>> custom_sum = dd.Aggregation(
+    ...     name='custom_sum',
+    ...     chunk=lambda s: s.sum(),
+    ...     agg=lambda s0: s0.sum()
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_sum)  # doctest: +SKIP
 
-        custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
-        df.groupby('g').agg(custom_sum)
+    We can implement ``mean`` as follows:
 
-    and ``mean`` can be implemented as::
+    >>> custom_mean = dd.Aggregation(
+    ...     name='custom_mean',
+    ...     chunk=lambda s: (s.count(), s.sum()),
+    ...     agg=lambda count, sum: (count.sum(), sum.sum()),
+    ...     finalize=lambda count, sum: sum / count,
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_mean)  # doctest: +SKIP
 
-        custom_mean = dd.Aggregation(
-            'custom_mean',
-            lambda s: (s.count(), s.sum()),
-            lambda count, sum: (count.sum(), sum.sum()),
-            lambda count, sum: sum / count,
-        )
-        df.groupby('g').agg(custom_mean)
-
+    Though of course, both of these are built-in and so you don't need to
+    implement them yourself.
     """
     def __init__(self, name, chunk, agg, finalize=None):
         self.chunk = chunk
@@ -240,17 +251,21 @@ def _apply_chunk(df, *index, **kwargs):
 def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
+
+    df = df.copy()
+    cols = df._get_numeric_data().columns
+
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
-    n = g.count().rename(columns=lambda c: c + '-count')
+    n = g[x.columns].count().rename(columns=lambda c: c + '-count')
 
-    df2 = df ** 2
-    g2 = _groupby_raise_unaligned(df2, by=index)
+    df[cols] = df[cols] ** 2
+    g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index
-    return pd.concat([x, x2, n], axis=1)
+    return concat([x, x2, n], axis=1)
 
 
 def _var_combine(g, levels):
@@ -284,7 +299,7 @@ def _nunique_df_chunk(df, *index, **kwargs):
 
     g = _groupby_raise_unaligned(df, by=index)
     if len(df) > 0:
-        grouped = g[[name]].apply(pd.DataFrame.drop_duplicates)
+        grouped = g[[name]].apply(M.drop_duplicates)
         # we set the index here to force a possibly duplicate index
         # for our reduce step
         if isinstance(levels, list):
@@ -500,7 +515,8 @@ def _build_agg_args_single(result_column, func, input_column):
         'count': (M.count, M.sum),
         'size': (M.size, M.sum),
         'first': (M.first, M.first),
-        'last': (M.last, M.last)
+        'last': (M.last, M.last),
+        'prod': (M.prod, M.prod)
     }
 
     if func in simple_impl.keys():
@@ -656,7 +672,11 @@ def _groupby_apply_funcs(df, *index, **kwargs):
         else:
             result[result_column] = r
 
-    return pd.DataFrame(result)
+    if is_dataframe_like(df):
+        return type(df)(result)
+    else:
+        # Get the DataFrame type of this Series object
+        return type(df.head(0).to_frame())(result)
 
 
 def _compute_sum_of_squares(grouped, column):
@@ -673,7 +693,7 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level):
     for result_column, func, kwargs in finalize_funcs:
         result[result_column] = func(df, **kwargs)
 
-    return pd.DataFrame(result)
+    return type(df)(result)
 
 
 def _apply_func_to_column(df_like, column, func):
@@ -747,21 +767,24 @@ class _GroupBy(object):
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
+    group_keys: bool
+        Passed to pandas.DataFrame.groupby()
     """
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, group_keys=True):
 
         assert isinstance(df, (DataFrame, Series))
+        self.group_keys = group_keys
         self.obj = df
         # grouping key passed via groupby method
         self.index = _normalize_index(df, by)
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
-                item.divisions == df.divisions if isinstance(item, Series) else True
+                item.npartitions == df.npartitions if isinstance(item, Series) else True
                 for item in self.index
             )
         elif isinstance(self.index, Series):
-            do_index_partition_align = df.divisions == self.index.divisions
+            do_index_partition_align = df.npartitions == self.index.npartitions
         else:
             do_index_partition_align = True
 
@@ -781,7 +804,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        self._meta = self.obj._meta.groupby(index_meta)
+        self._meta = self.obj._meta.groupby(index_meta, group_keys=group_keys)
 
     @property
     def _meta_nonempty(self):
@@ -799,7 +822,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(index_meta)
+        grouped = sample.groupby(index_meta, group_keys=self.group_keys)
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(self, token, func, aggfunc=None, split_every=None,
@@ -807,7 +830,7 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        meta = func(self._meta)
+        meta = func(self._meta_nonempty)
         columns = meta.name if is_series_like(meta) else meta.columns
 
         token = self._token_prefix + token
@@ -912,9 +935,24 @@ class _GroupBy(object):
                              initial=-1)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1):
-        return self._aca_agg(token='sum', func=M.sum, split_every=split_every,
-                             split_out=split_out)
+    def sum(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='sum', func=M.sum, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def prod(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='prod', func=M.prod, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self, split_every=None, split_out=1):
@@ -934,8 +972,11 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self, split_every=None, split_out=1):
-        return (self.sum(split_every=split_every, split_out=split_out) /
-                self.count(split_every=split_every, split_out=split_out))
+        s = self.sum(split_every=split_every, split_out=split_out)
+        c = self.count(split_every=split_every, split_out=split_out)
+        if is_dataframe_like(s):
+            c = c[s.columns]
+        return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
     def size(self, split_every=None, split_out=1):
@@ -1084,15 +1125,16 @@ class _GroupBy(object):
         meta = kwargs.get('meta', no_default)
 
         if meta is no_default:
+            with raise_on_meta_error("groupby.apply({0})".format(funcname(func)), udf=True):
+                meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
+                meta = self._meta_nonempty.apply(func, *meta_args, **meta_kwargs)
+
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
                    "  Before: .apply(func)\n"
                    "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
                    "  or:     .apply(func, meta=('x', 'f8'))            for series result")
             warnings.warn(msg, stacklevel=2)
-
-            with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
-                meta = self._meta_nonempty.apply(func, *args, **kwargs)
 
         meta = make_meta(meta)
 
@@ -1107,6 +1149,13 @@ class _GroupBy(object):
                               df._contains_index_name(self.index))
 
         if should_shuffle:
+            if isinstance(self.obj, Series):
+                # Temporarily convert series to dataframe for shuffle
+                df = df.to_frame('__series__')
+                convert_back_to_series = True
+            else:
+                convert_back_to_series = False
+
             if isinstance(self.index, DataFrame):  # add index columns to dataframe
                 df2 = df.assign(**{'_index_' + c: self.index[c]
                                    for c in self.index.columns})
@@ -1119,33 +1168,38 @@ class _GroupBy(object):
                 index = df._select_columns_or_index(self.index)
 
             df3 = shuffle(df2, index)  # shuffle dataframe and index
-        else:
-            df3 = df
 
-        if should_shuffle and isinstance(self.index, DataFrame):
-            # extract index from dataframe
-            cols = ['_index_' + c for c in self.index.columns]
-            index2 = df3[cols]
-            if is_dataframe_like(meta):
-                df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+            if isinstance(self.index, DataFrame):
+                # extract index from dataframe
+                cols = ['_index_' + c for c in self.index.columns]
+                index2 = df3[cols]
+                if is_dataframe_like(meta):
+                    df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+                else:
+                    df4 = df3.drop(cols, axis=1)
+            elif isinstance(self.index, Series):
+                index2 = df3['_index']
+                index2.name = self.index.name
+                if is_dataframe_like(meta):
+                    df4 = df3.map_partitions(drop_columns, '_index',
+                                             meta.columns.dtype)
+                else:
+                    df4 = df3.drop('_index', axis=1)
             else:
-                df4 = df3.drop(cols, axis=1)
-        elif should_shuffle and isinstance(self.index, Series):
-            index2 = df3['_index']
-            index2.name = self.index.name
-            if is_dataframe_like(meta):
-                df4 = df3.map_partitions(drop_columns, '_index',
-                                         meta.columns.dtype)
-            else:
-                df4 = df3.drop('_index', axis=1)
+                df4 = df3
+                index2 = self.index
+
+            if convert_back_to_series:
+                df4 = df4['__series__'].rename(self.obj.name)
+
         else:
-            df4 = df3
+            df4 = df
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
         kwargs['meta'] = meta
         df5 = map_partitions(_groupby_slice_apply, df4, index2,
-                             self._slice, func, token=funcname(func), *args,
+                             self._slice, func, token=funcname(func), *args, group_keys=self.group_keys,
                              **kwargs)
 
         return df5
@@ -1191,7 +1245,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, **kwargs):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1209,7 +1263,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name

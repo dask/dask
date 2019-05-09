@@ -413,8 +413,6 @@ def test_multiple_list_slicing():
     assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0',
-                    reason='boolean lists are not treated as boolean indexes')
 def test_boolean_list_slicing():
     with pytest.raises(IndexError):
         da.asarray(range(2))[[True]]

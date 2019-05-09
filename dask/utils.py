@@ -196,6 +196,10 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """
     with (tmp_cwd() if use_tmpdir else noop_context()):
         for filename, text in d.items():
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError:
+                pass
             f = open(filename, 'w' + mode)
             try:
                 f.write(text)
@@ -470,8 +474,84 @@ def extra_titles(doc):
     return '\n'.join(lines)
 
 
+def ignore_warning(doc, cls, name, extra=""):
+    """Expand docstring by adding disclaimer and extra text"""
+    l1 = "This docstring was copied from %s.%s.%s. \n\n" % (cls.__module__, cls.__name__, name)
+    l2 = "Some inconsistencies with the Dask version may exist."
+
+    i = doc.find('\n\n')
+    if i != -1:
+        # Insert our warning
+        head = doc[:i + 2]
+        tail = doc[i + 2:]
+        # Indentation of next line
+        indent = re.match(r'\s*', tail).group(0)
+        # Insert the warning, indented, with a blank line before and after
+        if extra:
+            more = [indent, extra.rstrip('\n') + '\n\n']
+        else:
+            more = []
+        bits = [
+            head,
+            indent, l1,
+            indent, l2, '\n\n'
+        ] + more + [tail]
+        doc = ''.join(bits)
+
+    return doc
+
+
+def unsupported_arguments(doc, args):
+    """ Mark unsupported arguments with a disclaimer """
+    lines = doc.split('\n')
+    for arg in args:
+        subset = [(i, line) for i, line in enumerate(lines) if re.match(r'^\s*' + arg + ' ?:', line)]
+        if len(subset) == 1:
+            [(i, line)] = subset
+            lines[i] = line + "  (Not supported in Dask)"
+    return '\n'.join(lines)
+
+
+def _derived_from(cls, method, ua_args=[], extra=""):
+    """ Helper function for derived_from to ease testing """
+    # do not use wraps here, as it hides keyword arguments displayed
+    # in the doc
+    original_method = getattr(cls, method.__name__)
+    doc = original_method.__doc__
+    if doc is None:
+        doc = ''
+
+    # Insert disclaimer that this is a copied docstring
+    if doc:
+        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+    elif extra:
+        doc += extra.rstrip('\n') + '\n\n'
+
+    # Mark unsupported arguments
+    try:
+        method_args = get_named_args(method)
+        original_args = get_named_args(original_method)
+        not_supported = [m for m in original_args if m not in method_args]
+    except ValueError:
+        not_supported = []
+    if len(ua_args) > 0:
+        not_supported.extend(ua_args)
+    if len(not_supported) > 0:
+        doc = unsupported_arguments(doc, not_supported)
+
+    doc = skip_doctest(doc)
+    doc = extra_titles(doc)
+
+    return doc
+
+
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
+
+    The output structure will be: top line of docstring, disclaimer about this
+    being auto-derived, any extra text associated with the method being patched,
+    the body of the docstring and finally, the list of keywords that exist in
+    the original method but not in the dask version.
 
     Parameters
     ----------
@@ -484,35 +564,11 @@ def derived_from(original_klass, version=None, ua_args=[]):
         original but not in Dask will automatically be added.
     """
     def wrapper(method):
-        method_name = method.__name__
-
         try:
-            # do not use wraps here, as it hides keyword arguments displayed
-            # in the doc
-            original_method = getattr(original_klass, method_name)
-            doc = original_method.__doc__
-            if doc is None:
-                doc = ''
-
-            try:
-                method_args = get_named_args(method)
-                original_args = get_named_args(original_method)
-                not_supported = [m for m in original_args if m not in method_args]
-            except ValueError:
-                not_supported = []
-
-            if len(ua_args) > 0:
-                not_supported.extend(ua_args)
-
-            if len(not_supported) > 0:
-                note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't support the following argument(s).\n\n")
-                args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
-                doc = doc + note + args
-            doc = skip_doctest(doc)
-            doc = extra_titles(doc)
-
-            method.__doc__ = doc
+            extra = (getattr(method, '__doc__', None) or "")
+            method.__doc__ = _derived_from(
+                original_klass, method, ua_args=ua_args, extra=extra
+            )
             return method
 
         except AttributeError:
@@ -520,7 +576,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method_name)
+                msg = "Base package doesn't support '{0}'.".format(method.__name__)
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
