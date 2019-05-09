@@ -5,7 +5,7 @@ import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
                                   UNKNOWN_CATEGORIES, is_dataframe_like,
-                                  is_series_like, is_index_like)
+                                  is_series_like, is_index_like, is_groupyby_dataframe_like)
 
 import pytest
 
@@ -359,3 +359,8 @@ def test_is_dataframe_like():
     assert is_index_like(df.index)
     assert is_index_like(ddf.index)
     assert not is_index_like(pd.Index)
+
+
+def test_is_groupyby_like():
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': [1, 2, 3]})
+    assert is_groupyby_dataframe_like(df.groupby('x'))

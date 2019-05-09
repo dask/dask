@@ -525,6 +525,19 @@ def is_index_like(s):
             and 'index' in typ.__name__.lower())
 
 
+def is_groupyby_dataframe_like(s):
+    """ Looks like a Pandas DataFrameGroupBy """
+    typ = type(s)
+    # 'apply_multicolumn' in cdf
+    # 'ngroups' in df
+    return bool('groupby' in typ.__name__.lower())
+
+
+def is_groupyby_series_like(s):
+    """ Looks like a Pandas SeriesGroupBy """
+    raise NotImplementedError
+
+
 def check_meta(x, meta, funcname=None, numeric_equal=True):
     """Check that the dask metadata matches the result.
 
