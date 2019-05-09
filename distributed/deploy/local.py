@@ -57,7 +57,7 @@ class LocalCluster(Cluster):
         Address on which to listen for the Bokeh diagnostics server like
         'localhost:8787' or '0.0.0.0:8787'.  Defaults to ':8787'.
         Set to ``None`` to disable the dashboard.
-        Use port 0 for a random port.
+        Use ':0' for a random port.
     diagnostics_port: int
         Deprecated.  See dashboard_address.
     asynchronous: bool (False by default)
@@ -112,6 +112,7 @@ class LocalCluster(Cluster):
         scheduler_port=0,
         silence_logs=logging.WARN,
         dashboard_address=":8787",
+        worker_dashboard_address=None,
         diagnostics_port=None,
         services=None,
         worker_services=None,
@@ -179,29 +180,23 @@ class LocalCluster(Cluster):
             worker_kwargs["memory_limit"] = parse_memory_limit("auto", 1, n_workers)
 
         worker_kwargs.update(
-            {"ncores": threads_per_worker, "services": worker_services}
+            {
+                "ncores": threads_per_worker,
+                "services": worker_services,
+                "dashboard_address": worker_dashboard_address,
+            }
         )
 
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
-        if dashboard_address is not False and dashboard_address is not None:
-            try:
-                from distributed.bokeh.scheduler import BokehScheduler
-                from distributed.bokeh.worker import BokehWorker
-            except ImportError:
-                logger.debug("To start diagnostics web server please install Bokeh")
-            else:
-                services[("bokeh", dashboard_address)] = (
-                    BokehScheduler,
-                    (service_kwargs or {}).get("bokeh", {}),
-                )
-                worker_services[("bokeh", 0)] = BokehWorker
-
         self.scheduler = Scheduler(
             loop=self.loop,
             services=services,
+            service_kwargs=service_kwargs,
             security=security,
+            interface=interface,
+            dashboard_address=dashboard_address,
             blocked_handlers=blocked_handlers,
         )
         self.scheduler_port = scheduler_port

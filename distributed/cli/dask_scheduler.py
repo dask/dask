@@ -188,29 +188,15 @@ def main(
     loop = IOLoop.current()
     logger.info("-" * 47)
 
-    services = {}
-    if _bokeh:
-        try:
-            from distributed.bokeh.scheduler import BokehScheduler
-
-            services[("bokeh", dashboard_address)] = (
-                BokehScheduler,
-                {"prefix": bokeh_prefix},
-            )
-        except ImportError as error:
-            if str(error).startswith("No module named"):
-                logger.info("Web dashboard not loaded.  Unable to import bokeh")
-            else:
-                logger.info("Unable to import bokeh: %s" % str(error))
-
     scheduler = Scheduler(
         loop=loop,
-        services=services,
         scheduler_file=scheduler_file,
         security=sec,
         host=host,
         port=port,
         interface=interface,
+        dashboard_address=dashboard_address if _bokeh else None,
+        service_kwargs={"bokeh": {"prefix": bokeh_prefix}},
     )
     scheduler.start()
     if not preload:

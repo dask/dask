@@ -290,6 +290,7 @@ class Worker(ServerNode):
         local_dir="dask-worker-space",
         services=None,
         service_ports=None,
+        service_kwargs=None,
         name=None,
         reconnect=True,
         memory_limit="auto",
@@ -309,6 +310,7 @@ class Worker(ServerNode):
         host=None,
         port=None,
         protocol=None,
+        dashboard_address=None,
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
         **kwargs
     ):
@@ -535,6 +537,18 @@ class Worker(ServerNode):
         self.services = {}
         self.service_ports = service_ports or {}
         self.service_specs = services or {}
+
+        if dashboard_address is not None:
+            try:
+                from distributed.bokeh.worker import BokehWorker
+            except ImportError:
+                logger.debug("To start diagnostics web server please install Bokeh")
+            else:
+                self.service_specs[("bokeh", dashboard_address)] = (
+                    BokehWorker,
+                    (service_kwargs or {}).get("bokeh", {}),
+                )
+
         self.metrics = dict(metrics) if metrics else {}
 
         self.low_level_profiler = low_level_profiler

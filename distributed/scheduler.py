@@ -818,6 +818,7 @@ class Scheduler(ServerNode):
         delete_interval="500ms",
         synchronize_worker_interval="60s",
         services=None,
+        service_kwargs=None,
         allowed_failures=ALLOWED_FAILURES,
         extensions=None,
         validate=False,
@@ -829,6 +830,7 @@ class Scheduler(ServerNode):
         host=None,
         port=8786,
         protocol=None,
+        dashboard_address=None,
         **kwargs
     ):
         self._setup_logging()
@@ -861,6 +863,17 @@ class Scheduler(ServerNode):
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("scheduler")
         self.listen_args = self.security.get_listen_args("scheduler")
+
+        if dashboard_address is not None:
+            try:
+                from distributed.bokeh.scheduler import BokehScheduler
+            except ImportError:
+                logger.debug("To start diagnostics web server please install Bokeh")
+            else:
+                self.service_specs[("bokeh", dashboard_address)] = (
+                    BokehScheduler,
+                    (service_kwargs or {}).get("bokeh", {}),
+                )
 
         # Communication state
         self.loop = loop or IOLoop.current()

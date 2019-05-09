@@ -163,7 +163,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     default=None,
     help="Seconds to wait for a scheduler before closing",
 )
-@click.option("--bokeh-prefix", type=str, default=None, help="Prefix for the bokeh app")
+@click.option("--bokeh-prefix", type=str, default="", help="Prefix for the bokeh app")
 @click.option(
     "--preload",
     type=str,
@@ -288,18 +288,6 @@ def main(
 
     services = {}
 
-    if bokeh:
-        try:
-            from distributed.bokeh.worker import BokehWorker
-        except ImportError:
-            pass
-        else:
-            if bokeh_prefix:
-                result = (BokehWorker, {"prefix": bokeh_prefix})
-            else:
-                result = BokehWorker
-            services[("bokeh", dashboard_address)] = result
-
     if resources:
         resources = resources.replace(",", " ").split()
         resources = dict(pair.split("=") for pair in resources)
@@ -350,6 +338,8 @@ def main(
             interface=interface,
             host=host,
             port=port,
+            dashboard_address=dashboard_address if bokeh else None,
+            service_kwargs={"bokhe": {"prefix": bokeh_prefix}},
             name=name if nprocs == 1 or not name else name + "-" + str(i),
             **kwargs
         )
