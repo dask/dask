@@ -1162,6 +1162,7 @@ class Array(DaskMethodsMixin):
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+
         if isinstance(index2, tuple):
             new_index = []
             for i in range(len(index2)):
@@ -1170,12 +1171,21 @@ class Array(DaskMethodsMixin):
                     cond = any([isinstance(index2[i], t) for t in types])
                     new_index.append(slice(0, 0) if cond else index2[i])
                 else:
-                    new_index.append(tuple([Ellipsis if j is not None else None for j in
-                        index2[i]]))
+                    new_index.append(tuple([Ellipsis if j is not None else
+                                            None for j in index2[i]]))
             new_index = tuple(new_index)
             meta = self._meta[new_index].astype(self.dtype)
         else:
             meta = self._meta[index2].astype(self.dtype)
+
+        # If meta still has more dimensions than actual data
+        # Exception for object dtype and ndim == 1, which results in primitive types
+        if meta.ndim > len(chunks) and not (meta.dtype == object and meta.ndim == 1):
+            meta = np.sum(meta, axis=0)
+
+        # Ensure all dimensions are 0
+        if not np.isscalar(meta):
+            meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
 
         return Array(graph, out, chunks, meta=meta)
 
