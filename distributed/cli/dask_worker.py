@@ -8,8 +8,8 @@ from sys import exit
 import warnings
 
 import click
+import dask
 from distributed import Nanny, Worker
-from distributed.config import config
 from distributed.utils import parse_timedelta
 from distributed.worker import _ncores
 from distributed.security import Security
@@ -318,7 +318,11 @@ def main(
             kwargs["service_ports"] = {"nanny": nanny_port}
         t = Worker
 
-    if not scheduler and not scheduler_file and "scheduler-address" not in config:
+    if (
+        not scheduler
+        and not scheduler_file
+        and dask.config.get("scheduler-address", None) is None
+    ):
         raise ValueError(
             "Need to provide scheduler address like\n"
             "dask-worker SCHEDULER_ADDRESS:8786"

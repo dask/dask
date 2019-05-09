@@ -6,6 +6,7 @@ pytest.importorskip("requests")
 
 import requests
 import sys
+import os
 from time import sleep
 
 from distributed import Client
@@ -139,6 +140,17 @@ def test_scheduler_file(loop, nanny):
                     while not c.scheduler_info()["workers"]:
                         sleep(0.1)
                         assert time() < start + 10
+
+
+def test_scheduler_address_env(loop, monkeypatch):
+    monkeypatch.setenv("DASK_SCHEDULER_ADDRESS", "tcp://127.0.0.1:8786")
+    with popen(["dask-scheduler", "--no-bokeh"]) as sched:
+        with popen(["dask-worker", "--no-bokeh"]):
+            with Client(os.environ["DASK_SCHEDULER_ADDRESS"], loop=loop) as c:
+                start = time()
+                while not c.scheduler_info()["workers"]:
+                    sleep(0.1)
+                    assert time() < start + 10
 
 
 def test_nprocs_requires_nanny(loop):
