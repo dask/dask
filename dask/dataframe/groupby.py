@@ -14,8 +14,7 @@ from .core import (DataFrame, Series, aca, map_partitions,
 from .methods import drop_columns, concat
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
-                    raise_on_meta_error, is_series_like, is_dataframe_like,
-                    is_groupyby_dataframe_like)
+                    raise_on_meta_error, is_series_like, is_dataframe_like)
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
@@ -88,7 +87,11 @@ def _maybe_slice(grouped, columns):
     """
     Slice columns if grouped is pd.DataFrameGroupBy
     """
-    if is_groupyby_dataframe_like(grouped):
+    # generalized approach of groupby checking
+    # cudf and pandas currently do not have much overlap in
+    # attribute functionality
+    typ = type(grouped)
+    if bool('groupby' in typ.__name__.lower()):
         if columns is not None:
             if isinstance(columns, (tuple, list, set, pd.Index)):
                 columns = list(columns)
