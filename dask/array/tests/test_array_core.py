@@ -1933,6 +1933,8 @@ def test_optimize():
 
 def test_slicing_with_non_ndarrays():
     class ARangeSlice(object):
+        dtype = np.dtype('i8')
+
         def __init__(self, start, stop):
             self.start = start
             self.stop = stop
@@ -1942,6 +1944,7 @@ def test_slicing_with_non_ndarrays():
 
     class ARangeSlicable(object):
         dtype = np.dtype('i8')
+        ndim = 1
 
         def __init__(self, n):
             self.n = n
