@@ -223,6 +223,7 @@ def to_parquet(
     append=False,
     partition_on=None,
     storage_options=None,
+    write_metadata_file=True,
     compute=True,
     **kwargs
 ):
@@ -259,6 +260,8 @@ def to_parquet(
         there will be no global groupby.
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
+    write_metadata_file : bool, optional
+        Whether to create the special "_metadata" file,
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
@@ -297,14 +300,24 @@ def to_parquet(
         path, mode="wb", storage_options=storage_options
     )
     # Trim any protocol information from the path before forwarding
+    # ideally, this should be done as a method of the file-system
     path = infer_storage_options(path)["path"]
 
     if write_index:
         df = df.reset_index()
 
-    out = engine.write(
-        df, fs, fs_token, path, append=append, partition_on=partition_on, **kwargs
-    )
+    # create parquet metadata, includes loading of existing stuff is appending
+    meta, filenames, kwargs2 = engine.create_metadata(df, fs, path, append)
+    kwargs.update(kwargs2)
+
+    # write parts
+    dwrite = delayed(engine.write)
+    parts = [dwrite(
+        d, path, fs, filename, partition_on, write_metadata_file, **kwargs)
+        for d, filename in zip(df.to_delayed(), filenames)]
+
+    # single task to complete
+    out = engine.write_metadata(parts, meta, fs, path, **kwargs2)
 
     if compute:
         out = out.compute()

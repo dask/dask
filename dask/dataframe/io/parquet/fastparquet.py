@@ -75,33 +75,6 @@ def _paths_to_cats(paths, scheme):
     return {k: list(v) for k, v in cats.items()}
 
 
-def _write_metadata(writes, filenames, fmd, path, fs, sep):
-    """ Write Parquet metadata after writing all row groups
-
-    See Also
-    --------
-    to_parquet
-    """
-    fmd = copy.copy(fmd)
-    for fn, rg in zip(filenames, writes):
-        if rg is not None:
-            if isinstance(rg, list):
-                for r in rg:
-                    fmd.row_groups.append(r)
-            else:
-                for chunk in rg.columns:
-                    chunk.file_path = fn
-                fmd.row_groups.append(rg)
-
-    fn = sep.join([path, "_metadata"])
-    fastparquet.writer.write_common_metadata(
-        fn, fmd, open_with=fs.open, no_row_groups=False
-    )
-
-    fn = sep.join([path, "_common_metadata"])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open)
-
-
 from .utils import Engine, _normalize_index_columns, _parse_pandas_metadata
 
 
@@ -214,7 +187,7 @@ class FastParquetEngine:
         return pf.read_row_group_file(piece, columns, categories)
 
     @staticmethod
-    def write(df, fs, fs_token, path, append=False, partition_on=None, **kwargs):
+    def create_metadata(df, fs, path, append=False, **kwargs):
         """
         Write a Dask DataFrame to Parquet
 
@@ -222,11 +195,9 @@ class FastParquetEngine:
         ----------
         df: dask.dataframe.DataFrame
         fs: FileSystem
-        fs_token:
         path: str
         append: boolean
             Whether or not to append to a previous dataset
-        partition_on:
         **kwargs:
             Other keywords as needed by the engine
 
@@ -251,6 +222,8 @@ class FastParquetEngine:
         divisions = df.divisions
         if append:
             try:
+                # to append to a dataset without _metadata, need to load
+                # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open,
                                                  sep=sep)
             except (IOError, ValueError):
@@ -288,7 +261,8 @@ class FastParquetEngine:
                 old_end = minmax[index_cols[0]]["max"][-1]
                 if divisions[0] < old_end:
                     raise ValueError(
-                        "Appended divisions overlapping with the previous ones.\n"
+                        "Appended divisions overlapping with the previous ones."
+                        "\n"
                         "Previous: {} | New: {}".format(old_end, divisions[0])
                     )
         else:
@@ -302,31 +276,43 @@ class FastParquetEngine:
 
         filenames = ["part.%i.parquet" % (i + i_offset) for i in
                      range(df.npartitions)]
+        return fmd, filenames
 
-        write = delayed(FastParquetEngine.write_partition, pure=False)
-        writes = [
-            write(part, path, fs, filename, partition_on, fmd=fmd, **kwargs)
-            for filename, part in zip(filenames, df.to_delayed())
-        ]
+    @staticmethod
+    def write_metadata(parts, fmd, fs, path, **kwargs):
+        fmd = copy.copy(fmd)
+        if parts:
+            fn = sep.join([path, "_metadata"])
+            fastparquet.writer.write_common_metadata(
+                fn, fmd, open_with=fs.open, no_row_groups=False
+            )
 
-        return delayed(_write_metadata)(writes, filenames, fmd, path, fs, sep)
+        fn = sep.join([path, "_common_metadata"])
+        fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open)
 
     @staticmethod
     def write_partition(
-        df, path, fs, filename, partition_on, fmd=None, compression=None, **kwargs
+        df, path, fs, filename, partition_on, fmd=None, compression=None,
+        with_metadata=True, **kwargs
     ):
         fmd = copy.copy(fmd)
         if not len(df):
             # Write nothing for empty partitions
-            rgs = None
+            rgs = []
         elif partition_on:
-            # require fastparquet "0.1.4" or better (Oct 2017)
             rgs = partition_on_columns(
                 df, partition_on, path, filename, fmd, compression, fs.open,
                 fs.mkdirs
             )
+            rgs = sum(rgs, [])
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                rgs = make_part_file(fil, df, fmd.schema,
-                                     compression=compression, fmd=fmd)
-        return rgs
+                rg = make_part_file(fil, df, fmd.schema,
+                                    compression=compression, fmd=fmd)
+            for chunk in rg.columns:
+                chunk.file_path = fn
+            rgs = [rgs]
+        if with_metadata:
+            return rgs
+        else:
+            return []

@@ -78,32 +78,58 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def write(df, fs, fs_token, path, append=False, partition_on=None, **kwargs):
-        """
-        Write a Dask DataFrame to Parquet
+    def create_metadata(df, fs, path, append=False):
+        """Create engine-specific metadata instance for this dataset
 
         Parameters
         ----------
         df: dask.dataframe.DataFrame
         fs: FileSystem
-        fs_token:
         path: str
-        append: boolean
-            Whether or not to append to a previous dataset
-        partition_on:
-        **kwargs:
-            Other keywords as needed by the engine
+            Output file to write to, usually ``"_metadata"`` in the root of
+            the output dataset; only required if appending.
+        append: bool
+            If True, may use existing metadata (if any) and perform checks
+            against the new data being stored.
 
         Returns
         -------
-        out: List[delayed]
-            A list of dask.delayed objects, one for each partition
+        tuple:
+            engine-specific instance
+            list of filenames
+            and kwargs to pass to write_partition and write_metadata
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def write_metadata(parts, meta, fs, path, append=False, **kwargs):
+        """
+        Write a Dask DataFrame to Parquet
+
+        Parameters
+        ----------
+        parts: List
+            Containes metadata objects to write, of the type undrestood by the
+            specific implementation
+        meta: non-chunk metadata
+            Details that do not depend on the specifics of each chunk write,
+            typically the schema and pandas metadata, in a format the writer
+            can use.
+        fs: FileSystem
+        path: str
+            Output file to write to, usually ``"_metadata"`` in the root of
+            the output dataset
+        append: boolean
+            Whether or not to consolidate new metadata with existing (True)
+            or start from scratch (False)
+        **kwargs:
+            Other keywords as needed by the engine
         """
         raise NotImplementedError()
 
     @staticmethod
     def write_partition(
-        df, path, fs, filename, partition_on, metadata_path=None, **kwargs
+        df, path, fs, filename, partition_on, return_metadata, **kwargs
     ):
         """
         Output a partition of a dask.DataFrame. This will correspond to
@@ -117,14 +143,19 @@ class Engine:
         fs
         filename
         partition_on
-        metadata_path
         kwargs
+        return_metadata : bool
+            Whether to return list of instances from this write, one for each
+            output file. These will be passed to write_metadata if an output
+            metadata file is requested.
 
         Returns
         -------
-
+        List of metadata-containing instances (if return_metadata is True)
+        or empty list
         """
         raise NotImplementedError
+
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
