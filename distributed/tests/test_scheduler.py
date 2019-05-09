@@ -35,7 +35,6 @@ from distributed.utils_test import (
     cluster,
     div,
     varying,
-    slow,
 )
 from distributed.utils_test import loop, nodebug  # noqa: F401
 from dask.compatibility import apply
@@ -775,7 +774,7 @@ def test_retire_workers_no_suspicious_tasks(c, s, a, b):
     assert all(ts.suspicious == 0 for ts in s.tasks.values())
 
 
-@slow
+@pytest.mark.slow
 @pytest.mark.skipif(
     sys.platform.startswith("win"), reason="file descriptors not really a thing"
 )
@@ -831,7 +830,7 @@ def test_file_descriptors(c, s):
         assert time() < start + 3
 
 
-@slow
+@pytest.mark.slow
 @nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy(c, s, a, b):
@@ -844,7 +843,7 @@ def test_learn_occupancy(c, s, a, b):
         assert 50 < s.workers[w.address].occupancy < 700
 
 
-@slow
+@pytest.mark.slow
 @nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy_2(c, s, a, b):
@@ -1062,7 +1061,7 @@ def test_close_worker(c, s, a, b):
     assert len(s.workers) == 1
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True, Worker=Nanny, timeout=20)
 def test_close_nanny(c, s, a, b):
     assert len(s.workers) == 2

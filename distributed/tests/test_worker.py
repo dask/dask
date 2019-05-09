@@ -33,7 +33,6 @@ from distributed.utils_test import (
     gen_cluster,
     div,
     dec,
-    slow,
     slowinc,
     gen_test,
     captured_logger,
@@ -147,7 +146,7 @@ def test_worker_bad_args(c, s, a, b):
     assert tuple(results) == (3, 7)
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster()
 def dont_test_delete_data_with_missing_worker(c, a, b):
     bad = "127.0.0.1:9001"  # this worker doesn't exist
@@ -312,7 +311,7 @@ def test_worker_with_port_zero():
     yield w.close()
 
 
-@slow
+@pytest.mark.slow
 def test_worker_waits_for_center_to_come_up(loop):
     @gen.coroutine
     def f():
@@ -726,7 +725,7 @@ def test_hold_onto_dependents(c, s, a, b):
     assert x.key in b.data
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=False, ncores=[])
 def test_worker_death_timeout(s):
     with dask.config.set({"distributed.comm.timeouts.connect": "1s"}):
@@ -1235,7 +1234,7 @@ def test_scheduler_address_config(c, s):
     yield worker.close()
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True)
 def test_wait_for_outgoing(c, s, a, b):
     np = pytest.importorskip("numpy")

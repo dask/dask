@@ -18,7 +18,7 @@ from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.utils import ignoring, tmpfile
-from distributed.utils_test import gen_cluster, gen_test, slow, inc, captured_logger
+from distributed.utils_test import gen_cluster, gen_test, inc, captured_logger
 
 
 @gen_cluster(ncores=[])
@@ -127,7 +127,7 @@ def test_run(s):
     yield n.close()
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(
     Worker=Nanny, ncores=[("127.0.0.1", 1)], worker_kwargs={"reconnect": False}
 )
@@ -159,7 +159,7 @@ def test_nanny_alt_worker_class(c, s, w1, w2):
     assert w1.Worker is Something
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=False, ncores=[])
 def test_nanny_death_timeout(s):
     yield s.close()
@@ -318,7 +318,7 @@ def test_scheduler_address_config(c, s):
     yield nanny.close()
 
 
-@slow
+@pytest.mark.slow
 @gen_test()
 def test_wait_for_scheduler():
     with captured_logger("distributed") as log:

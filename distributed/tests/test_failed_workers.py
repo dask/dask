@@ -19,7 +19,6 @@ from distributed.utils_test import (
     gen_cluster,
     cluster,
     inc,
-    slow,
     div,
     slowinc,
     slowadd,
@@ -406,7 +405,7 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
     yield n.close()
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True, timeout=60, Worker=Nanny, ncores=[("127.0.0.1", 1)])
 def test_restart_timeout_on_long_running_task(c, s, a):
     with captured_logger("distributed.scheduler") as sio:

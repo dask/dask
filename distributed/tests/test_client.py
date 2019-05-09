@@ -60,7 +60,6 @@ from distributed.sizeof import sizeof
 from distributed.utils import ignoring, mp_context, sync, tmp_text, tokey, tmpfile
 from distributed.utils_test import (
     cluster,
-    slow,
     slowinc,
     slowadd,
     slowdec,
@@ -771,7 +770,7 @@ def test_recompute_released_key(c, s, a, b):
     assert result1 == result2
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True)
 def test_long_tasks_dont_trigger_timeout(c, s, a, b):
     from time import sleep
@@ -3473,7 +3472,7 @@ def test_get_foo_lost_keys(c, s, u, v, w):
     assert_dict_key_equal(d, {x.key: [], y.key: []})
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True, Worker=Nanny, check_new_threads=False)
 def test_bad_tasks_fail(c, s, a, b):
     f = c.submit(sys.exit, 1)
@@ -3528,7 +3527,7 @@ def test_get_returns_early(c):
     assert x.key in c.futures
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(Worker=Nanny, client=True)
 def test_Client_clears_references_after_restart(c, s, a, b):
     x = c.submit(inc, 1)
@@ -3644,7 +3643,7 @@ def test_scatter_raises_if_no_workers(c, s):
         yield c.scatter(1, timeout=0.5)
 
 
-@slow
+@pytest.mark.slow
 def test_reconnect(loop):
     w = Worker("127.0.0.1", 9393, loop=loop)
     w.start()
@@ -3721,7 +3720,7 @@ def test_reconnect_timeout(c, s):
     assert "Failed to reconnect" in text
 
 
-@slow
+@pytest.mark.slow
 @pytest.mark.skipif(
     sys.platform.startswith("win"), reason="num_fds not supported on windows"
 )
@@ -4251,7 +4250,7 @@ def test_normalize_collection_dask_array(c, s, a, b):
     assert result1 == result2
 
 
-@slow
+@pytest.mark.slow
 def test_normalize_collection_with_released_futures(c):
     da = pytest.importorskip("dask.array")
 
@@ -4382,7 +4381,7 @@ def test_scatter_dict_workers(c, s, a, b):
     assert "a" in a.data or "a" in b.data
 
 
-@slow
+@pytest.mark.slow
 @gen_test()
 def test_client_timeout():
     loop = IOLoop.current()
@@ -4710,7 +4709,7 @@ def test_quiet_client_close(loop):
             ), line
 
 
-@slow
+@pytest.mark.slow
 def test_quiet_client_close_when_cluster_is_closed_before_client(loop):
     with captured_logger(logging.getLogger("tornado.application")) as logger:
         cluster = LocalCluster(loop=loop, n_workers=1)
@@ -4755,7 +4754,7 @@ def test_threadsafe(c):
         del results
 
 
-@slow
+@pytest.mark.slow
 def test_threadsafe_get(c):
     da = pytest.importorskip("dask.array")
     x = da.arange(100, chunks=(10,))
@@ -4774,7 +4773,7 @@ def test_threadsafe_get(c):
     assert results and all(results)
 
 
-@slow
+@pytest.mark.slow
 def test_threadsafe_compute(c):
     da = pytest.importorskip("dask.array")
     x = da.arange(100, chunks=(10,))
@@ -4864,7 +4863,7 @@ def test_secede_simple(c, s, a):
     assert result == 2
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2, timeout=60)
 def test_secede_balances(c, s, a, b):
     count = threading.active_count()
@@ -4970,7 +4969,7 @@ def test_dynamic_workloads_sync(c):
     _test_dynamic_workloads_sync(c, delay=0.02)
 
 
-@slow
+@pytest.mark.slow
 def test_dynamic_workloads_sync_random(c):
     _test_dynamic_workloads_sync(c, delay="random")
 
@@ -5190,7 +5189,7 @@ def test_client_async_before_loop_starts():
         client.close()
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(
     client=True,
     Worker=Nanny if PY3 else Worker,

@@ -804,17 +804,6 @@ def disconnect_all(addresses, timeout=3, rpc_kwargs=None):
     yield [disconnect(addr, timeout, rpc_kwargs) for addr in addresses]
 
 
-def slow(func):
-    try:
-        if not pytest.config.getoption("--runslow"):
-            func = pytest.mark.skip("need --runslow option to run")(func)
-    except AttributeError:
-        # AttributeError: module 'pytest' has no attribute 'config'
-        pass
-
-    return nodebug(func)
-
-
 def gen_test(timeout=10):
     """ Coroutine test
 

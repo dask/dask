@@ -9,7 +9,6 @@ from distributed.protocol import loads, dumps, msgpack, maybe_compress, to_seria
 from distributed.protocol.compression import compressions
 from distributed.protocol.serialize import Serialize, Serialized, serialize, deserialize
 from distributed.utils import nbytes
-from distributed.utils_test import slow
 
 
 def test_protocol():
@@ -110,7 +109,7 @@ def test_large_bytes():
         assert loads(frames, deserialize=False) == msg
 
 
-@slow
+@pytest.mark.slow
 def test_large_messages():
     np = pytest.importorskip("numpy")
     psutil = pytest.importorskip("psutil")

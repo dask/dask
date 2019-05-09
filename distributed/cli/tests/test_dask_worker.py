@@ -12,7 +12,7 @@ from time import sleep
 from distributed import Client
 from distributed.metrics import time
 from distributed.utils import sync, tmpfile
-from distributed.utils_test import popen, slow, terminate_process, wait_for_port
+from distributed.utils_test import popen, terminate_process, wait_for_port
 from distributed.utils_test import loop  # noqa: F401
 
 
@@ -65,7 +65,7 @@ def test_no_nanny(loop):
             assert any(b"Registered" in worker.stderr.readline() for i in range(15))
 
 
-@slow
+@pytest.mark.slow
 @pytest.mark.parametrize("nanny", ["--nanny", "--no-nanny"])
 def test_no_reconnect(nanny, loop):
     with popen(["dask-scheduler", "--no-bokeh"]) as sched:
