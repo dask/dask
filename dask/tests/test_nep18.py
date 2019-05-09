@@ -34,46 +34,6 @@ def test_cupy_conj_nep18():
     d = da.from_array(x, chunks=(1000000), asarray=False)
     assert_array_equal(asnumpy(np.conj(x)), asnumpy(da.conj(d).compute()))
 
-def test_dask_svd_nep18():
-    import numpy as np
-    import cupy
-    import dask.array as da
-    from cupy import asnumpy
-    from numpy.testing import assert_array_equal
-
-    x = cupy.random.random((5000, 1000))
-    y = x.copy()
-
-    d = da.from_array(x, chunks=(1000, 1000), asarray=False)
-
-    u, s, v = da.linalg.svd(d)
-    u = u.compute()
-    s = s.compute()
-    v = v.compute()
-    u_cupy, s_cupy, v_cupy = np.linalg.svd(x)
-    assert_array_equal(asnumpy(u_cupy), asnumpy(u))
-    assert_array_equal(asnumpy(s_cupy), asnumpy(s))
-    assert_array_equal(asnumpy(v_cupy), asnumpy(v))
-
-def test_dask_qr_nep18():
-    import numpy as np
-    import cupy
-    import dask.array as da
-    from cupy import asnumpy
-    from numpy.testing import assert_array_equal
-
-    x = cupy.random.random((5000, 1000))
-    y = x.copy()
-
-    d = da.from_array(x, chunks=(1000, 1000), asarray=False)
-
-    q, r = da.linalg.qr(d)
-    q = q.compute()
-    r = r.compute()
-    q_cupy, r_cupy = np.linalg.qr(x)
-    assert_array_equal(asnumpy(q_cupy), asnumpy(q))
-    assert_array_equal(asnumpy(r_cupy), asnumpy(r))
-
 
 def test_dask_glm_algorithms_nep18():
     import numpy as np
@@ -398,3 +358,38 @@ def test_dask_fp_construct_nep18():
     assert_array_equal(asnumpy(x1), asnumpy(d1))
     assert_array_equal(asnumpy(x2), asnumpy(d2))
     assert_array_equal(asnumpy(xr), asnumpy(dr))
+
+
+def test_dask_svd_nep18():
+    import numpy as np
+    import cupy
+    import dask.array as da
+    from dask.array.utils import assert_eq
+
+    x = cupy.random.random((5000, 1000))
+    # Dask doesn't support full_matrices
+    # https://github.com/dask/dask/issues/3576
+    u_cupy, s_cupy, v_cupy = np.linalg.svd(x, full_matrices=False)
+
+    d = da.from_array(x, chunks=(1000, 1000), asarray=False)
+    u, s, v = np.linalg.svd(d)
+
+    assert_eq(s_cupy, s)
+    assert_eq(u_cupy.shape, u.shape)
+    assert_eq(v_cupy.shape, v.shape)
+
+
+def test_dask_qr_nep18():
+    import numpy as np
+    import cupy
+    import dask.array as da
+    from dask.array.utils import assert_eq
+
+    x = cupy.random.random((5000, 1000))
+
+    d = da.from_array(x, chunks=(1000, 1000), asarray=False)
+
+    q, r = da.linalg.qr(d)
+    q_cupy, r_cupy = np.linalg.qr(x)
+    assert_eq(x, np.dot(q_cupy, r_cupy))
+    assert_eq(d, np.dot(q, r))
