@@ -120,7 +120,8 @@ def test_dask_sum_nep18():
 
     d = da.from_array(x, chunks=(100, 100), asarray=False)
 
-    assert_array_almost_equal(asnumpy(x.sum()), asnumpy(d.sum().compute()))
+    assert_eq(np.sum(x), np.sum(d))
+    assert_eq(x.sum(), d.sum())
 
 
 def test_dask_bitwise_nep18():
@@ -128,10 +129,10 @@ def test_dask_bitwise_nep18():
 
     d = da.from_array(x, chunks=(1000, 1000), asarray=False)
 
-    assert_array_equal(asnumpy(np.bitwise_and(x, x)), asnumpy(da.bitwise_and(d, d).compute()))
-    assert_array_equal(asnumpy(np.bitwise_not(x)), asnumpy(da.bitwise_not(d).compute()))
-    assert_array_equal(asnumpy(np.bitwise_or(x, x)), asnumpy(da.bitwise_or(d, d).compute()))
-    assert_array_equal(asnumpy(np.bitwise_xor(x, x)), asnumpy(da.bitwise_xor(d, d).compute()))
+    assert_eq(np.bitwise_and(x, x), np.bitwise_and(d, d))
+    assert_eq(np.bitwise_not(x), np.bitwise_not(d))
+    assert_eq(np.bitwise_or(x, x), np.bitwise_or(d, d))
+    assert_eq(np.bitwise_xor(x, x), np.bitwise_xor(d, d))
 
 
 def test_dask_concatenate_nep18():
@@ -141,6 +142,7 @@ def test_dask_concatenate_nep18():
 
     d = da.from_array((x, z), chunks=(1000), asarray=False)
 
+    #assert_eq(np.concatenate((x, y)), da.concatenate(d).compute())
     assert_array_equal(asnumpy(np.concatenate((x,y))), asnumpy(da.concatenate(d).compute()))
 
 
@@ -154,7 +156,7 @@ def test_dask_copysign_nep18():
     dx = da.from_array(x, chunks=(C), asarray=False)
     dy = da.from_array(y, chunks=(C), asarray=False)
 
-    assert_array_equal(asnumpy(np.copysign(x, y)), asnumpy(da.copysign(dx, dy).compute()))
+    assert_eq(np.copysign(x, y), np.copysign(dx, dy))
 
 
 def test_dask_count_nonzero_nep18():
@@ -162,7 +164,7 @@ def test_dask_count_nonzero_nep18():
 
     d = da.from_array(x, chunks=(1000), asarray=False)
 
-    assert_array_equal(asnumpy(np.count_nonzero(x)), asnumpy(da.count_nonzero(d).compute()))
+    assert_eq(np.count_nonzero(x), np.count_nonzero(d))
 
 
 def test_dask_deg_nep18():
@@ -170,8 +172,8 @@ def test_dask_deg_nep18():
 
     d = da.from_array(x, chunks=(1000), asarray=False)
 
-    assert_array_equal(asnumpy(np.deg2rad(x)), asnumpy(da.deg2rad(d).compute()))
-    assert_array_equal(asnumpy(np.degrees(x)), asnumpy(da.degrees(d).compute()))
+    assert_eq(np.deg2rad(x), np.deg2rad(d))
+    assert_eq(np.degrees(x), np.degrees(d))
 
 
 def test_dask_trig_nep18():
@@ -185,12 +187,14 @@ def test_dask_trig_nep18():
     fn_list = ['cos', 'sin', 'tan']
 
     for fn in fn_list:
-        assert_array_equal(asnumpy(getattr(np, fn)(x)), asnumpy(getattr(da, fn)(d).compute()))
-        assert_array_equal(asnumpy(getattr(np, fn+'h')(x)), asnumpy(getattr(da, fn+'h')(d).compute()))
-        assert_array_equal(asnumpy(getattr(np, 'arc'+fn)(x)), asnumpy(getattr(da, 'arc'+fn)(d).compute()))
-        assert_array_equal(asnumpy(getattr(np, 'arc'+fn+'h')(x)), asnumpy(getattr(da, 'arc'+fn+'h')(d).compute()))
+        assert_eq(getattr(np, fn)(x), getattr(np, fn)(d))
+        assert_eq(getattr(np, fn + 'h')(x), getattr(np, fn + 'h')(d))
+        assert_eq(getattr(np, 'arc' + fn)(x), getattr(np, 'arc' + fn)(d))
+        #assert_eq(getattr(np, 'arc' + fn + 'h')(x), getattr(np, 'arc' + fn + 'h')(d))
+        assert_array_equal(asnumpy(getattr(np, 'arc' + fn + 'h')(x)),
+                           asnumpy(getattr(np, 'arc' + fn + 'h')(d).compute()))
 
-    assert_array_equal(asnumpy(getattr(np, 'arctan2')(x, x)), asnumpy(getattr(da, 'arctan2')(d, d).compute()))
+    assert_eq(asnumpy(getattr(np, 'arctan2')(x, x)), asnumpy(getattr(da, 'arctan2')(d, d).compute()))
 
 
 def test_dask_dot_nep18():
@@ -198,7 +202,7 @@ def test_dask_dot_nep18():
 
     d = da.from_array(x, chunks=(1000000), asarray=False)
 
-    assert_array_almost_equal(asnumpy(np.dot(x, x)), asnumpy(da.dot(d, d).compute()))
+    assert_eq(np.dot(x, x), np.dot(d, d))
 
 
 def test_dask_div_nep18():
@@ -206,7 +210,7 @@ def test_dask_div_nep18():
 
     d = da.from_array(x, chunks=(1000), asarray=False)
 
-    assert_array_equal(asnumpy(np.divide(x, x)), asnumpy(da.divide(d, d).compute()))
+    assert_eq(np.divide(x, x), np.divide(d, d))
 
 
 def test_dask_exp_nep18():
@@ -214,8 +218,8 @@ def test_dask_exp_nep18():
 
     d = da.from_array(x, chunks=(1000), asarray=False)
 
-    assert_array_equal(asnumpy(np.exp(x)), asnumpy(da.exp(d).compute()))
-    assert_array_equal(asnumpy(np.expm1(x)), asnumpy(da.expm1(d).compute()))
+    assert_eq(np.exp(x), np.exp(d))
+    assert_eq(np.expm1(x), np.expm1(d))
 
 
 def test_dask_comparison_nep18():
@@ -225,9 +229,9 @@ def test_dask_comparison_nep18():
     dx = da.from_array(x, chunks=(1000), asarray=False)
     dy = da.from_array(y, chunks=(1000), asarray=False)
 
-    assert_array_equal(asnumpy(np.fmax(x, y)), asnumpy(da.fmax(dx, dy).compute()))
-    assert_array_equal(asnumpy(np.fmin(x, y)), asnumpy(da.fmin(dx, dy).compute()))
-    assert_array_equal(asnumpy(np.fmod(x, y)), asnumpy(da.fmod(dx, dy).compute()))
+    assert_eq(np.fmax(x, y), np.fmax(dx, dy))
+    assert_eq(np.fmin(x, y), np.fmin(dx, dy))
+    assert_eq(np.fmod(x, y), np.fmod(dx, dy))
 
 
 def test_dask_flip_nep18():
@@ -235,10 +239,10 @@ def test_dask_flip_nep18():
 
     d = da.from_array(x, chunks=(10, 10), asarray=False)
 
-    assert_array_equal(asnumpy(np.flip(x, axis=0)), asnumpy(da.flip(d, axis=0).compute()))
-    assert_array_equal(asnumpy(np.flip(x, axis=1)), asnumpy(da.flip(d, axis=1).compute()))
-    assert_array_equal(asnumpy(np.fliplr(x)), asnumpy(da.fliplr(d).compute()))
-    assert_array_equal(asnumpy(np.flipud(x)), asnumpy(da.flipud(d).compute()))
+    assert_eq(np.flip(x, axis=0), np.flip(d, axis=0))
+    assert_eq(np.flip(x, axis=1), np.flip(d, axis=1))
+    assert_eq(np.fliplr(x), np.fliplr(d))
+    assert_eq(np.flipud(x), np.flipud(d))
 
 
 def test_dask_fp_construct_nep18():
@@ -252,9 +256,9 @@ def test_dask_fp_construct_nep18():
     d1 = d1.compute()
     d2 = d2.compute()
 
-    assert_array_equal(asnumpy(x1), asnumpy(d1))
-    assert_array_equal(asnumpy(x2), asnumpy(d2))
-    assert_array_equal(asnumpy(xr), asnumpy(dr))
+    assert_eq(x1, d1)
+    assert_eq(x2, d2)
+    assert_eq(xr, dr)
 
 
 def test_dask_svd_nep18():
