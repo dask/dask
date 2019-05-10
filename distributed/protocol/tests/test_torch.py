@@ -14,14 +14,22 @@ def test_tensor():
     assert (x == t2.numpy()).all()
 
 
-def test_grad():
+@pytest.mark.parametrize("requires_grad", [True, False])
+def test_grad(requires_grad):
     x = np.arange(10)
-    t = torch.Tensor(x)
-    t.grad = torch.zeros_like(t) + 1
+    t = torch.tensor(x, dtype=torch.float, requires_grad=requires_grad)
+
+    if requires_grad:
+        t.grad = torch.zeros_like(t) + 1
 
     t2 = deserialize(*serialize(t))
-    assert (t2.numpy() == x).all()
-    assert (t2.grad.numpy() == 1).all()
+
+    assert t2.requires_grad is requires_grad
+    assert t.requires_grad is requires_grad
+    assert np.allclose(t2.detach().numpy(), x)
+
+    if requires_grad:
+        assert np.allclose(t2.grad.numpy(), 1)
 
 
 def test_resnet():
