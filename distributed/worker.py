@@ -261,6 +261,8 @@ class Worker(ServerNode):
     executor: concurrent.futures.Executor
     resources: dict
         Resources that this worker has like ``{'GPU': 2}``
+    nanny: str
+        Address on which to contact nanny, if it exists
 
     Examples
     --------
@@ -311,6 +313,7 @@ class Worker(ServerNode):
         port=None,
         protocol=None,
         dashboard_address=None,
+        nanny=None,
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
         **kwargs
     ):
@@ -323,6 +326,7 @@ class Worker(ServerNode):
         self.who_has = dict()
         self.has_what = defaultdict(set)
         self.pending_data_per_worker = defaultdict(deque)
+        self.nanny = nanny
         self._lock = threading.Lock()
 
         self.data_needed = deque()  # TODO: replace with heap?
@@ -535,7 +539,6 @@ class Worker(ServerNode):
             sys.path.insert(0, self.local_dir)
 
         self.services = {}
-        self.service_ports = service_ports or {}
         self.service_specs = services or {}
 
         if dashboard_address is not None:
@@ -731,6 +734,7 @@ class Worker(ServerNode):
                         memory_limit=self.memory_limit,
                         local_directory=self.local_dir,
                         services=self.service_ports,
+                        nanny=self.nanny,
                         pid=os.getpid(),
                         metrics=self.get_metrics(),
                     ),
@@ -895,34 +899,6 @@ class Worker(ServerNode):
     # Lifecycle #
     #############
 
-    def start_services(self, default_listen_ip):
-        if default_listen_ip == "0.0.0.0":
-            default_listen_ip = ""  # for IPV6
-
-        for k, v in self.service_specs.items():
-            listen_ip = None
-            if isinstance(k, tuple):
-                k, port = k
-            else:
-                port = 0
-
-            if isinstance(port, (str, unicode)):
-                port = port.split(":")
-
-            if isinstance(port, (tuple, list)):
-                listen_ip, port = (port[0], int(port[1]))
-
-            if isinstance(v, tuple):
-                v, kwargs = v
-            else:
-                kwargs = {}
-
-            self.services[k] = v(self, io_loop=self.loop, **kwargs)
-            self.services[k].listen(
-                (listen_ip if listen_ip is not None else default_listen_ip, port)
-            )
-            self.service_ports[k] = self.services[k].port
-
     @gen.coroutine
     def _start(self, addr_or_port=0):
         assert self.status is None
@@ -1047,13 +1023,8 @@ class Worker(ServerNode):
             if self.batched_stream:
                 self.batched_stream.close()
 
-            if nanny and "nanny" in self.service_ports:
-                nanny_address = "%s%s:%d" % (
-                    self.listener.prefix,
-                    self.ip,
-                    self.service_ports["nanny"],
-                )
-                with self.rpc(nanny_address) as r:
+            if nanny and self.nanny:
+                with self.rpc(self.nanny) as r:
                     yield r.terminate()
 
             self.rpc.close()

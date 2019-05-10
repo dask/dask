@@ -1542,3 +1542,15 @@ def test_host_address():
     s = yield Scheduler(host="127.0.0.2")
     assert "127.0.0.2" in s.address
     yield s.close()
+
+
+@gen_test()
+def test_dashboard_address():
+    pytest.importorskip("bokeh")
+    s = yield Scheduler(dashboard_address="127.0.0.1:8901")
+    assert s.services["bokeh"].port == 8901
+    yield s.close()
+
+    s = yield Scheduler(dashboard_address="127.0.0.1")
+    assert s.services["bokeh"].port
+    yield s.close()

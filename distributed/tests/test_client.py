@@ -3479,7 +3479,7 @@ def test_bad_tasks_fail(c, s, a, b):
     with pytest.raises(KilledWorker) as info:
         yield f
 
-    assert info.value.last_worker.services["nanny"] in {a.port, b.port}
+    assert info.value.last_worker.nanny in {a.address, b.address}
 
 
 def test_get_processing_sync(c, s, a, b):

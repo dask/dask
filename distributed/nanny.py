@@ -259,7 +259,7 @@ class Nanny(ServerNode):
                 ncores=self.ncores,
                 local_dir=self.local_dir,
                 services=self.services,
-                service_ports={"nanny": self.port},
+                nanny=self.address,
                 name=self.name,
                 memory_limit=self.memory_limit,
                 reconnect=self.reconnect,

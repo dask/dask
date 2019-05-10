@@ -40,7 +40,10 @@ def test_nanny_worker_ports(loop):
                     else:
                         assert time() - start < 5
                         sleep(0.1)
-                assert d["workers"]["tcp://127.0.0.1:9684"]["services"]["nanny"] == 5273
+                assert (
+                    d["workers"]["tcp://127.0.0.1:9684"]["nanny"]
+                    == "tcp://127.0.0.1:5273"
+                )
 
 
 def test_memory_limit(loop):
