@@ -8,7 +8,8 @@ from warnings import warn
 
 from distributed import Scheduler, Nanny, Worker
 from distributed.bokeh.worker import BokehWorker
-from distributed.cli.utils import check_python_3, uri_from_host_port
+from distributed.cli.utils import check_python_3
+from distributed.comm.addressing import uri_from_host_port
 from distributed.utils import get_ip_interface
 
 
