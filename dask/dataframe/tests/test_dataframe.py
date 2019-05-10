@@ -343,8 +343,6 @@ def test_describe(include, exclude, percentiles):
     desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
     desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
     desc_ddf_computed = desc_ddf.compute()
-    print(desc_ddf_computed)
-    print(desc_df)
 
     # TODO: for timedelta columns there's overflow in var function, see #4233
     # causing std to be nan, ignoring this cell
@@ -356,26 +354,29 @@ def test_describe(include, exclude, percentiles):
     assert_eq(desc_df, desc_ddf_computed)
 
     # Check series
-    for col in ['a', 'c', 'e']:
+    for col in ['a', 'c', 'e', 'g']:
         assert_eq(
             df[col].describe(include=include, exclude=exclude),
             ddf[col].describe(include=include, exclude=exclude).compute())
 
 
-def test_describe_empty():
+@pytest.mark.parametrize('method', ['tdigest', 'dask'])
+def test_describe_empty(method):
+    if method == 'tdigest':
+        pytest.importorskip('crick')
+
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(pd.DataFrame({"A": [None, None]}), 2)
     ddf_len0 = dd.from_pandas(pd.DataFrame({"A": []}), 2)
     ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
 
-    print(ddf_none.describe().compute())
-    assert_eq(df_none.describe(), ddf_none.describe().compute())
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method=method).compute())
 
     with pytest.raises(ValueError):
-        ddf_len0.describe().compute()
+        ddf_len0.describe(percentiles_method=method).compute()
 
     with pytest.raises(ValueError):
-        ddf_nocols.describe().compute()
+        ddf_nocols.describe(percentiles_method=method).compute()
 
 
 def test_describe_for_possibly_unsorted_q():

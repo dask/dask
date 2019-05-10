@@ -11,6 +11,8 @@ from pprint import pformat
 import numpy as np
 import pandas as pd
 from pandas.util import cache_readonly, hash_pandas_object
+from pandas.api.types import is_bool_dtype, is_timedelta64_dtype, \
+    is_numeric_dtype, is_datetime64_any_dtype
 from toolz import merge, first, unique, partition_all, remove
 
 try:
@@ -1543,92 +1545,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  include=None,
                  exclude=None):
 
-        from pandas.api.types import is_bool_dtype, is_timedelta64_dtype, \
-            is_numeric_dtype, is_datetime64_any_dtype
-
-        def describe_numeric(data, split_every=False, percentiles=None,
-                             percentiles_method='default', is_timedelta_column=False):
-
-            num = data._get_numeric_data()
-
-            if data.ndim == 2 and len(num.columns) == 0:
-                raise ValueError("DataFrame contains only non-numeric data.")
-            elif data.ndim == 1 and data.dtype == 'object':
-                raise ValueError("Cannot compute ``describe`` on object dtype.")
-            if percentiles is None:
-                percentiles = [0.25, 0.5, 0.75]
-            else:
-                # always include the the 50%tle to calculate the median
-                # unique removes duplicates and sorts quantiles
-                percentiles = np.array(percentiles)
-                percentiles = np.append(percentiles, 0.5)
-                percentiles = np.unique(percentiles)
-                percentiles = list(percentiles)
-            stats = [num.count(split_every=split_every),
-                     num.mean(split_every=split_every),
-                     num.std(split_every=split_every),
-                     num.min(split_every=split_every),
-                     num.quantile(percentiles, method=percentiles_method),
-                     num.max(split_every=split_every)]
-            stats_names = [(s._name, 0) for s in stats]
-
-            colname = data._meta.name if isinstance(data._meta, pd.Series) else None
-
-            name = 'describe-numeric--' + tokenize(data, split_every)
-            layer = {(name, 0): (methods.describe_numeric_aggregate, stats_names, colname, is_timedelta_column)}
-            graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-            meta = num._meta.describe()
-            return new_dd_object(graph, name, meta, divisions=[None, None])
-
-        def describe_categorical_1d(data, split_every=False):
-            vcounts = data.value_counts(split_every)
-            count_nonzero = vcounts[vcounts != 0]
-            count_unique = count_nonzero.size
-
-            stats = [
-                # nunique
-                count_unique,
-                # count
-                data.count(split_every=split_every),
-                # most common value
-                vcounts.head(1, compute=False)
-            ]
-
-            if is_datetime64_any_dtype(data._meta):
-                min_ts = data.dropna().astype('i8').min(split_every=split_every)
-                max_ts = data.dropna().astype('i8').max(split_every=split_every)
-                stats += [min_ts, max_ts]
-
-            stats_names = [(s._name, 0) for s in stats]
-            colname = data._meta.name
-
-            name = 'describe-categorical-1d--' + tokenize(data, split_every)
-            layer = {(name, 0): (methods.describe_categorical_aggregate, stats_names, colname)}
-            graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-            meta = data._meta.describe()
-            return new_dd_object(graph, name, meta, divisions=[None, None])
-
-        def describe_1d(data):
-            if is_bool_dtype(data._meta):
-                return describe_categorical_1d(data, split_every=split_every)
-            elif is_numeric_dtype(data._meta):
-                return describe_numeric(
-                    data,
-                    split_every=split_every,
-                    percentiles=percentiles,
-                    percentiles_method=percentiles_method)
-            elif is_timedelta64_dtype(data._meta):
-                return describe_numeric(
-                    data.dropna().astype('i8'),
-                    split_every=split_every,
-                    percentiles=percentiles,
-                    percentiles_method=percentiles_method,
-                    is_timedelta_column=True)
-            else:
-                return describe_categorical_1d(data, split_every=split_every)
-
         if self._meta.ndim == 1:
-            return describe_1d(self)
+            return self._describe_1d(self)
         elif (include is None) and (exclude is None):
             data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
 
@@ -1639,7 +1557,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 # check if there are timedelta columns
                 timedeltas = self._meta.select_dtypes(include=[np.timedelta64])
                 if len(timedeltas.columns) == 0:
-                    return describe_numeric(self, split_every, percentiles, percentiles_method)
+                    return self._describe_numeric(self, split_every, percentiles, percentiles_method)
                 else:
                     chosen_columns = data.columns
         elif include == 'all':
@@ -1650,13 +1568,96 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             chosen_columns = self._meta.select_dtypes(include=include, exclude=exclude)
 
-        stats = [describe_1d(self[col_idx]) for col_idx in chosen_columns]
+        stats = [self._describe_1d(self[col_idx], split_every,
+                                   percentiles, percentiles_method) for col_idx in chosen_columns]
         stats_names = [(s._name, 0) for s in stats]
 
         name = 'describe--' + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = self._meta.describe(include=include, exclude=exclude)
+        return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _describe_1d(self, data, split_every=False,
+                     percentiles=None, percentiles_method='default'):
+        if is_bool_dtype(data._meta):
+            return self._describe_categorical_1d(data, split_every=split_every)
+        elif is_numeric_dtype(data._meta):
+            return self._describe_numeric(
+                data,
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method)
+        elif is_timedelta64_dtype(data._meta):
+            return self._describe_numeric(
+                data.dropna().astype('i8'),
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method,
+                is_timedelta_column=True)
+        else:
+            return self._describe_categorical_1d(data, split_every=split_every)
+
+    def _describe_numeric(self, data, split_every=False, percentiles=None,
+                          percentiles_method='default', is_timedelta_column=False):
+
+        num = data._get_numeric_data()
+
+        if data.ndim == 2 and len(num.columns) == 0:
+            raise ValueError("DataFrame contains only non-numeric data.")
+        elif data.ndim == 1 and data.dtype == 'object':
+            raise ValueError("Cannot compute ``describe`` on object dtype.")
+        if percentiles is None:
+            percentiles = [0.25, 0.5, 0.75]
+        else:
+            # always include the the 50%tle to calculate the median
+            # unique removes duplicates and sorts quantiles
+            percentiles = np.array(percentiles)
+            percentiles = np.append(percentiles, 0.5)
+            percentiles = np.unique(percentiles)
+            percentiles = list(percentiles)
+        stats = [num.count(split_every=split_every),
+                 num.mean(split_every=split_every),
+                 num.std(split_every=split_every),
+                 num.min(split_every=split_every),
+                 num.quantile(percentiles, method=percentiles_method),
+                 num.max(split_every=split_every)]
+        stats_names = [(s._name, 0) for s in stats]
+
+        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+
+        name = 'describe-numeric--' + tokenize(data, split_every)
+        layer = {(name, 0): (methods.describe_numeric_aggregate, stats_names, colname, is_timedelta_column)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
+        meta = num._meta.describe()
+        return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _describe_categorical_1d(self, data, split_every=False):
+        vcounts = data.value_counts(split_every)
+        count_nonzero = vcounts[vcounts != 0]
+        count_unique = count_nonzero.size
+
+        stats = [
+            # nunique
+            count_unique,
+            # count
+            data.count(split_every=split_every),
+            # most common value
+            vcounts.head(1, compute=False)
+        ]
+
+        if is_datetime64_any_dtype(data._meta):
+            min_ts = data.dropna().astype('i8').min(split_every=split_every)
+            max_ts = data.dropna().astype('i8').max(split_every=split_every)
+            stats += [min_ts, max_ts]
+
+        stats_names = [(s._name, 0) for s in stats]
+        colname = data._meta.name
+
+        name = 'describe-categorical-1d--' + tokenize(data, split_every)
+        layer = {(name, 0): (methods.describe_categorical_aggregate, stats_names, colname)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
+        meta = data._meta.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
