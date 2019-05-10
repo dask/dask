@@ -39,7 +39,7 @@ def test_submit_after_failed_worker_sync(loop):
 
 @gen_cluster(client=True, timeout=60, active_rpc_timeout=10)
 def test_submit_after_failed_worker_async(c, s, a, b):
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = Nanny(s.address, ncores=2, loop=s.loop)
     n.start(0)
     while len(s.workers) < 3:
         yield gen.sleep(0.1)
@@ -267,8 +267,8 @@ def test_fast_kill(c, s, a, b):
 
 @gen_cluster(Worker=Nanny, timeout=60)
 def test_multiple_clients_restart(s, a, b):
-    e1 = yield Client((s.ip, s.port), asynchronous=True)
-    e2 = yield Client((s.ip, s.port), asynchronous=True)
+    e1 = yield Client(s.address, asynchronous=True)
+    e2 = yield Client(s.address, asynchronous=True)
 
     x = e1.submit(inc, 1)
     y = e2.submit(inc, 2)
@@ -315,7 +315,7 @@ def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
 @gen_cluster(client=True, timeout=60, active_rpc_timeout=10)
 def test_broken_worker_during_computation(c, s, a, b):
     s.allowed_failures = 100
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = Nanny(s.address, ncores=2, loop=s.loop)
     n.start(0)
 
     start = time()
@@ -374,7 +374,7 @@ def test_restart_during_computation(c, s, a, b):
 
 @gen_cluster(client=True, timeout=60)
 def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
-    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = Nanny(s.address, ncores=2, loop=s.loop)
     n.start(0)
 
     start = time()

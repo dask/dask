@@ -23,7 +23,7 @@ from distributed.utils_test import gen_cluster, gen_test, inc, captured_logger
 
 @gen_cluster(ncores=[])
 def test_nanny(s):
-    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, ncores=2, loop=s.loop)
 
     with rpc(n.address) as nn:
         assert n.is_alive()
@@ -70,7 +70,7 @@ def test_str(s, a, b):
 
 @gen_cluster(ncores=[], timeout=20, client=True)
 def test_nanny_process_failure(c, s):
-    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, ncores=2, loop=s.loop)
     first_dir = n.worker_dir
 
     assert os.path.exists(first_dir)
@@ -117,7 +117,7 @@ def test_nanny_no_port():
 @gen_cluster(ncores=[])
 def test_run(s):
     pytest.importorskip("psutil")
-    n = yield Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, ncores=2, loop=s.loop)
 
     with rpc(n.address) as nn:
         response = yield nn.run(function=dumps(lambda: 1))

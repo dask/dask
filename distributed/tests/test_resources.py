@@ -19,8 +19,8 @@ def test_resources(c, s):
     assert not s.worker_resources
     assert not s.resources
 
-    a = Worker(s.ip, s.port, loop=s.loop, resources={"GPU": 2})
-    b = Worker(s.ip, s.port, loop=s.loop, resources={"GPU": 1, "DB": 1})
+    a = Worker(s.address, loop=s.loop, resources={"GPU": 2})
+    b = Worker(s.address, loop=s.loop, resources={"GPU": 1, "DB": 1})
 
     yield [a, b]
 
@@ -55,7 +55,7 @@ def test_resource_submit(c, s, a, b):
 
     assert s.get_task_status(keys=[z.key]) == {z.key: "no-worker"}
 
-    d = yield Worker(s.ip, s.port, loop=s.loop, resources={"C": 10})
+    d = yield Worker(s.address, loop=s.loop, resources={"C": 10})
 
     yield wait(z)
     assert z.key in d.data

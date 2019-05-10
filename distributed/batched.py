@@ -26,7 +26,7 @@ class BatchedSend(object):
 
     Example
     -------
-    >>> stream = yield connect(ip, port)
+    >>> stream = yield connect(address)
     >>> bstream = BatchedSend(interval='10 ms')
     >>> bstream.start(stream)
     >>> bstream.send('Hello,')

@@ -437,7 +437,7 @@ def test_run_coroutine_dask_worker(c, s, a, b):
 @gen_cluster(client=True, ncores=[])
 def test_Executor(c, s):
     with ThreadPoolExecutor(2) as e:
-        w = Worker(s.ip, s.port, executor=e)
+        w = Worker(s.address, executor=e)
         assert w.executor is e
         w = yield w
 

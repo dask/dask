@@ -253,7 +253,7 @@ def test_clear_events_client_removal(c, s, a, b):
 
 @gen_cluster()
 def test_add_worker(s, a, b):
-    w = Worker(s.ip, s.port, ncores=3)
+    w = Worker(s.address, ncores=3)
     w.data["x-5"] = 6
     w.data["y"] = 1
     yield w
@@ -533,12 +533,12 @@ def test_broadcast_nanny(s, a, b):
 @gen_test()
 def test_worker_name():
     s = yield Scheduler(validate=True, port=0)
-    w = yield Worker(s.ip, s.port, name="alice")
+    w = yield Worker(s.address, name="alice")
     assert s.workers[w.address].name == "alice"
     assert s.aliases["alice"] == w.address
 
     with pytest.raises(ValueError):
-        w2 = yield Worker(s.ip, s.port, name="alice")
+        w2 = yield Worker(s.address, name="alice")
         yield w2.close()
 
     yield w.close()
@@ -550,8 +550,8 @@ def test_coerce_address():
     with dask.config.set({"distributed.comm.timeouts.connect": "100ms"}):
         s = yield Scheduler(validate=True, port=0)
         print("scheduler:", s.address, s.listen_address)
-        a = Worker(s.ip, s.port, name="alice")
-        b = Worker(s.ip, s.port, name=123)
+        a = Worker(s.address, name="alice")
+        b = Worker(s.address, name=123)
         c = Worker("127.0.0.1", s.port, name="charlie")
         yield [a, b, c]
 
@@ -594,7 +594,7 @@ def test_file_descriptors_dont_leak(s):
     proc = psutil.Process()
     before = proc.num_fds()
 
-    w = yield Worker(s.ip, s.port)
+    w = yield Worker(s.address)
     yield w.close()
 
     during = proc.num_fds()
@@ -661,7 +661,7 @@ def test_scatter_no_workers(c, s):
         yield c.scatter(123, timeout=0.1)
     assert time() < start + 1.5
 
-    w = Worker(s.ip, s.port, ncores=3)
+    w = Worker(s.address, ncores=3)
     yield [c.scatter(data={"y": 2}, timeout=5), w._start()]
 
     assert w.data["y"] == 2
@@ -670,7 +670,7 @@ def test_scatter_no_workers(c, s):
 
 @gen_cluster(ncores=[])
 def test_scheduler_sees_memory_limits(s):
-    w = yield Worker(s.ip, s.port, ncores=3, memory_limit=12345)
+    w = yield Worker(s.address, ncores=3, memory_limit=12345)
 
     assert s.workers[w.address].memory_limit == 12345
     yield w.close()
@@ -788,7 +788,7 @@ def test_file_descriptors(c, s):
     num_fds_1 = proc.num_fds()
 
     N = 20
-    nannies = yield [Nanny(s.ip, s.port, loop=s.loop) for i in range(N)]
+    nannies = yield [Nanny(s.address, loop=s.loop) for i in range(N)]
 
     while len(s.ncores) < N:
         yield gen.sleep(0.1)
@@ -926,7 +926,7 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
     while not any(w.processing for w in s.workers.values()):
         yield gen.sleep(0.01)
 
-    w = Worker(s.ip, s.port, ncores=1)
+    w = Worker(s.address, ncores=1)
     w.put_key_in_memory(y.key, 3)
 
     yield w
@@ -977,7 +977,7 @@ def test_no_workers_to_memory(c, s):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    w = Worker(s.ip, s.port, ncores=1)
+    w = Worker(s.address, ncores=1)
     w.put_key_in_memory(y.key, 3)
 
     yield w
@@ -1007,7 +1007,7 @@ def test_no_worker_to_memory_restrictions(c, s, a, b):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    w = Worker(s.ip, s.port, ncores=1, name="alice")
+    w = Worker(s.address, ncores=1, name="alice")
     w.put_key_in_memory(y.key, 3)
 
     yield w
