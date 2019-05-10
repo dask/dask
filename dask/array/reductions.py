@@ -247,9 +247,14 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
         except ValueError:
             pass
 
-    # if out_chunks is scalar, transform _meta into scalar
-    if len(out_chunks) == 0 and (np.isscalar(meta) or meta.ndim == 1):
-        meta = np.sum(meta, keepdims=False)
+    # some functions can't compute empty arrays (those for which reduced_meta
+    # fall into the ValueError exception) and we have to rely on reshaping
+    # the array according to len(out_chunks)
+    if not np.isscalar(meta) and meta.ndim != len(out_chunks):
+        if len(out_chunks) == 0:
+            meta = meta.sum()
+        else:
+            meta = meta.reshape((0, ) * len(out_chunks))
 
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
