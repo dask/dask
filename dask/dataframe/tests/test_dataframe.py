@@ -3601,3 +3601,62 @@ def test_map_partitions_delays_lists():
 
     out = ddf.map_partitions(lambda x, y: x + sum(y), L)
     assert any(str(L) == str(v) for v in out.__dask_graph__().values())
+
+
+def test_str_expand():
+    s = pd.Series(['a b c d', 'aa bb cc dd', 'aaa bbb ccc dddd'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(s.str.split(n=n, expand=True),
+                  ds.str.split(n=n, expand=True))
+
+    with pytest.raises(NotImplementedError) as info:
+        ds.str.split(expand=True)
+
+    assert "n=" in str(info.value)
+
+
+@pytest.mark.xfail(reason="Need to pad columns")
+def test_str_expand_more_columns():
+    s = pd.Series(['a b c d', 'aa', 'aaa bbb ccc dddd'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(s.str.split(n=3, expand=True),
+              ds.str.split(n=3, expand=True))
+
+    s = pd.Series(['a b c', 'aa bb cc', 'aaa bbb ccc'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    s.str.split(n=10, expand=True).compute()
+
+
+@pytest.mark.skipif(PY2,
+                    reason="docstring not rendered on py2 build")
+def test_describe_doc():
+    # tests the addition of text into a dataframe method
+    assert ("Currently, only numeric describe is supported"
+            in dd.DataFrame.describe.__doc__)
+
+
+def test_dtype_cast():
+    df = pd.DataFrame({
+        'A': np.arange(10, dtype=np.int32),
+        'B': np.arange(10, dtype=np.int64),
+        'C': np.arange(10, dtype=np.float32),
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.A.dtype == np.int32
+    assert ddf.B.dtype == np.int64
+    assert ddf.C.dtype == np.float32
+
+    col = pd.Series(np.arange(10, dtype=np.float32)) / 2
+    assert col.dtype == np.float32
+
+    ddf = ddf.assign(D=col)
+    assert ddf.D.dtype == np.float32
+    assert ddf.C.dtype == np.float32
+    # fails
+    assert ddf.B.dtype == np.int64
+    # fails
+    assert ddf.A.dtype == np.int32

@@ -678,10 +678,12 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
         particular ``threading.Lock`` object to be shared among all writes.
-    regions: tuple of slices or iterable of tuple of slices
+    regions: tuple of slices or list of tuples of slices
         Each ``region`` tuple in ``regions`` should be such that
         ``target[region].shape = source.shape``
-        for the corresponding source and target in sources and targets, respectively.
+        for the corresponding source and target in sources and targets,
+        respectively. If this is a tuple, the contents will be assumed to be
+        slices, so do not provide a tuple of tuples.
     compute: boolean, optional
         If true compute immediately, return ``dask.delayed.Delayed`` otherwise
     return_stored: boolean, optional
@@ -3087,6 +3089,8 @@ def asanyarray(a):
         return a
     elif hasattr(a, 'to_dask_array'):
         return a.to_dask_array()
+    elif hasattr(a, 'data') and type(a).__module__.startswith('xarray.'):
+        return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
     elif not isinstance(getattr(a, 'shape', None), Iterable):
