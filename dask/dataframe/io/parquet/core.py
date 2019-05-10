@@ -277,6 +277,7 @@ def to_parquet(
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
+    from dask import delayed
     partition_on = partition_on or []
     if isinstance(partition_on, string_types):
         partition_on = [partition_on]
@@ -307,17 +308,18 @@ def to_parquet(
         df = df.reset_index()
 
     # create parquet metadata, includes loading of existing stuff is appending
-    meta, filenames, kwargs2 = engine.create_metadata(df, fs, path, append)
-    kwargs.update(kwargs2)
+    meta, filenames = engine.create_metadata(df, fs, path, append=append,
+                                             partition_on=partition_on)
 
     # write parts
-    dwrite = delayed(engine.write)
+    dwrite = delayed(engine.write_partition)
     parts = [dwrite(
-        d, path, fs, filename, partition_on, write_metadata_file, **kwargs)
+        d, path, fs, filename, partition_on, with_metadata=write_metadata_file,
+        fmd=meta, **kwargs)
         for d, filename in zip(df.to_delayed(), filenames)]
 
     # single task to complete
-    out = engine.write_metadata(parts, meta, fs, path, **kwargs2)
+    out = delayed(engine.write_metadata)(parts, meta, fs, path, **kwargs)
 
     if compute:
         out = out.compute()

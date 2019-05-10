@@ -78,7 +78,7 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def create_metadata(df, fs, path, append=False):
+    def create_metadata(df, fs, path, append=False, **kwargs):
         """Create engine-specific metadata instance for this dataset
 
         Parameters
@@ -96,8 +96,7 @@ class Engine:
         -------
         tuple:
             engine-specific instance
-            list of filenames
-            and kwargs to pass to write_partition and write_metadata
+            list of filenames, one per partition
         """
         raise NotImplementedError
 

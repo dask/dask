@@ -91,8 +91,6 @@ def write_read_engines(**kwargs):
             for k in marks:
                 if key in k:
                     marks[k].append(val)
-    marks = {('pyarrow', 'pyarrow'): []}
-
     return pytest.mark.parametrize(('write_engine', 'read_engine'),
                                    [pytest.param(*k, marks=tuple(v))
                                     for (k, v) in sorted(marks.items())])

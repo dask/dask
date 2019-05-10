@@ -29,6 +29,7 @@ from ...utils import UNKNOWN_CATEGORIES
 #########################
 # Fastparquet interface #
 #########################
+from .utils import Engine
 
 
 def _paths_to_cats(paths, scheme):
@@ -75,10 +76,7 @@ def _paths_to_cats(paths, scheme):
     return {k: list(v) for k, v in cats.items()}
 
 
-from .utils import Engine, _normalize_index_columns, _parse_pandas_metadata
-
-
-class FastParquetEngine:
+class FastParquetEngine(Engine):
     """ The API necessary to provide a new Parquet reader/writer """
 
     @staticmethod
@@ -187,25 +185,8 @@ class FastParquetEngine:
         return pf.read_row_group_file(piece, columns, categories)
 
     @staticmethod
-    def create_metadata(df, fs, path, append=False, **kwargs):
-        """
-        Write a Dask DataFrame to Parquet
-
-        Parameters
-        ----------
-        df: dask.dataframe.DataFrame
-        fs: FileSystem
-        path: str
-        append: boolean
-            Whether or not to append to a previous dataset
-        **kwargs:
-            Other keywords as needed by the engine
-
-        Returns
-        -------
-        out: List[delayed]
-            A list of dask.delayed objects, one for each partition
-        """
+    def create_metadata(df, fs, path, append=False, partition_on=None,
+                        **kwargs):
         fs.mkdirs(path)
         sep = fs.sep
 
@@ -279,21 +260,25 @@ class FastParquetEngine:
         return fmd, filenames
 
     @staticmethod
-    def write_metadata(parts, fmd, fs, path, **kwargs):
+    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
         fmd = copy.copy(fmd)
         if parts:
-            fn = sep.join([path, "_metadata"])
+            if all(isinstance(part, list) for part in parts):
+                parts = sum(parts, [])
+            fmd.row_groups = parts
+            fn = fs.sep.join([path, "_metadata"])
             fastparquet.writer.write_common_metadata(
                 fn, fmd, open_with=fs.open, no_row_groups=False
             )
 
-        fn = sep.join([path, "_common_metadata"])
+        # if appending, could skip this, but would need to check existence
+        fn = fs.sep.join([path, "_common_metadata"])
         fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open)
 
     @staticmethod
     def write_partition(
         df, path, fs, filename, partition_on, fmd=None, compression=None,
-        with_metadata=True, **kwargs
+        return_metadata=True, **kwargs
     ):
         fmd = copy.copy(fmd)
         if not len(df):
@@ -304,15 +289,14 @@ class FastParquetEngine:
                 df, partition_on, path, filename, fmd, compression, fs.open,
                 fs.mkdirs
             )
-            rgs = sum(rgs, [])
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                 rg = make_part_file(fil, df, fmd.schema,
                                     compression=compression, fmd=fmd)
             for chunk in rg.columns:
-                chunk.file_path = fn
-            rgs = [rgs]
-        if with_metadata:
+                chunk.file_path = filename
+            rgs = [rg]
+        if return_metadata:
             return rgs
         else:
             return []
