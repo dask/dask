@@ -1546,7 +1546,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  exclude=None):
 
         if self._meta.ndim == 1:
-            return self._describe_1d(self)
+            return self._describe_1d(self, split_every, percentiles, percentiles_method)
         elif (include is None) and (exclude is None):
             data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
 

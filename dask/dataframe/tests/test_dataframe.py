@@ -360,23 +360,40 @@ def test_describe(include, exclude, percentiles):
             ddf[col].describe(include=include, exclude=exclude).compute())
 
 
-@pytest.mark.parametrize('method', ['tdigest', 'dask'])
-def test_describe_empty(method):
-    if method == 'tdigest':
-        pytest.importorskip('crick')
+def test_describe_empty():
+    df_none = pd.DataFrame({"A": [None, None]})
+    ddf_none = dd.from_pandas(df_none, 2)
+    df_len0 = pd.DataFrame({"A": [], "B":[]})
+    ddf_len0 = dd.from_pandas(df_len0, 2)
+    ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
+
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='dask').compute())
+
+    with pytest.raises(ValueError):
+        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='dask').compute())
+
+    with pytest.raises(ValueError):
+        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='dask').compute())
+
+    with pytest.raises(ValueError):
+        ddf_nocols.describe(percentiles_method='dask').compute()
+
+
+def test_describe_empty_tdigest():
+    pytest.importorskip('crick')
 
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(pd.DataFrame({"A": [None, None]}), 2)
-    ddf_len0 = dd.from_pandas(pd.DataFrame({"A": []}), 2)
+    df_len0 = pd.DataFrame({"A": [], "B":[]})
+    ddf_len0 = dd.from_pandas(pd.DataFrame({"A": [], "B":[]}), 2)
     ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
 
-    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method=method).compute())
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest').compute())
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest').compute())
 
     with pytest.raises(ValueError):
-        ddf_len0.describe(percentiles_method=method).compute()
-
-    with pytest.raises(ValueError):
-        ddf_nocols.describe(percentiles_method=method).compute()
+        ddf_nocols.describe(percentiles_method='tdigest').compute()
 
 
 def test_describe_for_possibly_unsorted_q():
