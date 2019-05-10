@@ -72,6 +72,9 @@ Dask DataFrame operations will not function properly.
 Arrays
 ~~~~~~
 
+.. note:: Dask's integration with CuPy relies on features recently added to
+   NumPy and CuPy, particularly in version ``numpy>=1.17`` and ``cupy>=6``
+
 `Chainer's CuPy <https://cupy.chainer.org/>`_ library provides a GPU
 accelerated NumPy-like library that interoperates nicely with Dask Array.
 
@@ -142,3 +145,12 @@ prefer one device.
    CUDA_VISIBLE_DEVICES=1 dask-worker ...
    CUDA_VISIBLE_DEVICES=2 dask-worker ...
    CUDA_VISIBLE_DEVICES=3 dask-worker ...
+
+
+Work in Progress
+----------------
+
+GPU computing is a quickly moving field today and as a result the information
+in this page is likely to go out of date quickly.  We encourage interested
+readers to check out `Dask's Blog <https://blog.dask.org>`_ which has more
+timely updates on ongoing work.
