@@ -4051,7 +4051,7 @@ def svg_2d(chunks, max_size=(500, 300), min_size=30):
     if y[-1] < min_size:
         y = y * min_size / y[-1]
 
-    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:2" >\n' % (x[-1] + 50, y[-1] + 50)
+    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (x[-1] + 50, y[-1] + 50)
 
     footer = '\n</svg>'
 
@@ -4059,6 +4059,11 @@ def svg_2d(chunks, max_size=(500, 300), min_size=30):
               for yy in y]
     v_lines = ['  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (xx, 0, xx, y[-1])
               for xx in x]
+
+    h_lines[0] = h_lines[0].replace(' /', 'style="stroke-width:2" /')
+    h_lines[-1] = h_lines[-1].replace(' /', 'style="stroke-width:2" /')
+    v_lines[0] = v_lines[0].replace(' /', 'style="stroke-width:2" /')
+    v_lines[-1] = v_lines[-1].replace(' /', 'style="stroke-width:2" /')
 
     rect = [
         '  <rect x="0" y="0" width="%d" height="%d" style="fill:#ECB172A0;stroke-width:0"/>' % (x[-1], y[-1])
