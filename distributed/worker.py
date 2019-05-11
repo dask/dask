@@ -12,6 +12,7 @@ import threading
 import sys
 import warnings
 import weakref
+import psutil
 
 import dask
 from dask.core import istask
@@ -76,15 +77,7 @@ LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
 
 no_value = "--no-value-sentinel--"
 
-try:
-    import psutil
-
-    TOTAL_MEMORY = psutil.virtual_memory().total
-except ImportError:
-    logger.warning("Please install psutil to estimate worker memory use")
-    TOTAL_MEMORY = 8e9
-    psutil = None
-
+TOTAL_MEMORY = psutil.virtual_memory().total
 
 IN_PLAY = ("waiting", "ready", "executing", "long-running")
 PENDING = ("waiting", "ready", "constrained")
@@ -2933,17 +2926,30 @@ class Reschedule(Exception):
 def parse_memory_limit(memory_limit, ncores, total_cores=_ncores):
     if memory_limit is None:
         return None
+
     if memory_limit == "auto":
         memory_limit = int(TOTAL_MEMORY * min(1, ncores / total_cores))
     with ignoring(ValueError, TypeError):
-        x = float(memory_limit)
-        if isinstance(x, float) and x <= 1:
-            return int(x * TOTAL_MEMORY)
+        memory_limit = float(memory_limit)
+        if isinstance(memory_limit, float) and memory_limit <= 1:
+            memory_limit = int(memory_limit * TOTAL_MEMORY)
 
     if isinstance(memory_limit, (unicode, str)):
-        return parse_bytes(memory_limit)
+        memory_limit = parse_bytes(memory_limit)
     else:
-        return int(memory_limit)
+        memory_limit = int(memory_limit)
+
+    # should be less than hard RSS limit
+    try:
+        import resource
+
+        hard_limit = resource.getrlimit(resource.RLIMIT_RSS)[1]
+        if hard_limit > 0:
+            memory_limit = min(memory_limit, hard_limit)
+    except (ImportError, OSError):
+        pass
+
+    return memory_limit
 
 
 @gen.coroutine

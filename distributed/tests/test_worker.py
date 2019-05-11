@@ -25,7 +25,7 @@ from distributed.core import rpc
 from distributed.client import wait
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
-from distributed.worker import Worker, error_message, logger
+from distributed.worker import Worker, error_message, logger, parse_memory_limit
 from distributed.utils import tmpfile, format_bytes
 from distributed.utils_test import (
     inc,
@@ -1401,3 +1401,25 @@ def test_host_address(c, s):
     assert "127.0.0.3" in n.address
     assert "127.0.0.3" in n.worker_address
     yield n.close()
+
+
+def test_resource_limit():
+    assert parse_memory_limit("250MiB", 1, total_cores=1) == 1024 * 1024 * 250
+
+    # get current limit
+    resource = pytest.importorskip("resource")
+    try:
+        hard_limit = resource.getrlimit(resource.RLIMIT_RSS)[1]
+    except OSError:
+        pytest.skip("resource could not get the RSS limit")
+    memory_limit = psutil.virtual_memory().total
+    if hard_limit > memory_limit or hard_limit < 0:
+        hard_limit = memory_limit
+
+    # decrease memory limit by one byte
+    new_limit = hard_limit - 1
+    try:
+        resource.setrlimit(resource.RLIMIT_RSS, (new_limit, new_limit))
+        assert parse_memory_limit(hard_limit, 1, total_cores=1) == new_limit
+    except OSError:
+        pytest.skip("resource could not set the RSS limit")
