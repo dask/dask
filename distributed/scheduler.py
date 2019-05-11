@@ -12,6 +12,7 @@ import os
 import pickle
 import random
 import six
+import weakref
 
 import psutil
 import sortedcontainers
@@ -819,6 +820,7 @@ class Scheduler(ServerNode):
     """
 
     default_port = 8786
+    _instances = weakref.WeakSet()
 
     def __init__(
         self,
@@ -1113,6 +1115,7 @@ class Scheduler(ServerNode):
             ext(self)
 
         setproctitle("dask-scheduler [not started]")
+        Scheduler._instances.add(self)
 
     ##################
     # Administration #

@@ -934,14 +934,9 @@ def test_get_client_coroutine_sync(client, s, a, b):
 
 @gen_cluster()
 def test_global_workers(s, a, b):
-    from distributed.worker import _global_workers
-
-    n = len(_global_workers)
-    w = _global_workers[-1]()
+    n = len(Worker._instances)
+    w = first(Worker._instances)
     assert w is a or w is b
-    yield a.close()
-    yield b.close()
-    assert len(_global_workers) == n - 2
 
 
 @pytest.mark.skipif(WINDOWS, reason="file descriptors")

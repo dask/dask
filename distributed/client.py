@@ -577,6 +577,8 @@ class Client(Node):
     distributed.deploy.local.LocalCluster:
     """
 
+    _instances = weakref.WeakSet()
+
     def __init__(
         self,
         address=None,
@@ -710,6 +712,7 @@ class Client(Node):
             ext(self)
 
         self.start(timeout=timeout)
+        Client._instances.add(self)
 
         from distributed.recreate_exceptions import ReplayExceptionClient
 

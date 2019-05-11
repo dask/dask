@@ -60,7 +60,8 @@ from .utils import (
     iscoroutinefunction,
     thread_state,
 )
-from .worker import Worker, TOTAL_MEMORY, _global_workers
+from .worker import Worker, TOTAL_MEMORY
+from .nanny import Nanny
 
 try:
     import dask.array  # register config
@@ -109,14 +110,13 @@ def invalid_python_script(tmpdir_factory):
 
 @gen.coroutine
 def cleanup_global_workers():
-    for w in _global_workers:
-        w = w()
-        w.close(report=False, executor_wait=False)
+    for worker in Worker._instances:
+        worker.close(report=False, executor_wait=False)
 
 
 @pytest.fixture
 def loop():
-    del _global_workers[:]
+    Worker._instances.clear()
     _global_clients.clear()
     with pristine_loop() as loop:
         # Monkey-patch IOLoop.start to wait for loop stop
@@ -146,7 +146,7 @@ def loop():
             pass
         else:
             is_stopped.wait()
-    del _global_workers[:]
+    Worker._instances.clear()
 
     start = time()
     while set(_global_clients):
@@ -511,8 +511,6 @@ def run_worker(q, scheduler_q, **kwargs):
 
 
 def run_nanny(q, scheduler_q, **kwargs):
-    from distributed import Nanny
-
     with log_errors():
         with pristine_loop() as loop:
             scheduler_addr = scheduler_q.get()
@@ -924,7 +922,10 @@ def gen_cluster(
             func = gen.coroutine(func)
 
         def test_func():
-            del _global_workers[:]
+            Client._instances.clear()
+            Worker._instances.clear()
+            Scheduler._instances.clear()
+            Nanny._instances.clear()
             _global_clients.clear()
             Comm._instances.clear()
             active_threads_start = set(threading._active)
@@ -1029,12 +1030,11 @@ def gen_cluster(
                             pass
                         del w.data
                 DequeHandler.clear_all_instances()
-                for w in _global_workers:
-                    w = w()
+                for w in Worker._instances:
                     w.close(report=False, executor_wait=False)
                     if w.status == "running":
                         w.close()
-                del _global_workers[:]
+                Worker._instances.clear()
 
             if PY3 and not WINDOWS and check_new_threads:
                 start = time()

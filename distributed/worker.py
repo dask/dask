@@ -19,9 +19,9 @@ from dask.core import istask
 from dask.compatibility import apply
 
 try:
-    from cytoolz import pluck, partial, merge
+    from cytoolz import pluck, partial, merge, first
 except ImportError:
-    from toolz import pluck, partial, merge
+    from toolz import pluck, partial, merge, first
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -86,8 +86,6 @@ READY = ("ready", "constrained")
 
 
 DEFAULT_EXTENSIONS = [PubSubWorkerExtension]
-
-_global_workers = []
 
 
 class Worker(ServerNode):
@@ -274,6 +272,8 @@ class Worker(ServerNode):
     distributed.scheduler.Scheduler
     distributed.nanny.Nanny
     """
+
+    _instances = weakref.WeakSet()
 
     def __init__(
         self,
@@ -630,7 +630,7 @@ class Worker(ServerNode):
         )
         self.periodic_callbacks["profile-cycle"] = pc
 
-        _global_workers.append(weakref.ref(self))
+        Worker._instances.add(self)
 
     ##################
     # Administrative #
@@ -1022,22 +1022,11 @@ class Worker(ServerNode):
 
             self.rpc.close()
             self._closed.set()
-            self._remove_from_global_workers()
 
             self.status = "closed"
             yield ServerNode.close(self)
 
             setproctitle("dask-worker [closed]")
-
-    def __del__(self):
-        self._remove_from_global_workers()
-
-    def _remove_from_global_workers(self):
-        for ref in list(_global_workers):
-            if ref() is self:
-                _global_workers.remove(ref)
-            if ref() is None:
-                _global_workers.remove(ref)
 
     @gen.coroutine
     def terminate(self, comm, report=True):
@@ -2807,11 +2796,10 @@ def get_worker():
     try:
         return thread_state.execution_state["worker"]
     except AttributeError:
-        for ref in _global_workers[::-1]:
-            worker = ref()
-            if worker:
-                return worker
-        raise ValueError("No workers found")
+        try:
+            return first(Worker._instances)
+        except StopIteration:
+            raise ValueError("No workers found")
 
 
 def get_client(address=None, timeout=3, resolve_address=True):
@@ -3299,3 +3287,6 @@ def run(server, comm, function, args=(), kwargs={}, is_coro=None, wait=True):
     else:
         response = {"status": "OK", "result": to_serialize(result)}
     raise Return(response)
+
+
+_global_workers = Worker._instances

@@ -4829,9 +4829,7 @@ def test_get_client(c, s, a, b):
 def test_get_client_no_cluster():
     # Clean up any global workers added by other tests. This test requires that
     # there are no global workers.
-    from distributed.worker import _global_workers
-
-    del _global_workers[:]
+    Worker._instances.clear()
 
     msg = "No global client found and no address provided"
     with pytest.raises(ValueError, match=r"^{}$".format(msg)):
@@ -5705,6 +5703,13 @@ def test_direct_to_workers(s, loop):
         future.result()
         resp = client.run_on_scheduler(lambda dask_scheduler: dask_scheduler.events)
         assert "gather" not in str(resp)
+
+
+@gen_cluster(client=True)
+def test_instances(c, s, a, b):
+    assert list(Client._instances) == [c]
+    assert list(Scheduler._instances) == [s]
+    assert set(Worker._instances) == {a, b}
 
 
 if sys.version_info >= (3, 5):
