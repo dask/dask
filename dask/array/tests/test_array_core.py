@@ -12,6 +12,7 @@ import operator
 from operator import add, sub, getitem
 from threading import Lock
 import warnings
+import xml.etree.ElementTree
 
 from toolz import merge, countby, concat
 from toolz.curried import identity
@@ -1267,6 +1268,18 @@ def test_repr():
     assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
+
+
+def test_repr_html():
+    x = da.ones((10000, 10000))
+    text = x._repr_html_()
+    assert 'MB' in text or 'MiB' in text
+    assert str(x.shape) in text
+    assert str(x.dtype) in text
+    assert 'ones' in text
+
+    cleaned = text.replace('&rarr;', '')  # xml doesn't like righarrow character
+    assert xml.etree.ElementTree.fromstring(cleaned) is not None  # parses cleanly
 
 
 def test_slicing_with_ellipsis():

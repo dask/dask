@@ -35,7 +35,7 @@ from ..context import globalmethod
 from ..utils import (ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, Dispatch, factors,
-                     parse_bytes, has_keyword, M, ndimlist)
+                     parse_bytes, has_keyword, M, ndimlist, format_bytes)
 from ..compatibility import (unicode, zip_longest,
                              Iterable, Iterator, Mapping)
 from ..core import quote
@@ -1011,6 +1011,42 @@ class Array(DaskMethodsMixin):
         name = self.name.rsplit('-', 1)[0]
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
+
+    def _repr_html_(self):
+        table = self._repr_html_table()
+        grid = svg_grid(self.chunks)
+
+        both = [
+            '<table>',
+            '<tr>',
+            '<td>',
+            table,
+            '</td>',
+            '<td>',
+            grid,
+            '</td>',
+            '</tr>',
+            '</table>',
+        ]
+        return '\n'.join(both)
+
+    def _repr_html_table(self):
+        table = [
+            '<table>'
+            '  <thead>'
+            '    <tr><th> Dask Array </th><td> %s </td></tr>' % (self.name[:14] + '...' if len(self.name) > 14 else ''),
+            '  </thead>',
+            '  <tbody>',
+            '    <tr><th> Bytes </th><td> %s </td></tr>' % format_bytes(self.nbytes),
+            '    <tr><th> DType </th><td> %s </td></tr>' % self.dtype,
+            '    <tr><th> Shape </th><td> %s </td></tr>' % str(self.shape),
+            '    <tr><th> Chunk Shape </th><td> %s </td></tr>' % str(self.chunksize),
+            '    <tr><th> # Chunks </th><td> %s &rarr; %s </td></tr>' % (self.numblocks, self.npartitions),
+            '    <tr><th> # Tasks </th><td> %d </td></tr>' % len(self.__dask_graph__()),
+            '  </tbody>',
+            '</table>'
+        ]
+        return '\n'.join(table)
 
     @property
     def ndim(self):
@@ -3992,3 +4028,50 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+
+def svg_grid(chunks, **kwargs):
+    if len(chunks) == 1:
+        return svg_1d(chunks, **kwargs)
+    elif len(chunks) == 2:
+        return svg_2d(chunks, **kwargs)
+    else:
+        # TODO
+        return ''
+
+def svg_2d(chunks, max_size=(500, 300), min_size=30):
+    y, x = [np.cumsum((0,) + c) for c in chunks]
+    factor = min(max_size[0] / x[-1], max_size[1] / y[-1])
+
+    x = x * factor
+    y = y * factor
+
+    if x[-1] < min_size:
+        x = x * min_size / x[-1]
+    if y[-1] < min_size:
+        y = y * min_size / y[-1]
+
+    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:2" >\n' % (x[-1] + 50, y[-1] + 50)
+
+    footer = '\n</svg>'
+
+    h_lines = ['  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (0, yy, x[-1], yy)
+              for yy in y]
+    v_lines = ['  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (xx, 0, xx, y[-1])
+              for xx in x]
+
+    rect = [
+        '  <rect x="0" y="0" width="%d" height="%d" style="fill:#ECB172A0;stroke-width:0"/>' % (x[-1], y[-1])
+    ]
+
+    text = [
+        '<text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % (x[-1] / 2, y[-1] + 20, sum(chunks[1])),
+        '<text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(-90 %f,%f)">%d</text>' % (
+            x[-1] + 20, y[-1] / 2, x[-1] + 20, y[-1] / 2, sum(chunks[0])),
+    ]
+
+    return header + '\n'.join(rect + h_lines + v_lines + text) + footer
+
+
+def svg_1d(chunks, **kwargs):
+    return svg_2d(((1,),) + chunks, **kwargs)
