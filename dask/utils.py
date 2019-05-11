@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from datetime import timedelta
 import functools
 import inspect
 import os
@@ -10,7 +11,7 @@ import re
 from errno import ENOENT
 from contextlib import contextmanager
 from importlib import import_module
-from numbers import Integral
+from numbers import Integral, Number
 from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
@@ -1089,6 +1090,118 @@ byte_sizes = {
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
 byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def format_time(n):
+    """ format integers as time
+
+    >>> format_time(1)
+    '1.00 s'
+    >>> format_time(0.001234)
+    '1.23 ms'
+    >>> format_time(0.00012345)
+    '123.45 us'
+    >>> format_time(123.456)
+    '123.46 s'
+    """
+    if n >= 1:
+        return "%.2f s" % n
+    if n >= 1e-3:
+        return "%.2f ms" % (n * 1e3)
+    return "%.2f us" % (n * 1e6)
+
+
+def format_bytes(n):
+    """ Format bytes as text
+
+    >>> format_bytes(1)
+    '1 B'
+    >>> format_bytes(1234)
+    '1.23 kB'
+    >>> format_bytes(12345678)
+    '12.35 MB'
+    >>> format_bytes(1234567890)
+    '1.23 GB'
+    >>> format_bytes(1234567890000)
+    '1.23 TB'
+    >>> format_bytes(1234567890000000)
+    '1.23 PB'
+    """
+    if n > 1e15:
+        return "%0.2f PB" % (n / 1e15)
+    if n > 1e12:
+        return "%0.2f TB" % (n / 1e12)
+    if n > 1e9:
+        return "%0.2f GB" % (n / 1e9)
+    if n > 1e6:
+        return "%0.2f MB" % (n / 1e6)
+    if n > 1e3:
+        return "%0.2f kB" % (n / 1000)
+    return "%d B" % n
+
+
+timedelta_sizes = {
+    "s": 1,
+    "ms": 1e-3,
+    "us": 1e-6,
+    "ns": 1e-9,
+    "m": 60,
+    "h": 3600,
+    "d": 3600 * 24,
+}
+
+tds2 = {
+    "second": 1,
+    "minute": 60,
+    "hour": 60 * 60,
+    "day": 60 * 60 * 24,
+    "millisecond": 1e-3,
+    "microsecond": 1e-6,
+    "nanosecond": 1e-9,
+}
+tds2.update({k + "s": v for k, v in tds2.items()})
+timedelta_sizes.update(tds2)
+timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
+
+
+def parse_timedelta(s, default="seconds"):
+    """ Parse timedelta string to number of seconds
+
+    Examples
+    --------
+    >>> parse_timedelta('3s')
+    3
+    >>> parse_timedelta('3.5 seconds')
+    3.5
+    >>> parse_timedelta('300ms')
+    0.3
+    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
+    3
+    """
+    if isinstance(s, timedelta):
+        return s.total_seconds()
+    if isinstance(s, Number):
+        s = str(s)
+    s = s.replace(" ", "")
+    if not s[0].isdigit():
+        s = "1" + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:] or default
+
+    n = float(prefix)
+
+    multiplier = timedelta_sizes[suffix.lower()]
+
+    result = n * multiplier
+    if int(result) == result:
+        result = int(result)
+    return result
 
 
 def has_keyword(func, keyword):
