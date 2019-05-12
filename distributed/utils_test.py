@@ -148,15 +148,7 @@ def loop():
             is_stopped.wait()
     Worker._instances.clear()
 
-    start = time()
-    while set(_global_clients):
-        sleep(0.1)
-        assert time() < start + 10
-
     _cleanup_dangling()
-
-    assert_no_leaked_processes()
-
     _global_clients.clear()
 
 
@@ -630,157 +622,122 @@ def cluster(
     nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1, scheduler_kwargs={}
 ):
     ws = weakref.WeakSet()
-
-    reset_config()
-    Comm._instances.clear()
-
-    for name, level in logging_levels.items():
-        logging.getLogger(name).setLevel(level)
-
     enable_proctitle_on_children()
 
-    with pristine_loop() as loop:
-        with check_active_rpc(loop, active_rpc_timeout):
-            if nanny:
-                _run_worker = run_nanny
-            else:
-                _run_worker = run_worker
+    with clean(timeout=active_rpc_timeout, threads=False) as loop:
+        if nanny:
+            _run_worker = run_nanny
+        else:
+            _run_worker = run_worker
 
-            # The scheduler queue will receive the scheduler's address
-            scheduler_q = mp_context.Queue()
+        # The scheduler queue will receive the scheduler's address
+        scheduler_q = mp_context.Queue()
 
-            # Launch scheduler
-            scheduler = mp_context.Process(
-                name="Dask cluster test: Scheduler",
-                target=run_scheduler,
-                args=(scheduler_q, nworkers + 1),
-                kwargs=scheduler_kwargs,
+        # Launch scheduler
+        scheduler = mp_context.Process(
+            name="Dask cluster test: Scheduler",
+            target=run_scheduler,
+            args=(scheduler_q, nworkers + 1),
+            kwargs=scheduler_kwargs,
+        )
+        ws.add(scheduler)
+        scheduler.daemon = True
+        scheduler.start()
+
+        # Launch workers
+        workers = []
+        for i in range(nworkers):
+            q = mp_context.Queue()
+            fn = "_test_worker-%s" % uuid.uuid4()
+            kwargs = merge(
+                {"ncores": 1, "local_dir": fn, "memory_limit": TOTAL_MEMORY},
+                worker_kwargs,
             )
-            ws.add(scheduler)
-            scheduler.daemon = True
-            scheduler.start()
+            proc = mp_context.Process(
+                name="Dask cluster test: Worker",
+                target=_run_worker,
+                args=(q, scheduler_q),
+                kwargs=kwargs,
+            )
+            ws.add(proc)
+            workers.append({"proc": proc, "queue": q, "dir": fn})
 
-            # Launch workers
-            workers = []
-            for i in range(nworkers):
-                q = mp_context.Queue()
-                fn = "_test_worker-%s" % uuid.uuid4()
-                kwargs = merge(
-                    {"ncores": 1, "local_dir": fn, "memory_limit": TOTAL_MEMORY},
-                    worker_kwargs,
-                )
-                proc = mp_context.Process(
-                    name="Dask cluster test: Worker",
-                    target=_run_worker,
-                    args=(q, scheduler_q),
-                    kwargs=kwargs,
-                )
-                ws.add(proc)
-                workers.append({"proc": proc, "queue": q, "dir": fn})
-
+        for worker in workers:
+            worker["proc"].start()
+        try:
             for worker in workers:
-                worker["proc"].start()
+                worker["address"] = worker["queue"].get(timeout=5)
+        except Empty:
+            raise pytest.xfail.Exception("Worker failed to start in test")
+
+        saddr = scheduler_q.get()
+
+        start = time()
+        try:
             try:
-                for worker in workers:
-                    worker["address"] = worker["queue"].get(timeout=5)
-            except Empty:
-                raise pytest.xfail.Exception("Worker failed to start in test")
+                security = scheduler_kwargs["security"]
+                rpc_kwargs = {"connection_args": security.get_connection_args("client")}
+            except KeyError:
+                rpc_kwargs = {}
 
-            saddr = scheduler_q.get()
+            with rpc(saddr, **rpc_kwargs) as s:
+                while True:
+                    ncores = loop.run_sync(s.ncores)
+                    if len(ncores) == nworkers:
+                        break
+                    if time() - start > 5:
+                        raise Exception("Timeout on cluster creation")
 
-            start = time()
-            try:
-                try:
-                    security = scheduler_kwargs["security"]
-                    rpc_kwargs = {
-                        "connection_args": security.get_connection_args("client")
-                    }
-                except KeyError:
-                    rpc_kwargs = {}
+            # avoid sending processes down to function
+            yield {"address": saddr}, [
+                {"address": w["address"], "proc": weakref.ref(w["proc"])}
+                for w in workers
+            ]
+        finally:
+            logger.debug("Closing out test cluster")
 
-                with rpc(saddr, **rpc_kwargs) as s:
-                    while True:
-                        ncores = loop.run_sync(s.ncores)
-                        if len(ncores) == nworkers:
-                            break
-                        if time() - start > 5:
-                            raise Exception("Timeout on cluster creation")
-
-                # avoid sending processes down to function
-                yield {"address": saddr}, [
-                    {"address": w["address"], "proc": weakref.ref(w["proc"])}
-                    for w in workers
-                ]
-            finally:
-                logger.debug("Closing out test cluster")
-
-                loop.run_sync(
-                    lambda: disconnect_all(
-                        [w["address"] for w in workers],
-                        timeout=0.5,
-                        rpc_kwargs=rpc_kwargs,
-                    )
+            loop.run_sync(
+                lambda: disconnect_all(
+                    [w["address"] for w in workers], timeout=0.5, rpc_kwargs=rpc_kwargs
                 )
-                loop.run_sync(
-                    lambda: disconnect(saddr, timeout=0.5, rpc_kwargs=rpc_kwargs)
-                )
+            )
+            loop.run_sync(lambda: disconnect(saddr, timeout=0.5, rpc_kwargs=rpc_kwargs))
 
-                scheduler.terminate()
-                scheduler_q.close()
-                scheduler_q._reader.close()
-                scheduler_q._writer.close()
+            scheduler.terminate()
+            scheduler_q.close()
+            scheduler_q._reader.close()
+            scheduler_q._writer.close()
 
-                for w in workers:
-                    w["proc"].terminate()
-                    w["queue"].close()
-                    w["queue"]._reader.close()
-                    w["queue"]._writer.close()
+            for w in workers:
+                w["proc"].terminate()
+                w["queue"].close()
+                w["queue"]._reader.close()
+                w["queue"]._writer.close()
 
-                scheduler.join(2)
-                del scheduler
-                for proc in [w["proc"] for w in workers]:
-                    proc.join(timeout=2)
+            scheduler.join(2)
+            del scheduler
+            for proc in [w["proc"] for w in workers]:
+                proc.join(timeout=2)
 
-                with ignoring(UnboundLocalError):
-                    del worker, w, proc
-                del workers[:]
+            with ignoring(UnboundLocalError):
+                del worker, w, proc
+            del workers[:]
 
-                for fn in glob("_test_worker-*"):
-                    with ignoring(OSError):
-                        shutil.rmtree(fn)
+            for fn in glob("_test_worker-*"):
+                with ignoring(OSError):
+                    shutil.rmtree(fn)
 
-            try:
-                client = default_client()
-            except ValueError:
-                pass
-            else:
-                client.close()
+        try:
+            client = default_client()
+        except ValueError:
+            pass
+        else:
+            client.close()
 
     start = time()
     while list(ws):
         sleep(0.01)
         assert time() < start + 1, "Workers still around after one second"
-
-    for i in range(5):
-        if all(c.closed() for c in Comm._instances):
-            break
-        else:
-            sleep(0.1)
-    else:
-        L = [c for c in Comm._instances if not c.closed()]
-        Comm._instances.clear()
-        print("Unclosed Comms", L)
-        # raise ValueError("Unclosed Comms", L)
-
-    assert_no_leaked_processes()
-
-
-def assert_no_leaked_processes():
-    for i in range(20):
-        if mp_context.active_children():
-            sleep(0.1)
-    else:
-        assert not mp_context.active_children()
 
 
 @gen.coroutine
@@ -922,147 +879,95 @@ def gen_cluster(
             func = gen.coroutine(func)
 
         def test_func():
-            Client._instances.clear()
-            Worker._instances.clear()
-            Scheduler._instances.clear()
-            Nanny._instances.clear()
-            _global_clients.clear()
-            Comm._instances.clear()
-            active_threads_start = set(threading._active)
-
-            reset_config()
-
-            dask.config.set({"distributed.comm.timeouts.connect": "5s"})
-            # Restore default logging levels
-            # XXX use pytest hooks/fixtures instead?
-            for name, level in logging_levels.items():
-                logging.getLogger(name).setLevel(level)
-
             result = None
             workers = []
+            with clean(threads=check_new_threads, timeout=active_rpc_timeout) as loop:
 
-            with pristine_loop() as loop:
-                with check_active_rpc(loop, active_rpc_timeout):
-
-                    @gen.coroutine
-                    def coro():
-                        with dask.config.set(config):
-                            s = False
-                            for i in range(5):
-                                try:
-                                    s, ws = yield start_cluster(
-                                        ncores,
-                                        scheduler,
-                                        loop,
-                                        security=security,
-                                        Worker=Worker,
-                                        scheduler_kwargs=scheduler_kwargs,
-                                        worker_kwargs=worker_kwargs,
-                                    )
-                                except Exception as e:
-                                    logger.error(
-                                        "Failed to start gen_cluster, retrying",
-                                        exc_info=True,
-                                    )
-                                else:
-                                    workers[:] = ws
-                                    args = [s] + workers
-                                    break
-                            if s is False:
-                                raise Exception("Could not start cluster")
-                            if client:
-                                c = yield Client(
-                                    s.address,
-                                    loop=loop,
+                @gen.coroutine
+                def coro():
+                    with dask.config.set(config):
+                        s = False
+                        for i in range(5):
+                            try:
+                                s, ws = yield start_cluster(
+                                    ncores,
+                                    scheduler,
+                                    loop,
                                     security=security,
-                                    asynchronous=True,
-                                    **client_kwargs
+                                    Worker=Worker,
+                                    scheduler_kwargs=scheduler_kwargs,
+                                    worker_kwargs=worker_kwargs,
                                 )
-                                args = [c] + args
-                            try:
-                                future = func(*args)
-                                if timeout:
-                                    future = gen.with_timeout(
-                                        timedelta(seconds=timeout), future
-                                    )
-                                result = yield future
-                                if s.validate:
-                                    s.validate_state()
-                            finally:
-                                if client and c.status not in ("closing", "closed"):
-                                    yield c._close(fast=s.status == "closed")
-                                yield end_cluster(s, workers)
-                                yield gen.with_timeout(
-                                    timedelta(seconds=1), cleanup_global_workers()
+                            except Exception as e:
+                                logger.error(
+                                    "Failed to start gen_cluster, retrying",
+                                    exc_info=True,
                                 )
-
-                            try:
-                                c = yield default_client()
-                            except ValueError:
-                                pass
                             else:
-                                yield c._close(fast=True)
-
-                            for i in range(5):
-                                if all(c.closed() for c in Comm._instances):
-                                    break
-                                else:
-                                    yield gen.sleep(0.05)
-                            else:
-                                L = [c for c in Comm._instances if not c.closed()]
-                                Comm._instances.clear()
-                                # raise ValueError("Unclosed Comms", L)
-                                print("Unclosed Comms", L)
-
-                            raise gen.Return(result)
-
-                    result = loop.run_sync(
-                        coro, timeout=timeout * 2 if timeout else timeout
-                    )
-
-                for w in workers:
-                    if getattr(w, "data", None):
+                                workers[:] = ws
+                                args = [s] + workers
+                                break
+                        if s is False:
+                            raise Exception("Could not start cluster")
+                        if client:
+                            c = yield Client(
+                                s.address,
+                                loop=loop,
+                                security=security,
+                                asynchronous=True,
+                                **client_kwargs
+                            )
+                            args = [c] + args
                         try:
-                            w.data.clear()
-                        except EnvironmentError:
-                            # zict backends can fail if their storage directory
-                            # was already removed
+                            future = func(*args)
+                            if timeout:
+                                future = gen.with_timeout(
+                                    timedelta(seconds=timeout), future
+                                )
+                            result = yield future
+                            if s.validate:
+                                s.validate_state()
+                        finally:
+                            if client and c.status not in ("closing", "closed"):
+                                yield c._close(fast=s.status == "closed")
+                            yield end_cluster(s, workers)
+                            yield gen.with_timeout(
+                                timedelta(seconds=1), cleanup_global_workers()
+                            )
+
+                        try:
+                            c = yield default_client()
+                        except ValueError:
                             pass
-                        del w.data
-                DequeHandler.clear_all_instances()
-                for w in Worker._instances:
-                    w.close(report=False, executor_wait=False)
-                    if w.status == "running":
-                        w.close()
-                Worker._instances.clear()
+                        else:
+                            yield c._close(fast=True)
 
-            if PY3 and not WINDOWS and check_new_threads:
-                start = time()
-                while True:
-                    bad = [
-                        t
-                        for t, v in threading._active.items()
-                        if t not in active_threads_start
-                        and "Threaded" not in v.name
-                        and "watch message" not in v.name
-                        and "TCP-Executor" not in v.name
-                    ]
-                    if not bad:
-                        break
-                    else:
-                        sleep(0.01)
-                    if time() > start + 5:
-                        from distributed import profile
+                        for i in range(5):
+                            if all(c.closed() for c in Comm._instances):
+                                break
+                            else:
+                                yield gen.sleep(0.05)
+                        else:
+                            L = [c for c in Comm._instances if not c.closed()]
+                            Comm._instances.clear()
+                            # raise ValueError("Unclosed Comms", L)
+                            print("Unclosed Comms", L)
 
-                        tid = bad[0]
-                        thread = threading._active[tid]
-                        call_stacks = profile.call_stack(sys._current_frames()[tid])
-                        assert False, (thread, call_stacks)
-            _cleanup_dangling()
-            with ignoring(AttributeError):
-                del thread_state.on_event_loop_thread
+                        raise gen.Return(result)
 
-            assert_no_leaked_processes()
+                result = loop.run_sync(
+                    coro, timeout=timeout * 2 if timeout else timeout
+                )
+
+            for w in workers:
+                if getattr(w, "data", None):
+                    try:
+                        w.data.clear()
+                    except EnvironmentError:
+                        # zict backends can fail if their storage directory
+                        # was already removed
+                        pass
+                    del w.data
 
             return result
 
@@ -1510,3 +1415,112 @@ def gen_tls_cluster(**kwargs):
     return gen_cluster(
         scheduler="tls://127.0.0.1", security=tls_only_security(), **kwargs
     )
+
+
+@contextmanager
+def check_thread_leak():
+    active_threads_start = set(threading._active)
+
+    yield
+
+    start = time()
+    while True:
+        bad = [
+            t
+            for t, v in threading._active.items()
+            if t not in active_threads_start
+            and "Threaded" not in v.name
+            and "watch message" not in v.name
+            and "TCP-Executor" not in v.name
+        ]
+        if not bad:
+            break
+        else:
+            sleep(0.01)
+        if time() > start + 5:
+            from distributed import profile
+
+            tid = bad[0]
+            thread = threading._active[tid]
+            call_stacks = profile.call_stack(sys._current_frames()[tid])
+            assert False, (thread, call_stacks)
+
+
+@contextmanager
+def check_process_leak():
+    start_children = set(mp_context.active_children())
+
+    yield
+
+    for i in range(50):
+        if not set(mp_context.active_children()) - start_children:
+            break
+        else:
+            sleep(0.2)
+    else:
+        assert not mp_context.active_children()
+
+    _cleanup_dangling()
+
+
+@contextmanager
+def check_instances():
+    Client._instances.clear()
+    Worker._instances.clear()
+    Scheduler._instances.clear()
+    Nanny._instances.clear()
+    _global_clients.clear()
+    Comm._instances.clear()
+
+    yield
+
+    start = time()
+    while set(_global_clients):
+        sleep(0.1)
+        assert time() < start + 10
+
+    _global_clients.clear()
+
+    for w in Worker._instances:
+        w.close(report=False, executor_wait=False)
+        if w.status == "running":
+            w.close()
+    Worker._instances.clear()
+
+    for i in range(5):
+        if all(c.closed() for c in Comm._instances):
+            break
+        else:
+            sleep(0.1)
+    else:
+        L = [c for c in Comm._instances if not c.closed()]
+        Comm._instances.clear()
+        print("Unclosed Comms", L)
+        # raise ValueError("Unclosed Comms", L)
+
+    DequeHandler.clear_all_instances()
+
+
+@contextmanager
+def clean(threads=not WINDOWS, processes=True, instances=True, timeout=1):
+    @contextmanager
+    def null():
+        yield
+
+    with check_thread_leak() if threads else null():
+        with pristine_loop() as loop:
+            with check_process_leak() if processes else null():
+                with check_instances() if instances else null():
+                    with check_active_rpc(loop, timeout):
+                        reset_config()
+
+                        dask.config.set({"distributed.comm.timeouts.connect": "5s"})
+                        # Restore default logging levels
+                        # XXX use pytest hooks/fixtures instead?
+                        for name, level in logging_levels.items():
+                            logging.getLogger(name).setLevel(level)
+
+                        yield loop
+
+                        with ignoring(AttributeError):
+                            del thread_state.on_event_loop_thread
