@@ -1013,8 +1013,9 @@ class Array(DaskMethodsMixin):
                 (name, self.shape, self.dtype, chunksize))
 
     def _repr_html_(self):
+        from .svg import svg
         table = self._repr_html_table()
-        grid = svg_grid(self.chunks)
+        grid = svg(self.chunks)
 
         both = [
             '<table>',
@@ -4028,55 +4029,3 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
-
-
-def svg_grid(chunks, **kwargs):
-    if len(chunks) == 1:
-        return svg_1d(chunks, **kwargs)
-    elif len(chunks) == 2:
-        return svg_2d(chunks, **kwargs)
-    else:
-        # TODO
-        return ''
-
-def svg_2d(chunks, max_size=(500, 300), min_size=30):
-    y, x = [np.cumsum((0,) + c) for c in chunks]
-    factor = min(max_size[0] / x[-1], max_size[1] / y[-1])
-
-    x = x * factor
-    y = y * factor
-
-    if x[-1] < min_size:
-        x = x * min_size / x[-1]
-    if y[-1] < min_size:
-        y = y * min_size / y[-1]
-
-    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (x[-1] + 50, y[-1] + 50)
-
-    footer = '\n</svg>'
-
-    h_lines = ['  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (0, yy, x[-1], yy)
-              for yy in y]
-    v_lines = ['  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (xx, 0, xx, y[-1])
-              for xx in x]
-
-    h_lines[0] = h_lines[0].replace(' /', 'style="stroke-width:2" /')
-    h_lines[-1] = h_lines[-1].replace(' /', 'style="stroke-width:2" /')
-    v_lines[0] = v_lines[0].replace(' /', 'style="stroke-width:2" /')
-    v_lines[-1] = v_lines[-1].replace(' /', 'style="stroke-width:2" /')
-
-    rect = [
-        '  <rect x="0" y="0" width="%d" height="%d" style="fill:#ECB172A0;stroke-width:0"/>' % (x[-1], y[-1])
-    ]
-
-    text = [
-        '<text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % (x[-1] / 2, y[-1] + 20, sum(chunks[1])),
-        '<text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(-90 %f,%f)">%d</text>' % (
-            x[-1] + 20, y[-1] / 2, x[-1] + 20, y[-1] / 2, sum(chunks[0])),
-    ]
-
-    return header + '\n'.join(rect + h_lines + v_lines + text) + footer
-
-
-def svg_1d(chunks, **kwargs):
-    return svg_2d(((1,),) + chunks, **kwargs)
