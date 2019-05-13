@@ -282,7 +282,6 @@ class FastParquetEngine(Engine):
         return_metadata=True, **kwargs
     ):
         fmd = copy.copy(fmd)
-
         if not len(df):
             # Write nothing for empty partitions
             rgs = []

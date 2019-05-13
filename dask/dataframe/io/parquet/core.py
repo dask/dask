@@ -318,7 +318,8 @@ def to_parquet(
     # write parts
     dwrite = delayed(engine.write_partition)
     parts = [dwrite(
-        d, path, fs, filename, partition_on, fmd=meta, **kwargs)
+        d, path, fs, filename, partition_on, with_metadata=write_metadata_file,
+        fmd=meta, **kwargs)
         for d, filename in zip(df.to_delayed(), filenames)]
 
     # single task to complete

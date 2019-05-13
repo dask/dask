@@ -188,12 +188,10 @@ class ArrowEngine(Engine):
     @staticmethod
     def create_metadata(df, fs, path, append=False, partition_on=None,
                         ignore_divisions=False, **kwargs):
-
         fs.mkdirs(path)
         if ignore_divisions:
             raise NotImplementedError("`ignore_divisions` not implemented"
                                       " for `engine='pyarrow'`")
-
         object_encoding = kwargs.pop("object_encoding", "utf8")
         if object_encoding == "infer" or (
             isinstance(object_encoding,
@@ -203,14 +201,11 @@ class ArrowEngine(Engine):
                 '"infer" not allowed as object encoding, '
                 "because this required data in memory."
             )
-
         if append:
             raise NotImplementedError("`append` not implemented for "
                                       "`engine='pyarrow'`")
-
         filenames = ["part.%i.parquet" % (i + 0) for i in
                      range(df.npartitions)]
-
         return None, filenames
 
     @staticmethod
@@ -226,7 +221,7 @@ class ArrowEngine(Engine):
     @staticmethod
     def write_partition(
         df, path, fs, filename, partition_on, fmd=None, compression=None,
-        return_metadata=True, **kwargs
+        return_metadata=True, with_metadata=True, **kwargs
     ):
         t = pa.Table.from_pandas(df, preserve_index=False)
         if partition_on:
