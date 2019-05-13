@@ -1179,7 +1179,8 @@ def parse_timedelta(s, default="seconds"):
     3
     """
     if isinstance(s, timedelta):
-        return s.total_seconds()
+        s = s.total_seconds()
+        return int(s) if int(s) == s else s
     if isinstance(s, Number):
         s = str(s)
     s = s.replace(" ", "")
