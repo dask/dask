@@ -1013,9 +1013,11 @@ class Array(DaskMethodsMixin):
                 (name, self.shape, self.dtype, chunksize))
 
     def _repr_html_(self):
-        from .svg import svg
         table = self._repr_html_table()
-        grid = svg(self.chunks)
+        try:
+            grid = self.to_svg(size=config.get('array.svg.size', 120))
+        except NotImplementedError:
+            grid = ""
 
         both = [
             '<table>',
@@ -1114,6 +1116,26 @@ class Array(DaskMethodsMixin):
             r = r[0]
 
         return r
+
+    def to_svg(self, size=500):
+        """ Convert chunks from Dask Array into an SVG Image
+
+        Parameters
+        ----------
+        chunks: tuple
+        size: int
+            Rough size of the image
+
+        Examples
+        --------
+        >>> x.to_svg(size=500)  # doctest: +SKIP
+
+        Returns
+        -------
+        text: An svg string depicting the array as a grid of chunks
+        """
+        from .svg import svg
+        return svg(self.chunks, size=size)
 
     def to_hdf5(self, filename, datapath, **kwargs):
         """ Store array in HDF5 file

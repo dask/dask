@@ -2,28 +2,44 @@ import numpy as np
 import math
 
 
-def svg(chunks, **kwargs):
-    if len(chunks) == 1:
-        return svg_1d(chunks, **kwargs)
-    elif len(chunks) == 2:
-        return svg_2d(chunks, **kwargs)
-    elif len(chunks) == 3:
-        return svg_3d(chunks, **kwargs)
-    else:
-        return ""
+def svg(chunks, size=200, **kwargs):
+    """ Convert chunks from Dask Array into an SVG Image
 
+    Parameters
+    ----------
+    chunks: tuple
+    size: int
+        Rough size of the image
 
-text_style = 'font-size="1.0rem" font-weight=100 text-anchor="middle"'
-
-
-def svg_2d(chunks, offset=(0, 0), skew=(0, 0)):
+    Returns
+    -------
+    text: An svg string depicting the array as a grid of chunks
+    """
     shape = tuple(map(sum, chunks))
-    sizes = draw_sizes(shape)
+    if np.isnan(shape).any():  # don't support unknown sizes
+        raise NotImplementedError("Can't generate SVG with unknown chunk sizes")
+    if not all(shape):
+        raise NotImplementedError("Can't generate SVG with 0 dimensions")
+    if len(chunks) == 1:
+        return svg_1d(chunks, size=size, **kwargs)
+    elif len(chunks) == 2:
+        return svg_2d(chunks, size=size, **kwargs)
+    elif len(chunks) == 3:
+        return svg_3d(chunks, size=size, **kwargs)
+    else:
+        raise NotImplementedError("Can't generate SVG for greater than 3 dimensions")
+
+
+text_style = 'font-size="1.0rem" font-weight="100" text-anchor="middle"'
+
+
+def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200):
+    shape = tuple(map(sum, chunks))
+    sizes = draw_sizes(shape, size=size)
     y, x = grid_points(chunks, sizes)
 
-    lines, (min_x, max_x, min_y, max_y) = svg_grid(
-        x, y, shape, offset=offset, skew=skew
-    )
+    lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, offset=offset, skew=skew)
+
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
         max_x + 50,
         max_y + 50,
@@ -47,20 +63,16 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0)):
     return header + "\n".join(lines + text) + footer
 
 
-def svg_3d(chunks):
+def svg_3d(chunks, size=200):
     shape = tuple(map(sum, chunks))
-    sizes = draw_sizes(shape)
+    sizes = draw_sizes(shape, size=size)
     x, y, z = grid_points(chunks, sizes)
 
-    xy, (mnx, mxx, mny, mxy) = svg_grid(
-        x / 1.7, y, (shape[0], shape[1]), offset=(10, 0), skew=(1, 0)
-    )
-    zx, (_, _, _, max_x) = svg_grid(
-        z, x / 1.7, (shape[2], shape[0]), offset=(10, 0), skew=(0, 1)
-    )
-    zy, (min_z, max_z, min_y, max_y) = svg_grid(
-        z, y, (shape[2], shape[1]), offset=(max_x + 10, max_x), skew=(0, 0)
-    )
+    xy, (mnx, mxx, mny, mxy) = svg_grid( x / 1.7, y, offset=(10, 0), skew=(1, 0))
+
+    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, offset=(10, 0), skew=(0, 1))
+    zy, (min_z, max_z, min_y, max_y) = svg_grid(z, y, offset=(max_x + 10, max_x), skew=(0, 0))
+
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
         max_z + 50,
         max_y + 50,
@@ -102,6 +114,14 @@ def svg_3d(chunks):
 
 
 def svg_lines(x1, y1, x2, y2):
+    """ Convert points into lines of text for an SVG plot
+
+    Examples
+    --------
+    >>> svg_lines([0, 1], [0, 0], [10, 11], [1, 1])  # doctest: +NORMALIZE_WHITESPACE
+    ['  <line x1="0" y1="0" x2="10" y2="1" style="stroke-width:2" />',
+     '  <line x1="1" y1="0" x2="11" y2="1" style="stroke-width:2" />']
+    """
     n = len(x1)
     lines = [
         '  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (x1[i], y1[i], x2[i], y2[i])
@@ -113,14 +133,13 @@ def svg_lines(x1, y1, x2, y2):
     return lines
 
 
-def svg_grid(x, y, shape, offset=(0, 0), skew=(0, 0)):
+def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     """ Create lines of SVG text that show a grid
 
     Parameters
     ----------
     x: numpy.ndarray
     y: numpy.ndarray
-    shape: tuple
     offset: tuple
         translational displacement of the grid in SVG coordinates
     skew: tuple
@@ -132,7 +151,6 @@ def svg_grid(x, y, shape, offset=(0, 0), skew=(0, 0)):
     y2 = y + offset[1]
 
     if skew[0]:
-        y1_old = y1.copy()
         y2 += x.max() * skew[0]
     if skew[1]:
         x1 += skew[1] * y
@@ -177,12 +195,12 @@ def grid_points(chunks, sizes):
     return points
 
 
-def draw_sizes(shape, max_size=120):
+def draw_sizes(shape, size=200):
     """ Get size in pixels for all dimensions """
     mx = max(shape)
-    ratios = [mx / d for d in shape]
+    ratios = [mx / max(0.1, d) for d in shape]
     ratios = [ratio_response(r) for r in ratios]
-    return tuple(max_size/ r for r in ratios)
+    return tuple(size / r for r in ratios)
 
 
 def ratio_response(x):
