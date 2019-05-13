@@ -3824,22 +3824,3 @@ def test_auto_chunks_h5py():
             with dask.config.set({'array.chunk-size': '1 MiB'}):
                 x = da.from_array(d)
                 assert x.chunks == ((256, 256, 256, 232), (512, 488))
-
-
-def test_draw_grid_points():
-    x = da.ones((100, 100), chunks=(10, 10))
-    x, y = grid_points(x.chunks)
-    assert (x == y).all()  # respects symmetry
-
-    x = da.ones((10, 50), chunks=(10, 10))
-    x, y = grid_points(x.chunks)
-    assert len(x) == 2
-    assert len(y) == 5   # happy to draw modest grids explicitly
-    assert y[-1] > x[-1]  # larger axes should be larger
-
-    x = da.ones((10, 10000), chunks=(10, 100))
-    x, y = grid_points(x.chunks)
-    assert len(x) == 2
-    assert 5 <= len(y) < 30  # not too many lines
-    assert y[-1] > x[-1]  # still a difference
-    assert y[-1] < x[-1] * 20  # but not beyond perception

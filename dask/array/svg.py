@@ -16,12 +16,26 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0)):
     sizes = draw_sizes(shape)
     y, x = grid_points(chunks, sizes)
 
-    lines, (max_x, max_y) = svg_grid(x, y, shape, offset=offset, skew=skew)
+    lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, shape, offset=offset, skew=skew)
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
         max_x + 50, max_y + 50)
     footer = '\n</svg>'
 
-    return header + '\n'.join(lines) + footer
+    if shape[0] >= 100:
+        rotate = -90
+    else:
+        rotate = 0
+
+    text = [
+        '',
+        '  <!-- Text -->',
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % (max_x / 2, max_y + 20, shape[1]),
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(%d,%f,%f)">%d</text>' % (
+            max_x + 20, max_y / 2, rotate, max_x + 20, max_y / 2, shape[0]),
+    ]
+
+
+    return header + '\n'.join(lines + text) + footer
 
 
 def svg_3d(chunks):
@@ -29,14 +43,29 @@ def svg_3d(chunks):
     sizes = draw_sizes(shape)
     x, y, z = grid_points(chunks, sizes)
 
-    zx, (max_z, max_x) = svg_grid(z / math.sqrt(2), x, (shape[2], shape[0]), offset=(0, 0), skew=(1, 0))
-    yz, (max_y, max_z) = svg_grid(y, z / math.sqrt(2), (shape[1], shape[2]), offset=(0, 0), skew=(0, 1))
-    yx, (max_y, max_x) = svg_grid(y, x, (shape[1], shape[0]), offset=(max_z, max_z), skew=(0, 0))
+    xy, (mnx, mxx, mny, mxy) = svg_grid(x / 1.7, y, (shape[0], shape[1]), offset=(10, 0), skew=(1, 0))
+    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, (shape[2], shape[0]), offset=(10, 0), skew=(0, 1))
+    zy, (min_z, max_z, min_y, max_y) = svg_grid(z, y, (shape[2], shape[1]), offset=(max_x + 10, max_x), skew=(0, 0))
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
-        max_y + 50, max_x + 50)
+        max_z + 50, max_y + 50)
     footer = '\n</svg>'
 
-    return header + '\n'.join(zx + yz + yx) + footer
+    if shape[1] >= 100:
+        rotate = -90
+    else:
+        rotate = 0
+
+    text = [
+        '',
+        '  <!-- Text -->',
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % ((min_z + max_z) / 2, max_y + 20, shape[2]),
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(%d,%f,%f)">%d</text>' % (
+            max_z + 20, (min_y + max_y) / 2, rotate, max_z + 20, (min_y + max_y) / 2, shape[1]),
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(45,%f,%f)">%d</text>' % (
+            (mnx + mxx) / 2 - 10, mxy - (mxx - mnx) / 2 + 20, (mnx + mxx) / 2 - 10, mxy - (mxx - mnx) / 2 + 20, shape[0]),
+    ]
+
+    return header + '\n'.join(xy + zx + zy + text) + footer
 
 
 def svg_lines(x1, y1, x2, y2):
@@ -93,7 +122,6 @@ def svg_grid(x, y, shape, offset=(0, 0), skew=(0, 0)):
     if skew[1]:
         x2 += skew[1] * y.max()
 
-
     v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
 
     rect = [
@@ -101,15 +129,7 @@ def svg_grid(x, y, shape, offset=(0, 0), skew=(0, 0)):
             x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0])
     ]
 
-    text = [
-        '',
-        '  <!-- Text -->',
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % (x[-1] / 2, y[-1] + 20, shape[1]),
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(-90 %f,%f)">%d</text>' % (
-            x[-1] + 20, y[-1] / 2, x[-1] + 20, y[-1] / 2, shape[0]),
-    ]
-
-    return h_lines + v_lines + rect , (max_x, max_y)
+    return h_lines + v_lines + rect , (min_x, max_x, min_y, max_y)
 
 
 def svg_1d(chunks, **kwargs):
@@ -138,9 +158,26 @@ def draw_sizes(shape, max_size=400):
     """
     mx = max(shape)
     size = 200
-    ratios = [d / mx for d in shape]
-    ratios = [max(1/10, r) for r in ratios]
-    return tuple(size * r for r in ratios)
+    ratios = [mx / d for d in shape]
+    ratios = [ratio_response(r) for r in ratios]
+    return tuple(size / r for r in ratios)
+
+
+def ratio_response(x):
+    """ How we display actual size ratios
+
+    Common ratios in sizes span several orders of magnitude,
+    which is hard for us to perceive.
+
+    We keep ratios in the 1-3 range accurate, and then apply a logarithm to
+    values up until about 100 or so, at which point we stop scaling.
+    """
+    if x < math.e:
+        return x
+    elif x <= 100:
+        return math.log(x + 12.4)  # f(e) == e
+    else:
+        return math.log(100 + 12.4)
 
 
 class HTML:
