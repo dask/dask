@@ -171,6 +171,14 @@ def reshape(x, shape):
     if x.shape == shape:
         return x
 
+    if len(shape) > x.ndim:
+        meta = x._meta[(Ellipsis, ) + tuple(None for _ in range(len(shape) - x.ndim))]
+        meta = meta[tuple(slice(0, 0, None) for _ in range(meta.ndim))]
+    elif len(shape) < x.ndim:
+        meta = np.sum(x._meta, axis=tuple(d for d in range((x.ndim - len(shape)))))
+    else:
+        meta = x._meta
+
     name = 'reshape-' + tokenize(x, shape)
 
     if x.npartitions == 1:
@@ -178,7 +186,7 @@ def reshape(x, shape):
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-        return Array(graph, name, chunks, dtype=x.dtype)
+        return Array(graph, name, chunks, meta=meta)
 
     # Logic for how to rechunk
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
@@ -191,4 +199,4 @@ def reshape(x, shape):
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
-    return Array(graph, name, outchunks, dtype=x.dtype)
+    return Array(graph, name, outchunks, meta=meta)
