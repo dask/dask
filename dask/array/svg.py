@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+
 def svg(chunks, **kwargs):
     if len(chunks) == 1:
         return svg_1d(chunks, **kwargs)
@@ -9,17 +10,22 @@ def svg(chunks, **kwargs):
     elif len(chunks) == 3:
         return svg_3d(chunks, **kwargs)
     else:
-        return ''
+        return ""
+
 
 def svg_2d(chunks, offset=(0, 0), skew=(0, 0)):
     shape = tuple(map(sum, chunks))
     sizes = draw_sizes(shape)
     y, x = grid_points(chunks, sizes)
 
-    lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, shape, offset=offset, skew=skew)
+    lines, (min_x, max_x, min_y, max_y) = svg_grid(
+        x, y, shape, offset=offset, skew=skew
+    )
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
-        max_x + 50, max_y + 50)
-    footer = '\n</svg>'
+        max_x + 50,
+        max_y + 50,
+    )
+    footer = "\n</svg>"
 
     if shape[0] >= 100:
         rotate = -90
@@ -27,15 +33,15 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0)):
         rotate = 0
 
     text = [
-        '',
-        '  <!-- Text -->',
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % (max_x / 2, max_y + 20, shape[1]),
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(%d,%f,%f)">%d</text>' % (
-            max_x + 20, max_y / 2, rotate, max_x + 20, max_y / 2, shape[0]),
+        "",
+        "  <!-- Text -->",
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>'
+        % (max_x / 2, max_y + 20, shape[1]),
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(%d,%f,%f)">%d</text>'
+        % (max_x + 20, max_y / 2, rotate, max_x + 20, max_y / 2, shape[0]),
     ]
 
-
-    return header + '\n'.join(lines + text) + footer
+    return header + "\n".join(lines + text) + footer
 
 
 def svg_3d(chunks):
@@ -43,12 +49,20 @@ def svg_3d(chunks):
     sizes = draw_sizes(shape)
     x, y, z = grid_points(chunks, sizes)
 
-    xy, (mnx, mxx, mny, mxy) = svg_grid(x / 1.7, y, (shape[0], shape[1]), offset=(10, 0), skew=(1, 0))
-    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, (shape[2], shape[0]), offset=(10, 0), skew=(0, 1))
-    zy, (min_z, max_z, min_y, max_y) = svg_grid(z, y, (shape[2], shape[1]), offset=(max_x + 10, max_x), skew=(0, 0))
+    xy, (mnx, mxx, mny, mxy) = svg_grid(
+        x / 1.7, y, (shape[0], shape[1]), offset=(10, 0), skew=(1, 0)
+    )
+    zx, (_, _, _, max_x) = svg_grid(
+        z, x / 1.7, (shape[2], shape[0]), offset=(10, 0), skew=(0, 1)
+    )
+    zy, (min_z, max_z, min_y, max_y) = svg_grid(
+        z, y, (shape[2], shape[1]), offset=(max_x + 10, max_x), skew=(0, 0)
+    )
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
-        max_z + 50, max_y + 50)
-    footer = '\n</svg>'
+        max_z + 50,
+        max_y + 50,
+    )
+    footer = "\n</svg>"
 
     if shape[1] >= 100:
         rotate = -90
@@ -56,25 +70,41 @@ def svg_3d(chunks):
         rotate = 0
 
     text = [
-        '',
-        '  <!-- Text -->',
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>' % ((min_z + max_z) / 2, max_y + 20, shape[2]),
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(%d,%f,%f)">%d</text>' % (
-            max_z + 20, (min_y + max_y) / 2, rotate, max_z + 20, (min_y + max_y) / 2, shape[1]),
-        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(45,%f,%f)">%d</text>' % (
-            (mnx + mxx) / 2 - 10, mxy - (mxx - mnx) / 2 + 20, (mnx + mxx) / 2 - 10, mxy - (mxx - mnx) / 2 + 20, shape[0]),
+        "",
+        "  <!-- Text -->",
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle">%d</text>'
+        % ((min_z + max_z) / 2, max_y + 20, shape[2]),
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(%d,%f,%f)">%d</text>'
+        % (
+            max_z + 20,
+            (min_y + max_y) / 2,
+            rotate,
+            max_z + 20,
+            (min_y + max_y) / 2,
+            shape[1],
+        ),
+        '  <text x="%f" y="%f" font-size="1.4rem" text-anchor="middle" transform="rotate(45,%f,%f)">%d</text>'
+        % (
+            (mnx + mxx) / 2 - 10,
+            mxy - (mxx - mnx) / 2 + 20,
+            (mnx + mxx) / 2 - 10,
+            mxy - (mxx - mnx) / 2 + 20,
+            shape[0],
+        ),
     ]
 
-    return header + '\n'.join(xy + zx + zy + text) + footer
+    return header + "\n".join(xy + zx + zy + text) + footer
 
 
 def svg_lines(x1, y1, x2, y2):
     n = len(x1)
-    lines = ['  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (x1[i], y1[i], x2[i], y2[i])
-               for i in range(n)]
+    lines = [
+        '  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (x1[i], y1[i], x2[i], y2[i])
+        for i in range(n)
+    ]
 
-    lines[0] = lines[0].replace(' /', ' style="stroke-width:2" /')
-    lines[-1] = lines[-1].replace(' /', ' style="stroke-width:2" /')
+    lines[0] = lines[0].replace(" /", ' style="stroke-width:2" /')
+    lines[-1] = lines[-1].replace(" /", ' style="stroke-width:2" /')
     return lines
 
 
@@ -125,11 +155,11 @@ def svg_grid(x, y, shape, offset=(0, 0), skew=(0, 0)):
     v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
 
     rect = [
-            '  <polygon points="%f,%f %f,%f %f,%f %f,%f" style="fill:#ECB172A0;stroke-width:0"/>' % (
-            x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0])
+        '  <polygon points="%f,%f %f,%f %f,%f %f,%f" style="fill:#ECB172A0;stroke-width:0"/>'
+        % (x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0])
     ]
 
-    return h_lines + v_lines + rect , (min_x, max_x, min_y, max_y)
+    return h_lines + v_lines + rect, (min_x, max_x, min_y, max_y)
 
 
 def svg_1d(chunks, **kwargs):
@@ -178,11 +208,3 @@ def ratio_response(x):
         return math.log(x + 12.4)  # f(e) == e
     else:
         return math.log(100 + 12.4)
-
-
-class HTML:
-    def __init__(self, text):
-        self.text = text
-
-    def _repr_html_(self):
-        return self.text
