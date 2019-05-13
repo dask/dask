@@ -14,7 +14,7 @@ from tornado import gen
 from distributed import Nanny, Worker, wait, worker_client
 from distributed.config import config
 from distributed.metrics import time
-from distributed.scheduler import BANDWIDTH, key_split
+from distributed.scheduler import key_split
 from distributed.utils_test import (
     slowinc,
     slowadd,
@@ -394,7 +394,7 @@ def assert_balanced(inp, expected, c, s, *workers):
                 ts = s.tasks[dat.key]
                 # Ensure scheduler state stays consistent
                 old_nbytes = ts.nbytes
-                ts.nbytes = BANDWIDTH * t
+                ts.nbytes = s.bandwidth * t
                 for ws in ts.who_has:
                     ws.nbytes += ts.nbytes - old_nbytes
             else:
@@ -499,8 +499,8 @@ def test_restart(c, s, a, b):
 def test_steal_communication_heavy_tasks(c, s, a, b):
     steal = s.extensions["stealing"]
     s.task_duration["slowadd"] = 0.001
-    x = c.submit(mul, b"0", int(BANDWIDTH), workers=a.address)
-    y = c.submit(mul, b"1", int(BANDWIDTH), workers=b.address)
+    x = c.submit(mul, b"0", int(s.bandwidth), workers=a.address)
+    y = c.submit(mul, b"1", int(s.bandwidth), workers=b.address)
 
     futures = [
         c.submit(

@@ -54,6 +54,7 @@ from .utils import (
     no_default,
     DequeHandler,
     parse_timedelta,
+    parse_bytes,
     PeriodicCallback,
     shutting_down,
 )
@@ -72,7 +73,6 @@ from .variable import VariableExtension
 logger = logging.getLogger(__name__)
 
 
-BANDWIDTH = dask.config.get("distributed.scheduler.bandwidth")
 ALLOWED_FAILURES = dask.config.get("distributed.scheduler.allowed-failures")
 
 LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
@@ -868,6 +868,7 @@ class Scheduler(ServerNode):
         else:
             self.idle_timeout = None
         self.time_started = time()
+        self.bandwidth = parse_bytes(dask.config.get("distributed.scheduler.bandwidth"))
 
         self.security = security or Security()
         assert isinstance(self.security, Security)
@@ -1359,6 +1360,8 @@ class Scheduler(ServerNode):
         host_info = host_info or {}
 
         self.host_info[host]["last-seen"] = local_now
+        frac = 1 / 20 / len(self.workers)
+        self.bandwidth = self.bandwidth * (1 - frac) + metrics["bandwidth"] * frac
 
         ws = self.workers.get(address)
         if not ws:
@@ -3336,7 +3339,7 @@ class Scheduler(ServerNode):
         Get the estimated communication cost (in s.) to compute the task
         on the given worker.
         """
-        return sum(dts.nbytes for dts in ts.dependencies - ws.has_what) / BANDWIDTH
+        return sum(dts.nbytes for dts in ts.dependencies - ws.has_what) / self.bandwidth
 
     def get_task_duration(self, ts, default=0.5):
         """
@@ -4522,7 +4525,7 @@ class Scheduler(ServerNode):
             [dts.get_nbytes() for dts in ts.dependencies if ws not in dts.who_has]
         )
         stack_time = ws.occupancy / ws.ncores
-        start_time = comm_bytes / BANDWIDTH + stack_time
+        start_time = comm_bytes / self.bandwidth + stack_time
 
         if ts.actor:
             return (len(ws.actors), start_time, ws.nbytes)

@@ -15,7 +15,6 @@ try:
 except ImportError:
     from toolz import topk
 
-BANDWIDTH = 100e6
 LATENCY = 10e-3
 log_2 = log(2)
 
@@ -134,7 +133,7 @@ class WorkStealing(SchedulerPlugin):
 
         nbytes = sum(dep.get_nbytes() for dep in ts.dependencies)
 
-        transfer_time = nbytes / BANDWIDTH + LATENCY
+        transfer_time = nbytes / self.scheduler.bandwidth + LATENCY
         split = ts.prefix
         if split in fast_tasks:
             return None, None

@@ -1221,6 +1221,8 @@ def parse_bytes(s):
     >>> parse_bytes('MB')
     1000000
     """
+    if isinstance(s, (int, float)):
+        return int(s)
     s = s.replace(" ", "")
     if not s[0].isdigit():
         s = "1" + s

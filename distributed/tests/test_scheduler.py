@@ -5,7 +5,7 @@ import pickle
 from collections import defaultdict
 from datetime import timedelta
 import json
-from operator import add, mul
+import operator
 import sys
 from time import sleep
 
@@ -18,7 +18,7 @@ import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
 from distributed.core import connect, rpc
-from distributed.scheduler import Scheduler, BANDWIDTH
+from distributed.scheduler import Scheduler
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -63,7 +63,7 @@ def test_respect_data_in_memory(c, s, a):
 
     assert s.tasks[y.key].who_has == {s.workers[a.address]}
 
-    z = delayed(add)(x, y)
+    z = delayed(operator.add)(x, y)
     f2 = c.persist(z)
     while f2.key not in s.tasks or not s.tasks[f2.key]:
         assert s.tasks[y.key].who_has
@@ -427,7 +427,10 @@ def test_filtered_communication(s, a, b):
     yield f.write(
         {
             "op": "update-graph",
-            "tasks": {"x": dumps_task((inc, 1)), "z": dumps_task((add, "x", 10))},
+            "tasks": {
+                "x": dumps_task((inc, 1)),
+                "z": dumps_task((operator.add, "x", 10)),
+            },
             "dependencies": {"x": [], "z": ["x"]},
             "client": "f",
             "keys": ["z"],
@@ -903,8 +906,8 @@ def test_learn_occupancy_multiple_workers(c, s, a, b):
 @gen_cluster(client=True)
 def test_include_communication_in_occupancy(c, s, a, b):
     s.task_duration["slowadd"] = 0.001
-    x = c.submit(mul, b"0", int(BANDWIDTH), workers=a.address)
-    y = c.submit(mul, b"1", int(BANDWIDTH * 1.5), workers=b.address)
+    x = c.submit(operator.mul, b"0", int(s.bandwidth), workers=a.address)
+    y = c.submit(operator.mul, b"1", int(s.bandwidth * 1.5), workers=b.address)
 
     z = c.submit(slowadd, x, y, delay=1)
     while z.key not in s.tasks or not s.tasks[z.key].processing_on:
@@ -1375,7 +1378,7 @@ def test_dont_recompute_if_persisted_3(c, s, a, b):
     x = delayed(inc)(1, dask_key_name="x")
     y = delayed(inc)(2, dask_key_name="y")
     z = delayed(inc)(y, dask_key_name="z")
-    w = delayed(add)(x, z, dask_key_name="w")
+    w = delayed(operator.add)(x, z, dask_key_name="w")
 
     ww = w.persist()
     yield wait(ww)
@@ -1511,6 +1514,17 @@ def test_idle_timeout(c, s, a, b):
 
     assert a.status == "closed"
     assert b.status == "closed"
+
+
+@gen_cluster(client=True, config={"distributed.scheduler.bandwidth": "100 GB"})
+def test_bandwidth(c, s, a, b):
+    start = s.bandwidth
+    x = c.submit(operator.mul, b"0", 20000, workers=a.address)
+    y = c.submit(lambda x: x, x, workers=b.address)
+    yield y
+    yield b.heartbeat()
+    assert s.bandwidth < start  # we've learned that we're slower
+    assert b.latency
 
 
 @gen_cluster()
