@@ -1383,6 +1383,15 @@ def test_data_types(s):
     yield w.close()
 
 
+@gen_cluster(ncores=[])
+def test_local_dir(s):
+    with tmpfile() as fn:
+        with dask.config.set(temporary_directory=fn):
+            w = yield Worker(s.address)
+            assert w.local_dir.startswith(fn)
+            assert "dask-worker-space" in w.local_dir
+
+
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
 )

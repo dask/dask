@@ -282,7 +282,7 @@ class Worker(ServerNode):
         scheduler_file=None,
         ncores=None,
         loop=None,
-        local_dir="dask-worker-space",
+        local_dir=None,
         services=None,
         service_ports=None,
         service_kwargs=None,
@@ -447,6 +447,12 @@ class Worker(ServerNode):
         self.extensions = dict()
         if silence_logs:
             silence_logging(level=silence_logs)
+
+        if local_dir is None:
+            local_dir = dask.config.get("temporary-directory") or os.getcwd()
+            if not os.path.exists(local_dir):
+                os.mkdir(local_dir)
+            local_dir = os.path.join(local_dir, "dask-worker-space")
 
         with warn_on_duration(
             "1s",
