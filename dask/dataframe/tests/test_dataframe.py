@@ -384,8 +384,8 @@ def test_describe_empty_tdigest():
 
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(pd.DataFrame({"A": [None, None]}), 2)
-    df_len0 = pd.DataFrame({"A": [], "B":[]})
-    ddf_len0 = dd.from_pandas(pd.DataFrame({"A": [], "B":[]}), 2)
+    df_len0 = pd.DataFrame({"A": []})
+    ddf_len0 = dd.from_pandas(df_len0, 2)
     ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
 
     assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())

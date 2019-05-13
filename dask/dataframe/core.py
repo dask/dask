@@ -1626,7 +1626,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         colname = data._meta.name if isinstance(data._meta, pd.Series) else None
 
-        name = 'describe-numeric--' + tokenize(data, split_every)
+        name = 'describe-numeric--' + tokenize(num, split_every)
         layer = {(name, 0): (methods.describe_numeric_aggregate, stats_names, colname, is_timedelta_column)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = num._meta.describe()

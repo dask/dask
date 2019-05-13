@@ -163,6 +163,8 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     part1 = typ([count, mean, std, min],
                 index=['count', 'mean', 'std', 'min'])
     q.index = ['{0:g}%'.format(l * 100) for l in q.index.tolist()]
+    if isinstance(q, pd.Series) and typ == pd.DataFrame:
+        q = q.to_frame()
     part3 = typ([max], index=['max'])
 
     result = pd.concat([part1, q, part3], **concat_kwargs)
