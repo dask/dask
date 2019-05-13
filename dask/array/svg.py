@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import math
+import re
+
+import numpy as np
 
 
 def svg(chunks, size=200, **kwargs):
@@ -29,15 +31,15 @@ def svg(chunks, size=200, **kwargs):
     elif len(chunks) == 3:
         return svg_3d(chunks, size=size, **kwargs)
     else:
-        raise NotImplementedError("Can't generate SVG for greater than 3 dimensions")
+        return svg_nd(chunks, size=size, **kwargs)
 
 
 text_style = 'font-size="1.0rem" font-weight="100" text-anchor="middle"'
 
 
-def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200):
+def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
     shape = tuple(map(sum, chunks))
-    sizes = draw_sizes(shape, size=size)
+    sizes = sizes or draw_sizes(shape, size=size)
     y, x = grid_points(chunks, sizes)
 
     lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, offset=offset, skew=skew)
@@ -65,15 +67,16 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200):
     return header + "\n".join(lines + text) + footer
 
 
-def svg_3d(chunks, size=200):
+def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     shape = tuple(map(sum, chunks))
-    sizes = draw_sizes(shape, size=size)
+    sizes = sizes or draw_sizes(shape, size=size)
     x, y, z = grid_points(chunks, sizes)
+    ox, oy = offset
 
-    xy, (mnx, mxx, mny, mxy) = svg_grid( x / 1.7, y, offset=(10, 0), skew=(1, 0))
+    xy, (mnx, mxx, mny, mxy) = svg_grid( x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0))
 
-    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, offset=(10, 0), skew=(0, 1))
-    zy, (min_z, max_z, min_y, max_y) = svg_grid(z, y, offset=(max_x + 10, max_x), skew=(0, 0))
+    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, offset=(ox + 10, oy + 0), skew=(0, 1))
+    zy, (min_z, max_z, min_y, max_y) = svg_grid(z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0))
 
     header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
         max_z + 50,
@@ -113,6 +116,41 @@ def svg_3d(chunks, size=200):
     ]
 
     return header + "\n".join(xy + zx + zy + text) + footer
+
+
+def svg_nd(chunks, size=200):
+    if len(chunks) % 3 == 1:
+        chunks = ((1,),) + chunks
+    shape = tuple(map(sum, chunks))
+    sizes = draw_sizes(shape, size=size)
+
+    chunks2 = chunks
+    sizes2 = sizes
+    out = []
+    left = 0
+    total_height = 0
+    while chunks2:
+        n = len(chunks2) % 3 or 3
+        o = svg(chunks2[:n], sizes=sizes2[:n], offset=(left, 0))
+        chunks2 = chunks2[n:]
+        sizes2 = sizes2[n:]
+
+        lines = o.split('\n')
+        header = lines[0]
+        height = float(re.search(r'height="(\d*\.?\d*)"', header).groups()[0])
+        total_height = max(total_height, height)
+        width = float(re.search(r'width="(\d*\.?\d*)"', header).groups()[0])
+        left += width + 10
+        o = '\n'.join(lines[1:-1])  # remove header and footer
+
+        out.append(o)
+
+    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
+        left,
+        total_height,
+    )
+    footer = "\n</svg>"
+    return header + '\n\n'.join(out) + footer
 
 
 def svg_lines(x1, y1, x2, y2):
@@ -187,7 +225,7 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     return h_lines + v_lines + rect, (min_x, max_x, min_y, max_y)
 
 
-def svg_1d(chunks, **kwargs):
+def svg_1d(chunks, sizes=None, **kwargs):
     return svg_2d(((1,),) + chunks, **kwargs)
 
 

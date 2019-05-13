@@ -13,6 +13,10 @@ def test_basic():
     parses(da.ones(10).to_svg())
     parses(da.ones((10, 10)).to_svg())
     parses(da.ones((10, 10, 10)).to_svg())
+    parses(da.ones((10, 10, 10, 10)).to_svg())
+    parses(da.ones((10, 10, 10, 10, 10)).to_svg())
+    parses(da.ones((10, 10, 10, 10, 10, 10)).to_svg())
+    parses(da.ones((10, 10, 10, 10, 10, 10, 10)).to_svg())
 
 
 def test_repr_html():
@@ -26,9 +30,6 @@ def test_repr_html():
 def test_errors():
     with pytest.raises(NotImplementedError):
         assert da.ones(10)[:0].to_svg()
-
-    with pytest.raises(NotImplementedError):
-        assert da.ones((10, 10, 10, 10)).to_svg()
 
     with pytest.raises(NotImplementedError):
         x = da.ones(10)
@@ -62,3 +63,8 @@ def test_draw_sizes():
     assert b > c
     assert a < b * 5
     assert b < c * 5
+
+
+def test_3d():
+    text = da.ones((10, 10, 10, 10, 10)).to_svg()
+    assert text.count("<svg" ) == 1
