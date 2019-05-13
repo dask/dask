@@ -10,12 +10,8 @@ from .utils import IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
-from ..utils import skip_doctest, funcname
-try:
-    from ..dataframe.utils import is_dataframe_like
-except ImportError:
-    def is_dataframe_like(df):
-        return False
+from ..utils import (skip_doctest, funcname,
+                     is_dataframe_like, is_series_like, is_index_like)
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -34,8 +30,10 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
+            is_dataframe = (is_dataframe_like(dsk[0]) or is_series_like(dsk[0]) or
+                            is_index_like(dsk[0]))
             if (array_wrap and
-                    (is_dataframe_like(dsk[0]) or not IS_NEP18_ACTIVE)):
+                    (is_dataframe or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
