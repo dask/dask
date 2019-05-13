@@ -399,7 +399,7 @@ def map_varying(itemslists):
     def apply(func, *args, **kwargs):
         return func(*args, **kwargs)
 
-    return apply, map(varying, itemslists)
+    return apply, list(map(varying, itemslists))
 
 
 @gen.coroutine

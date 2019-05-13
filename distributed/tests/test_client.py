@@ -5,7 +5,6 @@ from operator import add
 from collections import deque
 from concurrent.futures import CancelledError
 import gc
-import itertools
 import logging
 import os
 import pickle
@@ -52,7 +51,7 @@ from distributed.client import (
     futures_of,
     temp_default_client,
 )
-from distributed.compatibility import PY3, Iterator
+from distributed.compatibility import PY3
 
 from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
@@ -1321,104 +1320,6 @@ def test_directed_scatter_sync(c, s, a, b, loop):
     assert len(has_what[a["address"]]) == 0
 
 
-def test_iterator_scatter(c):
-    aa = c.scatter([1, 2, 3])
-    assert [1, 2, 3] == c.gather(aa)
-
-    g = (i for i in range(10))
-    futures = c.scatter(g)
-    assert isinstance(futures, Iterator)
-
-    a = next(futures)
-    assert c.gather(a) == 0
-
-    futures = list(futures)
-    assert len(futures) == 9
-    assert c.gather(futures) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
-
-
-def test_queue_scatter(c):
-    from distributed.compatibility import Queue
-
-    q = Queue()
-    for d in range(10):
-        q.put(d)
-
-    futures = c.scatter(q)
-    assert isinstance(futures, Queue)
-    a = futures.get()
-    assert c.gather(a) == 0
-
-
-def test_queue_scatter_gather_maxsize(c):
-    from distributed.compatibility import Queue
-
-    q = Queue(maxsize=3)
-    out = c.scatter(q, maxsize=10)
-    assert out.maxsize == 10
-    local = c.gather(q)
-    assert not local.maxsize
-
-    q = Queue()
-    out = c.scatter(q)
-    assert not out.maxsize
-    local = c.gather(out, maxsize=10)
-    assert local.maxsize == 10
-
-    q = Queue(maxsize=3)
-    out = c.scatter(q)
-    assert not out.maxsize
-
-
-def test_queue_gather(c):
-    from distributed.compatibility import Queue
-
-    q = Queue()
-
-    qin = list(range(10))
-    for d in qin:
-        q.put(d)
-
-    futures = c.scatter(q)
-    assert isinstance(futures, Queue)
-
-    ff = c.gather(futures)
-    assert isinstance(ff, Queue)
-
-    qout = []
-    for f in range(10):
-        qout.append(ff.get())
-    assert qout == qin
-
-
-@pytest.mark.skip(reason="intermittent blocking failures")
-def test_iterator_gather(c, c2):
-    i_in = list(range(10))
-
-    g = (d for d in i_in)
-    futures = c.scatter(g)
-    assert isinstance(futures, Iterator)
-
-    ff = c.gather(futures)
-    assert isinstance(ff, Iterator)
-
-    i_out = list(ff)
-    assert i_out == i_in
-
-    i_in = ["a", "b", "c", StopIteration("f"), StopIteration, "d", "c"]
-
-    g = (d for d in i_in)
-    futures = c.scatter(g)
-
-    ff = c.gather(futures)
-    i_out = list(ff)
-    assert i_out[:3] == i_in[:3]
-    # This is because StopIteration('f') != StopIteration('f')
-    assert isinstance(i_out[3], StopIteration)
-    assert i_out[3].args == i_in[3].args
-    assert i_out[4:] == i_in[4:]
-
-
 @gen_cluster(client=True)
 def test_scatter_direct(c, s, a, b):
     future = yield c.scatter(123, direct=True)
@@ -2371,109 +2272,6 @@ def test_traceback_clean(c, s, a, b):
             assert "scheduler" not in tb.tb_frame.f_code.co_filename
             assert "worker" not in tb.tb_frame.f_code.co_filename
             tb = tb.tb_next
-
-
-@gen_cluster(client=True)
-def test_map_queue(c, s, a, b):
-    from distributed.compatibility import Queue, isqueue
-
-    q_1 = Queue(maxsize=2)
-    q_2 = c.map(inc, q_1)
-    assert isqueue(q_2)
-    assert not q_2.maxsize
-    q_3 = c.map(double, q_2, maxsize=3)
-    assert isqueue(q_3)
-    assert q_3.maxsize == 3
-    q_4 = yield c._gather(q_3)
-    assert isqueue(q_4)
-
-    q_1.put(1)
-
-    f = q_4.get()
-    assert isinstance(f, Future)
-    result = yield f
-    assert result == (1 + 1) * 2
-
-
-@pytest.mark.skipif(
-    sys.version_info >= (3, 7), reason="replace StopIteration with return"
-)
-@gen_cluster(client=True)
-def test_map_iterator_with_return(c, s, a, b):
-    def g():
-        yield 1
-        yield 2
-        raise StopIteration(3)  # py2.7 compat.
-
-    f1 = c.map(lambda x: x, g())
-    assert isinstance(f1, Iterator)
-
-    start = time()  # ensure that we compute eagerly
-    while not s.tasks:
-        yield gen.sleep(0.01)
-        assert time() < start + 5
-
-    g1 = g()
-    try:
-        while True:
-            f = next(f1)
-            n = yield f
-            assert n == next(g1)
-    except StopIteration as e:
-        with pytest.raises(StopIteration) as exc_info:
-            next(g1)
-        assert e.args == exc_info.value.args
-
-
-@gen_cluster(client=True)
-def test_map_iterator(c, s, a, b):
-    x = iter([1, 2, 3])
-    y = iter([10, 20, 30])
-    f1 = c.map(add, x, y)
-    assert isinstance(f1, Iterator)
-
-    start = time()  # ensure that we compute eagerly
-    while not s.tasks:
-        yield gen.sleep(0.01)
-        assert time() < start + 5
-
-    f2 = c.map(double, f1)
-    assert isinstance(f2, Iterator)
-
-    future = next(f2)
-    result = yield future
-    assert result == (1 + 10) * 2
-    futures = list(f2)
-    results = []
-    for f in futures:
-        r = yield f
-        results.append(r)
-    assert results == [(2 + 20) * 2, (3 + 30) * 2]
-
-    items = enumerate(range(10))
-    futures = c.map(lambda x: x, items)
-    assert isinstance(futures, Iterator)
-
-    result = yield next(futures)
-    assert result == (0, 0)
-    futures_l = list(futures)
-    results = []
-    for f in futures_l:
-        r = yield f
-        results.append(r)
-    assert results == [(i, i) for i in range(1, 10)]
-
-
-@gen_cluster(client=True)
-def test_map_infinite_iterators(c, s, a, b):
-    futures = c.map(add, [1, 2], itertools.repeat(10))
-    assert len(futures) == 2
-
-
-def test_map_iterator_sync(c):
-    items = enumerate(range(10))
-    futures = c.map(lambda x: x, items)
-    next(futures).result() == (0, 0)
 
 
 @gen_cluster(client=True)
@@ -3557,7 +3355,7 @@ def test_get_stops_work_after_error(c):
 
 
 def test_as_completed_list(c):
-    seq = c.map(inc, iter(range(5)))
+    seq = c.map(inc, range(5))
     seq2 = list(as_completed(seq))
     assert set(c.gather(seq2)) == {1, 2, 3, 4, 5}
 
