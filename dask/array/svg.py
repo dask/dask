@@ -172,25 +172,12 @@ def grid_points(chunks, sizes):
     return points
 
 
-def draw_sizes(shape, max_size=400):
-    """
-
-    Examples
-    --------
-    >>> draw_sizes((10, 10), max_size=100)
-    (100, 100)
-    >>> draw_sizes((1000,), max_size=100)
-    (100,)
-    >>> draw_sizes((1000, 1), max_size=100)
-    (100,, 10)
-    >>> draw_sizes((1000000, 1000, 1), max_size=100)
-    (100, 2, 1)
-    """
+def draw_sizes(shape, max_size=120):
+    """ Get size in pixels for all dimensions """
     mx = max(shape)
-    size = 200
     ratios = [mx / d for d in shape]
     ratios = [ratio_response(r) for r in ratios]
-    return tuple(size / r for r in ratios)
+    return tuple(max_size/ r for r in ratios)
 
 
 def ratio_response(x):
