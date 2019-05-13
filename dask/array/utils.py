@@ -73,7 +73,7 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
+def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwargs):
     a_original = a
     b_original = b
     if isinstance(a, Array):
@@ -125,20 +125,21 @@ def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
 
     try:
         assert a.shape == b.shape
-        if hasattr(a, '_meta') and hasattr(b, '_meta'):
-            assert a._meta.ndim == b._meta.ndim
-        if hasattr(a_original, '_meta'):
-            assert a_original._meta.ndim == a.ndim
-            if a_meta is not None:
-                assert type(a_original._meta) == type(a_meta)
-                if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
-                    assert type(a_meta) == type(a_computed)
-        if hasattr(b_original, '_meta'):
-            assert b_original._meta.ndim == b.ndim
-            if b_meta is not None:
-                assert type(b_original._meta) == type(b_meta)
-                if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
-                    assert type(b_meta) == type(b_computed)
+        if check_meta:
+            if hasattr(a, '_meta') and hasattr(b, '_meta'):
+                assert a._meta.ndim == b._meta.ndim
+            if hasattr(a_original, '_meta'):
+                assert a_original._meta.ndim == a.ndim
+                if a_meta is not None:
+                    assert type(a_original._meta) == type(a_meta)
+                    if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
+                        assert type(a_meta) == type(a_computed)
+            if hasattr(b_original, '_meta'):
+                assert b_original._meta.ndim == b.ndim
+                if b_meta is not None:
+                    assert type(b_original._meta) == type(b_meta)
+                    if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
+                        assert type(b_meta) == type(b_computed)
         assert allclose(a, b, **kwargs)
         return True
     except TypeError:
