@@ -574,7 +574,11 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     chunks = left_chunks + right_shape
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    return Array(graph, name, shape=shape, chunks=chunks, dtype=a.dtype)
+    if hasattr(a, '_meta'):
+        meta = a._meta[tuple(slice(0, 0, None) for _ in range(a.ndim))].reshape((0, ) * len(shape))
+    else:
+        meta = a[tuple(slice(0, 0, None) for _ in range(a.ndim))].reshape((0, ) * len(shape))
+    return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
 
 
 def triu(m, k=0):
