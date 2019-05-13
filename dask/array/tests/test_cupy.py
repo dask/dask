@@ -2,7 +2,10 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+
+missing_arrfunc_cond = not IS_NEP18_ACTIVE
+missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
 cupy = pytest.importorskip('cupy')
 
@@ -60,3 +63,17 @@ def test_basic(func):
     if ddc.shape:
         result = ddc.compute(scheduler='single-threaded')
         assert isinstance(result, cupy.ndarray)
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+def test_diag():
+    v = cupy.arange(11)
+    assert_eq(da.diag(v), cupy.diag(v))
+
+    v = v + v + 3
+    darr = da.diag(v)
+    cupyarr = cupy.diag(v)
+    assert_eq(darr, cupyarr)
+
+    x = cupy.arange(64).reshape((8, 8))
+    assert_eq(da.diag(x), cupy.diag(x))
