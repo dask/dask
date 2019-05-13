@@ -38,6 +38,9 @@ functions = [
     pytest.param(lambda x: x.round(1),
                  marks=pytest.mark.xfail(reason="cupy doesn't support round")),
     lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
+    # Rechunking here is required, see https://github.com/dask/dask/issues/2561
+    lambda x: (x.rechunk(x.shape)).reshape((x.shape[1], x.shape[0], x.shape[2])),
+    lambda x: x.reshape((x.shape[0], x.shape[1], x.shape[2] / 2, x.shape[2] / 2)),
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
