@@ -81,7 +81,9 @@ def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
         adt = a.dtype
         if check_graph:
             _check_dsk(a.dask)
+        a_meta = getattr(a, '_meta', None)
         a = a.compute(scheduler='sync')
+        a_computed = a
         if hasattr(a, 'todense'):
             a = a.todense()
         if not hasattr(a, 'dtype'):
@@ -100,7 +102,9 @@ def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
         bdt = b.dtype
         if check_graph:
             _check_dsk(b.dask)
+        b_meta = getattr(b, '_meta', None)
         b = b.compute(scheduler='sync')
+        b_computed = b
         if not hasattr(b, 'dtype'):
             b = np.array(b, dtype='O')
         if hasattr(b, 'todense'):
@@ -123,6 +127,18 @@ def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
         assert a.shape == b.shape
         if hasattr(a, '_meta') and hasattr(b, '_meta'):
             assert a._meta.ndim == b._meta.ndim
+        if hasattr(a_original, '_meta'):
+            assert a_original._meta.ndim == a.ndim
+            if a_meta is not None:
+                assert type(a_original._meta) == type(a_meta)
+                if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
+                    assert type(a_meta) == type(a_computed)
+        if hasattr(b_original, '_meta'):
+            assert b_original._meta.ndim == b.ndim
+            if b_meta is not None:
+                assert type(b_original._meta) == type(b_meta)
+                if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
+                    assert type(b_meta) == type(b_computed)
         assert allclose(a, b, **kwargs)
         return True
     except TypeError:
