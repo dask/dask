@@ -78,7 +78,7 @@ Arrays
 `Chainer's CuPy <https://cupy.chainer.org/>`_ library provides a GPU
 accelerated NumPy-like library that interoperates nicely with Dask Array.
 
-If you have a cupy installed then you should be able to convert a NumPy-backed
+If you have CuPy installed then you should be able to convert a NumPy-backed
 Dask Array into a CuPy backed Dask Array as follows:
 
 .. code-block:: python
@@ -104,7 +104,10 @@ Some of these include:
 
 -  `Skorch <https://skorch.readthedocs.io/>`_
 -  `cuML <https://rapidsai.github.io/projects/cuml/en/latest/>`_
--  TODO (help?)
+-  `LightGBM <https://github.com/Microsoft/LightGBM>`_
+-  `XGBoost <https://xgboost.readthedocs.io/en/latest/>`_
+-  `Thunder SVM <https://github.com/Xtra-Computing/thundersvm>`_
+-  `Thunder GBM <https://github.com/Xtra-Computing/thundergbm>`_
 
 
 Setup
@@ -122,11 +125,12 @@ By default Dask allows as many tasks as you have CPU cores to run concurrently.
 However if your tasks primarily use a GPU then you probably want far fewer
 tasks running at once.  There are a few ways to limit parallelism here:
 
--  Limit the number of threads explicitly on your workers using the
-   ``--nthreads`` keyword in the CLI or the ``ncores=`` keyword in Python.
--  Use `worker resources <https://distributed.dask.org/en/latest/resources.html>`_ and tag certain
-   tasks as GPU tasks so that the scheduler and limit them, while leaving the
-   rest of your CPU cores for other work
+-   Limit the number of threads explicitly on your workers using the
+    ``--nthreads`` keyword in the CLI or the ``ncores=`` keyword the
+    Cluster constructor.
+-   Use `worker resources <https://distributed.dask.org/en/latest/resources.html>`_ and tag certain
+    tasks as GPU tasks so that the scheduler and limit them, while leaving the
+    rest of your CPU cores for other work
 
 Specifying GPUs per Machine
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -134,7 +138,7 @@ Specifying GPUs per Machine
 Some configurations may have many GPU devices per node.  Dask is often used to
 balance and coordinate work between these devices.
 
-In these situations it is common to start one Dask worker per device, an use
+In these situations it is common to start one Dask worker per device, and use
 the CUDA environment varible ``CUDA_VISIBLE_DEVICES`` to pin each worker to
 prefer one device.
 
@@ -146,6 +150,8 @@ prefer one device.
    CUDA_VISIBLE_DEVICES=2 dask-worker ...
    CUDA_VISIBLE_DEVICES=3 dask-worker ...
 
+The `Dask CUDA <https://github.com/rapidsai/dask-cuda>`_ project contains some
+convenience CLI and Python utilities to automate this process.
 
 Work in Progress
 ----------------
