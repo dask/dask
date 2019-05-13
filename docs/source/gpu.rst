@@ -89,7 +89,9 @@ Dask Array into a CuPy backed Dask Array as follows:
 
 CuPy is fairly mature and adheres closely to the NumPy API.  However, small
 differences do exist and these can cause Dask Array operations to function
-improperly.
+improperly. Check the
+`CuPy Reference Manual <https://docs-cupy.chainer.org/en/stable/reference/index.html>`_
+for API compatibility.
 
 
 Scikit-Learn
