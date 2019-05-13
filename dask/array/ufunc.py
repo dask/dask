@@ -12,9 +12,10 @@ from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import skip_doctest, funcname
 try:
-    from ..dataframe import core as ddcore
+    from ..dataframe.utils import is_dataframe_like
 except ImportError:
-    pass
+    def is_dataframe_like(df):
+        return False
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -33,12 +34,8 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            try:
-                is_dataframe = isinstance(dsk[0], ddcore._Frame)
-            except NameError:
-                is_dataframe = False
             if (array_wrap and
-                    (is_dataframe or not IS_NEP18_ACTIVE)):
+                    (is_dataframe_like(dsk[0]) or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
