@@ -1,6 +1,14 @@
 Changelog
 =========
 
+1.28.1 - 2019-05-13
+-------------------
+
+This is a small bugfix release due to a config change upstream.
+
+-  Use config accessor method for "scheduler-address" (#2676) `James Bourbeau`_
+
+
 1.28.0 - 2019-05-08
 -------------------
 
