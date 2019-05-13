@@ -66,7 +66,9 @@ Dask DataFrame to a cuDF-backed Dask DataFrame as follows:
    df = df.map_partitions(cudf.from_pandas)  # convert pandas partitions into cudf partitions
 
 However, cuDF does not support the entire Pandas interface, and so a variety of
-Dask DataFrame operations will not function properly.
+Dask DataFrame operations will not function properly. Check the 
+`cudf API Reference <https://rapidsai.github.io/projects/cudf/en/latest/api.html>`_
+for currently supported interface.
 
 
 Arrays
