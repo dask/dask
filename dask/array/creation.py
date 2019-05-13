@@ -465,7 +465,15 @@ def eye(N, chunks, M=None, k=0, dtype=float):
 @wraps(np.diag)
 def diag(v):
     name = 'diag-' + tokenize(v)
-    if isinstance(v, np.ndarray):
+
+    if hasattr(v, '_meta'):
+        meta = v._meta[tuple(slice(0, 0, None) for _ in range(v.ndim))]
+    else:
+        meta = v[tuple(slice(0, 0, None) for _ in range(v.ndim))]
+    meta = meta.reshape((0, 0)) if v.ndim == 1 else meta.reshape((0, ))
+
+    if (isinstance(v, np.ndarray) or
+            (hasattr(v, '__array_function__') and not isinstance(v, Array))):
         if v.ndim == 1:
             chunks = ((v.shape[0],), (v.shape[0],))
             dsk = {(name, 0, 0): (np.diag, v)}
@@ -474,7 +482,7 @@ def diag(v):
             dsk = {(name, 0): (np.diag, v)}
         else:
             raise ValueError("Array must be 1d or 2d only")
-        return Array(dsk, name, chunks, dtype=v.dtype)
+        return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
         raise TypeError("v must be a dask array or numpy array, "
                         "got {0}".format(type(v)))
@@ -483,7 +491,7 @@ def diag(v):
             dsk = {(name, i): (np.diag, row[i])
                    for i, row in enumerate(v.__dask_keys__())}
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-            return Array(graph, name, (v.chunks[0],), dtype=v.dtype)
+            return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
@@ -499,7 +507,7 @@ def diag(v):
                 dsk[key] = (np.zeros, (m, n))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-    return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
+    return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
 
 
 @wraps(np.diagonal)
