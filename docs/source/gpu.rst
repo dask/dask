@@ -133,7 +133,7 @@ tasks running at once.  There are a few ways to limit parallelism here:
     ``--nthreads`` keyword in the CLI or the ``ncores=`` keyword the
     Cluster constructor.
 -   Use `worker resources <https://distributed.dask.org/en/latest/resources.html>`_ and tag certain
-    tasks as GPU tasks so that the scheduler and limit them, while leaving the
+    tasks as GPU tasks so that the scheduler will limit them, while leaving the
     rest of your CPU cores for other work
 
 Specifying GPUs per Machine
