@@ -33,9 +33,9 @@ As a worked example, you may want to view this talk:
 High Level Collections
 ----------------------
 
-Dask can also help to scale out large scale array and data computations by
-combining the Dask collections Dask Array and Dask DataFrame, with a
-GPU-accelerated array or dataframe library.
+Dask can also help to scale out large array and dataframe computations by
+combining the Dask Array and DataFrame collections with a GPU-accelerated
+array or dataframe library.
 
 Recall that :doc:`Dask Array <array>` creates a large array out of many NumPy
 arrays and :doc:`Dask DataFrame <dataframe>` creates a large dataframe out of
