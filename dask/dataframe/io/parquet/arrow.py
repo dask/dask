@@ -186,11 +186,49 @@ class ArrowEngine(Engine):
         return delayed(writes)
 
     @staticmethod
+    def create_metadata(df, fs, path, append=False, partition_on=None,
+                        ignore_divisions=False, **kwargs):
+
+        fs.mkdirs(path)
+        if ignore_divisions:
+            raise NotImplementedError("`ignore_divisions` not implemented"
+                                      " for `engine='pyarrow'`")
+
+        object_encoding = kwargs.pop("object_encoding", "utf8")
+        if object_encoding == "infer" or (
+            isinstance(object_encoding,
+                       dict) and "infer" in object_encoding.values()
+        ):
+            raise ValueError(
+                '"infer" not allowed as object encoding, '
+                "because this required data in memory."
+            )
+
+        if append:
+            raise NotImplementedError("`append` not implemented for "
+                                      "`engine='pyarrow'`")
+
+        filenames = ["part.%i.parquet" % (i + 0) for i in
+                     range(df.npartitions)]
+
+        return None, filenames
+
+    @staticmethod
+    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        if parts:
+            metadata_path = fs.sep.join([path, '_common_metadata'])
+            # Get only arguments specified in the function
+            keywords = getargspec(pq.write_metadata).args
+            kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
+            with fs.open(metadata_path, "wb") as fil:
+                pq.write_metadata(parts[0][0], fil, **kwargs_meta)
+
+    @staticmethod
     def write_partition(
-        df, path, fs, filename, partition_on, metadata_path=None, **kwargs
+        df, path, fs, filename, partition_on, fmd=None, compression=None,
+        return_metadata=True, **kwargs
     ):
         t = pa.Table.from_pandas(df, preserve_index=False)
-
         if partition_on:
             pq.write_to_dataset(
                 t,
@@ -201,14 +239,10 @@ class ArrowEngine(Engine):
                 **kwargs
             )
         else:
-            with fs.open(filename, "wb") as fil:
-                pq.write_table(t, fil, **kwargs)
-
-        if metadata_path is not None:
-            # Get only arguments specified in the function
-            keywords = getargspec(pq.write_metadata).args
-            kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
-            with fs.open(metadata_path, "wb") as fil:
-                pq.write_metadata(t.schema, fil, **kwargs_meta)
-
-        return filename
+            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
+                pq.write_table(t, fil, compression=compression, **kwargs)
+        # Return the schema needed to write the metadata
+        if return_metadata:
+            return [t.schema]
+        else:
+            return []

@@ -102,6 +102,7 @@ write_read_engines_xfail = write_read_engines(xfail_pyarrow_fastparquet=pyarrow_
 
 @write_read_engines_xfail
 def test_local(tmpdir, write_engine, read_engine):
+
     tmp = str(tmpdir)
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'i64': np.arange(1000, dtype=np.int64),

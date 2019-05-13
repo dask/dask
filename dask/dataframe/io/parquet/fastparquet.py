@@ -186,7 +186,8 @@ class FastParquetEngine(Engine):
 
     @staticmethod
     def create_metadata(df, fs, path, append=False, partition_on=None,
-                        **kwargs):
+                        ignore_divisions=False, **kwargs):
+
         fs.mkdirs(path)
         sep = fs.sep
 
@@ -213,7 +214,7 @@ class FastParquetEngine(Engine):
         if append:
             if pf.file_scheme not in ["hive", "empty", "flat"]:
                 raise ValueError(
-                    "Requested file scheme is hive, " 
+                    "Requested file scheme is hive, "
                     "but existing file scheme is not."
                 )
             elif (set(pf.columns) != set(df.columns) - set(partition_on)) or (
@@ -281,6 +282,7 @@ class FastParquetEngine(Engine):
         return_metadata=True, **kwargs
     ):
         fmd = copy.copy(fmd)
+
         if not len(df):
             # Write nothing for empty partitions
             rgs = []

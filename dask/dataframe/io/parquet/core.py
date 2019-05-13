@@ -221,6 +221,7 @@ def to_parquet(
     compression="default",
     write_index=True,
     append=False,
+    ignore_divisions=False,
     partition_on=None,
     storage_options=None,
     write_metadata_file=True,
@@ -254,6 +255,9 @@ def to_parquet(
         If False (default), construct data-set from scratch. If True, add new
         row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
+    ignore_divisions : bool, optional
+        If False (default) raises error when previous divisions overlap with
+        the new appended divisions. Ignored if append=False.
     partition_on : list, optional
         Construct directory-based partitioning by splitting on these fields'
         values. Each dask partition will result in one or more datafiles,
@@ -309,13 +313,12 @@ def to_parquet(
 
     # create parquet metadata, includes loading of existing stuff is appending
     meta, filenames = engine.create_metadata(df, fs, path, append=append,
-                                             partition_on=partition_on)
+             ignore_divisions=ignore_divisions, partition_on=partition_on)
 
     # write parts
     dwrite = delayed(engine.write_partition)
     parts = [dwrite(
-        d, path, fs, filename, partition_on, with_metadata=write_metadata_file,
-        fmd=meta, **kwargs)
+        d, path, fs, filename, partition_on, fmd=meta, **kwargs)
         for d, filename in zip(df.to_delayed(), filenames)]
 
     # single task to complete
