@@ -1,13 +1,26 @@
+import sys
+import warnings
 import pytest
 from toolz import merge
 
 from dask.compatibility import Mapping
-from dask.sharedict import ShareDict
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", UserWarning)
+    from dask.sharedict import ShareDict
 
 
 a = {'x': 1, 'y': 2}
 b = {'z': 3}
 c = {'w': 2}
+
+
+def test_import_warns():
+    # remove cached import
+    sys.modules.pop('dask.sharedict', None)
+    with pytest.warns(UserWarning):
+        import dask.sharedict  # noqa
+
 
 
 def test_core():
