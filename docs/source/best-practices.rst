@@ -29,7 +29,7 @@ want to first try some alternatives:
 
 -   **Better file formats**:  Efficient binary formats that support random
     access can often help you manage larger-than-memory datasets efficiently and
-    simply.
+    simply.  See the `Store Data Efficiently`_ section below.
 
 -   **Compiled code**:  Compiling your Python code with Numba or Cython might
     make parallelism unnecessary.  Or you might use the multi-core parallelism
@@ -204,11 +204,16 @@ line with how you plan to compute on it.
 
 For example ...
 
--  For compression you'll probably find that you drop gzip and bz2, and embrace
-   newer systems like lz4, snappy, and Z-Standard that provide better
-   performance and random access.
--  For storage formats you may find that you want self-describing formats that
-   are optimized for random access, metadata storage, and binary encoding like
-   Parquet, ORC, Zarr, HDF5, GeoTIFF and so on
--  When working on the cloud you may find that some older formats like HDF5 may
-   not work well
+-   For compression you'll probably find that you drop gzip and bz2, and embrace
+    newer systems like lz4, snappy, and Z-Standard that provide better
+    performance and random access.
+-   For storage formats you may find that you want self-describing formats that
+    are optimized for random access, metadata storage, and binary encoding like
+    Parquet, ORC, Zarr, HDF5, GeoTIFF and so on
+-   When working on the cloud you may find that some older formats like HDF5 may
+    not work well
+-   You may want to partition or chunk your data in ways that align well to
+    common queries.  In Dask DataFrame this might mean choosing a column to
+    sort by for fast selection and joins.  For Dask dataframe this might mean
+    choosing chunk sizes that are aligned with your access patterns and
+    algorithms.
