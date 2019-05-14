@@ -28,6 +28,21 @@ def normalize_to_array(x):
         return x
 
 
+def normalize_meta(x, ndim, dtype=None):
+    if ndim > x.ndim:
+        meta = x[(Ellipsis, ) + tuple(None for _ in range(ndim - x.ndim))]
+        meta = meta[tuple(slice(0, 0, None) for _ in range(meta.ndim))]
+    elif ndim < x.ndim:
+        meta = np.sum(x, axis=tuple(d for d in range((x.ndim - ndim))))
+    else:
+        meta = x
+
+    if dtype:
+        meta = meta.astype(dtype)
+
+    return meta
+
+
 def allclose(a, b, equal_nan=False, **kwargs):
     a = normalize_to_array(a)
     b = normalize_to_array(b)
