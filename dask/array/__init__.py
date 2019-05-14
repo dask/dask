@@ -37,8 +37,8 @@ try:
                              nanmax, nanargmin, nanargmax,
                              cumsum, cumprod,
                              topk, argtopk,
-                             reduction,
-                             nanprod, nancumprod, nancumsum)
+                             nanprod, nancumprod, nancumsum,
+                             reduction)
     from .percentile import percentile
     from . import ma
     from . import random, linalg, overlap, fft, backends
