@@ -16,7 +16,7 @@ from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
-from .utils import AxisError
+from .utils import AxisError, numpy_like_safe
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -620,13 +620,15 @@ def triu(m, k=0):
     for i in range(rdim):
         for j in range(hdim):
             if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(numpy_like_safe,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     np.zeros, np.zeros_like, m._meta)
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m._meta)
 
 
 def tril(m, k=0):
@@ -672,9 +674,11 @@ def tril(m, k=0):
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
-                dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(numpy_like_safe, np.zeros, np.zeros_like,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m._meta)
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):

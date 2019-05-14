@@ -166,6 +166,21 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return lambda x: x
 
 
+def numpy_like_safe(func, func_like, a, shape=None, **kwargs):
+    """
+    Return func_like(a, shape=shape, **kwargs) if the shape argument
+    is supported (requires NumPy >= 1.17), otherwise falls back to
+    using the old behavior, returning func(shape).
+    """
+    if shape:
+        try:
+            return func_like(a, shape=shape, **kwargs)
+        except TypeError:
+            return func(shape, **kwargs)
+    else:
+        return func(shape, **kwargs)
+
+
 def validate_axis(axis, ndim):
     """ Validate an input to axis= keywords """
     if isinstance(axis, (tuple, list)):

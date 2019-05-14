@@ -82,6 +82,7 @@ def test_diag():
     assert_eq(da.diag(x), cupy.diag(x))
 
 
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 def test_diagonal():
     v = cupy.arange(11)
     with pytest.raises(ValueError):
@@ -130,3 +131,30 @@ def test_diagonal():
     assert_eq(da.diagonal(v, -1), np.diagonal(v, -1))
     # Positional arguments
     assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
+
+
+@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
+@pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+def test_tril_triu():
+    A = cupy.random.randn(20, 20)
+    for chk in [5, 4]:
+        dA = da.from_array(A, (chk, chk), asarray=False)
+
+        assert np.allclose(da.triu(dA).compute(), np.triu(A))
+        assert np.allclose(da.tril(dA).compute(), np.tril(A))
+
+        for k in [-25, -20, -19, -15, -14, -9, -8, -6, -5, -1,
+                  1, 4, 5, 6, 8, 10, 11, 15, 16, 19, 20, 21]:
+            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
+            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+
+
+@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
+@pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+def test_tril_triu_non_square_arrays():
+    A = cupy.random.randint(0, 11, (30, 35))
+    dA = da.from_array(A, chunks=(5, 5), asarray=False)
+    assert_eq(da.triu(dA), np.triu(A))
+    assert_eq(da.tril(dA), np.tril(A))
