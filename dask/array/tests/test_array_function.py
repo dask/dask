@@ -60,14 +60,18 @@ def test_array_notimpl_function_dask(func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-def test_array_function_sparse_transpose():
+@pytest.mark.parametrize('func', [
+    lambda x: np.real(x),
+    lambda x: np.imag(x),
+    lambda x: np.transpose(x)])
+def test_array_function_sparse(func):
     sparse = pytest.importorskip('sparse')
     x = da.random.random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
 
     y = x.map_blocks(sparse.COO)
 
-    assert_eq(np.transpose(x), np.transpose(y))
+    assert_eq(func(x), func(y))
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

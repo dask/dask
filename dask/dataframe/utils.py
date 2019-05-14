@@ -27,6 +27,9 @@ from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
 from ..local import get_sync
 from ..utils import asciitable, is_arraylike, Dispatch
+from ..utils import is_dataframe_like as dask_is_dataframe_like
+from ..utils import is_series_like as dask_is_series_like
+from ..utils import is_index_like as dask_is_index_like
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -501,28 +504,15 @@ def _nonempty_series(s, idx=None):
 
 
 def is_dataframe_like(df):
-    """ Looks like a Pandas DataFrame """
-    typ = type(df)
-    return (all(hasattr(typ, name)
-                for name in ('groupby', 'head', 'merge', 'mean')) and
-            all(hasattr(df, name) for name in ('dtypes',)) and not
-            any(hasattr(typ, name)
-                for name in ('value_counts', 'dtype')))
+    return dask_is_dataframe_like(df)
 
 
 def is_series_like(s):
-    """ Looks like a Pandas Series """
-    typ = type(s)
-    return (all(hasattr(typ, name) for name in ('groupby', 'head', 'mean')) and
-            all(hasattr(s, name) for name in ('dtype', 'name')) and
-            'index' not in typ.__name__.lower())
+    return dask_is_series_like(s)
 
 
 def is_index_like(s):
-    """ Looks like a Pandas Index """
-    typ = type(s)
-    return (all(hasattr(s, name) for name in ('name', 'dtype'))
-            and 'index' in typ.__name__.lower())
+    return dask_is_index_like(s)
 
 
 def check_meta(x, meta, funcname=None, numeric_equal=True):

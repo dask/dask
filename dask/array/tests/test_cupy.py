@@ -42,7 +42,17 @@ functions = [
     lambda x: x.rechunk((2, 2, 1)),
     pytest.param(lambda x: da.einsum("ijk,ijk", x, x),
                  marks=pytest.mark.xfail(
-                     reason='depends on resolution of https://github.com/numpy/numpy/issues/12974'))
+                     reason='depends on resolution of https://github.com/numpy/numpy/issues/12974')),
+    lambda x: np.isreal(x),
+    lambda x: np.iscomplex(x),
+    lambda x: np.isneginf(x),
+    lambda x: np.isposinf(x),
+    lambda x: np.real(x),
+    lambda x: np.imag(x),
+    lambda x: np.fix(x),
+    lambda x: np.i0(x.reshape((24,))),
+    lambda x: np.sinc(x),
+    lambda x: np.nan_to_num(x),
 ]
 
 
