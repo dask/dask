@@ -176,13 +176,16 @@ def test_unquote():
     f = lambda x: (dict, [list(pair) for pair in x.items()], {})
 
     t = {'a': 1, 'b': 2, 'c': 3}
-    assert unquote(f(t)) == t
-    t = {'a': [1, 2, 3], 'b': 2, 'c': 3}
-    assert unquote(f(t)) == t
-    t = [1, 2, 3]
+    task_dask = (dict, [['a', 1], ['b', 2], ['c', 3]])
+    assert unquote(task_dask) == t
 
-    f = lambda x: x
-    assert unquote(f(t)) == t
+    t = {'a': [1, 2, 3], 'b': 2, 'c': 3}
+    task_dask = (dict, [['a', [1, 2, 3]], ['b', 2], ['c', 3]])
+    assert unquote(task_dask) == t
+
+    t = [1, 2, 3]
+    task_dask = [1, 2, 3]
+    assert unquote(task_dask) == t
 
 
 @pytest.mark.skipif("not bokeh")
