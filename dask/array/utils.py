@@ -127,7 +127,7 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
         assert a.shape == b.shape
         if check_meta:
             if hasattr(a, '_meta') and hasattr(b, '_meta'):
-                assert a._meta.ndim == b._meta.ndim
+                assert_eq(a._meta, b._meta)
             if hasattr(a_original, '_meta'):
                 assert a_original._meta.ndim == a.ndim
                 if a_meta is not None:
