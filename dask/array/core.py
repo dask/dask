@@ -2812,13 +2812,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
 
-    seq_dtypes = [a.dtype for a in seq]
-    if len(set(seq_dtypes)) > 1:
-        dt = reduce(np.promote_types, seq_dtypes)
-        seq = [x.astype(dt) for x in seq]
-    else:
-        dt = seq_dtypes[0]
-
     names = [a.name for a in seq]
 
     name = 'concatenate-' + tokenize(names, axis)
@@ -2831,7 +2824,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     dsk = dict(zip(keys, values))
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
 
-    return Array(graph, name, chunks, meta=meta.astype(dt))
+    return Array(graph, name, chunks, meta=meta)
 
 
 def load_store_chunk(x, out, index, lock, return_stored, load_stored):
