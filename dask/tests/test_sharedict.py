@@ -15,14 +15,6 @@ b = {'z': 3}
 c = {'w': 2}
 
 
-def test_import_warns():
-    # remove cached import
-    sys.modules.pop('dask.sharedict', None)
-    with pytest.warns(UserWarning):
-        import dask.sharedict  # noqa
-
-
-
 def test_core():
     s = ShareDict()
     assert isinstance(s, Mapping)
