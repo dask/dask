@@ -1049,7 +1049,7 @@ class Array(DaskMethodsMixin):
             '  <tbody>',
             '    <tr><th> Bytes </th><td> %s </td> <td> %s </td></tr>' % (nbytes, cbytes),
             '    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>' % (str(self.shape), str(self.chunksize)),
-            '    <tr><th> Count </th><td> %d Tasks </td><td> %d chunks </td></tr>' % (
+            '    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>' % (
                 len(self.__dask_graph__()), self.npartitions),
             '    <tr><th> DType </th><td> %s </td><td></td></tr>' % self.dtype,
             '  </tbody>',
