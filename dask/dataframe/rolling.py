@@ -114,10 +114,10 @@ def map_overlap(func, df, before, after, *args, **kwargs):
 
         if (before > deltas).any():
             pt_z = divs[0]
-            for i in range(df.npartitions-1):
+            for i in range(df.npartitions - 1):
                 # Select all indexes of relevant partitions between the current partition and
                 # the partition with the highest division outside the rolling window (before)
-                pt_i = divs[i+1]
+                pt_i = divs[i + 1]
 
                 # lower-bound the search to the first division
                 lb = max(pt_i - before, pt_z)
@@ -132,7 +132,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                 # particularly for large divisions tables
                 #j = divs[divs<=lb].idxmax()
 
-                dsk.update({(name_a, i): (_multi_tail_timedelta, [(df_name, k) for k in range(j, i+1)],
+                dsk.update({(name_a, i): (_multi_tail_timedelta, [(df_name, k) for k in range(j, i + 1)],
                                           (df_name, i + 1), before)})
 
             prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
