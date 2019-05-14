@@ -225,7 +225,7 @@ def blockwise(func, out_ind, *args, **kwargs):
             meta = arrays[0]._meta[tuple(slice(0, 0, None)
                                    for _ in range(ndim))]
         return Array(graph, out, chunks, meta=meta.astype(dtype))
-    except:
+    except Exception:
         return Array(graph, out, chunks, dtype=dtype)
 
 
