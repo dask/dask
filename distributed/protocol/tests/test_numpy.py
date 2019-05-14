@@ -18,7 +18,7 @@ from distributed.protocol import (
 )
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
 from distributed.utils import tmpfile, nbytes
-from distributed.utils_test import slow, gen_cluster
+from distributed.utils_test import gen_cluster
 from distributed.protocol.numpy import itemsize
 from distributed.protocol.compression import maybe_compress
 
@@ -152,7 +152,7 @@ def test_memmap():
         np.testing.assert_equal(x, y)
 
 
-@slow
+@pytest.mark.slow
 def test_dumps_serialize_numpy_large():
     psutil = pytest.importorskip("psutil")
     if psutil.virtual_memory().total < 2e9:

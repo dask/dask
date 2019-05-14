@@ -3,13 +3,6 @@ from __future__ import print_function, division, absolute_import
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-from distributed.comm import (
-    parse_address,
-    unparse_address,
-    parse_host_port,
-    unparse_host_port,
-)
-
 
 py3_err_msg = """
 Warning: Your terminal does not set locales.
@@ -75,36 +68,3 @@ def install_signal_handlers(loop=None, cleanup=None):
 
     for sig in [signal.SIGINT, signal.SIGTERM]:
         old_handlers[sig] = signal.signal(sig, handle_signal)
-
-
-def uri_from_host_port(host_arg, port_arg, default_port):
-    """
-    Process the *host* and *port* CLI options.
-    Return a URI.
-    """
-    # Much of distributed depends on a well-known IP being assigned to
-    # each entity (Worker, Scheduler, etc.), so avoid "universal" addresses
-    # like '' which would listen on all registered IPs and interfaces.
-    scheme, loc = parse_address(host_arg or "")
-
-    host, port = parse_host_port(
-        loc, port_arg if port_arg is not None else default_port
-    )
-
-    if port is None and port_arg is None:
-        port_arg = default_port
-
-    if port and port_arg and port != port_arg:
-        raise ValueError(
-            "port number given twice in options: "
-            "host %r and port %r" % (host_arg, port_arg)
-        )
-    if port is None and port_arg is not None:
-        port = port_arg
-    # Note `port = 0` means "choose a random port"
-    if port is None:
-        port = default_port
-    loc = unparse_host_port(host, port)
-    addr = unparse_address(scheme, loc)
-
-    return addr

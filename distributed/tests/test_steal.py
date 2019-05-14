@@ -14,7 +14,7 @@ from tornado import gen
 from distributed import Nanny, Worker, wait, worker_client
 from distributed.config import config
 from distributed.metrics import time
-from distributed.scheduler import BANDWIDTH, key_split
+from distributed.scheduler import key_split
 from distributed.utils_test import (
     slowinc,
     slowadd,
@@ -172,7 +172,7 @@ def test_new_worker_steals(c, s, a):
     while len(a.task_state) < 10:
         yield gen.sleep(0.01)
 
-    b = yield Worker(s.ip, s.port, loop=s.loop, ncores=1, memory_limit=TOTAL_MEMORY)
+    b = yield Worker(s.address, loop=s.loop, ncores=1, memory_limit=TOTAL_MEMORY)
 
     result = yield total
     assert result == sum(map(inc, range(100)))
@@ -277,7 +277,7 @@ def test_steal_resource_restrictions(c, s, a):
         yield gen.sleep(0.01)
     assert len(a.task_state) == 101
 
-    b = yield Worker(s.ip, s.port, loop=s.loop, ncores=1, resources={"A": 4})
+    b = yield Worker(s.address, loop=s.loop, ncores=1, resources={"A": 4})
 
     start = time()
     while not b.task_state or len(a.task_state) == 101:
@@ -394,7 +394,7 @@ def assert_balanced(inp, expected, c, s, *workers):
                 ts = s.tasks[dat.key]
                 # Ensure scheduler state stays consistent
                 old_nbytes = ts.nbytes
-                ts.nbytes = BANDWIDTH * t
+                ts.nbytes = s.bandwidth * t
                 for ws in ts.who_has:
                     ws.nbytes += ts.nbytes - old_nbytes
             else:
@@ -499,8 +499,8 @@ def test_restart(c, s, a, b):
 def test_steal_communication_heavy_tasks(c, s, a, b):
     steal = s.extensions["stealing"]
     s.task_duration["slowadd"] = 0.001
-    x = c.submit(mul, b"0", int(BANDWIDTH), workers=a.address)
-    y = c.submit(mul, b"1", int(BANDWIDTH), workers=b.address)
+    x = c.submit(mul, b"0", int(s.bandwidth), workers=a.address)
+    y = c.submit(mul, b"1", int(s.bandwidth), workers=b.address)
 
     futures = [
         c.submit(
@@ -536,7 +536,7 @@ def test_steal_twice(c, s, a, b):
         yield gen.sleep(0.01)
 
     # Army of new workers arrives to help
-    workers = yield [Worker(s.ip, s.port, loop=s.loop) for _ in range(20)]
+    workers = yield [Worker(s.address, loop=s.loop) for _ in range(20)]
 
     yield wait(futures)
 

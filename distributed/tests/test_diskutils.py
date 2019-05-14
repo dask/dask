@@ -16,7 +16,7 @@ from distributed.compatibility import Empty, WINDOWS
 from distributed.diskutils import WorkSpace
 from distributed.metrics import time
 from distributed.utils import mp_context
-from distributed.utils_test import captured_logger, slow
+from distributed.utils_test import captured_logger
 
 
 def assert_directory_contents(dir_path, expected, trials=2):
@@ -279,7 +279,7 @@ def test_workspace_concurrency(tmpdir):
     _test_workspace_concurrency(tmpdir, 2.0, 6)
 
 
-@slow
+@pytest.mark.slow
 def test_workspace_concurrency_intense(tmpdir):
     n_created, n_purged = _test_workspace_concurrency(tmpdir, 8.0, 16)
     assert n_created >= 100

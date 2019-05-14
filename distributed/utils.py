@@ -46,7 +46,7 @@ try:
 except ImportError:
     PollIOLoop = None  # dropped in tornado 6.0
 
-from .compatibility import Queue, PY3, PY2, get_thread_identity, unicode
+from .compatibility import PY3, PY2, get_thread_identity, unicode
 from .metrics import time
 
 
@@ -797,42 +797,6 @@ def truncate_exception(e, n=10000):
         return e
 
 
-if sys.version_info >= (3,):
-    # (re-)raising StopIteration is deprecated in 3.6+
-    exec(
-        """def queue_to_iterator(q):
-        while True:
-            result = q.get()
-            if isinstance(result, StopIteration):
-                return result.value
-            yield result
-        """
-    )
-else:
-    # Returning non-None from generator is a syntax error in 2.x
-    def queue_to_iterator(q):
-        while True:
-            result = q.get()
-            if isinstance(result, StopIteration):
-                raise result
-            yield result
-
-
-def _dump_to_queue(seq, q):
-    for item in seq:
-        q.put(item)
-
-
-def iterator_to_queue(seq, maxsize=0):
-    q = Queue(maxsize=maxsize)
-
-    t = threading.Thread(target=_dump_to_queue, args=(seq, q))
-    t.daemon = True
-    t.start()
-
-    return q
-
-
 def tokey(o):
     """ Convert an object to a string.
 
@@ -1221,6 +1185,8 @@ def parse_bytes(s):
     >>> parse_bytes('MB')
     1000000
     """
+    if isinstance(s, (int, float)):
+        return int(s)
     s = s.replace(" ", "")
     if not s[0].isdigit():
         s = "1" + s

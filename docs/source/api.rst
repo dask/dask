@@ -177,14 +177,6 @@ Other
    :members:
 
 
-Asyncio Client
---------------
-
-.. currentmodule:: distributed.asyncio
-.. autoclass:: AioClient
-   :members:
-
-
 Adaptive
 --------
 

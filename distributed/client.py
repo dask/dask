@@ -55,7 +55,6 @@ from .utils_comm import (
 from .cfexecutor import ClientExecutor
 from .compatibility import (
     Queue as pyQueue,
-    Empty,
     isqueue,
     html_escape,
     StopAsyncIteration,
@@ -77,7 +76,6 @@ from .utils import (
     sync,
     funcname,
     ignoring,
-    queue_to_iterator,
     tokey,
     log_errors,
     str_graph,
@@ -577,6 +575,8 @@ class Client(Node):
     distributed.deploy.local.LocalCluster:
     """
 
+    _instances = weakref.WeakSet()
+
     def __init__(
         self,
         address=None,
@@ -710,6 +710,7 @@ class Client(Node):
             ext(self)
 
         self.start(timeout=timeout)
+        Client._instances.add(self)
 
         from distributed.recreate_exceptions import ReplayExceptionClient
 
@@ -1421,24 +1422,6 @@ class Client(Node):
 
         return futures[skey]
 
-    def _threaded_map(self, q_out, func, qs_in, **kwargs):
-        """ Internal function for mapping Queue """
-        if isqueue(qs_in[0]):
-            get = pyQueue.get
-        elif isinstance(qs_in[0], Iterator):
-            get = next
-        else:
-            raise NotImplementedError()
-
-        while True:
-            try:
-                args = [get(q) for q in qs_in]
-            except StopIteration as e:
-                q_out.put(e)
-                break
-            f = self.submit(func, *args, **kwargs)
-            q_out.put(f)
-
     def map(self, func, *iterables, **kwargs):
         """ Map a function on a sequence of arguments
 
@@ -1447,7 +1430,8 @@ class Client(Node):
         Parameters
         ----------
         func: callable
-        iterables: Iterables, Iterators, or Queues
+        iterables: Iterables
+            List-like objects to map over.  They should have the same length.
         key: str, list
             Prefix for task names if string.  Explicit names if list.
         pure: bool (defaults to True)
@@ -1486,20 +1470,10 @@ class Client(Node):
         if all(map(isqueue, iterables)) or all(
             isinstance(i, Iterator) for i in iterables
         ):
-            maxsize = kwargs.pop("maxsize", 0)
-            q_out = pyQueue(maxsize=maxsize)
-            t = threading.Thread(
-                target=self._threaded_map,
-                name="Threaded map()",
-                args=(q_out, func, iterables),
-                kwargs=kwargs,
+            raise TypeError(
+                "Dask no longer supports mapping over Iterators or Queues."
+                "Consider using a normal for loop and Client.submit"
             )
-            t.daemon = True
-            t.start()
-            if isqueue(iterables[0]):
-                return q_out
-            else:
-                return queue_to_iterator(q_out)
 
         key = kwargs.pop("key", None)
         key = key or funcname(func)
@@ -1735,22 +1709,7 @@ class Client(Node):
 
         raise gen.Return(response)
 
-    def _threaded_gather(self, qin, qout, **kwargs):
-        """ Internal function for gathering Queue """
-        while True:
-            L = [qin.get()]
-            while qin.empty():
-                try:
-                    L.append(qin.get_nowait())
-                except Empty:
-                    break
-            results = self.gather(L, **kwargs)
-            for item in results:
-                qout.put(item)
-
-    def gather(
-        self, futures, errors="raise", maxsize=0, direct=None, asynchronous=None
-    ):
+    def gather(self, futures, errors="raise", direct=None, asynchronous=None):
         """ Gather futures from distributed memory
 
         Accepts a future, nested container of futures, iterator, or queue.
@@ -1760,7 +1719,7 @@ class Client(Node):
         ----------
         futures: Collection of futures
             This can be a possibly nested collection of Future objects.
-            Collections can be lists, sets, iterators, queues or dictionaries
+            Collections can be lists, sets, or dictionaries
         errors: string
             Either 'raise' or 'skip' if we should raise if a future has erred
             or skip its inclusion in the output collection
@@ -1768,9 +1727,6 @@ class Client(Node):
             Whether or not to connect directly to the workers, or to ask
             the scheduler to serve as intermediary.  This can also be set when
             creating the Client.
-        maxsize: int
-            If the input is a queue then this produces an output queue with a
-            maximum size.
 
         Returns
         -------
@@ -1787,25 +1743,16 @@ class Client(Node):
         >>> c.gather([x, [x], x])  # support lists and dicts # doctest: +SKIP
         [3, [3], 3]
 
-        >>> seq = c.gather(iter([x, x]))  # support iterators # doctest: +SKIP
-        >>> next(seq)  # doctest: +SKIP
-        3
-
         See Also
         --------
         Client.scatter: Send data out to cluster
         """
         if isqueue(futures):
-            qout = pyQueue(maxsize=maxsize)
-            t = threading.Thread(
-                target=self._threaded_gather,
-                name="Threaded gather()",
-                args=(futures, qout),
-                kwargs={"errors": errors, "direct": direct},
+            raise TypeError(
+                "Dask no longer supports gathering over Iterators and Queues. "
+                "Consider using a normal for loop and Client.submit/gather"
             )
-            t.daemon = True
-            t.start()
-            return qout
+
         elif isinstance(futures, Iterator):
             return (self.gather(f, errors=errors, direct=direct) for f in futures)
         else:
@@ -1932,27 +1879,6 @@ class Client(Node):
             out = list(out.values())[0]
         raise gen.Return(out)
 
-    def _threaded_scatter(self, q_or_i, qout, **kwargs):
-        """ Internal function for scattering Iterable/Queue data """
-        while True:
-            if isqueue(q_or_i):
-                L = [q_or_i.get()]
-                while not q_or_i.empty():
-                    try:
-                        L.append(q_or_i.get_nowait())
-                    except Empty:
-                        break
-            else:
-                try:
-                    L = [next(q_or_i)]
-                except StopIteration as e:
-                    qout.put(e)
-                    break
-
-            futures = self.scatter(L, **kwargs)
-            for future in futures:
-                qout.put(future)
-
     def scatter(
         self,
         data,
@@ -1960,7 +1886,6 @@ class Client(Node):
         broadcast=False,
         direct=None,
         hash=True,
-        maxsize=0,
         timeout=no_default,
         asynchronous=None,
     ):
@@ -1973,7 +1898,7 @@ class Client(Node):
 
         Parameters
         ----------
-        data: list, iterator, dict, Queue, or object
+        data: list, dict, or object
             Data to scatter out to workers.  Output type matches input type.
         workers: list of tuples (optional)
             Optionally constrain locations of data.
@@ -1985,8 +1910,6 @@ class Client(Node):
             Whether or not to connect directly to the workers, or to ask
             the scheduler to serve as intermediary.  This can also be set when
             creating the Client.
-        maxsize: int (optional)
-            Maximum size of queue if using queues, 0 implies infinite
         hash: bool (optional)
             Whether or not to hash data to determine key.
             If False then this uses a random key
@@ -2015,12 +1938,6 @@ class Client(Node):
 
         >>> c.scatter([1, 2, 3], workers=[('hostname', 8788)])   # doctest: +SKIP
 
-        Handle streaming sequences of data with iterators or queues
-
-        >>> seq = c.scatter(iter([1, 2, 3]))  # doctest: +SKIP
-        >>> next(seq)  # doctest: +SKIP
-        <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
-
         Broadcast data to all workers
 
         >>> [future] = c.scatter([element], broadcast=True)  # doctest: +SKIP
@@ -2038,38 +1955,26 @@ class Client(Node):
         if timeout == no_default:
             timeout = self._timeout
         if isqueue(data) or isinstance(data, Iterator):
-            logger.debug("Starting thread for streaming data")
-            qout = pyQueue(maxsize=maxsize)
-
-            t = threading.Thread(
-                target=self._threaded_scatter,
-                name="Threaded scatter()",
-                args=(data, qout),
-                kwargs={"workers": workers, "broadcast": broadcast},
+            raise TypeError(
+                "Dask no longer supports mapping over Iterators or Queues."
+                "Consider using a normal for loop and Client.submit"
             )
-            t.daemon = True
-            t.start()
 
-            if isqueue(data):
-                return qout
-            else:
-                return queue_to_iterator(qout)
+        if hasattr(thread_state, "execution_state"):  # within worker task
+            local_worker = thread_state.execution_state["worker"]
         else:
-            if hasattr(thread_state, "execution_state"):  # within worker task
-                local_worker = thread_state.execution_state["worker"]
-            else:
-                local_worker = None
-            return self.sync(
-                self._scatter,
-                data,
-                workers=workers,
-                broadcast=broadcast,
-                direct=direct,
-                local_worker=local_worker,
-                timeout=timeout,
-                asynchronous=asynchronous,
-                hash=hash,
-            )
+            local_worker = None
+        return self.sync(
+            self._scatter,
+            data,
+            workers=workers,
+            broadcast=broadcast,
+            direct=direct,
+            local_worker=local_worker,
+            timeout=timeout,
+            asynchronous=asynchronous,
+            hash=hash,
+        )
 
     @gen.coroutine
     def _cancel(self, futures, force=False):

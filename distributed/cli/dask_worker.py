@@ -10,14 +10,10 @@ import warnings
 import click
 import dask
 from distributed import Nanny, Worker
-from distributed.utils import get_ip_interface, parse_timedelta
+from distributed.utils import parse_timedelta
 from distributed.worker import _ncores
 from distributed.security import Security
-from distributed.cli.utils import (
-    check_python_3,
-    uri_from_host_port,
-    install_signal_handlers,
-)
+from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
 from distributed.preloading import validate_preload_argv
 from distributed.proctitle import (
@@ -167,7 +163,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     default=None,
     help="Seconds to wait for a scheduler before closing",
 )
-@click.option("--bokeh-prefix", type=str, default=None, help="Prefix for the bokeh app")
+@click.option("--bokeh-prefix", type=str, default="", help="Prefix for the bokeh app")
 @click.option(
     "--preload",
     type=str,
@@ -292,18 +288,6 @@ def main(
 
     services = {}
 
-    if bokeh:
-        try:
-            from distributed.bokeh.worker import BokehWorker
-        except ImportError:
-            pass
-        else:
-            if bokeh_prefix:
-                result = (BokehWorker, {"prefix": bokeh_prefix})
-            else:
-                result = BokehWorker
-            services[("bokeh", dashboard_address)] = result
-
     if resources:
         resources = resources.replace(",", " ").split()
         resources = dict(pair.split("=") for pair in resources)
@@ -332,18 +316,6 @@ def main(
             "dask-worker SCHEDULER_ADDRESS:8786"
         )
 
-    if interface:
-        if host:
-            raise ValueError("Can not specify both interface and host")
-        else:
-            host = get_ip_interface(interface)
-
-    if host or port:
-        addr = uri_from_host_port(host, port, 0)
-    else:
-        # Choose appropriate address for scheduler
-        addr = None
-
     if death_timeout is not None:
         death_timeout = parse_timedelta(death_timeout, "s")
 
@@ -363,6 +335,11 @@ def main(
             preload_argv=preload_argv,
             security=sec,
             contact_address=contact_address,
+            interface=interface,
+            host=host,
+            port=port,
+            dashboard_address=dashboard_address if bokeh else None,
+            service_kwargs={"bokhe": {"prefix": bokeh_prefix}},
             name=name if nprocs == 1 or not name else name + "-" + str(i),
             **kwargs
         )
@@ -381,7 +358,7 @@ def main(
 
     @gen.coroutine
     def run():
-        yield [n._start(addr) for n in nannies]
+        yield nannies
         while all(n.status != "closed" for n in nannies):
             yield gen.sleep(0.2)
 

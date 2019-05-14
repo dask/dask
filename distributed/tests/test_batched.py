@@ -10,7 +10,7 @@ from distributed.batched import BatchedSend
 from distributed.core import listen, connect, CommClosedError
 from distributed.metrics import time
 from distributed.utils import All
-from distributed.utils_test import gen_test, slow, captured_logger
+from distributed.utils_test import gen_test, captured_logger
 from distributed.protocol import to_serialize
 
 
@@ -158,7 +158,7 @@ def test_close_twice():
         yield b.close()
 
 
-@slow
+@pytest.mark.slow
 @gen_test(timeout=50)
 def test_stress():
     with echo_server() as e:
@@ -231,7 +231,7 @@ def test_sending_traffic_jam():
     yield run_traffic_jam(50, 300000)
 
 
-@slow
+@pytest.mark.slow
 @gen_test()
 def test_large_traffic_jam():
     yield run_traffic_jam(500, 1500000)

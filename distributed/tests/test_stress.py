@@ -21,7 +21,6 @@ from distributed.utils_test import (
     inc,
     slowinc,
     slowadd,
-    slow,
     slowsum,
     bump_rlimit,
 )
@@ -198,7 +197,7 @@ def vsum(*args):
 
 
 @pytest.mark.avoid_travis
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 80, timeout=1000)
 def test_stress_communication(c, s, *workers):
     s.validate = False  # very slow otherwise
@@ -244,7 +243,7 @@ def test_stress_steal(c, s, *workers):
             break
 
 
-@slow
+@pytest.mark.slow
 @gen_cluster(ncores=[("127.0.0.1", 1)] * 10, client=True, timeout=120)
 def test_close_connections(c, s, *workers):
     da = pytest.importorskip("dask.array")

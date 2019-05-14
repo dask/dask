@@ -9,7 +9,7 @@ from tornado import gen
 
 from distributed import Client, Queue, Nanny, worker_client, wait
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, slow, div
+from distributed.utils_test import gen_cluster, inc, div
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 
 
@@ -114,7 +114,7 @@ def test_picklability_sync(client):
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2, reason="Multi-client issues")
-@slow
+@pytest.mark.slow
 @gen_cluster(client=True, ncores=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
 def test_race(c, s, *workers):
     def f(i):

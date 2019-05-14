@@ -565,10 +565,12 @@ def test_GraphPlot_order(c, s, a, b):
 )
 def test_profile_server(c, s, a, b):
     ptp = ProfileServer(s)
-    ptp.trigger_update()
-    yield gen.sleep(0.200)
-    ptp.trigger_update()
-    assert 2 < len(ptp.ts_source.data["time"]) < 20
+    start = time()
+    yield gen.sleep(0.100)
+    while len(ptp.ts_source.data["time"]) < 2:
+        yield gen.sleep(0.100)
+        ptp.trigger_update()
+        assert time() < start + 2
 
 
 @gen_cluster(client=True, scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}})

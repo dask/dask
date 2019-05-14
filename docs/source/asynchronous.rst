@@ -57,25 +57,6 @@ call.
        results = await client.gather(futures, asynchronous=True)
        return results
 
-AsyncIO
--------
-
-If you prefer to use the Asyncio event loop over the Tornado event loop you
-should use the ``AioClient``.
-
-.. code-block:: python
-
-   from distributed.asyncio import AioClient
-   client = await AioClient()
-
-All other operations remain the same:
-
-.. code-block:: python
-
-   future = client.submit(lambda x: x + 1, 10)
-   result = await future
-   # or
-   result = await client.gather(future)
 
 Python 2 Compatibility
 ----------------------
@@ -90,8 +71,8 @@ This self-contained example starts an asynchronous client, submits a trivial
 job, waits on the result, and then shuts down the client.  You can see
 implementations for Python 2 and 3 and for Asyncio and Tornado.
 
-Python 3 with Tornado
-+++++++++++++++++++++
+Python 3 with Tornado or Asyncio
+++++++++++++++++++++++++++++++++
 
 .. code-block:: python
 
@@ -104,8 +85,14 @@ Python 3 with Tornado
        await client.close()
        return result
 
+   # Either use Tornado
    from tornado.ioloop import IOLoop
    IOLoop().run_sync(f)
+
+   # Or use asyncio
+   import asyncio
+   asyncio.get_event_loop().run_until_complete(f())
+
 
 Python 2/3 with Tornado
 +++++++++++++++++++++++
@@ -125,23 +112,6 @@ Python 2/3 with Tornado
 
    from tornado.ioloop import IOLoop
    IOLoop().run_sync(f)
-
-Python 3 with Asyncio
-+++++++++++++++++++++
-
-.. code-block:: python
-
-   from distributed.asyncio import AioClient
-
-   async def f():
-       client = await AioClient()
-       future = client.submit(lambda x: x + 1, 10)
-       result = await future
-       await client.close()
-       return result
-
-   from asyncio import get_event_loop
-   get_event_loop().run_until_complete(f())
 
 Use Cases
 ---------
