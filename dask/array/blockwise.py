@@ -218,7 +218,11 @@ def blockwise(func, out_ind, *args, **kwargs):
         try:
             meta = func(*args_meta, **kwargs_meta)
         except TypeError:
-            meta = func(*args_meta)
+            # The concatenate argument is an argument introduced by this
+            # function and may not be support by some external functions,
+            # such as in NumPy
+            kwargs_meta.pop('concatenate')
+            meta = func(*args_meta, **kwargs_meta)
 
         if np.isscalar(meta):
             ndim = max([a.ndim for a in arrays])
