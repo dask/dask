@@ -3,6 +3,7 @@ import pytest
 
 import dask.array as da
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE, AxisError
+from dask.array.gufunc import apply_gufunc
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
@@ -158,3 +159,16 @@ def test_tril_triu_non_square_arrays():
     dA = da.from_array(A, chunks=(5, 5), asarray=False)
     assert_eq(da.triu(dA), np.triu(A))
     assert_eq(da.tril(dA), np.tril(A))
+
+
+def test_apply_gufunc_axis():
+    def mydiff(x):
+        return np.diff(x)
+
+    a = cupy.random.randn(3, 6, 4)
+    da_ = da.from_array(a, chunks=2, asarray=False)
+
+    m = np.diff(a, axis=1)
+    dm = apply_gufunc(mydiff, "(i)->(i)", da_, axis=1, output_sizes={'i': 5},
+    allow_rechunk=True)
+    assert_eq(m, dm)
