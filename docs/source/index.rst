@@ -172,6 +172,7 @@ then you should start here.
    delayed.rst
    futures.rst
    Machine Learning <https://ml.dask.org>
+   best-practices.rst
    api.rst
 
 **Scheduling**

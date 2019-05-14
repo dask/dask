@@ -131,7 +131,7 @@ Break up computations into many pieces
 Every ``dask.delayed`` function call is a single operation from Dask's perspective.
 You achieve parallelism by having many delayed calls, not by using only a
 single one: Dask will not look inside a function decorated with ``@dask.delayed``
-and parallelize that code internally.  To accomplish that, it needs your help to 
+and parallelize that code internally.  To accomplish that, it needs your help to
 find good places to break up a computation.
 
 **Don't**
@@ -154,7 +154,7 @@ find good places to break up a computation.
            data = load(filename)
            data = process(data)
            results.append(save(data))
-       
+
        return results
 
    dask.compute(f(filenames))  # this is only a single task
