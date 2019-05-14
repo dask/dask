@@ -218,6 +218,8 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
 
     rect = [
+        "",
+        "  <!-- Colored Rectangle -->",
         '  <polygon points="%f,%f %f,%f %f,%f %f,%f" style="fill:#ECB172A0;stroke-width:0"/>'
         % (x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0])
     ]
