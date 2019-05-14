@@ -87,7 +87,8 @@ def _maybe_slice(grouped, columns):
     """
     Slice columns if grouped is pd.DataFrameGroupBy
     """
-    if isinstance(grouped, pd.core.groupby.DataFrameGroupBy):
+    # FIXME: update with better groupby object detection (i.e.: ngroups, get_group)
+    if 'groupby' in type(grouped).__name__.lower():
         if columns is not None:
             if isinstance(columns, (tuple, list, set, pd.Index)):
                 columns = list(columns)
