@@ -1,9 +1,9 @@
 Best Practices
 ==============
 
-It is easy to get started with Dask arrays, but using them *well* requires
-some experience.  This page contains suggestions for best practices, and
-includes solutions to common problems.
+It is easy to get started with Dask's APIs, but using them *well* requires some
+experience. This page contains suggestions for best practices, and includes
+solutions to common problems.
 
 This document specifically focuses on best practices that are shared among all
 of the Dask APIs.  Readers may first want to investigate one of the
