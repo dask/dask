@@ -1034,18 +1034,24 @@ class Array(DaskMethodsMixin):
         return '\n'.join(both)
 
     def _repr_html_table(self):
+        if not math.isnan(self.nbytes):
+            nbytes = format_bytes(self.nbytes)
+            cbytes = format_bytes(np.prod(self.chunksize) * self.dtype.itemsize)
+        else:
+            nbytes = 'unknown'
+            cbytes = 'unknown'
+
         table = [
             '<table>'
             '  <thead>'
-            '    <tr><th> Dask Array </th><td> %s </td></tr>' % (self.name[:14] + '...' if len(self.name) > 14 else ''),
+            '    <tr><td> </td><th> Array </th><th> Chunk </th></tr>',
             '  </thead>',
             '  <tbody>',
-            '    <tr><th> Bytes </th><td> %s </td></tr>' % format_bytes(self.nbytes),
-            '    <tr><th> DType </th><td> %s </td></tr>' % self.dtype,
-            '    <tr><th> Shape </th><td> %s </td></tr>' % str(self.shape),
-            '    <tr><th> Chunk Shape </th><td> %s </td></tr>' % str(self.chunksize),
-            '    <tr><th> # Chunks </th><td> %s &rarr; %s </td></tr>' % (self.numblocks, self.npartitions),
-            '    <tr><th> # Tasks </th><td> %d </td></tr>' % len(self.__dask_graph__()),
+            '    <tr><th> Bytes </th><td> %s </td> <td> %s </td></tr>' % (nbytes, cbytes),
+            '    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>' % (str(self.shape), str(self.chunksize)),
+            '    <tr><th> Count </th><td> %d Tasks </td><td> %d chunks </td></tr>' % (
+                len(self.__dask_graph__()), self.npartitions),
+            '    <tr><th> DType </th><td> %s </td><td></td></tr>' % self.dtype,
             '  </tbody>',
             '</table>'
         ]

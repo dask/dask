@@ -45,7 +45,6 @@ def test_repr_html():
     assert 'MB' in text or 'MiB' in text
     assert str(x.shape) in text
     assert str(x.dtype) in text
-    assert 'ones' in text
 
     parses(text)
 
