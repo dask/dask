@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 
 from operator import getitem
 from functools import partial, wraps
@@ -7,10 +6,12 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
+from .utils import IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
-from ..utils import skip_doctest, funcname
+from ..utils import (skip_doctest, funcname,
+                     is_dataframe_like, is_series_like, is_index_like)
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -29,7 +30,10 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            if array_wrap:
+            is_dataframe = (is_dataframe_like(dsk[0]) or is_series_like(dsk[0]) or
+                            is_index_like(dsk[0]))
+            if (array_wrap and
+                    (is_dataframe or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
@@ -219,6 +223,8 @@ less = ufunc(np.less)
 less_equal = ufunc(np.less_equal)
 not_equal = ufunc(np.not_equal)
 equal = ufunc(np.equal)
+isneginf = partial(equal, -np.inf)
+isposinf = partial(equal, np.inf)
 logical_and = ufunc(np.logical_and)
 logical_or = ufunc(np.logical_or)
 logical_xor = ufunc(np.logical_xor)
@@ -264,8 +270,6 @@ absolute = ufunc(np.absolute)
 clip = wrap_elemwise(np.clip)
 isreal = wrap_elemwise(np.isreal, array_wrap=True)
 iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
-isneginf = wrap_elemwise(np.isneginf, array_wrap=True)
-isposinf = wrap_elemwise(np.isposinf, array_wrap=True)
 real = wrap_elemwise(np.real, array_wrap=True)
 imag = wrap_elemwise(np.imag, array_wrap=True)
 fix = wrap_elemwise(np.fix, array_wrap=True)

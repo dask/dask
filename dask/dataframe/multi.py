@@ -69,7 +69,7 @@ from .core import (_Frame, DataFrame, Series, map_partitions, Index,
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories
+from .utils import strip_unknown_categories, is_dataframe_like, is_series_like
 
 
 def align_partitions(*dfs):
@@ -470,13 +470,25 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def stack_partitions(dfs, divisions, join='outer'):
     """Concatenate partitions on axis=0 by doing a simple stack"""
-    meta = methods.concat([df._meta for df in dfs], join=join, filter_warning=False)
+    meta = methods.concat([df._meta for df in dfs], join=join,
+                          filter_warning=False)
     empty = strip_unknown_categories(meta)
 
     name = 'concat-{0}'.format(tokenize(*dfs))
     dsk = {}
     i = 0
     for df in dfs:
+        # dtypes of all dfs need to be coherent
+        # refer to https://github.com/dask/dask/issues/4685
+        if is_dataframe_like(df):
+            shared = df.columns.intersection(meta)
+            if not df._meta[shared].dtypes.equals(meta[shared].dtypes):
+                df = df.astype(meta[shared].dtypes)
+        elif is_series_like(df) and is_series_like(meta):
+            if not df.dtype == meta.dtype and str(df.dtype) != 'category':
+                df = df.astype(meta.dtype)
+        else:
+            pass  # TODO: there are other non-covered cases here
         dsk.update(df.dask)
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each

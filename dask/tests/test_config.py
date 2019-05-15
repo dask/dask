@@ -392,3 +392,7 @@ def test_get_set_roundtrip(key):
 
 def test_merge_None_to_dict():
     assert dask.config.merge({'a': None, 'c': 0}, {'a': {'b': 1}}) == {'a': {'b': 1}, 'c': 0}
+
+
+def test_core_file():
+    assert 'temporary-directory' in dask.config.config

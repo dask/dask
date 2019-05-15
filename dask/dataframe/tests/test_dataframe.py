@@ -2127,10 +2127,10 @@ def test_to_dask_array_raises(as_frame):
     if as_frame:
         a = a.to_frame()
 
-    with pytest.raises(ValueError, message="4 != 2"):
+    with pytest.raises(ValueError, match="4 != 2"):
         a.to_dask_array((1, 2, 3, 4))
 
-    with pytest.raises(ValueError, message="Unexpected value"):
+    with pytest.raises(ValueError, match="Unexpected value"):
         a.to_dask_array(5)
 
 
@@ -3629,3 +3629,34 @@ def test_str_expand_more_columns():
     ds = dd.from_pandas(s, npartitions=2)
 
     s.str.split(n=10, expand=True).compute()
+
+
+@pytest.mark.skipif(PY2,
+                    reason="docstring not rendered on py2 build")
+def test_describe_doc():
+    # tests the addition of text into a dataframe method
+    assert ("Currently, only numeric describe is supported"
+            in dd.DataFrame.describe.__doc__)
+
+
+def test_dtype_cast():
+    df = pd.DataFrame({
+        'A': np.arange(10, dtype=np.int32),
+        'B': np.arange(10, dtype=np.int64),
+        'C': np.arange(10, dtype=np.float32),
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.A.dtype == np.int32
+    assert ddf.B.dtype == np.int64
+    assert ddf.C.dtype == np.float32
+
+    col = pd.Series(np.arange(10, dtype=np.float32)) / 2
+    assert col.dtype == np.float32
+
+    ddf = ddf.assign(D=col)
+    assert ddf.D.dtype == np.float32
+    assert ddf.C.dtype == np.float32
+    # fails
+    assert ddf.B.dtype == np.int64
+    # fails
+    assert ddf.A.dtype == np.int32

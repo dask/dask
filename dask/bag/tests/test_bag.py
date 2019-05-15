@@ -8,7 +8,7 @@ import random
 
 import partd
 import pytest
-from toolz import merge, join, filter, identity, valmap, groupby, pluck
+from toolz import merge, join, filter, identity, valmap, groupby, pluck, unique
 
 import dask
 import dask.bag as db
@@ -234,6 +234,14 @@ def test_distinct():
     assert b.distinct().count().compute() == 5
     bag = db.from_sequence([0] * 50, npartitions=50)
     assert bag.filter(None).distinct().compute() == []
+
+
+def test_distinct_with_key():
+    seq = [{'a': i} for i in [0, 1, 2, 1, 2, 3, 2, 3, 4, 5]]
+    bag = db.from_sequence(seq, npartitions=3)
+    expected = list(unique(seq, key=lambda x: x['a']))
+    assert_eq(bag.distinct(key='a'), expected)
+    assert_eq(bag.distinct(key=lambda x: x['a']), expected)
 
 
 def test_frequencies():
