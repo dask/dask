@@ -1051,6 +1051,17 @@ class Client(Node):
         except EnvironmentError:
             logger.debug("Not able to query scheduler for identity")
 
+    @gen.coroutine
+    def _wait_for_workers(self, n_workers=0):
+        info = yield self.scheduler.identity()
+        while n_workers and len(info["workers"]) < n_workers:
+            yield gen.sleep(0.1)
+            info = yield self.scheduler.identity()
+
+    def wait_for_workers(self, n_workers=0):
+        """Blocking call to wait for n workers before continuing"""
+        return self.sync(self._wait_for_workers, n_workers)
+
     def _heartbeat(self):
         if self.scheduler_comm:
             self.scheduler_comm.send({"op": "heartbeat-client"})

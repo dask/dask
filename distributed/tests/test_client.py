@@ -5510,5 +5510,18 @@ def test_instances(c, s, a, b):
     assert set(Worker._instances) == {a, b}
 
 
+@gen_cluster(client=True)
+def test_wait_for_workers(c, s, a, b):
+    future = c.wait_for_workers(n_workers=3)
+    yield gen.sleep(0.22)  # 2 chances
+    assert not future.done()
+
+    w = yield Worker(s.address)
+    start = time()
+    yield future
+    assert time() < start + 1
+    yield w.close()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
