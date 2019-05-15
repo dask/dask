@@ -1,8 +1,12 @@
+import warnings
 import pytest
 from toolz import merge
 
 from dask.compatibility import Mapping
-from dask.sharedict import ShareDict
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", UserWarning)
+    from dask.sharedict import ShareDict
 
 
 a = {'x': 1, 'y': 2}
