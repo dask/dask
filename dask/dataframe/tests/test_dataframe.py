@@ -306,16 +306,20 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-@pytest.mark.parametrize('include,exclude,percentiles', [
-    (None, None, None),
-    ('all', None, None),
-    (['number'], None, [0.25, 0.5]),
-    ([np.timedelta64], None, None),
-    (['number', 'object'], None, [0.25, 0.75]),
-    (None, ['number', 'object'], None),
-    (['object', 'datetime', 'bool'], None, None)
+@pytest.mark.parametrize('include,exclude,percentiles,subset', [
+    (None, None, None, ['c','d']),  # numeric
+    (None, None, None, ['c', 'd', 'f']),  # numeric + timedelta
+    (None, None, None, ['c', 'd', 'g']),  # numeric + bool
+    (None, None, None, ['c', 'd', 'f', 'g']),  # numeric + bool + timedelta
+    (None, None, None, ['f', 'g']),  # bool + timedelta
+    ('all', None, None, None),
+    (['number'], None, [0.25, 0.5], None),
+    ([np.timedelta64], None, None, None),
+    (['number', 'object'], None, [0.25, 0.75], None),
+    (None, ['number', 'object'], None, None),
+    (['object', 'datetime', 'bool'], None, None, None)
 ])
-def test_describe(include, exclude, percentiles):
+def test_describe(include, exclude, percentiles, subset):
     data = {
         'a': ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
         'c': [None, 0, 1, 2, 3, 4] * 2,
@@ -337,27 +341,34 @@ def test_describe(include, exclude, percentiles):
 
     # Arrange
     df = pd.DataFrame(data)
+
+    if subset is not None:
+        df = df.loc[:, subset]
+
     ddf = dd.from_pandas(df, 2)
 
     # Act
     desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
     desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
-    desc_ddf_computed = desc_ddf.compute()
-
-    # TODO: for timedelta columns there's overflow in var function, see #4233
-    # causing std to be nan, ignoring this cell
-    if 'f' in desc_ddf_computed:
-        desc_df['f']['std'] = None
-        desc_ddf_computed['f']['std'] = None
 
     # Assert
-    assert_eq(desc_df, desc_ddf_computed)
+    # TODO: for timedelta columns there's overflow in var function, see #4233
+    # causing std to be nan, workaround this allowing AssertionError on std sell
+    if 'f' in desc_ddf._meta:
+        with pytest.raises(AssertionError) as info:
+            assert_eq(desc_ddf, desc_df)
+            msg = "DataFrame.iloc[:, 2] are different"
+            assert msg in str(info.value)
+    else:
+        # Assert
+        assert_eq(desc_ddf, desc_df)
 
     # Check series
-    for col in ['a', 'c', 'e', 'g']:
-        assert_eq(
-            df[col].describe(include=include, exclude=exclude),
-            ddf[col].describe(include=include, exclude=exclude).compute())
+    if subset is None:
+        for col in ['a', 'c', 'e', 'g']:
+            assert_eq(
+                df[col].describe(include=include, exclude=exclude),
+                ddf[col].describe(include=include, exclude=exclude))
 
 
 def test_describe_empty():
@@ -367,13 +378,15 @@ def test_describe_empty():
     ddf_len0 = dd.from_pandas(df_len0, 2)
     ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
 
+    # Pandas have different dtypes for resulting describe dataframe if there are only
+    # None-values, pre-compute dask df to bypass _meta check
     assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='dask').compute())
 
     with pytest.raises(ValueError):
-        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='dask').compute())
+        ddf_len0.describe(percentiles_method='dask').compute()
 
     with pytest.raises(ValueError):
-        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='dask').compute())
+        ddf_len0.describe(percentiles_method='dask').compute()
 
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method='dask').compute()
@@ -383,14 +396,17 @@ def test_describe_empty_tdigest():
     pytest.importorskip('crick')
 
     df_none = pd.DataFrame({"A": [None, None]})
-    ddf_none = dd.from_pandas(pd.DataFrame({"A": [None, None]}), 2)
+    ddf_none = dd.from_pandas(df_none, 2)
     df_len0 = pd.DataFrame({"A": []})
     ddf_len0 = dd.from_pandas(df_len0, 2)
     ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
 
+    # Pandas have different dtypes for resulting describe dataframe if there are only
+    # None-values, pre-compute dask df to bypass _meta check
     assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
-    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest').compute())
-    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest').compute())
+
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
 
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method='tdigest').compute()

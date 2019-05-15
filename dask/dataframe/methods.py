@@ -144,7 +144,7 @@ def describe_aggregate(values):
             if name not in names:
                 names.append(name)
 
-    return pd.concat(values, join_axes=pd.Index([names]), axis=1)
+    return pd.concat(values, join_axes=[pd.Index(names)], axis=1)
 
 
 def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
@@ -175,7 +175,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     return result
 
 
-def describe_categorical_aggregate(stats, name):
+def describe_nonnumeric_aggregate(stats, name):
     args_len = len(stats)
 
     is_datetime_column = args_len == 5
@@ -190,7 +190,7 @@ def describe_categorical_aggregate(stats, name):
 
     # input was empty dataframe/series
     if len(top_freq) == 0:
-        return pd.Series([0, 0], index=['count','unique'], name=name)
+        return pd.Series([0, 0], index=['count', 'unique'], name=name)
 
     top = top_freq.index[0]
     freq = top_freq.iloc[0]

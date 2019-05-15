@@ -1554,9 +1554,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             if len(data.columns) == 0:
                 chosen_columns = self._meta.columns
             else:
-                # check if there are timedelta columns
-                timedeltas = self._meta.select_dtypes(include=[np.timedelta64])
-                if len(timedeltas.columns) == 0:
+                # check if there are timedelta or boolean columns
+                bools_and_timedeltas = self._meta.select_dtypes(include=[np.timedelta64, 'bool'])
+                if len(bools_and_timedeltas.columns) == 0:
                     return self._describe_numeric(self, split_every, percentiles, percentiles_method)
                 else:
                     chosen_columns = data.columns
@@ -1575,13 +1575,13 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'describe--' + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = self._meta.describe(include=include, exclude=exclude)
+        meta = self._meta_nonempty.describe(include=include, exclude=exclude)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _describe_1d(self, data, split_every=False,
                      percentiles=None, percentiles_method='default'):
         if is_bool_dtype(data._meta):
-            return self._describe_categorical_1d(data, split_every=split_every)
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
         elif is_numeric_dtype(data._meta):
             return self._describe_numeric(
                 data,
@@ -1596,7 +1596,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 percentiles_method=percentiles_method,
                 is_timedelta_column=True)
         else:
-            return self._describe_categorical_1d(data, split_every=split_every)
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
 
     def _describe_numeric(self, data, split_every=False, percentiles=None,
                           percentiles_method='default', is_timedelta_column=False):
@@ -1629,10 +1629,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'describe-numeric--' + tokenize(num, split_every)
         layer = {(name, 0): (methods.describe_numeric_aggregate, stats_names, colname, is_timedelta_column)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = num._meta.describe()
+        meta = num._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
-    def _describe_categorical_1d(self, data, split_every=False):
+    def _describe_nonnumeric_1d(self, data, split_every=False):
         vcounts = data.value_counts(split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
@@ -1654,10 +1654,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name
 
-        name = 'describe-categorical-1d--' + tokenize(data, split_every)
-        layer = {(name, 0): (methods.describe_categorical_aggregate, stats_names, colname)}
+        name = 'describe-nonnumeric-1d--' + tokenize(data, split_every)
+        layer = {(name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = data._meta.describe()
+        meta = data._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
