@@ -13,7 +13,7 @@ from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import funcname
+from ..utils import funcname, derived_from
 from . import chunk
 from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis
@@ -27,7 +27,7 @@ from .core import (Array, map_blocks, elemwise, from_array, asarray,
 from .einsumfuncs import einsum  # noqa
 
 
-@wraps(np.array)
+@derived_from(np)
 def array(x, dtype=None, ndmin=None):
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
