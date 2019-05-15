@@ -123,6 +123,8 @@ can be used to select either on-disk or task-based shuffling:
     df.set_index(column, shuffle='tasks')
 
 
+.. _dataframe.groupby.aggregate:
+
 Aggregate
 =========
 
@@ -167,3 +169,41 @@ A mean function can be implemented as:
         lambda count, sum: sum / count,
     )
     df.groupby('g').agg(custom_mean)
+
+
+For example, let's compute the group-wise extent (maximum - minimum)
+for a DataFrame.
+
+.. code-block:: python
+
+   >>> df = pd.DataFrame({
+   ...   'a': ['a', 'b', 'a', 'a', 'b'],
+   ...   'b': [0, 1, 0, 2, 5],
+   >>> })
+   >>> ddf = dd.from_pandas(df, 2)
+
+We define the building blocks to find the maximum and minimum of each chunk, and then
+the maximum and minimum over all the chunks. We finalize by taking the difference between
+the Series with the maxima and minima
+
+.. code-block:: python
+
+   >>> def chunk(grouped):
+   ...     return grouped.max(), grouped.min()
+
+   >>> def agg(chunk_maxes, chunk_mins):
+   ...     return chunk_maxes.max(), chunk_mins.min()
+
+   >>> def finalize(maxima, minima):
+   ...     return maxima - minima
+
+Finally, we create and use the aggregation
+
+.. code-block:: python
+
+   >>> extent = dd.Aggregation('extent', chunk, agg, finalize=finalize)
+   >>> ddf.groupby('a').agg(extent).compute()
+      b
+   a
+   a  2
+   b  4
