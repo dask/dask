@@ -2127,10 +2127,10 @@ def test_to_dask_array_raises(as_frame):
     if as_frame:
         a = a.to_frame()
 
-    with pytest.raises(ValueError, message="4 != 2"):
+    with pytest.raises(ValueError, match="4 != 2"):
         a.to_dask_array((1, 2, 3, 4))
 
-    with pytest.raises(ValueError, message="Unexpected value"):
+    with pytest.raises(ValueError, match="Unexpected value"):
         a.to_dask_array(5)
 
 

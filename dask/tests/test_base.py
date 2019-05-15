@@ -313,6 +313,7 @@ def test_tokenize_base_types(x):
 
 
 @pytest.mark.skipif('not np')
+@pytest.mark.filterwarnings("ignore:the matrix:PendingDeprecationWarning")
 def test_tokenize_numpy_matrix():
     rng = np.random.RandomState(1234)
     a = np.asmatrix(rng.rand(100))
