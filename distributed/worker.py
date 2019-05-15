@@ -1216,7 +1216,7 @@ class Worker(ServerNode):
         function=None,
         args=None,
         kwargs=None,
-        task=None,
+        task=no_value,
         who_has=None,
         nbytes=None,
         priority=None,
@@ -3007,7 +3007,7 @@ def get_data_from_worker(
 job_counter = [0]
 
 
-def _deserialize(function=None, args=None, kwargs=None, task=None):
+def _deserialize(function=None, args=None, kwargs=None, task=no_value):
     """ Deserialize task inputs and regularize to func, args, kwargs """
     if function is not None:
         function = pickle.loads(function)
@@ -3016,7 +3016,7 @@ def _deserialize(function=None, args=None, kwargs=None, task=None):
     if kwargs:
         kwargs = pickle.loads(kwargs)
 
-    if task is not None:
+    if task is not no_value:
         assert not function and not args and not kwargs
         function = execute_task
         args = (task,)
