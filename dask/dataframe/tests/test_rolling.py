@@ -249,10 +249,31 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
               check_less_precise=check_less_precise)
 
 
-@pytest.mark.parametrize('window', [pd.Timedelta('31s'), pd.Timedelta('1M')])
-def test_time_rolling_window_too_large(window):
-    with pytest.raises(ValueError):
-        dts.map_overlap(ts_shifted_sum, window, window, window, window, c=2)
+@pytest.mark.parametrize('window,N', [('1s', 10), ('2s', 10), ('10s', 10), ('10h', 10),
+                                      ('10s', 100), ('10h', 100)])
+def test_time_rolling_large_window_fixed_chunks(window, N):
+    df = pd.DataFrame({'a': pd.date_range('2016-01-01 00:00:00', periods=N, freq='1s'),
+                       'b': np.random.randint(100, size=(N,))})
+    df = df.set_index('a')
+    ddf = dd.from_pandas(df, 5)
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
+    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
+
+
+@pytest.mark.parametrize('window', ['2s', '5s', '20s', '10h'])
+def test_time_rolling_large_window_variable_chunks(window):
+    df = pd.DataFrame({'a': pd.date_range('2016-01-01 00:00:00', periods=100, freq='1s'),
+                       'b': np.random.randint(100, size=(100,))})
+    ddf = dd.from_pandas(df, 5)
+    ddf = ddf.repartition(divisions=[
+        0, 5, 20, 28, 33, 54, 79, 80, 82, 99
+    ])
+    df = df.set_index('a')
+    ddf = ddf.set_index('a')
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
+    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
 @pytest.mark.parametrize('before, after', [

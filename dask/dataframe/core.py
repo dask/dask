@@ -1215,9 +1215,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         ----------
         window : int, str, offset
            Size of the moving window. This is the number of observations used
-           for calculating the statistic. The window size must not be so large
-           as to span more than one adjacent partition. If using an offset
-           or offset alias like '5D', the data must have a ``DatetimeIndex``
+           for calculating the statistic. When not using a ``DatetimeIndex``,
+           the window size must not be so large as to span more than one
+           adjacent partition. If using an offset or offset alias like '5D',
+           the data must have a ``DatetimeIndex``
 
            .. versionchanged:: 0.15.0
 
