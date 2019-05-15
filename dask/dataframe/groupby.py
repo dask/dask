@@ -182,6 +182,8 @@ class Aggregation(object):
     what operation to do on each chunk of data, how to combine those chunks of
     data together, and then how to finalize the result.
 
+    See :ref:`dataframe.groupby.aggregate` for more.
+
     Parameters
     ----------
     name : str
@@ -1110,6 +1112,17 @@ class _GroupBy(object):
         1.  The user should provide output metadata.
         2.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
+        3.  Dask's GroupBy.apply is not appropriate for aggregations. For custom
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
+
+        .. warning::
+
+           Pandas' groupby-apply can be used to to apply arbitrary functions,
+           including aggregations that result in one row per group. Dask's
+           groupby-apply will apply ``func`` once to each partition-group pair,
+           so when ``func`` is a reduction you'll end up with one row per
+           partition-group pair. To apply a custom aggregation with Dask,
+           use :class:`dask.dataframe.groupby.Aggregation`.
 
         Parameters
         ----------
