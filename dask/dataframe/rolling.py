@@ -127,13 +127,13 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                     first = first - deltas[j]
                     j = j - 1
 
-                dsk.update({(name_a, i): (_multi_tail_timedelta, [(df_name, k) for k in range(j, i + 1)],
+                dsk.update({(name_a, i): (_tail_timedelta, [(df_name, k) for k in range(j, i + 1)],
                                           (df_name, i + 1), before)})
 
             prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
 
         else:
-            dsk.update({(name_a, i): (_tail_timedelta, (df_name, i), (df_name, i + 1), before)
+            dsk.update({(name_a, i): (_tail_timedelta, [(df_name, i)], (df_name, i + 1), before)
                         for i in range(df.npartitions - 1)})
             prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
     else:
@@ -180,7 +180,7 @@ def _head_timedelta(current, next_, after):
     return next_[next_.index < (current.index.max() + after)]
 
 
-def _multi_tail_timedelta(prevs, current, before):
+def _tail_timedelta(prevs, current, before):
     """Return the concatenated rows of each dataframe in ``prevs`` whose
     index is after the first observation in ``current`` - ``before``.
 
@@ -196,23 +196,6 @@ def _multi_tail_timedelta(prevs, current, before):
     """
     selected = pd.concat([prev[prev.index > (current.index.min() - before)] for prev in prevs])
     return selected
-
-
-def _tail_timedelta(prev, current, before):
-    """Return rows of ``prev`` whose index is after the first
-    observation in ``current`` - ``before``.
-
-    Parameters
-    ----------
-    current : DataFrame
-    prev : DataFrame
-    before : timedelta
-
-    Returns
-    -------
-    overlapped : DataFrame
-    """
-    return prev[prev.index > (current.index.min() - before)]
 
 
 def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
