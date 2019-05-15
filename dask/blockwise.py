@@ -451,7 +451,6 @@ def optimize_blockwise(graph, keys=()):
         warnings.filterwarnings("ignore",
                                 "elementwise comparison failed",
                                 Warning)  # FutureWarning or DeprecationWarning
-        print(warnings.filters)
         out = _optimize_blockwise(graph, keys=keys)
         while out.dependencies != graph.dependencies:
             graph = out
