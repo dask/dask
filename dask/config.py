@@ -252,7 +252,7 @@ def ensure_file(
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except OSError:
+    except (IOError, OSError):
         pass
 
 
