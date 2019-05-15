@@ -176,11 +176,6 @@ for a DataFrame.
 
 .. code-block:: python
 
-   >>> import string
-   >>> import pandas as pd
-   >>> import dask.dataframe as dd
-   >>> import numpy as np
-
    >>> df = pd.DataFrame({
    ...   'a': ['a', 'b', 'a', 'a', 'b'],
    ...   'b': [0, 1, 0, 2, 5],
