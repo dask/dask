@@ -3,7 +3,6 @@ from operator import add, setitem
 import pickle
 from random import random
 import types
-import warnings
 
 from toolz import identity, partial, merge
 import pytest

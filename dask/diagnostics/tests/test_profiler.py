@@ -172,8 +172,6 @@ def test_register(profiler):
 @ignore_abc_warning
 def test_unquote():
     from dask.diagnostics.profile_visualize import unquote
-    # basic dask.delayed.to_task_dask
-    f = lambda x: (dict, [list(pair) for pair in x.items()], {})
 
     t = {'a': 1, 'b': 2, 'c': 3}
     task_dask = (dict, [['a', 1], ['b', 2], ['c', 3]])

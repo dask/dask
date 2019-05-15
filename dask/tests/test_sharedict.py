@@ -1,4 +1,3 @@
-import sys
 import warnings
 import pytest
 from toolz import merge
