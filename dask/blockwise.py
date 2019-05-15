@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import numpy as np
 try:
@@ -436,10 +437,25 @@ def optimize_blockwise(graph, keys=()):
     --------
     rewrite_blockwise
     """
-    out = _optimize_blockwise(graph, keys=keys)
-    while out.dependencies != graph.dependencies:
-        graph = out
+    with warnings.catch_warnings():
+        # In some cases, rewrite_blockwise (called internally) will do a bad
+        # thing. e.g. dask/array/tests/test_atop.py::test_blockwise_numpy_arg
+        # Users shouldn't see those warnings, so we filter them.
+        # We set the filter here, rather than lower down, to avoid having to
+        # create and remove the filter many times inside a tight loop.
+
+        # It's OK to just ignore the warning. The operation is Tuple in
+        # List[Tuple]. It shouldn't matter whether the elementwise comparison
+        # changes from returning a scalar to an array, since the outer `in` test
+        # will still just be a bool.
+        warnings.filterwarnings("ignore",
+                                "elementwise comparison failed",
+                                Warning)  # FutureWarning or DeprecationWarning
+        print(warnings.filters)
         out = _optimize_blockwise(graph, keys=keys)
+        while out.dependencies != graph.dependencies:
+            graph = out
+            out = _optimize_blockwise(graph, keys=keys)
     return out
 
 
