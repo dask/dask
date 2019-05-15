@@ -127,11 +127,6 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                     first = first - deltas[j]
                     j = j - 1
 
-                # TODO: delete after discussion
-                # Simpler approach, however much slower due to the implicit loc call
-                # particularly for large divisions tables
-                #j = divs[divs<=lb].idxmax()
-
                 dsk.update({(name_a, i): (_multi_tail_timedelta, [(df_name, k) for k in range(j, i + 1)],
                                           (df_name, i + 1), before)})
 
