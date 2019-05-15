@@ -524,7 +524,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
                             type(df).__name__)
 
     if meta is None:
-        meta = dask.delayed(make_meta)(dfs[0]).compute()
+        meta = delayed(make_meta)(dfs[0]).compute()
     else:
         meta = make_meta(meta)
 
