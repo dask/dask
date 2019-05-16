@@ -14,14 +14,10 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 from pandas.api.types import (is_categorical_dtype, is_scalar, is_sparse,
-                              is_period_dtype, is_datetime64tz_dtype)
+                              is_period_dtype, is_datetime64tz_dtype,
+                              is_interval_dtype)
 
-try:
-    from pandas.api.types import is_interval_dtype
-except ImportError:
-    is_interval_dtype = lambda dtype: False
-
-from .extensions import make_array_nonempty
+from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
 from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
@@ -445,15 +441,29 @@ def _scalar_from_dtype(dtype):
         raise TypeError("Can't handle dtype: {0}".format(dtype))
 
 
+@make_scalar.register(np.dtype)
+def _(dtype):
+    return _scalar_from_dtype(dtype)
+
+
+@make_scalar.register(pd.Timestamp)
+@make_scalar.register(pd.Timedelta)
+@make_scalar.register(pd.Period)
+@make_scalar.register(pd.Interval)
+def _(x):
+    return x
+
+
 def _nonempty_scalar(x):
-    if isinstance(x, (pd.Timestamp, pd.Timedelta, pd.Period)):
-        return x
-    elif np.isscalar(x):
+    if type(x) in make_scalar._lookup:
+        return make_scalar(x)
+
+    if np.isscalar(x):
         dtype = x.dtype if hasattr(x, 'dtype') else np.dtype(type(x))
-        return _scalar_from_dtype(dtype)
-    else:
-        raise TypeError("Can't handle meta of type "
-                        "'{0}'".format(type(x).__name__))
+        return make_scalar(dtype)
+
+    raise TypeError("Can't handle meta of type "
+                    "'{0}'".format(type(x).__name__))
 
 
 @meta_nonempty.register(pd.Series)
