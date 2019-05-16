@@ -6,3 +6,4 @@ See :ref:`extensionarrays` for more.
 from ..utils import Dispatch
 
 make_array_nonempty = Dispatch("make_array_nonempty")
+make_scalar = Dispatch("make_scalar")
