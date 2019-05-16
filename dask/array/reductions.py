@@ -16,7 +16,7 @@ from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
-from .utils import validate_axis
+from .utils import numpy_like_safe, validate_axis
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -367,7 +367,8 @@ def numel(x, **kwargs):
 
     if axis is None:
         prod = np.prod(shape, dtype=dtype)
-        return np.full((1,) * len(shape), prod, dtype=dtype) if keepdims is True else prod
+        return numpy_like_safe(np.full, np.full_like, x, prod,
+                               shape=(1, ) * len(shape), dtype=dtype)
 
     if not isinstance(axis, tuple or list):
         axis = [axis]
@@ -377,7 +378,7 @@ def numel(x, **kwargs):
         new_shape = tuple(shape[dim] if dim not in axis else 1 for dim in range(len(shape)))
     else:
         new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
-    return np.full(new_shape, prod, dtype=dtype)
+    return numpy_like_safe(np.full, np.full_like, x, prod, shape=new_shape, dtype=dtype)
 
 
 def nannumel(x, **kwargs):
