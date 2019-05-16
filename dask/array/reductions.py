@@ -367,7 +367,9 @@ def numel(x, **kwargs):
 
     if axis is None:
         prod = np.prod(shape, dtype=dtype)
-        return full_like_safe(x, prod, shape=(1, ) * len(shape), dtype=dtype)
+        return full_like_safe(
+            x, prod, shape=(1, ) * len(shape), dtype=dtype
+        ) if keepdims is True else prod
 
     if not isinstance(axis, tuple or list):
         axis = [axis]
