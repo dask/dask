@@ -156,7 +156,7 @@ def test_npartitions(db):
 
     data_1 = read_sql_table('test', db, columns=list(df.columns),
                           bytes_per_chunk=2**30,
-                          index_col='number', head_rows=10)
+                          index_col='number', head_rows=1)
     assert data_1.npartitions == 1
     assert (data_1.name.compute() == df.name).all()
 
