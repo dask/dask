@@ -14,9 +14,8 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 from pandas.api.types import (is_categorical_dtype, is_scalar, is_sparse,
-                              is_period_dtype, is_datetime64tz_dtype)
-
-from pandas.api.types import is_interval_dtype
+                              is_period_dtype, is_datetime64tz_dtype,
+                              is_interval_dtype)
 
 from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
@@ -450,10 +449,6 @@ def _(dtype):
 @make_scalar.register(pd.Timestamp)
 @make_scalar.register(pd.Timedelta)
 @make_scalar.register(pd.Period)
-def _(x):
-    return x
-
-
 @make_scalar.register(pd.Interval)
 def _(x):
     return x

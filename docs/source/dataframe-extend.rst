@@ -140,7 +140,7 @@ test suite.
 .. code-block:: python
 
    from decimal import Decimal
-   from dask.dataframe.extensions import make_array_nonempty
+   from dask.dataframe.extensions import make_array_nonempty, make_scalar
    from pandas.tests.extension.decimal import DecimalArray, DecimalDtype
 
    @make_array_nonempty.register(DecimalDtype)
