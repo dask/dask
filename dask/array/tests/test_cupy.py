@@ -25,10 +25,16 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
-    lambda x: x.mean(),
+    pytest.param(lambda x: x.mean(),
+                 marks=pytest.mark.xfail(
+                 reason='requires NumPy>=1.17 and CuPy support for shape argument in *_like functions.')),
     lambda x: x.moment(order=0),
-    lambda x: x.std(),
-    lambda x: x.var(),
+    pytest.param(lambda x: x.std(),
+                 marks=pytest.mark.xfail(
+                 reason='requires NumPy>=1.17 and CuPy support for shape argument in *_like functions.')),
+    pytest.param(lambda x: x.var(),
+                 marks=pytest.mark.xfail(
+                 reason='requires NumPy>=1.17 and CuPy support for shape argument in *_like functions.')),
     pytest.param(lambda x: x.dot(np.arange(x.shape[-1])),
                  marks=pytest.mark.xfail(reason='cupy.dot(numpy) fails')),
     pytest.param(lambda x: x.dot(np.eye(x.shape[-1])),
