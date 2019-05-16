@@ -7,7 +7,7 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
-from .utils import numpy_like_safe
+from .utils import empty_like_safe
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
@@ -298,8 +298,7 @@ def frexp(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = numpy_like_safe(np.empty, np.empty_like,
-                        x._meta if hasattr(x, '_meta') else x,
+    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
                         shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
     lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
@@ -323,8 +322,7 @@ def modf(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = numpy_like_safe(np.empty, np.empty_like,
-                        x._meta if hasattr(x, '_meta') else x,
+    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
                         shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
     lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
