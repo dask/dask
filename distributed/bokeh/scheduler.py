@@ -223,6 +223,7 @@ class ProcessingHistogram(DashboardComponent):
                 id="bk-nprocessing-histogram-plot",
                 name="processing_hist",
                 y_axis_label="frequency",
+                tools="",
                 **kwargs
             )
 
@@ -265,6 +266,7 @@ class NBytesHistogram(DashboardComponent):
                 name="nbytes_hist",
                 id="bk-nbytes-histogram-plot",
                 y_axis_label="frequency",
+                tools="",
                 **kwargs
             )
 
@@ -943,6 +945,7 @@ class TaskProgress(DashboardComponent):
             x_range=x_range,
             y_range=y_range,
             toolbar_location=None,
+            tools="",
             **kwargs
         )
         self.root.line(  # just to define early ranges
