@@ -620,8 +620,9 @@ def triu(m, k=0):
     for i in range(rdim):
         for j in range(hdim):
             if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (partial(numpy_like_safe, np.zeros, np.zeros_like),
-                                     m._meta, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(numpy_like_safe, np.zeros, np.zeros_like,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
@@ -673,8 +674,9 @@ def tril(m, k=0):
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
-                dsk[(name, i, j)] = (partial(numpy_like_safe, np.zeros, np.zeros_like),
-                                     m._meta, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(numpy_like_safe, np.zeros, np.zeros_like,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
     return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m._meta)
 

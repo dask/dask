@@ -181,14 +181,14 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return lambda x: x
 
 
-def numpy_like_safe(func, func_like, a, shape, **kwargs):
+def numpy_like_safe(func, func_like, *args, shape, **kwargs):
     """
-    Return func_like(a, shape=shape, **kwargs) if the shape argument
+    Return func_like(*args, shape=shape, **kwargs) if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning func(shape).
+    using the old behavior, returning func(shape, **kwargs).
     """
     try:
-        return func_like(a, shape=shape, **kwargs)
+        return func_like(*args, shape=shape, **kwargs)
     except TypeError:
         return func(shape, **kwargs)
 

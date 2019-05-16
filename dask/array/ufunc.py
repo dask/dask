@@ -300,7 +300,7 @@ def frexp(x):
 
     a = numpy_like_safe(np.empty, np.empty_like,
                         x._meta if hasattr(x, '_meta') else x,
-                        (1, ) * x.ndim, dtype=x.dtype)
+                        shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
     lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
     rmeta = r[tuple(slice(0, 0, None) for _ in range(r.ndim))]
@@ -325,7 +325,7 @@ def modf(x):
 
     a = numpy_like_safe(np.empty, np.empty_like,
                         x._meta if hasattr(x, '_meta') else x,
-                        (1, ) * x.ndim, dtype=x.dtype)
+                        shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
     lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
     rmeta = r[tuple(slice(0, 0, None) for _ in range(r.ndim))]
