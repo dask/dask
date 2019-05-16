@@ -326,9 +326,9 @@ class Nanny(ServerNode):
             return
         try:
             proc = psutil.Process(process.pid)
-        except psutil.NoSuchProcess:
+            memory = proc.memory_info().rss
+        except (ProcessLookupError, psutil.NoSuchProcess, psutil.AccessDenied):
             return
-        memory = proc.memory_info().rss
         frac = memory / self.memory_limit
         if self.memory_terminate_fraction and frac > self.memory_terminate_fraction:
             logger.warning(
