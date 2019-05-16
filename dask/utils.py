@@ -512,7 +512,8 @@ def unsupported_arguments(doc, args):
     """ Mark unsupported arguments with a disclaimer """
     lines = doc.split('\n')
     for arg in args:
-        subset = [(i, line) for i, line in enumerate(lines) if re.match(r'^\s*' + arg + ' ?:', line)]
+        subset = [(i, line) for i, line in enumerate(lines)
+                  if re.match(r'^\s*' + arg + ' ?:', line)]
         if len(subset) == 1:
             [(i, line)] = subset
             lines[i] = line + "  (Not supported in Dask)"
