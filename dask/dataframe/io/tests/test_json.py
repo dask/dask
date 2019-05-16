@@ -10,6 +10,11 @@ except ImportError:
     except ImportError:
         lzma = None
 
+try:
+    import json
+except ImportError:
+    json = None
+
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile, tmpdir
@@ -34,6 +39,28 @@ def test_read_json_basic(orient):
             out.columns = list(df.columns)
         assert_eq(out, df)
 
+@pytest.mark.parametrize('orient', ['records', 'index', 'columns', 'values'])
+@pytest.mark.parametrize('fkeyword', ['pandas', 'json'])
+def test_read_json_fkeyword(orient, fkeyword):
+    def _my_json_reader(*args, **kwargs):
+        if fkeyword == 'json':
+            if json is None:
+                pytest.skip(
+                    "json module not available. Please install."
+                )
+            return pd.DataFrame.from_dict(json.load(*args))
+        return pd.read_json(*args)
+    with tmpfile('json') as f:
+        df.to_json(f, orient='records', lines=False)
+        actual = dd.read_json(f, orient='records', lines=False,
+                              read_function=_my_json_reader)
+        actual_pd = pd.read_json(f, orient='records', lines=False)
+
+        out = actual.compute()
+        assert_eq(out, actual_pd)
+        if orient == 'values':
+            out.columns = list(df.columns)
+        assert_eq(out, df)
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
                                     'values'])
