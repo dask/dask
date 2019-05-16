@@ -170,7 +170,8 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
 def read_json_chunk(chunk, encoding, errors, kwargs, meta=None):
     s = io.StringIO(chunk.decode(encoding, errors))
     s.seek(0)
-    df = pd.read_json(s, orient='records', lines=True, **kwargs)
+    read_function = kwargs.pop('read_function', pd.read_json)
+    df = read_function(s, orient='records', lines=True, **kwargs)
     if meta is not None and df.empty:
         return meta
     else:
@@ -178,5 +179,6 @@ def read_json_chunk(chunk, encoding, errors, kwargs, meta=None):
 
 
 def read_json_file(f, orient, lines, kwargs):
+    read_function = kwargs.pop('read_function', pd.read_json)
     with f as f:
-        return pd.read_json(f, orient=orient, lines=lines, **kwargs)
+        return read_function(f, orient=orient, lines=lines, **kwargs)
