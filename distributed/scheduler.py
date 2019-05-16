@@ -1353,6 +1353,9 @@ class Scheduler(ServerNode):
         address = self.coerce_address(address, resolve_address)
         address = normalize_address(address)
         host = get_address_host(address)
+        if address not in self.workers:
+            logger.info("Received heartbeat from removed worker: %s", address)
+            return
 
         local_now = time()
         now = now or time()
