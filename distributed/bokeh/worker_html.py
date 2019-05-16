@@ -67,7 +67,16 @@ class HealthHandler(RequestHandler):
         self.set_header("Content-Type", "text/plain")
 
 
-routes = [(r"metrics", PrometheusHandler), (r"health", HealthHandler)]
+class OldRoute(RequestHandler):
+    def get(self):
+        self.redirect("/status")
+
+
+routes = [
+    (r"metrics", PrometheusHandler),
+    (r"health", HealthHandler),
+    (r"main", OldRoute),
+]
 
 
 def get_handlers(server):

@@ -51,7 +51,7 @@ env = Environment(
 
 BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), "theme.yaml"))
 
-template_variables = {"pages": ["main", "system", "profile", "crossfilter"]}
+template_variables = {"pages": ["status", "system", "profile", "crossfilter"]}
 
 
 class StateTable(DashboardComponent):
@@ -410,9 +410,9 @@ class CrossFilter(DashboardComponent):
             def func(k):
                 return msg["keys"].get(k, 0)
 
-            main_key = max(msg["keys"], key=func)
-            typ = self.worker.types.get(main_key, object).__name__
-            keyname = key_split(main_key)
+            status_key = max(msg["keys"], key=func)
+            typ = self.worker.types.get(status_key, object).__name__
+            keyname = key_split(status_key)
             d = {
                 "nbytes": msg["total"],
                 "duration": msg["duration"],
@@ -659,7 +659,7 @@ from bokeh.application.handlers.function import FunctionHandler
 from bokeh.application import Application
 
 
-def main_doc(worker, extra, doc):
+def status_doc(worker, extra, doc):
     with log_errors():
         statetable = StateTable(worker)
         executing_ts = ExecutingTimeSeries(worker, sizing_mode="scale_width")
@@ -685,7 +685,7 @@ def main_doc(worker, extra, doc):
             )
         )
         doc.template = env.get_template("simple.html")
-        doc.template_variables["active_page"] = "main"
+        doc.template_variables["active_page"] = "status"
         doc.template_variables.update(extra)
         doc.theme = BOKEH_THEME
 
@@ -773,7 +773,7 @@ class BokehWorker(BokehServer):
 
         extra.update(template_variables)
 
-        main = Application(FunctionHandler(partial(main_doc, worker, extra)))
+        status = Application(FunctionHandler(partial(status_doc, worker, extra)))
         crossfilter = Application(
             FunctionHandler(partial(crossfilter_doc, worker, extra))
         )
@@ -787,7 +787,7 @@ class BokehWorker(BokehServer):
         )
 
         self.apps = {
-            "/main": main,
+            "/status": status,
             "/counters": counters,
             "/crossfilter": crossfilter,
             "/system": systemmonitor,

@@ -105,7 +105,7 @@ attributes including
 4.  Keys moved
 5.  Peer
 
-These are made available to users through the ``/main`` page of the Worker's
+These are made available to users through the ``/status`` page of the Worker's
 diagnostic dashboard.  You can capture their state explicitly by running a
 command on the workers:
 
