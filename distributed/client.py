@@ -1204,10 +1204,11 @@ class Client(Node):
         """ Send close signal and wait until scheduler completes """
         self.status = "closing"
 
+        for pc in self._periodic_callbacks.values():
+            pc.stop()
+
         with log_errors():
             _del_global_client(self)
-            for pc in self._periodic_callbacks.values():
-                pc.stop()
             self._scheduler_identity = {}
             with ignoring(AttributeError):
                 # clear the dask.config set keys
@@ -1288,6 +1289,9 @@ class Client(Node):
         if self.status == "closed":
             return
         self.status = "closing"
+
+        for pc in self._periodic_callbacks.values():
+            pc.stop()
 
         if self.asynchronous:
             future = self._close()
