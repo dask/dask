@@ -402,5 +402,5 @@ cluster resources in response to demand.
 
 .. _`combines dask.distributed with normal Python Queues`: https://distributed.dask.org/en/latest/queues.html
 
-.. _Joblib: https://pythonhosted.org/joblib/parallel.html
+.. _Joblib: https://joblib.readthedocs.io/en/latest/
 .. _dask.distributed: https://distributed.dask.org/en/latest/
