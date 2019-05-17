@@ -35,7 +35,7 @@ from ..context import globalmethod
 from ..utils import (ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, Dispatch, factors,
-                     parse_bytes, has_keyword, M, ndimlist)
+                     parse_bytes, has_keyword, M, ndimlist, format_bytes)
 from ..compatibility import (unicode, zip_longest,
                              Iterable, Iterator, Mapping)
 from ..core import quote
@@ -1012,6 +1012,51 @@ class Array(DaskMethodsMixin):
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
 
+    def _repr_html_(self):
+        table = self._repr_html_table()
+        try:
+            grid = self.to_svg(size=config.get('array.svg.size', 120))
+        except NotImplementedError:
+            grid = ""
+
+        both = [
+            '<table>',
+            '<tr>',
+            '<td>',
+            table,
+            '</td>',
+            '<td>',
+            grid,
+            '</td>',
+            '</tr>',
+            '</table>',
+        ]
+        return '\n'.join(both)
+
+    def _repr_html_table(self):
+        if not math.isnan(self.nbytes):
+            nbytes = format_bytes(self.nbytes)
+            cbytes = format_bytes(np.prod(self.chunksize) * self.dtype.itemsize)
+        else:
+            nbytes = 'unknown'
+            cbytes = 'unknown'
+
+        table = [
+            '<table>'
+            '  <thead>'
+            '    <tr><td> </td><th> Array </th><th> Chunk </th></tr>',
+            '  </thead>',
+            '  <tbody>',
+            '    <tr><th> Bytes </th><td> %s </td> <td> %s </td></tr>' % (nbytes, cbytes),
+            '    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>' % (str(self.shape), str(self.chunksize)),
+            '    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>' % (
+                len(self.__dask_graph__()), self.npartitions),
+            '    <tr><th> DType </th><td> %s </td><td></td></tr>' % self.dtype,
+            '  </tbody>',
+            '</table>'
+        ]
+        return '\n'.join(table)
+
     @property
     def ndim(self):
         return len(self.shape)
@@ -1077,6 +1122,26 @@ class Array(DaskMethodsMixin):
             r = r[0]
 
         return r
+
+    def to_svg(self, size=500):
+        """ Convert chunks from Dask Array into an SVG Image
+
+        Parameters
+        ----------
+        chunks: tuple
+        size: int
+            Rough size of the image
+
+        Examples
+        --------
+        >>> x.to_svg(size=500)  # doctest: +SKIP
+
+        Returns
+        -------
+        text: An svg string depicting the array as a grid of chunks
+        """
+        from .svg import svg
+        return svg(self.chunks, size=size)
 
     def to_hdf5(self, filename, datapath, **kwargs):
         """ Store array in HDF5 file
