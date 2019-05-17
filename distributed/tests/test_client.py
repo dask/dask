@@ -9,6 +9,7 @@ import logging
 import os
 import pickle
 import random
+import subprocess
 import sys
 import threading
 from threading import Semaphore
@@ -79,6 +80,7 @@ from distributed.utils_test import (
     wait_for,
     async_wait_for,
     pristine_loop,
+    save_sys_modules,
 )
 from distributed.utils_test import (  # noqa: F401
     client as c,
@@ -1484,7 +1486,7 @@ def test_upload_file(c, s, a, b):
 
         return myfile.f()
 
-    try:
+    with save_sys_modules():
         for value in [123, 456]:
             with tmp_text("myfile.py", "def f():\n    return {}".format(value)) as fn:
                 yield c.upload_file(fn)
@@ -1492,10 +1494,6 @@ def test_upload_file(c, s, a, b):
             x = c.submit(g, pure=False)
             result = yield x
             assert result == value
-    finally:
-        # Ensure that this test won't impact the others
-        if "myfile" in sys.modules:
-            del sys.modules["myfile"]
 
 
 @gen_cluster(client=True)
@@ -1511,28 +1509,80 @@ def test_upload_file_zip(c, s, a, b):
 
         return myfile.f()
 
-    try:
+    with save_sys_modules():
+        try:
+            for value in [123, 456]:
+                with tmp_text(
+                    "myfile.py", "def f():\n    return {}".format(value)
+                ) as fn_my_file:
+                    with zipfile.ZipFile("myfile.zip", "w") as z:
+                        z.write(fn_my_file, arcname=os.path.basename(fn_my_file))
+                    yield c.upload_file("myfile.zip")
+
+                    x = c.submit(g, pure=False)
+                    result = yield x
+                    assert result == value
+        finally:
+            if os.path.exists("myfile.zip"):
+                os.remove("myfile.zip")
+
+
+@gen_cluster(client=True)
+def test_upload_file_egg(c, s, a, b):
+    def g():
+        import package_1, package_2
+
+        return package_1.a, package_2.b
+
+    # c.upload_file tells each worker to
+    # - put this file in their local_dir
+    # - modify their sys.path to include it
+    # we don't care about the local_dir
+    # but we do care about restoring the path
+
+    with save_sys_modules():
         for value in [123, 456]:
-            with tmp_text(
-                "myfile.py", "def f():\n    return {}".format(value)
-            ) as fn_my_file:
-                with zipfile.ZipFile("myfile.zip", "w") as z:
-                    z.write(fn_my_file, arcname=os.path.basename(fn_my_file))
-                yield c.upload_file("myfile.zip")
+            with tmpfile() as dirname:
+                os.mkdir(dirname)
+
+                with open(os.path.join(dirname, "setup.py"), "w") as f:
+                    f.write("from setuptools import setup, find_packages\n")
+                    f.write(
+                        'setup(name="my_package", packages=find_packages(), version="{}")\n'.format(
+                            value
+                        )
+                    )
+
+                # test a package with an underscore in the name
+                package_1 = os.path.join(dirname, "package_1")
+                os.mkdir(package_1)
+                with open(os.path.join(package_1, "__init__.py"), "w") as f:
+                    f.write("a = {}\n".format(value))
+
+                # test multiple top-level packages
+                package_2 = os.path.join(dirname, "package_2")
+                os.mkdir(package_2)
+                with open(os.path.join(package_2, "__init__.py"), "w") as f:
+                    f.write("b = {}\n".format(value))
+
+                # compile these into an egg
+                subprocess.check_call(
+                    [sys.executable, "setup.py", "bdist_egg"], cwd=dirname
+                )
+
+                egg_root = os.path.join(dirname, "dist")
+                # first file ending with '.egg'
+                egg_name = [
+                    fname for fname in os.listdir(egg_root) if fname.endswith(".egg")
+                ][0]
+                egg_path = os.path.join(egg_root, egg_name)
+
+                yield c.upload_file(egg_path)
+                os.remove(egg_path)
 
                 x = c.submit(g, pure=False)
                 result = yield x
-                assert result == value
-    finally:
-        # Ensure that this test won't impact the others
-        if os.path.exists("myfile.zip"):
-            os.remove("myfile.zip")
-        if "myfile" in sys.modules:
-            del sys.modules["myfile"]
-        for path in sys.path:
-            if os.path.basename(path) == "myfile.zip":
-                sys.path.remove(path)
-                break
+                assert result == (value, value)
 
 
 @gen_cluster(client=True)
