@@ -83,7 +83,7 @@ Dask schedulers differ in the following ways:
 But the other projects offer different advantages and different programming
 paradigms.  One should inspect all such projects before selecting one.
 
-.. _Joblib: https://pythonhosted.org/joblib/parallel.html
+.. _Joblib: https://joblib.readthedocs.io/en/latest/
 .. _Multiprocessing: https://docs.python.org/3/library/multiprocessing.html
 .. _`IPython Parallel`: https://ipyparallel.readthedocs.io/en/latest/
 .. _`Concurrent.futures`: https://docs.python.org/3/library/concurrent.futures.html
