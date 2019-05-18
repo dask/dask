@@ -59,6 +59,27 @@ See :doc:`Documentation on Dask's dashboard <diagnostics-distributed>` for more
 information.
 
 
+Avoid Very Large Partitions
+---------------------------
+
+Your chunks of data should be small enough so that many of them fit in a
+worker's available memory at once.  You often control this when you select
+partition size in Dask DataFrame or chunk size in Dask Array.
+
+Dask will likely manipulate as many chunks in parallel on one machine as you
+have cores on that machine.  So if you have 1 GB chunks and ten
+cores, then Dask is likely to use *at least* 10 GB of memory.  Additionally,
+it's common for Dask to have 2-3 times as many chunks available to work on so
+that it always has something to work on.
+
+If you have a machine with 100 GB and 10 cores, then you might want to choose
+chunks in the 1GB range.  You have space for ten chunks per core which gives
+Dask a healthy margin, without having tasks that are too small
+
+Note that you also want to avoid chunk sizes that are too small.  See the next
+section for details.
+
+
 Avoid Very Large Graphs
 -----------------------
 
