@@ -346,8 +346,8 @@ def meta_nonempty_object(x):
     if is_scalar(x):
         return _nonempty_scalar(x)
     else:
-        raise TypeError("Expected Index, Series, DataFrame, or scalar, "
-                        "got {0}".format(type(x).__name__))
+        raise TypeError("Expected Pandas-like Index, Series, DataFrame, or scalar, "
+                        "got {0}".format(typename(type(x))))
 
 
 @meta_nonempty.register(pd.DataFrame)
@@ -414,7 +414,7 @@ def _nonempty_index(idx):
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
 
     raise TypeError("Don't know how to handle index of "
-                    "type {0}".format(type(idx).__name__))
+                    "type {0}".format(typename(type(idx))))
 
 
 _simple_fake_mapping = {
@@ -463,7 +463,7 @@ def _nonempty_scalar(x):
         return make_scalar(dtype)
 
     raise TypeError("Can't handle meta of type "
-                    "'{0}'".format(type(x).__name__))
+                    "'{0}'".format(typename(type(x))))
 
 
 @meta_nonempty.register(pd.Series)
@@ -561,7 +561,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     if (not (is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta))
             or is_dask_collection(meta)):
         raise TypeError("Expected partition to be DataFrame, Series, or "
-                        "Index, got `%s`" % type(meta).__name__)
+                        "Index, got `%s`" % typename(type(meta)))
 
     if type(x) != type(meta):
         errmsg = ("Expected partition of type `%s` but got "
@@ -575,7 +575,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
                       if not equal_dtypes(a, b)]
         if bad_dtypes:
             errmsg = ("Partition type: `%s`\n%s" %
-                      (type(meta).__name__,
+                      (typename(type(meta)),
                        asciitable(['Column', 'Found', 'Expected'], bad_dtypes)))
         elif not np.array_equal(np.nan_to_num(meta.columns),
                                 np.nan_to_num(x.columns)):
@@ -589,7 +589,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         if equal_dtypes(x.dtype, meta.dtype):
             return x
         errmsg = ("Partition type: `%s`\n%s" %
-                  (type(meta).__name__,
+                  (typename(type(meta)),
                    asciitable(['', 'dtype'], [('Found', x.dtype),
                                               ('Expected', meta.dtype)])))
 
