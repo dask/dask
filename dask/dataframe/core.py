@@ -3624,9 +3624,11 @@ def handle_out(out, result):
         if not isinstance(out, Scalar):
             out.divisions = result.divisions
     elif out is not None:
-        msg = ("The out parameter is not fully supported."
-               " Received type %s, expected %s " % ( typename(type(out)),
-                   typename(type(result))))
+        msg = (
+            "The out parameter is not fully supported."
+            " Received type %s, expected %s " % (
+                typename(type(out)), typename(type(result)))
+        )
         raise NotImplementedError(msg)
     else:
         return result
