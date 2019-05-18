@@ -2896,7 +2896,7 @@ class DataFrame(_Frame):
                     callable(v) or pd.api.types.is_scalar(v) or
                     is_index_like(v)):
                 raise TypeError("Column assignment doesn't support type "
-                                "{0}".format(type(v).__name__))
+                                "{0}".format(typename(type(v))))
             if callable(v):
                 kwargs[k] = v(self)
 
@@ -3624,8 +3624,11 @@ def handle_out(out, result):
         if not isinstance(out, Scalar):
             out.divisions = result.divisions
     elif out is not None:
-        msg = ("The out parameter is not fully supported."
-               " Received type %s, expected %s " % ( type(out).__name__, type(result).__name__))
+        msg = (
+            "The out parameter is not fully supported."
+            " Received type %s, expected %s " % (
+                typename(type(out)), typename(type(result)))
+        )
         raise NotImplementedError(msg)
     else:
         return result
