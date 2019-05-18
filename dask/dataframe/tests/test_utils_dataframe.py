@@ -333,6 +333,17 @@ def test_check_meta():
     assert str(err.value) == exp
 
 
+def test_check_meta_typename():
+    df = pd.DataFrame({'x': []})
+    ddf = dd.from_pandas(df, npartitions=1)
+    check_meta(df, df)
+    with pytest.raises(Exception) as info:
+        check_meta(ddf, df)
+
+    assert "dask" in str(info.value)
+    assert "pandas" in str(info.value)
+
+
 def test_is_dataframe_like():
     df = pd.DataFrame({'x': [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)

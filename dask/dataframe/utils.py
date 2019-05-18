@@ -22,7 +22,7 @@ from ..base import is_dask_collection
 from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import asciitable, is_arraylike, Dispatch
+from ..utils import asciitable, is_arraylike, Dispatch, typename
 from ..utils import is_dataframe_like as dask_is_dataframe_like
 from ..utils import is_series_like as dask_is_series_like
 from ..utils import is_index_like as dask_is_index_like
@@ -565,7 +565,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
 
     if type(x) != type(meta):
         errmsg = ("Expected partition of type `%s` but got "
-                  "`%s`" % (type(meta).__name__, type(x).__name__))
+                  "`%s`" % (typename(type(meta)), typename(type(x))))
     elif is_dataframe_like(meta):
         kwargs = dict()
         if PANDAS_VERSION >= '0.23.0':
