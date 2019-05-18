@@ -124,7 +124,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
             head = pd.read_sql_table(name, uri, schema=schema, index_col=index_col)
             return from_pandas(head, npartitions=1)
 
-        bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
+        bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
         meta = head[:0]
     else:
         if divisions is None and npartitions is None:
