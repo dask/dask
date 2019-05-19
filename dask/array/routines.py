@@ -290,6 +290,11 @@ def matmul(a, b):
     return out
 
 
+@wraps(np.moveaxis)
+def moveaxis(array, source, destination):
+    return np.moveaxis(array, source, destination)
+
+
 @wraps(np.outer)
 def outer(a, b):
     a = a.flatten()
@@ -969,6 +974,11 @@ def roll(array, shift, axis=None):
     result = result.reshape(array.shape)
 
     return result
+
+
+@wraps(np.rollaxis)
+def rollaxis(array, axis, start):
+    return np.rollaxis(array, axis, start)
 
 
 @wraps(np.ravel)

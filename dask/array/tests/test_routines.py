@@ -150,6 +150,23 @@ def test_swapaxes():
     assert d.swapaxes(0, 1).name != d.swapaxes(1, 0).name
 
 
+@pytest.mark.parametrize("funcname", [
+    "moveaxis",
+    "rollaxis",
+])
+def test_moveaxis_rollaxis(funcname):
+    x = np.random.normal(0, 10, size=(10, 12, 7))
+    d = da.from_array(x, chunks=(4, 5, 2))
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    assert_eq(np_func(x, 0, 1), da_func(d, 0, 1))
+    assert_eq(np_func(x, 2, 1), da_func(d, 2, 1))
+    assert_eq(np_func(x, 0, 0), da_func(d, 0, 0))
+    assert_eq(np_func(x, 0, -1), da_func(d, 0, -1))
+    assert isinstance(da_func(d, 0, 1), da.Array)
+
+
 @pytest.mark.parametrize("funcname, kwargs", [
     ("flipud", {}),
     ("fliplr", {}),
