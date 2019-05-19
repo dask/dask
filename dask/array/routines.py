@@ -977,7 +977,7 @@ def roll(array, shift, axis=None):
 
 
 @wraps(np.rollaxis)
-def rollaxis(array, axis, start):
+def rollaxis(array, axis, start=0):
     return np.rollaxis(array, axis, start)
 
 

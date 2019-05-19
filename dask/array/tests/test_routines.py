@@ -164,7 +164,20 @@ def test_moveaxis_rollaxis(funcname):
     assert_eq(np_func(x, 2, 1), da_func(d, 2, 1))
     assert_eq(np_func(x, 0, 0), da_func(d, 0, 0))
     assert_eq(np_func(x, 0, -1), da_func(d, 0, -1))
+    assert_eq(np_func(x, -1, -1), da_func(d, -1, -1))
+    assert_eq(np_func(x, -1, 2), da_func(d, -1, 2))
+    assert_eq(np_func(x, -1, 0), da_func(d, -1, 0))
     assert isinstance(da_func(d, 0, 1), da.Array)
+
+
+def test_moveaxis_rollaxis_keyword():
+    x = np.random.normal(0, 10, size=(10, 12, 7))
+    d = da.from_array(x, chunks=(4, 5, 2))
+    assert_eq(np.moveaxis(x, destination=1, source=0),
+              da.moveaxis(d, destination=1, source=0))
+    assert_eq(np.rollaxis(x, 2), da.rollaxis(d, 2))
+    assert_eq(np.rollaxis(x, start=1, axis=2),
+              da.rollaxis(d, start=1, axis=2))
 
 
 @pytest.mark.parametrize("funcname, kwargs", [
