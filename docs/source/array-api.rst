@@ -126,6 +126,7 @@ Top level user functions:
    minimum
    modf
    moment
+   moveaxis
    nanargmax
    nanargmin
    nancumprod
@@ -160,6 +161,7 @@ Top level user functions:
    result_type
    rint
    roll
+   rollaxis
    round
    sign
    signbit
@@ -494,6 +496,7 @@ Other functions
 .. autofunction:: minimum
 .. autofunction:: modf
 .. autofunction:: moment
+.. autofunction:: moveaxis
 .. autofunction:: nanargmax
 .. autofunction:: nanargmin
 .. autofunction:: nancumprod
@@ -527,6 +530,7 @@ Other functions
 .. autofunction:: result_type
 .. autofunction:: rint
 .. autofunction:: roll
+.. autofunction:: rollaxis
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
