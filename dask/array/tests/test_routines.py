@@ -161,13 +161,13 @@ def test_swapaxes():
 ])
 def test_moveaxis_rollaxis(funcname, shape):
     x = np.random.random(shape)
-    d = da.from_array(x, chunks=(len(shape)*(2,)))
+    d = da.from_array(x, chunks=(len(shape) * (2,)))
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
     for axis1 in range(-x.ndim, x.ndim):
         assert isinstance(da_func(d, 0, axis1), da.Array)
         for axis2 in range(-x.ndim, x.ndim):
-            assert_eq(np_func(x, axis1, axis2), 
+            assert_eq(np_func(x, axis1, axis2),
                       da_func(d, axis1, axis2))
 
 
