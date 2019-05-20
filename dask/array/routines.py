@@ -290,10 +290,11 @@ def matmul(a, b):
     return out
 
 
-@wraps(np.moveaxis)
-def moveaxis(array, source, destination):
-    return np.moveaxis(array, source, destination)
-
+#@wraps(np.moveaxis)
+#def moveaxis(array, source, destination):
+#    return np.moveaxis(array, source, destination)
+moveaxis = np.moveaxis
+#moveaxis = wraps(moveaxis)
 
 @wraps(np.outer)
 def outer(a, b):
@@ -976,10 +977,10 @@ def roll(array, shift, axis=None):
     return result
 
 
-@wraps(np.rollaxis)
-def rollaxis(array, axis, start=0):
-    return np.rollaxis(array, axis, start)
-
+#@wraps(np.rollaxis)
+#def rollaxis(array, axis, start=0):
+#    return np.rollaxis(array, axis, start)
+rollaxis = np.rollaxis
 
 @wraps(np.ravel)
 def ravel(array):
