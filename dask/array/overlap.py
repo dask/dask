@@ -15,6 +15,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
+from .utils import meta_from_array
 
 
 def fractional_slice(task, axes):
@@ -152,7 +153,9 @@ def overlap_internal(x, axes):
     dsk = merge(interior_slices, overlap_blocks)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
-    return Array(graph, name, chunks, dtype=x.dtype)
+    meta = meta_from_array(x, x.ndim)
+
+    return Array(graph, name, chunks, meta=meta)
 
 
 def trim_overlap(x, depth, boundary=None):
