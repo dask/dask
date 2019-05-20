@@ -60,14 +60,6 @@ def _register_arrow():
     from . import arrow
 
 
-@dask_serialize.register_lazy("sklearn")
-@dask_deserialize.register_lazy("sklearn")
-def _register_sklearn():
-    import sklearn.base
-
-    register_generic(sklearn.base.BaseEstimator)
-
-
 @dask_serialize.register_lazy("torch")
 @dask_deserialize.register_lazy("torch")
 @dask_serialize.register_lazy("torchvision")
