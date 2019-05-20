@@ -8,6 +8,7 @@ from ..base import normalize_token
 from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
                    asanyarray, blockwise)
 from .routines import _average
+from ..utils import derived_from
 
 
 @normalize_token.register(np.ma.masked_array)
@@ -101,7 +102,7 @@ def _tensordot(a, b, axes=2):
     return res.reshape(olda + oldb)
 
 
-@wraps(np.ma.filled)
+@derived_from(np.ma)
 def filled(a, fill_value=None):
     a = asanyarray(a)
     return a.map_blocks(np.ma.filled, fill_value=fill_value)
@@ -128,7 +129,7 @@ masked_less_equal = _wrap_masked(np.ma.masked_less_equal)
 masked_not_equal = _wrap_masked(np.ma.masked_not_equal)
 
 
-@wraps(np.ma.masked_equal)
+@derived_from(np.ma)
 def masked_equal(a, value):
     a = asanyarray(a)
     if getattr(value, 'shape', ()):
