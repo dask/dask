@@ -496,8 +496,8 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
 
 @derived_from(np)
-def diag(v):
-    name = "diag-" + tokenize(v)
+def diag(v, k=0):
+    name = "diag-" + tokenize(v, k)
 
     meta = meta_from_array(v, 2 if v.ndim == 1 else 1)
 
@@ -518,24 +518,19 @@ def diag(v):
             "v must be a dask array or numpy array, got {0}".format(type(v))
         )
     if v.ndim != 1:
-        if v.chunks[0] == v.chunks[1]:
-            dsk = {
-                (name, i): (np.diag, row[i]) for i, row in enumerate(v.__dask_keys__())
-            }
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-            return Array(graph, name, (v.chunks[0],), meta=meta)
-        else:
-            raise NotImplementedError(
-                "Extracting diagonals from non-square chunked arrays"
-            )
+        return diagonal(v, offset=k)
+
     chunks_1d = v.chunks[0]
-    blocks = v.__dask_keys__()
+    #    blocks = v.__dask_keys__()
     dsk = {}
     for i, m in enumerate(chunks_1d):
         for j, n in enumerate(chunks_1d):
             key = (name, i, j)
-            if i == j:
-                dsk[key] = (np.diag, blocks[i])
+            # if i == j:
+            #     dsk[key] = (np.diag, blocks[i], k)
+            if n * (j - i - 1) < k <= n * (j - i + 1):
+                print("DEBUG", n, m, k - (n * (j - i)))
+                dsk[key] = (np.diag, (v.name, j), k - (n * (j - i)))
             else:
                 dsk[key] = (np.zeros, (m, n))
                 dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
