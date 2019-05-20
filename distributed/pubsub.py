@@ -234,8 +234,8 @@ class Pub(object):
     disappear without notice.
 
     When using a Pub or Sub from a Client all communications will be routed
-    through the scheduler.  This can cause some performance degredation.  Pubs
-    an Subs only operate at top-speed when they are both on workers.
+    through the scheduler.  This can cause some performance degradation.  Pubs
+    and Subs only operate at top-speed when they are both on workers.
 
     Parameters
     ----------
