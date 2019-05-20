@@ -11,11 +11,11 @@ from toolz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
+from .utils import meta_from_array
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
-from .utils import meta_from_array
 
 
 def fractional_slice(task, axes):
