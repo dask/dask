@@ -90,10 +90,24 @@ def wrap_func_like(func, *args, **kwargs):
 
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
+def wrap_func_like_safe(func_like, func, *args, **kwargs):
+    """
+    Safe implementation for wrap_func_like(), attempts to use func_like(),
+    if the shape keyword argument, falls back to func().
+    """
+    try:
+        return func_like(*args, **kwargs)
+    except TypeError:
+        return func(*args, **kwargs)
+
 
 @curry
 def wrap(wrap_func, func, **kwargs):
-    f = partial(wrap_func, func, **kwargs)
+    func_like = kwargs.pop('func_like', None)
+    if func_like is None:
+        f = partial(wrap_func, func, **kwargs)
+    else:
+        f = partial(wrap_func, func, func_like, **kwargs)
     template = """
     Blocked variant of %(name)s
 
@@ -109,14 +123,17 @@ def wrap(wrap_func, func, **kwargs):
 
 
 w = wrap(wrap_func_shape_as_first_arg)
-w_like = wrap(wrap_func_like)
 
 ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
 full = w(np.full)
 
-ones_like = w_like(np.ones_like)
-zeros_like = w_like(np.zeros_like)
-empty_like = w_like(np.empty_like)
-full_like = w_like(np.full_like)
+
+w_like = wrap(wrap_func_like_safe)
+
+
+ones_like = w_like(np.ones, func_like=np.ones_like)
+zeros_like = w_like(np.zeros, func_like=np.zeros_like)
+empty_like = w_like(np.empty, func_like=np.empty_like)
+full_like = w_like(np.full, func_like=np.full_like)

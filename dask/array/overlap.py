@@ -306,8 +306,8 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     try:
-        c = np.full_like(x._meta, value, shape=tuple(map(sum, chunks)),
-                         chunks=tuple(chunks), dtype=x.dtype)
+        c = wrap.full_like(x._meta, value, shape=tuple(map(sum, chunks)),
+                           chunks=tuple(chunks), dtype=x.dtype)
     except TypeError:
         c = wrap.full(tuple(map(sum, chunks)), value,
                       chunks=tuple(chunks), dtype=x.dtype)
