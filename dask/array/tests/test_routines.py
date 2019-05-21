@@ -26,6 +26,13 @@ def test_array():
     assert isinstance(y, da.Array)
 
 
+@pytest.mark.skipif(PY2, reason="Docstrings stripped in optimised Py2")
+def test_derived_docstrings():
+    assert ("This docstring was copied from numpy.array"
+            in da.routines.array.__doc__)
+    assert "Create an array." in da.routines.array.__doc__
+
+
 @pytest.mark.parametrize("funcname", [
     "atleast_1d",
     "atleast_2d",

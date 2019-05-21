@@ -1,11 +1,10 @@
 from __future__ import division, print_function, absolute_import
 
-from functools import wraps
-
 import numpy as np
 from numpy.compat import basestring
 
 from .core import blockwise, asarray, einsum_lookup
+from ..utils import derived_from
 
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
@@ -193,7 +192,7 @@ def parse_einsum_input(operands):
     return (input_subscripts, output_subscript, operands)
 
 
-@wraps(np.einsum)
+@derived_from(np)
 def einsum(*operands, **kwargs):
     casting = kwargs.pop('casting', 'safe')
     dtype = kwargs.pop('dtype', None)

@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from ..compatibility import Sequence
-from functools import wraps
 import inspect
 
 import numpy as np
@@ -14,6 +13,7 @@ except ImportError:
 
 from .core import concatenate as _concatenate
 from .creation import arange as _arange
+from ..utils import derived_from
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -236,7 +236,7 @@ def _fftfreq_block(i, n, d):
     return r
 
 
-@wraps(np.fft.fftfreq)
+@derived_from(np.fft)
 def fftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
@@ -246,7 +246,7 @@ def fftfreq(n, d=1.0, chunks='auto'):
     return r.map_blocks(_fftfreq_block, dtype=float, n=n, d=d)
 
 
-@wraps(np.fft.rfftfreq)
+@derived_from(np.fft)
 def rfftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
@@ -284,11 +284,11 @@ def _fftshift_helper(x, axes=None, inverse=False):
     return y
 
 
-@wraps(np.fft.fftshift)
+@derived_from(np.fft)
 def fftshift(x, axes=None):
     return _fftshift_helper(x, axes=axes, inverse=False)
 
 
-@wraps(np.fft.ifftshift)
+@derived_from(np.fft)
 def ifftshift(x, axes=None):
     return _fftshift_helper(x, axes=axes, inverse=True)

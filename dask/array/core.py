@@ -32,7 +32,7 @@ from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
 from ..blockwise import broadcast_dimensions, subs
 from ..context import globalmethod
-from ..utils import (ndeepmap, ignoring, concrete,
+from ..utils import (ndeepmap, ignoring, concrete, derived_from,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, Dispatch, factors,
                      parse_bytes, has_keyword, M, ndimlist, format_bytes)
@@ -3436,7 +3436,7 @@ def broadcast_to(x, shape, chunks=None):
     return Array(graph, name, chunks, dtype=x.dtype)
 
 
-@wraps(np.broadcast_arrays)
+@derived_from(np)
 def broadcast_arrays(*args, **kwargs):
     subok = bool(kwargs.pop("subok", False))
 

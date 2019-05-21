@@ -104,7 +104,8 @@ if PY3:
         """Get all non ``*args/**kwargs`` arguments for a function"""
         s = inspect.signature(func)
         return [n for n, p in s.parameters.items()
-                if p.kind == p.POSITIONAL_OR_KEYWORD]
+                if p.kind in [p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY,
+                              p.KEYWORD_ONLY]]
 
     def reraise(exc, tb=None):
         if exc.__traceback__ is not tb:
