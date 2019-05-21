@@ -2883,6 +2883,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
+    seq = [asarray(a) for a in seq]
+
     # Empty arrays can impact the output dtype
     from .routines import result_type
     seq_dtypes = [a.dtype for a in seq]
