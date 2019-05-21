@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import pytest
+import json
 
 try:
     import lzma
@@ -9,11 +10,6 @@ except ImportError:
         import backports.lzma as lzma
     except ImportError:
         lzma = None
-
-try:
-    import json
-except ImportError:
-    json = None
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
@@ -44,21 +40,14 @@ def test_read_json_basic(orient):
 def test_read_json_fkeyword(fkeyword):
     def _my_json_reader(*args, **kwargs):
         if fkeyword == 'json':
-            if json is None:
-                pytest.skip(
-                    "json module not available. Please install."
-                )
             return pd.DataFrame.from_dict(json.load(*args))
         return pd.read_json(*args)
     with tmpfile('json') as f:
         df.to_json(f, orient='records', lines=False)
         actual = dd.read_json(f, orient='records', lines=False,
-                              read_function=_my_json_reader)
+                              engine=_my_json_reader)
         actual_pd = pd.read_json(f, orient='records', lines=False)
-
-        out = actual.compute()
-        assert_eq(out, actual_pd)
-        assert_eq(out, df)
+        assert_eq(actual, actual_pd)
 
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
