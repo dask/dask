@@ -39,9 +39,9 @@ def test_read_json_basic(orient):
             out.columns = list(df.columns)
         assert_eq(out, df)
 
-@pytest.mark.parametrize('orient', ['records', 'index', 'columns', 'values'])
+
 @pytest.mark.parametrize('fkeyword', ['pandas', 'json'])
-def test_read_json_fkeyword(orient, fkeyword):
+def test_read_json_fkeyword(fkeyword):
     def _my_json_reader(*args, **kwargs):
         if fkeyword == 'json':
             if json is None:
@@ -58,9 +58,8 @@ def test_read_json_fkeyword(orient, fkeyword):
 
         out = actual.compute()
         assert_eq(out, actual_pd)
-        if orient == 'values':
-            out.columns = list(df.columns)
         assert_eq(out, df)
+
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
                                     'values'])
