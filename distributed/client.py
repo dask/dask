@@ -504,12 +504,19 @@ class AllExit(Exception):
 
 
 class Client(Node):
-    """ Connect to and drive computation on a distributed Dask cluster
+    """ Connect to and submit computation to a Dask cluster
 
-    The Client connects users to a dask.distributed compute cluster.  It
-    provides an asynchronous user interface around functions and futures.  This
-    class resembles executors in ``concurrent.futures`` but also allows
-    ``Future`` objects within ``submit/map`` calls.
+    The Client connects users to a Dask cluster.  It provides an asynchronous
+    user interface around functions and futures.  This class resembles
+    executors in ``concurrent.futures`` but also allows ``Future`` objects
+    within ``submit/map`` calls.  When a Client is instantiated it takes over
+    all ``dask.compute`` and ``dask.persist`` calls by default.
+
+    It is also common to create a Client without specifying the scheduler
+    address , like ``Client()``.  In this case the Client creates a
+    ``LocalCluster`` in the background and connects to that.  Any extra
+    keywords are passed from Client to LocalCluster in this case.  See the
+    LocalCluster documentation for more information.
 
     Parameters
     ----------
