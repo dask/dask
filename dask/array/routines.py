@@ -899,7 +899,6 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
-# not @derived_from, func might not exist
 @safe_wraps(getattr(np, 'isin', None))
 def isin(element, test_elements, assume_unique=False, invert=False):
     element = asarray(element)
@@ -1203,7 +1202,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
-@wraps(chunk.coarsen)  # this is not a numpy function
+@wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False):
     if (not trim_excess and
         not all(bd % div == 0 for i, div in axes.items()
