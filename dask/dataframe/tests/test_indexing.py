@@ -243,6 +243,22 @@ def test_getitem_slice():
     assert_eq(ddf['f':], df['f':])
 
 
+def test_getitem_integer_slice():
+    df = pd.DataFrame({'A': range(6)})
+    ddf = dd.from_pandas(df, 2)
+    # integer slicing is iloc based
+    with pytest.raises(NotImplementedError):
+        ddf[1:3]
+
+    df = pd.DataFrame({'A': range(6)},
+                      index=[1., 2., 3., 5., 10., 11.])
+    ddf = dd.from_pandas(df, 2)
+    # except for float dtype indexes
+    assert_eq(ddf[2:8], df[2:8])
+    assert_eq(ddf[2:], df[2:])
+    assert_eq(ddf[:8], df[:8])
+
+
 def test_loc_on_numpy_datetimes():
     df = pd.DataFrame({'x': [1, 2, 3]},
                       index=list(map(np.datetime64, ['2014', '2015', '2016'])))
@@ -394,6 +410,41 @@ def test_to_series():
     assert_eq(df.index.to_series(), ddf.index.to_series())
 
 
+def test_to_frame():
+
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(), ddf.index.to_frame())
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(), ddf.index.to_frame())
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.24.0',
+                    reason="No renaming for index")
+def test_to_frame_name():
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(name='foo'), ddf.index.to_frame(name='foo'))
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(name='bar'), ddf.index.to_frame(name='bar'))
+
+
 @pytest.mark.parametrize('indexer', [
     0,
     [0],
@@ -422,10 +473,10 @@ def test_iloc_raises():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         ddf.iloc[[0, 1], :]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         ddf.iloc[[0, 1], [0, 1]]
 
     with pytest.raises(ValueError):

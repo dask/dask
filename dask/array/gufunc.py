@@ -9,15 +9,15 @@ try:
 except ImportError:
     from toolz import concat, merge, unique
 
-from .core import Array, asarray, atop, getitem, apply_infer_dtype
-from .. import sharedict
+from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
+from ..highlevelgraph import HighLevelGraph
 from ..core import flatten
 
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
 #   - Allow for zero input arguments
-# See http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+# See https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 _DIMENSION_NAME = r'\w+'
 _CORE_DIMENSION_LIST = '(?:{0:}(?:,{0:})*,?)?'.format(_DIMENSION_NAME)
 _ARGUMENT = r'\({}\)'.format(_CORE_DIMENSION_LIST)
@@ -246,8 +246,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     References
     ----------
-    .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
     axes = kwargs.pop("axes", None)
     axis = kwargs.pop("axis", None)
@@ -361,21 +361,24 @@ significantly.".format(dim))
             if len(relevant_chunksizes) > 1:
                 raise ValueError("Dimension `'{}'` with different chunksize present".format(dim))
 
-    ## Apply function - use atop here
+    ## Apply function - use blockwise here
     arginds = list(concat(zip(args, input_dimss)))
 
-    ### Use existing `atop` but only with loopdims to enforce
+    ### Use existing `blockwise` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
-    ### Modifying `atop` could improve things here.
-    tmp = atop(func, loop_output_dims, *arginds,
-               dtype=int,  # Only dummy dtype, anyone will do
-               concatenate=True,
-               **kwargs)
+    ### Modifying `blockwise` could improve things here.
+    tmp = blockwise(
+        func,
+        loop_output_dims,
+        *arginds,
+        dtype=int,  # Only dummy dtype, anyone will do
+        concatenate=True,
+        **kwargs
+    )
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
     loop_output_chunks = tmp.chunks
-    dsk = tmp.__dask_graph__()
     keys = list(flatten(tmp.__dask_keys__()))
     name, token = keys[0][0].split('-')
 
@@ -393,7 +396,8 @@ significantly.".format(dim))
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = "%s_%d-%s" % (name, i, token)
         leaf_dsk = {(leaf_name,) + key[1:] + core_chunkinds: ((getitem, key, i) if nout else key) for key in keys}
-        leaf_arr = Array(sharedict.merge((leaf_name, leaf_dsk), dsk),
+        graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
+        leaf_arr = Array(graph,
                          leaf_name,
                          chunks=output_chunks,
                          shape=output_shape,
@@ -504,8 +508,8 @@ class gufunc(object):
 
     References
     ----------
-    .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
     def __init__(self, pyfunc, **kwargs):
         self.pyfunc = pyfunc
@@ -629,8 +633,8 @@ def as_gufunc(signature=None, **kwargs):
 
     References
     ----------
-    .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
     _allowedkeys = {"vectorize", "axes", "axis", "keepdims", "output_sizes", "output_dtypes", "allow_rechunk"}
     if set(_allowedkeys).issubset(kwargs.keys()):

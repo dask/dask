@@ -58,6 +58,7 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   diagonal
    diff
    digitize
    dot
@@ -114,7 +115,7 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   map_blocks
+   ~core.map_blocks
    map_overlap
    matmul
    max
@@ -145,7 +146,7 @@ Top level user functions:
    outer
    pad
    percentile
-   PerformanceWarning
+   ~core.PerformanceWarning
    piecewise
    prod
    ptp
@@ -176,6 +177,7 @@ Top level user functions:
    tensordot
    tile
    topk
+   trace
    transpose
    tril
    triu
@@ -277,6 +279,7 @@ Random
    random.pareto
    random.poisson
    random.power
+   random.randint
    random.random
    random.random_sample
    random.rayleigh
@@ -333,10 +336,12 @@ Create and Store Arrays
    from_delayed
    from_npy_stack
    from_zarr
+   from_tiledb
    store
    to_hdf5
    to_zarr
    to_npy_stack
+   to_tiledb
 
 Generalized Ufuncs
 ~~~~~~~~~~~~~~~~~~
@@ -355,9 +360,8 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   atop
+   blockwise
    normalize_chunks
-   top
 
 
 Other functions
@@ -424,6 +428,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diagonal
 .. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot
@@ -564,6 +569,7 @@ Other functions
 .. autofunction:: solve_triangular
 .. autofunction:: svd
 .. autofunction:: svd_compressed
+.. autofunction:: sfqr
 .. autofunction:: tsqr
 
 .. currentmodule:: dask.array.ma
@@ -589,6 +595,8 @@ Other functions
 
 .. autofunction:: overlap
 .. autofunction:: map_overlap
+.. autofunction:: trim_internal
+.. autofunction:: trim_overlap
 
 .. currentmodule:: dask.array
 
@@ -596,10 +604,12 @@ Other functions
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
 .. autofunction:: from_zarr
+.. autofunction:: from_tiledb
 .. autofunction:: store
 .. autofunction:: to_hdf5
 .. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
+.. autofunction:: to_tiledb
 
 .. currentmodule:: dask.array.fft
 
@@ -628,6 +638,7 @@ Other functions
 .. autofunction:: beta
 .. autofunction:: binomial
 .. autofunction:: chisquare
+.. autofunction:: choice
 .. autofunction:: exponential
 .. autofunction:: f
 .. autofunction:: gamma
@@ -645,6 +656,7 @@ Other functions
 .. autofunction:: pareto
 .. autofunction:: poisson
 .. autofunction:: power
+.. autofunction:: randint
 .. autofunction:: random
 .. autofunction:: random_sample
 .. autofunction:: rayleigh
@@ -688,9 +700,8 @@ Other functions
 .. currentmodule:: dask.array.core
 
 .. autofunction:: map_blocks
-.. autofunction:: atop
+.. autofunction:: blockwise
 .. autofunction:: normalize_chunks
-.. autofunction:: top
 
 .. currentmodule:: dask.array
 

@@ -21,17 +21,41 @@ try:
 except ImportError:
     fastparquet = False
 
-try:
-    import pyarrow.parquet as pq
-except ImportError:
-    pq = False
-
 
 try:
     import pyarrow as pa
     check_pa_divs = pa.__version__ >= LooseVersion('0.9.0')
 except ImportError:
     check_pa_divs = False
+
+
+try:
+    import pyarrow.parquet as pq
+except ImportError:
+    pq = False
+
+
+SKIP_FASTPARQUET = not fastparquet
+SKIP_FASTPARQUET_REASON = 'fastparquet not found'
+FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason=SKIP_FASTPARQUET_REASON)
+
+if pq and pa.__version__ == LooseVersion('0.13.0'):
+    SKIP_PYARROW = True
+    SKIP_PYARROW_REASON = 'pyarrow 0.13.0 not supported'
+else:
+    SKIP_PYARROW = not pq
+    SKIP_PYARROW_REASON = 'pyarrow not found'
+PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
+
+
+def check_fastparquet():
+    if SKIP_FASTPARQUET:
+        pytest.skip(SKIP_FASTPARQUET_REASON)
+
+
+def check_pyarrow():
+    if SKIP_PYARROW:
+        pytest.skip(SKIP_PYARROW_REASON)
 
 
 def should_check_divs(engine):
@@ -52,22 +76,11 @@ df = pd.DataFrame({'x': [i * 7 % 5 for i in range(nrows)],  # Not sorted
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-@pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
-                                           reason='fastparquet not found'),
-                        pytest.mark.skipif(not pq, 'pyarrow',
-                                           reason='pyarrow not found')])
+@pytest.fixture(params=[
+    pytest.param('fastparquet', marks=FASTPARQUET_MARK),
+    pytest.param('pyarrow', marks=PYARROW_MARK)])
 def engine(request):
     return request.param
-
-
-def check_fastparquet():
-    if not fastparquet:
-        pytest.skip('fastparquet not found')
-
-
-def check_pyarrow():
-    if not pq:
-        pytest.skip('pyarrow not found')
 
 
 def write_read_engines(**kwargs):
@@ -79,9 +92,10 @@ def write_read_engines(**kwargs):
     marks = {(w, r): [] for w in backends for r in backends}
 
     # Skip if uninstalled
-    for name, exists in [('fastparquet', fastparquet), ('pyarrow', pq)]:
-        val = pytest.mark.skip(reason='%s not found' % name)
-        if not exists:
+    for name, skip, reason in [('fastparquet', SKIP_FASTPARQUET, SKIP_FASTPARQUET_REASON),
+                               ('pyarrow', SKIP_PYARROW, SKIP_PYARROW_REASON)]:
+        if skip:
+            val = pytest.mark.skip(reason=reason)
             for k in marks:
                 if name in k:
                     marks[k].append(val)
@@ -177,6 +191,10 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 
 @write_read_engines()
 def test_read_glob(tmpdir, write_engine, read_engine):
+    if write_engine == read_engine == 'fastparquet' and os.name == 'nt':
+        # fastparquet or dask is not normalizing filepaths correctly on
+        # windows.
+        pytest.skip("filepath bug.")
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
     if os.path.exists(os.path.join(fn, '_metadata')):
@@ -199,6 +217,11 @@ def test_read_glob(tmpdir, write_engine, read_engine):
 
 @write_read_engines()
 def test_read_list(tmpdir, write_engine, read_engine):
+    if write_engine == read_engine == 'fastparquet' and os.name == 'nt':
+        # fastparquet or dask is not normalizing filepaths correctly on
+        # windows.
+        pytest.skip("filepath bug.")
+
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
     files = sorted([os.path.join(tmpdir, f)
@@ -287,7 +310,8 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     # No Index
     # --------
     # All columns, none as index
-    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine, infer_divisions=False),
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine,
+                              infer_divisions=False),
               ddf2, check_index=False, check_divisions=True)
 
     # Two columns, none as index
@@ -319,6 +343,8 @@ def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
 
 @write_read_engines_xfail
 def test_infer_divisions_no_index(tmpdir, write_engine, read_engine):
+    if read_engine == 'pyarrow' and pa.__version__ >= LooseVersion('0.13.0'):
+        pytest.skip("No longer an error from pyarrow 0.13.0")
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine, write_index=False)
 
@@ -433,6 +459,8 @@ def test_names(tmpdir, engine):
             set(read(fn, columns=['x']).dask))
 
 
+@pytest.mark.xfail(reason="parquet column fusion is special cased today"
+                          " we'll need to find a more general solution near-term")
 @pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
 def test_optimize(tmpdir, c):
     check_fastparquet()
@@ -546,7 +574,7 @@ def test_append_with_partition(tmpdir):
                   ignore_divisions=True)
 
     out = dd.read_parquet(tmp).compute()
-    out['lon'] = out.lon.astype('int64')  # just to pass assert
+    out['lon'] = out.lon.astype('int')  # just to pass assert
     # sort required since partitioning breaks index order
     assert_eq(out.sort_values('value'), pd.concat([df0, df1])[out.columns],
               check_index=False)
@@ -668,6 +696,7 @@ def test_ordering(tmpdir, write_engine, read_engine):
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
+    import glob
     tmp = str(tmpdir)
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'f': np.arange(1000, dtype=np.float64)})
@@ -680,6 +709,15 @@ def test_read_parquet_custom_columns(tmpdir, engine):
                           infer_divisions=should_check_divs(engine))
     assert_eq(df[['i32', 'f']], df2,
               check_index=False, check_divisions=should_check_divs(engine))
+
+    import glob
+    fns = glob.glob(os.path.join(tmp, '*.parquet'))
+    df2 = dd.read_parquet(fns,
+                          columns=['i32'],
+                          engine=engine).compute()
+    df2.sort_values('i32', inplace=True)
+    assert_eq(df[['i32']], df2,
+              check_index=False, check_divisions=False)
 
     df3 = dd.read_parquet(tmp,
                           columns=['f', 'i32'],
@@ -699,8 +737,9 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
-    pytest.mark.xfail((pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {}),
-                      reason="Parquet doesn't support nanosecond precision"),
+    pytest.param(pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {},
+                 marks=pytest.mark.xfail(
+                     reason="Parquet doesn't support nanosecond precision")),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'), {}, {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'), {}, {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'), {}, {}),
@@ -806,32 +845,34 @@ def test_partition_on(tmpdir, write_engine, read_engine):
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
 
 
-def test_filters(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_filters(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
 
     df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})
     ddf = dd.from_pandas(df, npartitions=1)
 
     # Ok with 1 partition and filters
-    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False)
-    ddf2 = dd.read_parquet(fn, index=False,
+    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False,
+                                                          engine=write_engine)
+    ddf2 = dd.read_parquet(fn, index=False, engine=read_engine,
                            filters=[('at', '==', 'aa')]).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and no filters
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn).compute()
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+    dd.read_parquet(fn, engine=read_engine).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and filters using base fastparquet
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
-    assert len(df2) > 0
+    if read_engine == 'fastparquet':
+        ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+        df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
+        assert len(df2) > 0
 
     # with >1 partition and filters
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+    dd.read_parquet(fn, engine=read_engine, filters=[('at', '==', 'aa')]).compute()
     assert len(ddf2) > 0
 
 
@@ -1009,7 +1050,6 @@ def test_columns_name(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
-
     if engine == 'fastparquet' and compression in ['snappy', 'default']:
         pytest.importorskip('snappy')
 
@@ -1024,8 +1064,10 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
         pf = fastparquet.ParquetFile(fn)
         assert pf.row_groups[0].columns[0].meta_data.codec == 1
 
-    out = dd.read_parquet(fn, engine=engine, infer_divisions=should_check_divs(engine))
-    assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
+    out = dd.read_parquet(fn, engine=engine,
+                          infer_divisions=should_check_divs(engine))
+    assert_eq(out, ddf, check_index=(engine != 'fastparquet'),
+              check_divisions=should_check_divs(engine))
 
 
 @pytest.fixture(params=[
@@ -1147,23 +1189,10 @@ def test_parse_pandas_metadata_null_index():
     assert column_index_names == e_column_index_names
 
 
-def test_pyarrow_raises_filters_categoricals(tmpdir):
-    check_pyarrow()
-    tmp = str(tmpdir)
-    data = pd.DataFrame({"A": [1, 2]})
-    df = dd.from_pandas(data, npartitions=2)
-
-    df.to_parquet(tmp, write_index=False, engine="pyarrow")
-
-    with pytest.raises(NotImplementedError):
-        dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
-
-
 def test_read_no_metadata(tmpdir, engine):
     # use pyarrow.parquet to create a parquet file without
     # pandas metadata
-    pa = pytest.importorskip("pyarrow")
-    import pyarrow.parquet as pq
+    check_pyarrow()
     tmp = str(tmpdir) + "table.parq"
 
     table = pa.Table.from_arrays([pa.array([1, 2, 3]),
@@ -1251,6 +1280,7 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     fn = str(tmpdir)
     path1 = os.path.join(fn, 'normal')
     path2 = os.path.join(fn, 'partitioned')
+    pytest.importorskip("snappy")
 
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
                        'b': np.random.random(size=100),
@@ -1291,6 +1321,7 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
 
 def test_select_partitioned_column(tmpdir, engine):
+    pytest.importorskip("snappy")
     if engine == 'pyarrow':
         import pyarrow as pa
         if pa.__version__ < LooseVersion('0.9.0'):
@@ -1309,9 +1340,23 @@ def test_select_partitioned_column(tmpdir, engine):
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
 
 
+def test_with_tz(tmpdir, engine):
+    if engine == 'pyarrow' and pa.__version__ < LooseVersion('0.11.0'):
+        pytest.skip("pyarrow<0.11.0 did not support this")
+    if engine == 'fastparquet' and fastparquet.__version__ < LooseVersion(
+            '0.3.0'):
+        pytest.skip("fastparquet<0.3.0 did not support this")
+    fn = str(tmpdir)
+    df = pd.DataFrame([[0]], columns=['a'], dtype='datetime64[ns, UTC]')
+    df = dd.from_pandas(df, 1)
+    df.to_parquet(fn, engine=engine)
+    df2 = dd.read_parquet(fn, engine=engine)
+    assert_eq(df, df2, check_divisions=False, check_index=False)
+
+
 def test_arrow_partitioning(tmpdir):
     # Issue #3518
-    pytest.importorskip('pyarrow')
+    check_pyarrow()
     path = str(tmpdir)
     data = {
         'p': np.repeat(np.arange(3), 2).astype(np.int8),
@@ -1335,3 +1380,34 @@ def test_informative_error_messages():
     assert 'foo' in str(info.value)
     assert 'arrow' in str(info.value)
     assert 'fastparquet' in str(info.value)
+
+
+def test_append_cat_fp(tmpdir):
+    check_fastparquet()
+    path = str(tmpdir)
+    # https://github.com/dask/dask/issues/4120
+    df = pd.DataFrame({"x": ["a", "a", "b", "a", "b"]})
+    df["x"] = df["x"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    dd.to_parquet(ddf, path)
+
+    # this fails:
+    dd.to_parquet(ddf, path, append=True, ignore_divisions=True)
+    d = dd.read_parquet(path).compute()
+    assert d['x'].tolist() == ["a", "a", "b", "a", "b"] * 2
+
+
+def test_passing_parquetfile(tmpdir):
+    import shutil
+    check_fastparquet()
+    path = str(tmpdir)
+    df = pd.DataFrame({"x": [1, 3, 2, 4]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    dd.to_parquet(ddf, path)
+    pf = fastparquet.ParquetFile(path)
+    shutil.rmtree(path)
+
+    # should pass, because no need to re-read metadata
+    dd.read_parquet(pf)

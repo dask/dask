@@ -10,7 +10,7 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..sharedict import ShareDict
+from ..highlevelgraph import HighLevelGraph
 
 try:
     AxisError = np.AxisError
@@ -22,7 +22,7 @@ except AttributeError:
 
 
 def normalize_to_array(x):
-    if 'cupy' in str(type(x)):
+    if 'cupy' in str(type(x)):  # TODO: avoid explicit reference to cupy
         return x.get()
     else:
         return x
@@ -55,10 +55,10 @@ def _not_empty(x):
 
 def _check_dsk(dsk):
     """ Check that graph is well named and non-overlapping """
-    if not isinstance(dsk, ShareDict):
+    if not isinstance(dsk, HighLevelGraph):
         return
 
-    assert all(isinstance(k, (tuple, str)) for k in dsk.dicts)
+    assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one
@@ -159,3 +159,17 @@ def validate_axis(axis, ndim):
     if axis < 0:
         axis += ndim
     return axis
+
+
+def _is_nep18_active():
+    class A():
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()

@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 
 from operator import getitem
 from functools import partial, wraps
@@ -6,10 +5,13 @@ from functools import partial, wraps
 import numpy as np
 from toolz import curry
 
-from .core import Array, elemwise, atop, apply_infer_dtype, asarray
+from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
+from .utils import IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
-from .. import core, sharedict
-from ..utils import skip_doctest, funcname
+from .. import core
+from ..highlevelgraph import HighLevelGraph
+from ..utils import (skip_doctest, funcname,
+                     is_dataframe_like, is_series_like, is_index_like)
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -28,7 +30,10 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            if array_wrap:
+            is_dataframe = (is_dataframe_like(dsk[0]) or is_series_like(dsk[0]) or
+                            is_index_like(dsk[0]))
+            if (array_wrap and
+                    (is_dataframe or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
@@ -151,12 +156,19 @@ class ufunc(object):
         else:
             func = self._ufunc.outer
 
-        return atop(func, out_inds, A, A_inds, B, B_inds, dtype=dtype,
-                    token=self.__name__ + '.outer', **kwargs)
+        return blockwise(
+            func,
+            out_inds,
+            A, A_inds,
+            B, B_inds,
+            dtype=dtype,
+            token=self.__name__ + '.outer',
+            **kwargs
+        )
 
 
 # ufuncs, copied from this page:
-# http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+# https://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
 # math operations
 add = ufunc(np.add)
@@ -169,11 +181,7 @@ true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
 power = ufunc(np.power)
-try:
-    float_power = ufunc(np.float_power)
-except AttributeError:
-    # Absent for NumPy versions prior to 1.12.
-    pass
+float_power = ufunc(np.float_power)
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below
@@ -215,6 +223,8 @@ less = ufunc(np.less)
 less_equal = ufunc(np.less_equal)
 not_equal = ufunc(np.not_equal)
 equal = ufunc(np.equal)
+isneginf = partial(equal, -np.inf)
+isposinf = partial(equal, np.inf)
 logical_and = ufunc(np.logical_and)
 logical_or = ufunc(np.logical_or)
 logical_xor = ufunc(np.logical_xor)
@@ -248,7 +258,7 @@ ceil = ufunc(np.ceil)
 trunc = ufunc(np.trunc)
 
 # more math routines, from this page:
-# http://docs.scipy.org/doc/numpy/reference/routines.math.html
+# https://docs.scipy.org/doc/numpy/reference/routines.math.html
 degrees = ufunc(np.degrees)
 radians = ufunc(np.radians)
 rint = ufunc(np.rint)
@@ -260,8 +270,6 @@ absolute = ufunc(np.absolute)
 clip = wrap_elemwise(np.clip)
 isreal = wrap_elemwise(np.isreal, array_wrap=True)
 iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
-isneginf = wrap_elemwise(np.isneginf, array_wrap=True)
-isposinf = wrap_elemwise(np.isposinf, array_wrap=True)
 real = wrap_elemwise(np.real, array_wrap=True)
 imag = wrap_elemwise(np.imag, array_wrap=True)
 fix = wrap_elemwise(np.fix, array_wrap=True)
@@ -294,10 +302,10 @@ def frexp(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk), dependencies={left: {tmp.name}}),
-              left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk), dependencies={right: {tmp.name}}),
-              right, chunks=tmp.chunks, dtype=rdt)
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
+    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
+    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
 
@@ -317,8 +325,8 @@ def modf(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk), dependencies={left: {tmp.name}}),
-              left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk), dependencies={right: {tmp.name}}),
-              right, chunks=tmp.chunks, dtype=rdt)
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
+    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
+    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R

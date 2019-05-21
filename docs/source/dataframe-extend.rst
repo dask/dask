@@ -9,29 +9,29 @@ objects:
 -  ...
 
 These projects may also want to produce parallel variants of themselves with
-Dask, and may want to reuse some of the code in Dask Dataframe.
+Dask, and may want to reuse some of the code in Dask DataFrame.
 This document describes how to do this.  It is intended for maintainers of
-these libraries, and not for general users.
+these libraries and not for general users.
 
 
 Implement dask, name, meta, and divisions
 -----------------------------------------
 
 You will need to implement ``._meta``, ``.dask``, ``.divisions``, and
-``._name`` as defined in the :doc:`dataframe design docs <dataframe-design>`.
+``._name`` as defined in the :doc:`DataFrame design docs <dataframe-design>`.
 
 
 Extend Dispatched Methods
 -------------------------
 
 If you are going to pass around Pandas-like objects that are not normal Pandas
-objects then we ask you to extend a few dispatched methods.
+objects, then we ask you to extend a few dispatched methods.
 
 make_meta
 ~~~~~~~~~
 
 This function returns an empty version of one of your non-Dask objects, given a
-non-empty non-Dask object.
+non-empty non-Dask object:
 
 .. code-block:: python
 
@@ -52,11 +52,11 @@ non-empty non-Dask object.
        return ind[:0]
 
 
-Additionally you should create a similar function that returns a non-empty
-version of your non-Dask dataframe objects, filled with a few rows of
+Additionally, you should create a similar function that returns a non-empty
+version of your non-Dask DataFrame objects filled with a few rows of
 representative or random data.  This is used to guess types when they are not
 provided.  It should expect an empty version of your object with columns,
-dtypes, index name, and it should return a non-empty version.
+dtypes, index name, and it should return a non-empty version:
 
 .. code-block:: python
 
@@ -82,7 +82,7 @@ dtypes, index name, and it should return a non-empty version.
 get_parallel_type
 ~~~~~~~~~~~~~~~~~
 
-Given a non-Dask dataframe object, return the Dask equivalent
+Given a non-Dask DataFrame object, return the Dask equivalent:
 
 .. code-block:: python
 
@@ -106,8 +106,8 @@ Given a non-Dask dataframe object, return the Dask equivalent
 concat
 ~~~~~~
 
-Concatenate many of your non-Dask dataframe objects together.  It should expect
-a list of your objects (homogeneously typed).
+Concatenate many of your non-Dask DataFrame objects together.  It should expect
+a list of your objects (homogeneously typed):
 
 .. code-block:: python
 
@@ -118,12 +118,71 @@ a list of your objects (homogeneously typed).
        ...
 
 
+.. _extensionarrays:
+
 Extension Arrays
 ----------------
 
-Rather than subclassing Pandas dataframes, you may be interested in extending
-Pandas with `Extension Arrays <https://pandas.pydata.org/pandas-docs/stable/extending.html>`_.
+Rather than subclassing Pandas DataFrames, you may be interested in extending
+Pandas with `Extension Arrays
+<https://pandas.pydata.org/pandas-docs/stable/extending.html>`_.
 
-API support for extension arrays isn't in Dask Dataframe yet (though this would
-be a good contribution), but many of the complications above will go away if
-your objects are genuinely Pandas dataframes, rather than a subclass.
+All of the first-party extension arrays (those implemented in pandas itself)
+are supported directly by dask.
+
+Developers implementing third-party extension arrays (outside of pandas) will
+need to do register their ``ExtensionDtype`` with Dask so that it works
+correctly in ``dask.dataframe``.
+
+For example, we'll register the *test-only* ``DecimalDtype`` from pandas
+test suite.
+
+.. code-block:: python
+
+   from decimal import Decimal
+   from dask.dataframe.extensions import make_array_nonempty, make_scalar
+   from pandas.tests.extension.decimal import DecimalArray, DecimalDtype
+
+   @make_array_nonempty.register(DecimalDtype)
+   def _(dtype):
+       return DecimalArray._from_sequence([Decimal('0'), Decimal('NaN')],
+                                          dtype=dtype)
+
+
+   @make_scalar.register(Decimal)
+   def _(x):
+      return Decimal('1')
+
+
+Internally, Dask will use this to create a small dummy Series for tracking
+metadata through operations.
+
+.. code-block:: python
+
+   >>> make_array_nonempty(DecimalDtype())
+   <DecimalArray>
+   [Decimal('0'), Decimal('NaN')]
+   Length: 2, dtype: decimal
+
+So you (or your users) can now create and store a dask ``DataFrame`` or
+``Series`` with your extension array contained within.
+
+.. code-block:: python
+
+   >>> from decimal import Decimal
+   >>> import dask.dataframe as dd
+   >>> import pandas as pd
+   >>> from pandas.tests.extension.decimal import DecimalArray
+   >>> ser = pd.Series(DecimalArray([Decimal('0.0')] * 10))
+   >>> dser = dd.from_pandas(ser, 3)
+   >>> dser
+   Dask Series Structure:
+   npartitions=3
+   0    decimal
+   4        ...
+   8        ...
+   9        ...
+   dtype: decimal
+   Dask Name: from_pandas, 3 tasks
+
+Notice the ``decimal`` dtype.

@@ -10,15 +10,15 @@ Overview
    :alt: A dask array
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
-These arrays may be concrete, or functions that produce arrays.  We define a
-Dask array with the following components
+These arrays may be actual arrays or functions that produce arrays. We 
+define a Dask array with the following components:
 
 *  A Dask graph with a special set of keys designating blocks
    such as ``('x', 0, 0), ('x', 0, 1), ...`` (See :doc:`Dask graph
-   documentation <graphs>` for more details.)
+   documentation <graphs>` for more details)
 *  A sequence of chunk sizes along each dimension called ``chunks``,
    for example ``((5, 5, 5, 5), (8, 8, 8))``
-*  A name to identify which keys in the dask graph refer to this array, like
+*  A name to identify which keys in the Dask graph refer to this array, like
    ``'x'``
 *  A NumPy dtype
 
@@ -48,11 +48,11 @@ Example
 Keys of the Dask graph
 ----------------------
 
-By special convention we refer to each block of the array with a tuple of the
-form ``(name, i, j, k)`` for ``i, j, k`` being the indices of the block,
-ranging from ``0`` to the number of blocks in that dimension.  The dask graph
-must hold key-value pairs referring to these keys.  It likely also holds other
-key-value pairs required to eventually compute the desired values, for example
+By special convention, we refer to each block of the array with a tuple of the
+form ``(name, i, j, k)``, with ``i, j, k`` being the indices of the block
+ranging from ``0`` to the number of blocks in that dimension.  The Dask graph
+must hold key-value pairs referring to these keys.  Moreover, it likely also 
+holds other key-value pairs required to eventually compute the desired values:
 
 .. code-block:: python
 
@@ -66,31 +66,32 @@ key-value pairs required to eventually compute the desired values, for example
    }
 
 The name of an ``Array`` object can be found in the ``name`` attribute.  One
-can get a nested list of keys with the ``.__dask_keys__()`` method.  One can
-flatten down this list with ``dask.array.core.flatten()``; this is sometimes
+can get a nested list of keys with the ``.__dask_keys__()`` method.  Additionally, 
+one can flatten down this list with ``dask.array.core.flatten()``. This is sometimes
 useful when building new dictionaries.
 
 Chunks
 ------
 
-We also store the size of each block along each axis.  This is a tuple of
-tuples such that the length of the outer tuple is equal to the dimension and
-the lengths of the inner tuples are equal to the number of blocks along each
-dimension.  In the example illustrated above this value is as follows::
+We also store the size of each block along each axis.  This is composed of 
+a tuple of tuples such that the length of the outer tuple is equal to the 
+number of dimensions of the array, and the lengths of the inner tuples are 
+equal to the number of blocks along each dimension.  In the example illustrated 
+above this value is as follows::
 
     chunks = ((5, 5, 5, 5), (8, 8, 8))
 
 Note that these numbers do not necessarily need to be regular.  We often create
 regularly sized grids but blocks change shape after complex slicing.  Beware
 that some operations do expect certain symmetries in the block-shapes.  For
-example matrix multiplication requires that blocks on each side have
+example, matrix multiplication requires that blocks on each side have
 anti-symmetric shapes.
 
-Some ways in which ``chunks`` reflects properties of our array
+Some ways in which ``chunks`` reflects properties of our array:
 
-1.  ``len(x.chunks) == x.ndim``: The length of chunks is the number of dimensions
-2.  ``tuple(map(sum, x.chunks)) == x.shape``: The sum of each internal chunk, is the
-    length of that dimension.
+1.  ``len(x.chunks) == x.ndim``: the length of chunks is the number of dimensions
+2.  ``tuple(map(sum, x.chunks)) == x.shape``: the sum of each internal chunk is the
+    length of that dimension
 3.  The length of each internal chunk is the number of keys in that dimension.
     For instance, for ``chunks == ((a, b), (d, e, f))`` and name == ``'x'``
     our array has tasks with the following keys::
@@ -102,12 +103,12 @@ Some ways in which ``chunks`` reflects properties of our array
 Create an Array Object
 ----------------------
 
-So to create an ``da.Array`` object we need a dictionary with these special
-keys ::
+In order to create an ``da.Array`` object we need a dictionary with these special
+keys::
 
     dsk = {('x', 0, 0): ...}
 
-a name specifying to which keys this array refers ::
+a name specifying which keys this array refers to::
 
     name = 'x'
 
@@ -115,19 +116,19 @@ and a chunks tuple::
 
     chunks = ((5, 5, 5, 5), (8, 8, 8))
 
-Then one can construct an array::
+Then, using these elements, one can construct an array::
 
     x = da.Array(dsk, name, chunks)
 
-So ``dask.array`` operations update dask graphs, update dtypes, and track chunk
+In short, ``dask.array`` operations update Dask graphs, update dtypes, and track chunk
 shapes.
 
 
 Example - ``eye`` function
 --------------------------
 
-As an example lets build the ``np.eye`` function for ``dask.array`` to make the
-identity matrix
+As an example, lets build the ``np.eye`` function for ``dask.array`` to make the
+identity matrix:
 
 .. code-block:: python
 

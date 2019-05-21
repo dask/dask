@@ -6,6 +6,7 @@ from operator import add, mul
 import subprocess
 import sys
 import time
+from collections import OrderedDict
 
 from toolz import merge
 
@@ -207,6 +208,29 @@ def test_tokenize_pandas():
     assert tokenize(a) == tokenize(b)
 
 
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame({'x\ud83d': [1, 2, 3], 'y\ud83d': ['4', 'asd\ud83d', None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_mixed_unicode_bytes():
+    df = pd.DataFrame({u'ö'.encode('utf8'): [1, 2, 3], u'ö': [u'ö', u'ö'.encode('utf8'), None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_no_pickle():
+    class NoPickle(object):
+        # pickling not supported because it is a local class
+        pass
+
+    df = pd.DataFrame({'x': ['foo', None, NoPickle()]})
+    tokenize(df)
+
+
 def test_tokenize_kwargs():
     assert tokenize(5, x=1) == tokenize(5, x=1)
     assert tokenize(5) != tokenize(5, x=1)
@@ -289,6 +313,7 @@ def test_tokenize_base_types(x):
 
 
 @pytest.mark.skipif('not np')
+@pytest.mark.filterwarnings("ignore:the matrix:PendingDeprecationWarning")
 def test_tokenize_numpy_matrix():
     rng = np.random.RandomState(1234)
     a = np.asmatrix(rng.rand(100))
@@ -346,20 +371,34 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
+try:
+    import dataclasses
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+except ImportError:
+    dataclasses = None
+
+
 def test_unpack_collections():
     a = delayed(1) + 5
     b = a + 1
     c = a + 2
 
     def build(a, b, c, iterator):
-        return (a, b,               # Top-level collections
-                {'a': a,            # dict
-                 a: b,              # collections as keys
-                 'b': [1, 2, [b]],  # list
-                 'c': 10,           # other builtins pass through unchanged
-                 'd': (c, 2),       # tuple
-                 'e': {a, 2, 3}},   # set
-                iterator)           # Iterator
+        t = (a, b,                              # Top-level collections
+                {'a': a,                        # dict
+                 a: b,                          # collections as keys
+                 'b': [1, 2, [b]],              # list
+                 'c': 10,                       # other builtins pass through unchanged
+                 'd': (c, 2),                   # tuple
+                 'e': {a, 2, 3},                # set
+                 'f': OrderedDict([('a', a)])}, # OrderedDict
+                iterator)                       # Iterator
+
+        if dataclasses is not None:
+            t[2]['f'] = ADataClass(a=a)
+
+        return t
 
     args = build(a, b, c, (i for i in [a, b, c]))
 
@@ -475,17 +514,17 @@ def test_compute_no_opt():
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(scheduler='single-threaded', optimize_graph=False)
-    assert len([k for k in keys if '-mul-' in k[0]]) == 4
-    assert len([k for k in keys if '-add-' in k[0]]) == 4
+    assert len([k for k in keys if 'mul' in k[0]]) == 4
+    assert len([k for k in keys if 'add' in k[0]]) == 4
     # Check that without the kwarg, the optimization does happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(scheduler='single-threaded')
     # Names of fused tasks have been merged, and the original key is an alias.
     # Otherwise, the lengths below would be 4 and 0.
-    assert len([k for k in keys if '-mul-' in k[0]]) == 8
-    assert len([k for k in keys if '-add-' in k[0]]) == 4
-    assert len([k for k in keys if 'add-map-mul' in k[0]]) == 4  # See? Renamed
+    assert len([k for k in keys if 'mul' in k[0]]) == 8
+    assert len([k for k in keys if 'add' in k[0]]) == 4
+    assert len([k for k in keys if 'add-from_sequence-mul' in k[0]]) == 4  # See? Renamed
 
 
 @pytest.mark.skipif('not da')
@@ -532,6 +571,25 @@ def test_compute_array_dataframe():
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
     pd.util.testing.assert_series_equal(df_out, df.a + 2)
+
+
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_valid_unicode_in_bytes():
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=[u'ö'.encode('utf8')],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=['\ud83d'],
+    )
+    dd.from_pandas(df, npartitions=4)
 
 
 @pytest.mark.skipif('not da or not db')
@@ -596,11 +654,23 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
 
 
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_lists(tmpdir):
+    pytest.importorskip('graphviz')
+    fn = os.path.join(str(tmpdir), 'myfile.dot')
+    dask.visualize([{'abc-xyz': (add, 1, 2)}], filename=fn)
+    with open(fn) as f:
+        text = f.read()
+    assert 'abc-xyz' in text
+
+
 @pytest.mark.skipif('not da')
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
-    pytest.importorskip('matplotlib')
+    pytest.importorskip('graphviz')
+    pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:
         x.visualize(color='order', filename=fn, cmap='RdBu')

@@ -14,11 +14,6 @@ from ..utils import ignoring
 from numbers import Integral
 
 try:
-    from numpy import broadcast_to
-except ImportError:  # pragma: no cover
-    broadcast_to = npcompat.broadcast_to
-
-try:
     from numpy import take_along_axis
 except ImportError:  # pragma: no cover
     take_along_axis = npcompat.take_along_axis
@@ -231,7 +226,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     if isinstance(a_plus_idx, list):
         a_plus_idx = list(flatten(a_plus_idx))
         a = np.concatenate([ai for ai, _ in a_plus_idx], axis)
-        idx = np.concatenate([broadcast_to(idxi, ai.shape)
+        idx = np.concatenate([np.broadcast_to(idxi, ai.shape)
                               for ai, idxi in a_plus_idx], axis)
     else:
         a, idx = a_plus_idx
@@ -280,17 +275,6 @@ def view(x, dtype, order='C'):
     else:
         x = np.asfortranarray(x)
         return x.T.view(dtype).T
-
-
-def einsum(*operands, **kwargs):
-    subscripts = kwargs.pop('subscripts')
-    ncontract_inds = kwargs.pop('ncontract_inds')
-    dtype = kwargs.pop('kernel_dtype')
-    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
-
-    # Avoid concatenate=True in atop by adding 1's
-    # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
 def slice_with_int_dask_array(x, idx, offset, x_size, axis):

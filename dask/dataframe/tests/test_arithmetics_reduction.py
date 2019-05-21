@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, make_meta
+from dask.dataframe.utils import (
+    assert_eq, assert_dask_graph, make_meta, HAS_INT_NA,
+)
 
 
 @pytest.mark.slow
@@ -985,6 +987,10 @@ def test_reductions_frame_dtypes():
                        'float': [1., 2., 3., 4., np.nan, 6., 7., 8.],
                        'dt': [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
                        'str': list('abcdefgh')})
+
+    if HAS_INT_NA:
+        df['intna'] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
+
     ddf = dd.from_pandas(df, 3)
     assert_eq(df.sum(), ddf.sum())
     assert_eq(df.prod(), ddf.prod())
@@ -997,7 +1003,10 @@ def test_reductions_frame_dtypes():
     assert_eq(df.std(ddof=0), ddf.std(ddof=0))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
-    assert_eq(df.mean(), ddf.mean())
+
+    result = ddf.mean()
+    expected = df.mean()
+    assert_eq(expected, result)
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
@@ -1070,3 +1079,27 @@ def test_reductions_frame_nan(split_every):
                   ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
         assert_eq(df.mean(axis=1, skipna=False),
                   ddf.mean(axis=1, skipna=False, split_every=split_every))
+
+
+@pytest.mark.parametrize('comparison', ['lt', 'gt', 'le', 'ge', 'ne', 'eq'])
+def test_series_comparison_nan(comparison):
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7])
+    s_nan = pd.Series([1, -1, 8, np.nan, 5, 6, 2.4])
+    ds = dd.from_pandas(s, 3)
+    ds_nan = dd.from_pandas(s_nan, 3)
+
+    fill_value = 7
+    comparison_pd = getattr(s, comparison)
+    comparison_dd = getattr(ds, comparison)
+    assert_eq(comparison_dd(ds_nan, fill_value=fill_value),
+              comparison_pd(s_nan, fill_value=fill_value))
+
+
+skip_if_no_intna = pytest.mark.skipif(not HAS_INT_NA, reason="integer na")
+
+
+@skip_if_no_intna
+def test_sum_intna():
+    a = pd.Series([1, None, 2], dtype=pd.Int32Dtype())
+    b = dd.from_pandas(a, 2)
+    assert_eq(a.sum(), b.sum())

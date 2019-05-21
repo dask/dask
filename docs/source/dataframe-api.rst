@@ -57,6 +57,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.partitions
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
@@ -64,6 +65,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -178,6 +180,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index
@@ -251,6 +254,9 @@ Groupby Operations
    SeriesGroupBy.first
    SeriesGroupBy.last
 
+.. autosummary::
+   Aggregation
+
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
@@ -286,6 +292,7 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
    read_json
@@ -350,6 +357,11 @@ SeriesGroupBy
    :members:
    :inherited-members:
 
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
+
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -357,6 +369,7 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
 .. autofunction:: read_orc
 .. autofunction:: read_hdf

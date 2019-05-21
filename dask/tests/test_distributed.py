@@ -2,19 +2,19 @@ import pytest
 distributed = pytest.importorskip('distributed')
 
 from functools import partial
-import inspect
 from operator import add
 from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
+from dask.compatibility import get_named_args
 from dask.delayed import Delayed
 from dask.utils import tmpdir
 from distributed.client import wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # noqa F401
 
 
-if 'should_check_state' in inspect.getargspec(gen_cluster).args:
+if 'should_check_state' in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
     cluster = partial(cluster, should_check_state=False)
 

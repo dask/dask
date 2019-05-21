@@ -39,6 +39,7 @@ class Tuple(object):
         return tuple, ()
 
 
+@pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_to_task_dask():
     a = delayed(1, name='a')
     b = delayed(2, name='b')
@@ -94,6 +95,23 @@ def test_delayed():
     assert a.key in b.dask
 
 
+def test_delayed_with_dataclass():
+    dataclasses = pytest.importorskip("dataclasses")
+
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+
+    literal = dask.delayed(3)
+    with_class = dask.delayed({"a": ADataClass(a=literal)})
+
+    def return_nested(obj):
+        return obj["a"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
 def test_operators():
     a = delayed([1, 2, 3])
     assert a[0].compute() == 1
@@ -140,6 +158,16 @@ def test_method_getattr_call_same_task():
     o = a.index(1)
     # Don't getattr the method, then call in separate task
     assert getattr not in set(v[0] for v in o.__dask_graph__().values())
+
+
+def test_np_dtype_of_delayed():
+    # This used to result in a segfault due to recursion, see
+    # https://github.com/dask/dask/pull/4374#issuecomment-454381465
+    np = pytest.importorskip('numpy')
+    x = delayed(1)
+    with pytest.raises(TypeError):
+        np.dtype(x)
+    assert delayed(np.array([1], dtype='f8')).dtype.compute() == np.dtype('f8')
 
 
 def test_delayed_errors():
@@ -370,6 +398,7 @@ def test_custom_delayed():
     assert compute(n, x2, x) == (3, (1, 2, 3, 4, 5, 6), (1, 2, 3))
 
 
+@pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_array_delayed():
     np = pytest.importorskip('numpy')
     da = pytest.importorskip('dask.array')
@@ -570,3 +599,10 @@ def test_delayed_decorator_on_method():
     # For static methods (and regular functions), the decorated methods should
     # be Delayed objects.
     assert isinstance(A.addstatic, Delayed)
+
+
+def test_attribute_of_attribute():
+    x = delayed(123)
+    assert isinstance(x.a, Delayed)
+    assert isinstance(x.a.b, Delayed)
+    assert isinstance(x.a.b.c, Delayed)

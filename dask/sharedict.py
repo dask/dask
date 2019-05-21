@@ -2,6 +2,11 @@ from toolz import concat, unique, count
 
 from .compatibility import Mapping
 
+import warnings
+
+warnings.warn("ShareDict has been deprecated in favor of HighLevelGraph "
+              "and will be removed in future versions", stacklevel=2)
+
 
 class ShareDict(Mapping):
     """ A Mapping composed of other Mappings

@@ -3,17 +3,16 @@ from __future__ import division, print_function, absolute_import
 import inspect
 import math
 import warnings
-from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Real, Integral
 
 import numpy as np
 from toolz import concat, sliding_window, interleave
 
-from .. import sharedict
 from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname
 from . import chunk
 from .creation import arange, diag, empty, indices
@@ -22,7 +21,7 @@ from .wrap import ones
 from .ufunc import multiply, sqrt
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   asanyarray, concatenate, stack, atop, broadcast_shapes,
+                   asanyarray, concatenate, stack, blockwise, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 from .einsumfuncs import einsum  # noqa
@@ -98,23 +97,23 @@ def atleast_1d(*arys):
 
 
 @wraps(np.vstack)
-def vstack(tup):
+def vstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_2d(x) for x in tup)
-    return concatenate(tup, axis=0)
+    return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.hstack)
-def hstack(tup):
+def hstack(tup, allow_unknown_chunksizes=False):
     if all(x.ndim == 1 for x in tup):
-        return concatenate(tup, axis=0)
+        return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
     else:
-        return concatenate(tup, axis=1)
+        return concatenate(tup, axis=1, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.dstack)
-def dstack(tup):
+def dstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_3d(x) for x in tup)
-    return concatenate(tup, axis=2)
+    return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.swapaxes)
@@ -129,8 +128,7 @@ def swapaxes(a, axis1, axis2):
     out = list(ind)
     out[axis1], out[axis2] = axis2, axis1
 
-    return atop(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2,
-                dtype=a.dtype)
+    return blockwise(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2, dtype=a.dtype)
 
 
 @wraps(np.transpose)
@@ -141,8 +139,8 @@ def transpose(a, axes=None):
     else:
         axes = tuple(range(a.ndim))[::-1]
     axes = tuple(d + a.ndim if d < 0 else d for d in axes)
-    return atop(np.transpose, axes, a, tuple(range(a.ndim)),
-                dtype=a.dtype, axes=axes)
+    return blockwise(np.transpose, axes, a, tuple(range(a.ndim)),
+                     dtype=a.dtype, axes=axes)
 
 
 def flip(m, axis):
@@ -226,18 +224,18 @@ def tensordot(lhs, rhs, axes=2):
 
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
-    left_index = list(alphabet[:lhs.ndim])
-    right_index = list(ALPHABET[:rhs.ndim])
+    left_index = list(range(lhs.ndim))
+    right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
 
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
 
-    intermediate = atop(_tensordot, out_index,
-                        lhs, left_index,
-                        rhs, right_index, dtype=dt,
-                        axes=(left_axes, right_axes))
+    intermediate = blockwise(_tensordot, out_index,
+                             lhs, left_index,
+                             rhs, right_index, dtype=dt,
+                             axes=(left_axes, right_axes))
 
     result = intermediate.sum(axis=left_axes)
     return result
@@ -253,7 +251,7 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-@wraps(np.matmul)
+@safe_wraps(np.matmul)
 def matmul(a, b):
     a = asanyarray(a)
     b = asanyarray(b)
@@ -276,7 +274,7 @@ def matmul(a, b):
     elif a.ndim > b.ndim:
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
-    out = atop(
+    out = blockwise(
         np.matmul, tuple(range(1, a.ndim + 1)),
         a, tuple(range(1, a.ndim - 1)) + (a.ndim - 1, 0,),
         b, tuple(range(1, a.ndim - 1)) + (0, a.ndim,),
@@ -299,7 +297,7 @@ def outer(a, b):
 
     dtype = np.outer(a.dtype.type(), b.dtype.type()).dtype
 
-    return atop(np.outer, "ij", a, "i", b, "j", dtype=dtype)
+    return blockwise(np.outer, "ij", a, "i", b, "j", dtype=dtype)
 
 
 def _inner_apply_along_axis(arr,
@@ -323,13 +321,6 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     # Test out some data with the function.
     test_data = np.ones((1,), dtype=arr.dtype)
     test_result = np.array(func1d(test_data, *args, **kwargs))
-
-    if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
-            (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-        raise ValueError(
-            "No more than one non-trivial dimension allowed in result. "
-            "Need NumPy 1.13.0+ for this functionality."
-        )
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
@@ -524,17 +515,27 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-@wraps(np.bincount)
-def bincount(x, weights=None, minlength=None):
-    if minlength is None:
-        raise TypeError("Must specify minlength argument in da.bincount")
-    assert x.ndim == 1
-    if weights is not None:
-        assert weights.chunks == x.chunks
+def _bincount_sum(bincounts, dtype=int):
+    n = max(map(len, bincounts))
+    out = np.zeros(n, dtype=dtype)
+    for b in bincounts:
+        out[:len(b)] += b
+    return out
 
-    # Call np.bincount on each block, possibly with weights
+
+@wraps(np.bincount)
+def bincount(x, weights=None, minlength=0):
+    if x.ndim != 1:
+        raise ValueError('Input array must be one dimensional. '
+                         'Try using x.ravel()')
+    if weights is not None:
+        if weights.chunks != x.chunks:
+            raise ValueError('Chunks of input array x and weights must match.')
+
     token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
+    final_name = 'bincount-sum' + token
+    # Call np.bincount on each block, possibly with weights
     if weights is not None:
         dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
                for i, _ in enumerate(x.__dask_keys__())}
@@ -544,17 +545,15 @@ def bincount(x, weights=None, minlength=None):
                for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
-    # Sum up all of the intermediate bincounts per block
-    name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, list(dsk), 0)
+    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[x] if weights is None else [x, weights])
 
-    chunks = ((minlength,),)
+    if minlength == 0:
+        chunks = ((np.nan,),)
+    else:
+        chunks = ((minlength,),)
 
-    dsk = sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}})
-    if weights is not None:
-        dsk.update(weights.dask)
-
-    return Array(dsk, name, chunks, dtype)
+    return Array(graph, final_name, chunks, dtype)
 
 
 @wraps(np.digitize)
@@ -601,13 +600,21 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    if bins is None or (range is None and bins is None):
-        raise ValueError('dask.array.histogram requires either bins '
-                         'or bins and range to be defined.')
+    if not np.iterable(bins) and (range is None or bins is None):
+        raise ValueError('dask.array.histogram requires either specifying '
+                         'bins as an iterable or specifying both a range and '
+                         'the number of bins')
 
     if weights is not None and weights.chunks != a.chunks:
         raise ValueError('Input array and weights must have the same '
                          'chunked structure')
+
+    if normed is not False:
+        raise ValueError(
+            "The normed= keyword argument has been deprecated. "
+            "Please use density instead. "
+            "See the numpy.histogram docstring for more information."
+        )
 
     if not np.iterable(bins):
         bin_token = bins
@@ -619,7 +626,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
     else:
         bin_token = bins
-    token = tokenize(a, bin_token, range, normed, weights, density)
+    token = tokenize(a, bin_token, range, weights, density)
 
     nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
@@ -641,11 +648,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
-    all_dsk = sharedict.merge(a.dask, (name, dsk), dependencies={name: {a.name}})
-    if weights is not None:
-        all_dsk.update(weights.dask)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a] if weights is None else [a, weights])
 
-    mapped = Array(all_dsk, name, chunks, dtype=dtype)
+    mapped = Array(graph, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
@@ -656,12 +661,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         else:
             return n, bins
     else:
-        # deprecated, will be removed from Numpy 2.0
-        if normed:
-            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
-            return n / (n * db).sum(), bins
-        else:
-            return n, bins
+        return n, bins
 
 
 @wraps(np.cov)
@@ -748,12 +748,12 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     inverse mapping in Dask.
 
     Given Dask likes to have one array returned from functions like
-    ``atop``, some formatting is done to stuff all of the resulting arrays
+    ``blockwise``, some formatting is done to stuff all of the resulting arrays
     into one big NumPy structured array. Dask is then able to handle this
-    object and can split it apart into the separate results on the Dask
-    side, which then can be passed back to this function in concatenated
-    chunks for further reduction or can be return to the user to perform
-    other forms of analysis.
+    object and can split it apart into the separate results on the Dask side,
+    which then can be passed back to this function in concatenated chunks for
+    further reduction or can be return to the user to perform other forms of
+    analysis.
 
     By handling the problem in this way, it does not matter where a chunk
     is in a larger array or how big it is. The chunk can still be computed
@@ -816,7 +816,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     else:
         args.extend([None, None])
 
-    out = atop(
+    out = blockwise(
         _unique_internal, "i",
         *args,
         dtype=out_dtype,
@@ -863,15 +863,10 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     if return_counts:
         out_dtype.append(("counts", np.intp))
 
-    out = Array(
-        sharedict.merge(*(
-            [(name, dsk)] +
-            [o.dask for o in out_parts if hasattr(o, "__dask_keys__")]
-        ), dependencies={name: {o.name for o in out_parts if hasattr(o, '__dask_keys__')}}),
-        name,
-        ((np.nan,),),
-        out_dtype
-    )
+    dependencies = [o for o in out_parts if hasattr(o, '__dask_keys__')]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    chunks = ((np.nan,),)
+    out = Array(graph, name, chunks, out_dtype)
 
     # Split out all results to return to the user.
 
@@ -910,12 +905,18 @@ def isin(element, test_elements, assume_unique=False, invert=False):
     test_elements = asarray(test_elements)
     element_axes = tuple(range(element.ndim))
     test_axes = tuple(i + element.ndim for i in range(test_elements.ndim))
-    mapped = atop(_isin_kernel, element_axes + test_axes,
-                  element, element_axes,
-                  test_elements, test_axes,
-                  adjust_chunks={axis: lambda _: 1 for axis in test_axes},
-                  dtype=bool,
-                  assume_unique=assume_unique)
+    mapped = blockwise(
+        _isin_kernel,
+        element_axes + test_axes,
+        element,
+        element_axes,
+        test_elements,
+        test_axes,
+        adjust_chunks={axis: lambda _: 1 for axis in test_axes},
+        dtype=bool,
+        assume_unique=assume_unique
+    )
+
     result = mapped.any(axis=test_axes)
     if invert:
         result = ~result
@@ -994,43 +995,34 @@ def squeeze(a, axis=None):
 
 @wraps(np.compress)
 def compress(condition, a, axis=None):
+    condition = asarray(condition).astype(bool)
+    a = asarray(a)
+
+    if condition.ndim != 1:
+        raise ValueError("Condition must be one dimensional")
+
     if axis is None:
         a = a.ravel()
         axis = 0
     axis = validate_axis(axis, a.ndim)
 
-    # Only coerce non-lazy values to numpy arrays
-    if not isinstance(condition, Array):
-        condition = np.array(condition, dtype=bool)
-    if condition.ndim != 1:
-        raise ValueError("Condition must be one dimensional")
+    # Treat `condition` as filled with `False` (if it is too short)
+    a = a[tuple(slice(None, len(condition))
+                if i == axis else slice(None)
+                for i in range(a.ndim))]
 
-    if isinstance(condition, Array):
-        if len(condition) < a.shape[axis]:
-            a = a[tuple(slice(None, len(condition))
-                        if i == axis else slice(None)
-                        for i in range(a.ndim))]
-        inds = tuple(range(a.ndim))
-        out = atop(np.compress, inds, condition, (inds[axis],), a, inds,
-                   axis=axis, dtype=a.dtype)
-        out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
-                            for i, c in enumerate(out.chunks))
-        return out
-    else:
-        # Optimized case when condition is known
-        if len(condition) < a.shape[axis]:
-            condition = condition.copy()
-            condition.resize(a.shape[axis])
+    # Use `condition` to select along 1 dimension
+    a = a[tuple(condition
+                if i == axis else slice(None)
+                for i in range(a.ndim))]
 
-        slc = ((slice(None),) * axis + (condition, ) +
-               (slice(None),) * (a.ndim - axis - 1))
-        return a[slc]
+    return a
 
 
 @wraps(np.extract)
 def extract(condition, arr):
-    if not isinstance(condition, Array):
-        condition = np.array(condition, dtype=bool)
+    condition = asarray(condition).astype(bool)
+    arr = asarray(arr)
     return compress(condition.ravel(), arr.ravel())
 
 
@@ -1228,8 +1220,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
                    for i, bds in enumerate(x.chunks))
 
     dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
-    return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
-                 name, chunks, dtype=dt)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    return Array(graph, name, chunks, dtype=dt)
 
 
 def split_at_breaks(array, breaks, axis=0):
@@ -1292,11 +1284,11 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
-@wraps(np.average)
-def average(a, axis=None, weights=None, returned=False):
+def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
+    # Wrapper used by da.average or da.ma.average.
     a = asanyarray(a)
 
     if weights is None:
@@ -1326,7 +1318,9 @@ def average(a, axis=None, weights=None, returned=False):
             # setup wgt to broadcast along axis
             wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
-
+        if is_masked:
+            from .ma import getmaskarray
+            wgt = wgt * (~getmaskarray(a))
         scl = wgt.sum(axis=axis, dtype=result_dtype)
         avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
 
@@ -1336,3 +1330,8 @@ def average(a, axis=None, weights=None, returned=False):
         return avg, scl
     else:
         return avg
+
+
+@wraps(np.average)
+def average(a, axis=None, weights=None, returned=False):
+    return _average(a, axis, weights, returned, is_masked=False)

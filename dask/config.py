@@ -9,7 +9,7 @@ try:
 except ImportError:
     yaml = None
 
-from .compatibility import makedirs, builtins, Mapping, string_types
+from .compatibility import makedirs, builtins, Mapping
 
 
 no_default = '__no_default__'
@@ -36,6 +36,29 @@ config_lock = threading.Lock()
 
 
 defaults = []
+
+
+def canonical_name(k, config):
+    """Return the canonical name for a key.
+
+    Handles user choice of '-' or '_' conventions by standardizing on whichever
+    version was set first. If a key already exists in either hyphen or
+    underscore form, the existing version is the canonical name. If neither
+    version exists the original key is used as is.
+    """
+    try:
+        if k in config:
+            return k
+    except TypeError:
+        # config is not a mapping, return the same name as provided
+        return k
+
+    altk = k.replace('_', '-') if '_' in k else k.replace('-', '_')
+
+    if altk in config:
+        return altk
+
+    return k
 
 
 def update(old, new, priority='new'):
@@ -68,10 +91,11 @@ def update(old, new, priority='new'):
     dask.config.merge
     """
     for k, v in new.items():
-        if k not in old and type(v) is dict:
-            old[k] = {}
+        k = canonical_name(k, old)
 
-        if type(v) is dict:
+        if isinstance(v, Mapping):
+            if k not in old or old[k] is None:
+                old[k] = {}
             update(old[k], v, priority=priority)
         else:
             if priority == 'new' or k not in old:
@@ -102,38 +126,6 @@ def merge(*dicts):
     return result
 
 
-def normalize_key(key):
-    """ Replaces underscores with hyphens in string keys
-
-    Parameters
-    ----------
-    key : string, int, or float
-        Key to assign.
-    """
-    if isinstance(key, string_types):
-        key = key.replace('_', '-')
-    return key
-
-
-def normalize_nested_keys(config):
-    """ Replaces underscores with hyphens for keys for a nested Mapping
-
-    Examples
-    --------
-    >>> a = {'x': 1, 'y_1': {'a_2': 2}}
-    >>> normalize_nested_keys(a)
-    {'x': 1, 'y-1': {'a-2': 2}}
-    """
-    config_norm = {}
-    for key, value in config.items():
-        if isinstance(value, Mapping):
-            value = normalize_nested_keys(value)
-        key_norm = normalize_key(key)
-        config_norm[key_norm] = value
-
-    return config_norm
-
-
 def collect_yaml(paths=paths):
     """ Collect configuration from yaml files
 
@@ -145,11 +137,15 @@ def collect_yaml(paths=paths):
     for path in paths:
         if os.path.exists(path):
             if os.path.isdir(path):
-                file_paths.extend(sorted([
-                    os.path.join(path, p)
-                    for p in os.listdir(path)
-                    if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
-                ]))
+                try:
+                    file_paths.extend(sorted([
+                        os.path.join(path, p)
+                        for p in os.listdir(path)
+                        if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
+                    ]))
+                except OSError:
+                    # Ignore permission errors
+                    pass
             else:
                 file_paths.append(path)
 
@@ -157,10 +153,13 @@ def collect_yaml(paths=paths):
 
     # Parse yaml files
     for path in file_paths:
-        with open(path) as f:
-            data = yaml.load(f.read()) or {}
-            data = normalize_nested_keys(data)
-            configs.append(data)
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f.read()) or {}
+                configs.append(data)
+        except (OSError, IOError):
+            # Ignore permission errors
+            pass
 
     return configs
 
@@ -174,7 +173,6 @@ def collect_env(env=None):
 
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
-    -  Replaces ``_`` (underscore) with a hyphen.
     -  Calls ``ast.literal_eval`` on the value
     """
     if env is None:
@@ -183,7 +181,6 @@ def collect_env(env=None):
     for name, value in env.items():
         if name.startswith('DASK_'):
             varname = name[5:].lower().replace('__', '.')
-            varname = normalize_key(varname)
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
@@ -255,7 +252,7 @@ def ensure_file(
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except OSError:
+    except (IOError, OSError):
         pass
 
 
@@ -319,7 +316,7 @@ class set(object):
         path: List[str]
             Used internally to hold the path of old values
         """
-        key = normalize_key(keys[0])
+        key = canonical_name(keys[0], d)
         if len(keys) == 1:
             if old is not None:
                 path_key = tuple(path + [key])
@@ -426,7 +423,7 @@ def get(key, default=no_default, config=config):
     keys = key.split('.')
     result = config
     for k in keys:
-        k = normalize_key(k)
+        k = canonical_name(k, result)
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
@@ -442,8 +439,8 @@ def rename(aliases, config=config):
 
     This helps migrate older configuration versions over time
     """
-    old = list()
-    new = dict()
+    old = []
+    new = {}
     for o, n in aliases.items():
         value = get(o, None, config=config)
         if value is not None:
@@ -500,3 +497,14 @@ def expand_environment_variables(config):
 
 
 refresh()
+
+
+if yaml:
+    fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
+    ensure_file(source=fn)
+
+    with open(fn) as f:
+        _defaults = yaml.safe_load(f)
+
+    update_defaults(_defaults)
+    del fn, _defaults

@@ -302,8 +302,6 @@ def test_from_pandas_single_row():
     assert_eq(ddf, df)
 
 
-@pytest.mark.skipif(np.__version__ < '1.11',
-                    reason='datetime unit unsupported in NumPy < 1.11')
 def test_from_pandas_with_datetime_index():
     df = pd.DataFrame({"Date": ["2015-08-28", "2015-08-27", "2015-08-26",
                                 "2015-08-25", "2015-08-24", "2015-08-21",
@@ -556,7 +554,7 @@ def test_from_delayed_misordered_meta():
 
     with pytest.raises(ValueError) as info:
         #produces dataframe which does not match meta
-        ddf.reset_index().compute()
+        ddf.reset_index().compute(scheduler='sync')
     msg = "The columns in the computed data do not match the columns in the" \
           " provided metadata"
     assert msg in str(info.value)
@@ -608,3 +606,25 @@ def test_to_delayed_optimize_graph():
     dx2 = x.to_delayed(optimize_graph=False)
     assert len(dx.dask) < len(dx2.dask)
     assert_eq(dx.compute(), dx2.compute())
+
+
+def test_from_dask_array_index_dtype():
+    x = da.ones((10,), chunks=(5,))
+
+    df = pd.DataFrame({"date": pd.date_range('2019-01-01', periods=10, freq='1T'),
+                       "val1": list(range(10))})
+    ddf = dd.from_pandas(df, npartitions=2).set_index('date')
+
+    ddf2 = dd.from_dask_array(x, index=ddf.index, columns='val2')
+
+    assert ddf.index.dtype == ddf2.index.dtype
+    assert ddf.index.name == ddf2.index.name
+
+    df = pd.DataFrame({"idx": np.arange(0, 1, 0.1),
+                       "val1": list(range(10))})
+    ddf = dd.from_pandas(df, npartitions=2).set_index('idx')
+
+    ddf2 = dd.from_dask_array(x, index=ddf.index, columns='val2')
+
+    assert ddf.index.dtype == ddf2.index.dtype
+    assert ddf.index.name == ddf2.index.name

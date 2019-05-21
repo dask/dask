@@ -10,29 +10,19 @@ except ImportError:
 
 import numpy as np
 import pandas as pd
-try:
-    from pandas.api.types import CategoricalDtype
-    _HAS_CDT = True
-except ImportError:
-    _HAS_CDT = False
-
+from pandas.api.types import (is_integer_dtype, is_float_dtype,
+                              is_object_dtype, is_datetime64_any_dtype,
+                              CategoricalDtype)
 
 from ...bytes import read_bytes, open_files
 from ...bytes.compression import seekable_files, files as cfiles
-from ...compatibility import PY2, PY3, Mapping
+from ...compatibility import PY2, PY3, Mapping, unicode
 from ...delayed import delayed
-from ...utils import asciitable
+from ...utils import asciitable, parse_bytes
 
-from ..utils import clear_known_categories, PANDAS_VERSION
+from ..utils import clear_known_categories
 
 from .io import from_delayed
-
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.api.types import (is_integer_dtype, is_float_dtype,
-                                  is_object_dtype, is_datetime64_any_dtype)
-else:
-    from pandas.types.common import (is_integer_dtype, is_float_dtype,
-                                     is_object_dtype, is_datetime64_any_dtype)
 
 
 def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
@@ -204,19 +194,17 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
 
     known_categoricals = []
     unknown_categoricals = categoricals
-
-    if _HAS_CDT:
-        if isinstance(specified_dtypes, Mapping):
-            known_categoricals = [
-                k for k in categoricals
-                if isinstance(specified_dtypes.get(k), CategoricalDtype) and
-                specified_dtypes.get(k).categories is not None
-            ]
-            unknown_categoricals = categoricals.difference(known_categoricals)
-        elif isinstance(specified_dtypes, CategoricalDtype):
-            if specified_dtypes.categories is None:
-                known_categoricals = []
-                unknown_categoricals = categoricals
+    if isinstance(specified_dtypes, Mapping):
+        known_categoricals = [
+            k for k in categoricals
+            if isinstance(specified_dtypes.get(k), CategoricalDtype) and
+            specified_dtypes.get(k).categories is not None
+        ]
+        unknown_categoricals = categoricals.difference(known_categoricals)
+    elif (isinstance(specified_dtypes, CategoricalDtype) and
+          specified_dtypes.categories is None):
+        known_categoricals = []
+        unknown_categoricals = categoricals
 
     # Fixup the dtypes
     for k in unknown_categoricals:
@@ -249,7 +237,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     if collection:
         if path:
             head = head.assign(**{
-                colname: pd.Categorical.from_codes(np.zeros(len(head)), paths)
+                colname: pd.Categorical.from_codes(
+                    np.zeros(len(head), dtype=int), paths)
             })
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
@@ -288,8 +277,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = 'path'
     if 'index' in kwargs or 'index_col' in kwargs:
-        raise ValueError("Keyword 'index' not supported "
-                         "dd.{0}(...).set_index('my-index') "
+        raise ValueError("Keywords 'index' and 'index_col' not supported. "
+                         "Use dd.{0}(...).set_index('my-index') "
                          "instead".format(reader_name))
     for kw in ['iterator', 'chunksize']:
         if kw in kwargs:
@@ -300,16 +289,18 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                          "`dd.{0}`. To achieve the same behavior, it's "
                          "recommended to use `dd.{0}(...)."
                          "head(n=nrows)`".format(reader_name))
-    if isinstance(kwargs.get('skiprows'), list):
+    if isinstance(kwargs.get('skiprows'), int):
+        skiprows = lastskiprow = firstrow = kwargs.get('skiprows')
+    elif kwargs.get('skiprows') is None:
+        skiprows = lastskiprow = firstrow = 0
+    else:
         # When skiprows is a list, we expect more than max(skiprows) to
         # be included in the sample. This means that [0,2] will work well,
         # but [0, 440] might not work.
-        skiprows = kwargs.get('skiprows')
+        skiprows = set(kwargs.get('skiprows'))
         lastskiprow = max(skiprows)
         # find the firstrow that is not skipped, for use as header
         firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
-    else:
-        skiprows = lastskiprow = firstrow = kwargs.get('skiprows', 0)
     if isinstance(kwargs.get('header'), list):
         raise TypeError("List of header rows not supported for "
                         "dd.{0}".format(reader_name))
@@ -318,6 +309,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     else:
         path_converter = None
 
+    if isinstance(blocksize, (str, unicode)):
+        blocksize = parse_bytes(blocksize)
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
              "Please ensure that each individual file can fit in memory and\n"
@@ -327,7 +320,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if compression not in seekable_files and compression not in cfiles:
         raise NotImplementedError("Compression format %s not installed" %
                                   compression)
-    if blocksize and blocksize < sample and lastskiprow != 0:
+    if blocksize and sample and blocksize < sample and lastskiprow != 0:
         warn("Unexpected behavior can result from passing skiprows when\n"
              "blocksize is smaller than sample size.\n"
              "Setting ``sample=blocksize``")
@@ -351,6 +344,10 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
+    # If we have not sampled, then use the first row of the first values
+    # as a representative sample.
+    if b_sample is False and len(values[0]):
+        b_sample = values[0][0].compute()
 
     # Get header row, and check that sample is long enough. If the file
     # contains a header row, we need at least 2 nonempty rows + the number of
@@ -362,7 +359,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    if nparts < lastskiprow + need and len(b_sample) >= sample:
+    if sample is not False and nparts < lastskiprow + need and len(b_sample) >= sample:
         raise ValueError("Sample is not large enough to include at least one "
                          "row of data. Please increase the number of bytes "
                          "in `sample` in the call to `read_csv`/`read_table`")
@@ -424,10 +421,11 @@ urlpath : string or list
     to read from alternative filesystems. To read from multiple files you
     can pass a globstring or a list of paths, with the caveat that they
     must all have the same protocol.
-blocksize : int or None, optional
+blocksize : str, int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
     If ``None``, use a single block for each file.
+    Can be a number like 64000000 or a string like "64MB"
 collection : boolean, optional
     Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int, optional
@@ -491,6 +489,7 @@ def make_reader(reader, reader_name, file_type):
 
 read_csv = make_reader(pd.read_csv, 'read_csv', 'CSV')
 read_table = make_reader(pd.read_table, 'read_table', 'delimited')
+read_fwf = make_reader(pd.read_fwf, 'read_fwf', 'fixed-width')
 
 
 def _write_csv(df, fil, **kwargs):

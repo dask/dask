@@ -1,3 +1,4 @@
+import datetime
 import functools
 import operator
 import pickle
@@ -5,13 +6,15 @@ import pickle
 import numpy as np
 import pytest
 
-from dask.sharedict import ShareDict
+from dask.compatibility import PY2
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
                         extra_titles, asciitable, itemgetter, partial_by_order,
-                        has_keyword)
+                        has_keyword, derived_from, parse_timedelta,
+                        parse_bytes)
 from dask.utils_test import inc
+from dask.highlevelgraph import HighLevelGraph
 
 
 def test_takes_multiple_arguments():
@@ -162,6 +165,16 @@ def test_skip_doctest():
 
     assert skip_doctest(None) == ''
 
+    example = """
+>>> 1 + 2  # doctest: +ELLIPSES
+3"""
+
+    expected = """
+>>> 1 + 2  # doctest: +ELLIPSES, +SKIP
+3"""
+    res = skip_doctest(example)
+    assert res == expected
+
 
 def test_extra_titles():
     example = """
@@ -257,6 +270,22 @@ def test_SerializableLock_name_collision():
     assert d.lock not in (a.lock, b.lock, c.lock)
 
 
+def test_SerializableLock_locked():
+    a = SerializableLock('a')
+    assert not a.locked()
+    with a:
+        assert a.locked()
+    assert not a.locked()
+
+
+@pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
+def test_SerializableLock_acquire_blocking():
+    a = SerializableLock('a')
+    assert a.acquire(blocking=True)
+    assert not a.acquire(blocking=False)
+    a.release()
+
+
 def test_funcname():
     def foo(a, b, c):
         pass
@@ -315,10 +344,9 @@ def test_ndeepmap():
 def test_ensure_dict():
     d = {'x': 1}
     assert ensure_dict(d) is d
-    sd = ShareDict()
-    sd.update(d)
-    assert type(ensure_dict(sd)) is dict
-    assert ensure_dict(sd) == d
+    hlg = HighLevelGraph.from_collections('x', d)
+    assert type(ensure_dict(hlg)) is dict
+    assert ensure_dict(hlg) == d
 
     class mydict(dict):
         pass
@@ -352,3 +380,91 @@ def test_has_keyword():
     bar = functools.partial(foo, a=1)
     assert has_keyword(bar, 'b')
     assert has_keyword(bar, 'c')
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from():
+    class Foo:
+        def f(a, b):
+            """ A super docstring
+
+            An explanation
+
+            Parameters
+            ----------
+            a: int
+                an explanation of a
+            b: float
+                an explanation of b
+            """
+
+    class Bar:
+        @derived_from(Foo)
+        def f(a, c):
+            pass
+
+    class Zap:
+        @derived_from(Foo)
+        def f(a, c):
+            "extra docstring"
+            pass
+
+    assert Bar.f.__doc__.strip().startswith('A super docstring')
+    assert "Foo.f" in Bar.f.__doc__
+    assert any("inconsistencies" in line for line in Bar.f.__doc__.split('\n')[:7])
+
+    [b_arg] = [line for line in Bar.f.__doc__.split('\n') if 'b:' in line]
+    assert "not supported" in b_arg.lower()
+    assert "dask" in b_arg.lower()
+
+    assert '  extra docstring\n\n' in Zap.f.__doc__
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from_dask_dataframe():
+    dd = pytest.importorskip('dask.dataframe')
+
+    assert "inconsistencies" in dd.DataFrame.dropna.__doc__
+
+    [axis_arg] = [line for line in dd.DataFrame.dropna.__doc__.split('\n') if 'axis :' in line]
+    assert "not supported" in axis_arg.lower()
+    assert "dask" in axis_arg.lower()
+
+
+def test_parse_bytes():
+    assert parse_bytes("100") == 100
+    assert parse_bytes("100 MB") == 100000000
+    assert parse_bytes("100M") == 100000000
+    assert parse_bytes("5kB") == 5000
+    assert parse_bytes("5.4 kB") == 5400
+    assert parse_bytes("1kiB") == 1024
+    assert parse_bytes("1Mi") == 2 ** 20
+    assert parse_bytes("1e6") == 1000000
+    assert parse_bytes("1e6 kB") == 1000000000
+    assert parse_bytes("MB") == 1000000
+
+
+def test_parse_timedelta():
+    for text, value in [
+        ("1s", 1),
+        ("100ms", 0.1),
+        ("5S", 5),
+        ("5.5s", 5.5),
+        ("5.5 s", 5.5),
+        ("1 second", 1),
+        ("3.3 seconds", 3.3),
+        ("3.3 milliseconds", 0.0033),
+        ("3500 us", 0.0035),
+        ("1 ns", 1e-9),
+        ("2m", 120),
+        ("2 minutes", 120),
+        (datetime.timedelta(seconds=2), 2),
+        (datetime.timedelta(milliseconds=100), 0.1),
+    ]:
+        result = parse_timedelta(text)
+        assert abs(result - value) < 1e-14
+
+    assert parse_timedelta("1ms", default="seconds") == 0.001
+    assert parse_timedelta("1", default="seconds") == 1
+    assert parse_timedelta("1", default="ms") == 0.001
+    assert parse_timedelta(1, default="ms") == 0.001

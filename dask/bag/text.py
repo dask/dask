@@ -5,7 +5,8 @@ import os
 
 from toolz import concat
 
-from ..utils import system_encoding
+from ..compatibility import unicode
+from ..utils import system_encoding, parse_bytes
 from ..delayed import delayed
 from ..bytes import open_files, read_bytes
 from .core import from_delayed
@@ -26,8 +27,10 @@ def read_text(urlpath, blocksize=None, compression='infer',
         to read from alternative filesystems. To read from multiple files you
         can pass a globstring or a list of paths, with the caveat that they
         must all have the same protocol.
-    blocksize: None or int
+    blocksize: None, int, or str
         Size (in bytes) to cut up larger files.  Streams by default.
+        Can be ``None`` for streaming, an integer number of bytes, or a string
+        like "128MiB"
     compression: string
         Compression format like 'gzip' or 'xz'.  Defaults to 'infer'
     encoding: string
@@ -54,7 +57,7 @@ def read_text(urlpath, blocksize=None, compression='infer',
     Parallelize a large file by providing the number of uncompressed bytes to
     load into each partition.
 
-    >>> b = read_text('largefile.txt', blocksize=1e7)  # doctest: +SKIP
+    >>> b = read_text('largefile.txt', blocksize='10MB')  # doctest: +SKIP
 
     Returns
     -------
@@ -66,6 +69,8 @@ def read_text(urlpath, blocksize=None, compression='infer',
     """
     if blocksize is not None and files_per_partition is not None:
         raise ValueError('Only one of blocksize or files_per_partition can be set')
+    if isinstance(blocksize, (str, unicode)):
+        blocksize = parse_bytes(blocksize)
 
     files = open_files(urlpath, mode='rt', encoding=encoding,
                        errors=errors, compression=compression,

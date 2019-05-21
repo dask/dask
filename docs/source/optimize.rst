@@ -2,19 +2,19 @@ Optimization
 ============
 
 Performance can be significantly improved in different contexts by making
-small optimizations on the dask graph before calling the scheduler.
+small optimizations on the Dask graph before calling the scheduler.
 
 The ``dask.optimization`` module contains several functions to transform graphs
 in a variety of useful ways. In most cases, users won't need to interact with
 these functions directly, as specialized subsets of these transforms are done
-automatically in the dask collections (``dask.array``, ``dask.bag``, and
+automatically in the Dask collections (``dask.array``, ``dask.bag``, and
 ``dask.dataframe``). However, users working with custom graphs or computations
 may find that applying these methods results in substantial speedups.
 
 In general, there are two goals when doing graph optimizations:
 
 1. Simplify computation
-2. Improve parallelism.
+2. Improve parallelism
 
 Simplifying computation can be done on a graph level by removing unnecessary
 tasks (``cull``), or on a task level by replacing expensive operations with
@@ -30,7 +30,7 @@ a task graph.
 Example
 -------
 
-Suppose you had a custom dask graph for doing a word counting task:
+Suppose you had a custom Dask graph for doing a word counting task:
 
 .. code-block:: python
 
@@ -63,18 +63,22 @@ Suppose you had a custom dask graph for doing a word counting task:
    :width: 65 %
    :alt: The original dask graph
 
-Here we're counting the occurrence of the words ``'orange``, ``'apple'``, and
+Here we are counting the occurrence of the words ``'orange``, ``'apple'``, and
 ``'pear'`` in the list of words, formatting an output string reporting the
-results, printing the output, then returning the output string.
+results, printing the output, and then returning the output string.
 
-To perform the computation, we pass the dask graph and the desired output keys
-to a scheduler ``get`` function:
+To perform the computation, we first remove unnecessary components from the
+graph using the ``cull`` function and then pass the Dask graph and the desired
+output keys to a scheduler ``get`` function:
 
 .. code-block:: python
 
     >>> from dask.threaded import get
+    >>> from dask.optimization import cull
 
     >>> outputs = ['print1', 'print2']
+    >>> dsk2, _ = cull(dsk, outputs)  # remove unnecessary tasks from the graph
+
     >>> results = get(dsk, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
@@ -84,10 +88,12 @@ to a scheduler ``get`` function:
      'word list has 2 occurrences of apple, out of 7 words')
 
 As can be seen above, the scheduler computed only the requested outputs
-(``'print3'`` was never computed). This is because the scheduler internally
-calls ``cull``, which removes the unnecessary tasks from the graph. Even though
-this is done internally in the scheduler, it can be beneficial to call it at
-the start of a series of optimizations to reduce the amount of work done in
+(``'print3'`` was never computed). This is because we called the
+``dask.optimization.cull`` function, which removes the unnecessary tasks from
+the graph.
+
+Culling is part of the default optimization pass of almost all collections.
+Often you want to call it somewhat early to reduce the amount of work done in
 later steps:
 
 .. code-block:: python
@@ -100,7 +106,7 @@ later steps:
    :alt: After culling
 
 Looking at the task graph above, there are multiple accesses to constants such
-as ``'val1'`` or ``'val2'`` in the dask graph. These can be inlined into the
+as ``'val1'`` or ``'val2'`` in the Dask graph. These can be inlined into the
 tasks to improve efficiency using the ``inline`` function. For example:
 
 .. code-block:: python
@@ -172,13 +178,13 @@ Putting it all together:
 
 In summary, the above operations accomplish the following:
 
-1. Removed tasks unnecessary for the desired output using ``cull``.
-2. Inlined constants using ``inline``.
-3. Inlined cheap computations using ``inline_functions``, improving parallelism.
-4. Fused linear tasks together to ensure they run on the same worker using ``fuse``.
+1. Removed tasks unnecessary for the desired output using ``cull``
+2. Inlined constants using ``inline``
+3. Inlined cheap computations using ``inline_functions``, improving parallelism
+4. Fused linear tasks together to ensure they run on the same worker using ``fuse``
 
 As stated previously, these optimizations are already performed automatically
-in the dask collections. Users not working with custom graphs or computations
+in the Dask collections. Users not working with custom graphs or computations
 should rarely need to directly interact with them.
 
 These are just a few of the optimizations provided in ``dask.optimization``. For
@@ -190,7 +196,7 @@ Rewrite Rules
 
 For context based optimizations, ``dask.rewrite`` provides functionality for
 pattern matching and term rewriting. This is useful for replacing expensive
-computations with equivalent, cheaper computations. For example, ``dask.array``
+computations with equivalent, cheaper computations. For example, Dask Array
 uses the rewrite functionality to replace series of array slicing operations
 with a more efficient single slice.
 
@@ -272,7 +278,7 @@ Keyword Arguments
 
 Some optimizations take optional keyword arguments.  To pass keywords from the
 compute call down to the right optimization, prepend the keyword with the name
-of the optimization.  For example to send a ``keys=`` keyword argument to the
+of the optimization.  For example, to send a ``keys=`` keyword argument to the
 ``fuse`` optimization from a compute call, use the ``fuse_keys=`` keyword:
 
 .. code-block:: python
@@ -287,11 +293,11 @@ Customizing Optimization
 ------------------------
 
 Dask defines a default optimization strategy for each collection type (Array,
-Bag, DataFrame, Delayed).  However different applications may have different
+Bag, DataFrame, Delayed).  However, different applications may have different
 needs.  To address this variability of needs, you can construct your own custom
 optimization function and use it instead of the default.  An optimization
 function takes in a task graph and list of desired keys and returns a new
-task graph.
+task graph:
 
 .. code-block:: python
 
@@ -300,7 +306,7 @@ task graph.
        return new_dsk
 
 You can then register this optimization class against whichever collection type
-you prefer and it will be used instead of the default scheme.
+you prefer and it will be used instead of the default scheme:
 
 .. code-block:: python
 
@@ -309,7 +315,7 @@ you prefer and it will be used instead of the default scheme.
 
 You can register separate optimization functions for different collections, or
 you can register ``None`` if you do not want particular types of collections to
-be optimized.
+be optimized:
 
 .. code-block:: python
 
@@ -318,7 +324,7 @@ be optimized.
                         delayed_optimize=my_other_optimize_function):
        ...
 
-You need not specify all collections.  Collections will default to their
+You do not need to specify all collections.  Collections will default to their
 standard optimization scheme (which is usually a good choice).
 
 

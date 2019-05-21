@@ -41,10 +41,10 @@ basedir = '/tmp/test-dask'
 
 
 # This fixture checks for a minimum pyarrow version
-@pytest.fixture(params=[pytest.mark.skipif(not hdfs3, 'hdfs3',
-                                           reason='hdfs3 not found'),
-                        pytest.mark.skipif(not PYARROW_DRIVER, 'pyarrow',
-                                           reason='required pyarrow version not found')])
+@pytest.fixture(params=[
+    pytest.param('hdfs3', marks=pytest.mark.skipif(not hdfs3, reason='hdfs3 not found')),
+    pytest.param('pyarrow', marks=pytest.mark.skipif(not PYARROW_DRIVER,
+                                                     reason='required pyarrow version not found'))])
 def hdfs(request):
     if request.param == 'hdfs3':
         hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
@@ -240,6 +240,8 @@ def test_pyarrow_compat():
 
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
+    if LooseVersion(pyarrow.__version__) == '0.13.0':
+        pytest.skip('pyarrow 0.13.0 not supported for parquet')
     dd = pytest.importorskip('dask.dataframe')
     import pandas as pd
     import numpy as np
