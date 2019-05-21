@@ -441,7 +441,7 @@ def _skip_doctest(line):
     # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
-        return stripped
+        return line
     elif '>>>' in stripped and '+SKIP' not in stripped:
         if '# doctest:' in line:
             return line + ', +SKIP'
