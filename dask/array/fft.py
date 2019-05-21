@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from ..compatibility import Sequence
-from functools import wraps
 import inspect
 
 import numpy as np

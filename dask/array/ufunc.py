@@ -1,6 +1,6 @@
 
 from operator import getitem
-from functools import partial, wraps
+from functools import partial
 
 import numpy as np
 from toolz import curry

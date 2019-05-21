@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps, reduce
+from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
 from numbers import Integral, Number

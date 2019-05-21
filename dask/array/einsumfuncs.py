@@ -1,7 +1,5 @@
 from __future__ import division, print_function, absolute_import
 
-from functools import wraps
-
 import numpy as np
 from numpy.compat import basestring
 
