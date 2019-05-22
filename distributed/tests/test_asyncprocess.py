@@ -49,6 +49,7 @@ def threads_info(q):
     q.put(threading.current_thread().name)
 
 
+@pytest.mark.xfail(reason="Intermittent failure")
 @nodebug
 @gen_test()
 def test_simple():

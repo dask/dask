@@ -1365,7 +1365,10 @@ class Scheduler(ServerNode):
 
         self.host_info[host]["last-seen"] = local_now
         frac = 1 / 20 / len(self.workers)
-        self.bandwidth = self.bandwidth * (1 - frac) + metrics["bandwidth"] * frac
+        try:
+            self.bandwidth = self.bandwidth * (1 - frac) + metrics["bandwidth"] * frac
+        except KeyError:
+            pass
 
         ws = self.workers.get(address)
         if not ws:
@@ -1990,7 +1993,10 @@ class Scheduler(ServerNode):
         """ Cancel a particular key and all dependents """
         # TODO: this should be converted to use the transition mechanism
         ts = self.tasks.get(key)
-        cs = self.clients[client]
+        try:
+            cs = self.clients[client]
+        except KeyError:
+            return
         if ts is None or not ts.who_wants:  # no key yet, lets try again in a moment
             if retries:
                 self.loop.add_future(
@@ -3085,7 +3091,7 @@ class Scheduler(ServerNode):
                     except KeyError:  # keys left during replicate
                         pass
 
-            workers = {self.workers[w] for w in workers}
+            workers = {self.workers[w] for w in workers if w in self.workers}
             if len(workers) > 0:
                 # Keys orphaned by retiring those workers
                 keys = set.union(*[w.has_what for w in workers])

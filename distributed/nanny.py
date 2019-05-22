@@ -18,7 +18,7 @@ from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
 from .comm.addressing import address_from_user_args
-from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
+from .core import RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
 from .node import ServerNode
 from .process import AsyncProcess
@@ -30,6 +30,7 @@ from .utils import (
     silence_logging,
     json_load_robust,
     PeriodicCallback,
+    parse_timedelta,
 )
 from .worker import _ncores, run, parse_memory_limit, Worker
 
@@ -78,6 +79,11 @@ class Nanny(ServerNode):
         protocol=None,
         **worker_kwargs
     ):
+        self.loop = loop or IOLoop.current()
+        self.security = security or Security()
+        assert isinstance(self.security, Security)
+        self.connection_args = self.security.get_connection_args("worker")
+        self.listen_args = self.security.get_listen_args("worker")
 
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
@@ -88,12 +94,13 @@ class Nanny(ServerNode):
             self.scheduler_addr = coerce_to_address(scheduler_ip)
         else:
             self.scheduler_addr = coerce_to_address((scheduler_ip, scheduler_port))
+
         self._given_worker_port = worker_port
         self.ncores = ncores or _ncores
         self.reconnect = reconnect
         self.validate = validate
         self.resources = resources
-        self.death_timeout = death_timeout
+        self.death_timeout = parse_timedelta(death_timeout)
         self.preload = preload
         self.preload_argv = preload_argv
         self.Worker = Worker if worker_class is None else worker_class
@@ -105,15 +112,8 @@ class Nanny(ServerNode):
             "distributed.worker.memory.terminate"
         )
 
-        self.security = security or Security()
-        assert isinstance(self.security, Security)
-        self.connection_args = self.security.get_connection_args("worker")
-        self.listen_args = self.security.get_listen_args("worker")
-
         self.local_dir = local_dir
 
-        self.loop = loop or IOLoop.current()
-        self.scheduler = rpc(self.scheduler_addr, connection_args=self.connection_args)
         self.services = services
         self.name = name
         self.quiet = quiet
@@ -135,8 +135,10 @@ class Nanny(ServerNode):
         }
 
         super(Nanny, self).__init__(
-            handlers, io_loop=self.loop, connection_args=self.connection_args
+            handlers=handlers, io_loop=self.loop, connection_args=self.connection_args
         )
+
+        self.scheduler = self.rpc(self.scheduler_addr)
 
         if self.memory_limit:
             pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
@@ -240,7 +242,6 @@ class Nanny(ServerNode):
 
         deadline = self.loop.time() + timeout
         yield self.process.kill(timeout=0.8 * (deadline - self.loop.time()))
-        yield self._unregister(deadline - self.loop.time())
 
     @gen.coroutine
     def instantiate(self, comm=None):
@@ -376,8 +377,12 @@ class Nanny(ServerNode):
         """
         Close the worker process, stop all comms.
         """
-        if self.status in ("closing", "closed"):
+        while self.status == "closing":
+            yield gen.sleep(0.01)
+
+        if self.status == "closed":
             raise gen.Return("OK")
+
         self.status = "closing"
         logger.info("Closing Nanny at %r", self.address)
         self.stop()
@@ -388,9 +393,10 @@ class Nanny(ServerNode):
             pass
         self.process = None
         self.rpc.close()
-        self.scheduler.close_rpc()
         self.status = "closed"
-        raise gen.Return("OK")
+        if comm:
+            yield comm.write("OK")
+        yield ServerNode.close(self)
 
 
 class WorkerProcess(object):

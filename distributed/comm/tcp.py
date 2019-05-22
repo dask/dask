@@ -431,6 +431,7 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
                 break
         else:
             raise exc
+        self.get_host_port()  # trigger assignment to self.bound_address
 
     def stop(self):
         tcp_server, self.tcp_server = self.tcp_server, None

@@ -114,7 +114,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option(
     "--name",
     type=str,
-    default="",
+    default=None,
     help="A unique name for this worker like 'worker-1'. "
     "If used with --nprocs then the process number "
     "will be appended like name-0, name-1, name-2, ...",

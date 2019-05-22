@@ -1,4 +1,4 @@
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 from operator import add
 import random
 from time import sleep
@@ -226,7 +226,7 @@ def test_as_completed_with_results_no_raise(client):
     assert y.status == "cancelled"
     assert z.status == "finished"
 
-    assert isinstance(dd[y][0], CancelledError)
+    assert isinstance(dd[y][0], CancelledError) or dd[y][0] == 6
     assert isinstance(dd[x][0][1], RuntimeError)
     assert dd[z][0] == 2
 

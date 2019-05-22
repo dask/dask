@@ -272,7 +272,7 @@ class Adaptive(object):
 
             logger.info("Retiring workers %s", workers)
             f = self.cluster.scale_down(workers)
-            if gen.is_future(f):
+            if hasattr(f, "__await__"):
                 yield f
 
             raise gen.Return(workers)
@@ -354,7 +354,7 @@ class Adaptive(object):
             if status == "up":
                 f = self.cluster.scale_up(**recommendations)
                 self.log.append((time(), "up", recommendations))
-                if gen.is_future(f):
+                if hasattr(f, "__await__"):
                     yield f
 
             elif status == "down":

@@ -110,10 +110,6 @@ def test_nanny_process_failure(c, s):
     s.stop()
 
 
-def test_nanny_no_port():
-    _ = str(Nanny("127.0.0.1", 8786))
-
-
 @gen_cluster(ncores=[])
 def test_run(s):
     pytest.importorskip("psutil")
@@ -319,12 +315,13 @@ def test_scheduler_address_config(c, s):
 
 
 @pytest.mark.slow
-@gen_test()
+@gen_test(timeout=20)
 def test_wait_for_scheduler():
     with captured_logger("distributed") as log:
         w = Nanny("127.0.0.1:44737")
-        w._start()
+        w.start()
         yield gen.sleep(6)
+        yield w.close()
 
     log = log.getvalue()
     assert "error" not in log.lower(), log

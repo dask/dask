@@ -202,7 +202,9 @@ def test_dont_override_default_get(loop):
     b = db.from_sequence([1, 2])
     b2 = b.map(f)
 
-    with Client(loop=loop, processes=False, set_as_default=True) as c:
+    with Client(
+        loop=loop, processes=False, set_as_default=True, dashboard_address=None
+    ) as c:
         assert dask.base.get_scheduler() == c.get
         for i in range(2):
             b2.compute()

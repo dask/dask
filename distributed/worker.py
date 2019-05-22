@@ -436,7 +436,7 @@ class Worker(ServerNode):
         self.ncores = ncores or _ncores
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
-        self.death_timeout = death_timeout
+        self.death_timeout = parse_timedelta(death_timeout)
         self.preload = preload
         if self.preload is None:
             self.preload = dask.config.get("distributed.worker.preload")
@@ -933,7 +933,8 @@ class Worker(ServerNode):
         if "://" in listen_host:
             protocol, listen_host = listen_host.split("://")
 
-        self.name = self.name or self.address
+        if self.name is None:
+            self.name = self.address
         preload_modules(
             self.preload,
             parameter=self,
@@ -976,7 +977,15 @@ class Worker(ServerNode):
         raise gen.Return(self)
 
     def __await__(self):
-        return self._start().__await__()
+        if self.status is not None:
+
+            @gen.coroutine  # idempotent
+            def _():
+                raise gen.Return(self)
+
+            return _().__await__()
+        else:
+            return self._start().__await__()
 
     def start(self, port=0):
         self.loop.add_callback(self._start, port)
