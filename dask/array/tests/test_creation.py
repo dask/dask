@@ -334,6 +334,7 @@ def test_tril_triu_non_square_arrays():
 
 def test_eye():
     assert_eq(da.eye(9, chunks=3), np.eye(9))
+    assert_eq(da.eye(9), np.eye(9))
     assert_eq(da.eye(10, chunks=3), np.eye(10))
     assert_eq(da.eye(9, chunks=3, M=11), np.eye(9, M=11))
     assert_eq(da.eye(11, chunks=3, M=9), np.eye(11, M=9))
@@ -348,6 +349,12 @@ def test_eye():
 
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+
+    with dask.config.set({'array.chunk-size': '50 MiB'}):
+        x = da.eye(10000, 'auto') 
+        assert 4 < x.npartitions < 32
+
+
 
 
 def test_diag():
