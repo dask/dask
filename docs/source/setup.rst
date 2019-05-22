@@ -84,3 +84,4 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/cloud.rst
    setup/adaptive.rst
    setup/docker.rst
+   setup/custom-startup.rst
