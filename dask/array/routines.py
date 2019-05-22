@@ -20,6 +20,7 @@ from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply, sqrt
+from .utils import normalize_meta
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, blockwise, broadcast_shapes,
@@ -986,7 +987,10 @@ def squeeze(a, axis=None):
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
-    return a[sl]
+    a = a[sl]
+    a._meta = normalize_meta(a._meta, a.ndim)
+
+    return a
 
 
 @wraps(np.compress)
