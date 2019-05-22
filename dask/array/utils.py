@@ -28,18 +28,6 @@ def normalize_to_array(x):
         return x
 
 
-def meta_from_array(x, ndim, dtype=None):
-    if hasattr(x, '_meta'):
-        meta = x._meta[tuple(slice(0, 0, None) for _ in range(ndim))]
-    else:
-        meta = x[tuple(slice(0, 0, None) for _ in range(ndim))]
-
-    if dtype:
-        meta = meta.astype(dtype)
-
-    return meta
-
-
 def normalize_meta(x, ndim, dtype=None):
     if ndim > x.ndim:
         meta = x[(Ellipsis, ) + tuple(None for _ in range(ndim - x.ndim))]
@@ -53,6 +41,15 @@ def normalize_meta(x, ndim, dtype=None):
         meta = meta.astype(dtype)
 
     return meta
+
+
+def meta_from_array(x, ndim, dtype=None):
+    if hasattr(x, '_meta'):
+        meta = x._meta[tuple(slice(0, 0, None) for _ in range(ndim))]
+    else:
+        meta = x[tuple(slice(0, 0, None) for _ in range(ndim))]
+
+    return normalize_meta(meta, ndim, dtype)
 
 
 def allclose(a, b, equal_nan=False, **kwargs):
