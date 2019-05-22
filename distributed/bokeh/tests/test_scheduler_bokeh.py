@@ -89,7 +89,7 @@ def test_basic(c, s, a, b):
         data = ss.source.data
         assert len(first(data.values()))
         if component is Occupancy:
-            assert all(addr.startswith("127.0.0.1:") for addr in data["bokeh_address"])
+            assert all(addr == "127.0.0.1" for addr in data["dashboard_host"])
 
 
 @gen_cluster(client=True)
@@ -581,3 +581,45 @@ def test_root_redirect(c, s, a, b):
     )
     assert response.code == 200
     assert "/status" in response.effective_url
+
+
+@gen_cluster(
+    client=True,
+    scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}},
+    worker_kwargs={"services": {"bokeh": BokehWorker}},
+    timeout=180,
+)
+def test_proxy_to_workers(c, s, a, b):
+    try:
+        import jupyter_server_proxy  # noqa: F401
+
+        proxy_exists = True
+    except ImportError:
+        proxy_exists = False
+
+    dashboard_port = s.services["bokeh"].port
+    http_client = AsyncHTTPClient()
+    response = yield http_client.fetch("http://localhost:%d/" % dashboard_port)
+    assert response.code == 200
+    assert "/status" in response.effective_url
+
+    for w in [a, b]:
+        host = w.ip
+        port = w.service_ports["bokeh"]
+        proxy_url = "http://localhost:%d/proxy/%s/%s/status" % (
+            dashboard_port,
+            port,
+            host,
+        )
+        direct_url = "http://localhost:%s/status" % port
+        http_client = AsyncHTTPClient()
+        response_proxy = yield http_client.fetch(proxy_url)
+        response_direct = yield http_client.fetch(direct_url)
+
+        assert response_proxy.code == 200
+        if proxy_exists:
+            assert b"Crossfilter" in response_proxy.body
+        else:
+            assert b"pip install jupyter-server-proxy" in response_proxy.body
+        assert response_direct.code == 200
+        assert b"Crossfilter" in response_direct.body

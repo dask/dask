@@ -7,6 +7,7 @@ from tornado import gen
 from tornado import web
 
 from ..utils import log_errors, format_bytes, format_time
+from .proxy import GlobalProxyHandler
 
 dirname = os.path.dirname(__file__)
 
@@ -42,6 +43,7 @@ class Worker(RequestHandler):
             self.render(
                 "worker.html",
                 title="Worker: " + worker,
+                scheduler=self.server,
                 Worker=worker,
                 **toolz.merge(self.server.__dict__, ns, self.extra)
             )
@@ -55,7 +57,7 @@ class Task(RequestHandler):
                 "task.html",
                 title="Task: " + task,
                 Task=task,
-                server=self.server,
+                scheduler=self.server,
                 **toolz.merge(self.server.__dict__, ns, self.extra)
             )
 
@@ -249,6 +251,7 @@ routes = [
     (r"individual-plots.json", IndividualPlots),
     (r"metrics", PrometheusHandler),
     (r"health", HealthHandler),
+    (r"proxy/(\d+)/(.*?)/(.*)", GlobalProxyHandler),
 ]
 
 

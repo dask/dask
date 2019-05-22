@@ -14,9 +14,14 @@ from tornado.httpclient import AsyncHTTPClient
 from dask.sizeof import sizeof
 from distributed.utils_test import gen_cluster, slowinc, inc
 from distributed.bokeh.scheduler import BokehScheduler
+from distributed.bokeh.worker import BokehWorker
 
 
-@gen_cluster(client=True, scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}})
+@gen_cluster(
+    client=True,
+    scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}},
+    worker_kwargs={"services": {"bokeh": BokehWorker}},
+)
 def test_connect(c, s, a, b):
     future = c.submit(lambda x: x + 1, 1)
     x = c.submit(slowinc, 1, delay=1, retries=5)

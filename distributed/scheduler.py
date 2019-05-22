@@ -856,6 +856,7 @@ class Scheduler(ServerNode):
         )
         self.digests = None
         self.service_specs = services or {}
+        self.service_kwargs = service_kwargs or {}
         self.services = {}
         self.scheduler_file = scheduler_file
         worker_ttl = worker_ttl or dask.config.get("distributed.scheduler.worker-ttl")

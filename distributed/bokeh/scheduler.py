@@ -130,7 +130,8 @@ class Occupancy(DashboardComponent):
                     "y": [1, 2],
                     "ms": [1, 2],
                     "color": ["red", "blue"],
-                    "bokeh_address": ["", ""],
+                    "dashboard_port": ["", ""],
+                    "dashboard_host": ["", ""],
                 }
             )
 
@@ -152,7 +153,9 @@ class Occupancy(DashboardComponent):
             # fig.xaxis[0].formatter = NumeralTickFormatter(format='0.0s')
             fig.x_range.start = 0
 
-            tap = TapTool(callback=OpenURL(url="http://@bokeh_address/"))
+            tap = TapTool(
+                callback=OpenURL(url="./proxy/@dashboard_port/@dashboard_host/status")
+            )
 
             hover = HoverTool()
             hover.tooltips = "@worker : @occupancy s."
@@ -166,10 +169,8 @@ class Occupancy(DashboardComponent):
         with log_errors():
             workers = list(self.scheduler.workers.values())
 
-            bokeh_addresses = []
-            for ws in workers:
-                addr = self.scheduler.get_worker_service_addr(ws.address, "bokeh")
-                bokeh_addresses.append("%s:%d" % addr if addr is not None else "")
+            dashboard_host = [ws.host for ws in workers]
+            dashboard_port = [ws.services.get("bokeh", "") for ws in workers]
 
             y = list(range(len(workers)))
             occupancy = [ws.occupancy for ws in workers]
@@ -199,7 +200,8 @@ class Occupancy(DashboardComponent):
                     "worker": [ws.address for ws in workers],
                     "ms": ms,
                     "color": color,
-                    "bokeh_address": bokeh_addresses,
+                    "dashboard_host": dashboard_host,
+                    "dashboard_port": dashboard_port,
                     "x": x,
                     "y": y,
                 }
@@ -317,7 +319,8 @@ class CurrentLoad(DashboardComponent):
                     "worker": ["a", "b"],
                     "y": [1, 2],
                     "nbytes-color": ["blue", "blue"],
-                    "bokeh_address": ["", ""],
+                    "dashboard_port": ["", ""],
+                    "dashboard_host": ["", ""],
                 }
             )
 
@@ -368,7 +371,11 @@ class CurrentLoad(DashboardComponent):
                 fig.yaxis.visible = False
                 fig.ygrid.visible = False
 
-                tap = TapTool(callback=OpenURL(url="http://@bokeh_address/"))
+                tap = TapTool(
+                    callback=OpenURL(
+                        url="./proxy/@dashboard_port/@dashboard_host/status"
+                    )
+                )
                 fig.add_tools(tap)
 
                 fig.toolbar.logo = None
@@ -395,10 +402,8 @@ class CurrentLoad(DashboardComponent):
         with log_errors():
             workers = list(self.scheduler.workers.values())
 
-            bokeh_addresses = []
-            for ws in workers:
-                addr = self.scheduler.get_worker_service_addr(ws.address, "bokeh")
-                bokeh_addresses.append("%s:%d" % addr if addr is not None else "")
+            dashboard_host = [ws.host for ws in workers]
+            dashboard_port = [ws.services.get("bokeh", "") for ws in workers]
 
             y = list(range(len(workers)))
             nprocessing = [len(ws.processing) for ws in workers]
@@ -442,7 +447,8 @@ class CurrentLoad(DashboardComponent):
                     "nbytes-half": [nb / 2 for nb in nbytes],
                     "nbytes-color": nbytes_color,
                     "nbytes_text": nbytes_text,
-                    "bokeh_address": bokeh_addresses,
+                    "dashboard_host": dashboard_host,
+                    "dashboard_port": dashboard_port,
                     "worker": [ws.address for ws in workers],
                     "y": y,
                 }
@@ -1579,6 +1585,7 @@ class BokehScheduler(BokehServer):
         self.prefix = prefix
 
         self.server_kwargs = kwargs
+
         self.server_kwargs["prefix"] = prefix or None
 
         self.apps = {

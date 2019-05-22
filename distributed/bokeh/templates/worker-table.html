@@ -1,4 +1,4 @@
-  <table class="table is-striped is-hoverable">
+   <table class="table is-striped is-hoverable">
     <tr>
         <th> Worker </th>
         <th> Cores </th>
@@ -20,7 +20,7 @@
         <td> {{ len(ws.processing) }} </td>
         <td> {{ len(ws.has_what) }} </td>
         {% if 'bokeh' in ws.services %}
-        <td> <a href="http://{{ ws.host }}:{{ ws.services['bokeh'] }}">bokeh</a> </td>
+        <td> <a href="../../proxy/{{ ws.services['bokeh'] }}/{{ ws.host }}/status">bokeh</a> </td>
         {% else %}
         <td> </td>
         {% end %}
