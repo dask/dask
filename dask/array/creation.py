@@ -419,8 +419,9 @@ def eye(N, chunks='auto', M=None, k=0, dtype=float):
     ----------
     N : int
       Number of rows in the output.
-    chunks: int
-        chunk size of resulting blocks
+    chunks: int, str
+        chunk size of resulting blocks. If string, use the value "auto"
+        to automatically determine chunk sizes along certain dimension.
     M : int, optional
       Number of columns in the output. If None, defaults to `N`.
     k : int, optional
