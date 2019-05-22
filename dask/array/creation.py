@@ -445,7 +445,7 @@ def eye(N, chunks='auto', M=None, k=0, dtype=float):
     elif isinstance(chunks, str):
         chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
         chunks = chunks[0][0]
-    token = tokenize(N, chunk, M, k, dtype)
+    token = tokenize(N, chunks, M, k, dtype)
     name_eye = 'eye-' + token
 
     vchunks = [chunks] * (N // chunks)
