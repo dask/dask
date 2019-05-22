@@ -439,15 +439,17 @@ def optimize_blockwise(graph, keys=()):
     """
     with warnings.catch_warnings():
         # In some cases, rewrite_blockwise (called internally) will do a bad
-        # thing. e.g. dask/array/tests/test_atop.py::test_blockwise_numpy_arg
+        # thing like `string in array[int].
+        # See dask/array/tests/test_atop.py::test_blockwise_numpy_arg for
+        # an example. NumPy currently raises a warning that 'a' == array([1, 2])
+        # will change from returning `False` to `array([False, False])`.
+        #
         # Users shouldn't see those warnings, so we filter them.
         # We set the filter here, rather than lower down, to avoid having to
         # create and remove the filter many times inside a tight loop.
 
-        # It's OK to just ignore the warning. The operation is Tuple in
-        # List[Tuple]. It shouldn't matter whether the elementwise comparison
-        # changes from returning a scalar to an array, since the outer `in` test
-        # will still just be a bool.
+        # https://github.com/dask/dask/pull/4805#discussion_r286545277 explains
+        # why silencing this warning shouldn't cause issues.
         warnings.filterwarnings("ignore",
                                 "elementwise comparison failed",
                                 Warning)  # FutureWarning or DeprecationWarning
