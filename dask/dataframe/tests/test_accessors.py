@@ -65,4 +65,3 @@ def test_accessor_works():
 
         assert b.mine.prop == 'item'
         assert b.mine.method() == 'item'
-
