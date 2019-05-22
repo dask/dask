@@ -1136,7 +1136,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
-        arr = self.map_partitions(np.array, )
+        arr = self.values
 
         if isinstance(lengths, Sequence):
             lengths = tuple(lengths)
