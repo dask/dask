@@ -1,10 +1,13 @@
-from dask.array.utils import assert_eq, same_keys, AxisError
-import dask.array as da
-import dask
-from toolz import concat
-import numpy as np
 import pytest
 pytest.importorskip('numpy')
+
+import numpy as np
+import pytest
+from toolz import concat
+
+import dask
+import dask.array as da
+from dask.array.utils import assert_eq, same_keys, AxisError
 
 
 @pytest.mark.parametrize(
