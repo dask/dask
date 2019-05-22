@@ -1115,7 +1115,7 @@ def test_map_blocks_block_info():
     assert_eq(z, x + x + 1 + 100)
 
 
-def test_map_blocks_block_info_with_axis():
+def test_map_blocks_block_info_with_new_axis():
     # https://github.com/dask/dask/issues/4298
     values = da.from_array(np.array(['a', 'a', 'b', 'c']), 2)
 
@@ -1143,6 +1143,40 @@ def test_map_blocks_block_info_with_axis():
 
     z = values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
     assert_eq(z, np.ones((4, 3), dtype='f8'))
+
+
+def test_map_blocks_block_info_with_drop_axis():
+    # https://github.com/dask/dask/issues/4584
+    values = da.from_array(np.array([[1, 2, 4],
+                                     [8, 16, 32],
+                                     [64, 128, 256],
+                                     [1024, 2048, 4096]], dtype='u4'), (2, 1))
+
+    def func(x, block_info=None):
+        assert set(block_info.keys()) == {0, None}
+        assert block_info[0]['shape'] == (4, 3)
+        # drop_axis concatenates along the dropped dimension, hence not (2, 3)
+        assert block_info[0]['num-chunks'] == (2, 1)
+        assert block_info[None]['shape'] == (4,)
+        assert block_info[None]['num-chunks'] == (2,)
+        assert block_info[None]['chunk-shape'] == (2,)
+        assert block_info[None]['dtype'] == np.dtype('u4')
+
+        assert block_info[0]['chunk-location'] in {(0, 0), (1, 0)}
+
+        if block_info[0]['chunk-location'] == (0, 0):
+            assert block_info[0]['array-location'] == [(0, 2), (0, 3)]
+            assert block_info[None]['chunk-location'] == (0,)
+            assert block_info[None]['array-location'] == [(0, 2)]
+        elif block_info[0]['chunk-location'] == (1, 0):
+            assert block_info[0]['array-location'] == [(2, 4), (0, 3)]
+            assert block_info[None]['chunk-location'] == (1,)
+            assert block_info[None]['array-location'] == [(2, 4)]
+
+        return np.sum(x, axis=1, dtype='u4')
+
+    z = values.map_blocks(func, drop_axis=1, dtype='u4')
+    assert_eq(z, np.array([7, 56, 448, 7168], dtype='u4'))
 
 
 def test_map_blocks_block_info_with_broadcast():
