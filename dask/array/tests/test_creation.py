@@ -1,13 +1,10 @@
-import pytest
-pytest.importorskip('numpy')
-
+from dask.array.utils import assert_eq, same_keys, AxisError
+import dask.array as da
+import dask
+from toolz import concat
 import numpy as np
 import pytest
-from toolz import concat
-
-import dask
-import dask.array as da
-from dask.array.utils import assert_eq, same_keys, AxisError
+pytest.importorskip('numpy')
 
 
 @pytest.mark.parametrize(
@@ -197,9 +194,9 @@ def test_indices_wrong_chunks():
 
 
 def test_indices_dimensions_chunks():
-    chunks = ((1,4,2,3), (5,5))
+    chunks = ((1, 4, 2, 3), (5, 5))
     darr = da.indices((10, 10), chunks=chunks)
-    assert darr.chunks == ((1,1),) + chunks
+    assert darr.chunks == ((1, 1),) + chunks
 
 
 def test_empty_indicies():
@@ -351,10 +348,8 @@ def test_eye():
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
 
     with dask.config.set({'array.chunk-size': '50 MiB'}):
-        x = da.eye(10000, 'auto') 
+        x = da.eye(10000, 'auto')
         assert 4 < x.npartitions < 32
-
-
 
 
 def test_diag():

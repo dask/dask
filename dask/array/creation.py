@@ -447,7 +447,6 @@ def eye(N, chunks='auto', M=None, k=0, dtype=float):
     token = tokenize(N, chunk, M, k, dtype)
     name_eye = 'eye-' + token
 
-
     vchunks = [chunks] * (N // chunks)
     if N % chunks != 0:
         vchunks.append(N % chunks)
