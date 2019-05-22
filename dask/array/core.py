@@ -1186,6 +1186,9 @@ class Array(DaskMethodsMixin):
         # Ensure all dimensions are 0
         if not np.isscalar(meta):
             meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
+            # If return array is 0-D, ensure _meta is 0-D
+            if len(chunks) == 0:
+                meta = meta.sum()
 
         return Array(graph, out, chunks, meta=meta)
 
