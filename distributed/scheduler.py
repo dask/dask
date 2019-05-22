@@ -4357,6 +4357,19 @@ class Scheduler(ServerNode):
     ##############################
 
     def check_idle_saturated(self, ws, occ=None):
+        """ Update the status of the idle and saturated state
+
+        The scheduler keeps track of workers that are ..
+
+        -  Saturated: have enough work to stay busy
+        -  Idle: do not have enough work to stay busy
+
+        They are considered saturated if they both have enough tasks to occupy
+        all of their cores, and if the expected runtime of those tasks is large
+        enough.
+
+        This is useful for load balancing and adaptivity.
+        """
         if self.total_ncores == 0 or ws.status == "closed":
             return
         if occ is None:
