@@ -6,6 +6,7 @@ Array
    :hidden:
 
    array-api.rst
+   array-best-practices.rst
    array-chunks.rst
    array-creation.rst
    array-overlap.rst

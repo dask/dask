@@ -1,12 +1,10 @@
 from __future__ import division, print_function, absolute_import
 
-from distutils.version import LooseVersion
-from functools import wraps
-
 import numpy as np
 from numpy.compat import basestring
 
 from .core import blockwise, asarray, einsum_lookup
+from ..utils import derived_from
 
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
@@ -194,10 +192,7 @@ def parse_einsum_input(operands):
     return (input_subscripts, output_subscript, operands)
 
 
-einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
-
-
-@wraps(np.einsum)
+@derived_from(np)
 def einsum(*operands, **kwargs):
     casting = kwargs.pop('casting', 'safe')
     dtype = kwargs.pop('dtype', None)
@@ -217,18 +212,13 @@ def einsum(*operands, **kwargs):
     if dtype is None:
         dtype = np.result_type(*[o.dtype for o in ops])
 
-    if einsum_can_optimize:
-        if optimize is not False:
-            # Avoid computation of dask arrays within np.einsum_path
-            # by passing in small numpy arrays broadcasted
-            # up to the right shape
-            fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape)
-                        for o in ops]
-            optimize, _ = np.einsum_path(subscripts, *fake_ops,
-                                         optimize=optimize)
-        kwargs = {'optimize': optimize}
-    else:
-        kwargs = {}
+    if optimize is not False:
+        # Avoid computation of dask arrays within np.einsum_path
+        # by passing in small numpy arrays broadcasted
+        # up to the right shape
+        fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape)
+                    for o in ops]
+        optimize, _ = np.einsum_path(subscripts, *fake_ops, optimize=optimize)
 
     inputs = [tuple(i) for i in inputs.split(",")]
 
@@ -248,7 +238,7 @@ def einsum(*operands, **kwargs):
                        # np.einsum parameters
                        subscripts=subscripts, kernel_dtype=einsum_dtype,
                        ncontract_inds=ncontract_inds, order=order,
-                       casting=casting, **kwargs)
+                       casting=casting, optimize=optimize)
 
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:

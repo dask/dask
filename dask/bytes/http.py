@@ -1,11 +1,17 @@
 from __future__ import print_function, division, absolute_import
 
+import posixpath
+import re
 import requests
-import uuid
 
 from . import core
+from .glob import generic_glob
+from ..compatibility import urlparse
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+# https://stackoverflow.com/a/15926317/3821154
+ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
+ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
 class HTTPFileSystem(object):
@@ -17,28 +23,73 @@ class HTTPFileSystem(object):
     """
     sep = '/'
 
-    def __init__(self, **storage_options):
+    def __init__(self, simple_links=True, block_size=None, same_schema=True,
+                 **storage_options):
         """
         Parameters
         ----------
         block_size: int
             Blocks to read bytes; if 0, will default to raw requests file-like
             objects instead of HTTPFile instances
+        simple_links: bool
+            If True, will consider both HTML <a> tags and anything that looks
+            like a URL; if False, will consider only the former.
+        same_schema: bool
+            For ls, glob: only return paths having the same schema
+            (http/https) as the original URL.
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters passed on to requests
         """
-        self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
+        self.block_size = (block_size if block_size is not None
+                           else DEFAULT_BLOCK_SIZE)
+        self.simple_links = simple_links
+        self.same_schema = same_schema
         self.kwargs = storage_options
         self.session = requests.Session()
 
-    def glob(self, url):
-        """For a template path, return matching files"""
-        raise NotImplementedError
+    def ls(self, url, detail=False):
+        # ignoring URL-encoded arguments
+        r = requests.get(url, **self.kwargs)
+        if self.simple_links:
+            links = ex2.findall(r.text) + ex.findall(r.text)
+        else:
+            links = ex.findall(r.text)
+        out = set()
+        parts = urlparse(url)
+        for l in links:
+            if isinstance(l, tuple):
+                l = l[1]
+            if l.startswith('http'):
+                if self.same_schema:
+                    if l.split(':', 1)[0] == url.split(':', 1)[0]:
+                        out.add(l)
+                elif l.replace('https', 'http').startswith(
+                        url.replace('https', 'http')):
+                    # allowed to cross http <-> https
+                    out.add(l)
+            elif l.startswith('/') and len(l) > 1:
+                out.add(parts.scheme + '://' + parts.netloc + l)
+            else:
+                if l not in ['..', '../', '']:
+                    # Ignore FTP-like "parent"
+                    out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
+        out = out - {url, url + '/'}
+        if detail:
+            return [{'name': u, 'type': 'directory'
+                     if self.isdir(u) else 'file'} for u in out]
+        else:
+            return list(sorted(out))
 
     def mkdirs(self, url):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
+
+    def isdir(self, path):
+        return True
+
+    def glob(self, path):
+        return sorted(generic_glob(self, posixpath, path))
 
     def open(self, url, mode='rb', block_size=None, **kwargs):
         """Make a file-like object
@@ -49,6 +100,8 @@ class HTTPFileSystem(object):
             Full URL with protocol
         mode: string
             must be "rb"
+        block_size: int or None
+            Bytes to download in one request; use instance value if None.
         kwargs: key-value
             Any other parameters, passed to requests calls
         """
@@ -66,8 +119,9 @@ class HTTPFileSystem(object):
             return r.raw
 
     def ukey(self, url):
-        """Unique identifier, implied file might have changed every time"""
-        return uuid.uuid1().hex
+        """Unique identifier; assume HTTP files are static, unchanging"""
+        from dask.base import tokenize
+        return tokenize(url, self.kwargs)
 
     def size(self, url):
         """Size in bytes of the file at path"""
@@ -107,10 +161,11 @@ class HTTPFile(object):
         self.session = session if session is not None else requests.Session()
         self.blocksize = (block_size if block_size is not None
                           else DEFAULT_BLOCK_SIZE)
+
         try:
             self.size = file_size(url, self.session, allow_redirects=True,
                                   **self.kwargs)
-        except ValueError:
+        except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
             self.size = None  # pragma: no cover
         except requests.HTTPError as err:
@@ -141,12 +196,12 @@ class HTTPFile(object):
 
         Returns the position.
         """
-        if self.size is None:
+        if self.size is None and (where, whence) not in [(0, 0), (0, 1)]:
             raise ValueError('Cannot seek since size of file is not known')
         if whence == 0:
             nloc = where
         elif whence == 1:
-            nloc += where
+            nloc = self.loc + where
         elif whence == 2:
             nloc = self.size + where
         else:
@@ -173,6 +228,9 @@ class HTTPFile(object):
         if length == 0:
             # asked for no data, so supply no data and shortcut doing work
             return b''
+        if length < 0 and self.loc == 0:
+            # size was provided, but asked for whole file, so shortcut
+            return self._fetch_all()
         if self.size is None:
             if length >= 0:  # pragma: no cover
                 # asked for specific amount of data, but we don't know how
@@ -181,9 +239,6 @@ class HTTPFile(object):
             else:
                 # asked for whole file
                 return self._fetch_all()
-        if length < 0 and self.loc == 0:
-            # size was provided, but asked for whole file, so shortcut
-            return self._fetch_all()
         if length < 0 or self.loc + length > self.size:
             end = self.size
         else:
@@ -322,8 +377,7 @@ def file_size(url, session, **kwargs):
     kwargs = kwargs.copy()
     ar = kwargs.pop('allow_redirects', True)
     head = kwargs.get('headers', {})
-    if 'Accept-Encoding' not in head:
-        head['Accept-Encoding'] = 'identity'
+    head['Accept-Encoding'] = 'identity'
     r = session.head(url, allow_redirects=ar, **kwargs)
     r.raise_for_status()
     if 'Content-Length' in r.headers:

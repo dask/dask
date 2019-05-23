@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps, reduce
+from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
 from numbers import Integral, Number
@@ -11,6 +11,7 @@ from toolz import accumulate, sliding_window
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..compatibility import Sequence
+from ..utils import derived_from
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
@@ -322,7 +323,7 @@ def arange(*args, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
-@wraps(np.meshgrid)
+@derived_from(np)
 def meshgrid(*xi, **kwargs):
     indexing = kwargs.pop("indexing", "xy")
     sparse = bool(kwargs.pop("sparse", False))
@@ -462,7 +463,7 @@ def eye(N, chunks, M=None, k=0, dtype=float):
                  chunks=(chunks, chunks), dtype=dtype)
 
 
-@wraps(np.diag)
+@derived_from(np)
 def diag(v):
     name = 'diag-' + tokenize(v)
 
@@ -510,7 +511,7 @@ def diag(v):
     return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
 
 
-@wraps(np.diagonal)
+@derived_from(np)
 def diagonal(a, offset=0, axis1=0, axis2=1):
     name = 'diagonal-' + tokenize(a, offset, axis1, axis2)
 
@@ -689,7 +690,7 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
     return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
 
 
-@wraps(np.fromfunction)
+@derived_from(np)
 def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
@@ -707,7 +708,7 @@ def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
-@wraps(np.repeat)
+@derived_from(np)
 def repeat(a, repeats, axis=None):
     if axis is None:
         if a.ndim == 1:
@@ -753,7 +754,7 @@ def repeat(a, repeats, axis=None):
     return concatenate(out, axis=axis)
 
 
-@wraps(np.tile)
+@derived_from(np)
 def tile(A, reps):
     if not isinstance(reps, Integral):
         raise NotImplementedError("Only integer valued `reps` supported.")
@@ -1050,7 +1051,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     return result
 
 
-@wraps(np.pad)
+@derived_from(np)
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
 

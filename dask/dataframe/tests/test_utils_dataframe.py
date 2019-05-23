@@ -4,9 +4,8 @@ import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
-                                  UNKNOWN_CATEGORIES, PANDAS_VERSION,
-                                  is_dataframe_like, is_series_like,
-                                  is_index_like)
+                                  UNKNOWN_CATEGORIES, is_dataframe_like,
+                                  is_series_like, is_index_like)
 
 import pytest
 
@@ -244,8 +243,6 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
-                    reason="Pandas < 0.20.0 doesn't support UInt64Index")
 def test_meta_nonempty_uint64index():
     idx = pd.UInt64Index([1], name='foo')
     res = meta_nonempty(idx)
@@ -308,7 +305,7 @@ def test_check_meta():
         check_meta(d, meta.d.astype('f8'), numeric_equal=False)
     assert str(err.value) == ('Metadata mismatch found.\n'
                               '\n'
-                              'Partition type: `Series`\n'
+                              'Partition type: `pandas.core.series.Series`\n'
                               '+----------+---------+\n'
                               '|          | dtype   |\n'
                               '+----------+---------+\n'
@@ -325,7 +322,7 @@ def test_check_meta():
     exp = (
         'Metadata mismatch found in `from_delayed`.\n'
         '\n'
-        'Partition type: `DataFrame`\n'
+        'Partition type: `pandas.core.frame.DataFrame`\n'
         '+--------+----------+----------+\n'
         '| Column | Found    | Expected |\n'
         '+--------+----------+----------+\n'
@@ -334,6 +331,17 @@ def test_check_meta():
         '| e      | category | -        |\n'
         '+--------+----------+----------+')
     assert str(err.value) == exp
+
+
+def test_check_meta_typename():
+    df = pd.DataFrame({'x': []})
+    ddf = dd.from_pandas(df, npartitions=1)
+    check_meta(df, df)
+    with pytest.raises(Exception) as info:
+        check_meta(ddf, df)
+
+    assert "dask" in str(info.value)
+    assert "pandas" in str(info.value)
 
 
 def test_is_dataframe_like():

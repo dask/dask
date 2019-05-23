@@ -4,6 +4,7 @@ import pytest
 import dask.array as da
 from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
+from dask.sizeof import sizeof
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
@@ -58,7 +59,17 @@ functions = [
     lambda x: x.rechunk((2, 2, 1)),
     pytest.param(lambda x: da.einsum("ijk,ijk", x, x),
                  marks=pytest.mark.xfail(
-                     reason='depends on resolution of https://github.com/numpy/numpy/issues/12974'))
+                     reason='depends on resolution of https://github.com/numpy/numpy/issues/12974')),
+    lambda x: np.isreal(x),
+    lambda x: np.iscomplex(x),
+    lambda x: np.isneginf(x),
+    lambda x: np.isposinf(x),
+    lambda x: np.real(x),
+    lambda x: np.imag(x),
+    lambda x: np.fix(x),
+    lambda x: np.i0(x.reshape((24,))),
+    lambda x: np.sinc(x),
+    lambda x: np.nan_to_num(x),
 ]
 
 
@@ -77,6 +88,13 @@ def test_basic(func):
     if ddc.shape:
         result = ddc.compute(scheduler='single-threaded')
         assert isinstance(result, cupy.ndarray)
+
+
+@pytest.mark.parametrize('dtype', ['f4', 'f8'])
+def test_sizeof(dtype):
+    c = cupy.random.random((2, 3, 4), dtype=dtype)
+
+    assert sizeof(c) == c.nbytes
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

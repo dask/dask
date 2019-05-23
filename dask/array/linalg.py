@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import operator
-from functools import wraps
 from numbers import Number
 
 import numpy as np
@@ -11,6 +10,7 @@ from ..base import tokenize
 from ..blockwise import blockwise
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
+from ..utils import derived_from
 from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
@@ -1121,7 +1121,7 @@ def lstsq(a, b):
     return x, residuals, rank, s
 
 
-@wraps(np.linalg.norm)
+@derived_from(np.linalg)
 def norm(x, ord=None, axis=None, keepdims=False):
     if axis is None:
         axis = tuple(range(x.ndim))

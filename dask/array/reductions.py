@@ -14,7 +14,7 @@ from . import chunk
 from .core import _concatenate2, Array, handle_out
 from .blockwise import blockwise, blockwise_meta
 from ..blockwise import lol_tuples
-from .creation import arange
+from .creation import arange, diagonal
 from .ufunc import sqrt
 from .utils import full_like_safe, validate_axis
 from .wrap import zeros, ones
@@ -979,3 +979,8 @@ def argtopk(a, k, axis=-1, split_every=None):
         a_plus_idx, chunk=chunk_combine, combine=chunk_combine,
         aggregate=aggregate, axis=axis, keepdims=True, dtype=np.intp,
         split_every=split_every, concatenate=False, output_size=abs(k))
+
+
+@wraps(np.trace)
+def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
+    return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)
