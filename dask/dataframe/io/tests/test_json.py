@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import pytest
+import json
 
 try:
     import lzma
@@ -33,6 +34,20 @@ def test_read_json_basic(orient):
         if orient == 'values':
             out.columns = list(df.columns)
         assert_eq(out, df)
+
+
+@pytest.mark.parametrize('fkeyword', ['pandas', 'json'])
+def test_read_json_fkeyword(fkeyword):
+    def _my_json_reader(*args, **kwargs):
+        if fkeyword == 'json':
+            return pd.DataFrame.from_dict(json.load(*args))
+        return pd.read_json(*args)
+    with tmpfile('json') as f:
+        df.to_json(f, orient='records', lines=False)
+        actual = dd.read_json(f, orient='records', lines=False,
+                              engine=_my_json_reader)
+        actual_pd = pd.read_json(f, orient='records', lines=False)
+        assert_eq(actual, actual_pd)
 
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
