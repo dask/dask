@@ -60,16 +60,24 @@ functions = [
     pytest.param(lambda x: da.einsum("ijk,ijk", x, x),
                  marks=pytest.mark.xfail(
                      reason='depends on resolution of https://github.com/numpy/numpy/issues/12974')),
-    lambda x: np.isreal(x),
-    lambda x: np.iscomplex(x),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
-    lambda x: np.real(x),
-    lambda x: np.imag(x),
-    lambda x: np.fix(x),
-    lambda x: np.i0(x.reshape((24,))),
-    lambda x: np.sinc(x),
-    lambda x: np.nan_to_num(x),
+    pytest.param(lambda x: np.isreal(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.iscomplex(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.real(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.imag(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.fix(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.i0(x.reshape((24,))),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.sinc(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+    pytest.param(lambda x: np.nan_to_num(x),
+                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
 ]
 
 
@@ -382,6 +390,8 @@ def test_random_shapes(shape):
     assert x.shape == shape
 
 
+@pytest.mark.xfail(reason="CuPy division by zero on tensordot(), https://github.com/cupy/cupy/pull/2209")
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, None),        # tall-skinny regular blocks
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
@@ -446,6 +456,7 @@ def test_tsqr(m, n, chunks, error_type):
             u, s, vh = da.linalg.tsqr(data, compute_svd=True)
 
 
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize('m_min,n_max,chunks,vary_rows,vary_cols,error_type', [
     (10, 5, (10, 5), True, False, None),   # single block tall
     (10, 5, (10, 5), False, True, None),   # single block tall
