@@ -142,7 +142,7 @@ you can give your function a keyword argument ``block_id``:
        ...
 
 This extra keyword argument will be given a tuple that provides the block
-location like ``(0, 0)`` for the upper right block or ``(0, 1)`` for the block
+location like ``(0, 0)`` for the upper-left block or ``(0, 1)`` for the block
 just to the right of that block.
 
 

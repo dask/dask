@@ -1113,6 +1113,37 @@ class Bag(DaskMethodsMixin):
 
         >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
 
+        Examples
+        --------
+
+        We can compute the maximum of some ``(key, value)`` pairs, grouped
+        by the ``key``. (You might be better off converting the ``Bag`` to
+        a ``dask.dataframe`` and using its groupby).
+
+        >>> import random
+        >>> import dask.bag as db
+
+        >>> tokens = list('abcdefg')
+        >>> values = range(10000)
+        >>> a = [(random.choice(tokens), random.choice(values))
+        ...       for _ in range(100)]
+        >>> a[:2]  # doctest: +SKIP
+        [('g', 676), ('a', 871)]
+
+        >>> a = db.from_sequence(a)
+
+        >>> def binop(t, x):
+        ...     return max((t, x), key=lambda x: x[1])
+
+        >>> a.foldby(lambda x: x[0], binop).compute()  # doctest: +SKIP
+        [('g', ('g', 984)),
+         ('a', ('a', 871)),
+         ('b', ('b', 999)),
+         ('c', ('c', 765)),
+         ('f', ('f', 955)),
+         ('e', ('e', 991)),
+         ('d', ('d', 854))]
+
         See Also
         --------
 

@@ -470,7 +470,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     tune the behavior, which are described below.  ``ave_width`` is the
     natural parameter with which to compare parallelism to granularity, so
     it should always be specified.  Reasonable values for other parameters
-    with be determined using ``ave_width`` if necessary.
+    will be determined using ``ave_width`` if necessary.
 
     Parameters
     ----------
