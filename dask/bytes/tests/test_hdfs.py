@@ -16,7 +16,7 @@ try:
     import distributed
     from distributed import Client
     from distributed.utils_test import cluster, loop  # noqa: F401
-except ImportError:
+except (ImportError, SyntaxError):
     distributed = None
 
 try:
