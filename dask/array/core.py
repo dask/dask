@@ -1291,17 +1291,19 @@ class Array(DaskMethodsMixin):
         else:
             meta = self._meta[index2].astype(self.dtype)
 
-        # If meta still has more dimensions than actual data
         # Exception for object dtype and ndim == 1, which results in primitive types
-        if meta.ndim > len(chunks) and not (meta.dtype == object and meta.ndim == 1):
-            meta = np.sum(meta, axis=0)
+        if not (meta.dtype == object and meta.ndim == 1):
 
-        # Ensure all dimensions are 0
-        if not np.isscalar(meta):
-            meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
-            # If return array is 0-D, ensure _meta is 0-D
-            if len(chunks) == 0:
-                meta = meta.sum()
+            # If meta still has more dimensions than actual data
+            if meta.ndim > len(chunks):
+                meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
+
+            # Ensure all dimensions are 0
+            if not np.isscalar(meta):
+                meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
+                # If return array is 0-D, ensure _meta is 0-D
+                if len(chunks) == 0:
+                    meta = meta.sum()
 
         return Array(graph, out, chunks, meta=meta)
 
