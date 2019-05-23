@@ -2899,7 +2899,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq)
     if n == 0:
-        return from_array([]).astype(dt)
+        return from_array(np.empty(shape=(), dtype=dt))
 
     ndim = len(seq[0].shape)
 
