@@ -12,7 +12,7 @@ from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, handle_out
-from .blockwise import blockwise
+from .blockwise import blockwise, blockwise_meta
 from ..blockwise import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
@@ -147,9 +147,14 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
                         for i, c in enumerate(tmp.chunks))
 
     if hasattr(x, '_meta'):
-        meta_inds = tuple(range(x._meta.ndim))
-        reduced_meta = blockwise(chunk, meta_inds, x._meta, meta_inds, axis=axis,
-                                 keepdims=True, dtype=x.dtype)
+        try:
+            reduced_meta = blockwise_meta(chunk, x.dtype, x._meta, axis=axis,
+                                          keepdims=True, meta=True)
+        except TypeError:
+            reduced_meta = blockwise_meta(chunk, x.dtype, x._meta, axis=axis,
+                                          keepdims=True)
+        except ValueError:
+            pass
     else:
         reduced_meta = None
 
@@ -239,10 +244,10 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
     meta = x._meta
     if reduced_meta is not None:
         try:
-            meta = func(reduced_meta.compute(scheduler=core.get), meta=True)
+            meta = func(reduced_meta, meta=True)
         # no meta keyword argument exists for func, and it isn't required
         except TypeError:
-            meta = func(reduced_meta.compute(scheduler=core.get))
+            meta = func(reduced_meta)
         # when no work can be computed on the empty array (e.g., func is a ufunc)
         except ValueError:
             pass
@@ -388,9 +393,9 @@ def nannumel(x, **kwargs):
 
 
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', meta=False, **kwargs):
-    n = numel(x, dtype=dtype, **kwargs)
     if meta:
-        return n
+        return x
+    n = numel(x, dtype=dtype, **kwargs)
 
     total = sum(x, dtype=dtype, **kwargs)
 
@@ -400,8 +405,10 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', meta=False, **kwargs):
 def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, meta=False, **kwargs):
     if not isinstance(pairs, list):
         pairs = [pairs]
-    ns = deepmap(lambda pair: pair['n'], pairs)
+
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
     n = _concatenate2(ns, axes=axis).sum(axis=axis, **kwargs)
+
     if meta:
         return n
 
@@ -412,8 +419,9 @@ def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, meta=
 
 
 def mean_agg(pairs, dtype='f8', axis=None, meta=False, **kwargs):
-    ns = deepmap(lambda pair: pair['n'], pairs)
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
     n = _concatenate2(ns, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+
     if meta:
         return n
 
@@ -452,9 +460,9 @@ with ignoring(AttributeError):
 
 
 def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', meta=False, **kwargs):
-    n = numel(A, **kwargs)
     if meta:
-        return n
+        return A
+    n = numel(A, **kwargs)
 
     n = n.astype(np.int64)
     total = sum(A, dtype=dtype, **kwargs)
@@ -476,12 +484,13 @@ def moment_combine(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, me
     if not isinstance(pairs, list):
         pairs = [pairs]
 
-    ns = _concatenate2(deepmap(lambda pair: pair['n'], pairs), axes=axis)
-
     kwargs['dtype'] = dtype
     kwargs['keepdims'] = True
 
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
+    ns = _concatenate2(ns, axes=axis)
     n = ns.sum(axis=axis, **kwargs)
+
     if meta:
         return n
 
@@ -507,12 +516,14 @@ def moment_agg(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, meta=F
     keepdim_kw = kwargs.copy()
     keepdim_kw['keepdims'] = True
 
-    ns = _concatenate2(deepmap(lambda pair: pair['n'], pairs), axes=axis)
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
+    ns = _concatenate2(ns, axes=axis)
+    n = ns.sum(axis=axis, **keepdim_kw)
+
     if meta:
-        return ns.sum(axis=axis, **kwargs)
+        return n
 
     totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
-    n = ns.sum(axis=axis, **keepdim_kw)
     Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
 
     mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)

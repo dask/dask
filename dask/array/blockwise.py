@@ -11,6 +11,34 @@ from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
 
 
+def blockwise_meta(func, dtype, *args, **kwargs):
+    arrays = args[::2]
+    ndims = [a.ndim if hasattr(a, 'ndim') else 0 for a in arrays]
+    args_meta = [arg._meta if hasattr(arg, '_meta') else
+                 arg[tuple(slice(0, 0, None) for _ in range(nd))] if nd > 0 else arg
+                 for arg, nd in zip(arrays, ndims)]
+    kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
+
+    # TODO: look for alternative to this, causes issues when using map_blocks()
+    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+    if isinstance(func, np.vectorize):
+        meta = func(*args_meta)
+        return meta.astype(dtype)
+
+    try:
+        meta = func(*args_meta, **kwargs_meta)
+    except TypeError:
+        # The concatenate argument is an argument introduced by this
+        # function and may not be support by some external functions,
+        # such as in NumPy
+        kwargs_meta.pop('concatenate', None)
+        meta = func(*args_meta, **kwargs_meta)
+    except ValueError:
+        return None
+
+    return meta.astype(dtype)
+
+
 def blockwise(func, out_ind, *args, **kwargs):
     """ Tensor operation: Generalized inner and outer products
 
@@ -199,36 +227,9 @@ def blockwise(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    # Attempt to construct meta, fallback to Array's dtype constructor if it's
-    # a basic type
     try:
-        arrays = args[::2]
-        ndims = [a.ndim if hasattr(a, 'ndim') else 0 for a in arrays]
-        args_meta = [arg._meta if hasattr(arg, '_meta') else
-                     arg[tuple(slice(0, 0, None) for _ in range(nd))] if nd > 0 else arg
-                     for arg, nd in zip(arrays, ndims)]
-        kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
-
-        # TODO: look for alternative to this, causes issues when using map_blocks()
-        # with np.vectorize, such as dask.array.routines._isnonzero_vec().
-        if isinstance(func, np.vectorize):
-            meta = func(*args_meta)
-            return Array(graph, out, chunks, meta=meta.astype(dtype))
-
-        try:
-            meta = func(*args_meta, **kwargs_meta)
-        except TypeError:
-            # The concatenate argument is an argument introduced by this
-            # function and may not be support by some external functions,
-            # such as in NumPy
-            kwargs_meta.pop('concatenate')
-            meta = func(*args_meta, **kwargs_meta)
-
-        if np.isscalar(meta):
-            ndim = max([a.ndim for a in arrays])
-            meta = arrays[0]._meta[tuple(slice(0, 0, None)
-                                   for _ in range(ndim))]
-        return Array(graph, out, chunks, meta=meta.astype(dtype))
+        meta = blockwise_meta(func, dtype, *args, **kwargs)
+        return Array(graph, out, chunks, meta=meta)
     except Exception:
         return Array(graph, out, chunks, dtype=dtype)
 
