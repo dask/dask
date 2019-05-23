@@ -1126,7 +1126,7 @@ class Bag(DaskMethodsMixin):
         >>> tokens = list('abcdefg')
         >>> values = range(10000)
         >>> a = [(random.choice(tokens), random.choice(values))
-        >>>       for _ in range(100)]
+        ...       for _ in range(100)]
         >>> a[:2]  # doctest: +SKIP
         [('g', 676), ('a', 871)]
 
