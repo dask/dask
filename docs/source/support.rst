@@ -63,9 +63,7 @@ likelihood of quickly getting a good answer.
 
 Paid support
 ------------
+In addition to the previous options, paid support is available from
 
-Dask is an open source project that originated at `Anaconda Inc
-<https://www.anaconda.com/>`_.  In addition to the previous options, Anaconda
-offers paid training and support:  `<https://www.anaconda.com/support>`_.
-Quansight also offers paid support, as part of their open-source subscription:
-`<https://www.quansight.com/open-source-support>`_.
+-   Anaconda: `<https://www.anaconda.com/support>`_
+-   Quansight: `<https://www.quansight.com/open-source-support>`_
