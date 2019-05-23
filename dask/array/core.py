@@ -2887,9 +2887,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     # Coerce all arrays to the same type
     # Empty arrays can impact the output dtype
-    from .routines import result_type
     seq_dtypes = [a.dtype for a in seq]
-    dt = result_type(*seq_dtypes)
+    dt = reduce(np.promote_types, seq_dtypes)
     seq = [a.astype(dt) for a in seq]
 
     # Drop empty arrays
