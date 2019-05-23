@@ -1,32 +1,100 @@
 language: generic
 sudo: false
 dist: trusty
+os: linux
 
-env:
-  matrix:
-    - PYTHON=2.7 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='true' PARALLEL='false' TEST_IMPORTS='false' XTRATESTARGS=
-    - PYTHON=2.7 NUMPY=1.13.0 PANDAS=0.20.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
-    - PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.19.1 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
-    - PYTHON=3.5 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' XTRATESTARGS=
-    - PYTHON=3.6 NUMPY=1.13.0 PANDAS=0.20.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
+_base_envs:
+  - &test_and_lint TEST='true' LINT='true'
+  - &coverage COVERAGE='true' PARALLEL='false'
+  - &no_coverage COVERAGE='false' PARALLEL='true'
+  - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS='--ignore=dask/diagnostics --ignore=dask/array/tests/test_image.py --ignore=dask/array/tests/test_stats.py --ignore=dask/bytes/tests/test_s3.py'
+  - &no_optimize XTRATESTARGS=
+  - &imports TEST_IMPORTS='true'
+  - &no_imports TEST_IMPORTS='false'
+  - &array_function NUMPY_EXPERIMENTAL_ARRAY_FUNCTION='1'
 
-matrix:
+jobs:
   fast_finish: true
   include:
-  - os: osx
-    env: PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
-  # Together with fast_finish, allow build to be marked successful before the OS X job finishes
-  allow_failures:
-  - os: osx
-    # This needs to be the exact same line as above
-    env: PYTHON=3.6 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
+    - env:
+      - PYTHON=2.7
+      - NUMPY=1.13.0
+      - PANDAS=0.21.1
+      - *test_and_lint
+      - *no_coverage
+      - *optimize
+      - *no_imports
 
-install: source continuous_integration/travis/install.sh
+    - env:
+      - PYTHON=3.5
+      - NUMPY=1.14.1
+      - PANDAS=0.22.0
+      - *test_and_lint
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
+
+    - env: &py36_env
+      - PYTHON=3.6
+      - NUMPY=1.15.1
+      - PANDAS=0.23.4
+      - *test_and_lint
+      - *coverage
+      - *no_optimize
+      - *imports
+
+    - env: &py37_env
+      - PYTHON=3.7
+      - NUMPY=1.16.2
+      - PANDAS>=0.24.1
+      - *test_and_lint
+      - *no_coverage
+      - *no_optimize
+      - *imports
+      - *array_function
+
+    - env: &py37_dev
+      - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
+      - NUMPY=1.16.2    # these are overridden later
+      - PANDAS>=0.24.2
+      - *test_and_lint
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
+      - *array_function
+      if: type == cron OR commit_message =~ test-upstream  # Run on cron jobs or any builds where commit message contains "test-upstream"
+
+    - env: *py36_env
+      if: type != pull_request
+      os: osx
+
+    - env:
+      - TEST_HDFS='true'
+      if: type != pull_request OR commit_message =~ test-hdfs  # Skip on PRS unless the commit message contains "test-hdfs"
+      sudo: true
+      services:
+        - docker
+      before_install:
+        - source continuous_integration/hdfs/startup_hdfs.sh
+
+  allow_failures:
+    - env: *py37_dev
+    - os: osx
+
+
+install:
+  - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/install.sh; fi
+  - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/install.sh; fi
+
 script:
-  - source continuous_integration/travis/run_tests.sh
-  - flake8 dask
+  - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
+  - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
+  - if [[ $LINT == 'true' ]]; then flake8 dask; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
-after_success: source continuous_integration/travis/after_success.sh
+
+after_success:
+  - codecov
+  - source continuous_integration/travis/after_success.sh
 
 notifications:
   email: false

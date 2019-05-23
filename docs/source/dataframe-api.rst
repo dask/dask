@@ -3,7 +3,8 @@ API
 
 .. currentmodule:: dask.dataframe
 
-Top level user functions:
+Dataframe
+~~~~~~~~~
 
 .. autosummary::
 
@@ -34,7 +35,10 @@ Top level user functions:
     DataFrame.get_partition
     DataFrame.groupby
     DataFrame.head
+    DataFrame.iloc
     DataFrame.index
+    DataFrame.isna
+    DataFrame.isnull
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
@@ -51,7 +55,9 @@ Top level user functions:
     DataFrame.ndim
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.partitions
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
@@ -59,6 +65,7 @@ Top level user functions:
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -68,20 +75,142 @@ Top level user functions:
     DataFrame.rtruediv
     DataFrame.sample
     DataFrame.set_index
+    DataFrame.shape
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
     DataFrame.tail
     DataFrame.to_bag
     DataFrame.to_csv
+    DataFrame.to_dask_array
     DataFrame.to_delayed
     DataFrame.to_hdf
+    DataFrame.to_json
+    DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
     DataFrame.var
     DataFrame.visualize
     DataFrame.where
+
+Series
+~~~~~~
+
+.. autosummary::
+
+   Series
+   Series.add
+   Series.align
+   Series.all
+   Series.any
+   Series.append
+   Series.apply
+   Series.astype
+   Series.autocorr
+   Series.between
+   Series.bfill
+   Series.cat
+   Series.clear_divisions
+   Series.clip
+   Series.clip_lower
+   Series.clip_upper
+   Series.compute
+   Series.copy
+   Series.corr
+   Series.count
+   Series.cov
+   Series.cummax
+   Series.cummin
+   Series.cumprod
+   Series.cumsum
+   Series.describe
+   Series.diff
+   Series.div
+   Series.drop_duplicates
+   Series.dropna
+   Series.dt
+   Series.dtype
+   Series.eq
+   Series.ffill
+   Series.fillna
+   Series.first
+   Series.floordiv
+   Series.ge
+   Series.get_partition
+   Series.groupby
+   Series.gt
+   Series.head
+   Series.idxmax
+   Series.idxmin
+   Series.isin
+   Series.isna
+   Series.isnull
+   Series.iteritems
+   Series.known_divisions
+   Series.last
+   Series.le
+   Series.loc
+   Series.lt
+   Series.map
+   Series.map_overlap
+   Series.map_partitions
+   Series.mask
+   Series.max
+   Series.mean
+   Series.memory_usage
+   Series.min
+   Series.mod
+   Series.mul
+   Series.nbytes
+   Series.ndim
+   Series.ne
+   Series.nlargest
+   Series.notnull
+   Series.nsmallest
+   Series.nunique
+   Series.nunique_approx
+   Series.persist
+   Series.pipe
+   Series.pow
+   Series.prod
+   Series.quantile
+   Series.radd
+   Series.random_split
+   Series.rdiv
+   Series.reduction
+   Series.repartition
+   Series.replace
+   Series.rename
+   Series.resample
+   Series.reset_index
+   Series.rolling
+   Series.round
+   Series.sample
+   Series.sem
+   Series.shape
+   Series.shift
+   Series.size
+   Series.std
+   Series.str
+   Series.sub
+   Series.sum
+   Series.to_bag
+   Series.to_csv
+   Series.to_dask_array
+   Series.to_delayed
+   Series.to_frame
+   Series.to_hdf
+   Series.to_string
+   Series.to_timestamp
+   Series.truediv
+   Series.unique
+   Series.value_counts
+   Series.values
+   Series.var
+   Series.visualize
+   Series.where
+
 
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~
@@ -103,6 +232,8 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.first
+   DataFrameGroupBy.last
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -120,6 +251,11 @@ Groupby Operations
    SeriesGroupBy.std
    SeriesGroupBy.sum
    SeriesGroupBy.var
+   SeriesGroupBy.first
+   SeriesGroupBy.last
+
+.. autosummary::
+   Aggregation
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
@@ -128,19 +264,25 @@ Rolling Operations
 
 .. autosummary::
    rolling.map_overlap
-   rolling.rolling_apply
-   rolling.rolling_count
-   rolling.rolling_kurt
-   rolling.rolling_max
-   rolling.rolling_mean
-   rolling.rolling_median
-   rolling.rolling_min
-   rolling.rolling_quantile
-   rolling.rolling_skew
-   rolling.rolling_std
-   rolling.rolling_sum
-   rolling.rolling_var
-   rolling.rolling_window
+   Series.rolling
+   DataFrame.rolling
+
+.. currentmodule:: dask.dataframe.rolling
+
+.. autosummary::
+   Rolling.apply
+   Rolling.count
+   Rolling.kurt
+   Rolling.max
+   Rolling.mean
+   Rolling.median
+   Rolling.min
+   Rolling.quantile
+   Rolling.skew
+   Rolling.std
+   Rolling.sum
+   Rolling.var
+
 
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
@@ -150,8 +292,11 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
+   read_json
+   read_orc
    read_sql_table
    from_array
    from_bcolz
@@ -165,12 +310,20 @@ Store DataFrames
 
 .. autosummary::
 
-    to_csv
-    to_parquet
-    to_hdf
-    to_records
-    to_bag
-    to_delayed
+   to_csv
+   to_parquet
+   to_hdf
+   to_records
+   to_bag
+   to_json
+
+Covert DataFrames
+~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+
+   to_dask_array
+   to_delayed
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -204,6 +357,11 @@ SeriesGroupBy
    :members:
    :inherited-members:
 
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
+
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -211,40 +369,30 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
+.. autofunction:: read_orc
 .. autofunction:: read_hdf
+.. autofunction:: read_json
 .. autofunction:: read_sql_table
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
 .. autofunction:: from_dask_array
 .. autofunction:: from_delayed
-.. autofunction:: to_delayed
 .. autofunction:: to_records
 .. autofunction:: to_csv
 .. autofunction:: to_bag
 .. autofunction:: to_hdf
 .. autofunction:: to_parquet
+.. autofunction:: to_json
 
 Rolling
 ~~~~~~~
 
 .. currentmodule:: dask.dataframe.rolling
 
-.. autofunction:: rolling_apply
 .. autofunction:: map_overlap
-.. autofunction:: rolling_count
-.. autofunction:: rolling_kurt
-.. autofunction:: rolling_max
-.. autofunction:: rolling_mean
-.. autofunction:: rolling_median
-.. autofunction:: rolling_min
-.. autofunction:: rolling_quantile
-.. autofunction:: rolling_skew
-.. autofunction:: rolling_std
-.. autofunction:: rolling_sum
-.. autofunction:: rolling_var
-.. autofunction:: rolling_window
 
 
 Other functions

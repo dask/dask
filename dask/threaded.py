@@ -1,7 +1,7 @@
 """
 A threaded shared-memory scheduler
 
-See scheduler.py
+See local.py
 """
 from __future__ import absolute_import, division, print_function
 
@@ -11,8 +11,8 @@ from multiprocessing.pool import ThreadPool
 import threading
 from threading import current_thread, Lock
 
+from . import config
 from .local import get_async
-from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 
 
@@ -30,7 +30,7 @@ def pack_exception(e, dumps):
     return e, sys.exc_info()[2]
 
 
-def get(dsk, result, cache=None, num_workers=None, **kwargs):
+def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -55,7 +55,8 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
     (4, 2)
     """
     global default_pool
-    pool = _globals['pool']
+    pool = pool or config.get('pool', None)
+    num_workers = num_workers or config.get('num_workers', None)
     thread = current_thread()
 
     with pools_lock:

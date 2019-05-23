@@ -1,7 +1,7 @@
 Bag
 ===
 
-Dask.Bag parallelizes computations across a large collection of generic Python
+Dask Bag parallelizes computations across a large collection of generic Python
 objects. It is particularly useful when dealing with large quantities of
 semi-structured data like JSON blobs or log files.
 

@@ -1,21 +1,25 @@
+import itertools
 import os
+import sys
 import pandas as pd
 import pytest
 import pickle
 import numpy as np
 import string
+import multiprocessing as mp
 from copy import copy
+import pandas.util.testing as tm
 
 import dask
-from dask import delayed
 import dask.dataframe as dd
-from dask.threaded import get as threaded_get
-from dask.multiprocessing import get as mp_get
+from dask import delayed
+from dask.base import compute_as_if_collection
 from dask.dataframe.shuffle import (shuffle,
                                     partitioning_index,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
-                                    maybe_buffered_partd)
+                                    maybe_buffered_partd,
+                                    remove_nans)
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -56,7 +60,7 @@ def test_shuffle_npartitions_task():
     df = pd.DataFrame({'x': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
     s = shuffle(ddf, ddf.x, shuffle='tasks', npartitions=17, max_branch=4)
-    sc = s.compute(get=dask.get)
+    sc = s.compute(scheduler='sync')
     assert s.npartitions == 17
     assert set(s.dask).issuperset(set(ddf.dask))
 
@@ -90,7 +94,8 @@ def test_shuffle_from_one_partition_to_one_other(method):
 
     for i in [1, 2]:
         b = shuffle(a, 'x', npartitions=i, shuffle=method)
-        assert len(a.compute(get=dask.get)) == len(b.compute(get=dask.get))
+        assert (len(a.compute(scheduler='sync')) ==
+                len(b.compute(scheduler='sync')))
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
@@ -98,7 +103,7 @@ def test_shuffle_empty_partitions(method):
     df = pd.DataFrame({'x': [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
     s = shuffle(ddf, ddf.x, npartitions=6, shuffle=method)
-    parts = s._get(s.dask, s._keys())
+    parts = compute_as_if_collection(dd.DataFrame, s.dask, s.__dask_keys__())
     for p in parts:
         assert s.columns == p.columns
 
@@ -148,7 +153,7 @@ def test_partitioning_index_categorical_on_values():
     assert (res == res2).all()
 
 
-@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])
+@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)])
 def test_set_index_tasks(npartitions):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
@@ -213,7 +218,7 @@ def test_set_index_tasks_2(shuffle):
         freq='2H', partition_freq='1M', seed=1)
 
     df2 = df.set_index('name', shuffle=shuffle)
-    df2.value.sum().compute(get=dask.get)
+    df2.value.sum().compute(scheduler='sync')
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
@@ -240,21 +245,23 @@ def test_shuffle_sort(shuffle):
 
 
 @pytest.mark.parametrize('shuffle', ['tasks', 'disk'])
-@pytest.mark.parametrize('get', [threaded_get, mp_get])
-def test_rearrange(shuffle, get):
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_rearrange(shuffle, scheduler):
     df = pd.DataFrame({'x': np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
-    ddf2 = ddf.assign(y=ddf.x % 4)
+    ddf2 = ddf.assign(_partitions=ddf.x % 4)
 
-    result = rearrange_by_column(ddf2, 'y', max_branch=32, shuffle=shuffle)
+    result = rearrange_by_column(ddf2, '_partitions', max_branch=32, shuffle=shuffle)
     assert result.npartitions == ddf.npartitions
     assert set(ddf.dask).issubset(result.dask)
 
     # Every value in exactly one partition
-    a = result.compute(get=get)
-    parts = get(result.dask, result._keys())
-    for i in a.y.drop_duplicates():
-        assert sum(i in part.y for part in parts) == 1
+    a = result.compute(scheduler=scheduler)
+    get = dask.base.get_scheduler(scheduler=scheduler)
+    parts = get(result.dask, result.__dask_keys__())
+
+    for i in a._partitions.drop_duplicates():
+        assert sum(i in set(part._partitions) for part in parts) == 1
 
 
 def test_rearrange_by_column_with_narrow_divisions():
@@ -285,7 +292,7 @@ def test_set_index_with_explicit_divisions():
     def throw(*args, **kwargs):
         raise Exception()
 
-    with dask.set_options(get=throw):
+    with dask.config.set(get=throw):
         ddf2 = ddf.set_index('x', divisions=[1, 3, 5])
     assert ddf2.divisions == (1, 3, 5)
 
@@ -304,7 +311,7 @@ def test_set_index_divisions_2():
     result = ddf.set_index('y', divisions=['a', 'c', 'd'])
     assert result.divisions == ('a', 'c', 'd')
 
-    assert list(result.compute(get=dask.get).index[-2:]) == ['d', 'd']
+    assert list(result.compute(scheduler='sync').index[-2:]) == ['d', 'd']
 
 
 def test_set_index_divisions_compute():
@@ -338,11 +345,11 @@ def test_set_index_divisions_sorted():
     def throw(*args, **kwargs):
         raise Exception("Shouldn't have computed")
 
-    with dask.set_options(get=throw):
+    with dask.config.set(get=throw):
         res = ddf.set_index('x', divisions=[10, 13, 16, 18], sorted=True)
     assert_eq(res, df.set_index('x'))
 
-    with dask.set_options(get=throw):
+    with dask.config.set(get=throw):
         res = ddf.set_index('y', divisions=['a', 'b', 'd', 'e'], sorted=True)
     assert_eq(res, df.set_index('y'))
 
@@ -355,6 +362,28 @@ def test_set_index_divisions_sorted():
         ddf.set_index('y', divisions=['a', 'b', 'd', 'c'], sorted=True)
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(sys.version_info < (3, 4),
+                    reason="multiprocessing spawn only after Py3.4")
+def test_set_index_consistent_divisions():
+    # See https://github.com/dask/dask/issues/3867
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                      index=np.random.random(100))
+    ddf = dd.from_pandas(df, npartitions=4)
+    ddf = ddf.clear_divisions()
+
+    ctx = mp.get_context('spawn')
+    pool = ctx.Pool(processes=8)
+    results = [pool.apply_async(_set_index, (ddf, 'x')) for _ in range(100)]
+    divisions_set = set(result.get() for result in results)
+    assert len(divisions_set) == 1
+
+
+def _set_index(df, *args, **kwargs):
+    return df.set_index(*args, **kwargs).divisions
+
+
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_index_reduces_partitions_small(shuffle):
     df = pd.DataFrame({'x': np.random.random(100)})
@@ -364,27 +393,32 @@ def test_set_index_reduces_partitions_small(shuffle):
     assert ddf2.npartitions < 10
 
 
+def make_part(n):
+    return pd.DataFrame({'x': np.random.random(n),
+                         'y': np.random.random(n)})
+
+
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_index_reduces_partitions_large(shuffle):
-    n = 2**24
-    df = pd.DataFrame({'x': np.random.random(n),
-                       'y': np.random.random(n),
-                       'z': np.random.random(n)})
-    ddf = dd.from_pandas(df, npartitions=50, name='x', sort=False)
-
-    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    nbytes = 1e6
+    nparts = 50
+    n = int(nbytes / (nparts * 8))
+    ddf = dd.DataFrame({('x', i): (make_part, n) for i in range(nparts)},
+                       'x', make_part(1), [None] * (nparts + 1))
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto',
+                         partition_size=nbytes)
     assert 1 < ddf2.npartitions < 20
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_index_doesnt_increase_partitions(shuffle):
-    n = 2**24
-    df = pd.DataFrame({'x': np.random.random(n),
-                       'y': np.random.random(n),
-                       'z': np.random.random(n)})
-    ddf = dd.from_pandas(df, npartitions=2, name='x', sort=False)
-
-    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    nparts = 2
+    nbytes = 1e6
+    n = int(nbytes / (nparts * 8))
+    ddf = dd.DataFrame({('x', i): (make_part, n) for i in range(nparts)},
+                       'x', make_part(1), [None] * (nparts + 1))
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto',
+                         partition_size=nbytes)
     assert ddf2.npartitions <= ddf.npartitions
 
 
@@ -548,7 +582,7 @@ def test_set_index_raises_error_on_bad_input():
 
 def test_set_index_sorted_true():
     df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
+                       'y': [10, 20, 20, 40],
                        'z': [4, 3, 2, 1]})
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
@@ -567,6 +601,9 @@ def test_set_index_sorted_true():
 
     with pytest.raises(ValueError):
         a.set_index(a.z, sorted=True)
+
+    with pytest.warns(UserWarning):
+        a.set_index(a.y, sorted=True)
 
 
 def test_set_index_sorted_single_partition():
@@ -590,10 +627,53 @@ def test_set_index_sorted_min_max_same():
     assert df2.divisions == (0, 1, 1)
 
 
+def test_set_index_empty_partition():
+    test_vals = [1, 2, 3]
+
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
+
+    for conv in converters:
+        df = pd.DataFrame([{'x': conv(i), 'y': i} for i in test_vals], columns=['x', 'y'])
+        ddf = dd.concat([
+            dd.from_pandas(df, npartitions=1),
+            dd.from_pandas(df[df.y > df.y.max()], npartitions=1),
+        ])
+
+        assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
+        assert assert_eq(ddf.set_index('x'), df.set_index('x'))
+
+
+def test_set_index_on_empty():
+    test_vals = [1, 2, 3, 4]
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
+
+    for converter in converters:
+        df = pd.DataFrame([{'x': converter(x), 'y': x} for x in test_vals])
+        ddf = dd.from_pandas(df, npartitions=4)
+
+        assert ddf.npartitions > 1
+
+        ddf = ddf[ddf.y > df.y.max()].set_index('x')
+        expected_df = df[df.y > df.y.max()].set_index('x')
+
+        assert assert_eq(ddf, expected_df)
+        assert ddf.npartitions == 1
+
+
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
+                       'y': [10, 20, 20, 40],
                        'z': [4, 3, 2, 1]},
                       index=[1, 3, 10, 20])
     a = dd.from_pandas(df, 2, sort=False)
@@ -606,18 +686,23 @@ def test_compute_divisions():
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
 
+    c = dd.from_pandas(df.set_index('y'), 2, sort=False)
+    # Partitions overlap warning
+    with pytest.warns(UserWarning):
+        compute_divisions(c)
 
-def test_temporary_directory():
+
+def test_temporary_directory(tmpdir):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100),
                        'z': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
 
-    with dask.set_options(temporary_directory=os.getcwd(),
-                          get=dask.multiprocessing.get):
+    with dask.config.set(temporary_directory=str(tmpdir),
+                         scheduler='processes'):
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
-        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
+        assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_partitions():
@@ -634,3 +719,88 @@ def test_empty_partitions():
 
     ddf = ddf.set_index('c')
     assert_eq(ddf, df.set_index('b').set_index('c'))
+
+
+def test_remove_nans():
+    tests = [
+        ((1, 1, 2), (1, 1, 2)),
+        ((None, 1, 2), (1, 1, 2)),
+        ((1, None, 2), (1, 2, 2)),
+        ((1, 2, None), (1, 2, 2)),
+        ((1, 2, None, None), (1, 2, 2, 2)),
+        ((None, None, 1, 2), (1, 1, 1, 2)),
+        ((1, None, None, 2), (1, 2, 2, 2)),
+        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
+    ]
+
+    converters = [
+        (int, np.nan),
+        (float, np.nan),
+        (str, np.nan),
+        (lambda x: pd.to_datetime(x, unit='ns'), np.datetime64('NaT')),
+    ]
+
+    for conv, none_val in converters:
+        for inputs, expected in tests:
+            params = [none_val if x is None else conv(x) for x in inputs]
+            expected = [conv(x) for x in expected]
+            assert remove_nans(params) == expected
+
+
+@pytest.mark.slow
+def test_gh_2730():
+    large = pd.DataFrame({'KEY': np.arange(0, 50000)})
+    small = pd.DataFrame({'KEY': np.arange(25, 500)})
+
+    dd_left = dd.from_pandas(small, npartitions=3)
+    dd_right = dd.from_pandas(large, npartitions=257)
+
+    with dask.config.set(shuffle='tasks', scheduler='sync'):
+        dd_merged = dd_left.merge(dd_right, how='inner', on='KEY')
+        result = dd_merged.compute()
+
+    expected = large.merge(small, how='inner', on='KEY')
+
+    tm.assert_frame_equal(
+        result.sort_values('KEY').reset_index(drop=True),
+        expected
+    )
+
+
+@pytest.mark.parametrize('npartitions', [None, 'auto'])
+def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
+    # Atomic counter
+    count = itertools.count()
+
+    def increment():
+        next(count)
+
+    def make_part(dummy, n):
+        return pd.DataFrame({'x': np.random.random(n),
+                             'y': np.random.random(n)})
+
+    nbytes = 1e6
+    nparts = 50
+    n = int(nbytes / (nparts * 8))
+
+    dsk = {('inc', i): (increment,) for i in range(nparts)}
+    dsk.update({('x', i): (make_part, ('inc', i), n) for i in range(nparts)})
+    ddf = dd.DataFrame(dsk, 'x', make_part(None, 1), [None] * (nparts + 1))
+
+    ddf.set_index('x', npartitions=npartitions)
+    ntimes = next(count)
+    assert ntimes == nparts
+
+
+def test_set_index_errors_with_inplace_kwarg():
+    df = pd.DataFrame({
+        'a': [9, 8, 7],
+        'b': [6, 5, 4],
+        'c': [3, 2, 1]
+    })
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    ddf.set_index('a')
+
+    with pytest.raises(NotImplementedError):
+        ddf.set_index('a', inplace=True)

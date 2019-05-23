@@ -7,10 +7,12 @@ import pytest
 from dask.dataframe.io.sql import read_sql_table
 from dask.utils import tmpfile
 from dask.dataframe.utils import assert_eq
+
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 pytest.importorskip('sqlalchemy')
 pytest.importorskip('sqlite3')
+np = pytest.importorskip('numpy')
 
 
 data = """
@@ -35,6 +37,100 @@ def db():
         yield uri
 
 
+def test_empty(db):
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+    with tmpfile() as f:
+        uri = 'sqlite:///%s' % f
+        metadata = MetaData()
+        engine = create_engine(uri)
+        table = Table('empty_table', metadata,
+                      Column('id', Integer, primary_key=True),
+                      Column('col2', Integer))
+        metadata.create_all(engine)
+
+        dask_df = read_sql_table(table.name, uri, index_col='id', npartitions=1)
+        assert dask_df.index.name == 'id'
+        assert dask_df.col2.dtype == np.dtype('int64')
+        pd_dataframe = dask_df.compute()
+        assert pd_dataframe.empty is True
+
+
+@pytest.mark.skip(reason="Requires a postgres server. Sqlite does not support multiple schemas.")
+def test_empty_other_schema():
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, event, DDL
+    # Database configurations.
+    pg_host = 'localhost'
+    pg_port = '5432'
+    pg_user = 'user'
+    pg_pass = 'pass'
+    pg_db = 'db'
+    db_url = 'postgresql://%s:%s@%s:%s/%s' % (pg_user, pg_pass, pg_host, pg_port, pg_db)
+
+    # Create an empty table in a different schema.
+    table_name = 'empty_table'
+    schema_name = 'other_schema'
+    engine = create_engine(db_url)
+    metadata = MetaData()
+    table = Table(table_name, metadata,
+                  Column('id', Integer, primary_key=True),
+                  Column('col2', Integer), schema=schema_name)
+    # Create the schema and the table.
+    event.listen(metadata, 'before_create', DDL("CREATE SCHEMA IF NOT EXISTS %s" % schema_name))
+    metadata.create_all(engine)
+
+    # Read the empty table from the other schema.
+    dask_df = read_sql_table(table.name, db_url, index_col='id', schema=table.schema, npartitions=1)
+
+    # Validate that the retrieved table is empty.
+    assert dask_df.index.name == 'id'
+    assert dask_df.col2.dtype == np.dtype('int64')
+    pd_dataframe = dask_df.compute()
+    assert pd_dataframe.empty is True
+
+    # Drop the schema and the table.
+    engine.execute("DROP SCHEMA IF EXISTS %s CASCADE" % schema_name)
+
+
+def test_needs_rational(db):
+    import datetime
+    now = datetime.datetime.now()
+    d = datetime.timedelta(seconds=1)
+    df = pd.DataFrame({'a': list('ghjkl'), 'b': [now + i * d for i in range(5)],
+                       'c': [True, True, False, True, True]})
+    df = df.append([{'a': 'x', 'b': now + d * 1000, 'c': None},
+                    {'a': None, 'b': now + d * 1001, 'c': None}])
+    with tmpfile() as f:
+        uri = 'sqlite:///%s' % f
+        df.to_sql('test', uri, index=False, if_exists='replace')
+
+        # one partition contains NULL
+        data = read_sql_table('test', uri, npartitions=2, index_col='b')
+        df2 = df.set_index('b')
+        assert_eq(data, df2.astype({'c': bool}))  # bools are coerced
+
+        # one partition contains NULL, but big enough head
+        data = read_sql_table('test', uri, npartitions=2, index_col='b',
+                              head_rows=12)
+        df2 = df.set_index('b')
+        assert_eq(data, df2)
+
+        # empty partitions
+        data = read_sql_table('test', uri, npartitions=20, index_col='b')
+        part = data.get_partition(12).compute()
+        assert part.dtypes.tolist() == ['O', bool]
+        assert part.empty
+        df2 = df.set_index('b')
+        assert_eq(data, df2.astype({'c': bool}))
+
+        # explicit meta
+        data = read_sql_table('test', uri, npartitions=2, index_col='b',
+                              meta=df2[:0])
+        part = data.get_partition(1).compute()
+        assert part.dtypes.tolist() == ['O', 'O']
+        df2 = df.set_index('b')
+        assert_eq(data, df2)
+
+
 def test_simple(db):
     # single chunk
     data = read_sql_table('test', db, npartitions=2, index_col='number'
@@ -57,6 +153,18 @@ def test_npartitions(db):
                           index_col='number')
     assert data.npartitions == 1
     assert (data.name.compute() == df.name).all()
+
+    data_1 = read_sql_table('test', db, columns=list(df.columns),
+                            bytes_per_chunk=2**30,
+                            index_col='number', head_rows=1)
+    assert data_1.npartitions == 1
+    assert (data_1.name.compute() == df.name).all()
+
+    data = read_sql_table('test', db, columns=list(df.columns),
+                          bytes_per_chunk=250,
+                          index_col='number',
+                          head_rows=1)
+    assert data.npartitions == 2
 
 
 def test_divisions(db):
@@ -146,3 +254,25 @@ def test_select_from_select(db):
                     ).select_from(sql.table('test'))
     out = read_sql_table(s1, db, npartitions=2, index_col='number')
     assert_eq(out, df[['name']])
+
+
+def test_extra_connection_engine_keywords(capsys, db):
+    data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': False}
+                          ).compute()
+    # no captured message from the stdout with the echo=False parameter (this is the default)
+    out, err = capsys.readouterr()
+    assert "SELECT" not in out
+    assert_eq(data, df)
+    # with the echo=True sqlalchemy parameter, you should get all SQL queries in the stdout
+    data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': True}
+                          ).compute()
+    out, err = capsys.readouterr()
+    assert "SELECT" in out
+    assert_eq(data, df)
+
+
+def test_no_character_index_without_divisions(db):
+
+    # attempt to read the sql table with a character index and no divisions
+    with pytest.raises(TypeError):
+        read_sql_table('test', db, npartitions=2, index_col='name', divisions=None)

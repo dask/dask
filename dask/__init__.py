@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from . import config, datasets
 from .core import istask
 from .context import set_options
 from .local import get_sync as get
@@ -8,13 +9,9 @@ try:
 except ImportError:
     pass
 try:
-    from .base import visualize, compute, persist
+    from .base import visualize, compute, persist, optimize, is_dask_collection
 except ImportError:
     pass
-
-# dask.async is deprecated. For now we import it to the top namespace to be
-# compatible with prior releases. This should be removed in a future release:
-import dask.async
 
 from ._version import get_versions
 versions = get_versions()

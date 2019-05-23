@@ -1,26 +1,26 @@
 # coding: utf-8
 import pandas as pd
+from textwrap import dedent
 
 import dask.dataframe as dd
-from dask.dataframe.utils import PANDAS_VERSION
+import dask.array as da
+import numpy as np
 
-if PANDAS_VERSION >= '0.20.0':
-    style = """<style>
-    .dataframe thead tr:only-child th {
-        text-align: right;
-    }
 
-    .dataframe thead th {
-        text-align: left;
+style = """<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
     }
 
     .dataframe tbody tr th {
         vertical-align: top;
     }
+
+    .dataframe thead th {
+        text-align: right;
+    }
 </style>
 """
-else:
-    style = ""
 
 
 def test_repr():
@@ -209,20 +209,20 @@ def test_dataframe_format_unknown_divisions():
     exp = ("Dask DataFrame Structure:\n"
            "                   A       B                C\n"
            "npartitions=3                                \n"
-           "None           int64  object  category[known]\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
+           "               int64  object  category[known]\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
            "Dask Name: from_pandas, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
     exp = ("                   A       B                C\n"
            "npartitions=3                                \n"
-           "None           int64  object  category[known]\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...")
+           "               int64  object  category[known]\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...")
     assert ddf.to_string() == exp
 
     exp_table = """<table border="1" class="dataframe">
@@ -242,25 +242,25 @@ def test_dataframe_format_unknown_divisions():
   </thead>
   <tbody>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>int64</td>
       <td>object</td>
       <td>category[known]</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
@@ -440,14 +440,15 @@ Dask Name: from_pandas, 6 tasks"""
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=pd.CategoricalIndex([1, 2, 3, 4, 5, 6, 7, 8], name='YYY'))
     ds = dd.from_pandas(s, 3)
-    exp = """Dask Index Structure:
-npartitions=3
-1    category[known]
-4                ...
-7                ...
-8                ...
-Name: YYY, dtype: category
-Dask Name: from_pandas, 6 tasks"""
+    exp = dedent("""\
+    Dask Index Structure:
+    npartitions=3
+    1    category[known]
+    4                ...
+    7                ...
+    8                ...
+    Name: YYY, dtype: category
+    Dask Name: from_pandas, 6 tasks""")
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -470,3 +471,9 @@ def test_categorical_format():
            "dtype: category\n"
            "Dask Name: from_pandas, 1 tasks")
     assert repr(unknown) == exp
+
+
+def test_duplicate_columns_repr():
+    arr = da.from_array(np.arange(10).reshape(5, 2), chunks=(5, 2))
+    frame = dd.from_dask_array(arr, columns=['a', 'a'])
+    repr(frame)

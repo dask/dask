@@ -1,4 +1,4 @@
-from dask.context import set_options, _globals, defer_to_globals
+from dask.context import globalmethod
 import dask.array as da
 import dask
 
@@ -15,7 +15,7 @@ def test_with_get():
     assert x.sum().compute() == 10
     assert var[0] == 0
 
-    with set_options(get=myget):
+    with dask.config.set(scheduler=myget):
         assert x.sum().compute() == 10
     assert var[0] == 1
 
@@ -24,33 +24,37 @@ def test_with_get():
     assert var[0] == 1
 
 
-def test_set_options_context_manger():
-    with set_options(foo='bar'):
-        assert _globals['foo'] == 'bar'
-    assert _globals['foo'] is None
-
-    try:
-        set_options(foo='baz')
-        assert _globals['foo'] == 'baz'
-    finally:
-        del _globals['foo']
+def foo():
+    return 'foo'
 
 
-def test_defer_to_globals():
-    @defer_to_globals('f')
+def bar():
+    return 'bar'
+
+
+class Foo(object):
+    @globalmethod(key='f')
     def f():
         return 1
 
-    assert f() == 1
+    g = globalmethod(foo, key='g', falsey=bar)
 
-    with dask.set_options(f=lambda: 2):
-        assert f() == 2
-    assert f() == 1
 
-    @defer_to_globals('f', falsey=lambda: 3)
-    def f():
-        return 1
+def test_globalmethod():
+    x = Foo()
 
-    with dask.set_options(f=None):
-        assert f() == 3
-    assert f() == 1
+    assert x.f() == 1
+
+    with dask.config.set(f=lambda: 2):
+        assert x.f() == 2
+
+    with dask.config.set(f=foo):
+        assert x.f is foo
+        assert x.f() == 'foo'
+
+    assert x.g is foo
+    assert x.g() == 'foo'
+
+    with dask.config.set(g=False):
+        assert x.g is bar
+        assert x.g() == 'bar'

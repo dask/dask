@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 from collections import defaultdict
 import pandas as pd
 from toolz import partition_all
+from numbers import Integral
 
-from ..base import tokenize
+from ..base import tokenize, compute_as_if_collection
 from .accessor import Accessor
 from .utils import (has_known_categories, clear_known_categories, is_scalar,
                     is_categorical_dtype)
@@ -105,17 +106,16 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         split_every = 16
     elif split_every is False:
         split_every = df.npartitions
-    elif not isinstance(split_every, int) or split_every < 2:
+    elif not isinstance(split_every, Integral) or split_every < 2:
         raise ValueError("split_every must be an integer >= 2")
 
     token = tokenize(df, columns, index, split_every)
     a = 'get-categories-chunk-' + token
     dsk = {(a, i): (_get_categories, key, columns, index)
-           for (i, key) in enumerate(df._keys())}
+           for (i, key) in enumerate(df.__dask_keys__())}
 
     prefix = 'get-categories-agg-' + token
     k = df.npartitions
-    b = a
     depth = 0
     while k > split_every:
         b = prefix + str(depth)
@@ -129,7 +129,8 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     dsk.update(df.dask)
 
     # Compute the categories
-    categories, index = df._get(dsk, (prefix, 0), **kwargs)
+    categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0),
+                                                 **kwargs)
 
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)
@@ -184,7 +185,7 @@ class CategoricalAccessor(Accessor):
             Keywords to pass on to the call to `compute`.
         """
         if self.known:
-            return self
+            return self._series
         categories = self._property_map('categories').unique().compute(**kwargs)
         return self.set_categories(categories.values)
 
@@ -244,6 +245,10 @@ class CategoricalAccessor(Accessor):
 
         # Reorder to keep cat:code relationship, filtering unused (-1)
         ordered, mask = present.reindex(meta_cat.categories)
+        if mask is None:
+            # PANDAS-23963: old and new categories match.
+            return self._series
+
         new_categories = ordered[mask != -1]
         meta = meta_cat.set_categories(new_categories, ordered=meta_cat.ordered)
         return self._series.map_partitions(self._delegate_method, 'cat',

@@ -5,27 +5,23 @@ environment:
   global:
     # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
     # /E:ON and /V:ON options are not enabled in the batch script intepreter
-    # See: http://stackoverflow.com/a/13751649/163740
+    # See: https://stackoverflow.com/a/13751649/163740
     CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\continuous_integration\\appveyor\\run_with_env.cmd"
 
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
-    - PYTHON: "3.5"
+    - PYTHON: "3.6"
       ARCH: "64"
-      NUMPY: "1.12.1"
-      PANDAS: "0.19.2"
       CONDA_ENV: testenv
 
 init:
   # Use AppVeyor's provided Miniconda: https://www.appveyor.com/docs/installed-software#python
-  - if "%ARCH%" == "64" set MINICONDA=C:\Miniconda35-x64
-  - if "%ARCH%" == "32" set MINICONDA=C:\Miniconda35
+  - if "%ARCH%" == "64" set MINICONDA=C:\Miniconda36-x64
+  - if "%ARCH%" == "32" set MINICONDA=C:\Miniconda36
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # Update to a known good conda
-  # (to workaround http://help.appveyor.com/discussions/problems/4910)
-  - conda install -q -y conda=4.2.9
+  - conda update conda -y -q
   - continuous_integration\\appveyor\\setup_conda_environment.cmd
 
 build_script:

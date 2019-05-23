@@ -3,11 +3,12 @@ pytest.importorskip('numpy')
 
 import numpy as np
 
+import dask
 import dask.array as da
+from dask.utils import key_split
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 from dask.array.utils import assert_eq
-from dask.multiprocessing import get as mpget
 from dask.multiprocessing import _dumps, _loads
 
 
@@ -27,7 +28,7 @@ def test_concurrency():
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=2)
-    assert (x.compute(get=mpget) == y.compute(get=mpget)).all()
+    assert (x.compute(scheduler='processes') == y.compute(scheduler='processes')).all()
 
 
 def test_doc_randomstate():
@@ -103,6 +104,7 @@ def test_unique_names():
 def test_docs():
     assert 'exponential' in exponential.__doc__
     assert 'exponential' in exponential.__name__
+    assert "# doctest: +SKIP" in normal.__doc__
 
 
 def test_can_make_really_big_random_array():
@@ -216,3 +218,110 @@ def test_multinomial():
         y = np.random.multinomial(20, [1 / 6.] * 6, size=size)
 
         assert x.shape == y.shape == x.compute().shape
+
+
+def test_choice():
+    np_dtype = np.random.choice(1, size=()).dtype
+    size = (10, 3)
+    chunks = 4
+    x = da.random.choice(3, size=size, chunks=chunks)
+    assert x.dtype == np_dtype
+    assert x.shape == size
+    res = x.compute()
+    assert res.dtype == np_dtype
+    assert res.shape == size
+
+    np_a = np.array([1, 3, 5, 7, 9], dtype='f8')
+    da_a = da.from_array(np_a, chunks=2)
+
+    for a in [np_a, da_a]:
+        x = da.random.choice(a, size=size, chunks=chunks)
+        res = x.compute()
+        assert x.dtype == np_a.dtype
+        assert res.dtype == np_a.dtype
+        assert set(np.unique(res)).issubset(np_a)
+
+    np_p = np.array([0, 0.2, 0.2, 0.3, 0.3])
+    da_p = da.from_array(np_p, chunks=2)
+
+    for a, p in [(da_a, np_p), (np_a, da_p)]:
+        x = da.random.choice(a, size=size, chunks=chunks, p=p)
+        res = x.compute()
+        assert x.dtype == np_a.dtype
+        assert res.dtype == np_a.dtype
+        assert set(np.unique(res)).issubset(np_a[1:])
+
+    np_dtype = np.random.choice(1, size=(), p=np.array([1])).dtype
+    x = da.random.choice(5, size=size, chunks=chunks, p=np_p)
+    res = x.compute()
+    assert x.dtype == np_dtype
+    assert res.dtype == np_dtype
+
+    errs = [(-1, None),             # negative a
+            (np_a[:, None], None),  # a must be 1D
+            (np_a, np_p[:, None]),  # p must be 1D
+            (np_a, np_p[:-2]),      # a and p must match
+            (3, np_p),              # a and p must match
+            (4, [0.2, 0.2, 0.3])]   # p must sum to 1
+
+    for (a, p) in errs:
+        with pytest.raises(ValueError):
+            da.random.choice(a, size=size, chunks=chunks, p=p)
+
+    with pytest.raises(NotImplementedError):
+        da.random.choice(da_a, size=size, chunks=chunks, replace=False)
+
+    # Want to make sure replace=False works for a single-partition output array
+    x = da.random.choice(da_a, size=da_a.shape[0], chunks=-1, replace=False)
+    res = x.compute()
+    assert len(res) == len(np.unique(res))
+
+
+def test_create_with_auto_dimensions():
+    with dask.config.set({'array.chunk-size': '128MiB'}):
+        x = da.random.random((10000, 10000), chunks=(-1, "auto"))
+        assert x.chunks == ((10000,), (1250,) * 8)
+
+        y = da.random.random((10000, 10000), chunks="auto")
+        assert y.chunks == ((2500,) * 4, (2500,) * 4)
+
+
+def test_names():
+    name = da.random.normal(0, 1, size=(1000,), chunks=(500,)).name
+
+    assert name.startswith('normal')
+    assert len(key_split(name)) < 10
+
+
+def test_external_randomstate_class():
+    randomgen = pytest.importorskip('randomgen')
+
+    rs = da.random.RandomState(RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)))
+    x = rs.normal(0, 1, size=(10), chunks=(5,))
+    assert_eq(x, x)
+
+    rs = da.random.RandomState(
+        RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
+        seed=123
+    )
+    a = rs.normal(0, 1, size=(10), chunks=(5,))
+    rs = da.random.RandomState(
+        RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
+        seed=123
+    )
+    b = rs.normal(0, 1, size=(10), chunks=(5,))
+    assert a.name == b.name
+    assert_eq(a, b)
+
+
+def test_auto_chunks():
+    with dask.config.set({'array.chunk-size': '50 MiB'}):
+        x = da.random.random((10000, 10000))
+        assert 4 < x.npartitions < 32
+
+
+def test_randint_dtype():
+    x = da.random.randint(0, 255, size=10, dtype='uint8')
+    assert_eq(x, x)
+    assert x.dtype == 'uint8'
+    assert x.compute().dtype == 'uint8'

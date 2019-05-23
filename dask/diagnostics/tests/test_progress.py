@@ -2,11 +2,11 @@ from operator import add, mul
 
 import pytest
 
+from dask.callbacks import Callback
 from dask.local import get_sync
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
 from dask.threaded import get as get_threaded
-from dask.context import _globals
 
 
 dsk = {'a': 1,
@@ -18,9 +18,19 @@ dsk = {'a': 1,
 
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
+    assert out.count('100% Completed') == 1
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == '[' + '#' * width + ']'
     assert percent == '100% Completed'
+
+
+def test_array_compute(capsys):
+    from dask.array import ones
+    data = ones((100,100),dtype='f4',chunks=(100,100))
+    with ProgressBar():
+        out = data.sum().compute()
+    assert out == 10000
+    check_bar_completed(capsys)
 
 
 def test_progressbar(capsys):
@@ -65,16 +75,16 @@ def test_register(capsys):
         p = ProgressBar()
         p.register()
 
-        assert _globals['callbacks']
+        assert Callback.active
 
         get_threaded(dsk, 'e')
         check_bar_completed(capsys)
 
         p.unregister()
 
-        assert not _globals['callbacks']
+        assert not Callback.active
     finally:
-        _globals['callbacks'].clear()
+        Callback.active.clear()
 
 
 def test_no_tasks(capsys):

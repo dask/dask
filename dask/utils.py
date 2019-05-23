@@ -1,26 +1,25 @@
 from __future__ import absolute_import, division, print_function
 
+from datetime import timedelta
 import functools
 import inspect
 import os
-import re
 import shutil
 import sys
 import tempfile
+import re
 from errno import ENOENT
-from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
-from numbers import Integral
+from numbers import Integral, Number
 from threading import Lock
-import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import getargspec, PY3, unicode, urlsplit
+from .compatibility import (get_named_args, getargspec, PY3, unicode,
+                            bind_method, Iterator)
 from .core import get_deps
-from .context import _globals
-from .optimize import key_split    # noqa: F401
+from .optimization import key_split    # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()
@@ -198,6 +197,10 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """
     with (tmp_cwd() if use_tmpdir else noop_context()):
         for filename, text in d.items():
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError:
+                pass
             f = open(filename, 'w' + mode)
             try:
                 f.write(text)
@@ -269,7 +272,7 @@ def random_state_data(n, random_state=None):
     """
     import numpy as np
 
-    if not isinstance(random_state, np.random.RandomState):
+    if not all(hasattr(random_state, attr) for attr in ['normal', 'beta', 'bytes', 'uniform']):
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
@@ -335,12 +338,12 @@ def takes_multiple_arguments(func, varargs=True):
 
     try:
         spec = getargspec(func)
-    except:
+    except Exception:
         return False
 
     try:
         is_constructor = spec.args[0] == 'self' and isinstance(func, type)
-    except:
+    except Exception:
         is_constructor = False
 
     if varargs and spec.varargs:
@@ -407,12 +410,20 @@ class Dispatch(object):
                 return lk[cls2]
         raise TypeError("No dispatch for {0}".format(cls))
 
-    def __call__(self, arg):
+    def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
         meth = self.dispatch(type(arg))
-        return meth(arg)
+        return meth(arg, *args, **kwargs)
+
+    @property
+    def __doc__(self):
+        try:
+            func = self.dispatch(object)
+            return func.__doc__
+        except TypeError:
+            return "Single Dispatch for %s" % self.__name__
 
 
 def ensure_not_exists(filename):
@@ -430,9 +441,12 @@ def _skip_doctest(line):
     # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
-        return stripped
+        return line
     elif '>>>' in stripped and '+SKIP' not in stripped:
-        return line + '  # doctest: +SKIP'
+        if '# doctest:' in line:
+            return line + ', +SKIP'
+        else:
+            return line + '  # doctest: +SKIP'
     else:
         return line
 
@@ -461,8 +475,91 @@ def extra_titles(doc):
     return '\n'.join(lines)
 
 
+def ignore_warning(doc, cls, name, extra=""):
+    """Expand docstring by adding disclaimer and extra text"""
+    import inspect
+    if inspect.isclass(cls):
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" \
+             "" % (cls.__module__, cls.__name__, name)
+    else:
+        l1 = "This docstring was copied from %s.%s. \n\n" \
+             "" % (cls.__name__, name)
+    l2 = "Some inconsistencies with the Dask version may exist."
+
+    i = doc.find('\n\n')
+    if i != -1:
+        # Insert our warning
+        head = doc[:i + 2]
+        tail = doc[i + 2:]
+        # Indentation of next line
+        indent = re.match(r'\s*', tail).group(0)
+        # Insert the warning, indented, with a blank line before and after
+        if extra:
+            more = [indent, extra.rstrip('\n') + '\n\n']
+        else:
+            more = []
+        bits = [
+            head,
+            indent, l1,
+            indent, l2, '\n\n'
+        ] + more + [tail]
+        doc = ''.join(bits)
+
+    return doc
+
+
+def unsupported_arguments(doc, args):
+    """ Mark unsupported arguments with a disclaimer """
+    lines = doc.split('\n')
+    for arg in args:
+        subset = [(i, line) for i, line in enumerate(lines)
+                  if re.match(r'^\s*' + arg + ' ?:', line)]
+        if len(subset) == 1:
+            [(i, line)] = subset
+            lines[i] = line + "  (Not supported in Dask)"
+    return '\n'.join(lines)
+
+
+def _derived_from(cls, method, ua_args=[], extra=""):
+    """ Helper function for derived_from to ease testing """
+    # do not use wraps here, as it hides keyword arguments displayed
+    # in the doc
+    original_method = getattr(cls, method.__name__)
+    doc = original_method.__doc__
+    if doc is None:
+        doc = ''
+
+    # Insert disclaimer that this is a copied docstring
+    if doc:
+        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+    elif extra:
+        doc += extra.rstrip('\n') + '\n\n'
+
+    # Mark unsupported arguments
+    try:
+        method_args = get_named_args(method)
+        original_args = get_named_args(original_method)
+        not_supported = [m for m in original_args if m not in method_args]
+    except ValueError:
+        not_supported = []
+    if len(ua_args) > 0:
+        not_supported.extend(ua_args)
+    if len(not_supported) > 0:
+        doc = unsupported_arguments(doc, not_supported)
+
+    doc = skip_doctest(doc)
+    doc = extra_titles(doc)
+
+    return doc
+
+
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
+
+    The output structure will be: top line of docstring, disclaimer about this
+    being auto-derived, any extra text associated with the method being patched,
+    the body of the docstring and finally, the list of keywords that exist in
+    the original method but not in the dask version.
 
     Parameters
     ----------
@@ -475,35 +572,11 @@ def derived_from(original_klass, version=None, ua_args=[]):
         original but not in Dask will automatically be added.
     """
     def wrapper(method):
-        method_name = method.__name__
-
         try:
-            # do not use wraps here, as it hides keyword arguments displayed
-            # in the doc
-            original_method = getattr(original_klass, method_name)
-            doc = original_method.__doc__
-            if doc is None:
-                doc = ''
-
-            try:
-                method_args = getargspec(method).args
-                original_args = getargspec(original_method).args
-                not_supported = [m for m in original_args if m not in method_args]
-            except TypeError:
-                not_supported = []
-
-            if len(ua_args) > 0:
-                not_supported.extend(ua_args)
-
-            if len(not_supported) > 0:
-                note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't support the following argument(s).\n\n")
-                args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
-                doc = doc + note + args
-            doc = skip_doctest(doc)
-            doc = extra_titles(doc)
-
-            method.__doc__ = doc
+            extra = (getattr(method, '__doc__', None) or "")
+            method.__doc__ = _derived_from(
+                original_klass, method, ua_args=ua_args, extra=extra
+            )
             return method
 
         except AttributeError:
@@ -511,7 +584,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method_name)
+                msg = "Base package doesn't support '{0}'.".format(method.__name__)
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -545,19 +618,38 @@ def funcname(func):
         if name == '<lambda>':
             return 'lambda'
         return name
-    except:
+    except AttributeError:
         return str(func)
+
+
+def typename(typ):
+    """
+    Return the name of a type
+
+    Examples
+    --------
+    >>> typename(int)
+    'int'
+
+    >>> from dask.core import literal
+    >>> typename(literal)
+    'dask.core.literal'
+    """
+    if not typ.__module__ or typ.__module__ == 'builtins':
+        return typ.__name__
+    else:
+        return typ.__module__ + '.' + typ.__name__
 
 
 def ensure_bytes(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_bytes(u'123')
-    '123'
+    b'123'
     >>> ensure_bytes('123')
-    '123'
+    b'123'
     >>> ensure_bytes(b'123')
-    '123'
+    b'123'
     """
     if isinstance(s, bytes):
         return s
@@ -571,11 +663,11 @@ def ensure_unicode(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_unicode(u'123')
-    u'123'
+    '123'
     >>> ensure_unicode('123')
-    u'123'
+    '123'
     >>> ensure_unicode(b'123')
-    u'123'
+    '123'
     """
     if isinstance(s, unicode):
         return s
@@ -666,9 +758,12 @@ _method_cache = {}
 
 
 class methodcaller(object):
-    """Return a callable object that calls the given method on its operand.
+    """
+    Return a callable object that calls the given method on its operand.
 
-    Unlike the builtin `methodcaller`, this class is serializable"""
+    Unlike the builtin `operator.methodcaller`, instances of this class are
+    serializable
+    """
 
     __slots__ = ('method',)
     func = property(lambda self: self.method)  # For `funcname` to work
@@ -691,6 +786,28 @@ class methodcaller(object):
         return "<%s: %s>" % (self.__class__.__name__, self.method)
 
     __repr__ = __str__
+
+
+class itemgetter(object):
+    """
+    Return a callable object that gets an item from the operand
+
+    Unlike the builtin `operator.itemgetter`, instances of this class are
+    serializable
+    """
+    __slots__ = ('index',)
+
+    def __init__(self, index):
+        self.index = index
+
+    def __call__(self, x):
+        return x[self.index]
+
+    def __reduce__(self):
+        return (itemgetter, (self.index,))
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.index == other.index
 
 
 class MethodCache(object):
@@ -746,11 +863,11 @@ class SerializableLock(object):
             self.lock = Lock()
             SerializableLock._locks[self.token] = self.lock
 
-    def acquire(self, *args):
-        return self.lock.acquire(*args)
+    def acquire(self, *args, **kwargs):
+        return self.lock.acquire(*args, **kwargs)
 
-    def release(self, *args):
-        return self.lock.release(*args)
+    def release(self, *args, **kwargs):
+        return self.lock.release(*args, **kwargs)
 
     def __enter__(self):
         self.lock.__enter__()
@@ -758,9 +875,8 @@ class SerializableLock(object):
     def __exit__(self, *args):
         self.lock.__exit__(*args)
 
-    @property
     def locked(self):
-        return self.locked
+        return self.lock.locked()
 
     def __getstate__(self):
         return self.token
@@ -774,20 +890,17 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, collection=None):
-    """Get the effective get method used in a given situation"""
-    collection_get = collection._default_get if collection is not None else None
-    return get or _globals.get('get') or collection_get
-
-
-def get_scheduler_lock(get=None, collection=None):
+def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
-    actual_get = effective_get(get, collection)
+    from .base import get_scheduler
+    actual_get = get_scheduler(collections=[collection],
+                               scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
+
     return SerializableLock()
 
 
@@ -802,100 +915,345 @@ def ensure_dict(d):
     return dict(d)
 
 
-_packages = {}
+class OperatorMethodMixin(object):
+    """A mixin for dynamically implementing operators"""
 
+    @classmethod
+    def _bind_operator(cls, op):
+        """ bind operator to this class """
+        name = op.__name__
 
-def package_of(typ):
-    """ Return package containing type's definition
+        if name.endswith('_'):
+            # for and_ and or_
+            name = name[:-1]
+        elif name == 'inv':
+            name = 'invert'
 
-    Or return None if not found
-    """
-    try:
-        return _packages[typ]
-    except KeyError:
-        # http://stackoverflow.com/questions/43462701/get-package-of-python-object/43462865#43462865
-        mod = inspect.getmodule(typ)
-        if not mod:
-            result = None
+        meth = '__{0}__'.format(name)
+
+        if name in ('abs', 'invert', 'neg', 'pos'):
+            bind_method(cls, meth, cls._get_unary_operator(op))
         else:
-            base, _sep, _stem = mod.__name__.partition('.')
-            result = sys.modules[base]
-        _packages[typ] = result
-        return result
+            bind_method(cls, meth, cls._get_binary_operator(op))
+
+            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne', 'getitem'):
+                return
+
+            rmeth = '__r{0}__'.format(name)
+            bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
+
+    @classmethod
+    def _get_unary_operator(cls, op):
+        """ Must return a method used by unary operator """
+        raise NotImplementedError
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        """ Must return a method used by binary operator """
+        raise NotImplementedError
 
 
-# XXX: Kept to keep old versions of distributed/dask in sync. After
-# distributed's dask requirement is updated to > this commit, this function can
-# be moved to dask.bytes.utils.
-def infer_storage_options(urlpath, inherit_storage_options=None):
-    """ Infer storage options from URL path and merge it with existing storage
-    options.
+def partial_by_order(*args, **kwargs):
+    """
 
-    Parameters
-    ----------
-    urlpath: str or unicode
-        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
-    storage_options: dict (optional)
-        Its contents will get merged with the inferred information from the
-        given path
+    >>> from operator import add
+    >>> partial_by_order(5, function=add, other=[(1, 10)])
+    15
+    """
+    function = kwargs.pop('function')
+    other = kwargs.pop('other')
+    args2 = list(args)
+    for i, arg in other:
+        args2.insert(i, arg)
+    return function(*args2, **kwargs)
 
-    Returns
-    -------
-    Storage options dict.
+
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
 
     Examples
     --------
-    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
-    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
-    >>> infer_storage_options(
-    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
-    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
-    {"protocol": "hdfs", "username": "username", "password": "pwd",
-    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
-    "url_query": "q=1", "extra": "value"}
+    >>> import numpy as np
+    >>> x = np.ones(5)
+    >>> is_arraylike(x)
+    True
+    >>> is_arraylike(5)
+    False
+    >>> is_arraylike('cat')
+    False
     """
-    # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
-        return {'protocol': 'file',
-                'path': urlpath}
+    from .base import is_dask_collection
 
-    parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or 'file'
-    path = parsed_path.path
-    if protocol == 'file':
-        # Special case parsing file protocol URL on Windows according to:
-        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
-        if windows_path:
-            path = '%s:%s' % windows_path.groups()
+    return (
+        hasattr(x, 'shape') and x.shape and
+        hasattr(x, 'dtype') and
+        not any(is_dask_collection(n) for n in x.shape)
+    )
 
-    inferred_storage_options = {
-        'protocol': protocol,
-        'path': path,
-    }
 
-    if parsed_path.netloc:
-        # Parse `hostname` from netloc manually because `parsed_path.hostname`
-        # lowercases the hostname which is not always desirable (e.g. in S3):
-        # https://github.com/dask/dask/issues/1417
-        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
-        if parsed_path.port:
-            inferred_storage_options['port'] = parsed_path.port
-        if parsed_path.username:
-            inferred_storage_options['username'] = parsed_path.username
-        if parsed_path.password:
-            inferred_storage_options['password'] = parsed_path.password
+def is_dataframe_like(df):
+    """ Looks like a Pandas DataFrame """
+    typ = type(df)
+    return (all(hasattr(typ, name)
+                for name in ('groupby', 'head', 'merge', 'mean')) and
+            all(hasattr(df, name) for name in ('dtypes',)) and not
+            any(hasattr(typ, name)
+                for name in ('value_counts', 'dtype')))
 
-    if parsed_path.query:
-        inferred_storage_options['url_query'] = parsed_path.query
-    if parsed_path.fragment:
-        inferred_storage_options['url_fragment'] = parsed_path.fragment
 
-    if inherit_storage_options:
-        if set(inherit_storage_options) & set(inferred_storage_options):
-            raise KeyError("storage options (%r) and path url options (%r) "
-                           "collision is detected"
-                           % (inherit_storage_options, inferred_storage_options))
-        inferred_storage_options.update(inherit_storage_options)
+def is_series_like(s):
+    """ Looks like a Pandas Series """
+    typ = type(s)
+    return (all(hasattr(typ, name) for name in ('groupby', 'head', 'mean')) and
+            all(hasattr(s, name) for name in ('dtype', 'name')) and
+            'index' not in typ.__name__.lower())
 
-    return inferred_storage_options
+
+def is_index_like(s):
+    """ Looks like a Pandas Index """
+    typ = type(s)
+    return (all(hasattr(s, name) for name in ('name', 'dtype'))
+            and 'index' in typ.__name__.lower())
+
+
+def natural_sort_key(s):
+    """
+    Sorting `key` function for performing a natural sort on a collection of
+    strings
+
+    See https://en.wikipedia.org/wiki/Natural_sort_order
+
+    Parameters
+    ----------
+    s : str
+        A string that is an element of the collection being sorted
+
+    Returns
+    -------
+    tuple[str or int]
+        Tuple of the parts of the input string where each part is either a
+        string or an integer
+
+    Examples
+    --------
+    >>> a = ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    >>> sorted(a)
+    ['f0', 'f1', 'f10', 'f11', 'f19', 'f2', 'f20', 'f21', 'f8', 'f9']
+    >>> sorted(a, key=natural_sort_key)
+    ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    """
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r'(\d+)', s)]
+
+
+def factors(n):
+    """ Return the factors of an integer
+
+    https://stackoverflow.com/a/6800214/616616
+    """
+    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
+    return set(functools.reduce(list.__add__, seq))
+
+
+def parse_bytes(s):
+    """ Parse byte string to numbers
+
+    >>> parse_bytes('100')
+    100
+    >>> parse_bytes('100 MB')
+    100000000
+    >>> parse_bytes('100M')
+    100000000
+    >>> parse_bytes('5kB')
+    5000
+    >>> parse_bytes('5.4 kB')
+    5400
+    >>> parse_bytes('1kiB')
+    1024
+    >>> parse_bytes('1e6')
+    1000000
+    >>> parse_bytes('1e6 kB')
+    1000000000
+    >>> parse_bytes('MB')
+    1000000
+    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    ValueError: Could not interpret 'foos' as a byte unit
+    """
+    s = s.replace(' ', '')
+    if not s[0].isdigit():
+        s = '1' + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    try:
+        n = float(prefix)
+    except ValueError:
+        raise ValueError("Could not interpret '%s' as a number" % prefix)
+
+    try:
+        multiplier = byte_sizes[suffix.lower()]
+    except KeyError:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+
+    result = n * multiplier
+    return int(result)
+
+
+byte_sizes = {
+    'kB': 10**3,
+    'MB': 10**6,
+    'GB': 10**9,
+    'TB': 10**12,
+    'PB': 10**15,
+    'KiB': 2**10,
+    'MiB': 2**20,
+    'GiB': 2**30,
+    'TiB': 2**40,
+    'PiB': 2**50,
+    'B': 1,
+    '': 1,
+}
+byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
+byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
+byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def format_time(n):
+    """ format integers as time
+
+    >>> format_time(1)
+    '1.00 s'
+    >>> format_time(0.001234)
+    '1.23 ms'
+    >>> format_time(0.00012345)
+    '123.45 us'
+    >>> format_time(123.456)
+    '123.46 s'
+    """
+    if n >= 1:
+        return "%.2f s" % n
+    if n >= 1e-3:
+        return "%.2f ms" % (n * 1e3)
+    return "%.2f us" % (n * 1e6)
+
+
+def format_bytes(n):
+    """ Format bytes as text
+
+    >>> format_bytes(1)
+    '1 B'
+    >>> format_bytes(1234)
+    '1.23 kB'
+    >>> format_bytes(12345678)
+    '12.35 MB'
+    >>> format_bytes(1234567890)
+    '1.23 GB'
+    >>> format_bytes(1234567890000)
+    '1.23 TB'
+    >>> format_bytes(1234567890000000)
+    '1.23 PB'
+    """
+    if n > 1e15:
+        return "%0.2f PB" % (n / 1e15)
+    if n > 1e12:
+        return "%0.2f TB" % (n / 1e12)
+    if n > 1e9:
+        return "%0.2f GB" % (n / 1e9)
+    if n > 1e6:
+        return "%0.2f MB" % (n / 1e6)
+    if n > 1e3:
+        return "%0.2f kB" % (n / 1000)
+    return "%d B" % n
+
+
+timedelta_sizes = {
+    "s": 1,
+    "ms": 1e-3,
+    "us": 1e-6,
+    "ns": 1e-9,
+    "m": 60,
+    "h": 3600,
+    "d": 3600 * 24,
+}
+
+tds2 = {
+    "second": 1,
+    "minute": 60,
+    "hour": 60 * 60,
+    "day": 60 * 60 * 24,
+    "millisecond": 1e-3,
+    "microsecond": 1e-6,
+    "nanosecond": 1e-9,
+}
+tds2.update({k + "s": v for k, v in tds2.items()})
+timedelta_sizes.update(tds2)
+timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
+
+
+def parse_timedelta(s, default="seconds"):
+    """ Parse timedelta string to number of seconds
+
+    Examples
+    --------
+    >>> parse_timedelta('3s')
+    3
+    >>> parse_timedelta('3.5 seconds')
+    3.5
+    >>> parse_timedelta('300ms')
+    0.3
+    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
+    3
+    """
+    if isinstance(s, timedelta):
+        s = s.total_seconds()
+        return int(s) if int(s) == s else s
+    if isinstance(s, Number):
+        s = str(s)
+    s = s.replace(" ", "")
+    if not s[0].isdigit():
+        s = "1" + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:] or default
+
+    n = float(prefix)
+
+    multiplier = timedelta_sizes[suffix.lower()]
+
+    result = n * multiplier
+    if int(result) == result:
+        result = int(result)
+    return result
+
+
+def has_keyword(func, keyword):
+    try:
+        if PY3:
+            return keyword in inspect.signature(func).parameters
+        else:
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
+    except Exception:
+        return False
+
+
+def ndimlist(seq):
+    if not isinstance(seq, (list, tuple)):
+        return 0
+    elif not seq:
+        return 1
+    else:
+        return 1 + ndimlist(seq[0])

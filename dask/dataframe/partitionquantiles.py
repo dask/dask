@@ -79,6 +79,7 @@ from toolz import merge, merge_sorted, take
 from ..utils import random_state_data
 from ..base import tokenize
 from .core import Series
+from .utils import is_categorical_dtype
 from dask.compatibility import zip
 
 
@@ -306,10 +307,18 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     aren't enough unique values in the column.  Increasing ``upsample``
     keyword argument in ``df.set_index`` may help.
     """
+    dtype, info = dtype_info
+
+    if not vals_and_weights:
+        try:
+            return np.array(None, dtype=dtype)
+        except Exception:
+            # dtype does not support None value so allow it to change
+            return np.array(None, dtype=np.float_)
+
     vals, weights = vals_and_weights
     vals = np.array(vals)
     weights = np.array(weights)
-    dtype, info = dtype_info
 
     # We want to create exactly `npartition` number of groups of `vals` that
     # are approximately the same weight and non-empty if possible.  We use a
@@ -363,7 +372,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = np.concatenate([trimmed, jumbo_vals])
         rv.sort()
 
-    if str(dtype) == 'category':
+    if is_categorical_dtype(dtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
     elif 'datetime64' in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
@@ -398,10 +407,10 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
     data = df.values
     interpolation = 'linear'
-    if str(data.dtype) == 'category':
+    if is_categorical_dtype(data):
         data = data.codes
         interpolation = 'nearest'
-    vals = _percentile(data, qs, interpolation=interpolation)
+    vals, n = _percentile(data, qs, interpolation=interpolation)
     if interpolation == 'linear' and np.issubdtype(data.dtype, np.integer):
         vals = np.round(vals).astype(data.dtype)
     vals_and_weights = percentiles_to_weights(qs, vals, length)
@@ -410,7 +419,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
 def dtype_info(df):
     info = None
-    if str(df.dtype) == 'category':
+    if is_categorical_dtype(df):
         data = df.values
         info = (data.categories, data.ordered)
     return df.dtype, info
@@ -427,10 +436,10 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     qs = np.linspace(0, 1, npartitions + 1)
     token = tokenize(df, qs, upsample)
     if random_state is None:
-        random_state = hash(token) % np.iinfo(np.int32).max
+        random_state = int(token, 16) % np.iinfo(np.int32).max
     state_data = random_state_data(df.npartitions, random_state)
 
-    df_keys = df._keys()
+    df_keys = df.__dask_keys__()
 
     name0 = 're-quantiles-0-' + token
     dtype_dsk = {(name0, 0): (dtype_info, df_keys[0])}

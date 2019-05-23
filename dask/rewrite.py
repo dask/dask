@@ -406,7 +406,7 @@ def _match(S, N):
             # Backtrack here
             (S, N, matches) = stack.pop()
             restore_state_flag = True
-        except:
+        except Exception:
             return
 
 

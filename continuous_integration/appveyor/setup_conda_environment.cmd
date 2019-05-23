@@ -19,24 +19,15 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% pytest toolz
 
 call activate %CONDA_ENV%
 
-@rem Pin matrix items
-@rem Please see PR ( https://github.com/dask/dask/pull/2185 ) for details.
-copy NUL %CONDA_PREFIX%\conda-meta\pinned
-echo numpy %NUMPY% >> %CONDA_PREFIX%\conda-meta\pinned
-echo pandas %PANDAS% >> %CONDA_PREFIX%\conda-meta\pinned
-
 @rem Install optional dependencies for tests
-%CONDA_INSTALL% numpy pandas cloudpickle distributed
-%CONDA_INSTALL% s3fs psutil pytables bokeh bcolz scipy h5py ipython
+%CONDA_INSTALL% -c conda-forge "numpy>=1.13" "pandas>=0.21.0" cloudpickle distributed bcolz bokeh h5py ipython lz4 psutil pytables s3fs scipy fastparquet python-snappy zarr crick
 
-%PIP_INSTALL% git+https://github.com/dask/partd --upgrade
-%PIP_INSTALL% git+https://github.com/dask/cachey --upgrade
-%PIP_INSTALL% git+https://github.com/dask/distributed --upgrade
-%PIP_INSTALL% git+https://github.com/mrocklin/sparse --upgrade
-%PIP_INSTALL% blosc --upgrade
-%PIP_INSTALL% moto
-
-if %PYTHON% LSS 3.0 (%PIP_INSTALL% backports.lzma mock)
+%PIP_INSTALL% --no-deps --upgrade locket git+https://github.com/dask/partd
+%PIP_INSTALL% --no-deps --upgrade heapdict git+https://github.com/dask/cachey
+%PIP_INSTALL%           --upgrade git+https://github.com/dask/distributed
+%PIP_INSTALL% --no-deps           git+https://github.com/pydata/sparse
+%PIP_INSTALL% --no-deps --upgrade blosc --upgrade
+%PIP_INSTALL% --no-deps moto Jinja2 boto boto3 botocore cryptography requests xmltodict six werkzeug PyYAML pytz python-dateutil python-jose mock docker jsondiff==1.1.2 aws-xray-sdk responses idna cfn-lint
 
 @rem Display final environment (for reproducing)
 %CONDA% list

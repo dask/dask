@@ -38,8 +38,31 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
     assert expected.index[-1] == divisions[-1]
 
 
+def test_resample_agg():
+    index = pd.date_range('2000-01-01', '2000-02-15', freq='h')
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
+
+    assert_eq(ds.resample('10min').agg('mean'),
+              ps.resample('10min').agg('mean'))
+    assert_eq(ds.resample('10min').agg(['mean', 'min']),
+              ps.resample('10min').agg(['mean', 'min']))
+
+
+def test_resample_agg_passes_kwargs():
+    index = pd.date_range('2000-01-01', '2000-02-15', freq='h')
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
+
+    def foo(series, bar=1, *args, **kwargs):
+        return bar
+    assert_eq(ds.resample('2h').agg(foo, bar=2),
+              ps.resample('2h').agg(foo, bar=2))
+    assert (ds.resample('2h').agg(foo, bar=2) == 2).compute().all()
+
+
 def test_series_resample_not_implemented():
-    index = pd.date_range(start='20120102', periods=100, freq='T')
+    index = pd.date_range(start='2012-01-02', periods=100, freq='T')
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
@@ -54,3 +77,19 @@ def test_unknown_divisions_error():
         assert False
     except ValueError as e:
         assert 'divisions' in str(e)
+
+
+def test_resample_index_name():
+    import numpy as np
+    from datetime import datetime, timedelta
+
+    date_today = datetime.now()
+    days = pd.date_range(date_today, date_today + timedelta(20), freq='D')
+    data = np.random.randint(1, high=100, size=len(days))
+
+    df = pd.DataFrame({'date': days, 'values': data})
+    df = df.set_index('date')
+
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    assert ddf.resample('D').mean().head().index.name == "date"

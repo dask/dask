@@ -134,31 +134,41 @@ class ResourceProfiler(Callback):
     manually.
 
     >>> prof.clear()  # doctest: +SKIP
+
+    Note that when used as a context manager data will be collected throughout
+    the duration of the enclosed block. In contrast, when registered globally
+    data will only be collected while a dask scheduler is active.
     """
     def __init__(self, dt=1):
-        self._tracker = _Tracker(dt)
-        self._tracker.start()
-        self.results = []
+        self._dt = dt
         self._entered = False
+        self._tracker = None
+        self.results = []
+
+    def _is_running(self):
+        return self._tracker is not None and self._tracker.is_alive()
 
     def _start_collect(self):
-        assert self._tracker.is_alive(), "Resource tracker is shutdown"
+        if not self._is_running():
+            self._tracker = _Tracker(self._dt)
+            self._tracker.start()
         self._tracker.parent_conn.send('collect')
 
     def _stop_collect(self):
-        if self._tracker.is_alive():
+        if self._is_running():
             self._tracker.parent_conn.send('send_data')
             self.results.extend(starmap(ResourceData, self._tracker.parent_conn.recv()))
 
     def __enter__(self):
-        self.clear()
         self._entered = True
+        self.clear()
         self._start_collect()
         return super(ResourceProfiler, self).__enter__()
 
     def __exit__(self, *args):
         self._entered = False
         self._stop_collect()
+        self.close()
         super(ResourceProfiler, self).__exit__(*args)
 
     def _start(self, dsk):
@@ -170,7 +180,9 @@ class ResourceProfiler(Callback):
 
     def close(self):
         """Shutdown the resource tracker process"""
-        self._tracker.shutdown()
+        if self._is_running():
+            self._tracker.shutdown()
+            self._tracker = None
 
     __del__ = close
 
@@ -195,12 +207,10 @@ class ResourceProfiler(Callback):
 class _Tracker(Process):
     """Background process for tracking resource usage"""
     def __init__(self, dt=1):
-        psutil = import_required("psutil", "Tracking resource usage requires "
-                                           "`psutil` to be installed")
         Process.__init__(self)
         self.daemon = True
         self.dt = dt
-        self.parent = psutil.Process(current_process().pid)
+        self.parent_pid = current_process().pid
         self.parent_conn, self.child_conn = Pipe()
 
     def shutdown(self):
@@ -214,8 +224,12 @@ class _Tracker(Process):
                                 if p.pid != pid and p.status() != 'zombie']
 
     def run(self):
+
+        psutil = import_required("psutil", "Tracking resource usage requires "
+                                           "`psutil` to be installed")
+        self.parent = psutil.Process(self.parent_pid)
+
         pid = current_process()
-        ps = self._update_pids(pid)
         data = []
         while True:
             try:
@@ -226,7 +240,7 @@ class _Tracker(Process):
                 break
             elif msg == 'collect':
                 ps = self._update_pids(pid)
-                while not self.child_conn.poll():
+                while not data or not self.child_conn.poll():
                     tic = default_timer()
                     mem = cpu = 0
                     for p in ps:
@@ -301,6 +315,7 @@ class CacheProfiler(Callback):
     """
 
     def __init__(self, metric=None, metric_name=None):
+        self.clear()
         self._metric = metric if metric else lambda value: 1
         if metric_name:
             self._metric_name = metric_name

@@ -56,14 +56,6 @@ class TestGet(GetFunctionTestMixin):
     get = staticmethod(core.get)
 
 
-class TestRecursiveGet(GetFunctionTestMixin):
-    get = staticmethod(lambda d, k: core.get(d, k, recursive=True))
-
-    def test_get_stack_limit(self):
-        # will blow stack in recursive mode
-        pass
-
-
 def test_GetFunctionTestMixin_class():
     class TestCustomGetFail(GetFunctionTestMixin):
         get = staticmethod(lambda x, y: 1)
@@ -134,9 +126,9 @@ def test_get_deps():
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
-    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    {'a': set(), 'b': {'a'}, 'c': {'b'}}
     >>> dependents
-    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dsk = {'a': [1, 2, 3],
            'b': 'a',
@@ -194,7 +186,7 @@ def test_subs_no_key_data_eq():
 def test_subs_with_unfriendly_eq():
     try:
         import numpy as np
-    except:
+    except ImportError:
         return
     else:
         task = (np.sum, np.array([1, 2]))
@@ -214,11 +206,25 @@ def test_subs_with_unfriendly_eq():
 def test_subs_with_surprisingly_friendly_eq():
     try:
         import pandas as pd
-    except:
+    except ImportError:
         return
     else:
         df = pd.DataFrame()
         assert subs(df, 'x', 1) is df
+
+
+def test_subs_unexpected_hashable_key():
+    class UnexpectedButHashable:
+        def __init__(self):
+            self.name = "a"
+
+        def __hash__(self):
+            return hash(self.name)
+
+        def __eq__(self, other):
+            return isinstance(other, UnexpectedButHashable)
+
+    assert subs((id, UnexpectedButHashable()), UnexpectedButHashable(), 1) == (id, 1)
 
 
 def test_quote():
