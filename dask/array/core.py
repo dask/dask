@@ -2892,6 +2892,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     dt = result_type(*seq_dtypes)
     seq = [a.astype(dt) for a in seq]
 
+    # Drop empty arrays
     seq = [a for a in seq if a.size]
 
     n = len(seq)
