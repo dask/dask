@@ -2885,10 +2885,12 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     seq = [asarray(a) for a in seq]
 
+    # Coerce all arrays to the same type
     # Empty arrays can impact the output dtype
     from .routines import result_type
     seq_dtypes = [a.dtype for a in seq]
     dt = result_type(*seq_dtypes)
+    seq = [a.astype(dt) for a in seq]
 
     seq = [a for a in seq if a.size]
 
@@ -2906,7 +2908,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         raise ValueError(msg % (ndim, axis))
 
     if n == 1:
-        return seq[0] if len(set(seq_dtypes)) == 1 else seq[0].astype(dt)
+        return seq[0]
 
     if (not allow_unknown_chunksizes and
         not all(i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
