@@ -94,6 +94,7 @@ def wrap_func_like(func, *args, **kwargs):
 
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
+
 def wrap_func_like_safe(func_like, func, *args, **kwargs):
     """
     Safe implementation for wrap_func_like(), attempts to use func_like(),

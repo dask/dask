@@ -23,7 +23,7 @@ from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, funcname, Dispatch, deepmap
-from .. import config, core
+from .. import config
 
 # Generic functions to support chunks of different types
 empty_lookup = Dispatch('empty')

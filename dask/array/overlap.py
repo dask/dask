@@ -4,8 +4,6 @@ from operator import getitem
 from itertools import product
 from numbers import Integral
 
-import numpy as np
-
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
