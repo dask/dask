@@ -16,7 +16,7 @@ try:
     import distributed
     from distributed import Client
     from distributed.utils_test import cluster, loop  # noqa: F401
-except ImportError:
+except (ImportError, SyntaxError):
     distributed = None
 
 try:
@@ -240,6 +240,8 @@ def test_pyarrow_compat():
 
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
+    if LooseVersion(pyarrow.__version__) == '0.13.0':
+        pytest.skip('pyarrow 0.13.0 not supported for parquet')
     dd = pytest.importorskip('dask.dataframe')
     import pandas as pd
     import numpy as np

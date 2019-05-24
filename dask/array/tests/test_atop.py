@@ -1,4 +1,5 @@
 import collections
+import warnings
 from operator import add
 
 import pytest
@@ -290,6 +291,34 @@ def test_blockwise_stacked_new_axes_same_dim(concatenate):
     assert_eq(c, np.ones((5, 7)))
 
 
+def test_blockwise_new_axes_chunked():
+    def f(x):
+        return x[None, :] * 2
+
+    x = da.arange(0, 6, 1, chunks=2, dtype=np.int32)
+    y = da.blockwise(f, 'qa', x, 'a', new_axes={'q': (1, 1)}, dtype=x.dtype)
+    assert y.chunks == ((1, 1), (2, 2, 2))
+    assert_eq(y, np.array([[0, 2, 4, 6, 8, 10], [0, 2, 4, 6, 8, 10]], np.int32))
+
+
+def test_blockwise_no_args():
+    def f():
+        return np.ones((2, 3), np.float32)
+
+    x = da.blockwise(f, 'ab', new_axes={'a': 2, 'b': (3, 3)}, dtype=np.float32)
+    assert x.chunks == ((2,), (3, 3))
+    assert_eq(x, np.ones((2, 6), np.float32))
+
+
+def test_blockwise_no_array_args():
+    def f(dtype):
+        return np.ones((2, 3), dtype)
+
+    x = da.blockwise(f, 'ab', np.float32, None, new_axes={'a': 2, 'b': (3, 3)}, dtype=np.float32)
+    assert x.chunks == ((2,), (3, 3))
+    assert_eq(x, np.ones((2, 6), np.float32))
+
+
 def test_blockwise_kwargs():
     def f(a, b=0):
         return a + b
@@ -426,7 +455,9 @@ def test_validate_top_inputs():
 
 
 def test_gh_4176():
-    from dask.sharedict import ShareDict
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        from dask.sharedict import ShareDict
 
     def foo(A):
         return A[None, ...]

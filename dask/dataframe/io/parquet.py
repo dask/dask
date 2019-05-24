@@ -1059,8 +1059,12 @@ def get_engine(engine):
     elif engine == 'pyarrow':
         pa = import_required('pyarrow', "`pyarrow` not installed")
 
-        if LooseVersion(pa.__version__) < '0.8.0':
+        pa_version = LooseVersion(pa.__version__)
+        if pa_version < '0.8.0':
             raise RuntimeError("PyArrow version >= 0.8.0 required")
+        elif pa_version == '0.13.0':
+            raise RuntimeError("PyArrow version 0.13.0 isn't supported, please "
+                               "upgrade or downgrade")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
                                      'write': _write_pyarrow}

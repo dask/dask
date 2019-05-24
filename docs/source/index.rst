@@ -172,6 +172,7 @@ then you should start here.
    delayed.rst
    futures.rst
    Machine Learning <https://ml.dask.org>
+   best-practices.rst
    api.rst
 
 **Scheduling**
@@ -252,6 +253,7 @@ often a better choice. If you are a *core developer*, then you should start here
 * :doc:`caching`
 * :doc:`bytes`
 * :doc:`remote-data-services`
+* :doc:`gpu`
 * :doc:`cite`
 * :doc:`funding`
 * :doc:`logos`
@@ -270,6 +272,7 @@ often a better choice. If you are a *core developer*, then you should start here
    caching.rst
    bytes.rst
    remote-data-services.rst
+   gpu.rst
    cite.rst
    funding.rst
    logos.rst

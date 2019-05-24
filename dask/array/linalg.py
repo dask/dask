@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import operator
-from functools import wraps
 from numbers import Number
 
 import numpy as np
@@ -14,6 +13,7 @@ from ..highlevelgraph import HighLevelGraph
 from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
+from ..utils import derived_from
 
 
 def _cumsum_blocks(it):
@@ -1104,14 +1104,15 @@ def lstsq(a, b):
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
     graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
-                                  np.array([0, 1], dtype=b.dtype))
+                                  np.array([0, 1], dtype=b.dtype),
+                                  rcond=-1)
     s = Array(graph, sname, shape=(r.shape[0], ),
               chunks=r.shape[0], dtype=ss.dtype)
 
     return x, residuals, rank, s
 
 
-@wraps(np.linalg.norm)
+@derived_from(np.linalg)
 def norm(x, ord=None, axis=None, keepdims=False):
     if axis is None:
         axis = tuple(range(x.ndim))

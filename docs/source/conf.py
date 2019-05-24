@@ -27,7 +27,8 @@ from shutil import copyfile
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax', 'sphinx.ext.intersphinx',
-              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc']
+              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc',
+              'sphinx_click.ext']
 
 numpydoc_show_class_members = False
 
@@ -311,6 +312,7 @@ redirect_files = [
     ('array-overview.html', 'array.html'),
     ('array-ghost.html', 'array-overlap.html'),
     ('dataframe-overview.html', 'dataframe.html'),
+    ('dataframe-performance.html', 'dataframe-best-practices.html'),
     ('delayed-overview.html', 'delayed.html'),
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
