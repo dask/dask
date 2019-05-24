@@ -1060,6 +1060,10 @@ def make_block_sorted_slices(index, chunks):
     >>> index = np.array([6, 0, 4, 2, 7, 1, 5, 3])
     >>> chunks = ((4, 4),)
     >>> a, b = make_block_sorted_slices(index, chunks)
+
+    Notice that the first set of 4 items are sorted, and the
+    second set of 4 items are sorted.
+
     >>> a
     array([0, 2, 4, 6, 1, 3, 5, 7])
     >>> b
