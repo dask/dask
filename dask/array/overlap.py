@@ -451,7 +451,7 @@ def add_dummy_padding(x, depth, boundary):
             try:
                 empty = wrap.empty_like(x, shape=empty_shape,
                                         chunks=empty_chunks, dtype=x.dtype)
-            except AttributeError:
+            except TypeError:
                 empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
 
             out_chunks = list(x.chunks)

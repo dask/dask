@@ -95,7 +95,7 @@ def wrap_func_like(func, *args, **kwargs):
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
 
-def wrap_func_like_safe(func_like, func, *args, **kwargs):
+def wrap_func_like_safe(func, func_like, *args, **kwargs):
     """
     Safe implementation for wrap_func_like(), attempts to use func_like(),
     if the shape keyword argument, falls back to func().
@@ -112,7 +112,7 @@ def wrap(wrap_func, func, **kwargs):
     if func_like is None:
         f = partial(wrap_func, func, **kwargs)
     else:
-        f = partial(wrap_func, func, func_like, **kwargs)
+        f = partial(wrap_func, func_like, **kwargs)
     template = """
     Blocked variant of %(name)s
 
