@@ -49,3 +49,27 @@ for more information on RabbitMQ and how to consume the messages.
        scheduler.add_plugin(plugin)
 
 Run with: ``dask-scheduler --preload <filename.py>``
+
+Accessing Full Task State
+-------------------------
+
+If you would like to access the full :class:`distributed.scheduler.TaskState`
+stored in the scheduler you can do this by passing and storing a reference to
+the scheduler as so:
+
+.. code-block:: python
+
+   from distributed.diagnostics.plugin import SchedulerPlugin
+
+   class MyPlugin(SchedulerPlugin):
+       def __init__(self, scheduler):
+            self.scheduler = scheduler
+
+       def transition(self, key, start, finish, *args, **kwargs):
+            # Get full TaskState
+            ts = self.scheduler.tasks[key]
+
+   @click.command()
+   def dask_setup(scheduler):
+       plugin = MyPlugin(scheduler)
+       scheduler.add_plugin(plugin)
