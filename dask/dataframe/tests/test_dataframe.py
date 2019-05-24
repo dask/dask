@@ -276,7 +276,7 @@ def test_rename_series_method():
 
 
 @pytest.mark.parametrize('method,test_values', [('tdigest', (6, 10)), ('dask', (4, 20))])
-def test_describe(method, test_values):
+def test_describe_numeric(method, test_values):
     if method == 'tdigest':
         pytest.importorskip('crick')
     # prepare test case which approx quantiles will be the same as actuals
@@ -306,19 +306,107 @@ def test_describe(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-@pytest.mark.parametrize('method', ['tdigest', 'dask'])
-def test_describe_empty(method):
-    if method == 'tdigest':
-        pytest.importorskip('crick')
-    # https://github.com/dask/dask/issues/2326
-    ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
-    with pytest.raises(ValueError) as rec:
-        ddf.describe(percentiles_method=method)
-    assert 'DataFrame contains only non-numeric data.' in str(rec)
+@pytest.mark.parametrize('include,exclude,percentiles,subset', [
+    (None, None, None, ['c','d']),  # numeric
+    (None, None, None, ['c', 'd', 'f']),  # numeric + timedelta
+    (None, None, None, ['c', 'd', 'g']),  # numeric + bool
+    (None, None, None, ['c', 'd', 'f', 'g']),  # numeric + bool + timedelta
+    (None, None, None, ['f', 'g']),  # bool + timedelta
+    ('all', None, None, None),
+    (['number'], None, [0.25, 0.5], None),
+    ([np.timedelta64], None, None, None),
+    (['number', 'object'], None, [0.25, 0.75], None),
+    (None, ['number', 'object'], None, None),
+    (['object', 'datetime', 'bool'], None, None, None)
+])
+def test_describe(include, exclude, percentiles, subset):
+    data = {
+        'a': ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        'c': [None, 0, 1, 2, 3, 4] * 2,
+        'd': [None, 0, 1] * 4,
+        'e': [pd.Timestamp('2017-05-09 00:00:00.006000'),
+              pd.Timestamp('2017-05-09 00:00:00.006000'),
+              pd.Timestamp('2017-05-09 07:56:23.858694'),
+              pd.Timestamp('2017-05-09 05:59:58.938999'),
+              None,
+              None] * 2,
+        'f': [np.timedelta64(3, 'D'),
+              np.timedelta64(1, 'D'),
+              None,
+              None,
+              np.timedelta64(3, 'D'),
+              np.timedelta64(1, 'D')] * 2,
+        'g': [True, False, True] * 4
+    }
 
-    with pytest.raises(ValueError) as rec:
-        ddf.A.describe(percentiles_method=method)
-    assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
+    # Arrange
+    df = pd.DataFrame(data)
+
+    if subset is not None:
+        df = df.loc[:, subset]
+
+    ddf = dd.from_pandas(df, 2)
+
+    # Act
+    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
+    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+
+    # TODO: for timedelta columns there's overflow in var function, see #4233
+    # causing std to be nan, workaround this by dropping timedelta column before assertion
+    if 'f' in desc_ddf._meta:
+        desc_df = desc_df.drop('f', axis=1)
+        desc_ddf = desc_ddf.drop('f', axis=1)
+
+    # Assert
+    assert_eq(desc_ddf, desc_df)
+
+    # Check series
+    if subset is None:
+        for col in ['a', 'c', 'e', 'g']:
+            assert_eq(
+                df[col].describe(include=include, exclude=exclude),
+                ddf[col].describe(include=include, exclude=exclude))
+
+
+def test_describe_empty():
+    df_none = pd.DataFrame({"A": [None, None]})
+    ddf_none = dd.from_pandas(df_none, 2)
+    df_len0 = pd.DataFrame({"A": [], "B":[]})
+    ddf_len0 = dd.from_pandas(df_len0, 2)
+    ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
+
+    # Pandas have different dtypes for resulting describe dataframe if there are only
+    # None-values, pre-compute dask df to bypass _meta check
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='dask').compute())
+
+    with pytest.raises(ValueError):
+        ddf_len0.describe(percentiles_method='dask').compute()
+
+    with pytest.raises(ValueError):
+        ddf_len0.describe(percentiles_method='dask').compute()
+
+    with pytest.raises(ValueError):
+        ddf_nocols.describe(percentiles_method='dask').compute()
+
+
+def test_describe_empty_tdigest():
+    pytest.importorskip('crick')
+
+    df_none = pd.DataFrame({"A": [None, None]})
+    ddf_none = dd.from_pandas(df_none, 2)
+    df_len0 = pd.DataFrame({"A": []})
+    ddf_len0 = dd.from_pandas(df_len0, 2)
+    ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
+
+    # Pandas have different dtypes for resulting describe dataframe if there are only
+    # None-values, pre-compute dask df to bypass _meta check
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
+
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+
+    with pytest.raises(ValueError):
+        ddf_nocols.describe(percentiles_method='tdigest').compute()
 
 
 def test_describe_for_possibly_unsorted_q():
@@ -2127,10 +2215,10 @@ def test_to_dask_array_raises(as_frame):
     if as_frame:
         a = a.to_frame()
 
-    with pytest.raises(ValueError, message="4 != 2"):
+    with pytest.raises(ValueError, match="4 != 2"):
         a.to_dask_array((1, 2, 3, 4))
 
-    with pytest.raises(ValueError, message="Unexpected value"):
+    with pytest.raises(ValueError, match="Unexpected value"):
         a.to_dask_array(5)
 
 

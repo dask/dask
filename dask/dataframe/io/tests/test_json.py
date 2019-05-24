@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import pytest
+import json
 
 try:
     import lzma
@@ -33,6 +34,46 @@ def test_read_json_basic(orient):
         if orient == 'values':
             out.columns = list(df.columns)
         assert_eq(out, df)
+
+
+@pytest.mark.parametrize('fkeyword', ['pandas', 'json'])
+def test_read_json_fkeyword(fkeyword):
+    def _my_json_reader(*args, **kwargs):
+        if fkeyword == 'json':
+            return pd.DataFrame.from_dict(json.load(*args))
+        return pd.read_json(*args)
+    with tmpfile('json') as f:
+        df.to_json(f, orient='records', lines=False)
+        actual = dd.read_json(f, orient='records', lines=False,
+                              engine=_my_json_reader)
+        actual_pd = pd.read_json(f, orient='records', lines=False)
+        assert_eq(actual, actual_pd)
+
+
+@pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
+                                    'values'])
+def test_read_json_meta(orient, tmpdir):
+    df = pd.DataFrame({'x': range(5), 'y': ['a', 'b', 'c', 'd', 'e']})
+    df2 = df.assign(x=df.x + 0.5)
+    lines = orient == 'records'
+    df.to_json(str(tmpdir.join("fil1.json")), orient=orient, lines=lines)
+    df2.to_json(str(tmpdir.join("fil2.json")), orient=orient, lines=lines)
+    sol = pd.concat([df, df2])
+    meta = df2.iloc[:0]
+
+    if orient == 'values':
+        # orient=values loses column names
+        sol.columns = meta.columns = [0, 1]
+
+    res = dd.read_json(str(tmpdir.join("fil*.json")), orient=orient,
+                       meta=meta, lines=lines)
+    assert_eq(res, sol)
+
+    if orient == 'records':
+        # Also check chunked version
+        res = dd.read_json(str(tmpdir.join("fil*.json")), orient=orient,
+                           meta=meta, lines=True, blocksize=50)
+        assert_eq(res, sol, check_index=False)
 
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',

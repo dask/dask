@@ -75,7 +75,7 @@ to be told to use only one thread explicitly.  You can do this with the
 following environment variables (using bash ``export`` command below, but this
 may vary depending on your operating system).
 
-.. code-block::
+.. code-block:: bash
 
    export OMP_NUM_THREADS=1
    export MKL_NUM_THREADS=1
