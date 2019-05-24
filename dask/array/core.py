@@ -2330,6 +2330,11 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
                     dtype=x.dtype)
         dsk[original_name] = x
 
+    # Workaround for TileDB, its indexing is 1-based,
+    # and doesn't seems to support 0-length slicing
+    if hasattr(x, '_ctx_'):
+        return Array(dsk, name, chunks, dtype=x.dtype)
+
     meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
 
     return Array(dsk, name, chunks, meta=meta)
