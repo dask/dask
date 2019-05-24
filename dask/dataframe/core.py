@@ -980,8 +980,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
             ignored.
-            Note that this keyword argument triggers computation to determine
-            the memory size of each current partition, which may be expensive.
+
+            .. warning::
+
+               This keyword argument triggers computation to determine
+               the memory size of each partition, which may be expensive.
+
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
@@ -989,6 +993,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
             the same as the old divisions.
+
+        Notes
+        -----
+        Exactly one of `divisions`, `npartitions`, `partition_size`, or `freq`
+        should be specified. A ``ValueError`` will be raised when that is
+        not the case.
 
         Examples
         --------
