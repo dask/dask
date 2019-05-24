@@ -2,6 +2,8 @@ import contextlib
 
 import pytest
 
+import dask.compatibility
+
 
 pd = pytest.importorskip('pandas')
 import dask.dataframe as dd
@@ -44,6 +46,7 @@ class MyAccessor:
     (dd.DataFrame, dd.extensions.register_dataframe_accessor),
     (dd.Index, dd.extensions.register_index_accessor)
 ])
+@pytest.mark.skipif(dask.compatibility.PY2, reason="Unknown")
 def test_register(obj, registrar):
     with ensure_removed(obj, 'mine'):
         before = set(dir(obj))
@@ -55,6 +58,7 @@ def test_register(obj, registrar):
         assert 'mine' in obj._accessors
 
 
+@pytest.mark.skipif(dask.compatibility.PY2, reason="Unknown")
 def test_accessor_works():
     with ensure_removed(dd.Series, 'mine'):
         dd.extensions.register_series_accessor('mine')(MyAccessor)
