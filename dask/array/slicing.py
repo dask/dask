@@ -1039,7 +1039,6 @@ def getitem_variadic(x, *index):
 
 
 def make_block_sorted_slices(index, chunks):
-    # type: (ndarray, tuple) -> Tuple[ndarray, ndarray]
     """Generate blockwise-sorted index pairs for shuffling an array.
 
     Parameters
