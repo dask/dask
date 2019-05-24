@@ -25,6 +25,7 @@ from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 from .einsumfuncs import einsum  # noqa
+from .numpy_compat import _unravel_index_keyword
 
 
 @derived_from(np)
@@ -1175,13 +1176,14 @@ def _unravel_index_kernel(indices, func_kwargs):
 
 @derived_from(np)
 def unravel_index(indices, dims, order='C'):
+    # TODO: deprecate dims as well?
     if dims and indices.size:
         unraveled_indices = tuple(indices.map_blocks(
             _unravel_index_kernel,
             dtype=np.intp,
             chunks=(((len(dims),),) + indices.chunks),
             new_axis=0,
-            func_kwargs={"dims": dims, "order": order}
+            func_kwargs={_unravel_index_keyword: dims, "order": order}
         ))
     else:
         unraveled_indices = tuple(

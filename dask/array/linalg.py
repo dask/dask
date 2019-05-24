@@ -1104,7 +1104,8 @@ def lstsq(a, b):
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
     graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
-                                  np.array([0, 1], dtype=b.dtype))
+                                  np.array([0, 1], dtype=b.dtype),
+                                  rcond=-1)
     s = Array(graph, sname, shape=(r.shape[0], ),
               chunks=r.shape[0], dtype=ss.dtype)
 

@@ -1,4 +1,5 @@
 import collections
+import warnings
 from operator import add
 
 import pytest
@@ -454,7 +455,9 @@ def test_validate_top_inputs():
 
 
 def test_gh_4176():
-    from dask.sharedict import ShareDict
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        from dask.sharedict import ShareDict
 
     def foo(A):
         return A[None, ...]

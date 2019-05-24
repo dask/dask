@@ -2037,10 +2037,10 @@ def test_slicing_with_non_ndarrays():
     assert_eq((x + 1).sum(), (np.arange(10, dtype=x.dtype) + 1).sum())
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass")
 def test_getter():
-    with warnings.catch_warnings(record=True):
-        assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
-        assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
+    assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
+    assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
     assert_eq(getter([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
 
     assert_eq(getter(np.arange(5), (None, slice(None, None))),
@@ -2164,6 +2164,7 @@ def test_from_array_scalar(type_):
     (True, np.ndarray),
     (False, np.matrix),
 ])
+@pytest.mark.filterwarnings("ignore:the matrix subclass")
 def test_from_array_no_asarray(asarray, cls):
 
     def assert_chunks_are_of_type(x):
@@ -2171,12 +2172,11 @@ def test_from_array_no_asarray(asarray, cls):
         for c in concat(chunks):
             assert type(c) is cls
 
-    with warnings.catch_warnings(record=True):
-        x = np.matrix(np.arange(100).reshape((10, 10)))
-        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
-        assert_chunks_are_of_type(dx)
-        assert_chunks_are_of_type(dx[0:5])
-        assert_chunks_are_of_type(dx[0:5][:, 0])
+    x = np.matrix(np.arange(100).reshape((10, 10)))
+    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+    assert_chunks_are_of_type(dx)
+    assert_chunks_are_of_type(dx[0:5])
+    assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
 def test_from_array_getitem():
@@ -2245,14 +2245,14 @@ def test_asarray_h5py():
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass")
 def test_asanyarray():
-    with warnings.catch_warnings(record=True):
-        x = np.matrix([1, 2, 3])
-        dx = da.asanyarray(x)
-        assert dx.numblocks == (1, 1)
-        chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
-        assert isinstance(chunks[0][0], np.matrix)
-        assert da.asanyarray(dx) is dx
+    x = np.matrix([1, 2, 3])
+    dx = da.asanyarray(x)
+    assert dx.numblocks == (1, 1)
+    chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
+    assert isinstance(chunks[0][0], np.matrix)
+    assert da.asanyarray(dx) is dx
 
 
 def test_asanyarray_dataframe():
@@ -3095,11 +3095,8 @@ def test_warn_bad_rechunking():
     x = da.ones((20, 20), chunks=(20, 1))
     y = da.ones((20, 20), chunks=(1, 20))
 
-    with warnings.catch_warnings(record=True) as record:
+    with pytest.warns(da.core.PerformanceWarning, match='factor of 20'):
         x + y
-
-    assert record
-    assert '20' in record[0].message.args[0]
 
 
 def test_concatenate_stack_dont_warn():

@@ -611,7 +611,7 @@ def test_lstsq(nrow, ncol, chunk):
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
 
-    x, r, rank, s = np.linalg.lstsq(A, b)
+    x, r, rank, s = np.linalg.lstsq(A, b, rcond=-1)
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
 
     assert_eq(dx, x)

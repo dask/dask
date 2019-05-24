@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import numpy as np
 try:
@@ -436,10 +437,26 @@ def optimize_blockwise(graph, keys=()):
     --------
     rewrite_blockwise
     """
-    out = _optimize_blockwise(graph, keys=keys)
-    while out.dependencies != graph.dependencies:
-        graph = out
+    with warnings.catch_warnings():
+        # In some cases, rewrite_blockwise (called internally) will do a bad
+        # thing like `string in array[int].
+        # See dask/array/tests/test_atop.py::test_blockwise_numpy_arg for
+        # an example. NumPy currently raises a warning that 'a' == array([1, 2])
+        # will change from returning `False` to `array([False, False])`.
+        #
+        # Users shouldn't see those warnings, so we filter them.
+        # We set the filter here, rather than lower down, to avoid having to
+        # create and remove the filter many times inside a tight loop.
+
+        # https://github.com/dask/dask/pull/4805#discussion_r286545277 explains
+        # why silencing this warning shouldn't cause issues.
+        warnings.filterwarnings("ignore",
+                                "elementwise comparison failed",
+                                Warning)  # FutureWarning or DeprecationWarning
         out = _optimize_blockwise(graph, keys=keys)
+        while out.dependencies != graph.dependencies:
+            graph = out
+            out = _optimize_blockwise(graph, keys=keys)
     return out
 
 
