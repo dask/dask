@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
 sparse = pytest.importorskip('sparse')
 if sparse:
@@ -150,5 +150,6 @@ def test_metadata():
     assert isinstance(y.var(axis=0)._meta, sparse.COO)
     assert isinstance(y[:5, ::2]._meta, sparse.COO)
     assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
-    assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
     assert isinstance((y - z)._meta, sparse.COO)
+    if IS_NEP18_ACTIVE:
+        assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
