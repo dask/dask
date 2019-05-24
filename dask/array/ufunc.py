@@ -1,6 +1,6 @@
 
 from operator import getitem
-from functools import partial, wraps
+from functools import partial
 
 import numpy as np
 from toolz import curry
@@ -10,7 +10,7 @@ from .utils import IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
-from ..utils import (skip_doctest, funcname,
+from ..utils import (skip_doctest, funcname, derived_from,
                      is_dataframe_like, is_series_like, is_index_like)
 
 
@@ -82,7 +82,7 @@ class da_frompyfunc(object):
         return list(o)
 
 
-@wraps(np.frompyfunc)
+@derived_from(np)
 def frompyfunc(func, nin, nout):
     if nout > 1:
         raise NotImplementedError("frompyfunc with more than one output")

@@ -32,7 +32,7 @@ from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
 from ..blockwise import broadcast_dimensions, subs
 from ..context import globalmethod
-from ..utils import (ndeepmap, ignoring, concrete,
+from ..utils import (ndeepmap, ignoring, concrete, derived_from,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, Dispatch, factors,
                      parse_bytes, has_keyword, M, ndimlist, format_bytes)
@@ -536,7 +536,7 @@ def map_blocks(func, *args, **kwargs):
         chunks2 = []
         for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
             if isinstance(c, tuple):
-                # We only check cases where numblocks > 1. Becuase of
+                # We only check cases where numblocks > 1. Because of
                 # broadcasting, we can't (easily) validate the chunks
                 # when the number of blocks is 1.
                 # See https://github.com/dask/dask/issues/4299 for more.
@@ -555,16 +555,19 @@ def map_blocks(func, *args, **kwargs):
         num_chunks = {}
         shapes = {}
 
-        for i, arg in enumerate(args):
-            if isinstance(arg, Array):
-                starts[i] = [np.cumsum((0,) + c) for c in arg.chunks]
+        for i, (arg, in_ind) in enumerate(argpairs):
+            if in_ind is not None:
                 shapes[i] = arg.shape
-                num_chunks[i] = arg.numblocks
-        for k, v in kwargs.items():
-            if isinstance(v, Array):
-                starts[k] = [np.cumsum((0,) + c) for c in v.chunks]
-                shapes[k] = arg.shape
-                num_chunks[i] = arg.numblocks
+                if drop_axis:
+                    # We concatenate along dropped axes, so we need to treat them
+                    # as if there is only a single chunk.
+                    starts[i] = [(np.cumsum((0,) + arg.chunks[j])
+                                  if ind in out_ind else np.array([0, arg.shape[j]]))
+                                 for j, ind in enumerate(in_ind)]
+                    num_chunks[i] = tuple(len(s) - 1 for s in starts[i])
+                else:
+                    starts[i] = [np.cumsum((0,) + c) for c in arg.chunks]
+                    num_chunks[i] = arg.numblocks
         out_starts = [np.cumsum((0,) + c) for c in out.chunks]
 
         for k, v in dsk.items():
@@ -572,21 +575,16 @@ def map_blocks(func, *args, **kwargs):
             v = v[0]
             [(key, task)] = v.dsk.items()  # unpack subgraph callable
 
-            if new_axis:
-                # anything using the keys in dsk is incorrect, as the
-                # original array doesn't have values for `new_axis`.
-                old_k = tuple(x for i, x in enumerate(k[1:]) if i not in new_axis)
-            else:
-                old_k = k[1:]
-
+            # Get position of chunk, indexed by axis labels
+            location = {out_ind[i]: loc for i, loc in enumerate(k[1:])}
             info = {}
             for i, shape in shapes.items():
                 # Compute chunk key in the array, taking broadcasting into
                 # account. We don't directly know which dimensions are
                 # broadcast, but any dimension with only one chunk can be
                 # treated as broadcast.
-                arr_k = old_k[-len(shape):]
-                arr_k = tuple(j if num_chunks[i][ij] > 1 else 0 for ij, j in enumerate(arr_k))
+                arr_k = tuple(location.get(ind, 0) if num_chunks[i][j] > 1 else 0
+                              for j, ind in enumerate(argpairs[i][1]))
                 info[i] = {'shape': shape,
                            'num-chunks': num_chunks[i],
                            'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
@@ -3436,7 +3434,7 @@ def broadcast_to(x, shape, chunks=None):
     return Array(graph, name, chunks, dtype=x.dtype)
 
 
-@wraps(np.broadcast_arrays)
+@derived_from(np)
 def broadcast_arrays(*args, **kwargs):
     subok = bool(kwargs.pop("subok", False))
 
