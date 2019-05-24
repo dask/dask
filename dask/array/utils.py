@@ -143,9 +143,12 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
         bdt = getattr(b, 'dtype', None)
 
     if str(adt) != str(bdt):
-        diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
-        raise AssertionError('string repr are different' + os.linesep +
-                             os.linesep.join(diff))
+        # Ignore check for matching length of flexible dtypes, since Array._meta
+        # can't encode that information
+        if adt.type == bdt.type and not (adt.type == np.bytes_ or adt.type == np.str_):
+            diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
+            raise AssertionError('string repr are different' + os.linesep +
+                                 os.linesep.join(diff))
 
     try:
         assert a.shape == b.shape
