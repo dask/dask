@@ -418,113 +418,72 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                          how, npartitions, suffixes, shuffle=shuffle,
                          indicator=indicator)
 
-def validate_arguments(msg, *dfs):
-    if not all(isinstance(df, _Frame) for df in dfs):
-        raise ValueError(msg, "only callable on Frames")
-    if not all(df.known_divisions for df in dfs):
-        raise ValueError("Not all divisions are known for", msg)
 
-def refine_partition(*dfs):
-    """ Refine the partition of first DataFrame to include the divisions of the
-    rest
-    Like align_partition but only modifying the first one
-    """
-    m = dfs[0].divisions[-1]
-    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-    divisions = [d for d in divisions if d <= m]
-    if len(divisions) == 1:  # single value for index
-        divisions = (divisions[0], divisions[0])
-    dfs2 = [df.repartition(divisions, force=True) if i == 0 else df for i, df in enumerate(dfs)]
+###############################################################
+# ASOF Join
+###############################################################
 
-    result = list()
-    inds = [-1 for df in dfs2]
-    for d in divisions[:-1]:
-        L = list()
-        for i, df in enumerate(dfs2):
-            if isinstance(df, _Frame):
-                j = inds[i]
-                divs = df.divisions
-                if j < len(divs) - 2 and divs[j+1] == d:
-                    inds[i] += 1
-                    j += 1
-                if j >= 0 and j < len(divs) - 1:
-                    L.append((df._name, j))
-                else:
-                    L.append(None)
-            else:
-                L.append(None)
-        result.append(L)
-    return dfs2[0], tuple(divisions), result
-
-def borrow_rows(curr, prev, next):
-    return curr
-
-def enforce_bounds(df):
-    """ Warning: don't ever use this function. It doesn't produce a valid
-    DataFrame. It's just a helper function for merge_asof.
-    """
-    name = 'enforce_bounds-' + tokenize(df)
-
-    n = len(df.divisions) - 1
-    dsk = dict()
-    for i in range(n):
-        curr = (df._name, i)
-        prev = (df._name, i-1) if i > 0 else None
-        next = (df._name, i+1) if i < n-1 else None
-        dsk[(name, i)] = (apply, borrow_rows, [curr, prev, next])
-
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    return new_dd_object(graph, name, df._meta, df.divisions)
+def merge_asof_padded(left, right, prev, next, **kwargs):
+    return pd.merge_asof(left, right, **kwargs)
 
 def merge_asof_indexed(left, right, **kwargs):
-    """ Asof join two partitioned dataframes along their index """
-    validate_arguments('merge_asof_indexed', left, right)
+    # Enforce distinct indices in right divisions
+    right_divisions = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
+    if len(right_divisions) != len(right.divisions):
+        right = right.repartition(divisions=right_divisions)
+        # I assume this forces right to have nonempty divisions
+        # possibly add force=True?
 
-    original_divisions = left.divisions
-    left, divisions, parts = refine_partition(left, right)
-    divisions, parts = require(divisions, parts, [0])
-    #right = enforce_bounds(right)
+    # Repartition left to include right divisions
+    lower = left.divisions[0]
+    upper = left.divisions[-1]
+    divisions = [d for d in unique(merge_sorted(left.divisions, right.divisions))
+                   if d >= lower and d <= upper]
+    if len(divisions) == 1: # single value for index
+        divisions = (divisions[0], divisions[0])
+    left = left.repartition(divisions=divisions)
 
-    name = 'merge_asof-indexed-' + tokenize(left, right, **kwargs)
+    name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
+    meta = pd.merge_asof(left._meta, right._meta, **kwargs)
 
+    # Pair up parts and merge
     dsk = dict()
-    for i, (a, b) in enumerate(parts):
-        dsk[(name, i)] = (apply, pd.merge_asof, [a, b], kwargs)
+    r = 0
+    for l in range(len(divisions) - 1):
+        # loop invariant: divisions[l] >= right.divisions[r] AND
+        #                 divisions[l+1] <= right.divisions[r+1]
+        while r+1 < len(right.divisions) and right.divisions[r+1] < divisions[l+1]:
+            r += 1
+        if r+1 == len(right.divisions):
+            r -= 1
 
-    meta = pd.merge_asof(left._meta, right._meta, left_index=True, right_index=True)
+        a = (left._name, l)
+        b = (right._name, r)
+        prev = (right._name, r-1) if r > 0 else None
+        next = (right._name, r+1) if r+1 < len(right.divisions) else None
+
+        dsk[(name, l)] = (apply, merge_asof_padded, [a, b, prev, next], kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
     result = new_dd_object(graph, name, meta, divisions)
     return result
-    #return result.repartition(divisions=original_divisions, force=True)
+    # repartition to original divisions?
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
-               right_by=None, suffixes=('_x','_y'), tolerance=None,
-               allow_exact_matches=True, direction='backward',
-               npartitions=None, shuffle=None):
-    if any([on!=None, left_on!=None, right_on!=None, left_index==False,
-            right_index==False, by!=None, left_by!=None, right_by!=None,
-            suffixes!=('_x','_y'), tolerance!=None, allow_exact_matches!=True,
-            direction!='backward', npartitions!=None, shuffle!=None]):
-        raise NotImplementedError("haven't implemented that yet... baby steps")
-
-    validate_arguments('merge_asof', left, right)
-
-    # Both sides are now dd.DataFrame or dd.Series objects
-    merge_indexed_left = left_index and left.known_divisions
-    merge_indexed_right = right_index and right.known_divisions
-    # TODO: handle multi-index case??
-
+               right_by=None, suffixes=('_x', '_y'), tolerance=None,
+               allow_exact_matches=True, direction='backward'):
     # Both sides indexed
-    if merge_indexed_left and merge_indexed_right:
-        return merge_asof_indexed(left, right, on=None, left_on=None,
-                                  right_on=None, left_index=left_index,
+    if left_index and right_index:
+        return merge_asof_indexed(left, right, on=on, left_on=left_on,
+                                  right_on=right_on, left_index=left_index,
                                   right_index=right_index, by=by,
                                   left_by=left_by, right_by=right_by,
                                   suffixes=suffixes, tolerance=tolerance,
                                   allow_exact_matches=allow_exact_matches,
                                   direction=direction)
+
+    raise NotImplementedError("baby steps")
 
 ###############################################################
 # Concat
