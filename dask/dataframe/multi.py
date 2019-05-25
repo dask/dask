@@ -444,7 +444,7 @@ def merge_asof_indexed(left, right, **kwargs):
     left = left.repartition(divisions=divisions)
 
     name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
-    meta = pd.merge_asof(left._meta, right._meta, **kwargs)
+    meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
 
     # Pair up parts and merge
     dsk = dict()
