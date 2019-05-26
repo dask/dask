@@ -124,7 +124,8 @@ class ProgressBar(Callback):
             return
         ndone = len(s['finished'])
         ntasks = sum(len(s[k]) for k in ['ready', 'waiting', 'running']) + ndone
-        self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
+        if ndone < ntasks:
+            self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
 
     def _draw_bar(self, frac, elapsed):
         bar = '#' * int(self._width * frac)

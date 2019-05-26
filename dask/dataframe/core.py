@@ -11,6 +11,8 @@ from pprint import pformat
 import numpy as np
 import pandas as pd
 from pandas.util import cache_readonly, hash_pandas_object
+from pandas.api.types import is_bool_dtype, is_timedelta64_dtype, \
+    is_numeric_dtype, is_datetime64_any_dtype
 from toolz import merge, first, unique, partition_all, remove
 
 try:
@@ -1157,7 +1159,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
-        arr = self.map_partitions(np.array, )
+        arr = self.values
 
         if isinstance(lengths, Sequence):
             lengths = tuple(lengths)
@@ -1238,9 +1240,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         ----------
         window : int, str, offset
            Size of the moving window. This is the number of observations used
-           for calculating the statistic. The window size must not be so large
-           as to span more than one adjacent partition. If using an offset
-           or offset alias like '5D', the data must have a ``DatetimeIndex``
+           for calculating the statistic. When not using a ``DatetimeIndex``,
+           the window size must not be so large as to span more than one
+           adjacent partition. If using an offset or offset alias like '5D',
+           the data must have a ``DatetimeIndex``
 
            .. versionchanged:: 0.15.0
 
@@ -1559,12 +1562,74 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False, percentiles=None, percentiles_method='default'):
-        # currently, only numeric describe is supported
-        num = self._get_numeric_data()
-        if self.ndim == 2 and len(num.columns) == 0:
+    def describe(self,
+                 split_every=False,
+                 percentiles=None,
+                 percentiles_method='default',
+                 include=None,
+                 exclude=None):
+
+        if self._meta.ndim == 1:
+            return self._describe_1d(self, split_every, percentiles, percentiles_method)
+        elif (include is None) and (exclude is None):
+            data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
+
+            # when some numerics/timedeltas are found, by default keep them
+            if len(data.columns) == 0:
+                chosen_columns = self._meta.columns
+            else:
+                # check if there are timedelta or boolean columns
+                bools_and_timedeltas = self._meta.select_dtypes(include=[np.timedelta64, 'bool'])
+                if len(bools_and_timedeltas.columns) == 0:
+                    return self._describe_numeric(self, split_every, percentiles, percentiles_method)
+                else:
+                    chosen_columns = data.columns
+        elif include == 'all':
+            if exclude is not None:
+                msg = "exclude must be None when include is 'all'"
+                raise ValueError(msg)
+            chosen_columns = self._meta.columns
+        else:
+            chosen_columns = self._meta.select_dtypes(include=include, exclude=exclude)
+
+        stats = [self._describe_1d(self[col_idx], split_every,
+                                   percentiles, percentiles_method) for col_idx in chosen_columns]
+        stats_names = [(s._name, 0) for s in stats]
+
+        name = 'describe--' + tokenize(self, split_every)
+        layer = {(name, 0): (methods.describe_aggregate, stats_names)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
+        meta = self._meta_nonempty.describe(include=include, exclude=exclude)
+        return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _describe_1d(self, data, split_every=False,
+                     percentiles=None, percentiles_method='default'):
+        if is_bool_dtype(data._meta):
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
+        elif is_numeric_dtype(data._meta):
+            return self._describe_numeric(
+                data,
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method)
+        elif is_timedelta64_dtype(data._meta):
+            return self._describe_numeric(
+                data.dropna().astype('i8'),
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method,
+                is_timedelta_column=True)
+        else:
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
+
+    def _describe_numeric(self, data, split_every=False, percentiles=None,
+                          percentiles_method='default', is_timedelta_column=False):
+
+        num = data._get_numeric_data()
+
+        if data.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
-        elif self.ndim == 1 and self.dtype == 'object':
+        elif data.ndim == 1 and data.dtype == 'object':
             raise ValueError("Cannot compute ``describe`` on object dtype.")
         if percentiles is None:
             percentiles = [0.25, 0.5, 0.75]
@@ -1583,10 +1648,40 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
-        name = 'describe--' + tokenize(self, split_every)
-        layer = {(name, 0): (methods.describe_aggregate, stats_names)}
+        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+
+        name = 'describe-numeric--' + tokenize(num, split_every)
+        layer = {(name, 0): (methods.describe_numeric_aggregate, stats_names, colname, is_timedelta_column)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = num._meta.describe()
+        meta = num._meta_nonempty.describe()
+        return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _describe_nonnumeric_1d(self, data, split_every=False):
+        vcounts = data.value_counts(split_every)
+        count_nonzero = vcounts[vcounts != 0]
+        count_unique = count_nonzero.size
+
+        stats = [
+            # nunique
+            count_unique,
+            # count
+            data.count(split_every=split_every),
+            # most common value
+            vcounts.head(1, compute=False)
+        ]
+
+        if is_datetime64_any_dtype(data._meta):
+            min_ts = data.dropna().astype('i8').min(split_every=split_every)
+            max_ts = data.dropna().astype('i8').max(split_every=split_every)
+            stats += [min_ts, max_ts]
+
+        stats_names = [(s._name, 0) for s in stats]
+        colname = data._meta.name
+
+        name = 'describe-nonnumeric-1d--' + tokenize(data, split_every)
+        layer = {(name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
+        meta = data._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
@@ -2824,7 +2919,7 @@ class DataFrame(_Frame):
                     callable(v) or pd.api.types.is_scalar(v) or
                     is_index_like(v)):
                 raise TypeError("Column assignment doesn't support type "
-                                "{0}".format(type(v).__name__))
+                                "{0}".format(typename(type(v))))
             if callable(v):
                 kwargs[k] = v(self)
 
@@ -3552,8 +3647,11 @@ def handle_out(out, result):
         if not isinstance(out, Scalar):
             out.divisions = result.divisions
     elif out is not None:
-        msg = ("The out parameter is not fully supported."
-               " Received type %s, expected %s " % ( type(out).__name__, type(result).__name__))
+        msg = (
+            "The out parameter is not fully supported."
+            " Received type %s, expected %s " % (
+                typename(type(out)), typename(type(result)))
+        )
         raise NotImplementedError(msg)
     else:
         return result

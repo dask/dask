@@ -1154,8 +1154,6 @@ def test_groupby_not_supported():
     with pytest.raises(TypeError):
         ddf.groupby('A', sort=False)
     with pytest.raises(TypeError):
-        ddf.groupby('A', group_keys=False)
-    with pytest.raises(TypeError):
         ddf.groupby('A', squeeze=True)
 
 
@@ -1597,3 +1595,19 @@ def test_with_min_count(min_count):
                   ddf.groupby('group').sum(min_count=min_count))
         assert_eq(df.groupby('group').prod(min_count=min_count),
                   ddf.groupby('group').prod(min_count=min_count))
+
+
+def test_groupby_group_keys():
+    df = pd.DataFrame({
+        'a': [1, 2, 2, 3],
+        'b': [2, 3, 4, 5],
+    })
+    ddf = dd.from_pandas(df, npartitions=2).set_index('a')
+    pdf = df.set_index('a')
+
+    func = lambda g: g.copy()
+    expected = pdf.groupby('a').apply(func)
+    assert_eq(expected, ddf.groupby('a').apply(func, meta=expected))
+
+    expected = pdf.groupby('a', group_keys=False).apply(func)
+    assert_eq(expected, ddf.groupby('a', group_keys=False).apply(func, meta=expected))
