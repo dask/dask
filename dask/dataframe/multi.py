@@ -424,9 +424,18 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 ###############################################################
 
 def merge_asof_padded(left, right, prev, next, **kwargs):
-    return pd.merge_asof(left, right, **kwargs)
+    frames = []
+    if not (prev is None or prev.empty):
+        frames.append(prev.tail(1))
+    frames.append(right)
+    if not (next is None or next.empty):
+        frames.append(next.head(1)) # wrong
+    result = pd.merge_asof(left, pd.concat(frames), **kwargs)
+    return result
 
-def merge_asof_indexed(left, right, **kwargs):
+def merge_asof_indexed(left, right, retain_partition=False, **kwargs):
+    original_divisions = left.divisions
+
     # Enforce distinct indices in right divisions
     right_divisions = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
     if len(right_divisions) != len(right.divisions):
@@ -450,8 +459,6 @@ def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     r = 0
     for l in range(len(divisions) - 1):
-        # loop invariant: divisions[l] >= right.divisions[r] AND
-        #                 divisions[l+1] <= right.divisions[r+1]
         while r+1 < len(right.divisions) and right.divisions[r+1] < divisions[l+1]:
             r += 1
         if r+1 == len(right.divisions):
@@ -460,28 +467,34 @@ def merge_asof_indexed(left, right, **kwargs):
         a = (left._name, l)
         b = (right._name, r)
         prev = (right._name, r-1) if r > 0 else None
-        next = (right._name, r+1) if r+1 < len(right.divisions) else None
+        next = (right._name, r+1) if r+2 < len(right.divisions) else None
 
         dsk[(name, l)] = (apply, merge_asof_padded, [a, b, prev, next], kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    result = new_dd_object(graph, name, meta, divisions)
+    result = new_dd_object(graph, name, meta, tuple(divisions))
+    if retain_partition:
+        return result.repartition(original_divisions)
     return result
-    # repartition to original divisions?
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
                right_by=None, suffixes=('_x', '_y'), tolerance=None,
-               allow_exact_matches=True, direction='backward'):
+               allow_exact_matches=True, direction='backward',
+               retain_partition=False):
+    # if not sorted: fail
+
     # Both sides indexed
     if left_index and right_index:
-        return merge_asof_indexed(left, right, on=on, left_on=left_on,
-                                  right_on=right_on, left_index=left_index,
-                                  right_index=right_index, by=by,
-                                  left_by=left_by, right_by=right_by,
-                                  suffixes=suffixes, tolerance=tolerance,
+        return merge_asof_indexed(left, right,
+                                  on=on, left_on=left_on, right_on=right_on,
+                                  left_index=left_index, right_index=right_index,
+                                  by=by, left_by=left_by, right_by=right_by,
+                                  suffixes=suffixes,
+                                  tolerance=tolerance,
                                   allow_exact_matches=allow_exact_matches,
-                                  direction=direction)
+                                  direction=direction,
+                                  retain_partition=retain_partition)
 
     raise NotImplementedError("baby steps")
 
