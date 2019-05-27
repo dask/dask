@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 import weakref
 
 from tornado import gen
@@ -97,6 +98,8 @@ class SpecCluster(Cluster):
     specifications into the same dictionary.
     """
 
+    _instances = weakref.WeakSet()
+
     def __init__(
         self,
         workers=None,
@@ -133,6 +136,7 @@ class SpecCluster(Cluster):
             loop=self.loop, **self.scheduler_spec["options"]
         )
         self.status = "created"
+        self._instances.add(self)
         self._correct_state_waiting = None
 
         if not self.asynchronous:
@@ -248,9 +252,9 @@ class SpecCluster(Cluster):
 
         self.status = "closed"
 
-    def close(self):
+    def close(self, timeout=None):
         with ignoring(RuntimeError):  # loop closed during process shutdown
-            return self.sync(self._close)
+            return self.sync(self._close, callback_timeout=timeout)
 
     def __del__(self):
         if self.status != "closed":
@@ -295,3 +299,10 @@ class SpecCluster(Cluster):
             self.scheduler_address,
             len(self.workers),
         )
+
+
+@atexit.register
+def close_clusters():
+    for cluster in list(SpecCluster._instances):
+        with ignoring(gen.TimeoutError):
+            cluster.close(timeout=10)

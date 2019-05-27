@@ -1,4 +1,5 @@
 from dask.distributed import SpecCluster, Worker, Client, Scheduler
+from distributed.deploy.spec import close_clusters
 from distributed.utils_test import loop  # noqa: F401
 import pytest
 
@@ -113,3 +114,13 @@ async def test_broken_worker():
             pass
 
     assert "Broken" in str(info.value)
+
+
+@pytest.mark.slow
+def test_spec_close_clusters(loop):
+    workers = {0: {"cls": Worker}}
+    scheduler = {"cls": Scheduler, "options": {"port": 0}}
+    cluster = SpecCluster(workers=workers, scheduler=scheduler, loop=loop)
+    assert cluster in SpecCluster._instances
+    close_clusters()
+    assert cluster.status == "closed"
