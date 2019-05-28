@@ -34,7 +34,6 @@ from dask.array.core import (getem, getter, dotmany, concatenate3,
 from dask.blockwise import (make_blockwise_graph as top, broadcast_dimensions)
 from dask.array.utils import assert_eq, same_keys
 
-# temporary until numpy functions migrated
 from numpy import nancumsum, nancumprod
 
 
