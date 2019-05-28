@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from datetime import timedelta
 import functools
 import inspect
 import os
@@ -10,7 +11,7 @@ import re
 from errno import ENOENT
 from contextlib import contextmanager
 from importlib import import_module
-from numbers import Integral
+from numbers import Integral, Number
 from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
@@ -440,7 +441,7 @@ def _skip_doctest(line):
     # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
-        return stripped
+        return line
     elif '>>>' in stripped and '+SKIP' not in stripped:
         if '# doctest:' in line:
             return line + ', +SKIP'
@@ -474,8 +475,15 @@ def extra_titles(doc):
     return '\n'.join(lines)
 
 
-def ignore_warning(doc, cls, name):
-    l1 = "This docstring was copied from %s.%s.%s\n" % (cls.__module__, cls.__name__, name)
+def ignore_warning(doc, cls, name, extra=""):
+    """Expand docstring by adding disclaimer and extra text"""
+    import inspect
+    if inspect.isclass(cls):
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" \
+             "" % (cls.__module__, cls.__name__, name)
+    else:
+        l1 = "This docstring was copied from %s.%s. \n\n" \
+             "" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find('\n\n')
@@ -486,12 +494,16 @@ def ignore_warning(doc, cls, name):
         # Indentation of next line
         indent = re.match(r'\s*', tail).group(0)
         # Insert the warning, indented, with a blank line before and after
-        doc = ''.join([
+        if extra:
+            more = [indent, extra.rstrip('\n') + '\n\n']
+        else:
+            more = []
+        bits = [
             head,
             indent, l1,
-            indent, l2, '\n\n',
-            tail
-        ])
+            indent, l2, '\n\n'
+        ] + more + [tail]
+        doc = ''.join(bits)
 
     return doc
 
@@ -500,14 +512,15 @@ def unsupported_arguments(doc, args):
     """ Mark unsupported arguments with a disclaimer """
     lines = doc.split('\n')
     for arg in args:
-        subset = [(i, line) for i, line in enumerate(lines) if re.match(r'^\s*' + arg + ' ?:', line)]
+        subset = [(i, line) for i, line in enumerate(lines)
+                  if re.match(r'^\s*' + arg + ' ?:', line)]
         if len(subset) == 1:
             [(i, line)] = subset
             lines[i] = line + "  (Not supported in Dask)"
     return '\n'.join(lines)
 
 
-def _derived_from(cls, method, ua_args=[]):
+def _derived_from(cls, method, ua_args=[], extra=""):
     """ Helper function for derived_from to ease testing """
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
@@ -518,7 +531,9 @@ def _derived_from(cls, method, ua_args=[]):
 
     # Insert disclaimer that this is a copied docstring
     if doc:
-        doc = ignore_warning(doc, cls, method.__name__)
+        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+    elif extra:
+        doc += extra.rstrip('\n') + '\n\n'
 
     # Mark unsupported arguments
     try:
@@ -541,6 +556,11 @@ def _derived_from(cls, method, ua_args=[]):
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
 
+    The output structure will be: top line of docstring, disclaimer about this
+    being auto-derived, any extra text associated with the method being patched,
+    the body of the docstring and finally, the list of keywords that exist in
+    the original method but not in the dask version.
+
     Parameters
     ----------
     original_klass: type
@@ -553,7 +573,10 @@ def derived_from(original_klass, version=None, ua_args=[]):
     """
     def wrapper(method):
         try:
-            method.__doc__ = _derived_from(original_klass, method, ua_args=ua_args)
+            extra = (getattr(method, '__doc__', None) or "")
+            method.__doc__ = _derived_from(
+                original_klass, method, ua_args=ua_args, extra=extra
+            )
             return method
 
         except AttributeError:
@@ -968,6 +991,31 @@ def is_arraylike(x):
     )
 
 
+def is_dataframe_like(df):
+    """ Looks like a Pandas DataFrame """
+    typ = type(df)
+    return (all(hasattr(typ, name)
+                for name in ('groupby', 'head', 'merge', 'mean')) and
+            all(hasattr(df, name) for name in ('dtypes',)) and not
+            any(hasattr(typ, name)
+                for name in ('value_counts', 'dtype')))
+
+
+def is_series_like(s):
+    """ Looks like a Pandas Series """
+    typ = type(s)
+    return (all(hasattr(typ, name) for name in ('groupby', 'head', 'mean')) and
+            all(hasattr(s, name) for name in ('dtype', 'name')) and
+            'index' not in typ.__name__.lower())
+
+
+def is_index_like(s):
+    """ Looks like a Pandas Index """
+    typ = type(s)
+    return (all(hasattr(s, name) for name in ('name', 'dtype'))
+            and 'index' in typ.__name__.lower())
+
+
 def natural_sort_key(s):
     """
     Sorting `key` function for performing a natural sort on a collection of
@@ -1074,6 +1122,119 @@ byte_sizes = {
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
 byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def format_time(n):
+    """ format integers as time
+
+    >>> format_time(1)
+    '1.00 s'
+    >>> format_time(0.001234)
+    '1.23 ms'
+    >>> format_time(0.00012345)
+    '123.45 us'
+    >>> format_time(123.456)
+    '123.46 s'
+    """
+    if n >= 1:
+        return "%.2f s" % n
+    if n >= 1e-3:
+        return "%.2f ms" % (n * 1e3)
+    return "%.2f us" % (n * 1e6)
+
+
+def format_bytes(n):
+    """ Format bytes as text
+
+    >>> format_bytes(1)
+    '1 B'
+    >>> format_bytes(1234)
+    '1.23 kB'
+    >>> format_bytes(12345678)
+    '12.35 MB'
+    >>> format_bytes(1234567890)
+    '1.23 GB'
+    >>> format_bytes(1234567890000)
+    '1.23 TB'
+    >>> format_bytes(1234567890000000)
+    '1.23 PB'
+    """
+    if n > 1e15:
+        return "%0.2f PB" % (n / 1e15)
+    if n > 1e12:
+        return "%0.2f TB" % (n / 1e12)
+    if n > 1e9:
+        return "%0.2f GB" % (n / 1e9)
+    if n > 1e6:
+        return "%0.2f MB" % (n / 1e6)
+    if n > 1e3:
+        return "%0.2f kB" % (n / 1000)
+    return "%d B" % n
+
+
+timedelta_sizes = {
+    "s": 1,
+    "ms": 1e-3,
+    "us": 1e-6,
+    "ns": 1e-9,
+    "m": 60,
+    "h": 3600,
+    "d": 3600 * 24,
+}
+
+tds2 = {
+    "second": 1,
+    "minute": 60,
+    "hour": 60 * 60,
+    "day": 60 * 60 * 24,
+    "millisecond": 1e-3,
+    "microsecond": 1e-6,
+    "nanosecond": 1e-9,
+}
+tds2.update({k + "s": v for k, v in tds2.items()})
+timedelta_sizes.update(tds2)
+timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
+
+
+def parse_timedelta(s, default="seconds"):
+    """ Parse timedelta string to number of seconds
+
+    Examples
+    --------
+    >>> parse_timedelta('3s')
+    3
+    >>> parse_timedelta('3.5 seconds')
+    3.5
+    >>> parse_timedelta('300ms')
+    0.3
+    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
+    3
+    """
+    if isinstance(s, timedelta):
+        s = s.total_seconds()
+        return int(s) if int(s) == s else s
+    if isinstance(s, Number):
+        s = str(s)
+    s = s.replace(" ", "")
+    if not s[0].isdigit():
+        s = "1" + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:] or default
+
+    n = float(prefix)
+
+    multiplier = timedelta_sizes[suffix.lower()]
+
+    result = n * multiplier
+    if int(result) == result:
+        result = int(result)
+    return result
 
 
 def has_keyword(func, keyword):

@@ -26,6 +26,13 @@ def test_array():
     assert isinstance(y, da.Array)
 
 
+@pytest.mark.skipif(PY2, reason="Docstrings stripped in optimised Py2")
+def test_derived_docstrings():
+    assert ("This docstring was copied from numpy.array"
+            in da.routines.array.__doc__)
+    assert "Create an array." in da.routines.array.__doc__
+
+
 @pytest.mark.parametrize("funcname", [
     "atleast_1d",
     "atleast_2d",
@@ -570,10 +577,6 @@ def test_histogram_extra_args_and_shapes():
 
     for v, bins, w in data:
         # density
-        assert_eq(da.histogram(v, bins=bins, normed=True)[0],
-                  np.histogram(v, bins=bins, normed=True)[0])
-
-        # normed
         assert_eq(da.histogram(v, bins=bins, density=True)[0],
                   np.histogram(v, bins=bins, density=True)[0])
 
@@ -583,6 +586,15 @@ def test_histogram_extra_args_and_shapes():
 
         assert_eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
+
+
+def test_histogram_normed_deprecation():
+    x = da.arange(10)
+    with pytest.raises(ValueError) as info:
+        da.histogram(x, bins=[1, 2, 3], normed=True)
+
+    assert 'density' in str(info.value)
+    assert 'deprecated' in str(info.value).lower()
 
 
 @pytest.mark.parametrize("bins, hist_range", [
