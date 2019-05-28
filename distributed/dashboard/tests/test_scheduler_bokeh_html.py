@@ -13,14 +13,13 @@ from tornado.httpclient import AsyncHTTPClient
 
 from dask.sizeof import sizeof
 from distributed.utils_test import gen_cluster, slowinc, inc
-from distributed.bokeh.scheduler import BokehScheduler
-from distributed.bokeh.worker import BokehWorker
+from distributed.dashboard import BokehScheduler, BokehWorker
 
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}},
-    worker_kwargs={"services": {"bokeh": BokehWorker}},
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    worker_kwargs={"services": {"dashboard": BokehWorker}},
 )
 def test_connect(c, s, a, b):
     future = c.submit(lambda x: x + 1, 1)
@@ -41,7 +40,7 @@ def test_connect(c, s, a, b):
         "individual-plots.json",
     ]:
         response = yield http_client.fetch(
-            "http://localhost:%d/%s" % (s.services["bokeh"].port, suffix)
+            "http://localhost:%d/%s" % (s.services["dashboard"].port, suffix)
         )
         assert response.code == 200
         body = response.body.decode()
@@ -54,13 +53,15 @@ def test_connect(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={"services": {("bokeh", 0): (BokehScheduler, {"prefix": "/foo"})}},
+    scheduler_kwargs={
+        "services": {("dashboard", 0): (BokehScheduler, {"prefix": "/foo"})}
+    },
 )
 def test_prefix(c, s, a, b):
     http_client = AsyncHTTPClient()
     for suffix in ["foo/info/main/workers.html", "foo/json/index.html", "foo/system"]:
         response = yield http_client.fetch(
-            "http://localhost:%d/%s" % (s.services["bokeh"].port, suffix)
+            "http://localhost:%d/%s" % (s.services["dashboard"].port, suffix)
         )
         assert response.code == 200
         body = response.body.decode()
@@ -73,7 +74,7 @@ def test_prefix(c, s, a, b):
 @gen_cluster(
     client=True,
     check_new_threads=False,
-    scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}},
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
 )
 def test_prometheus(c, s, a, b):
     pytest.importorskip("prometheus_client")
@@ -85,7 +86,7 @@ def test_prometheus(c, s, a, b):
     # prometheus_client errors
     for _ in range(2):
         response = yield http_client.fetch(
-            "http://localhost:%d/metrics" % s.services["bokeh"].port
+            "http://localhost:%d/metrics" % s.services["dashboard"].port
         )
         assert response.code == 200
         assert response.headers["Content-Type"] == "text/plain; version=0.0.4"
@@ -98,13 +99,13 @@ def test_prometheus(c, s, a, b):
 @gen_cluster(
     client=True,
     check_new_threads=False,
-    scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}},
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
 )
 def test_health(c, s, a, b):
     http_client = AsyncHTTPClient()
 
     response = yield http_client.fetch(
-        "http://localhost:%d/health" % s.services["bokeh"].port
+        "http://localhost:%d/health" % s.services["dashboard"].port
     )
     assert response.code == 200
     assert response.headers["Content-Type"] == "text/plain"
@@ -113,7 +114,9 @@ def test_health(c, s, a, b):
     assert txt == "ok"
 
 
-@gen_cluster(client=True, scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}})
+@gen_cluster(
+    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
+)
 def test_task_page(c, s, a, b):
     future = c.submit(lambda x: x + 1, 1, workers=a.address)
     x = c.submit(inc, 1)
@@ -122,7 +125,7 @@ def test_task_page(c, s, a, b):
 
     "info/task/" + url_escape(future.key) + ".html",
     response = yield http_client.fetch(
-        "http://localhost:%d/info/task/" % s.services["bokeh"].port
+        "http://localhost:%d/info/task/" % s.services["dashboard"].port
         + url_escape(future.key)
         + ".html"
     )

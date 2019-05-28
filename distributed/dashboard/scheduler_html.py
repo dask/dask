@@ -177,7 +177,7 @@ class IndexJSON(RequestHandler):
 
 class IndividualPlots(RequestHandler):
     def get(self):
-        bokeh_server = self.server.services["bokeh"]
+        bokeh_server = self.server.services["dashboard"]
         result = {
             uri.strip("/").replace("-", " ").title(): uri
             for uri in bokeh_server.apps

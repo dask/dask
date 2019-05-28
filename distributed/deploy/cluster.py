@@ -88,7 +88,7 @@ class Cluster(object):
     def dashboard_link(self):
         template = dask.config.get("distributed.dashboard.link")
         host = self.scheduler.address.split("://")[1].split(":")[0]
-        port = self.scheduler.services["bokeh"].port
+        port = self.scheduler.services["dashboard"].port
         return template.format(host=host, port=port, **os.environ)
 
     def scale(self, n):
@@ -165,7 +165,7 @@ class Cluster(object):
 
         layout = Layout(width="150px")
 
-        if "bokeh" in self.scheduler.services:
+        if "dashboard" in self.scheduler.services:
             link = self.dashboard_link
             link = '<p><b>Dashboard: </b><a href="%s" target="_blank">%s</a></p>\n' % (
                 link,

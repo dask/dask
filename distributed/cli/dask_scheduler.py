@@ -68,27 +68,23 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     help="Address on which to listen for diagnostics dashboard",
 )
 @click.option(
-    "--bokeh/--no-bokeh",
-    "_bokeh",
+    "--dashboard/--no-dashboard",
+    "dashboard",
     default=True,
     show_default=True,
     required=False,
-    help="Launch Bokeh Web UI",
+    help="Launch the Dashboard",
 )
 @click.option("--show/--no-show", default=False, help="Show web UI")
 @click.option(
-    "--bokeh-whitelist",
-    default=None,
-    multiple=True,
-    help="IP addresses to whitelist for bokeh.",
+    "--dashboard-prefix", type=str, default=None, help="Prefix for the dashboard app"
 )
-@click.option("--bokeh-prefix", type=str, default=None, help="Prefix for the bokeh app")
 @click.option(
     "--use-xheaders",
     type=bool,
     default=False,
     show_default=True,
-    help="User xheaders in bokeh app for ssl termination in header",
+    help="User xheaders in dashboard app for ssl termination in header",
 )
 @click.option("--pid-file", type=str, default="", help="File to write the process PID")
 @click.option(
@@ -119,9 +115,8 @@ def main(
     port,
     bokeh_port,
     show,
-    _bokeh,
-    bokeh_whitelist,
-    bokeh_prefix,
+    dashboard,
+    dashboard_prefix,
     use_xheaders,
     pid_file,
     scheduler_file,
@@ -195,8 +190,8 @@ def main(
         host=host,
         port=port,
         interface=interface,
-        dashboard_address=dashboard_address if _bokeh else None,
-        service_kwargs={"bokeh": {"prefix": bokeh_prefix}},
+        dashboard_address=dashboard_address if dashboard else None,
+        service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
     )
     scheduler.start()
     if not preload:

@@ -1174,7 +1174,7 @@ def test_correct_bad_time_estimate(c, s, *workers):
 @gen_test()
 def test_service_hosts():
     pytest.importorskip("bokeh")
-    from distributed.bokeh.scheduler import BokehScheduler
+    from distributed.dashboard import BokehScheduler
 
     port = 0
     for url, expected in [
@@ -1182,12 +1182,12 @@ def test_service_hosts():
         ("tcp://127.0.0.1", "127.0.0.1"),
         ("tcp://127.0.0.1:38275", "127.0.0.1"),
     ]:
-        services = {("bokeh", port): BokehScheduler}
+        services = {("dashboard", port): BokehScheduler}
 
         s = Scheduler(services=services)
         yield s.start(url)
 
-        sock = first(s.services["bokeh"].server._http._sockets.values())
+        sock = first(s.services["dashboard"].server._http._sockets.values())
         if isinstance(expected, tuple):
             assert sock.getsockname()[0] in expected
         else:
@@ -1196,12 +1196,12 @@ def test_service_hosts():
 
     port = ("127.0.0.1", 0)
     for url in ["tcp://0.0.0.0", "tcp://127.0.0.1", "tcp://127.0.0.1:38275"]:
-        services = {("bokeh", port): BokehScheduler}
+        services = {("dashboard", port): BokehScheduler}
 
         s = Scheduler(services=services)
         yield s.start(url)
 
-        sock = first(s.services["bokeh"].server._http._sockets.values())
+        sock = first(s.services["dashboard"].server._http._sockets.values())
         assert sock.getsockname()[0] == "127.0.0.1"
         yield s.close()
 
@@ -1566,9 +1566,9 @@ def test_host_address():
 def test_dashboard_address():
     pytest.importorskip("bokeh")
     s = yield Scheduler(dashboard_address="127.0.0.1:8901", port=0)
-    assert s.services["bokeh"].port == 8901
+    assert s.services["dashboard"].port == 8901
     yield s.close()
 
     s = yield Scheduler(dashboard_address="127.0.0.1", port=0)
-    assert s.services["bokeh"].port
+    assert s.services["dashboard"].port
     yield s.close()

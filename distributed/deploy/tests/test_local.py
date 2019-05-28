@@ -198,8 +198,8 @@ def test_duplicate_clients():
     with pytest.warns(Exception) as info:
         c2 = yield Client(processes=False, silence_logs=False, dashboard_address=9876)
 
-    assert "bokeh" in c1.cluster.scheduler.services
-    assert "bokeh" in c2.cluster.scheduler.services
+    assert "dashboard" in c1.cluster.scheduler.services
+    assert "dashboard" in c2.cluster.scheduler.services
 
     assert any(
         all(
@@ -341,7 +341,7 @@ def test_bokeh(loop, processes):
         processes=processes,
         dashboard_address=0,
     ) as c:
-        bokeh_port = c.scheduler.services["bokeh"].port
+        bokeh_port = c.scheduler.services["dashboard"].port
         url = "http://127.0.0.1:%d/status/" % bokeh_port
         start = time()
         while True:
@@ -485,10 +485,10 @@ def test_bokeh_kwargs(loop):
         silence_logs=False,
         loop=loop,
         dashboard_address=0,
-        service_kwargs={"bokeh": {"prefix": "/foo"}},
+        service_kwargs={"dashboard": {"prefix": "/foo"}},
     ) as c:
 
-        bs = c.scheduler.services["bokeh"]
+        bs = c.scheduler.services["dashboard"]
         assert bs.prefix == "/foo"
 
 

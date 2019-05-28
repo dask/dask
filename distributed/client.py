@@ -812,9 +812,9 @@ class Client(Node):
             text = (
                 "<h3>Client</h3>\n" "<ul>\n" "  <li><b>Scheduler: not connected</b>\n"
             )
-        if info and "bokeh" in info["services"]:
+        if info and "dashboard" in info["services"]:
             protocol, rest = scheduler.address.split("://")
-            port = info["services"]["bokeh"]
+            port = info["services"]["dashboard"]
             if protocol == "inproc":
                 host = "localhost"
             else:
@@ -3852,7 +3852,7 @@ class Client(Node):
             from .diagnostics.task_stream import rectangles
 
             rects = rectangles(msgs)
-            from .bokeh.components import task_stream_figure
+            from .dashboard.components import task_stream_figure
 
             source, figure = task_stream_figure(sizing_mode="stretch_both")
             source.data.update(rects)

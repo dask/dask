@@ -3506,7 +3506,7 @@ def test_reconnect(loop):
         "127.0.0.1",
         "--port",
         "9393",
-        "--no-bokeh",
+        "--no-dashboard",
     ]
     with popen(scheduler_cli) as s:
         c = Client("127.0.0.1:9393", loop=loop)
@@ -5221,12 +5221,11 @@ def test_quiet_scheduler_loss(c, s):
 @pytest.mark.skipif("USER" not in os.environ, reason="no USER env variable")
 def test_diagnostics_link_env_variable(loop):
     pytest.importorskip("bokeh")
-    from distributed.bokeh.scheduler import BokehScheduler
+    from distributed.dashboard import BokehScheduler
 
-    with cluster(scheduler_kwargs={"services": {("bokeh", 12355): BokehScheduler}}) as (
-        s,
-        [a, b],
-    ):
+    with cluster(
+        scheduler_kwargs={"services": {("dashboard", 12355): BokehScheduler}}
+    ) as (s, [a, b]):
         with Client(s["address"], loop=loop) as c:
             with dask.config.set(
                 {"distributed.dashboard.link": "http://foo-{USER}:{port}/status"}

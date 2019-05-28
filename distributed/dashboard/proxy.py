@@ -124,7 +124,7 @@ def check_worker_dashboard_exits(scheduler, worker):
     addr, port = worker.split(":")
     workers = list(scheduler.workers.values())
     for w in workers:
-        bokeh_port = w.services.get("bokeh", "")
+        bokeh_port = w.services.get("dashboard", "")
         if addr == w.host and port == str(bokeh_port):
             return True
     return False

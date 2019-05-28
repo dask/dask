@@ -14,7 +14,7 @@ from tornado.httpclient import AsyncHTTPClient
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
-from distributed.bokeh.worker import (
+from distributed.dashboard.worker import (
     BokehWorker,
     StateTable,
     CrossFilter,
@@ -29,10 +29,10 @@ from distributed.bokeh.worker import (
 @pytest.mark.skipif(
     sys.version_info[0] == 2, reason="https://github.com/bokeh/bokeh/issues/5494"
 )
-@gen_cluster(client=True, worker_kwargs={"services": {("bokeh", 0): BokehWorker}})
+@gen_cluster(client=True, worker_kwargs={"services": {("dashboard", 0): BokehWorker}})
 def test_simple(c, s, a, b):
-    assert s.workers[a.address].services == {"bokeh": a.services["bokeh"].port}
-    assert s.workers[b.address].services == {"bokeh": b.services["bokeh"].port}
+    assert s.workers[a.address].services == {"dashboard": a.services["dashboard"].port}
+    assert s.workers[b.address].services == {"dashboard": b.services["dashboard"].port}
 
     future = c.submit(sleep, 1)
     yield gen.sleep(0.1)
@@ -40,15 +40,17 @@ def test_simple(c, s, a, b):
     http_client = AsyncHTTPClient()
     for suffix in ["main", "crossfilter", "system"]:
         response = yield http_client.fetch(
-            "http://localhost:%d/%s" % (a.services["bokeh"].port, suffix)
+            "http://localhost:%d/%s" % (a.services["dashboard"].port, suffix)
         )
         assert "bokeh" in response.body.decode().lower()
 
 
-@gen_cluster(client=True, worker_kwargs={"services": {("bokeh", 0): (BokehWorker, {})}})
+@gen_cluster(
+    client=True, worker_kwargs={"services": {("dashboard", 0): (BokehWorker, {})}}
+)
 def test_services_kwargs(c, s, a, b):
-    assert s.workers[a.address].services == {"bokeh": a.services["bokeh"].port}
-    assert isinstance(a.services["bokeh"], BokehWorker)
+    assert s.workers[a.address].services == {"dashboard": a.services["dashboard"].port}
+    assert isinstance(a.services["dashboard"], BokehWorker)
 
 
 @gen_cluster(client=True)
@@ -139,15 +141,15 @@ def test_CommunicatingStream(c, s, a, b):
 @gen_cluster(
     client=True,
     check_new_threads=False,
-    worker_kwargs={"services": {("bokeh", 0): BokehWorker}},
+    worker_kwargs={"services": {("dashboard", 0): BokehWorker}},
 )
 def test_prometheus(c, s, a, b):
     pytest.importorskip("prometheus_client")
-    assert s.workers[a.address].services == {"bokeh": a.services["bokeh"].port}
+    assert s.workers[a.address].services == {"dashboard": a.services["dashboard"].port}
 
     http_client = AsyncHTTPClient()
     for suffix in ["metrics"]:
         response = yield http_client.fetch(
-            "http://localhost:%d/%s" % (a.services["bokeh"].port, suffix)
+            "http://localhost:%d/%s" % (a.services["dashboard"].port, suffix)
         )
         assert response.code == 200

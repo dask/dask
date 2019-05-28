@@ -546,13 +546,13 @@ class Worker(ServerNode):
 
         if dashboard_address is not None:
             try:
-                from distributed.bokeh.worker import BokehWorker
+                from distributed.dashboard import BokehWorker
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
-                self.service_specs[("bokeh", dashboard_address)] = (
+                self.service_specs[("dashboard", dashboard_address)] = (
                     BokehWorker,
-                    (service_kwargs or {}).get("bokeh", {}),
+                    (service_kwargs or {}).get("dashboard", {}),
                 )
 
         self.metrics = dict(metrics) if metrics else {}

@@ -17,8 +17,8 @@ from distributed.utils import tokey
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, slowinc, div
-from distributed.bokeh.worker import Counters, BokehWorker
-from distributed.bokeh.scheduler import (
+from distributed.dashboard.worker import Counters, BokehWorker
+from distributed.dashboard.scheduler import (
     BokehScheduler,
     SystemMonitor,
     Occupancy,
@@ -36,7 +36,7 @@ from distributed.bokeh.scheduler import (
     ProfileServer,
 )
 
-from distributed.bokeh import scheduler
+from distributed.dashboard import scheduler
 
 scheduler.PROFILING = False
 
@@ -44,10 +44,12 @@ scheduler.PROFILING = False
 @pytest.mark.skipif(
     sys.version_info[0] == 2, reason="https://github.com/bokeh/bokeh/issues/5494"
 )
-@gen_cluster(client=True, scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}})
+@gen_cluster(
+    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
+)
 def test_simple(c, s, a, b):
-    assert isinstance(s.services["bokeh"], BokehScheduler)
-    port = s.services["bokeh"].port
+    assert isinstance(s.services["dashboard"], BokehScheduler)
+    port = s.services["dashboard"].port
 
     future = c.submit(sleep, 1)
     yield gen.sleep(0.1)
@@ -80,7 +82,7 @@ def test_simple(c, s, a, b):
     assert response
 
 
-@gen_cluster(client=True, worker_kwargs=dict(services={"bokeh": BokehWorker}))
+@gen_cluster(client=True, worker_kwargs=dict(services={"dashboard": BokehWorker}))
 def test_basic(c, s, a, b):
     for component in [SystemMonitor, Occupancy, StealingTimeSeries]:
         ss = component(s)
@@ -573,11 +575,13 @@ def test_profile_server(c, s, a, b):
         assert time() < start + 2
 
 
-@gen_cluster(client=True, scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}})
+@gen_cluster(
+    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
+)
 def test_root_redirect(c, s, a, b):
     http_client = AsyncHTTPClient()
     response = yield http_client.fetch(
-        "http://localhost:%d/" % s.services["bokeh"].port
+        "http://localhost:%d/" % s.services["dashboard"].port
     )
     assert response.code == 200
     assert "/status" in response.effective_url
@@ -585,8 +589,8 @@ def test_root_redirect(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={"services": {("bokeh", 0): BokehScheduler}},
-    worker_kwargs={"services": {"bokeh": BokehWorker}},
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    worker_kwargs={"services": {"dashboard": BokehWorker}},
     timeout=180,
 )
 def test_proxy_to_workers(c, s, a, b):
@@ -597,7 +601,7 @@ def test_proxy_to_workers(c, s, a, b):
     except ImportError:
         proxy_exists = False
 
-    dashboard_port = s.services["bokeh"].port
+    dashboard_port = s.services["dashboard"].port
     http_client = AsyncHTTPClient()
     response = yield http_client.fetch("http://localhost:%d/" % dashboard_port)
     assert response.code == 200
@@ -605,7 +609,7 @@ def test_proxy_to_workers(c, s, a, b):
 
     for w in [a, b]:
         host = w.ip
-        port = w.service_ports["bokeh"]
+        port = w.service_ports["dashboard"]
         proxy_url = "http://localhost:%d/proxy/%s/%s/status" % (
             dashboard_port,
             port,

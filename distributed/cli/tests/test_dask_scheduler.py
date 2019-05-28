@@ -26,7 +26,7 @@ from distributed.metrics import time
 
 
 def test_defaults(loop):
-    with popen(["dask-scheduler", "--no-bokeh"]) as proc:
+    with popen(["dask-scheduler", "--no-dashboard"]) as proc:
 
         @gen.coroutine
         def f():
@@ -43,7 +43,7 @@ def test_defaults(loop):
 
 
 def test_hostport(loop):
-    with popen(["dask-scheduler", "--no-bokeh", "--host", "127.0.0.1:8978"]):
+    with popen(["dask-scheduler", "--no-dashboard", "--host", "127.0.0.1:8978"]):
 
         @gen.coroutine
         def f():
@@ -57,18 +57,18 @@ def test_hostport(loop):
             c.sync(f)
 
 
-def test_no_bokeh(loop):
+def test_no_dashboard(loop):
     pytest.importorskip("bokeh")
-    with popen(["dask-scheduler", "--no-bokeh"]) as proc:
+    with popen(["dask-scheduler", "--no-dashboard"]) as proc:
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
             for i in range(3):
                 line = proc.stderr.readline()
-                assert b"bokeh" not in line.lower()
+                assert b"dashboard" not in line.lower()
             with pytest.raises(Exception):
                 requests.get("http://127.0.0.1:8787/status/")
 
 
-def test_bokeh(loop):
+def test_dashboard(loop):
     pytest.importorskip("bokeh")
 
     with popen(["dask-scheduler"]) as proc:
@@ -97,7 +97,7 @@ def test_bokeh(loop):
         requests.get("http://127.0.0.1:8787/status/")
 
 
-def test_bokeh_non_standard_ports(loop):
+def test_dashboard_non_standard_ports(loop):
     pytest.importorskip("bokeh")
 
     with popen(
@@ -122,20 +122,12 @@ def test_bokeh_non_standard_ports(loop):
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
 )
-def test_bokeh_whitelist(loop):
+def test_dashboard_whitelist(loop):
     pytest.importorskip("bokeh")
     with pytest.raises(Exception):
         requests.get("http://localhost:8787/status/").ok
 
-    with popen(
-        [
-            "dask-scheduler",
-            "--bokeh-whitelist",
-            "127.0.0.2:8787",
-            "--bokeh-whitelist",
-            "127.0.0.3:8787",
-        ]
-    ) as proc:
+    with popen(["dask-scheduler"]) as proc:
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
             pass
 
@@ -153,9 +145,9 @@ def test_bokeh_whitelist(loop):
 
 
 def test_multiple_workers(loop):
-    with popen(["dask-scheduler", "--no-bokeh"]) as s:
-        with popen(["dask-worker", "localhost:8786", "--no-bokeh"]) as a:
-            with popen(["dask-worker", "localhost:8786", "--no-bokeh"]) as b:
+    with popen(["dask-scheduler", "--no-dashboard"]) as s:
+        with popen(["dask-worker", "localhost:8786", "--no-dashboard"]) as a:
+            with popen(["dask-worker", "localhost:8786", "--no-dashboard"]) as b:
                 with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
                     start = time()
                     while len(c.ncores()) < 2:
@@ -180,9 +172,9 @@ def test_interface(loop):
             "Available interfaces are: %s." % (if_names,)
         )
 
-    with popen(["dask-scheduler", "--no-bokeh", "--interface", if_name]) as s:
+    with popen(["dask-scheduler", "--no-dashboard", "--interface", if_name]) as s:
         with popen(
-            ["dask-worker", "127.0.0.1:8786", "--no-bokeh", "--interface", if_name]
+            ["dask-worker", "127.0.0.1:8786", "--no-dashboard", "--interface", if_name]
         ) as a:
             with Client("tcp://127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
                 start = time()
@@ -217,12 +209,12 @@ def test_pid_file(loop):
             assert proc.pid == pid
 
     with tmpfile() as s:
-        with popen(["dask-scheduler", "--pid-file", s, "--no-bokeh"]) as sched:
+        with popen(["dask-scheduler", "--pid-file", s, "--no-dashboard"]) as sched:
             check_pidfile(sched, s)
 
         with tmpfile() as w:
             with popen(
-                ["dask-worker", "127.0.0.1:8786", "--pid-file", w, "--no-bokeh"]
+                ["dask-worker", "127.0.0.1:8786", "--pid-file", w, "--no-dashboard"]
             ) as worker:
                 check_pidfile(worker, w)
 
@@ -230,21 +222,21 @@ def test_pid_file(loop):
 def test_scheduler_port_zero(loop):
     with tmpfile() as fn:
         with popen(
-            ["dask-scheduler", "--no-bokeh", "--scheduler-file", fn, "--port", "0"]
+            ["dask-scheduler", "--no-dashboard", "--scheduler-file", fn, "--port", "0"]
         ) as sched:
             with Client(scheduler_file=fn, loop=loop) as c:
                 assert c.scheduler.port
                 assert c.scheduler.port != 8786
 
 
-def test_bokeh_port_zero(loop):
+def test_dashboard_port_zero(loop):
     pytest.importorskip("bokeh")
     with tmpfile() as fn:
         with popen(["dask-scheduler", "--dashboard-address", ":0"]) as proc:
             count = 0
             while count < 1:
                 line = proc.stderr.readline()
-                if b"bokeh" in line.lower() or b"web" in line.lower():
+                if b"dashboard" in line.lower():
                     sleep(0.01)
                     count += 1
                     assert b":0" not in line

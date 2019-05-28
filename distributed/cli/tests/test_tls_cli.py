@@ -33,9 +33,9 @@ def wait_for_cores(c, ncores=1):
 
 
 def test_basic(loop):
-    with popen(["dask-scheduler", "--no-bokeh"] + tls_args) as s:
+    with popen(["dask-scheduler", "--no-dashboard"] + tls_args) as s:
         with popen(
-            ["dask-worker", "--no-bokeh", "tls://127.0.0.1:8786"] + tls_args
+            ["dask-worker", "--no-dashboard", "tls://127.0.0.1:8786"] + tls_args
         ) as w:
             with Client(
                 "tls://127.0.0.1:8786", loop=loop, security=tls_security()
@@ -44,9 +44,10 @@ def test_basic(loop):
 
 
 def test_nanny(loop):
-    with popen(["dask-scheduler", "--no-bokeh"] + tls_args) as s:
+    with popen(["dask-scheduler", "--no-dashboard"] + tls_args) as s:
         with popen(
-            ["dask-worker", "--no-bokeh", "--nanny", "tls://127.0.0.1:8786"] + tls_args
+            ["dask-worker", "--no-dashboard", "--nanny", "tls://127.0.0.1:8786"]
+            + tls_args
         ) as w:
             with Client(
                 "tls://127.0.0.1:8786", loop=loop, security=tls_security()
@@ -55,9 +56,9 @@ def test_nanny(loop):
 
 
 def test_separate_key_cert(loop):
-    with popen(["dask-scheduler", "--no-bokeh"] + tls_args_2) as s:
+    with popen(["dask-scheduler", "--no-dashboard"] + tls_args_2) as s:
         with popen(
-            ["dask-worker", "--no-bokeh", "tls://127.0.0.1:8786"] + tls_args_2
+            ["dask-worker", "--no-dashboard", "tls://127.0.0.1:8786"] + tls_args_2
         ) as w:
             with Client(
                 "tls://127.0.0.1:8786", loop=loop, security=tls_security()
@@ -67,8 +68,8 @@ def test_separate_key_cert(loop):
 
 def test_use_config_file(loop):
     with new_config_file(tls_only_config()):
-        with popen(["dask-scheduler", "--no-bokeh", "--host", "tls://"]) as s:
-            with popen(["dask-worker", "--no-bokeh", "tls://127.0.0.1:8786"]) as w:
+        with popen(["dask-scheduler", "--no-dashboard", "--host", "tls://"]) as s:
+            with popen(["dask-worker", "--no-dashboard", "tls://127.0.0.1:8786"]) as w:
                 with Client(
                     "tls://127.0.0.1:8786", loop=loop, security=tls_security()
                 ) as c:

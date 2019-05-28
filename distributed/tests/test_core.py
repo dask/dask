@@ -324,7 +324,10 @@ def check_rpc_message_lifetime(*listen_args):
     obj = CountedObject()
     assert CountedObject.n_instances == 1
     del obj
-    assert CountedObject.n_instances == 0
+    start = time()
+    while CountedObject.n_instances != 0:
+        yield gen.sleep(0.01)
+        assert time() < start + 1
 
     with rpc(server.address) as remote:
         obj = CountedObject()

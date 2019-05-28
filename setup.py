@@ -2,46 +2,51 @@
 
 import os
 from setuptools import setup
-import sys
 import versioneer
 
-requires = open('requirements.txt').read().strip().split('\n')
+requires = open("requirements.txt").read().strip().split("\n")
 install_requires = []
 extras_require = {}
 for r in requires:
-    if ';' in r:
+    if ";" in r:
         # requirements.txt conditional dependencies need to be reformatted for wheels
         # to the form: `'[extra_name]:condition' : ['requirements']`
-        req, cond = r.split(';', 1)
-        cond = ':' + cond
+        req, cond = r.split(";", 1)
+        cond = ":" + cond
         cond_reqs = extras_require.setdefault(cond, [])
         cond_reqs.append(req)
     else:
         install_requires.append(r)
 
-setup(name='distributed',
-      version=versioneer.get_version(),
-      cmdclass=versioneer.get_cmdclass(),
-      description='Distributed scheduler for Dask',
-      url='https://distributed.readthedocs.io/en/latest/',
-      maintainer='Matthew Rocklin',
-      maintainer_email='mrocklin@gmail.com',
-      license='BSD',
-      package_data={'': ['templates/index.html', 'template.html'],
-                    'distributed': ['bokeh/templates/*.html']},
-      include_package_data=True,
-      install_requires=install_requires,
-      extras_require=extras_require,
-      packages=['distributed',
-                'distributed.bokeh',
-                'distributed.cli',
-                'distributed.comm',
-                'distributed.deploy',
-                'distributed.diagnostics',
-                'distributed.protocol'],
-      long_description=(open('README.rst').read() if os.path.exists('README.rst')
-                        else ''),
-      classifiers=[
+setup(
+    name="distributed",
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
+    description="Distributed scheduler for Dask",
+    url="https://distributed.readthedocs.io/en/latest/",
+    maintainer="Matthew Rocklin",
+    maintainer_email="mrocklin@gmail.com",
+    license="BSD",
+    package_data={
+        "": ["templates/index.html", "template.html"],
+        "distributed": ["dashboard/templates/*.html"],
+    },
+    include_package_data=True,
+    install_requires=install_requires,
+    extras_require=extras_require,
+    packages=[
+        "distributed",
+        "distributed.dashboard",
+        "distributed.cli",
+        "distributed.comm",
+        "distributed.deploy",
+        "distributed.diagnostics",
+        "distributed.protocol",
+    ],
+    long_description=(
+        open("README.rst").read() if os.path.exists("README.rst") else ""
+    ),
+    classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
@@ -54,8 +59,8 @@ setup(name='distributed',
         "Programming Language :: Python :: 3.7",
         "Topic :: Scientific/Engineering",
         "Topic :: System :: Distributed Computing",
-      ],
-      entry_points='''
+    ],
+    entry_points="""
         [console_scripts]
         dask-ssh=distributed.cli.dask_ssh:go
         dask-submit=distributed.cli.dask_submit:go
@@ -63,5 +68,6 @@ setup(name='distributed',
         dask-scheduler=distributed.cli.dask_scheduler:go
         dask-worker=distributed.cli.dask_worker:go
         dask-mpi=distributed.cli.dask_mpi:go
-      ''',
-      zip_safe=False)
+      """,
+    zip_safe=False,
+)

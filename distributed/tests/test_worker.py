@@ -972,25 +972,25 @@ def test_worker_fds(s):
 @gen_cluster(ncores=[])
 def test_service_hosts_match_worker(s):
     pytest.importorskip("bokeh")
-    from distributed.bokeh.worker import BokehWorker
+    from distributed.dashboard import BokehWorker
 
-    services = {("bokeh", ":0"): BokehWorker}
+    services = {("dashboard", ":0"): BokehWorker}
 
-    w = Worker(s.address, services={("bokeh", ":0"): BokehWorker})
+    w = Worker(s.address, services={("dashboard", ":0"): BokehWorker})
     yield w._start("tcp://0.0.0.0")
-    sock = first(w.services["bokeh"].server._http._sockets.values())
+    sock = first(w.services["dashboard"].server._http._sockets.values())
     assert sock.getsockname()[0] in ("::", "0.0.0.0")
     yield w.close()
 
-    w = Worker(s.address, services={("bokeh", ":0"): BokehWorker})
+    w = Worker(s.address, services={("dashboard", ":0"): BokehWorker})
     yield w._start("tcp://127.0.0.1")
-    sock = first(w.services["bokeh"].server._http._sockets.values())
+    sock = first(w.services["dashboard"].server._http._sockets.values())
     assert sock.getsockname()[0] in ("::", "0.0.0.0")
     yield w.close()
 
-    w = Worker(s.address, services={("bokeh", 0): BokehWorker})
+    w = Worker(s.address, services={("dashboard", 0): BokehWorker})
     yield w._start("tcp://127.0.0.1")
-    sock = first(w.services["bokeh"].server._http._sockets.values())
+    sock = first(w.services["dashboard"].server._http._sockets.values())
     assert sock.getsockname()[0] == "127.0.0.1"
     yield w.close()
 
@@ -998,14 +998,14 @@ def test_service_hosts_match_worker(s):
 @gen_cluster(ncores=[])
 def test_start_services(s):
     pytest.importorskip("bokeh")
-    from distributed.bokeh.worker import BokehWorker
+    from distributed.dashboard import BokehWorker
 
-    services = {("bokeh", ":1234"): BokehWorker}
+    services = {("dashboard", ":1234"): BokehWorker}
 
     w = Worker(s.address, services=services)
     yield w._start()
 
-    assert w.services["bokeh"].server.port == 1234
+    assert w.services["dashboard"].server.port == 1234
     yield w.close()
 
 

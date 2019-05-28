@@ -878,13 +878,13 @@ class Scheduler(ServerNode):
 
         if dashboard_address is not None:
             try:
-                from distributed.bokeh.scheduler import BokehScheduler
+                from distributed.dashboard import BokehScheduler
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
-                self.service_specs[("bokeh", dashboard_address)] = (
+                self.service_specs[("dashboard", dashboard_address)] = (
                     BokehScheduler,
-                    (service_kwargs or {}).get("bokeh", {}),
+                    (service_kwargs or {}).get("dashboard", {}),
                 )
 
         # Communication state

@@ -170,7 +170,7 @@ class Occupancy(DashboardComponent):
             workers = list(self.scheduler.workers.values())
 
             dashboard_host = [ws.host for ws in workers]
-            dashboard_port = [ws.services.get("bokeh", "") for ws in workers]
+            dashboard_port = [ws.services.get("dashboard", "") for ws in workers]
 
             y = list(range(len(workers)))
             occupancy = [ws.occupancy for ws in workers]
@@ -403,7 +403,7 @@ class CurrentLoad(DashboardComponent):
             workers = list(self.scheduler.workers.values())
 
             dashboard_host = [ws.host for ws in workers]
-            dashboard_port = [ws.services.get("bokeh", "") for ws in workers]
+            dashboard_port = [ws.services.get("dashboard", "") for ws in workers]
 
             y = list(range(len(workers)))
             nprocessing = [len(ws.processing) for ws in workers]

@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from copy import deepcopy
+import collections
 
 import pytest
 from tornado import gen
@@ -26,10 +26,12 @@ def test_eventstream(c, s, *workers):
 
     assert len(es.buffer) == 11
 
-    from distributed.bokeh import messages
     from distributed.diagnostics.progress_stream import task_stream_append
 
-    lists = deepcopy(messages["task-events"]["rectangles"])
+    lists = {
+        name: collections.deque(maxlen=100)
+        for name in "start duration key name color worker worker_thread y alpha".split()
+    }
     workers = dict()
     for msg in es.buffer:
         task_stream_append(lists, msg, workers)
