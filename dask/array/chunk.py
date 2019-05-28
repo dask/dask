@@ -67,8 +67,6 @@ all = np.all
 nansum = np.nansum
 nanprod = np.nanprod
 
-from numpy import nancumprod, nancumsum
-
 nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
