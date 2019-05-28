@@ -34,13 +34,7 @@ from dask.array.core import (getem, getter, dotmany, concatenate3,
 from dask.blockwise import (make_blockwise_graph as top, broadcast_dimensions)
 from dask.array.utils import assert_eq, same_keys
 
-# temporary until numpy functions migrated
-try:
-    from numpy import nancumsum, nancumprod
-except ImportError:  # pragma: no cover
-    import dask.array.numpy_compat as npcompat
-    nancumsum = npcompat.nancumsum
-    nancumprod = npcompat.nancumprod
+from numpy import nancumsum, nancumprod
 
 
 def test_getem():
