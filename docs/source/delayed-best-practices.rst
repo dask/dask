@@ -293,7 +293,7 @@ your data separately for each function call.
 | .. code-block:: python                   | .. code-block:: python                                  |
 |                                          |                                                         |
 |    x = np.array(...)  # some large array |    x = np.array(...)    # some large array              |
-|                                          |    x = dask.delayed(x)  # delay the data once  |
+|                                          |    x = dask.delayed(x)  # delay the data once           |
 |    results = [dask.delayed(train)(x, i)  |    results = [dask.delayed(train)(x, i)                 |
 |               for i in range(1000)]      |               for i in range(1000)]                     |
 +------------------------------------------+---------------------------------------------------------+
