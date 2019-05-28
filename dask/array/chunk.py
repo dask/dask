@@ -67,6 +67,9 @@ all = np.all
 nansum = np.nansum
 nanprod = np.nanprod
 
+nancumprod = np.nancumprod
+nancumsum = np.nancumsum
+
 nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
