@@ -76,3 +76,11 @@ def test_progress_function(client, capsys):
 
     progress(f)
     check_bar_completed(capsys)
+
+
+def test_progress_function_w_kwargs(client, capsys):
+    f = client.submit(lambda: 1)
+    g = client.submit(lambda: 2)
+
+    progress(f, interval="20ms")
+    check_bar_completed(capsys)

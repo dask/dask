@@ -118,6 +118,7 @@ class TextProgressBar(ProgressBar):
         loop=None,
         complete=True,
         start=True,
+        **kwargs
     ):
         super(TextProgressBar, self).__init__(keys, scheduler, interval, complete)
         self.width = width
@@ -154,7 +155,13 @@ class ProgressWidget(ProgressBar):
     """
 
     def __init__(
-        self, keys, scheduler=None, interval="100ms", complete=False, loop=None
+        self,
+        keys,
+        scheduler=None,
+        interval="100ms",
+        complete=False,
+        loop=None,
+        **kwargs
     ):
         super(ProgressWidget, self).__init__(keys, scheduler, interval, complete)
 
@@ -207,7 +214,13 @@ class ProgressWidget(ProgressBar):
 
 class MultiProgressBar(object):
     def __init__(
-        self, keys, scheduler=None, func=key_split, interval="100ms", complete=False
+        self,
+        keys,
+        scheduler=None,
+        func=key_split,
+        interval="100ms",
+        complete=False,
+        **kwargs
     ):
         self.scheduler = get_scheduler(scheduler)
 
@@ -306,6 +319,7 @@ class MultiProgressWidget(MultiProgressBar):
         interval=0.1,
         func=key_split,
         complete=False,
+        **kwargs
     ):
         super(MultiProgressWidget, self).__init__(
             keys, scheduler, func, interval, complete
@@ -425,7 +439,6 @@ def progress(*futures, **kwargs):
     notebook = kwargs.pop("notebook", None)
     multi = kwargs.pop("multi", True)
     complete = kwargs.pop("complete", True)
-    assert not kwargs
 
     futures = futures_of(futures)
     if not isinstance(futures, (set, list)):
@@ -434,9 +447,9 @@ def progress(*futures, **kwargs):
         notebook = is_kernel()  # often but not always correct assumption
     if notebook:
         if multi:
-            bar = MultiProgressWidget(futures, complete=complete)
+            bar = MultiProgressWidget(futures, complete=complete, **kwargs)
         else:
-            bar = ProgressWidget(futures, complete=complete)
+            bar = ProgressWidget(futures, complete=complete, **kwargs)
         return bar
     else:
-        TextProgressBar(futures, complete=complete)
+        TextProgressBar(futures, complete=complete, **kwargs)
