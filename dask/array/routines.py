@@ -17,7 +17,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from
 from . import chunk
 from .creation import arange, diag, empty, indices
-from .utils import safe_wraps, validate_axis
+from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
 from .utils import normalize_meta
@@ -520,7 +520,7 @@ def gradient(f, *varargs, **kwargs):
 
 def _bincount_sum(bincounts, dtype=int):
     n = max(map(len, bincounts))
-    out = np.zeros(n, dtype=dtype)
+    out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
         out[:len(b)] += b
     return out
@@ -556,7 +556,9 @@ def bincount(x, weights=None, minlength=0):
     else:
         chunks = ((minlength,),)
 
-    return Array(graph, final_name, chunks, dtype)
+    meta = meta_from_array(x, 1, dtype=dtype)
+
+    return Array(graph, final_name, chunks, meta=meta)
 
 
 @derived_from(np)
