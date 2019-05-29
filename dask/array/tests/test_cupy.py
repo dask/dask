@@ -576,3 +576,17 @@ def test_sfqr(m, n, chunks, error_type):
     else:
         with pytest.raises(error_type):
             q, r = da.linalg.sfqr(data)
+
+
+@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
+@pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+def test_bincount():
+    x = cupy.array([2, 1, 5, 2, 1])
+    d = da.from_array(x, chunks=2, asarray=False)
+    e = da.bincount(d, minlength=6)
+    assert_eq(e, np.bincount(x, minlength=6))
+    assert same_keys(da.bincount(d, minlength=6), e)
+
+    assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
+    assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
