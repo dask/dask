@@ -71,7 +71,6 @@ def test_basic(func):
             assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
-@pytest.mark.xfail(reason="Sparse reshape bug on 0-length array dimensions", strict=False)
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
