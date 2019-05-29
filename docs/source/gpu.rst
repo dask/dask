@@ -20,15 +20,10 @@ As a worked example, you may want to view this talk:
 
 .. raw:: html
 
-    <iframe width="560"
-            height="315"
-            src="https://developer.download.nvidia.com/video/gputechconf/gtc/2019/video/S9198/s9198-dask-and-v100s-for-fast-distributed-batch-scoring-of-computer-vision-workloads.mp4"
-            frameborder="0"
-            allow="autoplay; encrypted-media"
-            allowfullscreen>
-    </iframe>
-
-
+    <video width="560" height="315" controls>
+        <source src="https://developer.download.nvidia.com/video/gputechconf/gtc/2019/video/S9198/s9198-dask-and-v100s-for-fast-distributed-batch-scoring-of-computer-vision-workloads.mp4"
+                type="video/mp4">
+    </video>
 
 High Level Collections
 ----------------------
@@ -66,7 +61,7 @@ Dask DataFrame to a cuDF-backed Dask DataFrame as follows:
    df = df.map_partitions(cudf.from_pandas)  # convert pandas partitions into cudf partitions
 
 However, cuDF does not support the entire Pandas interface, and so a variety of
-Dask DataFrame operations will not function properly. Check the 
+Dask DataFrame operations will not function properly. Check the
 `cudf API Reference <https://rapidsai.github.io/projects/cudf/en/latest/api.html>`_
 for currently supported interface.
 
