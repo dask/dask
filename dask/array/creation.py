@@ -411,7 +411,7 @@ def indices(dimensions, dtype=int, chunks='auto'):
     return grid
 
 
-def eye(N, chunks, M=None, k=0, dtype=float):
+def eye(N, chunks='auto', M=None, k=0, dtype=float):
     """
     Return a 2-D Array with ones on the diagonal and zeros elsewhere.
 
@@ -419,8 +419,13 @@ def eye(N, chunks, M=None, k=0, dtype=float):
     ----------
     N : int
       Number of rows in the output.
-    chunks: int
-        chunk size of resulting blocks
+    chunks : int, str
+        How to chunk the array. Must be one of the following forms:
+        -   A blocksize like 1000.
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
     M : int, optional
       Number of columns in the output. If None, defaults to `N`.
     k : int, optional
@@ -436,15 +441,17 @@ def eye(N, chunks, M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    if not isinstance(chunks, Integral):
-        raise ValueError('chunks must be an int')
-
-    token = tokenize(N, chunk, M, k, dtype)
-    name_eye = 'eye-' + token
-
     eye = {}
     if M is None:
         M = N
+
+    if not isinstance(chunks, (int, str)):
+        raise ValueError('chunks must be an int or string')
+    elif isinstance(chunks, str):
+        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+        chunks = chunks[0][0]
+    token = tokenize(N, chunks, M, k, dtype)
+    name_eye = 'eye-' + token
 
     vchunks = [chunks] * (N // chunks)
     if N % chunks != 0:
