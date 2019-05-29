@@ -798,15 +798,18 @@ def lu(a):
                 # l_permuted is not referred in upper triangulars
 
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
+    pp_meta = meta_from_array(a, a.ndim, dtype=pp.dtype)
+    ll_meta = meta_from_array(a, a.ndim, dtype=ll.dtype)
+    uu_meta = meta_from_array(a, a.ndim, dtype=uu.dtype)
 
     graph = HighLevelGraph.from_collections(name_p, dsk, dependencies=[a])
-    p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
+    p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, meta=pp_meta)
 
     graph = HighLevelGraph.from_collections(name_l, dsk, dependencies=[a])
-    l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
+    l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, meta=ll_meta)
 
     graph = HighLevelGraph.from_collections(name_u, dsk, dependencies=[a])
-    u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
+    u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, meta=uu_meta)
 
     return p, l, u
 
@@ -895,7 +898,8 @@ def solve_triangular(a, b, lower=False):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
-    return Array(graph, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
+    meta = meta_from_array(a, b.ndim, dtype=res.dtype)
+    return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
 def solve(a, b, sym_pos=False):
@@ -1044,10 +1048,11 @@ def _cholesky(a):
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+    meta = meta_from_array(a, a.ndim, dtype=cho.dtype)
 
-    lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)
     # do not use .T, because part of transposed blocks are already calculated
-    upper = Array(graph_upper, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    upper = Array(graph_upper, name_upper, shape=a.shape, chunks=a.chunks, meta=meta)
     return lower, upper
 
 
@@ -1115,8 +1120,9 @@ def lstsq(a, b):
     graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
+    meta = meta_from_array(r, 1, dtype=ss.dtype)
     s = Array(graph, sname, shape=(r.shape[0], ),
-              chunks=r.shape[0], dtype=ss.dtype)
+              chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
 
