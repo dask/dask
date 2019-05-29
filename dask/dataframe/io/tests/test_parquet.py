@@ -828,6 +828,48 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
+def test_to_parquet_consistent_schema_partition_pyarrow(tmpdir, engine):
+    check_fastparquet()
+    check_pyarrow()
+    fn = str(tmpdir.join('dask.pa'))
+
+    arrays = np.array([0, 1, 2, 4])
+    strings = np.array(['a', 'b', 'c', 'd'])
+
+    df = pd.DataFrame([0, 0, 1, 1], columns=['partition_column'])
+    df['arrays'] = pd.Series(arrays)
+    df['strings'] = pd.Series(strings)
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine=engine, partition_on=['partition_column'])
+    ddf2 = dd.read_parquet(fn, engine=engine)
+
+    assert np.array_equal(ddf2['arrays'], arrays)
+    assert np.array_equal(ddf2['strings'], strings)
+    assert np.array_equal(ddf2['partition_column'], df['partition_column'])
+
+
+def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir, engine):
+    check_fastparquet()
+    check_pyarrow()
+    fn = str(tmpdir.join('dask.pa'))
+
+    arrays = np.array([np.array([0, 1, 2]), np.array([3, 4]), np.nan, np.nan])
+    strings = np.array(['a', 'b', np.nan, np.nan])
+
+    df = pd.DataFrame([0, 0, 1, 1], columns=['partition_column'])
+    df['arrays'] = pd.Series(arrays)
+    df['strings'] = pd.Series(strings)
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine=engine, partition_on=['partition_column'])
+    ddf2 = dd.read_parquet(fn, engine=engine)
+
+    assert np.array_equal(ddf2['arrays'], arrays)
+    assert np.array_equal(ddf2['strings'], strings)
+    assert np.array_equal(ddf2['partition_column'], df['partition_column'])
+
+
 @write_read_engines(
     xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
     xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
