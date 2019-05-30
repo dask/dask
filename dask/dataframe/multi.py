@@ -423,23 +423,93 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 # ASOF Join
 ###############################################################
 
+def compute_prev(dsk, ddf, by=None):
+    n = len(ddf.divisions) - 1
+    name = 'compute-prev-' + tokenize(ddf)
+
+    if by is None:
+        def prev_tail(L, R):
+            if R is None or R.empty:
+                return L
+            return R.tail(1)
+
+        dsk[(name, 0)] = (prev_tail, None, (ddf._name, 0))
+        for i in range(1, n):
+            dsk[(name, i)] = (prev_tail, (name, i-1), (ddf._name, i))
+    else:
+        def reduce_partition(df):
+            if df is None or df.empty:
+                return None
+            return df.drop_duplicates(subset=by, keep='last')
+
+        def prev_tail(L, R):
+            if R is None or R.empty:
+                return L
+            if L is None or L.empty:
+                return R
+            return pd.concat([L, R]).drop_duplicates(subset=by, keep='last')
+
+        N = 1
+        while N < n:
+            N *= 2
+        for i in range(n):
+            dsk[(name, i, 1, 0)] = (reduce_partition, (ddf._name, i))
+        for i in range(n, N):
+            dsk[(name, i, 1, 0)] = None
+
+        d = 1
+        while d < N:
+            for i in range(0, N, 2*d):
+                dsk[(name, i+2*d-1, 2*d, 0)] = (prev_tail, (name, i+d-1, d, 0), (name, i+2*d-1, d, 0))
+            d *= 2
+
+        dsk[(name, N-1, N, 1)] = None
+
+        while d > 2:
+            d //= 2
+            for i in range(0, N, 2*d):
+                dsk[(name, i+d-1, d, 1)] = (name, i+2*d-1, 2*d, 1)
+                dsk[(name, i+2*d-1, d, 1)] = (prev_tail, (name, i+2*d-1, 2*d, 1), (name, i+d-1, d, 0))
+
+        dsk[(name, 0)] = (prev_tail, (name, 1, 2, 1), (name, 0, 1, 0))
+        for i in range(2, N, 2):
+            dsk[(name, i-1)] = (name, i+1, 2, 1)
+            dsk[(name, i)] = (prev_tail, (name, i+1, 2, 1), (name, i, 1, 0))
+        dsk[(name, n-1)] = (name, N-1, N, 0)
+
+    return name
+
+def compute_next(dsk, ddf, by=None):
+    def next_head(df, index):
+        try:
+            return None if df is None else df.loc[[index]]
+        except KeyError:
+            return None
+
+    name = 'compute-next-' + tokenize(ddf)
+
+    n = len(ddf.divisions)-1
+    for i in range(n):
+        index = ddf.divisions[i]
+        dsk[(name, i)] = (next_head, (ddf._name, i), index)
+
+    return name
+
 def merge_asof_padded(left, right, prev, next, meta, **kwargs):
-    # left is not None, right is not None
     if left is None or right is None:
         raise ValueError("Bug found! left and right can't be None in merge_asof_padded")
     if prev is not None and prev.empty:
         raise ValueError("Bug found! Some partition was empty before merge_asof was applied!")
     frames = []
-    if prev is not None: # implies not prev.empty
+    if prev is not None:
         frames.append(prev)
     frames.append(right)
     if next is not None:
-        frames.append(next) # wrong
+        frames.append(next)
     right = pd.concat(frames)
     if left.empty or right.empty:
-        #print (left, '\n', right, '\n', pd.DataFrame().reindex_like(meta), '\n---')
         return pd.DataFrame().reindex_like(meta)
-    #print (left, '\n', right, '\n', pd.merge_asof(left, right, **kwargs), '\n---')
+    #print (left, '\n', right, '\n---')
     return pd.merge_asof(left, right, **kwargs)
 
 def merge_asof_indexed(left, right, **kwargs):
@@ -447,6 +517,8 @@ def merge_asof_indexed(left, right, **kwargs):
     right_divisions = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
     if len(right_divisions) != len(right.divisions):
         right = right.repartition(divisions=right_divisions)
+
+    #left.map_partitions(lambda df: print(str(df) + '\n---')).compute()
 
     # Repartition left to include right divisions
     lower = left.divisions[0]
@@ -457,24 +529,16 @@ def merge_asof_indexed(left, right, **kwargs):
         divisions = (divisions[0], divisions[0])
     left = left.repartition(divisions=divisions)
 
+    #left.map_partitions(lambda df: print(str(df) + '\n---')).compute()
+
+    # Pair up partitions and merge
     dsk = dict()
     name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
-    name_prev = 'last-tail-' + tokenize(right)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
 
-    def last_tail(df, prev):
-        return prev if df is None or df.empty else df.tail(1)
-    def next_head(df, index):
-        try:
-            return None if df is None else df.loc[[index]]
-        except KeyError:
-            return None
+    prev_name = compute_prev(dsk, right, by=kwargs['right_by'])
+    next_name = compute_next(dsk, right, by=kwargs['right_by'])
 
-    dsk[(name_prev, 0)] = (last_tail, (right._name, 0), None)
-    for i in range(1, len(right.divisions)-1):
-        dsk[(name_prev, i)] = (last_tail, (right._name, i), (name_prev, i-1))
-
-    # Pair up parts and merge
     r = 0
     for l in range(len(divisions) - 1):
         while r+1 < len(right.divisions) and right.divisions[r+1] < divisions[l+1]:
@@ -482,12 +546,11 @@ def merge_asof_indexed(left, right, **kwargs):
         if r+1 == len(right.divisions):
             r -= 1
 
-        a = (left._name, l)
-        b = (right._name, r)
-        prev = (name_prev, r-1) if r > 0 else None
-        next = (right._name, r+1) if r+2 < len(right.divisions) else None
-
-        args = [a, b, prev, (next_head, next, divisions[l+1]), meta]
+        args = [(left._name, l),
+                (right._name, r),
+                (prev_name, r-1) if r > 0 else None,
+                (next_name, r+1) if r+2 < len(right.divisions) else None,
+                meta]
         dsk[(name, l)] = (apply, merge_asof_padded, args, kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
@@ -499,8 +562,7 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
                right_by=None, suffixes=('_x', '_y'), tolerance=None,
                allow_exact_matches=True, direction='backward'):
-    if by is not None or left_by is not None or right_by is not None or\
-       tolerance is not None or not allow_exact_matches or direction != 'backward':
+    if tolerance is not None or not allow_exact_matches or direction != 'backward':
         raise NotImplementedError("still need to implement that")
     kwargs = {'on': on, 'left_on': left_on, 'right_on': right_on,
               'left_index': left_index, 'right_index': right_index,
@@ -535,7 +597,7 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
         right = right.set_index(right_on, sorted=True)
 
     if by is not None:
-        left_by = right_by = by
+        kwargs['left_by'] = kwargs['right_by'] = by
 
     del kwargs['on'], kwargs['left_on'], kwargs['right_on'], kwargs['by']
     kwargs['left_index'] = kwargs['right_index'] = True
@@ -544,6 +606,7 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
         raise ValueError("merge_asof input must be sorted!")
 
     return merge_asof_indexed(left, right, **kwargs)
+    # warning: answer may have a weird index
 
 ###############################################################
 # Concat
