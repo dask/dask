@@ -1265,6 +1265,7 @@ class Scheduler(ServerNode):
         setproctitle("dask-scheduler [closing]")
 
         if close_workers:
+            self.broadcast(msg={"op": "close_gracefully"}, nanny=True)
             for worker in self.workers:
                 self.worker_send(worker, {"op": "close"})
             for i in range(20):  # wait a second for send signals to clear

@@ -44,6 +44,7 @@ from .comm import Comm
 from .comm.utils import offload
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
+from .deploy import SpecCluster
 from .metrics import time
 from .process import _cleanup_dangling
 from .proctitle import enable_proctitle_on_children
@@ -1477,6 +1478,7 @@ def check_instances():
     Client._instances.clear()
     Worker._instances.clear()
     Scheduler._instances.clear()
+    SpecCluster._instances.clear()
     # assert all(n.status == "closed" for n in Nanny._instances), {
     #     n: n.status for n in Nanny._instances
     # }
@@ -1513,6 +1515,10 @@ def check_instances():
     assert all(n.status == "closed" or n.status == "init" for n in Nanny._instances), {
         n: n.status for n in Nanny._instances
     }
+
+    # assert not list(SpecCluster._instances)  # TODO
+    assert all(c.status == "closed" for c in SpecCluster._instances)
+    SpecCluster._instances.clear()
 
     Nanny._instances.clear()
     DequeHandler.clear_all_instances()

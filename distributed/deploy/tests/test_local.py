@@ -474,6 +474,7 @@ def test_death_timeout_raises(loop):
             loop=loop,
         ) as cluster:
             pass
+    LocalCluster._instances.clear()  # ignore test hygiene checks
 
 
 @pytest.mark.skipif(sys.version_info < (3, 6), reason="Unknown")

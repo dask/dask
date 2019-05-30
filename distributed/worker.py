@@ -1007,6 +1007,11 @@ class Worker(ServerNode):
             except ValueError:  # address not available if already closed
                 logger.info("Stopping worker")
             self.status = "closing"
+
+            if nanny and self.nanny:
+                with self.rpc(self.nanny) as r:
+                    yield r.close_gracefully()
+
             setproctitle("dask-worker [closing]")
 
             yield [
@@ -1015,7 +1020,6 @@ class Worker(ServerNode):
                 if hasattr(plugin, "teardown")
             ]
 
-            self.stop()
             for pc in self.periodic_callbacks.values():
                 pc.stop()
             with ignoring(EnvironmentError, gen.TimeoutError):
@@ -1047,6 +1051,7 @@ class Worker(ServerNode):
                 with self.rpc(self.nanny) as r:
                     yield r.terminate()
 
+            self.stop()
             self.rpc.close()
             self._closed.set()
 
