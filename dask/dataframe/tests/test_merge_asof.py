@@ -19,35 +19,32 @@ def test_basic():
 
     assert_eq(c, C)
 
-def test_random():
-    N = 1000
-    p = 0.2
-    from random import random, randint
-    for i in range(1000):
-        index_left = [i for i in range(N) if random() < p]
-        index_right = [i for i in range(N) if random() < p]
-        value_left = [randint(0,9) for i in range(len(index_left))]
-        value_right = [randint(0,9) for i in range(len(index_right))]
+def test_duplicates_random():
+    avg_slowdown = 0
+    N = 0
+    with open('tests/merge_asof_tests.txt', 'r') as f:
+        N += 1
+        index_left = [int(x) for x in f.readline().split(',')]
+        index_right = [int(x) for x in f.readline().split(',')]
+        value_left = [int(x) for x in f.readline().split(',')]
+        value_right = [int(x) for x in f.readline().split(',')]
 
         A = pd.DataFrame({'left_val': value_left}, index=index_left)
-        a = dd.from_pandas(A, npartitions=1)
-        a.compute()
+        a = dd.from_pandas(A, npartitions=5)
         B = pd.DataFrame({'right_val': value_right}, index=index_right)
-        b = dd.from_pandas(B, npartitions=1)
-        b.compute()
+        b = dd.from_pandas(B, npartitions=5)
 
-        start_time = time.time()
+        #start_time = time.time()
         C = pd.merge_asof(A, B, left_index=True, right_index=True)
-        end_time = time.time()
-        old_time = end_time - start_time
+        #end_time = time.time()
+        #initial_time = end_time - start_time
 
         c = merge_asof(a, b, left_index=True, right_index=True)
+        #start_time = time.time()
+        #c.compute()
+        #end_time = time.time()
+        #avg_slowdown += initial_time/(end_time-start_time)
 
-        start_time = time.time()
-        c.compute()
-        end_time = time.time()
-        new_time = end_time - start_time
-
-        print (old_time/new_time)
-
-        assert_eq (c, C)
+        #assert_eq (c, C)
+    #print (avg_slowdown / N)
+    #raise NotImplementedError("fail")

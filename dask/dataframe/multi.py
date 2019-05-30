@@ -423,25 +423,30 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 # ASOF Join
 ###############################################################
 
-def merge_asof_padded(left, right, prev, next, **kwargs):
+def merge_asof_padded(left, right, prev, next, meta, **kwargs):
+    # left is not None, right is not None
+    if left is None or right is None:
+        raise ValueError("Bug found! left and right can't be None in merge_asof_padded")
+    if prev is not None and prev.empty:
+        raise ValueError("Bug found! Some partition was empty before merge_asof was applied!")
     frames = []
-    if not (prev is None or prev.empty):
-        frames.append(prev.tail(1))
+    if prev is not None: # implies not prev.empty
+        frames.append(prev)
     frames.append(right)
-    if not (next is None or next.empty):
-        frames.append(next.head(1)) # wrong
-    result = pd.merge_asof(left, pd.concat(frames), **kwargs)
-    return result
+    if next is not None:
+        frames.append(next) # wrong
+    right = pd.concat(frames)
+    if left.empty or right.empty:
+        #print (left, '\n', right, '\n', pd.DataFrame().reindex_like(meta), '\n---')
+        return pd.DataFrame().reindex_like(meta)
+    #print (left, '\n', right, '\n', pd.merge_asof(left, right, **kwargs), '\n---')
+    return pd.merge_asof(left, right, **kwargs)
 
-def merge_asof_indexed(left, right, retain_partition=False, **kwargs):
-    original_divisions = left.divisions
-
-    # Enforce distinct indices in right divisions
+def merge_asof_indexed(left, right, **kwargs):
+    # Repartition right so that right.divisions has no duplicates
     right_divisions = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
     if len(right_divisions) != len(right.divisions):
         right = right.repartition(divisions=right_divisions)
-        # I assume this forces right to have nonempty divisions
-        # possibly add force=True?
 
     # Repartition left to include right divisions
     lower = left.divisions[0]
@@ -452,11 +457,24 @@ def merge_asof_indexed(left, right, retain_partition=False, **kwargs):
         divisions = (divisions[0], divisions[0])
     left = left.repartition(divisions=divisions)
 
+    dsk = dict()
     name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
+    name_prev = 'last-tail-' + tokenize(right)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
 
+    def last_tail(df, prev):
+        return prev if df is None or df.empty else df.tail(1)
+    def next_head(df, index):
+        try:
+            return None if df is None else df.loc[[index]]
+        except KeyError:
+            return None
+
+    dsk[(name_prev, 0)] = (last_tail, (right._name, 0), None)
+    for i in range(1, len(right.divisions)-1):
+        dsk[(name_prev, i)] = (last_tail, (right._name, i), (name_prev, i-1))
+
     # Pair up parts and merge
-    dsk = dict()
     r = 0
     for l in range(len(divisions) - 1):
         while r+1 < len(right.divisions) and right.divisions[r+1] < divisions[l+1]:
@@ -466,37 +484,66 @@ def merge_asof_indexed(left, right, retain_partition=False, **kwargs):
 
         a = (left._name, l)
         b = (right._name, r)
-        prev = (right._name, r-1) if r > 0 else None
+        prev = (name_prev, r-1) if r > 0 else None
         next = (right._name, r+1) if r+2 < len(right.divisions) else None
 
-        dsk[(name, l)] = (apply, merge_asof_padded, [a, b, prev, next], kwargs)
+        args = [a, b, prev, (next_head, next, divisions[l+1]), meta]
+        dsk[(name, l)] = (apply, merge_asof_padded, args, kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    result = new_dd_object(graph, name, meta, tuple(divisions))
-    if retain_partition:
-        return result.repartition(original_divisions)
-    return result
+    return new_dd_object(graph, name, meta, tuple(divisions))
+    # for retain_partitions, we don't need to repartition
+    # we can just merge the split ones together
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
                right_by=None, suffixes=('_x', '_y'), tolerance=None,
-               allow_exact_matches=True, direction='backward',
-               retain_partition=False):
-    # if not sorted: fail
+               allow_exact_matches=True, direction='backward'):
+    if by is not None or left_by is not None or right_by is not None or\
+       tolerance is not None or not allow_exact_matches or direction != 'backward':
+        raise NotImplementedError("still need to implement that")
+    kwargs = {'on': on, 'left_on': left_on, 'right_on': right_on,
+              'left_index': left_index, 'right_index': right_index,
+              'by': by, 'left_by': left_by, 'right_by': right_by,
+              'suffixes': suffixes, 'tolerance': tolerance,
+              'allow_exact_matches': allow_exact_matches,
+              'direction': direction}
 
-    # Both sides indexed
-    if left_index and right_index:
-        return merge_asof_indexed(left, right,
-                                  on=on, left_on=left_on, right_on=right_on,
-                                  left_index=left_index, right_index=right_index,
-                                  by=by, left_by=left_by, right_by=right_by,
-                                  suffixes=suffixes,
-                                  tolerance=tolerance,
-                                  allow_exact_matches=allow_exact_matches,
-                                  direction=direction,
-                                  retain_partition=retain_partition)
+    # input validation
+    if left is None or right is None:
+        raise ValueError("Cannot merge_asof on empty DataFrames")
 
-    raise NotImplementedError("baby steps")
+    if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+        return pd.merge_asof(left, right, **kwargs)
+
+    if on is not None:
+        left_on = right_on = on
+    for o in [left_on, right_on]:
+        if isinstance(o, _Frame):
+            raise NotImplementedError(
+                "Dask collections not currently allowed in merge columns")
+
+    # pray that left[left_on] and right[right_on] are sorted
+    if not is_dask_collection(left):
+        left = from_pandas(left, npartitions=1)
+    if left_on is not None:
+        left = left.set_index(left_on, sorted=True)
+
+    if not is_dask_collection(right):
+        right = from_pandas(right, npartitions=1)
+    if right_on is not None:
+        right = right.set_index(right_on, sorted=True)
+
+    if by is not None:
+        left_by = right_by = by
+
+    del kwargs['on'], kwargs['left_on'], kwargs['right_on'], kwargs['by']
+    kwargs['left_index'] = kwargs['right_index'] = True
+
+    if not left.known_divisions or not right.known_divisions:
+        raise ValueError("merge_asof input must be sorted!")
+
+    return merge_asof_indexed(left, right, **kwargs)
 
 ###############################################################
 # Concat
