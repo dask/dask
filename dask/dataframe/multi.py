@@ -449,6 +449,7 @@ def compute_prev(dsk, ddf, by=None):
                 return R
             return pd.concat([L, R]).drop_duplicates(subset=by, keep='last')
 
+        # Implementation of parallel scan
         N = 1
         while N < n:
             N *= 2
@@ -480,15 +481,22 @@ def compute_prev(dsk, ddf, by=None):
     return name
 
 def compute_next(dsk, ddf, by=None):
-    def next_head(df, index):
-        try:
-            return None if df is None else df.loc[[index]]
-        except KeyError:
-            return None
+    if by is None:
+        def next_head(df, index):
+            try:
+                return None if df is None else df.loc[[index]]
+            except KeyError:
+                return None
+    else:
+        def next_head(df, index):
+            try:
+                return None if df is None else df.loc[[index]].drop_duplicates(subset=by, keep='last')
+            except KeyError:
+                return None
 
-    name = 'compute-next-' + tokenize(ddf)
+    n = len(ddf.divisions) - 1
+    name = 'next-head-' + tokenize(ddf)
 
-    n = len(ddf.divisions)-1
     for i in range(n):
         index = ddf.divisions[i]
         dsk[(name, i)] = (next_head, (ddf._name, i), index)
@@ -497,66 +505,67 @@ def compute_next(dsk, ddf, by=None):
 
 def merge_asof_padded(left, right, prev, next, meta, **kwargs):
     if left is None or right is None:
-        raise ValueError("Bug found! left and right can't be None in merge_asof_padded")
+        raise ValueError('&what&')
     if prev is not None and prev.empty:
-        raise ValueError("Bug found! Some partition was empty before merge_asof was applied!")
+        raise ValueError('bull splidd!')
+
     frames = []
     if prev is not None:
         frames.append(prev)
     frames.append(right)
     if next is not None:
         frames.append(next)
+
     right = pd.concat(frames)
     if left.empty or right.empty:
-        return pd.DataFrame().reindex_like(meta)
-    #print (left, '\n', right, '\n---')
+        return meta.iloc[0:0]
     return pd.merge_asof(left, right, **kwargs)
 
 def merge_asof_indexed(left, right, **kwargs):
-    # Repartition right so that right.divisions has no duplicates
-    right_divisions = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
-    if len(right_divisions) != len(right.divisions):
-        right = right.repartition(divisions=right_divisions)
+    rdiv = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
+    m = len(rdiv) - 1
+    if len(rdiv) != len(right.divisions):
+        right = right.repartition(divisions=rdiv)
 
-    #left.map_partitions(lambda df: print(str(df) + '\n---')).compute()
-
-    # Repartition left to include right divisions
     lower = left.divisions[0]
     upper = left.divisions[-1]
-    divisions = [d for d in unique(merge_sorted(left.divisions, right.divisions))
-                   if d >= lower and d <= upper]
-    if len(divisions) == 1: # single value for index
-        divisions = (divisions[0], divisions[0])
-    left = left.repartition(divisions=divisions)
+    ldiv = [d for d in unique(merge_sorted(left.divisions, rdiv))
+              if lower <= d <= upper]
+    if len(ldiv) == 1:
+        ldiv = (ldiv[0], ldiv[0])
+    n = len(ldiv) - 1
 
-    #left.map_partitions(lambda df: print(str(df) + '\n---')).compute()
-
-    # Pair up partitions and merge
     dsk = dict()
     name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
 
-    prev_name = compute_prev(dsk, right, by=kwargs['right_by'])
-    next_name = compute_next(dsk, right, by=kwargs['right_by'])
+    prev_tail = compute_prev(dsk, right)
+    next_head = compute_next(dsk, right)
 
-    r = 0
-    for l in range(len(divisions) - 1):
-        while r+1 < len(right.divisions) and right.divisions[r+1] < divisions[l+1]:
-            r += 1
-        if r+1 == len(right.divisions):
-            r -= 1
+    j, k = 0, -1
+    for i in range(n):
+        if ldiv[i] == left.divisions[k+1]:
+            k += 1
+            if ldiv[i+1] == left.divisions[k+1]:
+                splice = (left._name, k)
+            else:
+                splice = (methods.boundary_slice, (left._name, k),
+                          None, ldiv[i+1], False)
+        else:
+            splice = (methods.boundary_slice, (left._name, k),
+                      ldiv[i], ldiv[i+1], ldiv[i+1] == left.divisions[k+1])
 
-        args = [(left._name, l),
-                (right._name, r),
-                (prev_name, r-1) if r > 0 else None,
-                (next_name, r+1) if r+2 < len(right.divisions) else None,
-                meta]
-        dsk[(name, l)] = (apply, merge_asof_padded, args, kwargs)
+        while j+1 < m and rdiv[j+1] < ldiv[i+1]:
+            j += 1
+
+        args = [splice, (right._name, j),
+                (prev_tail, j-1) if j > 0 else None,
+                (next_head, j+1) if j+1 < m else None, meta]
+
+        dsk[(name, i)] = (apply, merge_asof_padded, args, kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    return new_dd_object(graph, name, meta, tuple(divisions))
-    # for retain_partitions, we don't need to repartition
-    # we can just merge the split ones together
+    return new_dd_object(graph, name, meta, ldiv)
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,

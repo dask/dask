@@ -20,6 +20,9 @@ def test_indexed_basic():
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
     c = merge_asof(a, b, left_index=True, right_index=True)
 
+    #print (C)
+    #print (c.compute())
+
     assert_eq(c, C)
 
 def test_indexed_random():
