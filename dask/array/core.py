@@ -1372,6 +1372,45 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._blocks)
 
+    @property
+    def partitions(self):
+        """Slice an array by partitions. Alias of dask array .blocks attribute.
+
+        This alias allows you to write agnostic code that works with both
+        dask arrays and dask dataframes.
+
+        This allows blockwise slicing of a Dask array.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
+        dask array with every other block in the first row of blocks.
+
+        You can index blocks in any way that could index a numpy array of shape
+        equal to the number of blocks in each dimension, (available as
+        array.numblocks).  The dimension of the output array will be the same
+        as the dimension of this array, even if integer indices are passed.
+        This does not support slicing with ``np.newaxis`` or multiple lists.
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> x = da.arange(10, chunks=2)
+        >>> x.partitions[0].compute()
+        array([0, 1])
+        >>> x.partitions[:3].compute()
+        array([0, 1, 2, 3, 4, 5])
+        >>> x.partitions[::2].compute()
+        array([0, 1, 4, 5, 8, 9])
+        >>> x.partitions[[-1, 0]].compute()
+        array([8, 9, 0, 1])
+        >>> all(x.partitions[:].compute() == x.blocks[:].compute())
+        True
+
+        Returns
+        -------
+        A Dask array
+        """
+        return self.blocks
+
     @derived_from(np.ndarray)
     def dot(self, other):
         from .routines import tensordot
