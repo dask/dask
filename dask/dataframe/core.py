@@ -1462,12 +1462,26 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             return handle_out(out, result)
         else:
             num = self._get_numeric_data()
-            x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
-            x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
-            n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var'
-            result = map_partitions(methods.var_aggregate, x2, x, n,
-                                    token=name, meta=meta, ddof=ddof)
+            values_dtype = num.values.dtype
+
+            if not np.issubdtype(values_dtype, np.number):
+                num.values.dtype = 'f8'
+
+            if skipna or skipna is None:
+                array_var = da.nanvar(num.values, axis=0, ddof=ddof, split_every=split_every)
+            else:
+                array_var = da.var(num.values, axis=0, ddof=ddof, split_every=split_every)
+
+            name = self._token_prefix + 'var--' + tokenize(num, split_every)
+
+            cols = num._meta.columns if isinstance(num._meta, pd.DataFrame) else None
+            array_var_name = (array_var._name,) + (0,) * len(num._meta.values.var(axis=0).shape)
+
+            layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
+            graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+            result = new_dd_object(graph, name, num._meta_nonempty.var(), divisions=[None, None])
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
@@ -1503,6 +1517,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'sem'
             result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return result
