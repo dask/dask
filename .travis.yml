@@ -7,7 +7,7 @@ _base_envs:
   - &test_and_lint TEST='true' LINT='true'
   - &coverage COVERAGE='true' PARALLEL='false'
   - &no_coverage COVERAGE='false' PARALLEL='true'
-  - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS='--ignore=dask/diagnostics --ignore=dask/array/tests/test_image.py --ignore=dask/array/tests/test_stats.py --ignore=dask/bytes/tests/test_s3.py'
+  - &optimize PYTHONOPTIMIZE=1 XTRATESTARGS='--ignore=dask/diagnostics --ignore=dask/array/tests/test_image.py --ignore=dask/array/tests/test_stats.py --ignore=dask/bytes/tests/test_s3.py'
   - &no_optimize XTRATESTARGS=
   - &imports TEST_IMPORTS='true'
   - &no_imports TEST_IMPORTS='false'
