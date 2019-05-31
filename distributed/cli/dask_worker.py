@@ -104,6 +104,9 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option(
     "--interface", type=str, default=None, help="Network interface like 'eth0' or 'ib0'"
 )
+@click.option(
+    "--protocol", type=str, default=None, help="Protocol like tcp, tls, or ucx"
+)
 @click.option("--nthreads", type=int, default=0, help="Number of threads per process.")
 @click.option(
     "--nprocs",
@@ -197,6 +200,7 @@ def main(
     local_directory,
     scheduler_file,
     interface,
+    protocol,
     death_timeout,
     preload,
     preload_argv,
@@ -338,6 +342,7 @@ def main(
             security=sec,
             contact_address=contact_address,
             interface=interface,
+            protocol=protocol,
             host=host,
             port=port,
             dashboard_address=dashboard_address if dashboard else None,

@@ -90,7 +90,10 @@ def merge_frames(header, frames):
                 L.append(mv[:l])
                 frames.append(mv[l:])
                 l = 0
-        out.append(b"".join(map(ensure_bytes, L)))
+        if len(L) == 1:  # no work necessary
+            out.extend(L)
+        else:
+            out.append(b"".join(map(ensure_bytes, L)))
     return out
 
 

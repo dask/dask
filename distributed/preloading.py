@@ -100,6 +100,7 @@ def _import_modules(names, file_dir=None):
                 import_module(name)
             module = sys.modules[name]
 
+        logger.info("Import preload module: %s", name)
         result_modules[name] = {
             attrname: getattr(module, attrname, None)
             for attrname in ("dask_setup", "dask_teardown")
@@ -137,6 +138,7 @@ def preload_modules(names, parameter=None, file_dir=None, argv=None):
                 dask_setup.callback(parameter, *context.args, **context.params)
             else:
                 dask_setup(parameter)
+                logger.info("Run preload setup function: %s", name)
 
         if interface["dask_teardown"]:
             atexit.register(interface["dask_teardown"], parameter)

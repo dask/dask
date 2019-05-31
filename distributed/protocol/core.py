@@ -176,6 +176,7 @@ def loads_msgpack(header, payload):
     See Also:
         dumps_msgpack
     """
+    header = bytes(header)
     if header:
         header = msgpack.loads(header, use_list=False, **msgpack_opts)
     else:

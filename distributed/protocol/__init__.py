@@ -4,6 +4,7 @@ from functools import partial
 
 from .compression import compressions, default_compression
 from .core import dumps, loads, maybe_compress, decompress, msgpack
+from .cuda import cuda_serialize, cuda_deserialize
 from .serialize import (
     serialize,
     deserialize,
@@ -66,3 +67,21 @@ def _register_arrow():
 @dask_deserialize.register_lazy("torchvision")
 def _register_torch():
     from . import torch
+
+
+@cuda_serialize.register_lazy("cupy")
+@cuda_deserialize.register_lazy("cupy")
+def _register_cupy():
+    from . import cupy
+
+
+@cuda_serialize.register_lazy("numba")
+@cuda_deserialize.register_lazy("numba")
+def _register_numba():
+    from . import numba
+
+
+@cuda_serialize.register_lazy("cudf")
+@cuda_deserialize.register_lazy("cudf")
+def _register_cudf():
+    from . import cudf

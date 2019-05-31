@@ -26,6 +26,7 @@ from distributed.utils_test import loop  # noqa: F401
 
 from distributed.protocol import to_serialize, Serialized, serialize, deserialize
 
+from distributed.comm.registry import backends
 from distributed.comm import (
     tcp,
     inproc,
@@ -39,7 +40,6 @@ from distributed.comm import (
     get_address_host,
     get_local_address_for,
 )
-
 
 EXTERNAL_IP4 = get_ip()
 if has_ipv6():
@@ -154,7 +154,6 @@ def test_unparse_host_port():
     assert f("[::1]", 123) == "[::1]:123"
 
     assert f("127.0.0.1") == "127.0.0.1"
-    assert f("127.0.0.1", 0) == "127.0.0.1"
     assert f("127.0.0.1", None) == "127.0.0.1"
     assert f("127.0.0.1", "*") == "127.0.0.1:*"
 
@@ -488,7 +487,7 @@ def check_client_server(
     # Check listener properties
     bound_addr = listener.listen_address
     bound_scheme, bound_loc = parse_address(bound_addr)
-    assert bound_scheme in ("inproc", "tcp", "tls")
+    assert bound_scheme in backends
     assert bound_scheme == parse_address(addr)[0]
 
     if check_listen_addr is not None:
@@ -528,6 +527,15 @@ def check_client_server(
     assert set(l) == {1234} | set(range(20))
 
     listener.stop()
+
+
+@gen_test()
+def test_ucx_client_server():
+    pytest.importorskip("distributed.comm.ucx")
+    import ucp
+
+    addr = ucp.get_address()
+    yield check_client_server("ucx://" + addr)
 
 
 def tcp_eq(expected_host, expected_port=None):
