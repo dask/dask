@@ -330,7 +330,7 @@ _dangling = weakref.WeakSet()
 @atexit.register
 def _cleanup_dangling():
     for proc in list(_dangling):
-        if proc.daemon and proc.is_alive():
+        if proc.is_alive():
             try:
                 logger.warning("reaping stray process %s" % (proc,))
                 proc.terminate()

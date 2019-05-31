@@ -464,7 +464,7 @@ class WorkerProcess(object):
                 env=self.env,
             ),
         )
-        self.process.daemon = True
+        self.process.daemon = dask.config.get("distributed.worker.daemon", default=True)
         self.process.set_exit_callback(self._on_exit)
         self.running = Event()
         self.stopped = Event()

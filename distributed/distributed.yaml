@@ -32,6 +32,7 @@ distributed:
       incoming: 10
     preload: []
     preload-argv: []
+    daemon: True
 
     profile:
       interval: 10ms        # Time between statistical profiling queries

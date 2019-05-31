@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import sys
+import multiprocessing as mp
 
 import numpy as np
 
@@ -344,3 +345,37 @@ def test_data_types(c, s):
     r = yield c.run(lambda dask_worker: type(dask_worker.data))
     assert r[w.worker_address] == dict
     yield w.close()
+
+
+def _noop(x):
+    """Define here because closures aren't pickleable."""
+    pass
+
+
+@gen_cluster(
+    ncores=[("127.0.0.1", 1)],
+    client=True,
+    Worker=Nanny,
+    config={"distributed.worker.daemon": False},
+)
+def test_mp_process_worker_no_daemon(c, s, a):
+    def multiprocessing_worker():
+        p = mp.Process(target=_noop, args=(None,))
+        p.start()
+        p.join()
+
+    yield c.submit(multiprocessing_worker)
+
+
+@gen_cluster(
+    ncores=[("127.0.0.1", 1)],
+    client=True,
+    Worker=Nanny,
+    config={"distributed.worker.daemon": False},
+)
+def test_mp_pool_worker_no_daemon(c, s, a):
+    def pool_worker(world_size):
+        with mp.Pool(processes=world_size) as p:
+            p.map(_noop, range(world_size))
+
+    yield c.submit(pool_worker, 4)

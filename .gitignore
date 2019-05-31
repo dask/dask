@@ -13,3 +13,6 @@ continuous_integration/hdfs-initialized
 .pytest_cache/
 dask-worker-space/
 .vscode/
+*.swp
+.ycm_extra_conf.py
+tags
