@@ -1475,7 +1475,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name = self._token_prefix + 'var--' + tokenize(num, split_every)
 
             cols = num._meta.columns if isinstance(num._meta, pd.DataFrame) else None
-            array_var_name = (array_var._name,) + (0,) * len(num._meta.values.var(axis=0).shape)
+            array_var_name = (array_var._name,) + (0,) * len(num._meta_nonempty.values.var(axis=0).shape)
 
             layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
             graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
