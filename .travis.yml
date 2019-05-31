@@ -20,8 +20,6 @@ jobs:
       - PYTHON=2.7
       - NUMPY=1.13.0
       - PANDAS=0.21.1
-      - PYARROW=0.13.0
-      - FASTPARQUET=0.3.1
       - *test_and_lint
       - *no_coverage
       - *optimize
@@ -31,8 +29,6 @@ jobs:
       - PYTHON=3.5
       - NUMPY=1.14.1
       - PANDAS=0.22.0
-      - PYARROW=0.13.0
-      - FASTPARQUET=0.3.1
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -42,8 +38,6 @@ jobs:
       - PYTHON=3.6
       - NUMPY=1.15.1
       - PANDAS=0.23.4
-      - PYARROW=0.13.0
-      - FASTPARQUET=0.3.1
       - *test_and_lint
       - *coverage
       - *no_optimize
@@ -53,8 +47,6 @@ jobs:
       - PYTHON=3.7
       - NUMPY=1.16.2
       - PANDAS>=0.24.1
-      - PYARROW=0.13.0
-      - FASTPARQUET=0.3.1
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -65,8 +57,6 @@ jobs:
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - NUMPY=1.16.2    # these are overridden later
       - PANDAS>=0.24.2
-      - PYARROW=0.13.0
-      - FASTPARQUET=0.3.1
       - *test_and_lint
       - *no_coverage
       - *no_optimize

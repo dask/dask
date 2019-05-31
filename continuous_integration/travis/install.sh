@@ -77,6 +77,8 @@ if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.
     conda install -q -c conda-forge fastparquet python-snappy cython
     conda remove --force fastparquet
     pip install --no-deps git+https://github.com/dask/fastparquet
+else
+    conda install -c conda-forge fastparquet
 fi
 
 if [[ $NUMPY > '1.13.0' ]]; then
