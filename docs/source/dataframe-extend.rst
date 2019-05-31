@@ -194,7 +194,8 @@ Accessors
 
 Many extension arrays expose their functionality on Series or DataFrame objects
 using accessors. Dask provides decorators to register accessors similar to pandas. See
-http://pandas.pydata.org/pandas-docs/stable/development/extending.html#registering-custom-accessors for more.
+`the pandas documentation on accessors <http://pandas.pydata.org/pandas-docs/stable/development/extending.html#registering-custom-accessors>`_
+for more.
 
 .. currentmodule:: dask.dataframe
 
