@@ -34,13 +34,7 @@ from dask.array.core import (getem, getter, dotmany, concatenate3,
 from dask.blockwise import (make_blockwise_graph as top, broadcast_dimensions)
 from dask.array.utils import assert_eq, same_keys
 
-# temporary until numpy functions migrated
-try:
-    from numpy import nancumsum, nancumprod
-except ImportError:  # pragma: no cover
-    import dask.array.numpy_compat as npcompat
-    nancumsum = npcompat.nancumsum
-    nancumprod = npcompat.nancumprod
+from numpy import nancumsum, nancumprod
 
 
 def test_getem():
@@ -3713,6 +3707,41 @@ def test_blocks_indexer():
     assert "newaxis" in str(info.value) and "not supported" in str(info.value)
     with pytest.raises(IndexError) as info:
         x.blocks[100, 100]
+
+
+def test_partitions_indexer():
+    # .partitions is an alias of .blocks for dask arrays
+    x = da.arange(10, chunks=2)
+
+    assert isinstance(x.partitions[0], da.Array)
+
+    assert_eq(x.partitions[0], x[:2])
+    assert_eq(x.partitions[-1], x[-2:])
+    assert_eq(x.partitions[:3], x[:6])
+    assert_eq(x.partitions[[0, 1, 2]], x[:6])
+    assert_eq(x.partitions[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
+
+    x = da.random.random((20, 20), chunks=(4, 5))
+    assert_eq(x.partitions[0], x[:4])
+    assert_eq(x.partitions[0, :3], x[:4, :15])
+    assert_eq(x.partitions[:, :3], x[:, :15])
+
+    x = da.ones((40, 40, 40), chunks=(10, 10, 10))
+    assert_eq(x.partitions[0, :, 0], np.ones((10, 40, 10)))
+
+    x = da.ones((2, 2), chunks=1)
+    with pytest.raises(ValueError):
+        x.partitions[[0, 1], [0, 1]]
+    with pytest.raises(ValueError):
+        x.partitions[np.array([0, 1]), [0, 1]]
+    with pytest.raises(ValueError) as info:
+        x.partitions[np.array([0, 1]), np.array([0, 1])]
+    assert "list" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        x.partitions[None, :, :]
+    assert "newaxis" in str(info.value) and "not supported" in str(info.value)
+    with pytest.raises(IndexError) as info:
+        x.partitions[100, 100]
 
 
 def test_dask_array_holds_scipy_sparse_containers():
