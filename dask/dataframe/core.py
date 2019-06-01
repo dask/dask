@@ -1461,22 +1461,23 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     axis=axis, skipna=skipna, ddof=ddof)
             return handle_out(out, result)
         else:
-            num = self._get_numeric_data()
+            num = self.select_dtypes(include=['number', np.timedelta64, 'bool']) \
+                if is_dataframe_like(self) else self
+
             values_dtype = num.values.dtype
             array_values = num.values
 
             if not np.issubdtype(values_dtype, np.number):
                 array_values = num.values.astype('f8')
 
-            if skipna or skipna is None:
-                array_var = da.nanvar(array_values, axis=0, ddof=ddof, split_every=split_every)
-            else:
-                array_var = da.var(array_values, axis=0, ddof=ddof, split_every=split_every)
+            var = da.nanvar if skipna or skipna is None else da.var
+            array_var = var(array_values, axis=0, ddof=ddof, split_every=split_every)
 
             name = self._token_prefix + 'var-' + tokenize(num, split_every)
-
             cols = num._meta.columns if is_dataframe_like(num) else None
-            array_var_name = (array_var._name,) + (0,) * len(num._meta_nonempty.values.var(axis=0).shape)
+
+            var_shape = num._meta_nonempty.values.var(axis=0).shape
+            array_var_name = (array_var._name,) + (0,) * len(var_shape)
 
             layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
             graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
