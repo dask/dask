@@ -98,10 +98,10 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
         return df
     else:
         result = getattr(df, kind)[start:stop]
-    if not right_boundary:
+    if not right_boundary and stop is not None:
         right_index = result.index.get_slice_bound(stop, 'left', kind)
         result = result.iloc[:right_index]
-    if not left_boundary:
+    if not left_boundary and start is not None:
         left_index = result.index.get_slice_bound(start, 'right', kind)
         result = result.iloc[left_index:]
     return result
