@@ -1463,18 +1463,19 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             num = self._get_numeric_data()
             values_dtype = num.values.dtype
+            array_values = num.values
 
             if not np.issubdtype(values_dtype, np.number):
-                num.values.dtype = 'f8'
+                array_values = num.values.astype('f8')
 
             if skipna or skipna is None:
-                array_var = da.nanvar(num.values, axis=0, ddof=ddof, split_every=split_every)
+                array_var = da.nanvar(array_values, axis=0, ddof=ddof, split_every=split_every)
             else:
-                array_var = da.var(num.values, axis=0, ddof=ddof, split_every=split_every)
+                array_var = da.var(array_values, axis=0, ddof=ddof, split_every=split_every)
 
-            name = self._token_prefix + 'var--' + tokenize(num, split_every)
+            name = self._token_prefix + 'var-' + tokenize(num, split_every)
 
-            cols = num._meta.columns if isinstance(num._meta, pd.DataFrame) else None
+            cols = num._meta.columns if is_dataframe_like(num) else None
             array_var_name = (array_var._name,) + (0,) * len(num._meta_nonempty.values.var(axis=0).shape)
 
             layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
