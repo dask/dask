@@ -65,7 +65,8 @@ from ..base import tokenize, is_dask_collection
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
-                   _maybe_from_pandas, new_dd_object, is_broadcastable)
+                   _maybe_from_pandas, new_dd_object, is_broadcastable,
+                   prefix_reduction)
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
@@ -423,149 +424,138 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 # ASOF Join
 ###############################################################
 
-def compute_prev(dsk, ddf, by=None):
-    n = len(ddf.divisions) - 1
-    name = 'compute-prev-' + tokenize(ddf)
+def fix_overlap(ddf):
+    """ Ensures that ddf.divisions are all distinct and that the upper bound on
+    each partition is exclusive
+    """
+    if not ddf.known_divisions:
+        raise ValueError("Can only fix overlap when divisions are known")
+
+    def body(df, index):
+        try:
+            return df.drop(index)
+        except KeyError:
+            return df
+
+    def overlap(df, index):
+        try:
+            return df.loc[[index]]
+        except KeyError:
+            return None
+
+    dsk = dict()
+    name = 'fix-overlap-' + tokenize(ddf)
+
+    n = len(ddf.divisions)-1
+    divisions = []
+    for i in range(n):
+        if i > 0 and ddf.divisions[i-1] == ddf.divisions[i]:
+            frames = dsk[(name, len(divisions)-1)][1]
+        else:
+            frames = []
+            if i > 0:
+                frames.append((overlap, (ddf._name, i-1), ddf.divisions[i]))
+            divisions.append(ddf.divisions[i])
+            dsk[(name, len(divisions)-1)] = (pd.concat, frames)
+
+        if i == n-1 or ddf.divisions[i+1] == ddf.divisions[i]:
+            frames.append((ddf._name, i))
+        else:
+            frames.append((body, (ddf._name, i), ddf.divisions[i+1]))
+    divisions.append(ddf.divisions[-1])
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    return new_dd_object(graph, name, ddf._meta, divisions)
+
+def compute_tails(ddf, by=None):
+    """ For each partition, returns the last row of the most recent nonempty
+    partition.
+    """
+    empty = ddf._meta.iloc[0:0]
+
+    def none_to_empty(df):
+        return empty if df is None else df
 
     if by is None:
-        def prev_tail(L, R):
+        def last_tail(L, R):
             if R is None or R.empty:
                 return L
             return R.tail(1)
 
-        dsk[(name, 0)] = (prev_tail, None, (ddf._name, 0))
-        for i in range(1, n):
-            dsk[(name, i)] = (prev_tail, (name, i-1), (ddf._name, i))
+        return prefix_reduction(last_tail, ddf, postprocess=none_to_empty)
     else:
-        def reduce_partition(df):
-            if df is None or df.empty:
+        def last_tail(*dfs):
+            frames = []
+            for df in dfs:
+                if df is not None:
+                    frames.append(df)
+            if len(frames) == 0:
                 return None
-            return df.drop_duplicates(subset=by, keep='last')
+            return pd.concat(frames).drop_duplicates(subset=by, keep='last')
 
-        def prev_tail(L, R):
-            if R is None or R.empty:
-                return L
-            if L is None or L.empty:
-                return R
-            return pd.concat([L, R]).drop_duplicates(subset=by, keep='last')
+        return prefix_reduction(last_tail, ddf, identity=empty,
+                                preprocess=last_tail)
 
-        # Implementation of parallel scan
-        N = 1
-        while N < n:
-            N *= 2
-        for i in range(n):
-            dsk[(name, i, 1, 0)] = (reduce_partition, (ddf._name, i))
-        for i in range(n, N):
-            dsk[(name, i, 1, 0)] = None
-
-        d = 1
-        while d < N:
-            for i in range(0, N, 2*d):
-                dsk[(name, i+2*d-1, 2*d, 0)] = (prev_tail, (name, i+d-1, d, 0), (name, i+2*d-1, d, 0))
-            d *= 2
-
-        dsk[(name, N-1, N, 1)] = None
-
-        while d > 2:
-            d //= 2
-            for i in range(0, N, 2*d):
-                dsk[(name, i+d-1, d, 1)] = (name, i+2*d-1, 2*d, 1)
-                dsk[(name, i+2*d-1, d, 1)] = (prev_tail, (name, i+2*d-1, 2*d, 1), (name, i+d-1, d, 0))
-
-        dsk[(name, 0)] = (prev_tail, (name, 1, 2, 1), (name, 0, 1, 0))
-        for i in range(2, N, 2):
-            dsk[(name, i-1)] = (name, i+1, 2, 1)
-            dsk[(name, i)] = (prev_tail, (name, i+1, 2, 1), (name, i, 1, 0))
-        dsk[(name, n-1)] = (name, N-1, N, 0)
-
-    return name
-
-def compute_next(dsk, ddf, by=None):
-    if by is None:
-        def next_head(df, index):
-            try:
-                return None if df is None else df.loc[[index]]
-            except KeyError:
-                return None
-    else:
-        def next_head(df, index):
-            try:
-                return None if df is None else df.loc[[index]].drop_duplicates(subset=by, keep='last')
-            except KeyError:
-                return None
-
-    n = len(ddf.divisions) - 1
-    name = 'next-head-' + tokenize(ddf)
-
-    for i in range(n):
-        index = ddf.divisions[i]
-        dsk[(name, i)] = (next_head, (ddf._name, i), index)
-
-    return name
-
-def merge_asof_padded(left, right, prev, next, meta, **kwargs):
+def merge_asof_padded(left, right, prev=None, **kwargs):
+    """ merge_asof but potentially adding rows to the beginning/end of right """
     if left is None or right is None:
-        raise ValueError('&what&')
-    if prev is not None and prev.empty:
-        raise ValueError('bull splidd!')
+        raise ValueError('dafuq did u do')
 
     frames = []
     if prev is not None:
         frames.append(prev)
     frames.append(right)
-    if next is not None:
-        frames.append(next)
 
-    right = pd.concat(frames)
-    if left.empty or right.empty:
-        return meta.iloc[0:0]
-    return pd.merge_asof(left, right, **kwargs)
+    return pd.merge_asof(left, pd.concat(frames), **kwargs)
 
 def merge_asof_indexed(left, right, **kwargs):
-    rdiv = list(unique(right.divisions[:-1])) + [right.divisions[-1]]
-    m = len(rdiv) - 1
-    if len(rdiv) != len(right.divisions):
-        right = right.repartition(divisions=rdiv)
-
-    lower = left.divisions[0]
-    upper = left.divisions[-1]
-    ldiv = [d for d in unique(merge_sorted(left.divisions, rdiv))
-              if lower <= d <= upper]
-    if len(ldiv) == 1:
-        ldiv = (ldiv[0], ldiv[0])
-    n = len(ldiv) - 1
+    left = fix_overlap(left)
+    right = fix_overlap(right)
 
     dsk = dict()
     name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
+    empty = meta.iloc[0:0]
 
-    prev_tail = compute_prev(dsk, right)
-    next_head = compute_next(dsk, right)
+    tails = compute_tails(right, by=kwargs['right_by'])
 
-    j, k = 0, -1
+    n, m = len(left.divisions)-1, len(right.divisions)-1
+    j = 0
+    while j+1 < m and right.divisions[j+1] <= left.divisions[0]:
+        j += 1
     for i in range(n):
-        if ldiv[i] == left.divisions[k+1]:
-            k += 1
-            if ldiv[i+1] == left.divisions[k+1]:
-                splice = (left._name, k)
-            else:
-                splice = (methods.boundary_slice, (left._name, k),
-                          None, ldiv[i+1], False)
-        else:
-            splice = (methods.boundary_slice, (left._name, k),
-                      ldiv[i], ldiv[i+1], ldiv[i+1] == left.divisions[k+1])
+        frames = []
 
-        while j+1 < m and rdiv[j+1] < ldiv[i+1]:
+        while j < m and (right.divisions[j] < left.divisions[i+1] or
+              (i == n-1 and right.divisions[j] <= left.divisions[i+1])):
+            lower = None if j == 0 or right.divisions[j] <= left.divisions[i]\
+                         else right.divisions[j]
+            upper = None if right.divisions[j+1] >= left.divisions[i+1]\
+                         else right.divisions[j+1]
+            slice = (methods.boundary_slice, (left._name, i),
+                     lower, upper, False)
+            frames.append((apply, merge_asof_padded, [slice,
+                          (right._name, j), (tails._name, j)], kwargs))
             j += 1
 
-        args = [splice, (right._name, j),
-                (prev_tail, j-1) if j > 0 else None,
-                (next_head, j+1) if j+1 < m else None, meta]
+        if left.divisions[i] < right.divisions[j] < left.divisions[i+1]:
+            slice = (methods.boundary_slice, (left._name, i),
+                     right.divisions[j], None)
+            frames.append((apply, merge_asof_padded, [slice,
+                          (right._name, m-1), (tails._name, m-1)], kwargs))
 
-        dsk[(name, i)] = (apply, merge_asof_padded, args, kwargs)
+        if right.divisions[m] <= left.divisions[i]:
+            frames.append((apply, merge_asof_padded, [(left._name, i),
+                          (right._name, m-1), (tails._name, m-1)], kwargs))
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    return new_dd_object(graph, name, meta, ldiv)
+        dsk[(name, i)] = (pd.concat, frames) if len(frames) > 0 else empty
+
+        if right.divisions[j] > left.divisions[i+1]:
+            j -= 1
+
+    graph = HighLevelGraph.from_collections(name, dsk,
+                                            dependencies=[left, right, tails])
+    return new_dd_object(graph, name, meta, left.divisions)
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
@@ -580,7 +570,6 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
               'allow_exact_matches': allow_exact_matches,
               'direction': direction}
 
-    # input validation
     if left is None or right is None:
         raise ValueError("Cannot merge_asof on empty DataFrames")
 
@@ -594,7 +583,6 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
             raise NotImplementedError(
                 "Dask collections not currently allowed in merge columns")
 
-    # pray that left[left_on] and right[right_on] are sorted
     if not is_dask_collection(left):
         left = from_pandas(left, npartitions=1)
     if left_on is not None:
@@ -615,7 +603,6 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
         raise ValueError("merge_asof input must be sorted!")
 
     return merge_asof_indexed(left, right, **kwargs)
-    # warning: answer may have a weird index
 
 ###############################################################
 # Concat
