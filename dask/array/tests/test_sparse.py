@@ -71,6 +71,10 @@ def test_basic(func):
             assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
+@pytest.mark.skipif(
+    sparse.__version__ < '0.7.0+10',
+    reason='fixed in https://github.com/pydata/sparse/pull/256'
+)
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
