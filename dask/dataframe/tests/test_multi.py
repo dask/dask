@@ -195,12 +195,10 @@ def list_eq(aa, bb):
         a = aa.compute(scheduler='sync')
     else:
         a = aa
-
     if isinstance(bb, dd.DataFrame):
         b = bb.compute(scheduler='sync')
     else:
         b = bb
-
     tm.assert_index_equal(a.columns, b.columns)
 
     if isinstance(a, pd.DataFrame):
@@ -391,11 +389,7 @@ def test_merge(how, shuffle):
                      suffixes=('1', '2'), shuffle=shuffle),
             pd.merge(A, B, left_on='x', right_index=True, how=how,
                      suffixes=('1', '2')))
-    # print("  --  ")
-    # print(dd.merge(a, b, left_on='x', right_index=True, how=how,
-    #                  suffixes=('1', '2'), shuffle=shuffle).index.compute())
-    # print(pd.merge(A, B, left_on='x', right_index=True, how=how,
-    #          suffixes=('1', '2')).index)
+
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
