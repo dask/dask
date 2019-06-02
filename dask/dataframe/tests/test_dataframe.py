@@ -1177,7 +1177,6 @@ def test_map():
     assert_eq(ddf.b.map(lk), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=('b', 'i8')), df.b.map(lk))
-    pytest.raises(TypeError, lambda: ddf.a.map(d.b))
 
 
 def test_concat():
@@ -3740,3 +3739,23 @@ def test_dtype_cast():
     assert ddf.B.dtype == np.int64
     # fails
     assert ddf.A.dtype == np.int32
+
+
+@pytest.mark.parametrize("base_npart", [1, 4])
+@pytest.mark.parametrize("map_npart", [1, 3])
+@pytest.mark.parametrize("sorted_index", [False, True])
+def test_series_map(base_npart, map_npart, sorted_index):
+    np.random.seed(0)
+    base = pd.Series([''.join(np.random.choice(['a', 'b', 'c'], size=3)) for x in range(100)])
+    if not sorted_index:
+        index = np.arange(100)
+        np.random.shuffle(index)
+        base.index = index
+    map_index = [''.join(x) for x in product('abc', repeat=3)]
+    map = pd.Series(np.random.randint(50, size=len(map_index)))
+    map.index = map_index
+    pandas_answer = base.map(map)
+    dask_base = dd.from_pandas(base, npartitions=base_npart)
+    dask_map = dd.from_pandas(map, npartitions=map_npart)
+    dask_answer = dask_base.map(dask_map).compute()
+    dd.utils.assert_eq(pandas_answer.sort_index(), dask_answer.sort_index())
