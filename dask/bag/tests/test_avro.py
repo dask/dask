@@ -19,6 +19,7 @@ schema = {
 
 
 def test_onefile_oneblock(tmpdir):
+    tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, 'one.avro')
     with open(fn, 'wb') as f:
         fastavro.writer(f, records=expected, schema=schema)
@@ -28,6 +29,7 @@ def test_onefile_oneblock(tmpdir):
 
 
 def test_twofile_oneblock(tmpdir):
+    tmpdir = str(tmpdir)
     fn1 = os.path.join(tmpdir, 'one.avro')
     fn2 = os.path.join(tmpdir, 'two.avro')
     with open(fn1, 'wb') as f:
@@ -40,6 +42,7 @@ def test_twofile_oneblock(tmpdir):
 
 
 def test_twofile_multiblock(tmpdir):
+    tmpdir = str(tmpdir)
     fn1 = os.path.join(tmpdir, 'one.avro')
     fn2 = os.path.join(tmpdir, 'two.avro')
     with open(fn1, 'wb') as f:
@@ -59,6 +62,7 @@ def test_twofile_multiblock(tmpdir):
 
 def test_roundtrip_simple(tmpdir):
     from dask.delayed import Delayed
+    tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, 'out*.avro')
     b = db.from_sequence([{'a': i} for i in [1, 2, 3, 4, 5]], npartitions=2)
     schema = {
@@ -76,6 +80,7 @@ def test_roundtrip_simple(tmpdir):
 
 @pytest.mark.parametrize('codec', ['null', 'deflate', 'snappy'])
 def test_roundtrip(tmpdir, codec):
+    tmpdir = str(tmpdir)
     if codec == 'snappy':
         pytest.importorskip('snappy')
     fn = os.path.join(tmpdir, 'out*.avro')
@@ -86,6 +91,7 @@ def test_roundtrip(tmpdir, codec):
 
 
 def test_invalid_schema(tmpdir):
+    tmpdir = str(tmpdir)
     b = db.from_sequence(expected, npartitions=3)
     fn = os.path.join(tmpdir, 'out*.avro')
     with pytest.raises(AssertionError):

@@ -2,7 +2,6 @@ from __future__ import division, print_function, absolute_import
 
 import itertools
 from numbers import Number
-import textwrap
 
 import pytest
 from distutils.version import LooseVersion
@@ -13,7 +12,6 @@ import dask.array as da
 from dask.compatibility import PY2
 from dask.utils import ignoring
 from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.einsumfuncs import einsum_can_optimize
 
 
 def test_array():
@@ -26,6 +24,13 @@ def test_array():
     x = da.ones((100,3), chunks=10)
     y = da.array(x)
     assert isinstance(y, da.Array)
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings stripped in optimised Py2")
+def test_derived_docstrings():
+    assert ("This docstring was copied from numpy.array"
+            in da.routines.array.__doc__)
+    assert "Create an array." in da.routines.array.__doc__
 
 
 @pytest.mark.parametrize("funcname", [
@@ -168,13 +173,6 @@ def test_swapaxes():
     (4, 6, 8, 10),
 ])
 def test_flip(funcname, kwargs, shape):
-    if (funcname == "flip" and
-            LooseVersion(np.__version__) < LooseVersion("1.12.0")):
-        pytest.skip(
-            "NumPy %s doesn't support `flip`."
-            " Need NumPy 1.12.0 or greater." % np.__version__
-        )
-
     axis = kwargs.get("axis")
     if axis is None:
         if funcname == "flipud":
@@ -356,16 +354,10 @@ def test_inner(shape1, shape2):
 def test_apply_along_axis(func1d_name, func1d, shape, axis):
     a = np.random.randint(0, 10, shape)
     d = da.from_array(a, chunks=(len(shape) * (5,)))
-
-    if (func1d_name == "range2" and
-            LooseVersion(np.__version__) < LooseVersion("1.13.0")):
-        with pytest.raises(ValueError):
-            da.apply_along_axis(func1d, axis, d)
-    else:
-        assert_eq(
-            da.apply_along_axis(func1d, axis, d),
-            np.apply_along_axis(func1d, axis, a)
-        )
+    assert_eq(
+        da.apply_along_axis(func1d, axis, d),
+        np.apply_along_axis(func1d, axis, a)
+    )
 
 
 @pytest.mark.parametrize('func_name, func', [
@@ -464,8 +456,6 @@ def test_ediff1d(shape, to_end, to_begin):
     1,
     2
 ])
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="Old np.gradient does not support coordinate.")
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -494,6 +484,9 @@ def test_bincount():
     assert_eq(e, np.bincount(x, minlength=6))
     assert same_keys(da.bincount(d, minlength=6), e)
 
+    assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
+    assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
+
 
 def test_bincount_with_weights():
     x = np.array([2, 1, 5, 2, 1])
@@ -506,15 +499,13 @@ def test_bincount_with_weights():
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
-def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
-    x = np.array([2, 1, 5, 2, 1])
+def test_bincount_unspecified_minlength():
+    x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
-    try:
-        da.bincount(d)
-    except Exception as e:
-        assert 'minlength' in str(e)
-    else:
-        assert False
+    e = da.bincount(d)
+    assert_eq(e, np.bincount(x))
+    assert same_keys(da.bincount(d), e)
+    assert len(e.compute()) == 8  # shape is (nan,) so must compute for len()
 
 
 def test_digitize():
@@ -586,10 +577,6 @@ def test_histogram_extra_args_and_shapes():
 
     for v, bins, w in data:
         # density
-        assert_eq(da.histogram(v, bins=bins, normed=True)[0],
-                  np.histogram(v, bins=bins, normed=True)[0])
-
-        # normed
         assert_eq(da.histogram(v, bins=bins, density=True)[0],
                   np.histogram(v, bins=bins, density=True)[0])
 
@@ -599,6 +586,15 @@ def test_histogram_extra_args_and_shapes():
 
         assert_eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
+
+
+def test_histogram_normed_deprecation():
+    x = da.arange(10)
+    with pytest.raises(ValueError) as info:
+        da.histogram(x, bins=[1, 2, 3], normed=True)
+
+    assert 'density' in str(info.value)
+    assert 'deprecated' in str(info.value).lower()
 
 
 @pytest.mark.parametrize("bins, hist_range", [
@@ -744,8 +740,6 @@ def test_unique_rand(seed, low, high, shape, chunks):
     [(20, 20), (4, 5)],
 ])
 @pytest.mark.parametrize("invert", [True, False])
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="np.isin is new in numpy 1.13")
 def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
                    test_shape, test_chunks, invert):
     rng = np.random.RandomState(seed)
@@ -763,8 +757,6 @@ def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
 
 
 @pytest.mark.parametrize("assume_unique", [True, False])
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
-                    reason="np.isin is new in numpy 1.13")
 def test_isin_assume_unique(assume_unique):
     a1 = np.arange(10)
     d1 = da.from_array(a1, chunks=(5,))
@@ -793,12 +785,6 @@ def test_roll(chunks, shift, axis):
         with pytest.raises(TypeError if axis is None else ValueError):
             da.roll(a, shift, axis)
     else:
-        if (_maybe_len(shift) > 1 and
-                LooseVersion(np.__version__) < LooseVersion("1.12.0")):
-            pytest.skip(
-                "NumPy %s doesn't support multiple axes with `roll`."
-                " Need NumPy 1.12.0 or greater." % np.__version__
-            )
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
@@ -1058,16 +1044,6 @@ def test_piecewise():
     )
 
 
-@pytest.mark.skipif(
-    LooseVersion(np.__version__) < '1.12.0',
-    reason=textwrap.dedent(
-        """\
-            NumPy piecewise mishandles the otherwise condition pre-1.12.0.
-
-            xref: https://github.com/numpy/numpy/issues/5737
-        """
-    )
-)
 def test_piecewise_otherwise():
     np.random.seed(1337)
 
@@ -1215,8 +1191,6 @@ def test_count_nonzero():
             assert_eq(x_c, d_c)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="NumPy's count_nonzero doesn't yet support axis")
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
 def test_count_nonzero_axis(axis):
     for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
@@ -1245,8 +1219,6 @@ def test_count_nonzero_obj():
         assert_eq(x_c, d_c)
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
-                    reason="NumPy's count_nonzero doesn't yet support axis")
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
 def test_count_nonzero_obj_axis(axis):
     x = np.random.randint(10, size=(15, 16)).astype(object)
@@ -1507,8 +1479,6 @@ def test_einsum(einsum_signature):
                   da.einsum(einsum_signature, *da_inputs))
 
 
-@pytest.mark.skipif(not einsum_can_optimize,
-                    reason="np.einsum(optimize) unavailable")
 @pytest.mark.parametrize('optimize_opts', [
     (True, False),
     ('greedy', False),

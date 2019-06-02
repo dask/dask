@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps, reduce
+from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
 from numbers import Integral, Number
@@ -17,6 +17,7 @@ from .core import (Array, asarray, normalize_chunks,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError
+from ..utils import derived_from
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -201,7 +202,7 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
     dtype : dtype, optional
-        The type of the output array. Default is given by ``numpy.dtype(float)``.
+        The type of the output array.
 
     Returns
     -------
@@ -216,15 +217,15 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
     """
     num = int(num)
 
-    chunks = normalize_chunks(chunks, (num,))
+    if dtype is None:
+        dtype = np.linspace(0, 1, 1).dtype
+
+    chunks = normalize_chunks(chunks, (num,), dtype=dtype)
 
     range_ = stop - start
 
     div = (num - 1) if endpoint else num
     step = float(range_) / div
-
-    if dtype is None:
-        dtype = np.linspace(0, 1, 1).dtype
 
     name = 'linspace-' + tokenize((start, stop, num, endpoint, chunks, dtype))
 
@@ -322,7 +323,7 @@ def arange(*args, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
-@wraps(np.meshgrid)
+@derived_from(np)
 def meshgrid(*xi, **kwargs):
     indexing = kwargs.pop("indexing", "xy")
     sparse = bool(kwargs.pop("sparse", False))
@@ -410,7 +411,7 @@ def indices(dimensions, dtype=int, chunks='auto'):
     return grid
 
 
-def eye(N, chunks, M=None, k=0, dtype=float):
+def eye(N, chunks='auto', M=None, k=0, dtype=float):
     """
     Return a 2-D Array with ones on the diagonal and zeros elsewhere.
 
@@ -418,8 +419,13 @@ def eye(N, chunks, M=None, k=0, dtype=float):
     ----------
     N : int
       Number of rows in the output.
-    chunks: int
-        chunk size of resulting blocks
+    chunks : int, str
+        How to chunk the array. Must be one of the following forms:
+        -   A blocksize like 1000.
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
     M : int, optional
       Number of columns in the output. If None, defaults to `N`.
     k : int, optional
@@ -435,15 +441,17 @@ def eye(N, chunks, M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    if not isinstance(chunks, Integral):
-        raise ValueError('chunks must be an int')
-
-    token = tokenize(N, chunk, M, k, dtype)
-    name_eye = 'eye-' + token
-
     eye = {}
     if M is None:
         M = N
+
+    if not isinstance(chunks, (int, str)):
+        raise ValueError('chunks must be an int or string')
+    elif isinstance(chunks, str):
+        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+        chunks = chunks[0][0]
+    token = tokenize(N, chunks, M, k, dtype)
+    name_eye = 'eye-' + token
 
     vchunks = [chunks] * (N // chunks)
     if N % chunks != 0:
@@ -462,7 +470,7 @@ def eye(N, chunks, M=None, k=0, dtype=float):
                  chunks=(chunks, chunks), dtype=dtype)
 
 
-@wraps(np.diag)
+@derived_from(np)
 def diag(v):
     name = 'diag-' + tokenize(v)
     if isinstance(v, np.ndarray):
@@ -502,7 +510,7 @@ def diag(v):
     return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
 
 
-@wraps(np.diagonal)
+@derived_from(np)
 def diagonal(a, offset=0, axis1=0, axis2=1):
     name = 'diagonal-' + tokenize(a, offset, axis1, axis2)
 
@@ -673,9 +681,9 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
     return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
 
 
-@wraps(np.fromfunction)
+@derived_from(np)
 def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
-    chunks = normalize_chunks(chunks, shape)
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
@@ -691,7 +699,7 @@ def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
-@wraps(np.repeat)
+@derived_from(np)
 def repeat(a, repeats, axis=None):
     if axis is None:
         if a.ndim == 1:
@@ -737,7 +745,7 @@ def repeat(a, repeats, axis=None):
     return concatenate(out, axis=axis)
 
 
-@wraps(np.tile)
+@derived_from(np)
 def tile(A, reps):
     if not isinstance(reps, Integral):
         raise NotImplementedError("Only integer valued `reps` supported.")
@@ -1034,7 +1042,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     return result
 
 
-@wraps(np.pad)
+@derived_from(np)
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
 

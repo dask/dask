@@ -140,13 +140,19 @@ test suite.
 .. code-block:: python
 
    from decimal import Decimal
-   from dask.dataframe.extensions import make_array_nonempty
+   from dask.dataframe.extensions import make_array_nonempty, make_scalar
    from pandas.tests.extension.decimal import DecimalArray, DecimalDtype
 
    @make_array_nonempty.register(DecimalDtype)
    def _(dtype):
        return DecimalArray._from_sequence([Decimal('0'), Decimal('NaN')],
                                           dtype=dtype)
+
+
+   @make_scalar.register(Decimal)
+   def _(x):
+      return Decimal('1')
+
 
 Internally, Dask will use this to create a small dummy Series for tracking
 metadata through operations.
@@ -180,3 +186,19 @@ So you (or your users) can now create and store a dask ``DataFrame`` or
    Dask Name: from_pandas, 3 tasks
 
 Notice the ``decimal`` dtype.
+
+.. _dataframe.accessors:
+
+Accessors
+---------
+
+Many extension arrays expose their functionality on Series or DataFrame objects
+using accessors. Dask provides decorators to register accessors similar to pandas. See
+`the pandas documentation on accessors <http://pandas.pydata.org/pandas-docs/stable/development/extending.html#registering-custom-accessors>`_
+for more.
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: dask.dataframe.extensions.register_dataframe_accessor
+.. autofunction:: dask.dataframe.extensions.register_series_accessor
+.. autofunction:: dask.dataframe.extensions.register_index_accessor

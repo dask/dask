@@ -1,15 +1,11 @@
 import pytest
-np = pytest.importorskip('numpy', minversion='1.16')
-
-import os
+import numpy as np
 
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
-
-env_name = "NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"
-missing_arrfunc_cond = env_name not in os.environ or os.environ[env_name] != "1"
-missing_arrfunc_reason = env_name + " undefined or disabled"
+missing_arrfunc_cond = not IS_NEP18_ACTIVE
+missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -26,8 +22,6 @@ missing_arrfunc_reason = env_name + " undefined or disabled"
     lambda x: np.sum(x),
     lambda x: np.var(x),
     lambda x: np.vstack(x),
-    lambda x: np.fft.fft(x.rechunk(x.shape) if isinstance(x, da.Array) else x),
-    lambda x: np.fft.fft2(x.rechunk(x.shape) if isinstance(x, da.Array) else x),
     lambda x: np.linalg.norm(x)])
 def test_array_function_dask(func):
     x = np.random.random((100, 100))
@@ -36,6 +30,19 @@ def test_array_function_dask(func):
     res_y = func(y)
 
     assert isinstance(res_y, da.Array)
+    assert_eq(res_y, res_x)
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize('func', [np.fft.fft, np.fft.fft2])
+def test_array_function_fft(func):
+    x = np.random.random((100, 100))
+    y = da.from_array(x, chunks=(100, 100))
+    res_x = func(x)
+    res_y = func(y)
+
+    if func.__module__ != 'mkl_fft._numpy_fft':
+        assert isinstance(res_y, da.Array)
     assert_eq(res_y, res_x)
 
 
@@ -53,14 +60,18 @@ def test_array_notimpl_function_dask(func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-def test_array_function_sparse_transpose():
+@pytest.mark.parametrize('func', [
+    lambda x: np.real(x),
+    lambda x: np.imag(x),
+    lambda x: np.transpose(x)])
+def test_array_function_sparse(func):
     sparse = pytest.importorskip('sparse')
     x = da.random.random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
 
     y = x.map_blocks(sparse.COO)
 
-    assert_eq(np.transpose(x), np.transpose(y))
+    assert_eq(func(x), func(y))
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

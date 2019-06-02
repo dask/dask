@@ -142,7 +142,7 @@ you can give your function a keyword argument ``block_id``:
        ...
 
 This extra keyword argument will be given a tuple that provides the block
-location like ``(0, 0)`` for the upper right block or ``(0, 1)`` for the block
+location like ``(0, 0)`` for the upper-left block or ``(0, 1)`` for the block
 just to the right of that block.
 
 
@@ -178,5 +178,5 @@ and ``trim_internal``:
    >>> g2 = g.map_blocks(myfunc)
    >>> result = da.overlap.trim_internal(g2, {0: 2, 1: 2})
 
-.. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
-.. _Numba: http://numba.pydata.org/
+.. _Life: https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
+.. _Numba: https://numba.pydata.org/

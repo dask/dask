@@ -1,5 +1,4 @@
 import random
-from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
@@ -13,10 +12,6 @@ if sparse:
     # Conda-Forge provides 0.35.0 on windows right now, causing failures like
     # searchsorted() got an unexpected keyword argument 'side'
     pytest.importorskip("numba", minversion="0.40.0")
-
-
-if LooseVersion(np.__version__) < '1.11.2':
-    pytestmark = pytest.mark.skip
 
 
 functions = [
@@ -33,6 +28,12 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
+    lambda x: x.mean(),
+    lambda x: x.moment(order=0),
+    pytest.param(lambda x: x.std(),
+                 marks=pytest.mark.xfail(reason="fixed in https://github.com/pydata/sparse/pull/243")),
+    pytest.param(lambda x: x.var(),
+                 marks=pytest.mark.xfail(reason="fixed in https://github.com/pydata/sparse/pull/243")),
     lambda x: x.dot(np.arange(x.shape[-1])),
     lambda x: x.dot(np.eye(x.shape[-1])),
     lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
@@ -47,6 +48,8 @@ functions = [
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
     lambda x: x.rechunk((2, 2, 1)),
+    lambda x: np.isneginf(x),
+    lambda x: np.isposinf(x),
 ]
 
 

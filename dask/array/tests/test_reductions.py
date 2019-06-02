@@ -5,6 +5,8 @@ import warnings
 import pytest
 np = pytest.importorskip('numpy')
 
+import itertools
+
 import dask.array as da
 from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
@@ -13,6 +15,26 @@ import dask.config as config
 
 def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
+
+
+@pytest.mark.parametrize('dtype', ['f4', 'i4'])
+@pytest.mark.parametrize('keepdims', [True, False])
+def test_numel(dtype, keepdims):
+    x = np.ones((2, 3, 4))
+
+    assert_eq(da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
+              np.sum(x, axis=0, keepdims=keepdims, dtype=dtype))
+
+    for length in range(x.ndim):
+        for sub in itertools.combinations([d for d in range(x.ndim)], length):
+            assert_eq(da.reductions.numel(x, axis=sub, keepdims=keepdims, dtype=dtype),
+                      np.sum(x, axis=sub, keepdims=keepdims, dtype=dtype))
+
+    for length in range(x.ndim):
+        for sub in itertools.combinations([d for d in range(x.ndim)], length):
+            ssub = np.random.shuffle(list(sub))
+            assert_eq(da.reductions.numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
+                      np.sum(x, axis=ssub, keepdims=keepdims, dtype=dtype))
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
@@ -316,7 +338,6 @@ def test_nan():
     assert_eq(np.nanprod(x), da.nanprod(d))
 
 
-@pytest.mark.skipif(np.__version__ < '1.13.0', reason='nanmax/nanmin for object dtype')
 @pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
                                   'nanmax', 'max'])
 def test_nan_object(func):
@@ -417,7 +438,6 @@ def test_reduction_names():
     assert x.mean().name.startswith('mean')
 
 
-@pytest.mark.skipif(np.__version__ < '1.12.0', reason='argmax out parameter')
 @pytest.mark.parametrize('func', [np.sum,
                                   np.argmax])
 def test_array_reduction_out(func):
@@ -427,12 +447,7 @@ def test_array_reduction_out(func):
     assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
-cum_funcs = ["cumsum", "cumprod"]
-if np.__version__ >= '1.12.0':
-    cum_funcs += ["nancumsum", "nancumprod"]
-
-
-@pytest.mark.parametrize("func", cum_funcs)
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
 def test_array_cumreduction_axis(func, use_nan, axis):
@@ -544,3 +559,28 @@ def test_regres_3940(func):
     assert func(a).name != func(a + 1).name
     assert func(a, axis=0).name != func(a).name
     assert func(a, axis=0).name != func(a, axis=1).name
+
+
+def test_trace():
+    def _assert(a, b, *args, **kwargs):
+        return assert_eq(a.trace(*args, **kwargs), b.trace(*args, **kwargs))
+
+    b = np.arange(12).reshape((3, 4))
+    a = da.from_array(b, 1)
+    _assert(a, b)
+    _assert(a, b, 0)
+    _assert(a, b, 1)
+    _assert(a, b, -1)
+
+    b = np.arange(8).reshape((2, 2, 2))
+    a = da.from_array(b, 2)
+    _assert(a, b)
+    _assert(a, b, 0)
+    _assert(a, b, 1)
+    _assert(a, b, -1)
+    _assert(a, b, 0, 0, 1)
+    _assert(a, b, 0, 0, 2)
+    _assert(a, b, 0, 1, 2, int)
+    _assert(a, b, 0, 1, 2, float)
+    _assert(a, b, offset=1, axis1=0, axis2=2, dtype=int)
+    _assert(a, b, offset=1, axis1=0, axis2=2, dtype=float)

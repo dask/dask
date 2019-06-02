@@ -177,6 +177,7 @@ Top level user functions:
    tensordot
    tile
    topk
+   trace
    transpose
    tril
    triu
@@ -335,10 +336,12 @@ Create and Store Arrays
    from_delayed
    from_npy_stack
    from_zarr
+   from_tiledb
    store
    to_hdf5
    to_zarr
    to_npy_stack
+   to_tiledb
 
 Generalized Ufuncs
 ~~~~~~~~~~~~~~~~~~
@@ -601,10 +604,12 @@ Other functions
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
 .. autofunction:: from_zarr
+.. autofunction:: from_tiledb
 .. autofunction:: store
 .. autofunction:: to_hdf5
 .. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
+.. autofunction:: to_tiledb
 
 .. currentmodule:: dask.array.fft
 

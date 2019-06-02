@@ -71,7 +71,7 @@ dtype as ``'category'``:
 
     >>> ddf = dd.read_csv(..., dtype={col_name: 'category'})
 
-.. _`categorical data`: http://pandas.pydata.org/pandas-docs/stable/categorical.html
+.. _`categorical data`: https://pandas.pydata.org/pandas-docs/stable/categorical.html
 
 Moreover, with Pandas 0.21.0 and up, ``dd.read_csv`` and ``dd.read_table`` can read
 data directly into *known* categoricals by specifying instances of

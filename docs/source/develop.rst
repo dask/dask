@@ -10,17 +10,17 @@ Where to ask for help
 
 Dask conversation happens in the following places:
 
-1.  `StackOverflow #dask tag`_: for usage questions
-2.  `Github Issue Tracker`_: for discussions around new features or established bugs
+1.  `Stack Overflow #dask tag`_: for usage questions
+2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
 3.  `Gitter chat`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of StackOverflow
-and Github issues over gitter chat.  Github and StackOverflow are more easily
+For usage questions and bug reports we strongly prefer the use of Stack Overflow
+and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
 searchable by future users and so is more efficient for everyone's time.
 Gitter chat is generally reserved for community discussion.
 
-.. _`StackOverflow #dask tag`: http://stackoverflow.com/questions/tagged/dask
-.. _`Github Issue Tracker`: https://github.com/dask/dask/issues/
+.. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
+.. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
 .. _`Gitter chat`: https://gitter.im/dask/dask
 
 
@@ -28,30 +28,30 @@ Separate Code Repositories
 --------------------------
 
 Dask maintains code and documentation in a few git repositories hosted on the
-Github ``dask`` organization, http://github.com/dask.  This includes the primary
+GitHub ``dask`` organization, https://github.com/dask.  This includes the primary
 repository and several other repositories for different components.  A
 non-exhaustive list follows:
 
-*  http://github.com/dask/dask: The main code repository holding parallel
+*  https://github.com/dask/dask: The main code repository holding parallel
    algorithms, the single-machine scheduler, and most documentation
-*  http://github.com/dask/distributed: The distributed memory scheduler
-*  http://github.com/dask/dask-ml: Machine learning algorithms
-*  http://github.com/dask/s3fs: S3 Filesystem interface
-*  http://github.com/dask/gcsfs: GCS Filesystem interface
-*  http://github.com/dask/hdfs3: Hadoop Filesystem interface
+*  https://github.com/dask/distributed: The distributed memory scheduler
+*  https://github.com/dask/dask-ml: Machine learning algorithms
+*  https://github.com/dask/s3fs: S3 Filesystem interface
+*  https://github.com/dask/gcsfs: GCS Filesystem interface
+*  https://github.com/dask/hdfs3: Hadoop Filesystem interface
 *  ...
 
-Git and Github can be challenging at first.  Fortunately good materials exist
+Git and GitHub can be challenging at first.  Fortunately good materials exist
 on the internet.  Rather than repeat these materials here, we refer you to
 Pandas' documentation and links on this subject at
-http://pandas.pydata.org/pandas-docs/stable/contributing.html
+https://pandas.pydata.org/pandas-docs/stable/contributing.html
 
 
 Issues
 ------
 
 The community discusses and tracks known bugs and potential features in the
-`Github Issue Tracker`_.  If you have a new idea or have identified a bug, then
+`GitHub Issue Tracker`_.  If you have a new idea or have identified a bug, then
 you should raise it there to start public discussion.
 
 If you are looking for an introductory issue to get started with development,
@@ -86,7 +86,7 @@ environment on your computer to compile them when installing with ``pip``::
 
    conda install -y numpy pandas scipy bokeh
 
-.. _conda: http://conda.pydata.org/docs/
+.. _conda: https://conda.io/
 
 Install Dask and dependencies::
 
@@ -106,7 +106,7 @@ as follows::
 
    py.test dask --verbose --doctest-modules
 
-.. _py.test: http://pytest.org/latest/
+.. _py.test: https://docs.pytest.org/en/latest/
 
 
 Contributing to Code
@@ -118,7 +118,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 2.7, 3.4, 3.5, and 3.6 in a single codebase.
+Dask supports Python versions 2.7, 3.5, 3.6, and 3.7 in a single codebase.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -254,13 +254,13 @@ Changelog
 
 Every significative code contribution should be listed in the
 :doc:`changelog` under the corresponding version.  When submitting a Pull
-Request in Github, please add to that file explaining what was added/modified.
+Request in GitHub, please add to that file explaining what was added/modified.
 
 
 Contributing to Documentation
 -----------------------------
 
-Dask uses Sphinx_ for documentation, hosted on http://readthedocs.org .
+Dask uses Sphinx_ for documentation, hosted on https://readthedocs.org .
 Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
@@ -279,4 +279,4 @@ The resulting HTML files end up in the ``build/html`` directory.
 You can now make edits to rst files and run ``make html`` again to update
 the affected pages.
 
-.. _Sphinx: http://www.sphinx-doc.org/
+.. _Sphinx: https://www.sphinx-doc.org/
