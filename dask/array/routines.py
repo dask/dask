@@ -20,7 +20,6 @@ from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
-from .utils import normalize_meta
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, blockwise, broadcast_shapes,
