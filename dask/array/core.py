@@ -876,6 +876,8 @@ class Array(DaskMethodsMixin):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
+        if dtype is not None and meta is not None:
+            raise TypeError("You must not specify both meta and dtype")
         if dtype is None and meta is None:
             raise ValueError("You must specify the meta or dtype of the array")
 
