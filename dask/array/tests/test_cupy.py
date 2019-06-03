@@ -96,11 +96,10 @@ def test_basic(func):
     ddc = func(dc)
     ddn = func(dn)
 
-    assert_eq(ddc, ddn)
+    assert type(ddc._meta) == cupy.core.core.ndarray
+    assert_eq(ddc, ddc)  # Check that _meta and computed arrays match types
 
-    if ddc.shape:
-        result = ddc.compute(scheduler='single-threaded')
-        assert isinstance(result, cupy.ndarray)
+    assert_eq(ddc, ddn)
 
 
 @pytest.mark.parametrize('dtype', ['f4', 'f8'])
@@ -113,15 +112,24 @@ def test_sizeof(dtype):
 @pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_diag():
     v = cupy.arange(11)
-    assert_eq(da.diag(v), cupy.diag(v))
+    dv = da.from_array(v, chunks=(4,), asarray=False)
+    assert type(dv._meta) == cupy.core.core.ndarray
+    assert_eq(dv, dv)  # Check that _meta and computed arrays match types
+    assert_eq(da.diag(dv), cupy.diag(v))
 
     v = v + v + 3
-    darr = da.diag(v)
+    dv = dv + dv + 3
+    darr = da.diag(dv)
     cupyarr = cupy.diag(v)
+    assert type(darr._meta) == cupy.core.core.ndarray
+    assert_eq(darr, darr)  # Check that _meta and computed arrays match types
     assert_eq(darr, cupyarr)
 
     x = cupy.arange(64).reshape((8, 8))
-    assert_eq(da.diag(x), cupy.diag(x))
+    dx = da.from_array(x, chunks=(4, 4), asarray=False)
+    assert type(dx._meta) == cupy.core.core.ndarray
+    assert_eq(dx, dx)  # Check that _meta and computed arrays match types
+    assert_eq(da.diag(dx), cupy.diag(x))
 
 
 @pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
