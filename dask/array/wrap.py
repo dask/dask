@@ -13,6 +13,7 @@ except ImportError:
 from ..base import tokenize
 from ..utils import funcname
 from .core import Array, normalize_chunks
+from .utils import meta_from_array
 
 
 def _parse_wrap_args(func, args, kwargs, shape):
@@ -72,7 +73,7 @@ def wrap_func_like(func, *args, **kwargs):
     Transform np creation function into blocked version
     """
     x = args[0]
-    meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
+    meta = meta_from_array(x, x.ndim)
     shape = kwargs.get('shape', x.shape)
 
     parsed = _parse_wrap_args(func, args, kwargs, shape)

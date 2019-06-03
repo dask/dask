@@ -2337,7 +2337,8 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     if hasattr(x, '_ctx_'):
         return Array(dsk, name, chunks, dtype=x.dtype)
 
-    meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
+    from .utils import meta_from_array
+    meta = meta_from_array(x, x.ndim)
 
     return Array(dsk, name, chunks, meta=meta)
 
@@ -2955,9 +2956,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
 
+    from .utils import meta_from_array
     metas = [getattr(s, '_meta', s) for s in seq]
-    metas = [m[tuple(slice(0, 0, None) for _ in range(m.ndim)) if
-             hasattr(m, 'ndim') else slice(0, 0, None)] for m in metas]
+    metas = [meta_from_array(m, getattr(m, 'ndim', 1)) for m in metas]
     meta = np.concatenate(metas)
 
     uc_args = list(concat(zip(seq, inds)))

@@ -6,6 +6,7 @@ from operator import mul
 import numpy as np
 
 from .core import Array
+from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
@@ -174,13 +175,7 @@ def reshape(x, shape):
     if x.shape == shape:
         return x
 
-    if len(shape) > x.ndim:
-        meta = x._meta[(Ellipsis, ) + tuple(None for _ in range(len(shape) - x.ndim))]
-        meta = meta[tuple(slice(0, 0, None) for _ in range(meta.ndim))]
-    elif len(shape) < x.ndim:
-        meta = np.sum(x._meta, axis=tuple(d for d in range((x.ndim - len(shape)))))
-    else:
-        meta = x._meta
+    meta = meta_from_array(x, len(shape))
 
     name = 'reshape-' + tokenize(x, shape)
 

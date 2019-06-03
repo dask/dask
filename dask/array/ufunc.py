@@ -6,7 +6,7 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
-from .utils import empty_like_safe, IS_NEP18_ACTIVE
+from .utils import empty_like_safe, meta_from_array, IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
@@ -300,8 +300,8 @@ def frexp(x):
     a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
                         shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
-    lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
-    rmeta = r[tuple(slice(0, 0, None) for _ in range(r.ndim))]
+    lmeta = meta_from_array(l, l.ndim)
+    rmeta = meta_from_array(r, r.ndim)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
     L = Array(graph, left, chunks=tmp.chunks, meta=lmeta)
@@ -324,8 +324,8 @@ def modf(x):
     a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
                         shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
-    lmeta = l[tuple(slice(0, 0, None) for _ in range(l.ndim))]
-    rmeta = r[tuple(slice(0, 0, None) for _ in range(r.ndim))]
+    lmeta = meta_from_array(l, l.ndim)
+    rmeta = meta_from_array(r, r.ndim)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
     L = Array(graph, left, chunks=tmp.chunks, meta=lmeta)

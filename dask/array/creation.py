@@ -17,7 +17,7 @@ from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
-from .utils import AxisError, zeros_like_safe
+from .utils import AxisError, meta_from_array, zeros_like_safe
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -474,11 +474,7 @@ def eye(N, chunks='auto', M=None, k=0, dtype=float):
 def diag(v):
     name = 'diag-' + tokenize(v)
 
-    if hasattr(v, '_meta'):
-        meta = v._meta[tuple(slice(0, 0, None) for _ in range(v.ndim))]
-    else:
-        meta = v[tuple(slice(0, 0, None) for _ in range(v.ndim))]
-    meta = meta.reshape((0, 0)) if v.ndim == 1 else meta.reshape((0, ))
+    meta = meta_from_array(v, 2 if v.ndim == 1 else 1)
 
     if (isinstance(v, np.ndarray) or
             (hasattr(v, '__array_function__') and not isinstance(v, Array))):
@@ -582,10 +578,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     chunks = left_chunks + right_shape
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    if hasattr(a, '_meta'):
-        meta = a._meta[tuple(slice(0, 0, None) for _ in range(a.ndim))].reshape((0, ) * len(shape))
-    else:
-        meta = a[tuple(slice(0, 0, None) for _ in range(a.ndim))].reshape((0, ) * len(shape))
+    meta = meta_from_array(a, len(shape))
     return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
 
 
