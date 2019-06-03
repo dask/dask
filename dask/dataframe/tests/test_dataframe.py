@@ -3745,7 +3745,6 @@ def test_dtype_cast():
 @pytest.mark.parametrize("map_npart", [1, 3])
 @pytest.mark.parametrize("sorted_index", [False, True])
 def test_series_map(base_npart, map_npart, sorted_index):
-    np.random.seed(0)
     base = pd.Series([''.join(np.random.choice(['a', 'b', 'c'], size=3)) for x in range(100)])
     if not sorted_index:
         index = np.arange(100)
