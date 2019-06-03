@@ -183,13 +183,12 @@ def test_tril_triu():
     for chk in [5, 4]:
         dA = da.from_array(A, (chk, chk), asarray=False)
 
-        assert np.allclose(da.triu(dA).compute(), np.triu(A))
-        assert np.allclose(da.tril(dA).compute(), np.tril(A))
+        assert_eq(da.triu(dA), np.triu(A))
+        assert_eq(da.tril(dA), np.tril(A))
 
-        for k in [-25, -20, -19, -15, -14, -9, -8, -6, -5, -1,
-                  1, 4, 5, 6, 8, 10, 11, 15, 16, 19, 20, 21]:
-            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
-            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+        for k in [-25, -20, -9, -1, 1, 8, 19, 21]:
+            assert_eq(da.triu(dA, k), np.triu(A, k))
+            assert_eq(da.tril(dA, k), np.tril(A, k))
 
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
@@ -221,7 +220,6 @@ def test_overlap_internal():
     d = da.from_array(x, chunks=(4, 4), asarray=False)
 
     g = da.overlap.overlap_internal(d, {0: 2, 1: 1})
-    result = g.compute(scheduler='sync')
     assert g.chunks == ((6, 6), (5, 5))
 
     expected = np.array([
@@ -239,7 +237,7 @@ def test_overlap_internal():
         [48, 49, 50, 51, 52,   51, 52, 53, 54, 55],
         [56, 57, 58, 59, 60,   59, 60, 61, 62, 63]])
 
-    assert_eq(result, expected)
+    assert_eq(g, expected)
     assert same_keys(da.overlap.overlap_internal(d, {0: 2, 1: 1}), g)
 
 
@@ -336,7 +334,7 @@ def test_random_all():
     def rnd_test(func, *args, **kwargs):
         a = func(*args, **kwargs)
         assert type(a._meta) == cupy.core.core.ndarray
-        assert type(a.compute()) == cupy.core.core.ndarray
+        assert_eq(a, a)  # Check that _meta and computed arrays match types
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
 
@@ -388,10 +386,8 @@ def test_random_shapes(shape):
 
     x = rs.poisson(size=shape, chunks=3)
     assert type(x._meta) == cupy.core.core.ndarray
+    assert_eq(x, x)  # Check that _meta and computed arrays match types
     assert x._meta.shape == (0,) * len(shape)
-
-    x = x.compute()
-    assert type(x) == cupy.core.core.ndarray
     assert x.shape == shape
 
 
