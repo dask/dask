@@ -26,7 +26,10 @@ functions = [
     pytest.param(lambda x: x.mean(),
                  marks=pytest.mark.xfail(
                  reason='requires NumPy>=1.17 and CuPy support for shape argument in *_like functions.')),
-    lambda x: x.moment(order=0),
+    pytest.param(lambda x: x.moment(order=0),
+                 marks=pytest.mark.xfail(
+                 reason='see https://github.com/dask/dask/issues/4875')),
+    lambda x: x.moment(order=2),
     pytest.param(lambda x: x.std(),
                  marks=pytest.mark.xfail(
                  reason='requires NumPy>=1.17 and CuPy support for shape argument in *_like functions.')),
