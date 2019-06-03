@@ -157,7 +157,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
             **kwargs):
     """Write bag to set of avro files
 
-    The schema is a complex dictionary dscribing the data, see
+    The schema is a complex dictionary describing the data, see
     https://avro.apache.org/docs/1.8.2/gettingstartedpython.html#Defining+a+schema
     and https://fastavro.readthedocs.io/en/latest/writer.html .
     It's structure is as follows::
