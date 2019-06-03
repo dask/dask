@@ -731,7 +731,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
-    sources2 = [Array(sources_dsk, e.name, e.chunks, meta=e._meta) for e in sources]
+    sources2 = [Array(sources_dsk, e.name, e.chunks, meta=e) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -774,7 +774,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             )
 
         result = tuple(
-            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, meta=s._meta)
+            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, meta=s)
             for s, t in zip(sources, toks)
         )
 
@@ -885,9 +885,11 @@ class Array(DaskMethodsMixin):
         if self._chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
-        if meta is None and dtype is not None:
-            meta = np.empty((0,) * self.ndim, dtype=dtype)
-        self._meta = meta
+        if dtype:
+            self._meta = np.empty((0,) * self.ndim, dtype=dtype)
+        else:
+            from .utils import meta_from_array
+            self._meta = meta_from_array(meta, meta.ndim)
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -1376,7 +1378,7 @@ class Array(DaskMethodsMixin):
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
-        return Array(graph, name, chunks, meta=self._meta)
+        return Array(graph, name, chunks, meta=self)
 
     @property
     def blocks(self):
@@ -1888,7 +1890,7 @@ class Array(DaskMethodsMixin):
         if self.npartitions == 1:
             return self.map_blocks(M.copy)
         else:
-            return Array(self.dask, self.name, self.chunks, meta=self._meta)
+            return Array(self.dask, self.name, self.chunks, meta=self)
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -2337,10 +2339,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     if hasattr(x, '_ctx_'):
         return Array(dsk, name, chunks, dtype=x.dtype)
 
-    from .utils import meta_from_array
-    meta = meta_from_array(x, x.ndim)
-
-    return Array(dsk, name, chunks, meta=meta)
+    return Array(dsk, name, chunks, meta=x)
 
 
 def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):

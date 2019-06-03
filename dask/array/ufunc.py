@@ -300,13 +300,11 @@ def frexp(x):
     a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
                         shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
-    lmeta = meta_from_array(l, l.ndim)
-    rmeta = meta_from_array(r, r.ndim)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, meta=lmeta)
+    L = Array(graph, left, chunks=tmp.chunks, meta=l)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, meta=rmeta)
+    R = Array(graph, right, chunks=tmp.chunks, meta=r)
     return L, R
 
 
@@ -324,11 +322,9 @@ def modf(x):
     a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
                         shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
-    lmeta = meta_from_array(l, l.ndim)
-    rmeta = meta_from_array(r, r.ndim)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, meta=lmeta)
+    L = Array(graph, left, chunks=tmp.chunks, meta=l)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, meta=rmeta)
+    R = Array(graph, right, chunks=tmp.chunks, meta=r)
     return L, R

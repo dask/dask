@@ -151,9 +151,7 @@ def overlap_internal(x, axes):
     dsk = merge(interior_slices, overlap_blocks)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
-    meta = meta_from_array(x, x.ndim)
-
-    return Array(graph, name, chunks, meta=meta)
+    return Array(graph, name, chunks, meta=x)
 
 
 def trim_overlap(x, depth, boundary=None):

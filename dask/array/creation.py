@@ -629,7 +629,7 @@ def triu(m, k=0):
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m._meta)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
 def tril(m, k=0):
@@ -679,7 +679,7 @@ def tril(m, k=0):
                                              shape=(m.chunks[0][i], m.chunks[1][j])),
                                      m._meta)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m._meta)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
