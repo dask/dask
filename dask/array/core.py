@@ -2336,7 +2336,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
-    if hasattr(x, '_ctx_'):
+    if x.__class__.__module__.split('.')[0] == 'tiledb' and hasattr(x, '_ctx_'):
         return Array(dsk, name, chunks, dtype=x.dtype)
 
     return Array(dsk, name, chunks, meta=x)
