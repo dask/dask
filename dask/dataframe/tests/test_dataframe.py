@@ -3751,10 +3751,9 @@ def test_series_map(base_npart, map_npart, sorted_index):
         np.random.shuffle(index)
         base.index = index
     map_index = [''.join(x) for x in product('abc', repeat=3)]
-    map = pd.Series(np.random.randint(50, size=len(map_index)))
-    map.index = map_index
-    pandas_answer = base.map(map)
+    mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
+    expected = base.map(mapper)
     dask_base = dd.from_pandas(base, npartitions=base_npart)
-    dask_map = dd.from_pandas(map, npartitions=map_npart)
-    dask_answer = dask_base.map(dask_map).compute()
-    dd.utils.assert_eq(pandas_answer.sort_index(), dask_answer.sort_index())
+    dask_map = dd.from_pandas(mapper, npartitions=map_npart)
+    result = dask_base.map(dask_map)
+    dd.utils.assert_eq(expected, result)
