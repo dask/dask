@@ -997,7 +997,6 @@ def squeeze(a, axis=None):
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
     a = a[sl]
-    a._meta = normalize_meta(a._meta, a.ndim)
 
     return a
 
