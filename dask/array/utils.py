@@ -44,10 +44,16 @@ def normalize_meta(x, ndim, dtype=None):
 
 
 def meta_from_array(x, ndim, dtype=None):
+    if isinstance(x, list) or isinstance(x, tuple):
+        ndims = [0 if isinstance(a, numbers.Number)
+                 else a.ndim if hasattr(a, 'ndim') else len(a) for a in x]
+        a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
+        return a if isinstance(x, list) else tuple(x)
+
     if hasattr(x, '_meta'):
-        meta = x._meta[tuple(slice(0, 0, None) for _ in range(ndim))]
+        meta = x._meta
     else:
-        meta = x[tuple(slice(0, 0, None) for _ in range(ndim))]
+        meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
 
     return normalize_meta(meta, ndim, dtype)
 
