@@ -50,7 +50,9 @@ def meta_from_array(x, ndim, dtype=None):
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
         return a if isinstance(x, list) else tuple(x)
 
-    if hasattr(x, '_meta'):
+    # x._meta must be a Dask Array, some libraries (e.g. zarr) implement a
+    # _meta attribute that are incompatible with Dask Array._meta
+    if hasattr(x, '_meta') and isinstance(x, Array):
         meta = x._meta
     else:
         meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
