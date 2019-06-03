@@ -6,7 +6,7 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
-from .utils import empty_like_safe, meta_from_array, IS_NEP18_ACTIVE
+from .utils import empty_like_safe, IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
