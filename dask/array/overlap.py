@@ -15,6 +15,25 @@ from ..core import flatten
 from ..utils import concrete
 
 
+class Depth:
+    def __init__(self, axes):
+        self.one = [0] * len(axes)
+        self.two = [0] * len(axes)
+        self.total = [0] * len(axes)
+
+        for i,idepth in axes.items():
+            idepth = axes.get(i,0)
+            if isinstance(idepth,tuple):
+                self.one[i] = idepth[0]
+                self.two[i] = idepth[1]
+                self.total[i] = self.one[i] + self.two[i]
+
+            else:
+                self.one[i] = idepth
+                self.two[i] = idepth
+                self.total[i] = self.one[i] + self.two[i]
+
+
 def fractional_slice(task, axes):
     """
 
@@ -29,17 +48,18 @@ def fractional_slice(task, axes):
     """
     rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
 
+    current_depth = Depth(axes)
+
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
-        depth = axes.get(i, 0)
         if t == r:
             index.append(slice(None, None, None))
         elif t < r:
-            index.append(slice(0, depth))
-        elif t > r and depth == 0:
+            index.append(slice(0, current_depth.one[i]))
+        elif t > r and current_depth.total[i] == 0:
             index.append(slice(0, 0))
         else:
-            index.append(slice(-depth, None))
+            index.append(slice(-current_depth.two[i], None))
 
     index = tuple(index)
 
@@ -84,6 +104,9 @@ def expand_key(k, dims, name=None, axes=None):
         return rv
 
     shape = []
+
+    local_depth = Depth(axes)
+
     for i, ind in enumerate(k[1:]):
         num = 1
         if ind > 0:
@@ -92,11 +115,11 @@ def expand_key(k, dims, name=None, axes=None):
             num += 1
         shape.append(num)
 
-    args = [inds(i, ind) if axes.get(i, 0) else [ind] for i, ind in enumerate(k[1:])]
+    args = [inds(i, ind) if local_depth.total[i] else [ind] for i, ind in enumerate(k[1:])]
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
-    shape2 = [d if axes.get(i, 0) else 1 for i, d in enumerate(shape)]
+    shape2 = [d if local_depth.total[i] else 1 for i, d in enumerate(shape)]
     result = reshapelist(shape2, seq)
     return result
 
@@ -115,13 +138,13 @@ def overlap_internal(x, axes):
     The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-    dims = list(map(len, x.chunks))
-    expand_key2 = partial(expand_key, dims=dims, axes=axes)
 
+    dims = list(map(len, x.chunks))
+
+    expand_key2 = partial(expand_key, dims=dims, axes=axes)
     # Make keys for each of the surrounding sub-arrays
     interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
                          map(flatten), concat, list)
-
     name = 'overlap-' + tokenize(x, axes)
     getitem_name = 'getitem-' + tokenize(x, axes)
     interior_slices = {}
@@ -136,15 +159,19 @@ def overlap_internal(x, axes):
                                            (concrete, expand_key2((None,) + k, name=getitem_name)))
 
     chunks = []
+
     for i, bds in enumerate(x.chunks):
+
+        current_depth = Depth(axes)
+
         if len(bds) == 1:
             chunks.append(bds)
         else:
-            left = [bds[0] + axes.get(i, 0)]
-            right = [bds[-1] + axes.get(i, 0)]
+            left = [bds[0] + current_depth.one[i]]
+            right = [bds[-1] + current_depth.two[i]]
             mid = []
             for bd in bds[1:-1]:
-                mid.append(bd + axes.get(i, 0) * 2)
+                mid.append(bd + current_depth.total[i])
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
@@ -190,7 +217,7 @@ def trim_internal(x, axes, boundary=None):
         ilist = []
         for j, d in enumerate(bd):
             if bdy != 'none':
-                d = d - axes.get(i, 0) * 2
+                d = d - axes.get(i, 0) * 2  #TODO add support for assymmetrical axes
             else:
                 d = d - axes.get(i, 0) if j != 0 else d
                 d = d - axes.get(i, 0) if j != len(bd) - 1 else d
@@ -203,7 +230,7 @@ def trim_internal(x, axes, boundary=None):
                       x, chunks=chunks, dtype=x.dtype)
 
 
-def _trim(x, axes, boundary, block_info):
+def _trim(x, axes, boundary, block_info):  #TODO Add support for assymetrical axes
     """Similar to dask.array.chunk.trim but requires one to specificy the
     boundary condition.
 
@@ -536,7 +563,10 @@ def coerce_depth(ndim, depth):
         depth = (depth,) * ndim
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
-
+    if isinstance(depth,dict):
+        for i in range(ndim):
+            if i not in depth:
+                depth.update({i:0})
     return depth
 
 

@@ -52,6 +52,46 @@ def test_overlap_internal():
     assert same_keys(overlap_internal(d, {0: 2, 1: 1}), g)
 
 
+def test_overlap_internal_asym():
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, chunks=(4, 4))
+
+    g = overlap_internal(d, {0: (0, 2), 1:(0, 1)})
+    result = g.compute(scheduler='sync')
+    assert g.chunks == ((4, 6), (4, 5))
+
+    expected = np.array([
+        [ 0,  1,  2,  3,    3,  4,  5,  6,  7],
+        [ 8,  9, 10, 11,   11, 12, 13, 14, 15],
+        [16, 17, 18, 19,   19, 20, 21, 22, 23],
+        [24, 25, 26, 27,   27, 28, 29, 30, 31],
+
+        [16, 17, 18, 19,   19, 20, 21, 22, 23],
+        [24, 25, 26, 27,   27, 28, 29, 30, 31],
+        [32, 33, 34, 35,   35, 36, 37, 38, 39],
+        [40, 41, 42, 43,   43, 44, 45, 46, 47],
+        [48, 49, 50, 51,   51, 52, 53, 54, 55],
+        [56, 57, 58, 59,   59, 60, 61, 62, 63]])
+    assert_eq(result, expected)
+    assert same_keys(overlap_internal(d, {0: (0,2), 1: (0,1)}), g)
+
+
+def test_overlap_internal_asym_small():
+    x = np.arange(32).reshape((2,16))
+    d = da.from_array(x, chunks=(2,4))
+
+    g = overlap_internal(d, {0: (0,0), 1: (1,1)})
+    result = g.compute(scheduler='sync')
+    assert g.chunks == ((2,), (5,6,6,5))
+
+    expected = np.array([
+        [0, 1, 2, 3, 4,    3, 4, 5, 6, 7, 8,   7, 8, 9, 10, 11, 12,   11, 12, 13, 14, 15],
+        [16, 17, 18, 19, 20,    19, 20, 21, 22, 23, 24,   23, 24, 25, 26, 27, 28,   27, 28, 29, 30, 31 ]])
+
+    assert_eq(result, expected)
+    assert same_keys(overlap_internal(d, {0: (0,0), 1: (1,1)}), g)
+
+
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2})
