@@ -6,9 +6,6 @@ from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
 from dask.sizeof import sizeof
 
-missing_arrfunc_cond = not IS_NEP18_ACTIVE
-missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
-
 cupy = pytest.importorskip('cupy')
 
 
@@ -63,21 +60,29 @@ functions = [
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
     pytest.param(lambda x: np.isreal(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.iscomplex(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.real(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.imag(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.fix(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.i0(x.reshape((24,))),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.sinc(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
     pytest.param(lambda x: np.nan_to_num(x),
-                 marks=pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)),
+                 marks=pytest.mark.skipif(not IS_NEP18_ACTIVE,
+                                          reason="NEP-18 support is not available in NumPy")),
 ]
 
 
@@ -105,7 +110,7 @@ def test_sizeof(dtype):
     assert sizeof(c) == c.nbytes
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_diag():
     v = cupy.arange(11)
     assert_eq(da.diag(v), cupy.diag(v))
@@ -119,7 +124,7 @@ def test_diag():
     assert_eq(da.diag(x), cupy.diag(x))
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_diagonal():
     v = cupy.arange(11)
     with pytest.raises(ValueError):
@@ -172,7 +177,7 @@ def test_diagonal():
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_tril_triu():
     A = cupy.random.randn(20, 20)
     for chk in [5, 4]:
@@ -189,7 +194,7 @@ def test_tril_triu():
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_tril_triu_non_square_arrays():
     A = cupy.random.randint(0, 11, (30, 35))
     dA = da.from_array(A, chunks=(5, 5), asarray=False)
@@ -197,7 +202,7 @@ def test_tril_triu_non_square_arrays():
     assert_eq(da.tril(dA), np.tril(A))
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_apply_gufunc_axis():
     def mydiff(x):
         return np.diff(x)
@@ -246,7 +251,7 @@ def test_trim_internal():
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_periodic():
     x = cupy.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4), asarray=False)
@@ -259,7 +264,7 @@ def test_periodic():
     assert_eq(e[0, :], d[-2, :])
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_reflect():
     x = cupy.arange(10)
     d = da.from_array(x, chunks=(5, 5), asarray=False)
@@ -273,7 +278,7 @@ def test_reflect():
     assert_eq(e, expected)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_nearest():
     x = cupy.arange(10)
     d = da.from_array(x, chunks=(5, 5), asarray=False)
@@ -289,7 +294,7 @@ def test_nearest():
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_constant():
     x = cupy.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4), asarray=False)
@@ -304,7 +309,7 @@ def test_constant():
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_boundaries():
     x = cupy.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4), asarray=False)
@@ -391,7 +396,7 @@ def test_random_shapes(shape):
 
 
 @pytest.mark.xfail(reason="CuPy division by zero on tensordot(), https://github.com/cupy/cupy/pull/2209")
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 @pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, None),        # tall-skinny regular blocks
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
@@ -456,7 +461,7 @@ def test_tsqr(m, n, chunks, error_type):
             u, s, vh = da.linalg.tsqr(data, compute_svd=True)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 @pytest.mark.parametrize('m_min,n_max,chunks,vary_rows,vary_cols,error_type', [
     (10, 5, (10, 5), True, False, None),   # single block tall
     (10, 5, (10, 5), False, True, None),   # single block tall
@@ -580,7 +585,7 @@ def test_sfqr(m, n, chunks, error_type):
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(np.__version__ < '1.17', reason='no shape argument for *_like functions')
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.skipif(not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy")
 def test_bincount():
     x = cupy.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2, asarray=False)
