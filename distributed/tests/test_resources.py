@@ -202,6 +202,24 @@ def test_persist_tuple(c, s, a, b):
     assert not b.data
 
 
+@gen_cluster(client=True)
+def test_resources_str(c, s, a, b):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    yield a.set_resources(MyRes=1)
+
+    x = dd.from_pandas(pd.DataFrame({"A": [1, 2], "B": [3, 4]}), npartitions=1)
+    y = x.apply(lambda row: row.sum(), axis=1, meta=(None, "int64"))
+    yy = y.persist(resources={"MyRes": 1})
+    yield wait(yy)
+
+    ts_first = s.tasks[tokey(y.__dask_keys__()[0])]
+    assert ts_first.resource_restrictions == {"MyRes": 1}
+    ts_last = s.tasks[tokey(y.__dask_keys__()[-1])]
+    assert ts_last.resource_restrictions == {"MyRes": 1}
+
+
 @gen_cluster(
     client=True,
     ncores=[

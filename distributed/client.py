@@ -2351,6 +2351,7 @@ class Client(Node):
                 resources = self._expand_resources(
                     resources, all_keys=itertools.chain(dsk, keys)
                 )
+                resources = {tokey(k): v for k, v in resources.items()}
 
             if retries:
                 retries = self._expand_retries(
