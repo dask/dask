@@ -4947,7 +4947,7 @@ def meta_warning(df):
 
 
 def mapseries(base_chunk, concat_map):
-    return base_chunk.map(concat_map.sort_index())
+    return base_chunk.map(concat_map)
 
 
 def mapseries_combine(index, concat_result):

@@ -3744,7 +3744,8 @@ def test_dtype_cast():
 @pytest.mark.parametrize("base_npart", [1, 4])
 @pytest.mark.parametrize("map_npart", [1, 3])
 @pytest.mark.parametrize("sorted_index", [False, True])
-def test_series_map(base_npart, map_npart, sorted_index):
+@pytest.mark.parametrize("sorted_map_index", [False, True])
+def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     base = pd.Series([''.join(np.random.choice(['a', 'b', 'c'], size=3)) for x in range(100)])
     if not sorted_index:
         index = np.arange(100)
@@ -3752,6 +3753,10 @@ def test_series_map(base_npart, map_npart, sorted_index):
         base.index = index
     map_index = [''.join(x) for x in product('abc', repeat=3)]
     mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
+    if not sorted_map_index:
+        map_index = np.array(map_index)
+        np.random.shuffle(map_index)
+        mapper.index = map_index
     expected = base.map(mapper)
     dask_base = dd.from_pandas(base, npartitions=base_npart)
     dask_map = dd.from_pandas(mapper, npartitions=map_npart)
