@@ -66,7 +66,7 @@ from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
                    _maybe_from_pandas, new_dd_object, is_broadcastable,
-                   prefix_reduction)
+                   prefix_reduction, suffix_reduction)
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
@@ -493,10 +493,64 @@ def compute_tails(ddf, by=None):
                 return None
             return pd.concat(frames).drop_duplicates(subset=by, keep='last')
 
-        return prefix_reduction(last_tail, ddf, identity=empty,
-                                preprocess=last_tail)
+        return prefix_reduction(last_tail, ddf, preprocess=last_tail, postprocess=none_to_empty)
 
-def merge_asof_padded(left, right, prev=None, **kwargs):
+def compute_heads(ddf, by=None):
+    """ For each partition, returns the first row of the next nonempty
+    partition.
+    """
+    empty = ddf._meta.iloc[0:0]
+
+    def none_to_empty(df):
+        return empty if df is None else df
+
+    if by is None:
+        def last_tail(L, R):
+            if L is None or L.empty:
+                return R
+            return L.heads(1)
+
+        return suffix_reduction(last_tail, ddf, postprocess=none_to_empty)
+    else:
+        def last_tail(*dfs):
+            frames = []
+            for df in dfs:
+                if df is not None:
+                    frames.append(df)
+            if len(frames) == 0:
+                return None
+            return pd.concat(frames).drop_duplicates(subset=by, keep='first')
+
+        return suffix_reduction(last_tail, ddf, preprocess=last_tail, postprocess=none_to_empty)
+
+def pair_partitions(L, R):
+    """ Returns which partitions to pair for the merge_asof algorithm and the
+    bounds on which to split them up
+    """
+    result = []
+
+    n, m = len(L) - 1, len(R) - 1
+    i, j = 0, -1
+    while R[j+1] <= L[i]:
+        j += 1
+    J = []
+    while i < n:
+        partition = 0 if j < 0 else m-1 if j >= m else j
+        lower = R[j] if j >= 0 and R[j] > L[i] else None
+        upper = R[j+1] if j+1 < m and (i == n-1 or R[j+1] < L[i+1]) else None
+
+        J.append((partition, lower, upper))
+
+        i1 = i+1 if j+1 == m or (i+1 < n and R[j+1] >= L[i+1]) else i
+        j1 = j+1 if i+1 == n or (j+1 < m and L[i+1] >= R[j+1]) else j
+        if i1 > i:
+            result.append(J)
+            J = []
+        i, j = i1, j1
+
+    return result
+
+def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
     """ merge_asof but potentially adding rows to the beginning/end of right """
     if left is None or right is None:
         raise ValueError('dafuq did u do')
@@ -505,6 +559,8 @@ def merge_asof_padded(left, right, prev=None, **kwargs):
     if prev is not None:
         frames.append(prev)
     frames.append(right)
+    if next is not None:
+        frames.append(next)
 
     return pd.merge_asof(left, pd.concat(frames), **kwargs)
 
@@ -517,52 +573,38 @@ def merge_asof_indexed(left, right, **kwargs):
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
     empty = meta.iloc[0:0]
 
-    tails = compute_tails(right, by=kwargs['right_by'])
+    dependencies = [left, right]
+    tails = heads = None
+    if kwargs['direction'] in ['backward', 'nearest']:
+        tails = compute_tails(right, by=kwargs['right_by'])
+        dependencies.append(tails)
+    if kwargs['direction'] in ['forward', 'nearest']:
+        heads = compute_heads(right, by=kwargs['right_by'])
+        dependencies.append(heads)
 
-    n, m = len(left.divisions)-1, len(right.divisions)-1
-    j = 0
-    while j+1 < m and right.divisions[j+1] <= left.divisions[0]:
-        j += 1
-    for i in range(n):
+    for i, J in enumerate(pair_partitions(left.divisions, right.divisions)):
         frames = []
-
-        while j < m and (right.divisions[j] < left.divisions[i+1] or
-              (i == n-1 and right.divisions[j] <= left.divisions[i+1])):
-            lower = None if j == 0 or right.divisions[j] <= left.divisions[i]\
-                         else right.divisions[j]
-            upper = None if right.divisions[j+1] >= left.divisions[i+1]\
-                         else right.divisions[j+1]
+        for j, lower, upper in J:
             slice = (methods.boundary_slice, (left._name, i),
                      lower, upper, False)
-            frames.append((apply, merge_asof_padded, [slice,
-                          (right._name, j), (tails._name, j)], kwargs))
-            j += 1
-
-        if left.divisions[i] < right.divisions[j] < left.divisions[i+1]:
-            slice = (methods.boundary_slice, (left._name, i),
-                     right.divisions[j], None)
-            frames.append((apply, merge_asof_padded, [slice,
-                          (right._name, m-1), (tails._name, m-1)], kwargs))
-
-        if right.divisions[m] <= left.divisions[i]:
-            frames.append((apply, merge_asof_padded, [(left._name, i),
-                          (right._name, m-1), (tails._name, m-1)], kwargs))
-
-        dsk[(name, i)] = (pd.concat, frames) if len(frames) > 0 else empty
-
-        if right.divisions[j] > left.divisions[i+1]:
-            j -= 1
+            tail = (tails._name, j) if tails is not None else None
+            head = (heads._name, j) if heads is not None else None
+            frames.append((apply, merge_asof_padded, [slice, (right._name, j),
+                           tail, head], kwargs))
+        dsk[(name, i)] = (pd.concat, frames)
 
     graph = HighLevelGraph.from_collections(name, dsk,
-                                            dependencies=[left, right, tails])
+                                            dependencies=dependencies)
     return new_dd_object(graph, name, meta, left.divisions)
 
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
                right_by=None, suffixes=('_x', '_y'), tolerance=None,
                allow_exact_matches=True, direction='backward'):
-    if tolerance is not None or not allow_exact_matches or direction != 'backward':
-        raise NotImplementedError("still need to implement that")
+    if direction not in ['backward', 'forward', 'nearest']:
+        raise ValueError("Invalid merge_asof direction. Choose from 'backward',\
+              'forward', or 'nearest'")
+
     kwargs = {'on': on, 'left_on': left_on, 'right_on': right_on,
               'left_index': left_index, 'right_index': right_index,
               'by': by, 'left_by': left_by, 'right_by': right_by,

@@ -86,9 +86,6 @@ def test_by_basic():
     C = pd.merge_asof(B, A, on='time', by='ticker').set_index('time')
     c = merge_asof(b, a, on='time', by='ticker')
 
-    #print (C)
-    #print (c.compute())
-
     assert_eq(c, C)
 
 def test_by_random():
@@ -110,5 +107,71 @@ def test_by_random():
 
         C = pd.merge_asof(A, B, on='time', by='ticker').set_index('time')
         c = merge_asof(a, b, on='time', by='ticker')
+
+        assert_eq (c, C)
+
+def test_allow_exact_matches_random():
+    avg_slowdown = 0
+    N = 0
+    with open('tests/merge_asof_tests.txt', 'r') as f:
+        N += 1
+        index_left = [int(x) for x in f.readline().split(',')]
+        index_right = [int(x) for x in f.readline().split(',')]
+        value_left = [int(x) for x in f.readline().split(',')]
+        value_right = [int(x) for x in f.readline().split(',')]
+        ticker_left = [int(x) for x in f.readline().split(',')]
+        ticker_right = [int(x) for x in f.readline().split(',')]
+
+        A = pd.DataFrame({'time': index_left, 'left_val': value_left, 'ticker': ticker_left})
+        a = dd.from_pandas(A, npartitions=5)
+        B = pd.DataFrame({'time': index_right, 'right_val': value_right, 'ticker': ticker_right})
+        b = dd.from_pandas(B, npartitions=5)
+
+        C = pd.merge_asof(A, B, on='time', by='ticker', allow_exact_matches=False).set_index('time')
+        c = merge_asof(a, b, on='time', by='ticker', allow_exact_matches=False)
+
+        assert_eq (c, C)
+
+def test_forward_random():
+    avg_slowdown = 0
+    N = 0
+    with open('tests/merge_asof_tests.txt', 'r') as f:
+        N += 1
+        index_left = [int(x) for x in f.readline().split(',')]
+        index_right = [int(x) for x in f.readline().split(',')]
+        value_left = [int(x) for x in f.readline().split(',')]
+        value_right = [int(x) for x in f.readline().split(',')]
+        ticker_left = [int(x) for x in f.readline().split(',')]
+        ticker_right = [int(x) for x in f.readline().split(',')]
+
+        A = pd.DataFrame({'time': index_left, 'left_val': value_left, 'ticker': ticker_left})
+        a = dd.from_pandas(A, npartitions=5)
+        B = pd.DataFrame({'time': index_right, 'right_val': value_right, 'ticker': ticker_right})
+        b = dd.from_pandas(B, npartitions=5)
+
+        C = pd.merge_asof(A, B, on='time', by='ticker', direction='forward').set_index('time')
+        c = merge_asof(a, b, on='time', by='ticker', direction='forward')
+
+        assert_eq (c, C)
+
+def test_nearest_random():
+    avg_slowdown = 0
+    N = 0
+    with open('tests/merge_asof_tests.txt', 'r') as f:
+        N += 1
+        index_left = [int(x) for x in f.readline().split(',')]
+        index_right = [int(x) for x in f.readline().split(',')]
+        value_left = [int(x) for x in f.readline().split(',')]
+        value_right = [int(x) for x in f.readline().split(',')]
+        ticker_left = [int(x) for x in f.readline().split(',')]
+        ticker_right = [int(x) for x in f.readline().split(',')]
+
+        A = pd.DataFrame({'time': index_left, 'left_val': value_left, 'ticker': ticker_left})
+        a = dd.from_pandas(A, npartitions=5)
+        B = pd.DataFrame({'time': index_right, 'right_val': value_right, 'ticker': ticker_right})
+        b = dd.from_pandas(B, npartitions=5)
+
+        C = pd.merge_asof(A, B, on='time', by='ticker', direction='nearest').set_index('time')
+        c = merge_asof(a, b, on='time', by='ticker', direction='nearest')
 
         assert_eq (c, C)
