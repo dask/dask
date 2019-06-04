@@ -12,6 +12,7 @@ from .utils import is_index_like
 from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from .. import compatibility
 
 
 class _IndexerBase(object):
@@ -308,18 +309,18 @@ def _maybe_partial_time_string(index, indexer, kind):
         return indexer
 
     if isinstance(indexer, slice):
-        if isinstance(indexer.start, pd.compat.string_types):
+        if isinstance(indexer.start, compatibility.string_types):
             start = index._maybe_cast_slice_bound(indexer.start, 'left', kind)
         else:
             start = indexer.start
 
-        if isinstance(indexer.stop, pd.compat.string_types):
+        if isinstance(indexer.stop, compatibility.string_types):
             stop = index._maybe_cast_slice_bound(indexer.stop, 'right', kind)
         else:
             stop = indexer.stop
         return slice(start, stop)
 
-    elif isinstance(indexer, pd.compat.string_types):
+    elif isinstance(indexer, compatibility.string_types):
         start = index._maybe_cast_slice_bound(indexer, 'left', 'loc')
         stop = index._maybe_cast_slice_bound(indexer, 'right', 'loc')
         return slice(min(start, stop), max(start, stop))

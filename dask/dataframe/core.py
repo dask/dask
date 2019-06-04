@@ -26,6 +26,7 @@ from .. import core
 from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
 from ..compatibility import (apply, operator_div, bind_method, string_types,
+                             isidentifier,
                              Iterator, Sequence)
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
@@ -2737,8 +2738,8 @@ class DataFrame(_Frame):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(c for c in self.columns if
-                 (isinstance(c, pd.compat.string_types) and
-                  pd.compat.isidentifier(c)))
+                 (isinstance(c, string_types) and
+                  isidentifier(c)))
         return list(o)
 
     def _ipython_key_completions_(self):
