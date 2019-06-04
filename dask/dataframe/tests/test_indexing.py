@@ -99,6 +99,7 @@ def test_loc_with_series():
     assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
     assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
 
+
 def test_loc_with_array():
     assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
 
