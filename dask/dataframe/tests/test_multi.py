@@ -265,9 +265,9 @@ def test_sequential_joins():
 
 
 def test_merge_asof_index():
-    A = pd.DataFrame({'left_val': list('abcd'*3)}, index=[1,3,7,9,10,13,14,17,20,24,25,28])
+    A = pd.DataFrame({'left_val': list('abcd' * 3)}, index=[1,3,7,9,10,13,14,17,20,24,25,28])
     a = dd.from_pandas(A, npartitions=4)
-    B = pd.DataFrame({'right_val': list('xyz'*4)}, index=[1,2,3,6,7,10,12,14,16,19,23,26])
+    B = pd.DataFrame({'right_val': list('xyz' * 4)}, index=[1,2,3,6,7,10,12,14,16,19,23,26])
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
@@ -284,7 +284,7 @@ def test_merge_asof_on():
 
     C = pd.merge_asof(A, B, on='a').set_index('a')
     c = merge_asof(a, b, on='a')
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_no_exact_matches():
@@ -295,7 +295,7 @@ def test_merge_asof_on_no_exact_matches():
 
     C = pd.merge_asof(A, B, on='a', allow_exact_matches=False).set_index('a')
     c = merge_asof(a, b, on='a', allow_exact_matches=False)
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_forward():
@@ -306,7 +306,7 @@ def test_merge_asof_on_forward():
 
     C = pd.merge_asof(A, B, on='a', direction='forward').set_index('a')
     c = merge_asof(a, b, on='a', direction='forward')
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_nearest():
@@ -317,7 +317,7 @@ def test_merge_asof_on_nearest():
 
     C = pd.merge_asof(A, B, on='a', direction='nearest').set_index('a')
     c = merge_asof(a, b, on='a', direction='nearest')
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_indexed():
@@ -328,40 +328,102 @@ def test_merge_asof_indexed():
 
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
     c = merge_asof(a, b, left_index=True, right_index=True)
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_by():
-    A = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.023', '2016-05-25 13:30:00.030', '2016-05-25 13:30:00.041', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.049', '2016-05-25 13:30:00.072', '2016-05-25 13:30:00.075']], 'ticker': ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT'], 'bid': [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01], 'ask': [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]})
+    times_A = [parse(d) for d in ['2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.030',
+                                  '2016-05-25 13:30:00.041',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.049',
+                                  '2016-05-25 13:30:00.072',
+                                  '2016-05-25 13:30:00.075']]
+    tickers_A = ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT']
+    bids_A = [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01]
+    asks_A = [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]
+    times_B = [parse(d) for d in ['2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.038',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.048']]
+    tickers_B = ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL']
+    prices_B = [51.95, 51.95, 720.77, 720.92, 98.00]
+    quantities_B = [75, 155, 100, 100, 100]
+
+    A = pd.DataFrame({'time': times_A, 'ticker': tickers_A, 'bid': bids_A, 'ask': asks_A})
     a = dd.from_pandas(A, npartitions=4)
-    B = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.038', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048']], 'ticker': ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL'], 'price': [51.95, 51.95, 720.77, 720.92, 98.00], 'quantity': [75, 155, 100, 100, 100]})
+    B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B})
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker').set_index('time')
     c = merge_asof(b, a, on='time', by='ticker')
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_by_tolerance():
-    A = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.023', '2016-05-25 13:30:00.030', '2016-05-25 13:30:00.041', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.049', '2016-05-25 13:30:00.072', '2016-05-25 13:30:00.075']], 'ticker': ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT'], 'bid': [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01], 'ask': [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]})
+    times_A = [parse(d) for d in ['2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.030',
+                                  '2016-05-25 13:30:00.041',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.049',
+                                  '2016-05-25 13:30:00.072',
+                                  '2016-05-25 13:30:00.075']]
+    tickers_A = ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT']
+    bids_A = [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01]
+    asks_A = [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]
+    times_B = [parse(d) for d in ['2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.038',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.048']]
+    tickers_B = ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL']
+    prices_B = [51.95, 51.95, 720.77, 720.92, 98.00]
+    quantities_B = [75, 155, 100, 100, 100]
+
+    A = pd.DataFrame({'time': times_A, 'ticker': tickers_A, 'bid': bids_A, 'ask': asks_A})
     a = dd.from_pandas(A, npartitions=4)
-    B = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.038', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048']], 'ticker': ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL'], 'price': [51.95, 51.95, 720.77, 720.92, 98.00], 'quantity': [75, 155, 100, 100, 100]})
+    B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B})
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('2ms')).set_index('time')
     c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('2ms'))
-    assert_eq (c, C)
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_by_tolerance_no_exact_matches():
-    A = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.023', '2016-05-25 13:30:00.030', '2016-05-25 13:30:00.041', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.049', '2016-05-25 13:30:00.072', '2016-05-25 13:30:00.075']], 'ticker': ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT'], 'bid': [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01], 'ask': [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]})
+    times_A = [parse(d) for d in ['2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.030',
+                                  '2016-05-25 13:30:00.041',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.049',
+                                  '2016-05-25 13:30:00.072',
+                                  '2016-05-25 13:30:00.075']]
+    tickers_A = ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT']
+    bids_A = [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01]
+    asks_A = [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]
+    times_B = [parse(d) for d in ['2016-05-25 13:30:00.023',
+                                  '2016-05-25 13:30:00.038',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.048',
+                                  '2016-05-25 13:30:00.048']]
+    tickers_B = ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL']
+    prices_B = [51.95, 51.95, 720.77, 720.92, 98.00]
+    quantities_B = [75, 155, 100, 100, 100]
+
+    A = pd.DataFrame({'time': times_A, 'ticker': tickers_A, 'bid': bids_A, 'ask': asks_A})
     a = dd.from_pandas(A, npartitions=4)
-    B = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.038', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048']], 'ticker': ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL'], 'price': [51.95, 51.95, 720.77, 720.92, 98.00], 'quantity': [75, 155, 100, 100, 100]})
+    B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B})
     b = dd.from_pandas(B, npartitions=3)
 
-    C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('10ms'), allow_exact_matches=False).set_index('time')
-    c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('10ms'), allow_exact_matches=False)
-    assert_eq (c, C)
+    C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
+                      allow_exact_matches=False).set_index('time')
+    c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
+                   allow_exact_matches=False)
+    assert_eq(c, C)
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])
