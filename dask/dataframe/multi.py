@@ -508,7 +508,7 @@ def compute_heads(ddf, by=None):
         def last_tail(L, R):
             if L is None or L.empty:
                 return R
-            return L.heads(1)
+            return L.head(1)
 
         return suffix_reduction(last_tail, ddf, postprocess=none_to_empty)
     else:
@@ -597,6 +597,7 @@ def merge_asof_indexed(left, right, **kwargs):
                                             dependencies=dependencies)
     return new_dd_object(graph, name, meta, left.divisions)
 
+@wraps(pd.merge_asof)
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
                left_index=False, right_index=False, by=None, left_by=None,
                right_by=None, suffixes=('_x', '_y'), tolerance=None,
