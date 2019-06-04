@@ -264,7 +264,7 @@ def test_sequential_joins():
     assert_eq(multi_join_pd, multi_join_dd)
 
 
-def test_merge_asof_index():
+def test_merge_asof_indexed():
     A = pd.DataFrame({'left_val': list('abcd' * 3)}, index=[1,3,7,9,10,13,14,17,20,24,25,28])
     a = dd.from_pandas(A, npartitions=4)
     B = pd.DataFrame({'right_val': list('xyz' * 4)}, index=[1,2,3,6,7,10,12,14,16,19,23,26])

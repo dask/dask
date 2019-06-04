@@ -432,16 +432,10 @@ def fix_overlap(ddf):
         raise ValueError("Can only fix overlap when divisions are known")
 
     def body(df, index):
-        try:
-            return df.drop(index)
-        except KeyError:
-            return df
+        return df.drop(index, inplace=True) if index in df else df
 
     def overlap(df, index):
-        try:
-            return df.loc[[index]]
-        except KeyError:
-            return None
+        return df.loc[[index]] if index in df else None
 
     dsk = dict()
     name = 'fix-overlap-' + tokenize(ddf)
