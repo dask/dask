@@ -446,26 +446,27 @@ def fix_overlap(ddf):
     dsk = dict()
     name = 'fix-overlap-' + tokenize(ddf)
 
-    n = len(ddf.divisions)-1
+    n = len(ddf.divisions) - 1
     divisions = []
     for i in range(n):
-        if i > 0 and ddf.divisions[i-1] == ddf.divisions[i]:
-            frames = dsk[(name, len(divisions)-1)][1]
+        if i > 0 and ddf.divisions[i - 1] == ddf.divisions[i]:
+            frames = dsk[(name, len(divisions) - 1)][1]
         else:
             frames = []
             if i > 0:
-                frames.append((overlap, (ddf._name, i-1), ddf.divisions[i]))
+                frames.append((overlap, (ddf._name, i - 1), ddf.divisions[i]))
             divisions.append(ddf.divisions[i])
-            dsk[(name, len(divisions)-1)] = (pd.concat, frames)
+            dsk[(name, len(divisions) - 1)] = (pd.concat, frames)
 
-        if i == n-1 or ddf.divisions[i+1] == ddf.divisions[i]:
+        if i == n - 1 or ddf.divisions[i + 1] == ddf.divisions[i]:
             frames.append((ddf._name, i))
         else:
-            frames.append((body, (ddf._name, i), ddf.divisions[i+1]))
+            frames.append((body, (ddf._name, i), ddf.divisions[i + 1]))
     divisions.append(ddf.divisions[-1])
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, ddf._meta, divisions)
+
 
 def compute_tails(ddf, by=None):
     """ For each partition, returns the last row of the most recent nonempty
@@ -495,6 +496,7 @@ def compute_tails(ddf, by=None):
 
         return prefix_reduction(last_tail, ddf, preprocess=last_tail, postprocess=none_to_empty)
 
+
 def compute_heads(ddf, by=None):
     """ For each partition, returns the first row of the next nonempty
     partition.
@@ -523,6 +525,7 @@ def compute_heads(ddf, by=None):
 
         return suffix_reduction(last_tail, ddf, preprocess=last_tail, postprocess=none_to_empty)
 
+
 def pair_partitions(L, R):
     """ Returns which partitions to pair for the merge_asof algorithm and the
     bounds on which to split them up
@@ -531,24 +534,25 @@ def pair_partitions(L, R):
 
     n, m = len(L) - 1, len(R) - 1
     i, j = 0, -1
-    while R[j+1] <= L[i]:
+    while R[j + 1] <= L[i]:
         j += 1
     J = []
     while i < n:
-        partition = 0 if j < 0 else m-1 if j >= m else j
+        partition = 0 if j < 0 else m - 1 if j >= m else j
         lower = R[j] if j >= 0 and R[j] > L[i] else None
-        upper = R[j+1] if j+1 < m and (i == n-1 or R[j+1] < L[i+1]) else None
+        upper = R[j + 1] if j + 1 < m and (i == n - 1 or R[j + 1] < L[i + 1]) else None
 
         J.append((partition, lower, upper))
 
-        i1 = i+1 if j+1 == m or (i+1 < n and R[j+1] >= L[i+1]) else i
-        j1 = j+1 if i+1 == n or (j+1 < m and L[i+1] >= R[j+1]) else j
+        i1 = i + 1 if j + 1 == m or (i + 1 < n and R[j + 1] >= L[i + 1]) else i
+        j1 = j + 1 if i + 1 == n or (j + 1 < m and L[i + 1] >= R[j + 1]) else j
         if i1 > i:
             result.append(J)
             J = []
         i, j = i1, j1
 
     return result
+
 
 def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
     """ merge_asof but potentially adding rows to the beginning/end of right """
@@ -564,6 +568,7 @@ def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
 
     return pd.merge_asof(left, pd.concat(frames), **kwargs)
 
+
 def merge_asof_indexed(left, right, **kwargs):
     left = fix_overlap(left)
     right = fix_overlap(right)
@@ -571,7 +576,6 @@ def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
-    empty = meta.iloc[0:0]
 
     dependencies = [left, right]
     tails = heads = None
@@ -596,6 +600,7 @@ def merge_asof_indexed(left, right, **kwargs):
     graph = HighLevelGraph.from_collections(name, dsk,
                                             dependencies=dependencies)
     return new_dd_object(graph, name, meta, left.divisions)
+
 
 @wraps(pd.merge_asof)
 def merge_asof(left, right, on=None, left_on=None, right_on=None,
@@ -646,6 +651,7 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
         raise ValueError("merge_asof input must be sorted!")
 
     return merge_asof_indexed(left, right, **kwargs)
+
 
 ###############################################################
 # Concat

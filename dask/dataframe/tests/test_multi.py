@@ -11,9 +11,11 @@ from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
-                                  _maybe_align_partitions)
+                                  _maybe_align_partitions, merge_asof)
 from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
                                   has_known_categories, clear_known_categories)
+
+from dateutil.parser import parse
 
 import pytest
 
@@ -260,6 +262,106 @@ def test_sequential_joins():
     join_dd = ddf1.join(ddf2, how='inner', lsuffix='_l', rsuffix='_r')
     multi_join_dd = join_dd.join(ddf3, how='inner', lsuffix='_l', rsuffix='_r')
     assert_eq(multi_join_pd, multi_join_dd)
+
+
+def test_merge_asof_index():
+    A = pd.DataFrame({'left_val': list('abcd'*3)}, index=[1,3,7,9,10,13,14,17,20,24,25,28])
+    a = dd.from_pandas(A, npartitions=4)
+    B = pd.DataFrame({'right_val': list('xyz'*4)}, index=[1,2,3,6,7,10,12,14,16,19,23,26])
+    b = dd.from_pandas(B, npartitions=3)
+
+    C = pd.merge_asof(A, B, left_index=True, right_index=True)
+    c = merge_asof(a, b, left_index=True, right_index=True)
+
+    assert_eq(c, C)
+
+
+def test_merge_asof_on():
+    A = pd.DataFrame({'a': [1, 5, 10], 'left_val': ['a', 'b', 'c']})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    C = pd.merge_asof(A, B, on='a').set_index('a')
+    c = merge_asof(a, b, on='a')
+    assert_eq (c, C)
+
+
+def test_merge_asof_on_no_exact_matches():
+    A = pd.DataFrame({'a': [1, 5, 10], 'left_val': ['a', 'b', 'c']})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    C = pd.merge_asof(A, B, on='a', allow_exact_matches=False).set_index('a')
+    c = merge_asof(a, b, on='a', allow_exact_matches=False)
+    assert_eq (c, C)
+
+
+def test_merge_asof_on_forward():
+    A = pd.DataFrame({'a': [1, 5, 10], 'left_val': ['a', 'b', 'c']})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    C = pd.merge_asof(A, B, on='a', direction='forward').set_index('a')
+    c = merge_asof(a, b, on='a', direction='forward')
+    assert_eq (c, C)
+
+
+def test_merge_asof_on_nearest():
+    A = pd.DataFrame({'a': [1, 5, 10], 'left_val': ['a', 'b', 'c']})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    C = pd.merge_asof(A, B, on='a', direction='nearest').set_index('a')
+    c = merge_asof(a, b, on='a', direction='nearest')
+    assert_eq (c, C)
+
+
+def test_merge_asof_indexed():
+    A = pd.DataFrame({'left_val': ['a', 'b', 'c']}, index=[1, 5, 10])
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({'right_val': [1, 2, 3, 6, 7]}, index=[1, 2, 3, 6, 7])
+    b = dd.from_pandas(B, npartitions=2)
+
+    C = pd.merge_asof(A, B, left_index=True, right_index=True)
+    c = merge_asof(a, b, left_index=True, right_index=True)
+    assert_eq (c, C)
+
+
+def test_merge_asof_on_by():
+    A = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.023', '2016-05-25 13:30:00.030', '2016-05-25 13:30:00.041', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.049', '2016-05-25 13:30:00.072', '2016-05-25 13:30:00.075']], 'ticker': ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT'], 'bid': [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01], 'ask': [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]})
+    a = dd.from_pandas(A, npartitions=4)
+    B = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.038', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048']], 'ticker': ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL'], 'price': [51.95, 51.95, 720.77, 720.92, 98.00], 'quantity': [75, 155, 100, 100, 100]})
+    b = dd.from_pandas(B, npartitions=3)
+
+    C = pd.merge_asof(B, A, on='time', by='ticker').set_index('time')
+    c = merge_asof(b, a, on='time', by='ticker')
+    assert_eq (c, C)
+
+
+def test_merge_asof_on_by_tolerance():
+    A = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.023', '2016-05-25 13:30:00.030', '2016-05-25 13:30:00.041', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.049', '2016-05-25 13:30:00.072', '2016-05-25 13:30:00.075']], 'ticker': ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT'], 'bid': [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01], 'ask': [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]})
+    a = dd.from_pandas(A, npartitions=4)
+    B = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.038', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048']], 'ticker': ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL'], 'price': [51.95, 51.95, 720.77, 720.92, 98.00], 'quantity': [75, 155, 100, 100, 100]})
+    b = dd.from_pandas(B, npartitions=3)
+
+    C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('2ms')).set_index('time')
+    c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('2ms'))
+    assert_eq (c, C)
+
+
+def test_merge_asof_on_by_tolerance_no_exact_matches():
+    A = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.023', '2016-05-25 13:30:00.030', '2016-05-25 13:30:00.041', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.049', '2016-05-25 13:30:00.072', '2016-05-25 13:30:00.075']], 'ticker': ['GOOG', 'MSFT', 'MSFT', 'MSFT', 'GOOG', 'AAPL', 'GOOG', 'MSFT'], 'bid': [720.50, 51.95, 51.97, 51.99, 720.50, 97.99, 720.50, 52.01], 'ask': [720.93, 51.96, 51.98, 52.00, 720.93, 98.01, 720.88, 52.03]})
+    a = dd.from_pandas(A, npartitions=4)
+    B = pd.DataFrame({'time': [parse(d) for d in ['2016-05-25 13:30:00.023', '2016-05-25 13:30:00.038', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048', '2016-05-25 13:30:00.048']], 'ticker': ['MSFT', 'MSFT', 'GOOG', 'GOOG', 'AAPL'], 'price': [51.95, 51.95, 720.77, 720.92, 98.00], 'quantity': [75, 155, 100, 100, 100]})
+    b = dd.from_pandas(B, npartitions=3)
+
+    C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('10ms'), allow_exact_matches=False).set_index('time')
+    c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('10ms'), allow_exact_matches=False)
+    assert_eq (c, C)
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])

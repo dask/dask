@@ -4940,6 +4940,7 @@ def meta_warning(df):
                 "  After:  .apply(func, meta=%s)\n" % str(meta_str))
     return msg
 
+
 def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
     """ Computes the prefix sums of f on df
 
@@ -4965,7 +4966,7 @@ def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
     name = 'prefix_reduction-' + tokenize(f, ddf, identity, preprocess)
     meta = ddf._meta
     n = len(ddf.divisions) - 1
-    divisions = [None] * (n+1)
+    divisions = [None] * (n + 1)
 
     N = 1
     while N < n:
@@ -4981,19 +4982,20 @@ def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
 
     d = 1
     while d < N:
-        for i in range(0, N, 2*d):
-            dsk[(name, i+2*d-1, 2*d, 0)] = (f, (name, i+d-1, d, 0),
-                                               (name, i+2*d-1, d, 0))
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (f, (name, i + d - 1, d, 0),
+                                                    (name, i + 2 * d - 1, d, 0))
         d *= 2
 
-    dsk[(name, N-1, N, 1)] = identity
+    dsk[(name, N - 1, N, 1)] = identity
 
     while d > 1:
         d //= 2
-        for i in range(0, N, 2*d):
-            dsk[(name, i+d-1, d, 1)] = (name, i+2*d-1, 2*d, 1)
-            dsk[(name, i+2*d-1, d, 1)] = (f, (name, i+2*d-1, 2*d, 1),
-                                             (name, i+d-1, d, 0))
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + d - 1, d, 1)] = (name, i + 2 * d - 1, 2 * d, 1)
+            dsk[(name, i + 2 * d - 1, d, 1)] = (f,
+                                                (name, i + 2 * d - 1, 2 * d, 1),
+                                                (name, i + d - 1, d, 0))
 
     if postprocess is None:
         for i in range(n):
@@ -5004,6 +5006,7 @@ def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, meta, divisions)
+
 
 def suffix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
     """ Computes the suffix sums of f on df
@@ -5030,42 +5033,43 @@ def suffix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
     name = 'suffix_reduction-' + tokenize(f, ddf, identity, preprocess)
     meta = ddf._meta
     n = len(ddf.divisions) - 1
-    divisions = [None] * (n+1)
+    divisions = [None] * (n + 1)
 
     N = 1
     while N < n:
         N *= 2
     if preprocess is None:
         for i in range(n):
-            dsk[(name, i, 1, 0)] = (ddf._name, n-1-i)
+            dsk[(name, i, 1, 0)] = (ddf._name, n - 1 - i)
     else:
         for i in range(n):
-            dsk[(name, i, 1, 0)] = (preprocess, (ddf._name, n-1-i))
+            dsk[(name, i, 1, 0)] = (preprocess, (ddf._name, n - 1 - i))
     for i in range(n, N):
         dsk[(name, i, 1, 0)] = identity
 
     d = 1
     while d < N:
-        for i in range(0, N, 2*d):
-            dsk[(name, i+2*d-1, 2*d, 0)] = (f, (name, i+2*d-1, d, 0),
-                                               (name, i+d-1, d, 0))
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (f,
+                                                    (name, i + 2 * d - 1, d, 0),
+                                                    (name, i + d - 1, d, 0))
         d *= 2
 
-    dsk[(name, N-1, N, 1)] = identity
+    dsk[(name, N - 1, N, 1)] = identity
 
     while d > 1:
         d //= 2
-        for i in range(0, N, 2*d):
-            dsk[(name, i+d-1, d, 1)] = (name, i+2*d-1, 2*d, 1)
-            dsk[(name, i+2*d-1, d, 1)] = (f, (name, i+d-1, d, 0),
-                                             (name, i+2*d-1, 2*d, 1))
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + d - 1, d, 1)] = (name, i + 2 * d - 1, 2 * d, 1)
+            dsk[(name, i + 2 * d - 1, d, 1)] = (f, (name, i + d - 1, d, 0),
+                                                (name, i + 2 * d - 1, 2 * d, 1))
 
     if postprocess is None:
         for i in range(n):
-            dsk[(name, i)] = (name, n-1-i, 1, 1)
+            dsk[(name, i)] = (name, n - 1 - i, 1, 1)
     else:
         for i in range(n):
-            dsk[(name, i)] = (postprocess, (name, n-1-i, 1, 1))
+            dsk[(name, i)] = (postprocess, (name, n - 1 - i, 1, 1))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, meta, divisions)
