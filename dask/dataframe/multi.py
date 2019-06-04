@@ -602,8 +602,8 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
                right_by=None, suffixes=('_x', '_y'), tolerance=None,
                allow_exact_matches=True, direction='backward'):
     if direction not in ['backward', 'forward', 'nearest']:
-        raise ValueError("Invalid merge_asof direction. Choose from 'backward',\
-              'forward', or 'nearest'")
+        raise ValueError("Invalid merge_asof direction. Choose from 'backward'"
+                         " 'forward', or 'nearest'")
 
     kwargs = {'on': on, 'left_on': left_on, 'right_on': right_on,
               'left_index': left_index, 'right_index': right_index,
