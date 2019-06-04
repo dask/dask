@@ -26,6 +26,7 @@ from .. import core
 from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
 from ..compatibility import (apply, operator_div, bind_method, string_types,
+                             isidentifier,
                              Iterator, Sequence)
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
@@ -2003,6 +2004,7 @@ class Series(_Frame):
     _partition_type = pd.Series
     _is_partition_type = staticmethod(is_series_like)
     _token_prefix = 'series-'
+    _accessors = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -2481,6 +2483,7 @@ class Index(Series):
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = 'index-'
+    _accessors = set()
 
     _dt_attributes = {'nanosecond', 'microsecond', 'millisecond', 'dayofyear',
                       'minute', 'hour', 'day', 'dayofweek', 'second', 'week',
@@ -2611,6 +2614,7 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = 'dataframe-'
+    _accessors = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -2734,8 +2738,8 @@ class DataFrame(_Frame):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(c for c in self.columns if
-                 (isinstance(c, pd.compat.string_types) and
-                  pd.compat.isidentifier(c)))
+                 (isinstance(c, string_types) and
+                  isidentifier(c)))
         return list(o)
 
     def _ipython_key_completions_(self):

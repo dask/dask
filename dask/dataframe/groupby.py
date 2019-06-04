@@ -18,6 +18,7 @@ from .utils import (make_meta, insert_meta_param_description,
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
+from .. import compatibility
 
 
 # #############################################
@@ -1235,7 +1236,8 @@ class DataFrameGroupBy(_GroupBy):
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(filter(pd.compat.isidentifier, self.obj.columns))))
+                      list(filter(compatibility.isidentifier,
+                                  self.obj.columns))))
 
     def __getattr__(self, key):
         try:
