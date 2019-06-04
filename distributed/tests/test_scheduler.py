@@ -1572,3 +1572,13 @@ def test_dashboard_address():
     s = yield Scheduler(dashboard_address="127.0.0.1", port=0)
     assert s.services["dashboard"].port
     yield s.close()
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager():
+    async with Scheduler(port=0) as s:
+        assert s.status == "running"
+        async with Worker(s.address) as w:
+            assert w.status == "running"
+            assert s.workers
+        assert not s.workers

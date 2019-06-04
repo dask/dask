@@ -130,3 +130,10 @@ class ServerNode(Node, Server):
     @property
     def service_ports(self):
         return {k: v.port for k, v in self.services.items()}
+
+    async def __aenter__(self):
+        await self
+        return self
+
+    async def __aexit__(self, typ, value, traceback):
+        await self.close()
