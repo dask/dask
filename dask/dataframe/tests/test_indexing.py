@@ -99,6 +99,13 @@ def test_loc_with_series():
     assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
     assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
 
+def test_loc_with_array():
+    assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
+
+    assert sorted(d.loc[(d.a % 2).values].dask) == sorted(d.loc[(d.a % 2).values].dask)
+    assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
+
+
 
 def test_loc_with_series_different_partition():
     df = pd.DataFrame(np.random.randn(20, 5),
