@@ -735,7 +735,7 @@ def counters_doc(server, extra, doc):
 def profile_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask Worker Profile"
-        profile = ProfileTimePlot(server, sizing_mode="scale_width")
+        profile = ProfileTimePlot(server, sizing_mode="scale_width", doc=doc)
         profile.trigger_update()
 
         doc.add_root(profile.root)

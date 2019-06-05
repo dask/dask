@@ -354,7 +354,7 @@ def test_WorkerTable_custom_metrics(c, s, a, b):
 
     assert all(data.values())
     assert all(len(v) == 2 for v in data.values())
-    my_index = data["worker"].index(a.address), data["worker"].index(b.address)
+    my_index = data["address"].index(a.address), data["address"].index(b.address)
     assert [data["metric_port"][i] for i in my_index] == [a.port, b.port]
     assert [data["metric_address"][i] for i in my_index] == [a.address, b.address]
 
@@ -379,7 +379,7 @@ def test_WorkerTable_different_metrics(c, s, a, b):
     assert "metric_b" in data
     assert all(data.values())
     assert all(len(v) == 2 for v in data.values())
-    my_index = data["worker"].index(a.address), data["worker"].index(b.address)
+    my_index = data["address"].index(a.address), data["address"].index(b.address)
     assert [data["metric_a"][i] for i in my_index] == [a.port, None]
     assert [data["metric_b"][i] for i in my_index] == [None, b.port]
 
@@ -399,7 +399,7 @@ def test_WorkerTable_metrics_with_different_metric_2(c, s, a, b):
     assert "metric_a" in data
     assert all(data.values())
     assert all(len(v) == 2 for v in data.values())
-    my_index = data["worker"].index(a.address), data["worker"].index(b.address)
+    my_index = data["address"].index(a.address), data["address"].index(b.address)
     assert [data["metric_a"][i] for i in my_index] == [a.port, None]
 
 

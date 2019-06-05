@@ -1,8 +1,8 @@
 {% extends main.html %}
 {% block content %}
-    <h1 class="title"> Worker: {{Worker}} </h1>
-      {% set ws = workers[Worker] %}
-      {% set worker_list = [ws] %}
+{% set ws = workers[Worker] %}
+{% set worker_list = [ws] %}
+    <h1 class="title"> Worker: {{ ws.address }} </h1>
       {% include "worker-table.html" %}
 
     <div class="columns">

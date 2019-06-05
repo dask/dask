@@ -77,7 +77,7 @@ env = Environment(
 )
 
 template_variables = {
-    "pages": ["status", "workers", "tasks", "system", "profile", "graph"]
+    "pages": ["status", "workers", "tasks", "system", "profile", "graph", "info"]
 }
 
 BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), "theme.yaml"))
@@ -449,7 +449,7 @@ class CurrentLoad(DashboardComponent):
                     "nbytes_text": nbytes_text,
                     "dashboard_host": dashboard_host,
                     "dashboard_port": dashboard_port,
-                    "worker": [ws.address for ws in workers],
+                    "address": [ws.address for ws in workers],
                     "y": y,
                 }
 
@@ -1177,7 +1177,8 @@ class WorkerTable(DashboardComponent):
     def __init__(self, scheduler, width=800, **kwargs):
         self.scheduler = scheduler
         self.names = [
-            "worker",
+            "name",
+            "address",
             "ncores",
             "cpu",
             "memory",
@@ -1195,7 +1196,8 @@ class WorkerTable(DashboardComponent):
         )
 
         table_names = [
-            "worker",
+            "name",
+            "address",
             "ncores",
             "cpu",
             "memory",
@@ -1242,7 +1244,7 @@ class WorkerTable(DashboardComponent):
             if name in formatters:
                 table.columns[table_names.index(name)].formatter = formatters[name]
 
-        extra_names = ["worker"] + self.extra_names
+        extra_names = ["name", "address"] + self.extra_names
         extra_columns = {
             name: TableColumn(field=name, title=name.replace("_percent", "%"))
             for name in extra_names
@@ -1330,10 +1332,13 @@ class WorkerTable(DashboardComponent):
     @without_property_validation
     def update(self):
         data = {name: [] for name in self.names + self.extra_names}
-        for addr, ws in sorted(self.scheduler.workers.items()):
+        for i, (addr, ws) in enumerate(
+            sorted(self.scheduler.workers.items(), key=lambda kv: kv[1].name)
+        ):
             for name in self.names + self.extra_names:
                 data[name].append(ws.metrics.get(name, None))
-            data["worker"][-1] = ws.address
+            data["name"][-1] = ws.name if ws.name is not None else i
+            data["address"][-1] = ws.address
             if ws.memory_limit:
                 data["memory_percent"][-1] = ws.metrics["memory"] / ws.memory_limit
             else:

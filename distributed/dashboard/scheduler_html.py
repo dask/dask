@@ -1,28 +1,16 @@
 from datetime import datetime
-import os
 
 import toolz
 from tornado import escape
 from tornado import gen
-from tornado import web
 
 from ..utils import log_errors, format_bytes, format_time
 from .proxy import GlobalProxyHandler
-
-dirname = os.path.dirname(__file__)
+from .utils import RequestHandler, redirect
 
 ns = {
     func.__name__: func for func in [format_bytes, format_time, datetime.fromtimestamp]
 }
-
-
-class RequestHandler(web.RequestHandler):
-    def initialize(self, server=None, extra=None):
-        self.server = server
-        self.extra = extra or {}
-
-    def get_template_path(self):
-        return os.path.join(dirname, "templates")
 
 
 class Workers(RequestHandler):
@@ -238,6 +226,7 @@ class HealthHandler(RequestHandler):
 
 
 routes = [
+    (r"info", redirect("info/main/workers.html")),
     (r"info/main/workers.html", Workers),
     (r"info/worker/(.*).html", Worker),
     (r"info/task/(.*).html", Task),

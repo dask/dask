@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from operator import add, sub
+import re
 from time import sleep
 
 import pytest
@@ -14,6 +15,7 @@ from tornado.httpclient import AsyncHTTPClient
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
+from distributed.dashboard.scheduler import BokehScheduler
 from distributed.dashboard.worker import (
     BokehWorker,
     StateTable,
@@ -24,6 +26,33 @@ from distributed.dashboard.worker import (
     SystemMonitor,
     Counters,
 )
+
+
+@gen_cluster(
+    client=True,
+    worker_kwargs={"services": {("dashboard", 0): BokehWorker}},
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+)
+def test_routes(c, s, a, b):
+    assert isinstance(a.services["dashboard"], BokehWorker)
+    assert isinstance(b.services["dashboard"], BokehWorker)
+    port = a.services["dashboard"].port
+
+    future = c.submit(sleep, 1)
+    yield gen.sleep(0.1)
+
+    http_client = AsyncHTTPClient()
+    for suffix in ["status", "counters", "system", "profile", "profile-server"]:
+        response = yield http_client.fetch("http://localhost:%d/%s" % (port, suffix))
+        body = response.body.decode()
+        assert "bokeh" in body.lower()
+        assert not re.search("href=./", body)  # no absolute links
+
+    response = yield http_client.fetch(
+        "http://localhost:%d/info/main/workers.html" % s.services["dashboard"].port
+    )
+
+    assert str(port) in response.body.decode()
 
 
 @pytest.mark.skipif(

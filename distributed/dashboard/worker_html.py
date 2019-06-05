@@ -1,17 +1,4 @@
-import os
-
-from tornado import web
-
-dirname = os.path.dirname(__file__)
-
-
-class RequestHandler(web.RequestHandler):
-    def initialize(self, server=None, extra=None):
-        self.server = server
-        self.extra = extra or {}
-
-    def get_template_path(self):
-        return os.path.join(dirname, "templates")
+from .utils import RequestHandler, redirect
 
 
 class _PrometheusCollector(object):
@@ -67,15 +54,10 @@ class HealthHandler(RequestHandler):
         self.set_header("Content-Type", "text/plain")
 
 
-class OldRoute(RequestHandler):
-    def get(self):
-        self.redirect("/status")
-
-
 routes = [
     (r"metrics", PrometheusHandler),
     (r"health", HealthHandler),
-    (r"main", OldRoute),
+    (r"main", redirect("/status")),
 ]
 
 
