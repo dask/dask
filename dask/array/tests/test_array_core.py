@@ -3864,3 +3864,41 @@ def test_auto_chunks_h5py():
             with dask.config.set({'array.chunk-size': '1 MiB'}):
                 x = da.from_array(d)
                 assert x.chunks == ((256, 256, 256, 232), (512, 488))
+
+
+def test_divmod():
+    arr1 = np.random.randint(1, 100, size=(20, 20))
+    arr2 = np.random.randint(1, 100, size=(20, 20))
+
+    darr1 = da.from_array(arr1, 3)
+    darr2 = da.from_array(arr2, 3)
+
+    result = divmod(darr1, 2.)
+    expected = divmod(arr1, 2.)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, darr2)
+    expected = divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = darr1.divmod(2.)
+    expected = divmod(arr1, 2.)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = darr1.divmod( darr2)
+    expected = divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = darr1.rdivmod(2.)
+    expected = divmod(2., arr1)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = darr1.rdivmod( darr2)
+    expected = divmod(arr2, arr1)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])

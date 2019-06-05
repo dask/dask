@@ -330,3 +330,9 @@ def modf(x):
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
     R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R
+
+
+def divmod(x, y):
+    res1 = x // y
+    res2 = x % y
+    return res1, res2

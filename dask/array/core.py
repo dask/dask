@@ -1622,6 +1622,10 @@ class Array(DaskMethodsMixin):
         from .routines import matmul
         return matmul(other, self)
 
+    def __divmod__(self, other):
+        from .ufunc import divmod
+        return divmod(self, other)
+
     @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import any
@@ -1834,6 +1838,14 @@ class Array(DaskMethodsMixin):
     def clip(self, min=None, max=None):
         from .ufunc import clip
         return clip(self, min, max)
+
+    def divmod(self, other):
+        from .ufunc import divmod
+        return divmod(self, other)
+
+    def rdivmod(self, other):
+        from .ufunc import divmod
+        return divmod(other, self)
 
     def view(self, dtype, order='C'):
         """ Get a view of the array as a new data type
