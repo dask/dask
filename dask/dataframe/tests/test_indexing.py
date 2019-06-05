@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import dask.dataframe as dd
+import dask.array as da
 
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
@@ -105,6 +106,17 @@ def test_loc_with_array():
 
     assert sorted(d.loc[(d.a % 2).values].dask) == sorted(d.loc[(d.a % 2).values].dask)
     assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
+
+
+def test_loc_with_array_different_partition():
+    df = pd.DataFrame(np.random.randn(20, 5),
+                      index=list('abcdefghijklmnopqrst'),
+                      columns=list('ABCDE'))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(ddf.loc[(ddf.A > 0).values], df.loc[(df.A > 0).values])
+    pytest.raises(ValueError,
+                  lambda: ddf.loc[(ddf.A > 0).repartition(['a', 'g', 'k', 'o', 't']).values].compute())
 
 
 def test_loc_with_series_different_partition():
