@@ -5,7 +5,6 @@ import numpy as np
 import pytest
 
 import dask.dataframe as dd
-import dask.array as da
 
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
