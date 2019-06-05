@@ -1262,6 +1262,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
+        """
+        .. note::
+
+           Pandas currently uses an ``object``-dtype column to represent
+           boolean data with missing values. This can cause issues for
+           boolean-specific operations, like ``|``. To enable boolean-
+           specific operations, at the cost of metadata that doesn't match
+           pandas, use ``.astype(bool)`` after the ``shift``.
+        """
         axis = self._validate_axis(axis)
         if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
