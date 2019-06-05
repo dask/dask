@@ -63,9 +63,10 @@ several options:
 2. A description of the appropriate names and dtypes.  This can take several forms:
 
     * A ``dict`` of ``{name: dtype}`` or an iterable of ``(name, dtype)``
-      specifies a DataFrame
-    * A tuple of ``(name, dtype)`` specifies a series
-    * A dtype object or string (e.g. ``'f8'``) specifies a scalar
+      specifies a DataFrame. Note that order is important: the order of the
+      names in ``meta`` should match the order of the columns.
+    * A tuple of ``(name, dtype)`` specifies a series.
+    * A dtype object or string (e.g. ``'f8'``) specifies a scalar.
 
 This keyword is available on all functions/methods that take user provided
 callables (e.g. ``DataFrame.map_partitions``, ``DataFrame.apply``, etc...), as
