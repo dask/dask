@@ -275,11 +275,27 @@ class SpecCluster(Cluster):
             self.worker_spec.popitem()
 
         while len(self.worker_spec) < n:
-            while self._i in self.worker_spec:
-                self._i += 1
-            self.worker_spec[self._i] = self.new_spec
+            k, spec = self.new_worker_spec()
+            self.worker_spec[k] = spec
 
         self.loop.add_callback(self._correct_state)
+
+    def new_worker_spec(self):
+        """ Return name and spec for the next worker
+
+        Returns
+        -------
+        name: identifier for worker
+        spec: dict
+
+        See Also
+        --------
+        scale
+        """
+        while self._i in self.worker_spec:
+            self._i += 1
+
+        return self._i, self.new_spec
 
     async def scale_down(self, workers):
         workers = set(workers)

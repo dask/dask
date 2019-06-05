@@ -76,7 +76,9 @@ def test_spec_sync(loop):
 
 
 def test_loop_started():
-    cluster = SpecCluster(worker_spec)
+    cluster = SpecCluster(
+        worker_spec, scheduler={"cls": Scheduler, "options": {"port": 0}}
+    )
 
 
 @pytest.mark.asyncio
@@ -110,6 +112,7 @@ async def test_broken_worker():
         async with SpecCluster(
             asynchronous=True,
             workers={"good": {"cls": Worker}, "bad": {"cls": BrokenWorker}},
+            scheduler={"cls": Scheduler, "options": {"port": 0}},
         ) as cluster:
             pass
 
@@ -124,3 +127,16 @@ def test_spec_close_clusters(loop):
     assert cluster in SpecCluster._instances
     close_clusters()
     assert cluster.status == "closed"
+
+
+@pytest.mark.asyncio
+async def test_new_worker_spec():
+    class MyCluster(SpecCluster):
+        def new_worker_spec(self):
+            i = len(self.worker_spec)
+            return i, {"cls": Worker, "options": {"ncores": i + 1}}
+
+    async with MyCluster(asynchronous=True, scheduler=scheduler) as cluster:
+        cluster.scale(3)
+        for i in range(3):
+            assert cluster.worker_spec[i]["options"]["ncores"] == i + 1

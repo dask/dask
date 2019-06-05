@@ -197,14 +197,8 @@ class LocalCluster(SpecCluster):
         )
 
     def __repr__(self):
-        return "LocalCluster(%r, workers=%d, ncores=%d)" % (
-            self.scheduler_address,
-            len(self.workers),
-            sum(w.ncores for w in self.workers.values()),
-        )
-
-    def __repr__(self):
-        return "LocalCluster(%r, workers=%d, ncores=%d)" % (
+        return "%s(%r, workers=%d, ncores=%d)" % (
+            type(self).__name__,
             self.scheduler_address,
             len(self.workers),
             sum(w.ncores for w in self.workers.values()),
