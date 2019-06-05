@@ -107,7 +107,6 @@ def test_loc_with_array():
     assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
 
 
-
 def test_loc_with_series_different_partition():
     df = pd.DataFrame(np.random.randn(20, 5),
                       index=list('abcdefghijklmnopqrst'),
