@@ -359,11 +359,11 @@ def _cov_agg(t, levels, ddof):
         muls.append(mul)
         ns.append(n)
 
-    x_sums = pd.concat(xs).groupby(level=levels, sort=False).sum()
-    x_muls = pd.concat(muls).groupby(level=levels, sort=False).sum()
-    x_ns = pd.concat(ns).groupby(level=levels).sum()
+    total_sums = concat(xs).groupby(level=levels, sort=False).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=False).sum()
+    total_counts = concat(ns).groupby(level=levels).sum()
     result = (
-        pd.concat([x_sums, x_muls, x_ns], axis=1)
+        concat([total_sums, total_muls, total_counts], axis=1)
         .groupby(level=0)
         .apply(_cov_finalizer, cols=cols)
     )
