@@ -411,3 +411,5 @@ Other functions
 .. currentmodule:: dask.dataframe.reshape
 
 .. autofunction:: get_dummies
+.. autofunction:: pivot_table
+

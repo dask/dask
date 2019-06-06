@@ -183,6 +183,10 @@ def pivot_table(df, index=None, columns=None,
     Returns
     -------
     table : DataFrame
+
+    See Also
+    --------
+    pandas.pivot_table
     """
 
     if not is_scalar(index) or index is None:
