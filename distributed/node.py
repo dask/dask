@@ -1,12 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
 import warnings
+import logging
 
 from tornado.ioloop import IOLoop
+import dask
 
-from .compatibility import unicode
+from .compatibility import unicode, finalize
 from .core import Server, ConnectionPool
 from .versions import get_versions
+from .utils import DequeHandler
 
 
 class Node(object):
@@ -130,6 +133,25 @@ class ServerNode(Node, Server):
     @property
     def service_ports(self):
         return {k: v.port for k, v in self.services.items()}
+
+    def _setup_logging(self, logger):
+        self._deque_handler = DequeHandler(
+            n=dask.config.get("distributed.admin.log-length")
+        )
+        self._deque_handler.setFormatter(
+            logging.Formatter(dask.config.get("distributed.admin.log-format"))
+        )
+        logger.addHandler(self._deque_handler)
+        finalize(self, logger.removeHandler, self._deque_handler)
+
+    def get_logs(self, comm=None, n=None):
+        deque_handler = self._deque_handler
+        if n is None:
+            L = list(deque_handler.deque)
+        else:
+            L = deque_handler.deque
+            L = [L[-i] for i in range(min(n, len(L)))]
+        return [(msg.levelname, deque_handler.format(msg)) for msg in L]
 
     async def __aenter__(self):
         await self

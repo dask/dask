@@ -79,6 +79,7 @@ class Nanny(ServerNode):
         protocol=None,
         **worker_kwargs
     ):
+        self._setup_logging(logger)
         self.loop = loop or IOLoop.current()
         self.security = security or Security()
         assert isinstance(self.security, Security)
@@ -130,6 +131,7 @@ class Nanny(ServerNode):
             "kill": self.kill,
             "restart": self.restart,
             # cannot call it 'close' on the rpc side for naming conflict
+            "get_logs": self.get_logs,
             "terminate": self.close,
             "close_gracefully": self.close_gracefully,
             "run": self.run,

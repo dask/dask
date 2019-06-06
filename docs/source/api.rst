@@ -19,8 +19,8 @@ API
    Client.get_executor
    Client.get_metadata
    Client.get_scheduler_logs
-   Client.get_task_stream
    Client.get_worker_logs
+   Client.get_task_stream
    Client.has_what
    Client.list_datasets
    Client.map

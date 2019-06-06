@@ -53,7 +53,6 @@ from .utils import (
     key_split,
     validate_key,
     no_default,
-    DequeHandler,
     parse_timedelta,
     parse_bytes,
     PeriodicCallback,
@@ -844,7 +843,7 @@ class Scheduler(ServerNode):
         dashboard_address=None,
         **kwargs
     ):
-        self._setup_logging()
+        self._setup_logging(logger)
 
         # Attributes
         self.allowed_failures = allowed_failures
@@ -1328,16 +1327,6 @@ class Scheduler(ServerNode):
 
             self.worker_send(worker, {"op": "close", "report": False})
             self.remove_worker(address=worker, safe=safe)
-
-    def _setup_logging(self):
-        self._deque_handler = DequeHandler(
-            n=dask.config.get("distributed.admin.log-length")
-        )
-        self._deque_handler.setFormatter(
-            logging.Formatter(dask.config.get("distributed.admin.log-format"))
-        )
-        logger.addHandler(self._deque_handler)
-        finalize(self, logger.removeHandler, self._deque_handler)
 
     ###########
     # Stimuli #
@@ -4627,18 +4616,11 @@ class Scheduler(ServerNode):
 
         raise gen.Return({"counts": counts, "keys": keys})
 
-    def get_logs(self, comm=None, n=None):
-        deque_handler = self._deque_handler
-        if n is None:
-            L = list(deque_handler.deque)
-        else:
-            L = deque_handler.deque
-            L = [L[-i] for i in range(min(n, len(L)))]
-        return [(msg.levelname, deque_handler.format(msg)) for msg in L]
-
     @gen.coroutine
-    def get_worker_logs(self, comm=None, n=None, workers=None):
-        results = yield self.broadcast(msg={"op": "get_logs", "n": n}, workers=workers)
+    def get_worker_logs(self, comm=None, n=None, workers=None, nanny=False):
+        results = yield self.broadcast(
+            msg={"op": "get_logs", "n": n}, workers=workers, nanny=nanny
+        )
         raise gen.Return(results)
 
     ###########

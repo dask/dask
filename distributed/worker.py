@@ -33,7 +33,7 @@ from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
 from .comm.addressing import address_from_user_args
-from .compatibility import unicode, get_thread_identity, finalize, MutableMapping
+from .compatibility import unicode, get_thread_identity, MutableMapping
 from .core import error_message, CommClosedError, send_recv, pingpong, coerce_to_address
 from .diskutils import WorkSpace
 from .metrics import time
@@ -60,7 +60,6 @@ from .utils import (
     json_load_robust,
     key_split,
     format_bytes,
-    DequeHandler,
     PeriodicCallback,
     parse_bytes,
     parse_timedelta,
@@ -412,7 +411,7 @@ class Worker(ServerNode):
         )
         profile_cycle_interval = parse_timedelta(profile_cycle_interval, default="ms")
 
-        self._setup_logging()
+        self._setup_logging(logger)
 
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
@@ -666,16 +665,6 @@ class Worker(ServerNode):
             )
         )
 
-    def _setup_logging(self):
-        self._deque_handler = DequeHandler(
-            n=dask.config.get("distributed.admin.log-length")
-        )
-        self._deque_handler.setFormatter(
-            logging.Formatter(dask.config.get("distributed.admin.log-format"))
-        )
-        logger.addHandler(self._deque_handler)
-        finalize(self, logger.removeHandler, self._deque_handler)
-
     @property
     def worker_address(self):
         """ For API compatibility with Nanny """
@@ -887,15 +876,6 @@ class Worker(ServerNode):
         else:
             self.update_data(data=result, report=False)
             raise Return({"status": "OK"})
-
-    def get_logs(self, comm=None, n=None):
-        deque_handler = self._deque_handler
-        if n is None:
-            L = list(deque_handler.deque)
-        else:
-            L = deque_handler.deque
-            L = [L[-i] for i in range(min(n, len(L)))]
-        return [(msg.levelname, deque_handler.format(msg)) for msg in L]
 
     #############
     # Lifecycle #

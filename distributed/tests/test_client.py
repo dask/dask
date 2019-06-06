@@ -5111,7 +5111,7 @@ def test_task_metadata(c, s, a, b):
     assert result == {"a": {"c": {"d": 1}}, "b": 2}
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, Worker=Nanny)
 def test_logs(c, s, a, b):
     yield wait(c.map(inc, range(5)))
     logs = yield c.get_scheduler_logs(n=5)
@@ -5121,10 +5121,22 @@ def test_logs(c, s, a, b):
         assert "distributed.scheduler" in msg
 
     w_logs = yield c.get_worker_logs(n=5)
-    assert set(w_logs.keys()) == {a.address, b.address}
+    assert set(w_logs.keys()) == {a.worker_address, b.worker_address}
     for log in w_logs.values():
         for _, msg in log:
             assert "distributed.worker" in msg
+
+    n_logs = yield c.get_worker_logs(nanny=True)
+    assert set(n_logs.keys()) == {a.worker_address, b.worker_address}
+    for log in n_logs.values():
+        for _, msg in log:
+            assert "distributed.nanny" in msg
+
+    n_logs = yield c.get_worker_logs(nanny=True, workers=[a.worker_address])
+    assert set(n_logs.keys()) == {a.worker_address}
+    for log in n_logs.values():
+        for _, msg in log:
+            assert "distributed.nanny" in msg
 
 
 @gen_cluster(client=True)

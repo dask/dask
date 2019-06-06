@@ -2270,6 +2270,10 @@ class Client(Node):
         wait: boolean (optional)
             If the function is asynchronous whether or not to wait until that
             function finishes.
+        nanny : bool, defualt False
+            Whether to run ``function`` on the nanny. By default, the function
+            is run on the worker process.  If specified, the addresses in
+            ``workers`` should still be the worker addresses, not the nanny addresses.
 
         Examples
         --------
@@ -3354,7 +3358,7 @@ class Client(Node):
 
         Parameters
         ----------
-        n: int
+        n : int
             Number of logs to retrive.  Maxes out at 10000 by default,
             confiruable in config.yaml::log-length
 
@@ -3364,23 +3368,27 @@ class Client(Node):
         """
         return self.sync(self.scheduler.logs, n=n)
 
-    def get_worker_logs(self, n=None, workers=None):
+    def get_worker_logs(self, n=None, workers=None, nanny=False):
         """ Get logs from workers
 
         Parameters
         ----------
-        n: int
+        n : int
             Number of logs to retrive.  Maxes out at 10000 by default,
             confiruable in config.yaml::log-length
-        workers: iterable
-            List of worker addresses to retrive.  Gets all workers by default.
+        workers : iterable
+            List of worker addresses to retrieve.  Gets all workers by default.
+        nanny : bool, default False
+            Whether to get the logs from the workers (False) or the nannies (True). If
+            specified, the addresses in `workers` should still be the worker addresses,
+            not the nanny addresses.
 
         Returns
         -------
         Dictionary mapping worker address to logs.
         Logs are returned in reversed order (newest first)
         """
-        return self.sync(self.scheduler.worker_logs, n=n, workers=workers)
+        return self.sync(self.scheduler.worker_logs, n=n, workers=workers, nanny=nanny)
 
     def retire_workers(self, workers=None, close_workers=True, **kwargs):
         """ Retire certain workers on the scheduler
