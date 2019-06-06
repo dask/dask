@@ -13,7 +13,7 @@ from dask.dataframe.utils import (
     assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION,
 )
 
-AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last', 'prod']
+AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'cov', 'nunique', 'first', 'last', 'prod']
 
 
 @pytest.fixture(params=AGG_FUNCS)
@@ -270,7 +270,6 @@ def test_groupby_on_index(scheduler):
                           lambda df: df.groupby(['a', 'b', 'c'])])
 def test_groupby_multilevel_getitem(grouper, agg_func):
     # nunique is not implemented for DataFrameGroupBy
-    breakpoint()
     if agg_func == 'nunique':
         return
 

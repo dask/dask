@@ -326,7 +326,7 @@ def _cov_finalizer(df, cols):
 
 
 def mul_cols(df, cols):
-    _df = pd.DataFrame()
+    _df = type(df)()
     for i, j in it.combinations_with_replacement(df[cols].columns, 2):
         col = "%s%s" % (i, j)
         _df[col] = df[i] * df[j]
