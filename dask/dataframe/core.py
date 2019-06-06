@@ -1461,32 +1461,75 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     axis=axis, skipna=skipna, ddof=ddof)
             return handle_out(out, result)
         else:
-            num = self.select_dtypes(include=['number', np.timedelta64, 'bool']) \
-                if is_dataframe_like(self) else self
-
-            values_dtype = num.values.dtype
-            array_values = num.values
-
-            if not np.issubdtype(values_dtype, np.number):
-                array_values = num.values.astype('f8')
-
-            var = da.nanvar if skipna or skipna is None else da.var
-            array_var = var(array_values, axis=0, ddof=ddof, split_every=split_every)
-
-            name = self._token_prefix + 'var-' + tokenize(num, split_every)
-            cols = num._meta.columns if is_dataframe_like(num) else None
-
-            var_shape = num._meta_nonempty.values.var(axis=0).shape
-            array_var_name = (array_var._name,) + (0,) * len(var_shape)
-
-            layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
-            graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
-
-            result = new_dd_object(graph, name, num._meta_nonempty.var(), divisions=[None, None])
+            if self.ndim == 1:
+                result = self._var_1d(self, skipna, ddof, split_every)
+            elif len(self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns) > 0:
+                result = self._var_mixed(skipna, ddof, split_every)
+            else:
+                result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
+
+    def _var_numeric(self, skipna=True, ddof=1, split_every=False):
+        num = self.select_dtypes(include=['number', 'bool'])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype('f8')
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(array_values, axis=0, ddof=ddof, split_every=split_every)
+
+        name = self._token_prefix + 'var-numeric' + tokenize(num, split_every)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        var_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_var_name = (array_var._name,) + (0,) * len(var_shape)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, num._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_mixed(self, skipna=True, ddof=1, split_every=False):
+        data = self.select_dtypes(include=['number', np.timedelta64, 'bool'])
+
+        vars = [self._var_1d(data[col_idx], skipna, ddof, split_every) for col_idx in data._meta.columns]
+        var_names = [(v._name, 0) for v in vars]
+
+        name = self._token_prefix + 'var-mixed-' + tokenize(data, split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, var_names, data._meta.columns)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=vars)
+
+        return new_dd_object(graph, name, data._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_1d(self, column, skipna=True, ddof=1, split_every=False):
+        is_timedelta = is_timedelta64_dtype(column._meta)
+
+        if is_timedelta:
+            column = column.dropna().astype('i8')
+
+        if PANDAS_VERSION >= '0.24.0':
+            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+                column = column.astype('f8')
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype('f8')
+
+        name = self._token_prefix + 'var-1d-' + tokenize(column, split_every)
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(column.values, axis=0, ddof=ddof, split_every=split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, (array_var._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, column._meta_nonempty.var(), divisions=[None, None])
 
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):

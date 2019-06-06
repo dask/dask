@@ -6,7 +6,7 @@ from itertools import product, repeat
 from math import factorial, log, ceil
 
 import numpy as np
-from numbers import Integral
+from numbers import Integral, Number
 
 from toolz import compose, partition_all, get, accumulate, pluck
 
@@ -461,10 +461,11 @@ def moment_agg(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **kwar
     denominator = n.sum(axis=axis, **kwargs) - ddof
 
     # taking care of the edge case with empty or all-nans array with ddof > 0
-    if isinstance(denominator, np.ndarray):
+    if isinstance(denominator, Number):
+        if denominator < 0:
+            denominator = np.nan
+    else:
         denominator[denominator < 0] = np.nan
-    elif denominator < 0:
-        denominator = np.nan
 
     return divide(M, denominator, dtype=dtype)
 

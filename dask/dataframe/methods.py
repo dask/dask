@@ -122,7 +122,7 @@ def mean_aggregate(s, n):
 
 
 def wrap_var_reduction(array_var, index):
-    if isinstance(array_var, np.ndarray):
+    if isinstance(array_var, np.ndarray) or isinstance(array_var, list):
         return pd.Series(array_var, index=index)
 
     return array_var
