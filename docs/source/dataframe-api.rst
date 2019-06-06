@@ -407,3 +407,7 @@ Other functions
 
 .. autofunction:: concat
 .. autofunction:: merge
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
