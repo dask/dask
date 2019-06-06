@@ -44,7 +44,7 @@ conda install -q \
     paramiko \
     prometheus_client \
     psutil \
-    pytest \
+    pytest>=4 \
     pytest-timeout \
     python=$PYTHON \
     requests \

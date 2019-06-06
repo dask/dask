@@ -6,6 +6,7 @@ from functools import partial
 import itertools
 import json
 import logging
+import math
 from numbers import Number
 import operator
 import os
@@ -1063,6 +1064,7 @@ class Scheduler(ServerNode):
             "get_task_status": self.get_task_status,
             "get_task_stream": self.get_task_stream,
             "register_worker_plugin": self.register_worker_plugin,
+            "adaptive_target": self.adaptive_target,
         }
 
         self._transitions = {
@@ -4739,6 +4741,59 @@ class Scheduler(ServerNode):
 
         if close:
             self.loop.add_callback(self.close)
+
+    def adaptive_target(self, target_duration="5s"):
+        """ Desired number of workers based on the current workload
+
+        This looks at the current running tasks and memory use, and returns a
+        number of desired workers.  This is often used by adaptive scheduling.
+
+        Parameters
+        ----------
+        target_duration: str
+            A desired duration of time for computations to take.  This affects
+            how rapidly the scheduler will ask to scale.
+
+        See Also
+        --------
+        distributed.deploy.Adaptive
+        """
+        target_duration = parse_timedelta(target_duration)
+
+        # CPU
+        cpu = math.ceil(
+            self.total_occupancy / target_duration
+        )  # TODO: threads per worker
+
+        # Avoid a few long tasks from asking for many cores
+        tasks_processing = 0
+        for ws in self.workers.values():
+            tasks_processing += len(ws.processing)
+
+            if tasks_processing > cpu:
+                break
+        else:
+            cpu = min(tasks_processing, cpu)
+
+        if self.unrunnable and not self.workers:
+            cpu = max(1, cpu)
+
+        # Memory
+        limit_bytes = {addr: ws.memory_limit for addr, ws in self.workers.items()}
+        worker_bytes = [ws.nbytes for ws in self.workers.values()]
+        limit = sum(limit_bytes.values())
+        total = sum(worker_bytes)
+        if total > 0.6 * limit:
+            memory = 2 * len(self.workers)
+        else:
+            memory = 0
+
+        target = max(memory, cpu)
+        if target >= len(self.workers):
+            return target
+        else:  # Scale down?
+            to_close = self.workers_to_close()
+            return len(self.workers) - len(to_close)
 
 
 def decide_worker(ts, all_workers, valid_workers, objective):

@@ -1574,6 +1574,31 @@ def test_dashboard_address():
     yield s.close()
 
 
+@gen_cluster(client=True)
+async def test_adaptive_target(c, s, a, b):
+    assert s.adaptive_target() == 0
+    x = c.submit(inc, 1)
+    await x
+    assert s.adaptive_target() == 1
+
+    # Long task
+    s.task_duration["slowinc"] = 10
+    x = c.submit(slowinc, 1, delay=0.5)
+    while x.key not in s.tasks:
+        await gen.sleep(0.01)
+    assert s.adaptive_target(target_duration=".1s") == 1  # still one
+
+    s.task_duration["slowinc"] = 10
+    L = c.map(slowinc, range(100), delay=0.5)
+    while len(s.tasks) < 100:
+        await gen.sleep(0.01)
+    assert 10 < s.adaptive_target(target_duration=".1s") <= 100
+    del x, L
+    while s.tasks:
+        await gen.sleep(0.01)
+    assert s.adaptive_target(target_duration=".1s") == 0
+
+
 @pytest.mark.asyncio
 async def test_async_context_manager():
     async with Scheduler(port=0) as s:

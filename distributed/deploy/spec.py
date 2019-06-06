@@ -274,6 +274,10 @@ class SpecCluster(Cluster):
         while len(self.worker_spec) > n:
             self.worker_spec.popitem()
 
+        if self.status in ("closing", "closed"):
+            self.loop.add_callback(self._correct_state)
+            return
+
         while len(self.worker_spec) < n:
             k, spec = self.new_worker_spec()
             self.worker_spec[k] = spec
@@ -321,4 +325,5 @@ class SpecCluster(Cluster):
 def close_clusters():
     for cluster in list(SpecCluster._instances):
         with ignoring(gen.TimeoutError):
-            cluster.close(timeout=10)
+            if cluster.status != "closed":
+                cluster.close(timeout=10)

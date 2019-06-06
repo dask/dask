@@ -4,7 +4,6 @@ from collections import deque
 import logging
 import math
 
-import toolz
 from tornado import gen
 
 from ..metrics import time
@@ -128,104 +127,6 @@ class Adaptive(object):
             self._adapt_callback = None
             del self._adapt_callback
 
-    def needs_cpu(self):
-        """
-        Check if the cluster is CPU constrained (too many tasks per core)
-
-        Notes
-        -----
-        Returns ``True`` if the occupancy per core is some factor larger
-        than ``startup_cost`` and the number of tasks exceeds the number of
-        cores
-        """
-        total_occupancy = self.scheduler.total_occupancy
-        total_cores = self.scheduler.total_ncores
-
-        if total_occupancy / (total_cores + 1e-9) > self.startup_cost * 2:
-            logger.info(
-                "CPU limit exceeded [%d occupancy / %d cores]",
-                total_occupancy,
-                total_cores,
-            )
-
-            tasks_processing = 0
-
-            for w in self.scheduler.workers.values():
-                tasks_processing += len(w.processing)
-
-                if tasks_processing > total_cores:
-                    logger.info(
-                        "pending tasks exceed number of cores " "[%d tasks / %d cores]",
-                        tasks_processing,
-                        total_cores,
-                    )
-
-                    return True
-
-        return False
-
-    def needs_memory(self):
-        """
-        Check if the cluster is RAM constrained
-
-        Notes
-        -----
-        Returns ``True`` if  the required bytes in distributed memory is some
-        factor larger than the actual distributed memory available.
-        """
-        limit_bytes = {
-            addr: ws.memory_limit for addr, ws in self.scheduler.workers.items()
-        }
-        worker_bytes = [ws.nbytes for ws in self.scheduler.workers.values()]
-
-        limit = sum(limit_bytes.values())
-        total = sum(worker_bytes)
-        if total > 0.6 * limit:
-            logger.info("Ram limit exceeded [%d/%d]", limit, total)
-            return True
-        else:
-            return False
-
-    def should_scale_up(self):
-        """
-        Determine whether additional workers should be added to the cluster
-
-        Returns
-        -------
-        scale_up : bool
-
-        Notes
-        ----
-        Additional workers are added whenever
-
-        1. There are unrunnable tasks and no workers
-        2. The cluster is CPU constrained
-        3. The cluster is RAM constrained
-        4. There are fewer workers than our minimum
-
-        See Also
-        --------
-        needs_cpu
-        needs_memory
-        """
-        with log_errors():
-            if len(self.scheduler.workers) < self.minimum:
-                return True
-
-            if self.maximum is not None and len(self.scheduler.workers) >= self.maximum:
-                return False
-
-            if self.scheduler.unrunnable and not self.scheduler.workers:
-                return True
-
-            needs_cpu = self.needs_cpu()
-            needs_memory = self.needs_memory()
-
-            if needs_cpu or needs_memory:
-                return True
-
-            return False
-
     def workers_to_close(self, **kwargs):
         """
         Determine which, if any, workers should potentially be removed from
@@ -305,9 +206,17 @@ class Adaptive(object):
         return {"n": instances}
 
     def recommendations(self, comm=None):
-        should_scale_up = self.should_scale_up()
+        n = self.scheduler.adaptive_target(target_duration=self.target_duration)
+        if self.maximum is not None:
+            n = min(self.maximum, n)
+        if self.minimum is not None:
+            n = max(self.minimum, n)
         workers = set(self.workers_to_close(key=self.worker_key, minimum=self.minimum))
-        if should_scale_up and workers:
+        try:
+            current = len(self.cluster.worker_spec)
+        except AttributeError:
+            current = len(self.cluster.workers)
+        if n > current and workers:
             logger.info("Attempting to scale up and scale down simultaneously.")
             self.close_counts.clear()
             return {
@@ -315,9 +224,9 @@ class Adaptive(object):
                 "msg": "Trying to scale up and down simultaneously",
             }
 
-        elif should_scale_up:
+        elif n > current:
             self.close_counts.clear()
-            return toolz.merge({"status": "up"}, self.get_scale_up_kwargs())
+            return {"status": "up", "n": n}
 
         elif workers:
             d = {}
@@ -352,7 +261,7 @@ class Adaptive(object):
                 return
             status = recommendations.pop("status")
             if status == "up":
-                f = self.cluster.scale_up(**recommendations)
+                f = self.cluster.scale(**recommendations)
                 self.log.append((time(), "up", recommendations))
                 if hasattr(f, "__await__"):
                     yield f
