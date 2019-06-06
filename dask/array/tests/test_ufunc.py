@@ -388,3 +388,13 @@ def test_divmod():
     expected = np.divmod(arr1, arr2)
     assert_eq(result[0], expected[0])
     assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, 2.)
+    expected = divmod(arr1, 2.)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, darr2)
+    expected = divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])

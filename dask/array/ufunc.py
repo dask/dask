@@ -332,6 +332,7 @@ def modf(x):
     return L, R
 
 
+@copy_docstring(source=np.divmod)
 def divmod(x, y):
     res1 = x // y
     res2 = x % y

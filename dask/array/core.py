@@ -1839,14 +1839,6 @@ class Array(DaskMethodsMixin):
         from .ufunc import clip
         return clip(self, min, max)
 
-    def divmod(self, other):
-        from .ufunc import divmod
-        return divmod(self, other)
-
-    def rdivmod(self, other):
-        from .ufunc import divmod
-        return divmod(other, self)
-
     def view(self, dtype, order='C'):
         """ Get a view of the array as a new data type
 

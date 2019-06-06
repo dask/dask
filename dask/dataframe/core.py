@@ -2482,9 +2482,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         res2 = self % other
         return res1, res2
 
-    def rdivmod(self, other):
-        return divmod(other, self)
-
 
 class Index(Series):
 

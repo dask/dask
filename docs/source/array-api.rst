@@ -60,6 +60,7 @@ Top level user functions:
    diag
    diagonal
    diff
+   divmod
    digitize
    dot
    dstack

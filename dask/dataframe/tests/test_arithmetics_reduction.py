@@ -1121,8 +1121,3 @@ def test_divmod():
     expected = divmod(df1, df2)
     assert_eq(result[0], expected[0])
     assert_eq(result[1], expected[1])
-
-    result = ddf1.rdivmod(ddf2)
-    expected = divmod(df2, df1)
-    assert_eq(result[0], expected[0])
-    assert_eq(result[1], expected[1])
