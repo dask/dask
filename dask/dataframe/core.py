@@ -2483,8 +2483,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return res1, res2
 
     def __rdivmod__(self, other):
-        res1 =  other // self
-        res2 =  other % self
+        res1 = other // self
+        res2 = other % self
         return res1, res2
 
 
