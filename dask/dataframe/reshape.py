@@ -171,18 +171,22 @@ def pivot_table(df, index=None, columns=None,
 
     Parameters
     ----------
-    data : DataFrame
-    values : scalar
-        column to aggregate
+    df : DataFrame
     index : scalar
         column to be index
     columns : scalar
         column to be columns
+    values : scalar
+        column to aggregate
     aggfunc : {'mean', 'sum', 'count'}, default 'mean'
 
     Returns
     -------
     table : DataFrame
+
+    See Also
+    --------
+    pandas.DataFrame.pivot_table
     """
 
     if not is_scalar(index) or index is None:
@@ -238,6 +242,38 @@ def pivot_table(df, index=None, columns=None,
 
 def melt(frame, id_vars=None, value_vars=None, var_name=None,
          value_name='value', col_level=None):
+    """
+    Unpivots a DataFrame from wide format to long format, optionally leaving identifier variables set.
+
+    This function is useful to massage a DataFrame into a format where one or more columns are identifier variables
+    (``id_vars``), while all other columns, considered measured variables (``value_vars``), are "unpivoted" to the row
+    axis, leaving just two non-identifier columns, 'variable' and 'value'.
+
+    Parameters
+    ----------
+    frame : DataFrame
+    id_vars : tuple, list, or ndarray, optional
+        Column(s) to use as identifier variables.
+    value_vars : tuple, list, or ndarray, optional
+        Column(s) to unpivot. If not specified, uses all columns that
+        are not set as `id_vars`.
+    var_name : scalar
+        Name to use for the 'variable' column. If None it uses
+        ``frame.columns.name`` or 'variable'.
+    value_name : scalar, default 'value'
+        Name to use for the 'value' column.
+    col_level : int or string, optional
+        If columns are a MultiIndex then use this level to melt.
+
+    Returns
+    -------
+    DataFrame
+        Unpivoted DataFrame.
+
+    See Also
+    --------
+    pandas.DataFrame.melt
+    """
 
     from dask.dataframe.core import no_default
 

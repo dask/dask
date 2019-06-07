@@ -325,6 +325,17 @@ Convert DataFrames
    to_dask_array
    to_delayed
 
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
+
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
 
@@ -407,3 +418,9 @@ Other functions
 
 .. autofunction:: concat
 .. autofunction:: merge
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
+.. autofunction:: pivot_table
+.. autofunction:: melt
