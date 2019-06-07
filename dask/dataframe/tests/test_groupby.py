@@ -15,7 +15,6 @@ from dask.dataframe.utils import (
 
 AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'cov', 'nunique', 'first', 'last', 'prod']
 
-
 @pytest.fixture(params=AGG_FUNCS)
 def agg_func(request):
     """
@@ -461,8 +460,6 @@ def test_split_apply_combine_on_series(empty):
                       pdf.groupby(pdkey).a.var(ddof))
             assert_eq(ddf.groupby(ddkey).a.std(ddof),
                       pdf.groupby(pdkey).a.std(ddof))
-            assert_eq(ddf.groupby(ddkey).a.cov(ddof),
-                      pdf.groupby(pdkey).a.cov(ddof))
 
         assert_eq(ddf.groupby(ddkey).sum(), pdf.groupby(pdkey).sum())
         assert_eq(ddf.groupby(ddkey).min(), pdf.groupby(pdkey).min())
@@ -495,8 +492,6 @@ def test_split_apply_combine_on_series(empty):
                       pdf.a.groupby(pdkey).var(ddof))
             assert_eq(ddf.a.groupby(ddkey).std(ddof),
                       pdf.a.groupby(pdkey).std(ddof))
-            assert_eq(ddf.a.groupby(ddkey).cov(ddof),
-                      pdf.a.groupby(pdkey).cov(ddof))
 
     for i in [0, 4, 7]:
         assert_eq(ddf.groupby(ddf.b > i).a.sum(), pdf.groupby(pdf.b > i).a.sum())
@@ -625,7 +620,8 @@ def test_groupby_reduction_split(keyword):
     # DataFrame
     for m in AGG_FUNCS:
         # nunique is not implemented for DataFrameGroupBy
-        if m == 'nunique':
+        # covariance is not a series aggregation
+        if m in ('nunique', 'cov'):
             continue
         res = call(ddf.groupby('b'), m, **{keyword: 2})
         sol = call(pdf.groupby('b'), m)
@@ -639,6 +635,9 @@ def test_groupby_reduction_split(keyword):
 
     # Series, post select
     for m in AGG_FUNCS:
+        # covariance is not a series aggregation
+        if m == 'cov':
+            continue
         res = call(ddf.groupby('b').a, m, **{keyword: 2})
         sol = call(pdf.groupby('b').a, m)
         assert_eq(res, sol)
@@ -651,6 +650,9 @@ def test_groupby_reduction_split(keyword):
 
     # Series, pre select
     for m in AGG_FUNCS:
+        # covariance is not a series aggregation
+        if m == 'cov':
+            continue
         res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
@@ -660,6 +662,7 @@ def test_groupby_reduction_split(keyword):
 
     res = call(ddf.a.groupby(ddf.b), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), 'var', ddof=2)
+
     assert_eq(res, sol)
     assert call(ddf.a.groupby(ddf.b), 'var', ddof=2)._name != res._name
 
