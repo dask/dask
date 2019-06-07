@@ -33,6 +33,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike, typename, skip_doctest)
 from ..array.core import Array, normalize_arg
+from ..array.utils import empty_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -3595,7 +3596,8 @@ def elemwise(op, *args, **kwargs):
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
-        parts = [d._meta if _is_broadcastable(d) or isinstance(d, Array)
+        parts = [d._meta if _is_broadcastable(d)
+                 else empty_like_safe(d, (), dtype=d.dtype) if isinstance(d, Array)
                  else d._meta_nonempty for d in dasks]
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)

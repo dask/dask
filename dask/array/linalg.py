@@ -10,10 +10,11 @@ from ..base import tokenize
 from ..blockwise import blockwise
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
+from ..utils import derived_from
 from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
-from ..utils import derived_from
+from .utils import meta_from_array
 
 
 def _cumsum_blocks(it):
@@ -194,8 +195,9 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         vchunks_rstacked = tuple([sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks])
         graph = HighLevelGraph(layers, dependencies)
         # dsk.dependencies[name_r_stacked] = {data.name}
+        r_stacked_meta = meta_from_array(data, len((sum(vchunks_rstacked), n)), dtype=rr.dtype)
         r_stacked = Array(graph, name_r_stacked,
-                          shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
+                          shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), meta=r_stacked_meta)
 
         # recurse
         q_inner, r_inner = tsqr(r_stacked, _max_vchunk_size=cr_max)
@@ -349,10 +351,12 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         # dsk.dependencies[name_q_st3] = {data.name}
         # dsk.dependencies[name_r_st2] = {data.name}
         graph = HighLevelGraph(layers, dependencies)
+        q_meta = meta_from_array(data, len(q_shape), qq.dtype)
+        r_meta = meta_from_array(data, len(r_shape), rr.dtype)
         q = Array(graph, name_q_st3,
-                  shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
+                  shape=q_shape, chunks=q_chunks, meta=q_meta)
         r = Array(graph, name_r_st2,
-                  shape=r_shape, chunks=r_chunks, dtype=rr.dtype)
+                  shape=r_shape, chunks=r_chunks, meta=r_meta)
         return q, r
     else:
         # In-core SVD computation
@@ -399,9 +403,12 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         n_vh = n
         d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
         graph = HighLevelGraph(layers, dependencies)
-        u = Array(graph, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)), dtype=uu.dtype)
-        s = Array(graph, name_s_st2, shape=(n_s,), chunks=((n_s,),), dtype=ss.dtype)
-        vh = Array(graph, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)), dtype=vvh.dtype)
+        u_meta = meta_from_array(data, len((m_u, n_u)), uu.dtype)
+        s_meta = meta_from_array(data, len((n_s,)), ss.dtype)
+        vh_meta = meta_from_array(data, len((d_vh, d_vh)), vvh.dtype)
+        u = Array(graph, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)), meta=u_meta)
+        s = Array(graph, name_s_st2, shape=(n_s,), chunks=((n_s,),), meta=s_meta)
+        vh = Array(graph, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)), meta=vh_meta)
         return u, s, vh
 
 
@@ -479,17 +486,20 @@ def sfqr(data, name=None):
 
     graph = HighLevelGraph(layers, dependencies)
 
+    Q_meta = meta_from_array(data, len((m, min(m, n))), dtype=qq.dtype)
+    R_1_meta = meta_from_array(data, len((min(m, n), cc)), dtype=rr.dtype)
     Q = Array(graph, name_Q,
-              shape=(m, min(m, n)), chunks=(m, min(m, n)), dtype=qq.dtype)
+              shape=(m, min(m, n)), chunks=(m, min(m, n)), meta=Q_meta)
     R_1 = Array(graph, name_R_1,
-                shape=(min(m, n), cc), chunks=(cr, cc), dtype=rr.dtype)
+                shape=(min(m, n), cc), chunks=(cr, cc), meta=R_1_meta)
 
     # R = [R_1 Q'A_rest]
     Rs = [R_1]
 
     if nc > 1:
+        A_rest_meta = meta_from_array(data, len((min(m, n), n - cc)), dtype=rr.dtype)
         A_rest = Array(graph, name_A_rest,
-                       shape=(min(m, n), n - cc), chunks=((cr), data.chunks[1][1:]), dtype=rr.dtype)
+                       shape=(min(m, n), n - cc), chunks=((cr), data.chunks[1][1:]), meta=A_rest_meta)
         Rs.append(Q.T.dot(A_rest))
 
     R = concatenate(Rs, axis=1)
@@ -788,15 +798,18 @@ def lu(a):
                 # l_permuted is not referred in upper triangulars
 
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
+    pp_meta = meta_from_array(a, a.ndim, dtype=pp.dtype)
+    ll_meta = meta_from_array(a, a.ndim, dtype=ll.dtype)
+    uu_meta = meta_from_array(a, a.ndim, dtype=uu.dtype)
 
     graph = HighLevelGraph.from_collections(name_p, dsk, dependencies=[a])
-    p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
+    p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, meta=pp_meta)
 
     graph = HighLevelGraph.from_collections(name_l, dsk, dependencies=[a])
-    l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
+    l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, meta=ll_meta)
 
     graph = HighLevelGraph.from_collections(name_u, dsk, dependencies=[a])
-    u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
+    u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, meta=uu_meta)
 
     return p, l, u
 
@@ -885,7 +898,8 @@ def solve_triangular(a, b, lower=False):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
-    return Array(graph, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
+    meta = meta_from_array(a, b.ndim, dtype=res.dtype)
+    return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
 def solve(a, b, sym_pos=False):
@@ -1034,10 +1048,11 @@ def _cholesky(a):
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+    meta = meta_from_array(a, a.ndim, dtype=cho.dtype)
 
-    lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)
     # do not use .T, because part of transposed blocks are already calculated
-    upper = Array(graph_upper, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    upper = Array(graph_upper, name_upper, shape=a.shape, chunks=a.chunks, meta=meta)
     return lower, upper
 
 
@@ -1106,8 +1121,9 @@ def lstsq(a, b):
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype),
                                   rcond=-1)
+    meta = meta_from_array(r, 1, dtype=ss.dtype)
     s = Array(graph, sname, shape=(r.shape[0], ),
-              chunks=r.shape[0], dtype=ss.dtype)
+              chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
 
