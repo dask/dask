@@ -137,14 +137,11 @@ class _LocIndexer(_IndexerBase):
                                        token='loc-series', meta=meta)
 
     def _loc_array(self, iindexer, cindexer):
-        meta = self._make_meta(iindexer, cindexer)
         iindexer_series = Series(iindexer.dask,
                                  iindexer.name,
                                  pd.Series([], dtype=bool),
                                  self.obj.divisions)
-
-        return self.obj.map_partitions(methods.loc, iindexer_series, cindexer,
-                                       token='loc-series', meta=meta)
+        return self._loc_series(iindexer_series, cindexer)
 
     def _loc_list(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
