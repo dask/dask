@@ -1098,7 +1098,7 @@ class _GroupBy(object):
         levels = _determine_levels(self.index)
 
         if self._slice:
-            sliced_plus = self._slice + list(self.index)
+            sliced_plus = list(self._slice) + list(self.index)
             self.obj = self.obj[sliced_plus]
 
         result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
