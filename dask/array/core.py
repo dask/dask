@@ -1061,8 +1061,9 @@ class Array(DaskMethodsMixin):
             '    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>' % (str(self.shape), str(self.chunksize)),
             '    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>' % (
                 len(self.__dask_graph__()), self.npartitions),
-            '    <tr><th> DType </th><td> %s </td><td></td></tr>' % self.dtype,
-            '  </tbody>',
+            '    <tr><th> Type </th><td> %s </td><td> %s.%s </td></tr>' %
+            (self.dtype, type(self._meta).__module__.split('.')[0], type(self._meta).__name__),
+            '  </tbody>'
             '</table>'
         ]
         return '\n'.join(table)
