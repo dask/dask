@@ -171,13 +171,13 @@ def pivot_table(df, index=None, columns=None,
 
     Parameters
     ----------
-    data : DataFrame
-    values : scalar
-        column to aggregate
+    df : DataFrame
     index : scalar
         column to be index
     columns : scalar
         column to be columns
+    values : scalar
+        column to aggregate
     aggfunc : {'mean', 'sum', 'count'}, default 'mean'
 
     Returns
