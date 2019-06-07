@@ -175,17 +175,18 @@ class IndividualPlots(RequestHandler):
 
 
 class _PrometheusCollector(object):
-    def __init__(self, server, prometheus_client):
+    def __init__(self, server):
         self.server = server
-        self.prometheus_client = prometheus_client
 
     def collect(self):
-        yield self.prometheus_client.core.GaugeMetricFamily(
+        from prometheus_client.core import GaugeMetricFamily
+
+        yield GaugeMetricFamily(
             "dask_scheduler_workers",
             "Number of workers.",
             value=len(self.server.workers),
         )
-        yield self.prometheus_client.core.GaugeMetricFamily(
+        yield GaugeMetricFamily(
             "dask_scheduler_clients",
             "Number of clients.",
             value=len(self.server.clients),
@@ -196,26 +197,21 @@ class PrometheusHandler(RequestHandler):
     _initialized = False
 
     def __init__(self, *args, **kwargs):
-        import prometheus_client  # keep out of global namespace
-
-        self.prometheus_client = prometheus_client
+        import prometheus_client
 
         super(PrometheusHandler, self).__init__(*args, **kwargs)
 
-        self._init()
-
-    def _init(self):
         if PrometheusHandler._initialized:
             return
 
-        self.prometheus_client.REGISTRY.register(
-            _PrometheusCollector(self.server, self.prometheus_client)
-        )
+        prometheus_client.REGISTRY.register(_PrometheusCollector(self.server))
 
         PrometheusHandler._initialized = True
 
     def get(self):
-        self.write(self.prometheus_client.generate_latest())
+        import prometheus_client
+
+        self.write(prometheus_client.generate_latest())
         self.set_header("Content-Type", "text/plain; version=0.0.4")
 
 
