@@ -301,7 +301,7 @@ def _cov_finalizer(df, cols):
     vals = []
     num_elements = len(list(it.product(cols, repeat=2)))
     num_cols = len(cols)
-    vals = np.zeros(num_elements)
+    vals = list(range(num_elements))
     col_idx_mapping = dict(zip(cols, range(len(cols))))
     for i, j in it.combinations_with_replacement(df[cols].columns, 2):
         x = col_idx_mapping[i]
@@ -314,16 +314,16 @@ def _cov_finalizer(df, cols):
         n = np.sqrt(ni * nj)
         div = n - 1
         div[div < 0] = 0
+        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
 
-        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div
         vals[idx] = val
         if i != j:
             idx = num_cols * x + y
             vals[idx] = val
+
     level_1 = cols
     index = pd.MultiIndex.from_product([level_1, level_1])
     return pd.Series(vals, index=index)
-
 
 def mul_cols(df, cols):
     _df = type(df)()
@@ -336,14 +336,16 @@ def mul_cols(df, cols):
 def _cov_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
-
     df = df.copy()
     cols = df._get_numeric_data().columns
-    cols = cols.drop(*index)
 
+    # casting to numpy may be problematic for non-pandas DataFrames
+    cols = cols.drop(np.array(index))
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
-    mul = g.apply(mul_cols, cols=cols).reset_index(level=1, drop=True)
+
+    level = len(index)
+    mul = g.apply(mul_cols, cols=cols).reset_index(level=level, drop=True)
     n = g[x.columns].count().rename(columns=lambda c: c + "-count")
 
     return (x, mul, n)
@@ -364,10 +366,10 @@ def _cov_agg(t, levels, ddof):
     total_counts = concat(ns).groupby(level=levels).sum()
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
-        .groupby(level=0)
+        .groupby(level=levels)
         .apply(_cov_finalizer, cols=cols)
     )
-    s_result = result.stack()
+    s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result
 
@@ -1094,10 +1096,12 @@ class _GroupBy(object):
     @derived_from(pd.DataFrame)
     def cov(self, ddof=1, split_every=None, split_out=1):
         levels = _determine_levels(self.index)
-        result = aca(
-            [self.obj, self.index]
-            if not isinstance(self.index, list)
-            else [self.obj] + self.index,
+
+        if self._slice:
+            sliced_plus = self._slice + list(self.index)
+            self.obj = self.obj[sliced_plus]
+
+        result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
             chunk=_cov_chunk,
             aggregate=_cov_agg,
             combine=_cov_combine,
@@ -1113,7 +1117,6 @@ class _GroupBy(object):
             result = result[result.columns[0]]
         if self._slice:
             result = result[self._slice]
-
         return result
 
     @derived_from(pd.core.groupby.GroupBy)

@@ -282,6 +282,10 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     dask_group = grouper(ddf)
     pandas_group = grouper(df)
 
+    # covariance only works with N+1 columns
+    if not isinstance(pandas_group, pd.core.groupby.generic.DataFrameGroupBy):
+        return
+
     dask_agg = getattr(dask_group, agg_func)
     pandas_agg = getattr(pandas_group, agg_func)
 
