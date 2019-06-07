@@ -156,6 +156,18 @@ class DaskMethodsMixin(object):
         (result,) = compute(self, traverse=False, **kwargs)
         return result
 
+    def __await__(self):
+        from distributed import wait
+        from tornado import gen
+
+        @gen.coroutine
+        def f():
+            x = self.persist()
+            yield wait(x)
+            raise gen.Return(x)
+
+        return f().__await__()
+
 
 def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs):
     """Compute a graph as if it were of type cls.
