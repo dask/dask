@@ -29,7 +29,7 @@ try:
             isreal, iscomplex, isfinite, isinf, isneginf, isposinf, isnan, signbit,
             copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
             radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
-            i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc, float_power)
+            i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc, float_power, divmod)
     from .reductions import (sum, prod, mean, std, var, any, all, min, max,
                              moment, trace,
                              argmin, argmax,

@@ -2487,6 +2487,16 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         result = self.map_partitions(M.memory_usage, index=index, deep=deep)
         return delayed(sum)(result.to_delayed())
 
+    def __divmod__(self, other):
+        res1 = self // other
+        res2 = self % other
+        return res1, res2
+
+    def __rdivmod__(self, other):
+        res1 = other // self
+        res2 = other % self
+        return res1, res2
+
 
 class Index(Series):
 

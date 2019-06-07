@@ -1103,3 +1103,21 @@ def test_sum_intna():
     a = pd.Series([1, None, 2], dtype=pd.Int32Dtype())
     b = dd.from_pandas(a, 2)
     assert_eq(a.sum(), b.sum())
+
+
+def test_divmod():
+    df1 = pd.Series(np.random.rand(10))
+    df2 = pd.Series(np.random.rand(10))
+
+    ddf1 = dd.from_pandas(df1, npartitions=3)
+    ddf2 = dd.from_pandas(df2, npartitions=3)
+
+    result = divmod(ddf1, 2.)
+    expected = divmod(df1, 2.)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(ddf1, ddf2)
+    expected = divmod(df1, df2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
