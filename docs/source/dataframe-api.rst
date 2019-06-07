@@ -317,8 +317,8 @@ Store DataFrames
    to_bag
    to_json
 
-Covert DataFrames
-~~~~~~~~~~~~~~~~~
+Convert DataFrames
+~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
 
