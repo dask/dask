@@ -325,6 +325,17 @@ Covert DataFrames
    to_dask_array
    to_delayed
 
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
+
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
 
