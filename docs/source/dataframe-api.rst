@@ -412,4 +412,4 @@ Other functions
 
 .. autofunction:: get_dummies
 .. autofunction:: pivot_table
-
+.. autofunction:: melt
