@@ -449,7 +449,7 @@ class CurrentLoad(DashboardComponent):
                     "nbytes_text": nbytes_text,
                     "dashboard_host": dashboard_host,
                     "dashboard_port": dashboard_port,
-                    "address": [ws.address for ws in workers],
+                    "worker": [ws.address for ws in workers],
                     "y": y,
                 }
 
