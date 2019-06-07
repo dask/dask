@@ -294,3 +294,34 @@ def test_tcp_localcluster(loop):
         #     assert any(w.data == {x.key: 2} for w in c.workers)
         #     assert e.loop is c.loop
         #     print(c.scheduler.workers)
+
+
+@pytest.mark.slow
+@pytest.mark.asyncio
+async def test_stress():
+    from distributed.utils import get_ip_interface
+
+    try:  # this check should be removed once UCX + TCP works
+        get_ip_interface("ib0")
+    except Exception:
+        pytest.skip("ib0 interface not found")
+
+    import dask.array as da
+    from distributed import wait
+
+    chunksize = "10 MB"
+
+    async with LocalCluster(
+        protocol="ucx", interface="ib0", asynchronous=True
+    ) as cluster:
+        async with Client(cluster, asynchronous=True) as client:
+            rs = da.random.RandomState()
+            x = rs.random((10000, 10000), chunks=(-1, chunksize))
+            x = x.persist()
+            await wait(x)
+
+            for i in range(10):
+                x = x.rechunk((chunksize, -1))
+                x = x.rechunk((-1, chunksize))
+                x = x.persist()
+                await wait(x)
