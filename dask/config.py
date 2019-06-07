@@ -448,7 +448,7 @@ def rename(aliases, config=config):
             new[n] = value
 
     for k in old:
-        del config[canonical_name(k,config)]  # TODO: support nested keys
+        del config[canonical_name(k, config)]  # TODO: support nested keys
 
     set(new, config=config)
 
