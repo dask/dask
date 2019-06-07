@@ -1665,6 +1665,14 @@ class Array(DaskMethodsMixin):
         from .routines import matmul
         return matmul(other, self)
 
+    def __divmod__(self, other):
+        from .ufunc import divmod
+        return divmod(self, other)
+
+    def __rdivmod__(self, other):
+        from .ufunc import divmod
+        return divmod(other, self)
+
     @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import any
