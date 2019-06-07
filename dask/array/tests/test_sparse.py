@@ -157,3 +157,14 @@ def test_metadata():
     assert isinstance((y - z)._meta, sparse.COO)
     if IS_NEP18_ACTIVE:
         assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+
+
+def test_html_repr():
+    y = da.random.random((10, 10), chunks=(5, 5))
+    y[y < 0.8] = 0
+    y = y.map_blocks(sparse.COO.from_numpy)
+
+    text = y._repr_html_()
+
+    assert "COO" in text
+    assert "sparse" in text
