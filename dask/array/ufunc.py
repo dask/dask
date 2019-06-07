@@ -6,7 +6,7 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
-from .utils import IS_NEP18_ACTIVE
+from .utils import empty_like_safe, IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
@@ -297,15 +297,14 @@ def frexp(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = np.empty((1, ), dtype=x.dtype)
+    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
+                        shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
-    ldt = l.dtype
-    rdt = r.dtype
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    L = Array(graph, left, chunks=tmp.chunks, meta=l)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
+    R = Array(graph, right, chunks=tmp.chunks, meta=r)
     return L, R
 
 
@@ -320,13 +319,12 @@ def modf(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = np.empty((1,), dtype=x.dtype)
+    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
+                        shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
-    ldt = l.dtype
-    rdt = r.dtype
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    L = Array(graph, left, chunks=tmp.chunks, meta=l)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
+    R = Array(graph, right, chunks=tmp.chunks, meta=r)
     return L, R

@@ -6,6 +6,7 @@ from operator import mul
 import numpy as np
 
 from .core import Array
+from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
@@ -174,6 +175,8 @@ def reshape(x, shape):
     if x.shape == shape:
         return x
 
+    meta = meta_from_array(x, len(shape))
+
     name = 'reshape-' + tokenize(x, shape)
 
     if x.npartitions == 1:
@@ -181,7 +184,7 @@ def reshape(x, shape):
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-        return Array(graph, name, chunks, dtype=x.dtype)
+        return Array(graph, name, chunks, meta=meta)
 
     # Logic for how to rechunk
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
@@ -194,4 +197,4 @@ def reshape(x, shape):
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
-    return Array(graph, name, outchunks, dtype=x.dtype)
+    return Array(graph, name, outchunks, meta=meta)

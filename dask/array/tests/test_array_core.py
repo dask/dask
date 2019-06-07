@@ -172,6 +172,11 @@ def test_Array():
 
     assert len(a) == shape[0]
 
+    with pytest.raises(ValueError):
+        Array(dsk, name, chunks, shape=shape)
+    with pytest.raises(TypeError):
+        Array(dsk, name, chunks, shape=shape, dtype='f8', meta=np.empty(0, 0))
+
 
 def test_uneven_chunks():
     a = Array({}, 'x', chunks=(3, 3), shape=(10, 10), dtype='f8')
@@ -355,8 +360,8 @@ def test_concatenate():
     pytest.raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
-@pytest.mark.parametrize('dtypes', [(('>f8', '>f8'), '>f8'),
-                                    (('<f4', '<f8'), '=f8')])
+@pytest.mark.parametrize('dtypes', [(('>f8', '>f8'), 'float64'),
+                                    (('<f4', '<f8'), 'float64')])
 def test_concatenate_types(dtypes):
     dts_in, dt_out = dtypes
     arrs = [np.zeros(4, dtype=dt) for dt in dts_in]
@@ -2006,6 +2011,9 @@ def test_optimize():
 
 def test_slicing_with_non_ndarrays():
     class ARangeSlice(object):
+        dtype = np.dtype('i8')
+        ndim = 1
+
         def __init__(self, start, stop):
             self.start = start
             self.stop = stop
@@ -2015,6 +2023,7 @@ def test_slicing_with_non_ndarrays():
 
     class ARangeSlicable(object):
         dtype = np.dtype('i8')
+        ndim = 1
 
         def __init__(self, n):
             self.n = n

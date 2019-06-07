@@ -569,7 +569,7 @@ def _compute_rechunk(x, chunks):
 
     layer = toolz.merge(x2, intermediates)
     graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
-    return Array(graph, merge_name, chunks, dtype=x.dtype)
+    return Array(graph, merge_name, chunks, meta=x)
 
 
 class _PrettyBlocks(object):
