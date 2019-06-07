@@ -423,6 +423,7 @@ def test_derived_from():
 @pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
 def test_derived_from_func():
     import builtins
+
     @derived_from(builtins)
     def sum():
         "extra docstring"

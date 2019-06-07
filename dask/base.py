@@ -157,13 +157,14 @@ class DaskMethodsMixin(object):
         return result
 
     def __await__(self):
-        from distributed import wait
+        from distributed import wait, futures_of
         from tornado import gen
 
         @gen.coroutine
         def f():
             x = self.persist()
-            yield wait(x)
+            if futures_of(x):
+                yield wait(x)
             raise gen.Return(x)
 
         return f().__await__()
