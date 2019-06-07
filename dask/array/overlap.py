@@ -15,25 +15,6 @@ from ..core import flatten
 from ..utils import concrete
 
 
-class Depth:
-    def __init__(self, axes):
-        self.one = [0] * len(axes)
-        self.two = [0] * len(axes)
-        self.total = [0] * len(axes)
-
-        for i,idepth in axes.items():
-            idepth = axes.get(i,0)
-            if isinstance(idepth,tuple):
-                self.one[i] = idepth[0]
-                self.two[i] = idepth[1]
-                self.total[i] = self.one[i] + self.two[i]
-
-            else:
-                self.one[i] = idepth
-                self.two[i] = idepth
-                self.total[i] = self.one[i] + self.two[i]
-
-
 def fractional_slice(task, axes):
     """
 
@@ -48,18 +29,25 @@ def fractional_slice(task, axes):
     """
     rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
 
-    current_depth = Depth(axes)
-
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
+
+        depth = axes.get(i,0)
+        if isinstance(depth,tuple):
+            left_depth = depth[0]
+            right_depth = depth[1]
+        else:
+            left_depth = depth
+            right_depth = depth
+
         if t == r:
             index.append(slice(None, None, None))
         elif t < r:
-            index.append(slice(0, current_depth.one[i]))
-        elif t > r and current_depth.total[i] == 0:
+            index.append(slice(0, left_depth ))
+        elif t > r and ( left_depth + right_depth ) == 0:
             index.append(slice(0, 0))
         else:
-            index.append(slice(-current_depth.two[i], None))
+            index.append(slice(-right_depth, None))
 
     index = tuple(index)
 
@@ -105,8 +93,6 @@ def expand_key(k, dims, name=None, axes=None):
 
     shape = []
 
-    local_depth = Depth(axes)
-
     for i, ind in enumerate(k[1:]):
         num = 1
         if ind > 0:
@@ -115,11 +101,11 @@ def expand_key(k, dims, name=None, axes=None):
             num += 1
         shape.append(num)
 
-    args = [inds(i, ind) if local_depth.total[i] else [ind] for i, ind in enumerate(k[1:])]
+    args = [inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])]
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
-    shape2 = [d if local_depth.total[i] else 1 for i, d in enumerate(shape)]
+    shape2 = [d if any((axes.get(i, 0),)) else 1 for i, d in enumerate(shape)]
     result = reshapelist(shape2, seq)
     return result
 
@@ -162,16 +148,22 @@ def overlap_internal(x, axes):
 
     for i, bds in enumerate(x.chunks):
 
-        current_depth = Depth(axes)
+        depth = axes.get(i,0)
+        if isinstance(depth,tuple):
+            left_depth = depth[0]
+            right_depth = depth[1]
+        else:
+            left_depth = depth
+            right_depth = depth
 
         if len(bds) == 1:
             chunks.append(bds)
         else:
-            left = [bds[0] + current_depth.one[i]]
-            right = [bds[-1] + current_depth.two[i]]
+            left = [bds[0] + left_depth]
+            right = [bds[-1] + right_depth]
             mid = []
             for bd in bds[1:-1]:
-                mid.append(bd + current_depth.total[i])
+                mid.append(bd + left_depth + right_depth )
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
