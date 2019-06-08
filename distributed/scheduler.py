@@ -73,8 +73,6 @@ from .variable import VariableExtension
 logger = logging.getLogger(__name__)
 
 
-ALLOWED_FAILURES = dask.config.get("distributed.scheduler.allowed-failures")
-
 LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
 DEFAULT_DATA_SIZE = dask.config.get("distributed.scheduler.default-data-size")
 
@@ -829,7 +827,7 @@ class Scheduler(ServerNode):
         synchronize_worker_interval="60s",
         services=None,
         service_kwargs=None,
-        allowed_failures=ALLOWED_FAILURES,
+        allowed_failures=None,
         extensions=None,
         validate=False,
         scheduler_file=None,
@@ -846,6 +844,8 @@ class Scheduler(ServerNode):
         self._setup_logging(logger)
 
         # Attributes
+        if allowed_failures is None:
+            allowed_failures = dask.config.get("distributed.scheduler.allowed-failures")
         self.allowed_failures = allowed_failures
         self.validate = validate
         self.status = None

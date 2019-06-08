@@ -1607,3 +1607,17 @@ async def test_async_context_manager():
             assert w.status == "running"
             assert s.workers
         assert not s.workers
+
+
+@pytest.mark.asyncio
+async def test_allowed_failures_config():
+    async with Scheduler(port=0, allowed_failures=10) as s:
+        assert s.allowed_failures == 10
+
+    with dask.config.set({"distributed.scheduler.allowed_failures": 100}):
+        async with Scheduler(port=0) as s:
+            assert s.allowed_failures == 100
+
+    with dask.config.set({"distributed.scheduler.allowed_failures": 0}):
+        async with Scheduler(port=0) as s:
+            assert s.allowed_failures == 0
