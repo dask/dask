@@ -4789,12 +4789,10 @@ def maybe_shift_divisions(df, periods, freq):
 
 
 @wraps(pd.to_datetime)
-def to_datetime(arg, meta=None **kwargs):
-
+def to_datetime(arg, meta=None, **kwargs):
     if meta is None:
         meta = pd.Series([pd.Timestamp('2000')])
         meta.index.name = arg.index.name
-
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
