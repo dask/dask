@@ -318,7 +318,7 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
 
 
 def test_rename():
-    aliases = {'foo-bar': 'foo.bar'}
+    aliases = {'foo_bar': 'foo.bar'}
     config = {'foo-bar': 123}
     rename(aliases, config=config)
     assert config == {'foo': {'bar': 123}}
