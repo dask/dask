@@ -1,3 +1,4 @@
+# flake8: noqa  # while we support Python 2
 import asyncio
 import dask
 from distributed.utils_test import gen_cluster, inc
