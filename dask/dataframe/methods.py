@@ -128,6 +128,12 @@ def wrap_var_reduction(array_var, index):
     return array_var
 
 
+def var_mixed_concat(numeric_var, timedelta_var, columns):
+    vars = pd.concat([numeric_var, timedelta_var])
+
+    return vars.reindex(index=columns)
+
+
 def describe_aggregate(values):
     assert len(values) > 0
 

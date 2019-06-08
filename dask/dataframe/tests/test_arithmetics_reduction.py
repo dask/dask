@@ -719,6 +719,7 @@ def test_reductions_timedelta(split_every):
     with pytest.warns(None):
         # runtime warnings; https://github.com/dask/dask/issues/2381
         assert_eq(dds.var(split_every=split_every), ds.var())
+        assert_eq(dds.var(split_every=split_every, skipna=False), ds.var(skipna=False))
 
     assert_eq(dds.var(ddof=0, split_every=split_every), ds.var(ddof=0))
 
@@ -1025,7 +1026,7 @@ def test_reductions_frame_dtypes():
                        'float': [1., 2., 3., 4., np.nan, 6., 7., 8.],
                        'dt': [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
                        'str': list('abcdefgh'),
-                       'timedelta': pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8]),
+                       'timedelta': pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
                        'bool': [True, False] * 4
                        })
 
@@ -1045,9 +1046,12 @@ def test_reductions_frame_dtypes():
     assert_eq(df.count(), ddf.count())
     assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
     assert_eq(df.var(), ddf.var())
+    assert_eq(df.var(skipna=False), ddf.var(skipna=False))
+
     assert_eq(df.sem(), ddf.sem())
     assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0))
+    assert_eq(df.var(ddof=0, skipna=False), ddf.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
 
     assert_eq(df_no_timedelta.mean(), ddf_no_timedelta.mean())
@@ -1056,6 +1060,19 @@ def test_reductions_frame_dtypes():
 
     numerics = ddf[['int', 'float']]
     assert numerics._get_numeric_data().dask == numerics.dask
+
+    # test var corner cases
+
+    # only timedelta
+    df_td = df[['timedelta']]
+    ddf_td = dd.from_pandas(df_td, 3)
+    assert_eq(df_td.var(ddof=0), ddf_td.var(ddof=0))
+    assert_eq(df_td.var(), ddf_td.var())
+
+    # only numercis
+    df_numerics = df[['int', 'float', 'bool']]
+    ddf_numerics = dd.from_pandas(df_numerics, 3)
+    assert_eq(df_numerics.var(), ddf_numerics.var())
 
 
 @pytest.mark.parametrize('split_every', [False, 2])
