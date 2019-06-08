@@ -867,8 +867,8 @@ def test_series_aggregate__examples(spec, split_every, grouper):
 def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
 
-    # nunique is not supported in specs
-    if spec == 'nunique':
+    # nunique/cov is not supported in specs
+    if spec in ('nunique', 'cov'):
         return
 
     pdf = pd.DataFrame({'a': [1, 1, 3, 3],
@@ -979,16 +979,26 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
 
     ddf = dd.from_pandas(pdf, npartitions=10)
 
-    assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
-              call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
+
+    # covariance only works with N+1 columns
+    if agg_func != 'cov':
+        assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
+                call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
 
     # not supported by pandas
     if agg_func != 'nunique':
         assert_eq(call(pdf.groupby(grouper(pdf))[['c', 'd']], agg_func),
                   call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
 
-        assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
-                  call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+        if agg_func == 'cov':
+            # stacking in covariance leads to a sorted index:
+            df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
+            cols = sorted(df.columns.to_list())
+            df = df[cols]
+            assert_eq(df, call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+        else:
+            assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
+                    call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
 
 
 @pytest.mark.parametrize('grouper', [

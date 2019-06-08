@@ -351,10 +351,15 @@ def _cov_chunk(df, *index):
     return (x, mul, n)
 
 
-def _cov_agg(t, levels, ddof):
+def _cov_agg(_t, levels, ddof):
     xs = []
     muls = []
     ns = []
+
+    if is_series_like(_t):
+        t = _t.to_list() # concat from combiner
+    else:
+        t = _t
     cols = t[0][0].columns
     for x, mul, n in t:
         xs.append(x)
@@ -1097,9 +1102,14 @@ class _GroupBy(object):
     def cov(self, ddof=1, split_every=None, split_out=1):
         levels = _determine_levels(self.index)
 
+        is_mask = any(is_series_like(s) for s in self.index)
+
         if self._slice:
-            sliced_plus = list(self._slice) + list(self.index)
-            self.obj = self.obj[sliced_plus]
+            if is_mask:
+                self.obj = self.obj[self._slice]
+            else:
+                sliced_plus = list(self._slice) + list(self.index)
+                self.obj = self.obj[sliced_plus]
 
         result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
             chunk=_cov_chunk,
