@@ -4790,13 +4790,18 @@ def maybe_shift_divisions(df, periods, freq):
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, **kwargs):
-    meta = pd.Series([pd.Timestamp('2000')])
-    # try to assign the same index name
-    # (will work if arg is DataFrame or Series)
-    try:
-        meta.index.name = arg.index.name
-    except AttributeError:
-        pass
+
+    meta = kwargs.pop('meta', None)
+
+    if meta is None:
+        meta = pd.Series([pd.Timestamp('2000')])
+        # try to assign the same index name
+        # (will work if arg is DataFrame or Series)
+        try:
+            meta.index.name = arg.index.name
+        except AttributeError:
+            pass
+
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
