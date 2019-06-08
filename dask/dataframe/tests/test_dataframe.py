@@ -3267,6 +3267,7 @@ def test_to_datetime():
     df = pd.DataFrame({'year': [2015, 2016],
                        'month': [2, 3],
                        'day': [4, 5]})
+    df.index.name = 'ix'
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
