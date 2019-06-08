@@ -4789,7 +4789,7 @@ def maybe_shift_divisions(df, periods, freq):
 
 
 @wraps(pd.to_datetime)
-def to_datetime(arg, **kwargs):
+def to_datetime(arg, meta=None, **kwargs):
 
     meta = kwargs.pop('meta', None)
 
