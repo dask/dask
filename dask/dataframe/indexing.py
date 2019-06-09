@@ -137,10 +137,7 @@ class _LocIndexer(_IndexerBase):
                                        token='loc-series', meta=meta)
 
     def _loc_array(self, iindexer, cindexer):
-        iindexer_series = Series(iindexer.dask,
-                                 iindexer.name,
-                                 pd.Series([], dtype=bool),
-                                 self.obj.divisions)
+        iindexer_series = iindexer.to_dask_dataframe('_', self.obj.index)
         return self._loc_series(iindexer_series, cindexer)
 
     def _loc_list(self, iindexer, cindexer):
