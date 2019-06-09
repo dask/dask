@@ -867,7 +867,7 @@ class Array(DaskMethodsMixin):
     --------
     dask.array.from_array
     """
-    __slots__ = 'dask', '_name', '_cached_keys', '_chunks', '_meta'
+    __slots__ = 'dask', '_name', '_cached_keys', '_chunks_', '_cached_chunk_boundaries', '_meta'
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
@@ -960,14 +960,25 @@ class Array(DaskMethodsMixin):
         return self._meta.dtype
 
     def _get_chunks(self):
-        return self._chunks
+        return self._chunks_
 
     def _set_chunks(self, chunks):
         raise TypeError("Can not set chunks directly\n\n"
                         "Please use the rechunk method instead:\n"
                         "  x.rechunk(%s)" % str(chunks))
 
+    def _set_chunks_internal(self, chunks):
+        self._chunks_ = chunks
+        self._cached_chunk_boundaries = None
+
     chunks = property(_get_chunks, _set_chunks, "chunks property")
+    _chunks = property(_get_chunks, _set_chunks_internal, "_chunks property")
+
+    @property
+    def chunk_boundaries(self):
+        if self._cached_chunk_boundaries is None:
+            self._cached_chunk_boundaries = make_chunk_boundaries(self.chunks)
+        return self._cached_chunk_boundaries
 
     def __len__(self):
         if not self.chunks:
@@ -1277,7 +1288,7 @@ class Array(DaskMethodsMixin):
             return self
 
         out = 'getitem-' + tokenize(self, index2)
-        dsk, chunks = slice_array(out, self.name, self.chunks, index2)
+        dsk, chunks = slice_array(out, self.name, self.chunks, index2, self.chunk_boundaries)
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
 
@@ -2258,6 +2269,32 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             chunks[i] = round_to(size, shape[i])
 
         return tuple(chunks)
+
+
+def _make_chunk_boundaries_1d(chunks):
+    if np.any(np.isnan(chunks)):
+        dtype = np.float64
+    else:
+        dtype = np.int64
+    out = np.zeros(len(chunks) + 1, dtype)
+    np.cumsum(chunks, dtype=dtype, out=out[1:])
+    return out
+
+
+def make_chunk_boundaries(chunks):
+    """
+    Convert normalized chunk information to chunk boundary positions.
+
+    >>> make_chunk_boundaries(((3, 5), (2, 2, 2), (3, np.nan)))
+    (array([0, 3, 8]), array([0, 2, 4, 6]), array([ 0.,  3., nan]))
+
+    Returns
+    -------
+    boundaries : tuple of np.ndarray
+        Each array has type `np.int64`, except where there are NaN chunks, in
+        which case it has a floating-point type.
+    """
+    return tuple(_make_chunk_boundaries_1d(c) for c in chunks)
 
 
 def round_to(c, s):

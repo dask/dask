@@ -83,7 +83,7 @@ def sanitize_index(ind):
         raise TypeError("Invalid index type", type(ind), ind)
 
 
-def slice_array(out_name, in_name, blockdims, index):
+def slice_array(out_name, in_name, blockdims, index, block_boundaries=None):
     """
     Master function for array slicing
 
@@ -102,8 +102,10 @@ def slice_array(out_name, in_name, blockdims, index):
       This is the dask variable name that will be used as input
     out_name - string
       This is the dask variable output name
-    blockshape - iterable of integers
+    blockdims - iterable of iterable of integers
     index - iterable of integers, slices, lists, or None
+    block_boundaries - iterable of arrays
+      Result of ``make_chunk_boundaries(blockdims)`` (optional)
 
     Returns
     -------
@@ -155,13 +157,13 @@ def slice_array(out_name, in_name, blockdims, index):
     index += (slice(None, None, None),) * missing
 
     # Pass down to next function
-    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index)
+    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index, block_boundaries)
 
     bd_out = tuple(map(tuple, bd_out))
     return dsk_out, bd_out
 
 
-def slice_with_newaxes(out_name, in_name, blockdims, index):
+def slice_with_newaxes(out_name, in_name, blockdims, index, block_boundaries=None):
     """
     Handle indexing with Nones
 
@@ -177,7 +179,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
             where_none[i] -= n
 
     # Pass down and do work
-    dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
+    dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2, block_boundaries)
 
     if where_none:
         expand = expander(where_none)
@@ -201,7 +203,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         return dsk, blockdims2
 
 
-def slice_wrap_lists(out_name, in_name, blockdims, index):
+def slice_wrap_lists(out_name, in_name, blockdims, index, block_boundaries=None):
     """
     Fancy indexing along blocked array dasks
 
@@ -232,7 +234,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # No lists, hooray! just use slice_slices_and_integers
     if not where_list:
-        return slice_slices_and_integers(out_name, in_name, blockdims, index)
+        return slice_slices_and_integers(out_name, in_name, blockdims, index, block_boundaries)
 
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(slice(None, None, None)
@@ -249,7 +251,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     else:
         # Do first pass without lists
         tmp = 'slice-' + tokenize((out_name, in_name, blockdims, index))
-        dsk, blockdims2 = slice_slices_and_integers(tmp, in_name, blockdims, index_without_list)
+        dsk, blockdims2 = slice_slices_and_integers(tmp, in_name, blockdims, index_without_list,
+                                                    block_boundaries)
 
         # After collapsing some axes due to int indices, adjust axis parameter
         axis = where_list[0]
@@ -264,7 +267,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     return dsk3, blockdims2
 
 
-def slice_slices_and_integers(out_name, in_name, blockdims, index):
+def slice_slices_and_integers(out_name, in_name, blockdims, index, block_boundaries):
     """
     Dask array indexing with slices and integers
 
@@ -273,7 +276,10 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
-    shape = tuple(map(sum, blockdims))
+    if block_boundaries is None:
+        from .core import make_chunk_boundaries   # Here to avoid circular import
+        block_boundaries = make_chunk_boundaries(blockdims)
+    shape = tuple(block[-1] for block in block_boundaries)
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
@@ -283,7 +289,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     assert len(index) == len(blockdims)
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
-    block_slices = list(map(_slice_1d, shape, blockdims, index))
+    block_slices = list(map(_slice_1d, shape, blockdims, index, block_boundaries))
     sorted_block_slices = [sorted(i.items()) for i in block_slices]
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
@@ -308,7 +314,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     return dsk_out, new_blockdims
 
 
-def _slice_1d(dim_shape, lengths, index):
+def _slice_1d(dim_shape, lengths, index, boundaries=None):
     """Returns a dict of {blocknum: slice}
 
     This function figures out where each slice should start in each
@@ -381,7 +387,10 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
-    chunk_boundaries = np.cumsum(lengths, dtype=np.int64)
+    if boundaries is not None:
+        chunk_boundaries = boundaries[1:]
+    else:
+        chunk_boundaries = np.cumsum(lengths, dtype=np.int64)
 
     if isinstance(index, Integral):
         # use right-side search to be consistent with previous result
