@@ -3510,8 +3510,8 @@ def concatenate3(arrays):
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
 
-    if (IS_NEP18_ACTIVE and not isinstance(advanced, np.ndarray) and
-            hasattr(advanced, '__array_function__')):
+    if (IS_NEP18_ACTIVE and getattr(np.ndarray, '__array_function__', None)
+        is not getattr(advanced, '__array_function__', None)):
         try:
             x = unpack_singleton(arrays)
             return _concatenate2(arrays, axes=tuple(range(x.ndim)))
