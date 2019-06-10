@@ -26,7 +26,9 @@ files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
 seekable_files = {None: noop_file}
 
 
-with ignoring(ImportError):
+with ignoring(ImportError, AttributeError):
+    # In case snappy is not installed, or another package called snappy that does not implement compress / decompress.
+    # For example, SnapPy (https://pypi.org/project/snappy/)
     import snappy
     compress['snappy'] = snappy.compress
     decompress['snappy'] = snappy.decompress
