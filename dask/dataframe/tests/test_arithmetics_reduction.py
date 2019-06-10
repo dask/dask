@@ -607,13 +607,19 @@ def test_frame_series_arithmetic_methods():
 
 @pytest.mark.parametrize('split_every', [False, 2])
 def test_reductions(split_every):
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3],
+                                   'b': [4, 5, 6],
+                                   'c': [True, True, False]},
                                   index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6],
+                                   'b': [3, 2, 1],
+                                   'c': [False, False, False]},
                                   index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
+           ('x', 2): pd.DataFrame({'a': [13094304034, 3489385935, 100006774],
+                                   'b': [0, 0, 0],
+                                   'c': [True, True, True]},
                                   index=[9, 9, 9])}
-    meta = make_meta({'a': 'i8', 'b': 'i8'}, index=pd.Index([], 'i8'))
+    meta = make_meta({'a': 'i8', 'b': 'i8', 'c': 'bool'}, index=pd.Index([], 'i8'))
     ddf1 = dd.DataFrame(dsk, 'x', meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
@@ -627,9 +633,14 @@ def test_reductions(split_every):
     bools = pd.Series([True, False, True, False, True], dtype=bool)
     boolds = dd.from_pandas(bools, 2)
 
-    for dds, pds in [(ddf1.b, pdf1.b), (ddf1.a, pdf1.a),
-                     (ddf1['a'], pdf1['a']), (ddf1['b'], pdf1['b']),
-                     (nands1, nans1), (nands2, nans2), (nands3, nans3),
+    for dds, pds in [(ddf1.a, pdf1.a),
+                     (ddf1.b, pdf1.b),
+                     (ddf1.c, pdf1.c),
+                     (ddf1['a'], pdf1['a']),
+                     (ddf1['b'], pdf1['b']),
+                     (nands1, nans1),
+                     (nands2, nans2),
+                     (nands3, nans3),
                      (boolds, bools)]:
         assert isinstance(dds, dd.Series)
         assert isinstance(pds, pd.Series)
@@ -639,6 +650,7 @@ def test_reductions(split_every):
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
+
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.std(split_every=split_every), pds.std())
@@ -648,6 +660,7 @@ def test_reductions(split_every):
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.sem(split_every=split_every), pds.sem())
+
         assert_eq(dds.std(ddof=0, split_every=split_every), pds.std(ddof=0))
         assert_eq(dds.var(ddof=0, split_every=split_every), pds.var(ddof=0))
         assert_eq(dds.sem(ddof=0, split_every=split_every), pds.sem(ddof=0))
@@ -696,6 +709,24 @@ def test_reductions(split_every):
     assert_eq(ddf1.index.min(split_every=split_every), pdf1.index.min())
     assert_eq(ddf1.index.max(split_every=split_every), pdf1.index.max())
     assert_eq(ddf1.index.count(split_every=split_every), pd.notnull(pdf1.index).sum())
+
+
+@pytest.mark.parametrize('split_every', [False, 2])
+def test_reductions_timedelta(split_every):
+    ds = pd.Series(pd.to_timedelta([2, 3, 4, np.nan, 5]))
+    dds = dd.from_pandas(ds, 2)
+
+    with pytest.warns(None):
+        # runtime warnings; https://github.com/dask/dask/issues/2381
+        assert_eq(dds.var(split_every=split_every), ds.var())
+        assert_eq(dds.var(split_every=split_every, skipna=False), ds.var(skipna=False))
+
+    assert_eq(dds.var(ddof=0, split_every=split_every), ds.var(ddof=0))
+
+    assert_eq(dds.sum(split_every=split_every), ds.sum())
+    assert_eq(dds.min(split_every=split_every), ds.min())
+    assert_eq(dds.max(split_every=split_every), ds.max())
+    assert_eq(dds.count(split_every=split_every), ds.count())
 
 
 @pytest.mark.parametrize('frame,axis,out',
@@ -880,10 +911,9 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.max(), pds.max())
     assert_eq(dds.count(), pds.count())
 
-    # ToDo: pandas supports timedelta std, otherwise dask raises:
-    # incompatible type for a datetime/timedelta operation [__pow__]
+    # ToDo: pandas supports timedelta std, dask returns float64
     # assert_eq(dds.std(), pds.std())
-    # assert_eq(dds.var(), pds.var())
+    assert_eq(dds.var(), pds.var())
 
     # ToDo: pandas supports timedelta std, otherwise dask raises:
     # TypeError: unsupported operand type(s) for *: 'float' and 'Timedelta'
@@ -951,13 +981,22 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.min(split_every=split_every), 'dataframe-min')
     assert_dask_graph(ddf1.max(split_every=split_every), 'dataframe-max')
     assert_dask_graph(ddf1.count(split_every=split_every), 'dataframe-count')
-    # std, var, sem, and mean consist of sum and count operations
-    assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-sum')
-    assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-count')
-    assert_dask_graph(ddf1.var(split_every=split_every), 'dataframe-sum')
-    assert_dask_graph(ddf1.var(split_every=split_every), 'dataframe-count')
-    assert_dask_graph(ddf1.sem(split_every=split_every), 'dataframe-sum')
-    assert_dask_graph(ddf1.sem(split_every=split_every), 'dataframe-count')
+
+    # std, var, sem, and mean consist of moment_* operations
+    assert_dask_graph(ddf1.std(split_every=split_every), 'dataframe-var')
+    assert_dask_graph(ddf1.std(split_every=split_every), 'moment_chunk')
+    assert_dask_graph(ddf1.std(split_every=split_every), 'moment_agg')
+    assert_dask_graph(ddf1.std(split_every=split_every), 'values')
+
+    assert_dask_graph(ddf1.var(split_every=split_every), 'moment_chunk')
+    assert_dask_graph(ddf1.var(split_every=split_every), 'moment_agg')
+    assert_dask_graph(ddf1.var(split_every=split_every), 'values')
+
+    assert_dask_graph(ddf1.sem(split_every=split_every), 'dataframe-var')
+    assert_dask_graph(ddf1.sem(split_every=split_every), 'moment_chunk')
+    assert_dask_graph(ddf1.sem(split_every=split_every), 'moment_agg')
+    assert_dask_graph(ddf1.sem(split_every=split_every), 'values')
+
     assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-sum')
     assert_dask_graph(ddf1.mean(split_every=split_every), 'dataframe-count')
 
@@ -986,32 +1025,54 @@ def test_reductions_frame_dtypes():
     df = pd.DataFrame({'int': [1, 2, 3, 4, 5, 6, 7, 8],
                        'float': [1., 2., 3., 4., np.nan, 6., 7., 8.],
                        'dt': [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
-                       'str': list('abcdefgh')})
+                       'str': list('abcdefgh'),
+                       'timedelta': pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+                       'bool': [True, False] * 4
+                       })
 
     if HAS_INT_NA:
         df['intna'] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
 
     ddf = dd.from_pandas(df, 3)
+
+    # TODO: std and mean do not support timedelta dtype
+    df_no_timedelta = df.drop('timedelta', axis=1, inplace=False)
+    ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
+
     assert_eq(df.sum(), ddf.sum())
     assert_eq(df.prod(), ddf.prod())
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
-    assert_eq(df.std(), ddf.std())
+    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
     assert_eq(df.var(), ddf.var())
+    assert_eq(df.var(skipna=False), ddf.var(skipna=False))
+
     assert_eq(df.sem(), ddf.sem())
-    assert_eq(df.std(ddof=0), ddf.std(ddof=0))
+    assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0))
+    assert_eq(df.var(ddof=0, skipna=False), ddf.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
 
-    result = ddf.mean()
-    expected = df.mean()
-    assert_eq(expected, result)
+    assert_eq(df_no_timedelta.mean(), ddf_no_timedelta.mean())
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
     numerics = ddf[['int', 'float']]
     assert numerics._get_numeric_data().dask == numerics.dask
+
+    # test var corner cases
+
+    # only timedelta
+    df_td = df[['timedelta']]
+    ddf_td = dd.from_pandas(df_td, 3)
+    assert_eq(df_td.var(ddof=0), ddf_td.var(ddof=0))
+    assert_eq(df_td.var(), ddf_td.var())
+
+    # only numercis
+    df_numerics = df[['int', 'float', 'bool']]
+    ddf_numerics = dd.from_pandas(df_numerics, 3)
+    assert_eq(df_numerics.var(), ddf_numerics.var())
 
 
 @pytest.mark.parametrize('split_every', [False, 2])
