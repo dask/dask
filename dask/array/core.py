@@ -16,7 +16,6 @@ import pickle
 from threading import Lock
 import uuid
 import warnings
-from .utils import IS_NEP18_ACTIVE
 
 try:
     from cytoolz import (partition, concat, first, groupby, accumulate)
@@ -3503,6 +3502,8 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    from .utils import IS_NEP18_ACTIVE
+
     arrays = concrete(arrays)
     if not arrays:
         return np.empty(0)
