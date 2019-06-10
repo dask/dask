@@ -4,15 +4,12 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like
+from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like
 from ..utils import Dispatch
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.api.types import union_categoricals
-else:
-    from pandas.types.concat import union_categoricals
+
 if PANDAS_VERSION >= '0.23':
     concat_kwargs = {'sort': False}
 else:
@@ -124,38 +121,112 @@ def mean_aggregate(s, n):
         return np.float64(np.nan)
 
 
-def var_aggregate(x2, x, n, ddof):
-    try:
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter('always')
-            result = (x2 / n) - (x / n)**2
-        if ddof != 0:
-            result = result * n / (n - ddof)
-        return result
-    except ZeroDivisionError:
-        return np.float64(np.nan)
+def wrap_var_reduction(array_var, index):
+    if isinstance(array_var, np.ndarray) or isinstance(array_var, list):
+        return pd.Series(array_var, index=index)
+
+    return array_var
+
+
+def var_mixed_concat(numeric_var, timedelta_var, columns):
+    vars = pd.concat([numeric_var, timedelta_var])
+
+    return vars.reindex(index=columns)
 
 
 def describe_aggregate(values):
-    assert len(values) == 6
-    count, mean, std, min, q, max = values
+    assert len(values) > 0
+
+    # arrange categorical and numeric stats
+    names = []
+    values_indexes = sorted((x.index for x in values), key=len)
+    for idxnames in values_indexes:
+        for name in idxnames:
+            if name not in names:
+                names.append(name)
+
+    return pd.concat(values, join_axes=[pd.Index(names)], axis=1)
+
+
+def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
+    assert len(stats) == 6
+    count, mean, std, min, q, max = stats
+
     typ = pd.DataFrame if isinstance(count, pd.Series) else pd.Series
+
+    if is_timedelta_col:
+        mean = pd.to_timedelta(mean)
+        std = pd.to_timedelta(std)
+        min = pd.to_timedelta(min)
+        max = pd.to_timedelta(max)
+        q = q.apply(lambda x: pd.to_timedelta(x))
+
     part1 = typ([count, mean, std, min],
                 index=['count', 'mean', 'std', 'min'])
     q.index = ['{0:g}%'.format(l * 100) for l in q.index.tolist()]
+    if isinstance(q, pd.Series) and typ == pd.DataFrame:
+        q = q.to_frame()
     part3 = typ([max], index=['max'])
-    return pd.concat([part1, q, part3], **concat_kwargs)
+
+    result = pd.concat([part1, q, part3], **concat_kwargs)
+
+    if isinstance(result, pd.Series):
+        result.name = name
+
+    return result
+
+
+def describe_nonnumeric_aggregate(stats, name):
+    args_len = len(stats)
+
+    is_datetime_column = args_len == 5
+    is_categorical_column = args_len == 3
+
+    assert is_datetime_column or is_categorical_column
+
+    if is_categorical_column:
+        nunique, count, top_freq = stats
+    else:
+        nunique, count, top_freq, min_ts, max_ts = stats
+
+    # input was empty dataframe/series
+    if len(top_freq) == 0:
+        return pd.Series([0, 0], index=['count', 'unique'], name=name)
+
+    top = top_freq.index[0]
+    freq = top_freq.iloc[0]
+
+    index = ['unique', 'count', 'top', 'freq']
+    values = [nunique, count]
+
+    if is_datetime_column:
+        tz = top.tz
+        top = pd.Timestamp(top)
+        if top.tzinfo is not None and tz is not None:
+            # Don't tz_localize(None) if key is already tz-aware
+            top = top.tz_convert(tz)
+        else:
+            top = top.tz_localize(tz)
+
+        first = pd.Timestamp(min_ts, tz=tz)
+        last = pd.Timestamp(max_ts, tz=tz)
+        index += ['first', 'last']
+        values += [top, freq, first, last]
+    else:
+        values += [top, freq]
+
+    return pd.Series(values, index=index, name=name)
 
 
 def cummin_aggregate(x, y):
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
     else:       # scalar
         return x if x < y else y
 
 
 def cummax_aggregate(x, y):
-    if isinstance(x, (pd.Series, pd.DataFrame)):
+    if is_series_like(x) or is_dataframe_like(x):
         return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
     else:       # scalar
         return x if x > y else y
@@ -240,13 +311,6 @@ def pivot_count(df, index, columns, values):
 # concat
 # ---------------------------------
 
-if PANDAS_VERSION < '0.20.0':
-    def _get_level_values(x, n):
-        return x.get_level_values(n)
-else:
-    def _get_level_values(x, n):
-        return x._get_level_values(n)
-
 
 concat_dispatch = Dispatch('concat')
 
@@ -289,7 +353,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
             first, rest = dfs[0], dfs[1:]
             if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
                     for o in rest):
-                arrays = [concat([_get_level_values(i, n) for i in dfs])
+                arrays = [concat([i._get_level_values(n) for i in dfs])
                           for n in range(first.nlevels)]
                 return pd.MultiIndex.from_arrays(arrays, names=first.names)
 

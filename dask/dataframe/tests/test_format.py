@@ -5,10 +5,9 @@ from textwrap import dedent
 import dask.dataframe as dd
 import dask.array as da
 import numpy as np
-from dask.dataframe.utils import PANDAS_VERSION
 
-if PANDAS_VERSION >= '0.21.0':
-    style = """<style scoped>
+
+style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
     }
@@ -22,23 +21,6 @@ if PANDAS_VERSION >= '0.21.0':
     }
 </style>
 """
-elif PANDAS_VERSION >= '0.20.0':
-    style = """<style>
-    .dataframe thead tr:only-child th {
-        text-align: right;
-    }
-
-    .dataframe thead th {
-        text-align: left;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-</style>
-"""
-else:
-    style = ""
 
 
 def test_repr():

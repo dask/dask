@@ -11,8 +11,20 @@ import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
                          update_defaults, refresh, expand_environment_variables,
-                         normalize_key, normalize_nested_keys)
+                         canonical_name)
+
 from dask.utils import tmpfile
+
+
+def test_canonical_name():
+    c = {'foo-bar': 1,
+         'fizz_buzz': 2}
+    assert canonical_name('foo-bar', c) == 'foo-bar'
+    assert canonical_name('foo_bar', c) == 'foo-bar'
+    assert canonical_name('fizz-buzz', c) == 'fizz_buzz'
+    assert canonical_name('fizz_buzz', c) == 'fizz_buzz'
+    assert canonical_name('new-key', c) == 'new-key'
+    assert canonical_name('new_key', c) == 'new_key'
 
 
 def test_update():
@@ -134,7 +146,7 @@ def test_env():
            }
 
     expected = {
-        'a-b': 123,
+        'a_b': 123,
         'c': True,
         'd': 'hello',
         'e': {'x': 123, 'y': 456},
@@ -142,7 +154,8 @@ def test_env():
         'g': '/not/parsable/as/literal',
     }
 
-    assert collect_env(env) == expected
+    res = collect_env(env)
+    assert res == expected
 
 
 def test_collect():
@@ -201,7 +214,7 @@ def test_ensure_file(tmpdir):
     ensure_file(source=source, destination=dest, comment=False)
 
     with open(destination) as f:
-        result = yaml.load(f)
+        result = yaml.safe_load(f)
     assert result == a
 
     # don't overwrite old config files
@@ -211,7 +224,7 @@ def test_ensure_file(tmpdir):
     ensure_file(source=source, destination=dest, comment=False)
 
     with open(destination) as f:
-        result = yaml.load(f)
+        result = yaml.safe_load(f)
     assert result == a
 
     os.remove(destination)
@@ -224,7 +237,7 @@ def test_ensure_file(tmpdir):
     assert '123' in text
 
     with open(destination) as f:
-        result = yaml.load(f)
+        result = yaml.safe_load(f)
     assert not result
 
 
@@ -305,7 +318,7 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
 
 
 def test_rename():
-    aliases = {'foo-bar': 'foo.bar'}
+    aliases = {'foo_bar': 'foo.bar'}
     config = {'foo-bar': 123}
     rename(aliases, config=config)
     assert config == {'foo': {'bar': 123}}
@@ -343,35 +356,30 @@ def test_expand_environment_variables(inp, out):
         del os.environ['FOO']
 
 
-@pytest.mark.parametrize('inp,out', [
-    ('custom_key', 'custom-key'),
-    ('custom-key', 'custom-key'),
-    (1, 1),
-    (2.3, 2.3)
-])
-def test_normalize_key(inp, out):
-    assert normalize_key(inp) == out
-
-
-def test_normalize_nested_keys():
-    config = {'key_1': 1,
-              'key_2': {'nested_key_1': 2},
-              'key_3': 3
-              }
-    expected = {'key-1': 1,
-                'key-2': {'nested-key-1': 2},
-                'key-3': 3
-                }
-    assert normalize_nested_keys(config) == expected
-
-
-def test_env_var_normalization(monkeypatch):
+def test_env_var_canonical_name(monkeypatch):
     value = 3
-    monkeypatch.setenv('DASK_A_B', value)
+    monkeypatch.setenv('DASK_A_B', str(value))
     d = {}
     dask.config.refresh(config=d)
     assert get('a_b', config=d) == value
     assert get('a-b', config=d) == value
+
+
+def test_get_set_canonical_name():
+    c = {'x-y': {'a_b': 123}}
+
+    keys = ['x_y.a_b', 'x-y.a-b', 'x_y.a-b']
+    for k in keys:
+        assert dask.config.get(k, config=c) == 123
+
+    with dask.config.set({'x_y': {'a-b': 456}}, config=c):
+        for k in keys:
+            assert dask.config.get(k, config=c) == 456
+
+    # No change to new keys in sub dicts
+    with dask.config.set({'x_y': {'a-b': {'c_d': 1}, 'e-f': 2}}, config=c):
+        assert dask.config.get('x_y.a-b', config=c) == {'c_d': 1}
+        assert dask.config.get('x_y.e_f', config=c) == 2
 
 
 @pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
@@ -384,3 +392,7 @@ def test_get_set_roundtrip(key):
 
 def test_merge_None_to_dict():
     assert dask.config.merge({'a': None, 'c': 0}, {'a': {'b': 1}}) == {'a': {'b': 1}, 'c': 0}
+
+
+def test_core_file():
+    assert 'temporary-directory' in dask.config.config

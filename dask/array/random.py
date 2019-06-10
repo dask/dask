@@ -131,11 +131,6 @@ class RandomState(object):
             else:
                 small_kwargs[key] = ar
 
-        # Get dtype
-        small_kwargs['size'] = (0,)
-        func = getattr(np.random.RandomState(), funcname)
-        dtype = func(*small_args, **small_kwargs).dtype
-
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
@@ -169,12 +164,15 @@ class RandomState(object):
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, self._RandomState, funcname, seed, size, arg, kwrg))
 
+        meta = _apply_random(self._RandomState, funcname, seed,
+                             (0,) * len(size), small_args, small_kwargs)
+
         dsk.update(dict(zip(keys, vals)))
 
         graph = HighLevelGraph.from_collections(
             name, dsk, dependencies=dependencies,
         )
-        return Array(graph, name, chunks + extra_chunks, dtype=dtype)
+        return Array(graph, name, chunks + extra_chunks, meta=meta)
 
     @doc_wraps(np.random.RandomState.beta)
     def beta(self, a, b, size=None, chunks="auto"):
@@ -331,8 +329,8 @@ class RandomState(object):
         return self._wrap('power', a, size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.randint)
-    def randint(self, low, high=None, size=None, chunks="auto"):
-        return self._wrap('randint', low, high, size=size, chunks=chunks)
+    def randint(self, low, high=None, size=None, chunks="auto", dtype='l'):
+        return self._wrap('randint', low, high, size=size, chunks=chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.random_integers)
     def random_integers(self, low, high=None, size=None, chunks="auto"):

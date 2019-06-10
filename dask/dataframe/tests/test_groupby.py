@@ -150,25 +150,38 @@ def test_full_groupby_apply_multiarg():
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        for c_lazy, d_lazy in [(c_scalar, d_scalar),
-                               (c_delayed, d_delayed)]:
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_scalar))
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c))
 
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d))
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_scalar), check_dtype=False)
 
-            assert_eq(df.groupby('a').apply(func, c),
-                      ddf.groupby('a').apply(func, c_lazy, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_scalar, meta=meta))
 
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_scalar, meta=meta))
+
+    # Delayed arguments work, but only if metadata is provided
+    with pytest.raises(ValueError) as exc:
+        ddf.groupby('a').apply(func, c, d=d_delayed)
+    assert 'dask.delayed' in str(exc.value) and 'meta'in str(exc.value)
+
+    with pytest.raises(ValueError) as exc:
+        ddf.groupby('a').apply(func, c_delayed, d=d)
+    assert 'dask.delayed' in str(exc.value) and 'meta'in str(exc.value)
+
+    assert_eq(df.groupby('a').apply(func, c),
+              ddf.groupby('a').apply(func, c_delayed, meta=meta))
+
+    assert_eq(df.groupby('a').apply(func, c, d=d),
+              ddf.groupby('a').apply(func, c, d=d_delayed, meta=meta))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -226,6 +239,9 @@ def test_groupby_on_index(scheduler):
     def func2(df):
         return df[['b']] - df[['b']].mean()
 
+    def func3(df):
+        return df.mean()
+
     with dask.config.set(scheduler=scheduler):
         with pytest.warns(None):
             assert_eq(ddf.groupby('a').apply(func),
@@ -236,6 +252,12 @@ def test_groupby_on_index(scheduler):
 
             assert_eq(pdf2.groupby(pdf2.index).apply(func2),
                       ddf2.groupby(ddf2.index).apply(func2))
+
+            assert_eq(ddf2.b.groupby('a').apply(func3),
+                      pdf2.b.groupby('a').apply(func3))
+
+            assert_eq(ddf2.b.groupby(ddf2.index).apply(func3),
+                      pdf2.b.groupby(pdf2.index).apply(func3))
 
 
 @pytest.mark.parametrize('grouper',
@@ -407,11 +429,7 @@ def test_groupby_set_index():
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-@pytest.mark.parametrize('empty', [
-    pytest.param(True, marks=pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                 reason="Empty groupby-reductions fail for older pandas")),
-    pytest.param(False)
-])
+@pytest.mark.parametrize('empty', [True, False])
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
@@ -664,6 +682,13 @@ def test_apply_shuffle():
         assert_eq(ddf.groupby(ddf['A'] + 1)['B'].apply(lambda x: x.sum()),
                   pdf.groupby(pdf['A'] + 1)['B'].apply(lambda x: x.sum()))
 
+        # Series.groupby
+        assert_eq(ddf.B.groupby(ddf['A']).apply(lambda x: x.sum()),
+                  pdf.B.groupby(pdf['A']).apply(lambda x: x.sum()))
+
+        assert_eq(ddf.B.groupby(ddf['A'] + 1).apply(lambda x: x.sum()),
+                  pdf.B.groupby(pdf['A'] + 1).apply(lambda x: x.sum()))
+
         # DataFrameGroupBy with column slice
         assert_eq(ddf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()),
                   pdf.groupby('A')[['B', 'C']].apply(lambda x: x.sum()))
@@ -824,9 +849,7 @@ def test_series_aggregate__examples(spec, split_every, grouper):
     # but we should still test it for now
     with pytest.warns(None):
         assert_eq(ps.groupby(grouper(pdf)).agg(spec),
-                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-                  # pandas < 0.20.0 does not propagate the name for size
-                  check_names=(spec != 'size'))
+                  ds.groupby(grouper(ddf)).agg(spec, split_every=split_every))
 
 
 def test_aggregate__single_element_groups(agg_func):
@@ -1131,8 +1154,6 @@ def test_groupby_not_supported():
     with pytest.raises(TypeError):
         ddf.groupby('A', sort=False)
     with pytest.raises(TypeError):
-        ddf.groupby('A', group_keys=False)
-    with pytest.raises(TypeError):
         ddf.groupby('A', squeeze=True)
 
 
@@ -1288,9 +1309,6 @@ def test_groupby_agg_grouper_multiple(slice_):
     assert_eq(result, expected)
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Need pandas groupby bug fix "
-                           "(pandas-dev/pandas#16859)")
 @pytest.mark.parametrize('agg_func', [
     'cumprod', 'cumcount', 'cumsum', 'var', 'sum', 'mean', 'count', 'size',
     'std', 'min', 'max', 'first', 'last', 'prod'
@@ -1366,8 +1384,6 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         assert_eq(expected, result)
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
-                    reason="Need 0.21.0 for mixed column/index grouping")
 @pytest.mark.parametrize(
     'group_args', [['idx', 'a'], ['a', 'idx'], ['idx'], 'idx'])
 @pytest.mark.parametrize(
@@ -1579,3 +1595,19 @@ def test_with_min_count(min_count):
                   ddf.groupby('group').sum(min_count=min_count))
         assert_eq(df.groupby('group').prod(min_count=min_count),
                   ddf.groupby('group').prod(min_count=min_count))
+
+
+def test_groupby_group_keys():
+    df = pd.DataFrame({
+        'a': [1, 2, 2, 3],
+        'b': [2, 3, 4, 5],
+    })
+    ddf = dd.from_pandas(df, npartitions=2).set_index('a')
+    pdf = df.set_index('a')
+
+    func = lambda g: g.copy()
+    expected = pdf.groupby('a').apply(func)
+    assert_eq(expected, ddf.groupby('a').apply(func, meta=expected))
+
+    expected = pdf.groupby('a', group_keys=False).apply(func)
+    assert_eq(expected, ddf.groupby('a', group_keys=False).apply(func, meta=expected))

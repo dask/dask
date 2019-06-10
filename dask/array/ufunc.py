@@ -1,16 +1,17 @@
-from __future__ import absolute_import, division, print_function
 
 from operator import getitem
-from functools import partial, wraps
+from functools import partial
 
 import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
+from .utils import empty_like_safe, IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
-from ..utils import skip_doctest, funcname
+from ..utils import (skip_doctest, funcname, derived_from,
+                     is_dataframe_like, is_series_like, is_index_like)
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -29,7 +30,10 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
         if len(dsk) > 0:
-            if array_wrap:
+            is_dataframe = (is_dataframe_like(dsk[0]) or is_series_like(dsk[0]) or
+                            is_index_like(dsk[0]))
+            if (array_wrap and
+                    (is_dataframe or not IS_NEP18_ACTIVE)):
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc,
                                         *args, **kwargs)
             else:
@@ -78,7 +82,7 @@ class da_frompyfunc(object):
         return list(o)
 
 
-@wraps(np.frompyfunc)
+@derived_from(np)
 def frompyfunc(func, nin, nout):
     if nout > 1:
         raise NotImplementedError("frompyfunc with more than one output")
@@ -177,11 +181,7 @@ true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
 power = ufunc(np.power)
-try:
-    float_power = ufunc(np.float_power)
-except AttributeError:
-    # Absent for NumPy versions prior to 1.12.
-    pass
+float_power = ufunc(np.float_power)
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below
@@ -223,6 +223,8 @@ less = ufunc(np.less)
 less_equal = ufunc(np.less_equal)
 not_equal = ufunc(np.not_equal)
 equal = ufunc(np.equal)
+isneginf = partial(equal, -np.inf)
+isposinf = partial(equal, np.inf)
 logical_and = ufunc(np.logical_and)
 logical_or = ufunc(np.logical_or)
 logical_xor = ufunc(np.logical_xor)
@@ -268,8 +270,6 @@ absolute = ufunc(np.absolute)
 clip = wrap_elemwise(np.clip)
 isreal = wrap_elemwise(np.isreal, array_wrap=True)
 iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
-isneginf = wrap_elemwise(np.isneginf, array_wrap=True)
-isposinf = wrap_elemwise(np.isposinf, array_wrap=True)
 real = wrap_elemwise(np.real, array_wrap=True)
 imag = wrap_elemwise(np.imag, array_wrap=True)
 fix = wrap_elemwise(np.fix, array_wrap=True)
@@ -297,15 +297,14 @@ def frexp(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = np.empty((1, ), dtype=x.dtype)
+    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
+                        shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
-    ldt = l.dtype
-    rdt = r.dtype
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    L = Array(graph, left, chunks=tmp.chunks, meta=l)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
+    R = Array(graph, right, chunks=tmp.chunks, meta=r)
     return L, R
 
 
@@ -320,13 +319,19 @@ def modf(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = np.empty((1,), dtype=x.dtype)
+    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
+                        shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
-    ldt = l.dtype
-    rdt = r.dtype
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    L = Array(graph, left, chunks=tmp.chunks, meta=l)
     graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
+    R = Array(graph, right, chunks=tmp.chunks, meta=r)
     return L, R
+
+
+@copy_docstring(source=np.divmod)
+def divmod(x, y):
+    res1 = x // y
+    res2 = x % y
+    return res1, res2

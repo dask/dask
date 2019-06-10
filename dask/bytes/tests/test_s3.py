@@ -4,6 +4,7 @@ import io
 import sys
 import os
 from contextlib import contextmanager
+from distutils.version import LooseVersion
 
 import pytest
 import numpy as np
@@ -353,7 +354,9 @@ def test_read_text_passes_through_options():
 @pytest.mark.parametrize("engine", ['pyarrow', 'fastparquet'])
 def test_parquet(s3, engine):
     dd = pytest.importorskip('dask.dataframe')
-    pytest.importorskip(engine)
+    lib = pytest.importorskip(engine)
+    if engine == 'pyarrow' and LooseVersion(lib.__version__) == '0.13.0':
+        pytest.skip('pyarrow 0.13.0 not supported for parquet')
     import pandas as pd
     import numpy as np
 

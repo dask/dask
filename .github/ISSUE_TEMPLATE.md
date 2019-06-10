@@ -4,7 +4,7 @@ Please read the following guidelines to ensure that your issue is handled
 properly.  If you have a ...
 
 1.  **General Question**: like *"How do I filter a dask.dataframe?"* then
-    please consider asking the question on StackOverflow using the #Dask tag.
+    please consider asking the question on Stack Overflow using the #Dask tag.
 
     Please do not ask a question in both locations.
 

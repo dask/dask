@@ -327,6 +327,77 @@ chunking of the resultant Dask array is defined by how the files were saved, unl
 otherwise specified.
 
 
+TileDB
+------
+
+`TileDB <https://docs.tiledb.io>`_  is a binary array format and storage manager with
+tunable chunking, layout, and compression options. The TileDB storage manager library
+includes support for scalable storage backends such as S3 API compatible object stores
+and HDFS, with automatic scaling, and supports multi-threaded and multi-process
+reads (consistent) and writes (eventually-consistent).
+
+To save data to a local TileDB array:
+
+.. code-block:: Python
+
+  >>> arr.to_tiledb('output.tdb')
+
+or to save to a bucket on S3:
+
+  >>> arr.to_tiledb('s3://mybucket/output.tdb',
+                    storage_options={'vfs.s3.aws_access_key_id': 'mykey',
+                                     'vfs.s3.aws_secret_access_key': 'mysecret'})
+
+Files may be retrieved by running `da.from_tiledb` with the same URI, and any
+necessary arguments.
+
+
+Intermediate storage
+--------------------
+
+.. autosummary::
+   store
+
+In some cases, one may wish to store an intermediate result in long term
+storage. This differs from ``persist``, which is mainly used to manage
+intermediate results within Dask that don't necessarily have longevity.
+Also it differs from storing final results as these mark the end of the Dask
+graph. Thus intermediate results are easier to reuse without reloading data.
+Intermediate storage is mainly useful in cases where the data is needed
+outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
+be useful as a checkpoint for long running or error-prone computations.
+
+The intermediate storage use case differs from the typical storage use case as
+a Dask Array is returned to the user that represents the result of that
+storage operation. This is typically done by setting the ``store`` function's
+``return_stored`` flag to ``True``. 
+
+.. code-block:: python
+
+   x.store()  # stores data, returns nothing
+   x = x.store(return_stored=True)  # stores data, returns new dask array backed by that data
+
+The user can then decide whether the
+storage operation happens immediately (by setting the ``compute`` flag to
+``True``) or later (by setting the ``compute`` flag to ``False``). In all
+other ways, this behaves the same as a normal call to ``store``. Some examples
+are shown below.
+
+.. code-block:: Python
+
+   >>> import dask.array as da
+   >>> import zarr as zr
+   >>> c = (2, 2)
+   >>> d = da.ones((10, 11), chunks=c)
+   >>> z1 = zr.open_array('lazy.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> z2 = zr.open_array('eager.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> d1 = d.store(z1, compute=False, return_stored=True)
+   >>> d2 = d.store(z2, compute=True, return_stored=True)
+
+This can be combined with any other storage strategies either noted above, in
+the docs or for any specialized storage types.
+
+
 Plugins
 =======
 

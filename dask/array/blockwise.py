@@ -3,10 +3,40 @@ import warnings
 
 import toolz
 
+import numpy as np
+
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
+
+
+def blockwise_meta(func, dtype, *args, **kwargs):
+    arrays = args[::2]
+    ndims = [a.ndim if hasattr(a, 'ndim') else 0 for a in arrays]
+    args_meta = [arg._meta if hasattr(arg, '_meta') else
+                 arg[tuple(slice(0, 0, None) for _ in range(nd))] if nd > 0 else arg
+                 for arg, nd in zip(arrays, ndims)]
+    kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
+
+    # TODO: look for alternative to this, causes issues when using map_blocks()
+    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+    if isinstance(func, np.vectorize):
+        meta = func(*args_meta)
+        return meta.astype(dtype)
+
+    try:
+        meta = func(*args_meta, **kwargs_meta)
+    except TypeError:
+        # The concatenate argument is an argument introduced by this
+        # function and may not be support by some external functions,
+        # such as in NumPy
+        kwargs_meta.pop('concatenate', None)
+        meta = func(*args_meta, **kwargs_meta)
+    except ValueError:
+        return None
+
+    return meta.astype(dtype)
 
 
 def blockwise(func, out_ind, *args, **kwargs):
@@ -88,6 +118,13 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
 
+    New dimensions can also be multi-chunk by specifying a tuple of chunk
+    sizes.  This has limited utility as is (because the chunks are all the
+    same), but the resulting graph can be modified to achieve more useful
+    results (see ``da.map_blocks``).
+
+    >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)  # doctest: +SKIP
+
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
     that modifies the dimension size in that index.
@@ -101,10 +138,6 @@ def blockwise(func, out_ind, *args, **kwargs):
     Include literals by indexing with None
 
     >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
-
-    See Also
-    --------
-    top - dict formulation of this function, contains most logic
     """
     out = kwargs.pop('name', None)      # May be None at this point
     token = kwargs.pop('token', None)
@@ -131,9 +164,12 @@ def blockwise(func, out_ind, *args, **kwargs):
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        arg, ind = max([(a, i) for (a, i) in toolz.partition(2, args) if i is not None],
-                       key=lambda ai: len(ai[1]))
-        chunkss = dict(zip(ind, arg.chunks))
+        arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
+        if arginds:
+            arg, ind = max(arginds, key=lambda ai: len(ai[1]))
+            chunkss = dict(zip(ind, arg.chunks))
+        else:
+            chunkss = {}
         arrays = args[::2]
 
     for k, v in new_axes.items():
@@ -197,7 +233,11 @@ def blockwise(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    return Array(graph, out, chunks, dtype=dtype)
+    try:
+        meta = blockwise_meta(func, dtype, *args, **kwargs)
+        return Array(graph, out, chunks, meta=meta)
+    except Exception:
+        return Array(graph, out, chunks, dtype=dtype)
 
 
 def atop(*args, **kwargs):

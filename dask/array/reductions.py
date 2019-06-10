@@ -6,17 +6,17 @@ from itertools import product, repeat
 from math import factorial, log, ceil
 
 import numpy as np
-from numbers import Integral
+from numbers import Integral, Number
 
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, handle_out
-from .blockwise import blockwise
+from .blockwise import blockwise, blockwise_meta
 from ..blockwise import lol_tuples
-from .creation import arange
+from .creation import arange, diagonal
 from .ufunc import sqrt
-from .utils import validate_axis
+from .utils import full_like_safe, validate_axis
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -145,8 +145,22 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     tmp = blockwise(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
+
+    if hasattr(x, '_meta'):
+        try:
+            reduced_meta = blockwise_meta(chunk, x.dtype, x._meta, axis=axis,
+                                          keepdims=True, meta=True)
+        except TypeError:
+            reduced_meta = blockwise_meta(chunk, x.dtype, x._meta, axis=axis,
+                                          keepdims=True)
+        except ValueError:
+            pass
+    else:
+        reduced_meta = None
+
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
-                          combine, name=name, concatenate=concatenate)
+                          combine, name=name, concatenate=concatenate,
+                          reduced_meta=reduced_meta)
     if keepdims and output_size != 1:
         result._chunks = tuple((output_size, ) if i in axis else c
                                for i, c in enumerate(tmp.chunks))
@@ -154,7 +168,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
 
 
 def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
-                 combine=None, name=None, concatenate=True):
+                 combine=None, name=None, concatenate=True, reduced_meta=None):
     """ Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
@@ -179,15 +193,18 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
         func = compose(func, partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
         x = partial_reduce(func, x, split_every, True, dtype=dtype,
-                           name=(name or funcname(combine or aggregate)) + '-partial')
+                           name=(name or funcname(combine or aggregate)) + '-partial',
+                           reduced_meta=reduced_meta)
     func = partial(aggregate, axis=axis, keepdims=keepdims)
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
     return partial_reduce(func, x, split_every, keepdims=keepdims, dtype=dtype,
-                          name=(name or funcname(aggregate)) + '-aggregate')
+                          name=(name or funcname(aggregate)) + '-aggregate',
+                          reduced_meta=reduced_meta)
 
 
-def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
+def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
+                   reduced_meta=None):
     """ Partial reduction across multiple axes.
 
     Parameters
@@ -223,7 +240,31 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    return Array(graph, name, out_chunks, dtype=dtype)
+
+    meta = x._meta
+    if reduced_meta is not None:
+        try:
+            meta = func(reduced_meta, meta=True)
+        # no meta keyword argument exists for func, and it isn't required
+        except TypeError:
+            meta = func(reduced_meta)
+        # when no work can be computed on the empty array (e.g., func is a ufunc)
+        except ValueError:
+            pass
+
+    # some functions can't compute empty arrays (those for which reduced_meta
+    # fall into the ValueError exception) and we have to rely on reshaping
+    # the array according to len(out_chunks)
+    if not np.isscalar(meta) and meta.ndim != len(out_chunks):
+        if len(out_chunks) == 0:
+            meta = meta.sum()
+        else:
+            meta = meta.reshape((0, ) * len(out_chunks))
+
+    if np.isscalar(meta):
+        return Array(graph, name, out_chunks, dtype=dtype)
+    else:
+        return Array(graph, name, out_chunks, meta=meta.astype(dtype))
 
 
 @wraps(chunk.sum)
@@ -320,7 +361,30 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(np.ones_like(x), **kwargs)
+
+    if hasattr(x, 'mask'):
+        return chunk.sum(np.ones_like(x), **kwargs)
+
+    shape = x.shape
+    keepdims = kwargs.get('keepdims', False)
+    axis = kwargs.get('axis', None)
+    dtype = kwargs.get('dtype', np.float64)
+
+    if axis is None:
+        prod = np.prod(shape, dtype=dtype)
+        return full_like_safe(
+            x, prod, shape=(1, ) * len(shape), dtype=dtype
+        ) if keepdims is True else prod
+
+    if not isinstance(axis, tuple or list):
+        axis = [axis]
+
+    prod = np.prod([shape[dim] for dim in axis])
+    if keepdims is True:
+        new_shape = tuple(shape[dim] if dim not in axis else 1 for dim in range(len(shape)))
+    else:
+        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
+    return full_like_safe(x, prod, shape=new_shape, dtype=dtype)
 
 
 def nannumel(x, **kwargs):
@@ -328,26 +392,40 @@ def nannumel(x, **kwargs):
     return chunk.sum(~np.isnan(x), **kwargs)
 
 
-def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', meta=False, **kwargs):
+    if meta:
+        return x
     n = numel(x, dtype=dtype, **kwargs)
+
     total = sum(x, dtype=dtype, **kwargs)
+
     return {'n': n, 'total': total}
 
 
-def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, **kwargs):
+def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, meta=False, **kwargs):
     if not isinstance(pairs, list):
         pairs = [pairs]
-    ns = deepmap(lambda pair: pair['n'], pairs)
-    totals = deepmap(lambda pair: pair['total'], pairs)
+
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
     n = _concatenate2(ns, axes=axis).sum(axis=axis, **kwargs)
+
+    if meta:
+        return n
+
+    totals = deepmap(lambda pair: pair['total'], pairs)
     total = _concatenate2(totals, axes=axis).sum(axis=axis, **kwargs)
+
     return {'n': n, 'total': total}
 
 
-def mean_agg(pairs, dtype='f8', axis=None, **kwargs):
-    ns = deepmap(lambda pair: pair['n'], pairs)
-    totals = deepmap(lambda pair: pair['total'], pairs)
+def mean_agg(pairs, dtype='f8', axis=None, meta=False, **kwargs):
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
     n = _concatenate2(ns, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+
+    if meta:
+        return n
+
+    totals = deepmap(lambda pair: pair['total'], pairs)
     total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
 
     return divide(total, n, dtype=dtype)
@@ -381,9 +459,13 @@ with ignoring(AttributeError):
     nanmean = wraps(chunk.nanmean)(nanmean)
 
 
-def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', meta=False, **kwargs):
+    if meta:
+        return A
+    n = numel(A, **kwargs)
+
+    n = n.astype(np.int64)
     total = sum(A, dtype=dtype, **kwargs)
-    n = numel(A, **kwargs).astype(np.int64)
     u = total / n
     xs = [sum((A - u)**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
@@ -398,18 +480,24 @@ def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
     return M
 
 
-def moment_combine(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **kwargs):
+def moment_combine(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, meta=False, **kwargs):
     if not isinstance(pairs, list):
         pairs = [pairs]
-    totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
-    ns = _concatenate2(deepmap(lambda pair: pair['n'], pairs), axes=axis)
-    Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
 
     kwargs['dtype'] = dtype
     kwargs['keepdims'] = True
 
-    total = totals.sum(axis=axis, **kwargs)
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
+    ns = _concatenate2(ns, axes=axis)
     n = ns.sum(axis=axis, **kwargs)
+
+    if meta:
+        return n
+
+    totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
+    Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
+
+    total = totals.sum(axis=axis, **kwargs)
     mu = divide(total, n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
 
@@ -418,12 +506,9 @@ def moment_combine(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **
     return {'total': total, 'n': n, 'M': M}
 
 
-def moment_agg(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **kwargs):
+def moment_agg(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, meta=False, **kwargs):
     if not isinstance(pairs, list):
         pairs = [pairs]
-    totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
-    ns = _concatenate2(deepmap(lambda pair: pair['n'], pairs), axes=axis)
-    Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
 
     kwargs['dtype'] = dtype
     # To properly handle ndarrays, the original dimensions need to be kept for
@@ -431,12 +516,31 @@ def moment_agg(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **kwar
     keepdim_kw = kwargs.copy()
     keepdim_kw['keepdims'] = True
 
+    ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
+    ns = _concatenate2(ns, axes=axis)
     n = ns.sum(axis=axis, **keepdim_kw)
+
+    if meta:
+        return n
+
+    totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
+    Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
+
     mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
-    return divide(M, n.sum(axis=axis, **kwargs) - ddof, dtype=dtype)
+
+    denominator = n.sum(axis=axis, **kwargs) - ddof
+
+    # taking care of the edge case with empty or all-nans array with ddof > 0
+    if isinstance(denominator, Number):
+        if denominator < 0:
+            denominator = np.nan
+    else:
+        denominator[denominator < 0] = np.nan
+
+    return divide(M, denominator, dtype=dtype)
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
@@ -885,3 +989,8 @@ def argtopk(a, k, axis=-1, split_every=None):
         a_plus_idx, chunk=chunk_combine, combine=chunk_combine,
         aggregate=aggregate, axis=axis, keepdims=True, dtype=np.intp,
         split_every=split_every, concatenate=False, output_size=abs(k))
+
+
+@wraps(np.trace)
+def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
+    return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)

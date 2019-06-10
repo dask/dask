@@ -88,87 +88,25 @@ API
 
 .. warning::
 
-   These may be out-dated.  We recommend referring to the ``--help`` text of your
-   installed version.
+   The command line documentation here may differ depending on your installed
+   version. We recommend referring to the output of ``<command> --help``.
 
-dask-scheduler
-~~~~~~~~~~~~~~
+.. click:: distributed.cli.dask_scheduler:main
+   :prog: dask-scheduler
+   :show-nested:
 
-.. code-block:: bash
+.. click:: distributed.cli.dask_worker:main
+   :prog: dask-worker
+   :show-nested:
 
-   $ dask-scheduler --help
-   Usage: dask-scheduler [OPTIONS]
+.. click:: distributed.cli.dask_ssh:main
+   :prog: dask-ssh
+   :show-nested:
 
-   Options:
-     --host TEXT             URI, IP or hostname of this server
-     --port INTEGER          Serving port
-     --interface TEXT        Preferred network interface like 'eth0' or 'ib0'
-     --tls-ca-file PATH      CA cert(s) file for TLS (in PEM format)
-     --tls-cert PATH         certificate file for TLS (in PEM format)
-     --tls-key PATH          private key file for TLS (in PEM format)
-     --bokeh-port INTEGER    Bokeh port for visual diagnostics
-     --bokeh / --no-bokeh    Launch Bokeh Web UI  [default: True]
-     --show / --no-show      Show web UI
-     --bokeh-whitelist TEXT  IP addresses to whitelist for bokeh
-     --bokeh-prefix TEXT     Prefix for the bokeh app
-     --use-xheaders BOOLEAN  User xheaders in bokeh app for ssl termination in
-                             header  [default: False]
-     --pid-file TEXT         File to write the process PID
-     --scheduler-file TEXT   File to write connection information. This may be a
-                             good way to share connection information if your
-                             cluster is on a shared network file system
-     --local-directory TEXT  Directory to place scheduler files
-     --preload TEXT          Module that should be loaded by each worker process
-                             like "foo.bar" or "/path/to/foo.py"
-     --help                  Show this message and exit
+.. click:: distributed.cli.dask_submit:main
+   :prog: dask-submit
+   :show-nested:
 
-
-dask-worker
-~~~~~~~~~~~
-
-.. code-block:: bash
-
-   $ dask-worker --help
-   Usage: dask-worker [OPTIONS] [SCHEDULER]
-
-   Options:
-     --tls-ca-file PATH            CA cert(s) file for TLS (in PEM format)
-     --tls-cert PATH               certificate file for TLS (in PEM format)
-     --tls-key PATH                private key file for TLS (in PEM format)
-     --worker-port INTEGER         Serving computation port, defaults to random
-     --nanny-port INTEGER          Serving nanny port, defaults to random
-     --bokeh-port INTEGER          Bokeh port, defaults to 8789
-     --bokeh / --no-bokeh          Launch Bokeh Web UI  [default: True]
-     --listen-address TEXT         The address to which the worker binds.
-                                   Example: tcp://0.0.0.0:9000
-     --contact-address TEXT        The address the worker advertises to the
-                                   scheduler for communication with it and other
-                                   workers. Example: tcp://127.0.0.1:9000
-     --host TEXT                   Serving host. Should be an ip address that is
-                                   visible to the scheduler and other workers.
-                                   See --listen-address and --contact-address if
-                                   you need different listen and contact
-                                   addresses. See --interface
-     --interface TEXT              Network interface like 'eth0' or 'ib0'
-     --nthreads INTEGER            Number of threads per process
-     --nprocs INTEGER              Number of worker processes.  Defaults to one
-     --name TEXT                   A unique name for this worker like 'worker-1'
-     --memory-limit TEXT           Bytes of memory that the worker can use. This
-                                   can be an integer (bytes), float (fraction of
-                                   total system memory), string (like 5GB or
-                                   5000M), 'auto', or zero for no memory
-                                   management
-     --reconnect / --no-reconnect  Reconnect to scheduler if disconnected
-     --nanny / --no-nanny          Start workers in nanny process for management
-     --pid-file TEXT               File to write the process PID
-     --local-directory TEXT        Directory to place worker files
-     --resources TEXT              Resources for task constraints like "GPU=2
-                                   MEM=10e9"
-     --scheduler-file TEXT         Filename to JSON encoded scheduler information. 
-                                   Use with dask-scheduler --scheduler-file
-     --death-timeout FLOAT         Seconds to wait for a scheduler before closing
-     --bokeh-prefix TEXT           Prefix for the bokeh app
-     --preload TEXT                Module that should be loaded by each worker
-                                   process like "foo.bar" or "/path/to/foo.py"
-     --help                        Show this message and exit
-
+.. click:: distributed.cli.dask_remote:main
+   :prog: dask-remote
+   :show-nested:

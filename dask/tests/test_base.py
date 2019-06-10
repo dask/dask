@@ -313,6 +313,7 @@ def test_tokenize_base_types(x):
 
 
 @pytest.mark.skipif('not np')
+@pytest.mark.filterwarnings("ignore:the matrix:PendingDeprecationWarning")
 def test_tokenize_numpy_matrix():
     rng = np.random.RandomState(1234)
     a = np.asmatrix(rng.rand(100))
@@ -668,6 +669,7 @@ def test_visualize_lists(tmpdir):
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
+    pytest.importorskip('graphviz')
     pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:

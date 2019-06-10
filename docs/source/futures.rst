@@ -468,7 +468,7 @@ themselves on remote clients if necessary:
 
    for filename in filenames:
        future = client.submit(load_and_submit, filename)
-       fire_and_forget(filename)
+       fire_and_forget(future)
 
    while True:
        future = queue.get()

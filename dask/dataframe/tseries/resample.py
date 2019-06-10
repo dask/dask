@@ -2,17 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import pandas as pd
 import numpy as np
+from pandas.core.resample import Resampler as pd_Resampler
 
 from ..core import DataFrame, Series
-from ..utils import PANDAS_VERSION
 from ...base import tokenize
 from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
-
-if PANDAS_VERSION >= '0.20.0':
-    from pandas.core.resample import Resampler as pd_Resampler
-else:
-    from pandas.tseries.resample import Resampler as pd_Resampler
 
 
 def getnanos(rule):

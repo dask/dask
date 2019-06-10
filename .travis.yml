@@ -19,7 +19,7 @@ jobs:
     - env:
       - PYTHON=2.7
       - NUMPY=1.13.0
-      - PANDAS=0.20.2
+      - PANDAS=0.21.1
       - *test_and_lint
       - *no_coverage
       - *optimize
@@ -27,8 +27,8 @@ jobs:
 
     - env:
       - PYTHON=3.5
-      - NUMPY=1.11.1
-      - PANDAS=0.19.2
+      - NUMPY=1.14.1
+      - PANDAS=0.22.0
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -36,8 +36,8 @@ jobs:
 
     - env: &py36_env
       - PYTHON=3.6
-      - NUMPY=1.14.1
-      - PANDAS=0.22.0
+      - NUMPY=1.15.1
+      - PANDAS=0.23.4
       - *test_and_lint
       - *coverage
       - *no_optimize
@@ -51,16 +51,18 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *imports
+      - *array_function
 
-    - env: &py36_dev
+    - env: &py37_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - NUMPY=1.13.0    # these are overridden later
-      - PANDAS=0.20.3
+      - NUMPY=1.16.2    # these are overridden later
+      - PANDAS>=0.24.2
       - *test_and_lint
       - *no_coverage
       - *no_optimize
       - *no_imports
-      if: type != pull_request
+      - *array_function
+      if: type == cron OR commit_message =~ test-upstream  # Run on cron jobs or any builds where commit message contains "test-upstream"
 
     - env: *py36_env
       if: type != pull_request
@@ -76,7 +78,7 @@ jobs:
         - source continuous_integration/hdfs/startup_hdfs.sh
 
   allow_failures:
-    - env: *py36_dev
+    - env: *py37_dev
     - os: osx
 
 

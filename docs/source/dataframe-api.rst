@@ -65,6 +65,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -179,6 +180,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index
@@ -315,13 +317,24 @@ Store DataFrames
    to_bag
    to_json
 
-Covert DataFrames
-~~~~~~~~~~~~~~~~~
+Convert DataFrames
+~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
 
    to_dask_array
    to_delayed
+
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -405,3 +418,9 @@ Other functions
 
 .. autofunction:: concat
 .. autofunction:: merge
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
+.. autofunction:: pivot_table
+.. autofunction:: melt
