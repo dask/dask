@@ -15,6 +15,7 @@ from dask.dataframe.utils import (
 
 AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'cov', 'nunique', 'first', 'last', 'prod']
 
+
 @pytest.fixture(params=AGG_FUNCS)
 def agg_func(request):
     """
@@ -979,11 +980,10 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
 
     ddf = dd.from_pandas(pdf, npartitions=10)
 
-
     # covariance only works with N+1 columns
     if agg_func != 'cov':
         assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
-                call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
+                  call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
 
     # not supported by pandas
     if agg_func != 'nunique':
@@ -998,7 +998,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
             assert_eq(df, call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
         else:
             assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
-                    call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+                      call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -1014,6 +1014,10 @@ def test_series_aggregations_multilevel(grouper, agg_func):
 
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
+
+    # covariance is not a series aggregation
+    if agg_func == 'cov':
+        return
 
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,

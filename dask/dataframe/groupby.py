@@ -325,6 +325,7 @@ def _cov_finalizer(df, cols):
     index = pd.MultiIndex.from_product([level_1, level_1])
     return pd.Series(vals, index=index)
 
+
 def mul_cols(df, cols):
     _df = type(df)()
     for i, j in it.combinations_with_replacement(df[cols].columns, 2):
@@ -339,8 +340,11 @@ def _cov_chunk(df, *index):
     df = df.copy()
     cols = df._get_numeric_data().columns
 
-    # casting to numpy may be problematic for non-pandas DataFrames
-    cols = cols.drop(np.array(index))
+    # when grouping by boolean series don't drop columns
+    is_mask = any(is_series_like(s) for s in index)
+    if not is_mask:
+        # casting to numpy may be problematic for non-pandas DataFrames
+        cols = cols.drop(np.array(index))
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
@@ -1103,7 +1107,6 @@ class _GroupBy(object):
         levels = _determine_levels(self.index)
 
         is_mask = any(is_series_like(s) for s in self.index)
-
         if self._slice:
             if is_mask:
                 self.obj = self.obj[self._slice]
@@ -1112,16 +1115,13 @@ class _GroupBy(object):
                 self.obj = self.obj[sliced_plus]
 
         result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
-            chunk=_cov_chunk,
-            aggregate=_cov_agg,
-            combine=_cov_combine,
-            token=self._token_prefix + "cov",
-            aggregate_kwargs={"ddof": ddof, "levels": levels},
-            combine_kwargs={"levels": levels},
-            split_every=split_every,
-            split_out=split_out,
-            split_out_setup=split_out_on_index,
-        )
+                     chunk=_cov_chunk,
+                     aggregate=_cov_agg, combine=_cov_combine,
+                     token=self._token_prefix + 'cov',
+                     aggregate_kwargs={'ddof': ddof, 'levels': levels},
+                     combine_kwargs={'levels': levels},
+                     split_every=split_every, split_out=split_out,
+                     split_out_setup=split_out_on_index)
 
         if isinstance(self.obj, Series):
             result = result[result.columns[0]]
