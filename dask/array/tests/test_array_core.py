@@ -1320,6 +1320,13 @@ def test_slicing_with_ndarray():
     assert_eq(d[np.array([True, False, True] + [False] * 5)], x[[0, 2]])
 
 
+def test_slicing_flexible_type():
+    a = np.array([['a', 'b'], ['c', 'd']])
+    b = da.from_array(a, 2)
+
+    assert_eq(a[:, 0], b[:, 0])
+
+
 def test_dtype():
     d = da.ones((4, 4), chunks=(2, 2))
 
