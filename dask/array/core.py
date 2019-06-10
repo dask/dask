@@ -1301,7 +1301,10 @@ class Array(DaskMethodsMixin):
 
             # If meta still has more dimensions than actual data
             if meta.ndim > len(chunks):
-                meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
+                try:
+                    meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
+                except TypeError:
+                    meta = meta.reshape((0,) * max(len(chunks), 1))
 
             # Ensure all dimensions are 0
             if not np.isscalar(meta):
