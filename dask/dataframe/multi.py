@@ -329,17 +329,24 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
     """ Checks for merge column dtype mismatches and throws a warning (#4574)
     """
 
-    dtype_mism = {(lo, ro): (left.dtypes[lo], right.dtypes[ro])
-                  for lo, ro in zip(left_on, right_on)
-                  if not left.dtypes[lo] is right.dtypes[ro]}
+    if not isinstance(left_on, list):
+        left_on = [left_on]
+    if not isinstance(right_on, list):
+        right_on = [right_on]
 
-    if dtype_mism:
-        col_str = '\n'.join('{}: {}'.format(cols, dtypes)
-                            for cols, dtypes in dtype_mism.items())
+    if (all(col in left.columns for col in left_on) and
+            all(col in right.columns for col in right_on)):
+        dtype_mism = {(lo, ro): (left.dtypes[lo], right.dtypes[ro])
+                      for lo, ro in zip(left_on, right_on)
+                      if not left.dtypes[lo] is right.dtypes[ro]}
 
-        warnings.warn(('Merging dataframes with merge column data '
-                       'type mismatches: \n{}\nCast dtypes explicitly to '
-                       'avoid unexpected results.').format(col_str))
+        if dtype_mism:
+            col_str = '\n'.join('{}: {}'.format(cols, dtypes)
+                                for cols, dtypes in dtype_mism.items())
+
+            warnings.warn(('Merging dataframes with merge column data '
+                           'type mismatches: \n{}\nCast dtypes explicitly to '
+                           'avoid unexpected results.').format(col_str))
 
 
 @wraps(pd.merge)
