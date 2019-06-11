@@ -249,14 +249,6 @@ Dask verifies style uniformity with the ``flake8`` tool::
    flake8 dask
 
 
-Changelog
-~~~~~~~~~
-
-Every significative code contribution should be listed in the
-:doc:`changelog` under the corresponding version.  When submitting a Pull
-Request in GitHub, please add to that file explaining what was added/modified.
-
-
 Contributing to Documentation
 -----------------------------
 
