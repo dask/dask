@@ -360,10 +360,9 @@ def _cov_agg(_t, levels, ddof):
     muls = []
     ns = []
 
-    if is_series_like(_t):
-        t = _t.to_list() # concat from combiner
-    else:
-        t = _t
+    # sometime we get a series back from concat combiner
+    t = list(_t)
+
     cols = t[0][0].columns
     for x, mul, n in t:
         xs.append(x)

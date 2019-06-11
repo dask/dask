@@ -283,7 +283,7 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     pandas_group = grouper(df)
 
     # covariance only works with N+1 columns
-    if not isinstance(pandas_group, pd.core.groupby.generic.DataFrameGroupBy):
+    if isinstance(pandas_group, pd.core.groupby.SeriesGroupBy) and agg_func == 'cov':
         return
 
     dask_agg = getattr(dask_group, agg_func)
@@ -993,7 +993,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         if agg_func == 'cov':
             # stacking in covariance leads to a sorted index:
             df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
-            cols = sorted(df.columns.to_list())
+            cols = sorted(list(df.columns))
             df = df[cols]
             assert_eq(df, call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
         else:
