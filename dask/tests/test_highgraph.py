@@ -26,3 +26,13 @@ def test_basic():
     hg = HighLevelGraph(layers, dependencies)
 
     assert dict(hg) == {'x': 1, 'y': (inc, 'x')}
+
+
+def test_values_method():
+    a = da.ones(10, chunks=(5,))
+    b = a + 1
+    c = a + 2
+    d = b + c
+    hg = d.dask
+
+    assert list(hg.values()) == [hg[i] for i in hg]

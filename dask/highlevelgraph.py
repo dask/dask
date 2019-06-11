@@ -153,6 +153,9 @@ class HighLevelGraph(Mapping):
     def __iter__(self):
         return toolz.unique(toolz.concat(self.layers.values()))
 
+    def values(self):
+        return toolz.concat(layer.values() for layer in self.layers.values())
+
     @classmethod
     def merge(cls, *graphs):
         layers = {}
