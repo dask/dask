@@ -308,7 +308,7 @@ def test_concat(join):
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
 
-        expected = pd.concat([pd1, pd2], join=join)
+        expected = pd.concat([pd1, pd2], join=join, sort=False)
         result = dd.concat([dd1, dd2], join=join)
         assert_eq(result, expected)
 
@@ -319,7 +319,7 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        expected = pd.concat([pd1, pd2])
+        expected = pd.concat([pd1, pd2], sort=False)
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
 
@@ -1227,7 +1227,8 @@ def test_append():
     s = pd.Series([7, 8], name=6, index=['a', 'b'])
 
     def check_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-        with warnings.catch_warnings(record=True):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
             expected = pandas_obj.append(pandas_append)
 
         result = dask_obj.append(dask_append)

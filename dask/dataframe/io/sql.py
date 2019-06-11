@@ -146,7 +146,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         if npartitions is None:
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)['count_1'][0]
-            npartitions = round(count * bytes_per_row / bytes_per_chunk) or 1
+            npartitions = int(round(count * bytes_per_row / bytes_per_chunk)) or 1
         if dtype.kind == "M":
             divisions = pd.date_range(
                 start=mini, end=maxi, freq='%iS' % (

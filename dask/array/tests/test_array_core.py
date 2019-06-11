@@ -3760,6 +3760,7 @@ def test_partitions_indexer():
         x.partitions[100, 100]
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
 def test_dask_array_holds_scipy_sparse_containers():
     pytest.importorskip('scipy.sparse')
     import scipy.sparse
