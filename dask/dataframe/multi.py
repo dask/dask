@@ -325,6 +325,23 @@ def single_partition_join(left, right, **kwargs):
     return new_dd_object(graph, name, meta, divisions)
 
 
+def warn_dtype_mismatch(left, right, left_on, right_on):
+    """ Checks for merge column dtype mismatches and throws a warning (#4574)
+    """
+
+    dtype_mism = {(lo, ro): (left.dtypes[lo], right.dtypes[ro])
+              for lo, ro in zip(left_on, right_on)
+              if not left.dtypes[lo] is right.dtypes[ro]}
+
+    if dtype_mism:
+        col_str = '\n'.join('{}: {}'.format(cols, dtypes)
+                            for cols, dtypes in dtype_mism.items())
+
+        warnings.warn(('Merging dataframes with merge column data '
+                       'type mismatches: \n{}\nCast dtypes explicitly to '
+                       'avoid unexpected results.').format(col_str))
+
+
 @wraps(pd.merge)
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
@@ -413,6 +430,9 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                               empty_index_dtype=meta.index.dtype)
     # Catch all hash join
     else:
+        if left_on and right_on:
+            warn_dtype_mismatch(left, right, left_on, right_on)
+
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes, shuffle=shuffle,
