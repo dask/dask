@@ -4945,29 +4945,27 @@ def meta_warning(df):
     return msg
 
 
-def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
+def prefix_reduction(f, ddf, identity, **kwargs):
     """ Computes the prefix sums of f on df
 
     If df has partitions [P1, P2, ..., Pn], then returns the DataFrame with
-    partitions [f(z, P1), f(f(z, P1), P2), f(f(f(z, P1), P2), P3), ...]
-
-    If you don't specify identity, make sure f handles when either argument is
-    None!
+    partitions [f(identity, P1),
+                f(f(identity, P1), P2),
+                f(f(f(identity, P1), P2), P3),
+                ...]
 
     Parameters
     ----------
-    f : 'a x 'a -> 'a
+    f : callable
         an associative function f
     ddf : dd.DataFrame
-    z : 'a
-        an identity element of f, that is f(z, df) = f(df, z) = df for all df's
-    preprocess : pd.DataFrame -> 'a
-        a function to apply to each partition before scanning
-    postprocess : 'a -> pd.DataFrame
-        a function to apply to each partition before scanning
+    identity : pd.DataFrame
+        an identity element of f, that is f(identity, df) = f(df, identity) = df
+    kwargs : ??
+        keyword arguments of f ??
     """
     dsk = dict()
-    name = 'prefix_reduction-' + tokenize(f, ddf, identity, preprocess)
+    name = 'prefix_reduction-' + tokenize(f, ddf, identity, **kwargs)
     meta = ddf._meta
     n = len(ddf.divisions) - 1
     divisions = [None] * (n + 1)
@@ -4975,20 +4973,18 @@ def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
     N = 1
     while N < n:
         N *= 2
-    if preprocess is None:
-        for i in range(n):
-            dsk[(name, i, 1, 0)] = (ddf._name, i)
-    else:
-        for i in range(n):
-            dsk[(name, i, 1, 0)] = (preprocess, (ddf._name, i))
+    for i in range(n):
+        dsk[(name, i, 1, 0)] = (apply, f, [(ddf._name, i), identity], kwargs)
     for i in range(n, N):
         dsk[(name, i, 1, 0)] = identity
 
     d = 1
     while d < N:
         for i in range(0, N, 2 * d):
-            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (f, (name, i + d - 1, d, 0),
-                                                    (name, i + 2 * d - 1, d, 0))
+            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (apply, f,
+                                                    [(name, i + d - 1, d, 0),
+                                                     (name, i + 2 * d - 1, d, 0)],
+                                                    kwargs)
         d *= 2
 
     dsk[(name, N - 1, N, 1)] = identity
@@ -4997,44 +4993,39 @@ def prefix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
         d //= 2
         for i in range(0, N, 2 * d):
             dsk[(name, i + d - 1, d, 1)] = (name, i + 2 * d - 1, 2 * d, 1)
-            dsk[(name, i + 2 * d - 1, d, 1)] = (f,
-                                                (name, i + 2 * d - 1, 2 * d, 1),
-                                                (name, i + d - 1, d, 0))
+            dsk[(name, i + 2 * d - 1, d, 1)] = (apply, f,
+                                                [(name, i + 2 * d - 1, 2 * d, 1),
+                                                 (name, i + d - 1, d, 0)],
+                                                kwargs)
 
-    if postprocess is None:
-        for i in range(n):
-            dsk[(name, i)] = (name, i, 1, 1)
-    else:
-        for i in range(n):
-            dsk[(name, i)] = (postprocess, (name, i, 1, 1))
+    for i in range(n):
+        dsk[(name, i)] = (apply, f, [(name, i, 1, 1), identity], kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, meta, divisions)
 
 
-def suffix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
+def suffix_reduction(f, ddf, identity, **kwargs):
     """ Computes the suffix sums of f on df
 
     If df has partitions [P1, P2, ..., Pn], then returns the DataFrame with
-    partitions [..., f(P3, f(P2, f(P1, z))), f(P2, f(P1, z)), f(P1, z)]
-
-    If you don't specify identity, make sure f handles when either argument is
-    None!
+    partitions [f(P1, f(P2, ...f(Pn, identity)...)),
+                f(P2, ...f(Pn, identity)...),
+                ...f(Pn, identity)...,
+                ...]
 
     Parameters
     ----------
-    f : 'a x 'a -> 'a
+    f : callable
         an associative function f
     ddf : dd.DataFrame
-    z : 'a
-        an identity element of f, that is f(z, df) = f(df, z) = df for all df's
-    preprocess : pd.DataFrame -> 'a
-        a function to apply to each partition before scanning
-    postprocess : 'a -> pd.DataFrame
-        a function to apply to each partition before scanning
+    identity : pd.DataFrame
+        an identity element of f, that is f(identity, df) = f(df, identity) = df
+    kwargs : ??
+        keyword arguments of f ??
     """
     dsk = dict()
-    name = 'suffix_reduction-' + tokenize(f, ddf, identity, preprocess)
+    name = 'suffix_reduction-' + tokenize(f, ddf, identity, **kwargs)
     meta = ddf._meta
     n = len(ddf.divisions) - 1
     divisions = [None] * (n + 1)
@@ -5042,21 +5033,18 @@ def suffix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
     N = 1
     while N < n:
         N *= 2
-    if preprocess is None:
-        for i in range(n):
-            dsk[(name, i, 1, 0)] = (ddf._name, n - 1 - i)
-    else:
-        for i in range(n):
-            dsk[(name, i, 1, 0)] = (preprocess, (ddf._name, n - 1 - i))
+    for i in range(n):
+        dsk[(name, i, 1, 0)] = (apply, f, [(ddf._name, n - 1 - i), identity], kwargs)
     for i in range(n, N):
         dsk[(name, i, 1, 0)] = identity
 
     d = 1
     while d < N:
         for i in range(0, N, 2 * d):
-            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (f,
-                                                    (name, i + 2 * d - 1, d, 0),
-                                                    (name, i + d - 1, d, 0))
+            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (apply, f,
+                                                    [(name, i + 2 * d - 1, d, 0),
+                                                     (name, i + d - 1, d, 0)],
+                                                    kwargs)
         d *= 2
 
     dsk[(name, N - 1, N, 1)] = identity
@@ -5065,15 +5053,13 @@ def suffix_reduction(f, ddf, identity=None, preprocess=None, postprocess=None):
         d //= 2
         for i in range(0, N, 2 * d):
             dsk[(name, i + d - 1, d, 1)] = (name, i + 2 * d - 1, 2 * d, 1)
-            dsk[(name, i + 2 * d - 1, d, 1)] = (f, (name, i + d - 1, d, 0),
-                                                (name, i + 2 * d - 1, 2 * d, 1))
+            dsk[(name, i + 2 * d - 1, d, 1)] = (apply, f,
+                                                [(name, i + d - 1, d, 0),
+                                                 (name, i + 2 * d - 1, 2 * d, 1)],
+                                                kwargs)
 
-    if postprocess is None:
-        for i in range(n):
-            dsk[(name, i)] = (name, n - 1 - i, 1, 1)
-    else:
-        for i in range(n):
-            dsk[(name, i)] = (postprocess, (name, n - 1 - i, 1, 1))
+    for i in range(n):
+        dsk[(name, i)] = (apply, f, [(name, n - 1 - i, 1, 1), identity], kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, meta, divisions)

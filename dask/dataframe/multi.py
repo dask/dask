@@ -462,33 +462,45 @@ def fix_overlap(ddf):
     return new_dd_object(graph, name, ddf._meta, divisions)
 
 
+def most_recent_tail(left, right):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    if right.empty:
+        return left
+    return right.tail(1)
+
+
+def most_recent_tail_summary(left, right, by=None):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    return pd.concat([left, right]).drop_duplicates(subset=by, keep='last')
+
+
 def compute_tails(ddf, by=None):
     """ For each partition, returns the last row of the most recent nonempty
     partition.
     """
     empty = ddf._meta.iloc[0:0]
 
-    def none_to_empty(df):
-        return empty if df is None else df
-
     if by is None:
-        def last_tail(L, R):
-            if R is None or R.empty:
-                return L
-            return R.tail(1)
-
-        return prefix_reduction(last_tail, ddf, postprocess=none_to_empty)
+        return prefix_reduction(most_recent_tail, ddf, empty)
     else:
-        def last_tail(*dfs):
-            frames = []
-            for df in dfs:
-                if df is not None:
-                    frames.append(df)
-            if len(frames) == 0:
-                return None
-            return pd.concat(frames).drop_duplicates(subset=by, keep='last')
+        kwargs = {'by': by}
+        return prefix_reduction(most_recent_tail_summary, ddf, empty, **kwargs)
 
-        return prefix_reduction(last_tail, ddf, preprocess=last_tail, postprocess=none_to_empty)
+
+def most_recent_head(left, right):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    if left.empty:
+        return right
+    return left.head(1)
+
+
+def most_recent_head_summary(left, right, by=None):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    return pd.concat([left, right]).drop_duplicates(subset=by, keep='first')
 
 
 def compute_heads(ddf, by=None):
@@ -497,27 +509,11 @@ def compute_heads(ddf, by=None):
     """
     empty = ddf._meta.iloc[0:0]
 
-    def none_to_empty(df):
-        return empty if df is None else df
-
     if by is None:
-        def last_tail(L, R):
-            if L is None or L.empty:
-                return R
-            return L.head(1)
-
-        return suffix_reduction(last_tail, ddf, postprocess=none_to_empty)
+        return suffix_reduction(most_recent_head, ddf, empty)
     else:
-        def last_tail(*dfs):
-            frames = []
-            for df in dfs:
-                if df is not None:
-                    frames.append(df)
-            if len(frames) == 0:
-                return None
-            return pd.concat(frames).drop_duplicates(subset=by, keep='first')
-
-        return suffix_reduction(last_tail, ddf, preprocess=last_tail, postprocess=none_to_empty)
+        kwargs = {'by': by}
+        return suffix_reduction(most_recent_head_summary, ddf, empty, **kwargs)
 
 
 def pair_partitions(L, R):
@@ -615,6 +611,7 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
     if left is None or right is None:
         raise ValueError("Cannot merge_asof on empty DataFrames")
 
+    #if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
         return pd.merge_asof(left, right, **kwargs)
 
