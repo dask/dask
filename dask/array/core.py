@@ -3757,7 +3757,7 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    from .utils import IS_NEP18_ACTIVE
+    from .utils import IS_NEP18_ACTIVE, NDARRAY_ARRAY_FUNCTION
 
     arrays = concrete(arrays)
     if not arrays:
@@ -3766,8 +3766,9 @@ def concatenate3(arrays):
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
 
-    if if (IS_NEP18_ACTIVE and not all(np.ndarray.__array_function__ is
-                                    getattr(arr, '__array_function__', np.ndarray.__array_function__) for arr in arrays)):
+    if (IS_NEP18_ACTIVE and not all(NDARRAY_ARRAY_FUNCTION is
+                                    getattr(arr, '__array_function__', NDARRAY_ARRAY_FUNCTION)
+                                    for arr in arrays)):
         try:
             x = unpack_singleton(arrays)
             return _concatenate2(arrays, axes=tuple(range(x.ndim)))
