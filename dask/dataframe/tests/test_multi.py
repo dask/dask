@@ -1,12 +1,14 @@
+import warnings
+
+import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-from dask.local import get_sync
 from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
-from dask.dataframe.methods import concat
+from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions)
@@ -190,11 +192,11 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
 
 def list_eq(aa, bb):
     if isinstance(aa, dd.DataFrame):
-        a = aa.compute(get=get_sync)
+        a = aa.compute(scheduler='sync')
     else:
         a = aa
     if isinstance(bb, dd.DataFrame):
-        b = bb.compute(get=get_sync)
+        b = bb.compute(scheduler='sync')
     else:
         b = bb
     tm.assert_index_equal(a.columns, b.columns)
@@ -227,7 +229,7 @@ def test_hash_join(how, shuffle):
     c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3, shuffle=shuffle)
     assert c.npartitions == 3
 
-    result = c.compute()
+    result = c.compute(scheduler='single-threaded')
     expected = pd.merge(A, B, 'outer', None, 'x', 'z')
 
     list_eq(result, expected)
@@ -236,6 +238,28 @@ def test_hash_join(how, shuffle):
             hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name)
     assert (hash_join(a, 'y', b, 'y', 'inner', shuffle=shuffle)._name !=
             hash_join(a, 'y', b, 'y', 'outer', shuffle=shuffle)._name)
+
+
+def test_sequential_joins():
+    # Pandas version of multiple inner joins
+    df1 = pd.DataFrame({'key': list(range(6)),
+                        'A': ['A0', 'A1', 'A2', 'A3', 'A4', 'A5']})
+    df2 = pd.DataFrame({'key': list(range(4)),
+                        'B': ['B0', 'B1', 'B2', 'B3']})
+    df3 = pd.DataFrame({'key': list(range(1, 5)),
+                        'C': ['C0', 'C1', 'C2', 'C3']})
+
+    join_pd = df1.join(df2, how='inner', lsuffix='_l', rsuffix='_r')
+    multi_join_pd = join_pd.join(df3, how='inner', lsuffix='_l', rsuffix='_r')
+
+    # Dask version of multiple inner joins
+    ddf1 = dd.from_pandas(df1, npartitions=3)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+    ddf3 = dd.from_pandas(df3, npartitions=2)
+
+    join_dd = ddf1.join(ddf2, how='inner', lsuffix='_l', rsuffix='_r')
+    multi_join_dd = join_dd.join(ddf3, how='inner', lsuffix='_l', rsuffix='_r')
+    assert_eq(multi_join_pd, multi_join_dd)
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])
@@ -248,14 +272,20 @@ def test_indexed_concat(join):
                      index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
+    expected = pd.concat([A, B], axis=0, join=join, **concat_kwargs)
     result = concat_indexed_dataframes([a, b], join=join)
-    expected = pd.concat([A, B], axis=0, join=join)
     assert_eq(result, expected)
 
-    assert (sorted(concat_indexed_dataframes([a, b], join=join).dask) ==
-            sorted(concat_indexed_dataframes([a, b], join=join).dask))
-    assert (sorted(concat_indexed_dataframes([a, b], join='inner').dask) !=
-            sorted(concat_indexed_dataframes([a, b], join='outer').dask))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', FutureWarning)
+        assert (
+            sorted(concat_indexed_dataframes([a, b], join=join).dask) ==
+            sorted(concat_indexed_dataframes([a, b], join=join).dask)
+        )
+        assert (
+            sorted(concat_indexed_dataframes([a, b], join='inner').dask) !=
+            sorted(concat_indexed_dataframes([a, b], join='outer').dask)
+        )
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer'])
@@ -277,8 +307,9 @@ def test_concat(join):
 
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
-        result = dd.concat([dd1, dd2], join=join)
+
         expected = pd.concat([pd1, pd2], join=join)
+        result = dd.concat([dd1, dd2], join=join)
         assert_eq(result, expected)
 
     # test outer only, inner has a problem on pandas side
@@ -288,9 +319,30 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        result = dd.concat([dd1, dd2])
         expected = pd.concat([pd1, pd2])
+        result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('join', ['inner', 'outer'])
+def test_concat_different_dtypes(join):
+    # check that the resulting dataframe has coherent dtypes
+    # refer to https://github.com/dask/dask/issues/4685
+    pdf1 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
+                         'y': list('abcdef')},
+                        index=[1, 2, 3, 4, 6, 7])
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({'x': [1.0, 2.0, 3.0, 4.0, 6.0, 7.0],
+                         'y': list('abcdef')},
+                        index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    expected = pd.concat([pdf1, pdf2], join=join)
+    result = dd.concat([ddf1, ddf2], join=join)
+    assert_eq(expected, result)
+
+    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
+    assert len(set(map(str, dtypes_list))) == 1  # all the same
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
@@ -357,6 +409,7 @@ def test_merge_tasks_passes_through():
     assert not any('partd' in k[0] for k in cc.dask)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
 def test_merge_by_index_patterns(how, shuffle):
@@ -405,6 +458,14 @@ def test_merge_by_index_patterns(how, shuffle):
                           'd': [5, 4, 3, 2]},
                          index=list('fghi'))
 
+    def pd_merge(left, right, **kwargs):
+        # Workaround pandas bug where output dtype of empty index will be int64
+        # even if input was object.
+        out = pd.merge(left, right, **kwargs)
+        if len(out) == 0:
+            return out.set_index(out.index.astype(left.index.dtype))
+        return out
+
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
                      (pdf7l, pdf7r)]:
@@ -418,22 +479,22 @@ def test_merge_by_index_patterns(how, shuffle):
 
             assert_eq(dd.merge(ddl, ddr, how=how, left_index=True,
                                right_index=True, shuffle=shuffle),
-                      pd.merge(pdl, pdr, how=how, left_index=True,
+                      pd_merge(pdl, pdr, how=how, left_index=True,
                                right_index=True))
             assert_eq(dd.merge(ddr, ddl, how=how, left_index=True,
                                right_index=True, shuffle=shuffle),
-                      pd.merge(pdr, pdl, how=how, left_index=True,
+                      pd_merge(pdr, pdl, how=how, left_index=True,
                                right_index=True))
 
             assert_eq(dd.merge(ddl, ddr, how=how, left_index=True,
                                right_index=True, shuffle=shuffle,
                                indicator=True),
-                      pd.merge(pdl, pdr, how=how, left_index=True,
+                      pd_merge(pdl, pdr, how=how, left_index=True,
                                right_index=True, indicator=True))
             assert_eq(dd.merge(ddr, ddl, how=how, left_index=True,
                                right_index=True, shuffle=shuffle,
                                indicator=True),
-                      pd.merge(pdr, pdl, how=how, left_index=True,
+                      pd_merge(pdr, pdl, how=how, left_index=True,
                                right_index=True, indicator=True))
 
             assert_eq(ddr.merge(ddl, how=how, left_index=True,
@@ -719,6 +780,25 @@ def test_cheap_single_partition_merge_divisions():
     assert_divisions(actual)
 
 
+@pytest.mark.parametrize('how', ['left', 'right'])
+def test_cheap_single_parition_merge_left_right(how):
+    a = pd.DataFrame({'x':range(8), 'z': list('ababbdda')}, index=range(8))
+    aa = dd.from_pandas(a, npartitions=1)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')}, index=range(4))
+    bb = dd.from_pandas(b, npartitions=1)
+
+    actual = aa.merge(bb, left_index=True, right_on='x', how=how)
+    expected = a.merge(b, left_index=True, right_on='x', how=how)
+
+    assert_eq(actual, expected)
+
+    actual = aa.merge(bb, left_on='x', right_index=True, how=how)
+    expected = a.merge(b, left_on='x', right_index=True, how=how)
+
+    assert_eq(actual, expected)
+
+
 def test_cheap_single_partition_merge_on_index():
     a = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
                      index=[10, 20, 30, 40, 50, 60])
@@ -866,19 +946,38 @@ def test_concat2():
     cases = [[a, b], [a, c], [a, d]]
     assert dd.concat([a]) is a
     for case in cases:
-        result = dd.concat(case)
         pdcase = [_c.compute() for _c in case]
 
-        assert result.npartitions == case[0].npartitions + case[1].npartitions
-        assert result.divisions == (None, ) * (result.npartitions + 1)
-        assert_eq(pd.concat(pdcase), result)
-        assert set(result.dask) == set(dd.concat(case).dask)
+        with warnings.catch_warnings(record=True) as w:
+            expected = pd.concat(pdcase, **concat_kwargs)
 
-        result = dd.concat(case, join='inner')
+        ctx = FutureWarning if w else None
+
+        with pytest.warns(ctx):
+            result = dd.concat(case)
+
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None, ) * (result.npartitions + 1)
-        assert_eq(pd.concat(pdcase, join='inner'), result)
-        assert set(result.dask) == set(dd.concat(case, join='inner').dask)
+        assert_eq(expected, result)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert set(result.dask) == set(dd.concat(case).dask)
+
+        with warnings.catch_warnings(record=True) as w:
+            expected = pd.concat(pdcase, join='inner', **concat_kwargs)
+
+        ctx = FutureWarning if w else None
+
+        with pytest.warns(ctx):
+            result = dd.concat(case, join='inner')
+        assert result.npartitions == case[0].npartitions + case[1].npartitions
+        assert result.divisions == (None, ) * (result.npartitions + 1)
+        assert_eq(result, result)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', FutureWarning)
+            assert set(result.dask) == set(dd.concat(case, join='inner').dask)
 
 
 def test_concat3():
@@ -892,25 +991,43 @@ def test_concat3():
     ddf2 = dd.from_pandas(pdf2, 3)
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    result = dd.concat([ddf1, ddf2])
+    with warnings.catch_warnings(record=True) as w:
+        expected = pd.concat([pdf1, pdf2], **concat_kwargs)
+
+    ctx = FutureWarning if w else None
+
+    with pytest.warns(ctx):
+        result = dd.concat([ddf1, ddf2])
+
     assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
     assert result.npartitions == ddf1.npartitions + ddf2.npartitions
-    assert_eq(result, pd.concat([pdf1, pdf2]))
+    assert_eq(result, expected)
 
-    assert_eq(dd.concat([ddf1, ddf2], interleave_partitions=True),
-              pd.concat([pdf1, pdf2]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        assert_eq(dd.concat([ddf1, ddf2], interleave_partitions=True),
+                  pd.concat([pdf1, pdf2]))
 
-    result = dd.concat([ddf1, ddf2, ddf3])
+    with warnings.catch_warnings(record=True) as w:
+        expected = pd.concat([pdf1, pdf2, pdf3], **concat_kwargs)
+
+    ctx = FutureWarning if w else None
+
+    with pytest.warns(ctx):
+        result = dd.concat([ddf1, ddf2, ddf3])
     assert result.divisions == (ddf1.divisions[:-1] + ddf2.divisions[:-1] +
                                 ddf3.divisions)
     assert result.npartitions == (ddf1.npartitions + ddf2.npartitions +
                                   ddf3.npartitions)
-    assert_eq(result, pd.concat([pdf1, pdf2, pdf3]))
+    assert_eq(result, expected)
 
-    assert_eq(dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
-              pd.concat([pdf1, pdf2, pdf3]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        assert_eq(dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
+                  pd.concat([pdf1, pdf2, pdf3]))
 
 
+@pytest.mark.filterwarnings('ignore')
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(np.random.randn(10, 5),
                         columns=list('ABCDE'), index=list('abcdefghij'))
@@ -932,14 +1049,10 @@ def test_concat4_interleave_partitions():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with pytest.raises(ValueError) as err:
-            dd.concat(case)
-        assert msg in str(err.value)
-
         assert_eq(dd.concat(case, interleave_partitions=True),
-                  pd.concat(pdcase))
+                  pd.concat(pdcase, **concat_kwargs))
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
-                  pd.concat(pdcase, join='inner'))
+                  pd.concat(pdcase, join='inner', **concat_kwargs))
 
     msg = "'join' must be 'inner' or 'outer'"
     with pytest.raises(ValueError) as err:
@@ -947,6 +1060,7 @@ def test_concat4_interleave_partitions():
     assert msg in str(err.value)
 
 
+@pytest.mark.filterwarnings('ignore')
 def test_concat5():
     pdf1 = pd.DataFrame(np.random.randn(7, 5),
                         columns=list('ABCDE'), index=list('abcdefg'))
@@ -977,7 +1091,7 @@ def test_concat5():
         with pytest.warns(None):
             # some cases will raise warning directly from pandas
             assert_eq(dd.concat(case, interleave_partitions=True),
-                      pd.concat(pdcase))
+                      pd.concat(pdcase, **concat_kwargs))
 
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
                   pd.concat(pdcase, join='inner'))
@@ -1011,6 +1125,7 @@ def test_concat5():
                          [(True, True, False), (True, False, True),
                           (True, False, False), (False, True, False),
                           (False, False, True), (False, False, False)])
+@pytest.mark.filterwarnings("ignore")
 def test_concat_categorical(known, cat_index, divisions):
     frames = [pd.DataFrame({'w': list('xxxxx'),
                             'x': np.arange(5),
@@ -1088,7 +1203,7 @@ def test_concat_datetimeindex():
     db3 = dd.from_pandas(b3, 1)
 
     result = concat([b2.iloc[:0], b3.iloc[:0]])
-    assert result.index.dtype == '<M8[ns]'
+    assert result.index.dtype == 'M8[ns]'
 
     result = dd.concat([db2, db3])
     expected = pd.concat([b2, b3])
@@ -1110,29 +1225,32 @@ def test_append():
     ddf3 = dd.from_pandas(df3, 2)
 
     s = pd.Series([7, 8], name=6, index=['a', 'b'])
-    assert_eq(ddf.append(s), df.append(s))
 
-    assert_eq(ddf.append(ddf2), df.append(df2))
-    assert_eq(ddf.a.append(ddf2.a), df.a.append(df2.a))
+    def check_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
+        with warnings.catch_warnings(record=True):
+            expected = pandas_obj.append(pandas_append)
+
+        result = dask_obj.append(dask_append)
+
+        assert_eq(result, expected)
+
+    check_with_warning(ddf, s, df, s)
+    check_with_warning(ddf, ddf2, df, df2)
+    check_with_warning(ddf.a, ddf2.a, df.a, df2.a)
+
     # different columns
-    assert_eq(ddf.append(ddf3), df.append(df3))
-    assert_eq(ddf.a.append(ddf3.b), df.a.append(df3.b))
+    check_with_warning(ddf, ddf3, df, df3)
+    check_with_warning(ddf.a, ddf3.b, df.a, df3.b)
 
     # dask + pandas
-    assert_eq(ddf.append(df2), df.append(df2))
-    assert_eq(ddf.a.append(df2.a), df.a.append(df2.a))
+    check_with_warning(ddf, df2, df, df2)
+    check_with_warning(ddf.a, df2.a, df.a, df2.a)
 
-    assert_eq(ddf.append(df3), df.append(df3))
-    assert_eq(ddf.a.append(df3.b), df.a.append(df3.b))
-
-    df4 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
-                        'b': [1, 2, 3, 4, 5, 6]},
-                       index=[4, 5, 6, 7, 8, 9])
-    ddf4 = dd.from_pandas(df4, 2)
-    with pytest.raises(ValueError):
-        ddf.append(ddf4)
+    check_with_warning(ddf, df3, df, df3)
+    check_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
+@pytest.mark.filterwarnings("ignore")
 def test_append2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
@@ -1150,8 +1268,8 @@ def test_append2():
     meta = make_meta({'b': 'i8', 'c': 'i8'})
     ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
-    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
-    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1159,8 +1277,8 @@ def test_append2():
         assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
-    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
-    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1168,8 +1286,8 @@ def test_append2():
         assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
     # Dask + pandas
-    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
-    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
+    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1177,8 +1295,8 @@ def test_append2():
         assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
-    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
-    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
+    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1225,6 +1343,15 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
+def test_append_lose_divisions():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[1, 2, 3, 4])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf2 = ddf.append(ddf)
+    df2 = df.append(df)
+    assert_eq(ddf2, df2)
+
+
 def test_singleton_divisions():
     df = pd.DataFrame({'x': [1, 1, 1]}, index=[1, 2, 3])
     ddf = dd.from_pandas(df, npartitions=2)
@@ -1233,3 +1360,29 @@ def test_singleton_divisions():
     joined = ddf2.join(ddf2, rsuffix='r')
     assert joined.divisions == (1, 1)
     joined.compute()
+
+
+def test_repartition_repeated_divisions():
+    df = pd.DataFrame({'x': [0, 0, 0, 0]})
+    ddf = dd.from_pandas(df, npartitions=2).set_index('x')
+
+    ddf2 = ddf.repartition(divisions=(0, 0), force=True)
+    assert_eq(ddf2, df.set_index('x'))
+
+
+def test_multi_duplicate_divisions():
+    df1 = pd.DataFrame({'x': [0, 0, 0, 0]})
+    df2 = pd.DataFrame({'x': [0]})
+
+    ddf1 = dd.from_pandas(df1, npartitions=2).set_index('x')
+    ddf2 = dd.from_pandas(df2, npartitions=1).set_index('x')
+    assert ddf1.npartitions == 2
+    assert len(ddf1) == len(df1)
+
+    r1 = ddf1.merge(ddf2, how='left', left_index=True, right_index=True)
+
+    sf1 = df1.set_index('x')
+    sf2 = df2.set_index('x')
+    r2 = sf1.merge(sf2, how='left', left_index=True, right_index=True)
+
+    assert_eq(r1, r2)

@@ -12,14 +12,14 @@ LICENSE
 
 New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt>`__.
 
-.. _documentation: http://dask.pydata.org/en/latest/
+.. _documentation: https://dask.org
 .. |Build Status| image:: https://travis-ci.org/dask/dask.svg?branch=master
    :target: https://travis-ci.org/dask/dask
 .. |Coverage| image:: https://coveralls.io/repos/dask/dask/badge.svg
    :target: https://coveralls.io/r/dask/dask
    :alt: Coverage status
-.. |Doc Status| image:: http://readthedocs.org/projects/dask/badge/?version=latest
-   :target: http://dask.pydata.org/en/latest/
+.. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
+   :target: https://dask.org
    :alt: Documentation Status
 .. |Gitter| image:: https://badges.gitter.im/Join%20Chat.svg
    :alt: Join the chat at https://gitter.im/dask/dask

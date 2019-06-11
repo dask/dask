@@ -70,9 +70,9 @@ def test_intersect_2():
 
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
-    a = np.random.uniform(0, 1, 300)
-    x = da.from_array(a, chunks=((100, ) * 3, ))
-    new = ((50, ) * 6,)
+    a = np.random.uniform(0, 1, 30)
+    x = da.from_array(a, chunks=((10, ) * 3, ))
+    new = ((5, ) * 6,)
     x2 = rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
@@ -157,6 +157,10 @@ def test_rechunk_with_dict():
     y = x.rechunk(chunks={0: (12, 12)})
     assert y.chunks == ((12, 12), (8, 8, 8))
 
+    x = da.ones((24, 24), chunks=(4, 8))
+    y = x.rechunk(chunks={0: -1})
+    assert y.chunks == ((24,), (8, 8, 8))
+
 
 def test_rechunk_with_empty_input():
     x = da.ones((24, 24), chunks=(4, 8))
@@ -196,6 +200,13 @@ def test_rechunk_same():
     x = da.ones((24, 24), chunks=(4, 8))
     y = x.rechunk(x.chunks)
     assert x is y
+
+
+def test_rechunk_with_zero_placeholders():
+    x = da.ones((24, 24), chunks=((12, 12), (24, 0)))
+    y = da.ones((24, 24), chunks=((12, 12), (12, 12)))
+    y = y.rechunk(((12, 12), (24, 0)))
+    assert x.chunks == y.chunks
 
 
 def test_rechunk_minus_one():
@@ -593,3 +604,115 @@ def test_rechunk_zero_dim():
 
     x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
     assert len(x.compute()) == 0
+
+
+def test_rechunk_avoid_needless_chunking():
+    x = da.ones(16, chunks=2)
+    y = x.rechunk(8)
+    dsk = y.__dask_graph__()
+    assert len(dsk) <= 8 + 2
+
+
+@pytest.mark.parametrize('shape,chunks,bs,expected', [
+    (100, 1, 10, (10,) * 10),
+    (100, 50, 10, (10,) * 10),
+    (100, 100, 10, (10,) * 10),
+    (20, 7, 10, (7, 7, 6)),
+    (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (5, 5, 5, 5)),
+])
+def test_rechunk_auto_1d(shape, chunks, bs, expected):
+    x = da.ones(shape, chunks=(chunks,))
+    y = x.rechunk({0: 'auto'}, block_size_limit=bs * x.dtype.itemsize)
+    assert y.chunks == (expected,)
+
+
+def test_rechunk_auto_2d():
+    x = da.ones((20, 20), chunks=(2, 2))
+    y = x.rechunk({0: -1, 1: "auto"}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks == ((20,), (1,) * 20)
+
+    x = da.ones((20, 20), chunks=(2, 2))
+    y = x.rechunk((-1, 'auto'), block_size_limit=80 * x.dtype.itemsize)
+    assert y.chunks == ((20,), (4,) * 5)
+
+    x = da.ones((20, 20), chunks=((2, 2)))
+    y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks[1] == x.chunks[1]
+    assert y.chunks[0] == (10, 10)
+
+    x = da.ones((20, 20), chunks=((2,) * 10, (2, 2, 2, 2, 2, 5, 5)))
+    y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks[1] == x.chunks[1]
+    assert y.chunks[0] == (4, 4, 4, 4, 4)  # limited by largest
+
+
+def test_rechunk_auto_3d():
+    x = da.ones((20, 20, 20), chunks=((2, 2, 2)))
+    y = x.rechunk({0: 'auto', 1: 'auto'}, block_size_limit=200 * x.dtype.itemsize)
+    assert y.chunks[2] == x.chunks[2]
+    assert y.chunks[0] == (10, 10)
+    assert y.chunks[1] == (10, 10)  # even split
+
+
+@pytest.mark.parametrize('n', [100, 1000])
+def test_rechunk_auto_image_stack(n):
+    with dask.config.set({'array.chunk-size': '10MiB'}):
+        x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype='uint8')
+        y = x.rechunk('auto')
+        assert y.chunks == ((10,) * (n // 10), (1000,), (1000,))
+        assert y.rechunk('auto').chunks == y.chunks  # idempotent
+
+    with dask.config.set({'array.chunk-size': '7MiB'}):
+        z = x.rechunk('auto')
+        assert z.chunks == ((5,) * (n // 5), (1000,), (1000,))
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype='float64')
+        z = x.rechunk('auto')
+        assert z.chunks == ((1,) * n , (250,) * 4, (250,) * 4)
+
+
+def test_rechunk_down():
+    with dask.config.set({'array.chunk-size': '10MiB'}):
+        x = da.ones((100, 1000, 1000), chunks=(1, 1000, 1000), dtype='uint8')
+        y = x.rechunk('auto')
+        assert y.chunks == ((10,) * 10, (1000,), (1000,))
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        z = y.rechunk('auto')
+        assert z.chunks == ((5,) * 20, (250,) * 4, (250,) * 4)
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        z = y.rechunk({0: 'auto'})
+        assert z.chunks == ((1,) * 100, (1000,),  (1000,))
+
+        z = y.rechunk({1: 'auto'})
+        assert z.chunks == ((10,) * 10, (100,) * 10,  (1000,))
+
+
+def test_rechunk_zero():
+    with dask.config.set({'array.chunk-size': '1B'}):
+        x = da.ones(10, chunks=(5,))
+        y = x.rechunk('auto')
+        assert y.chunks == ((1,) * 10,)
+
+
+def test_rechunk_bad_keys():
+    x = da.zeros((2, 3, 4), chunks=1)
+    assert x.rechunk({-1: 4}).chunks == ((1, 1), (1, 1, 1), (4,))
+    assert x.rechunk({-x.ndim: 2}).chunks == ((2,), (1, 1, 1), (1, 1, 1, 1))
+
+    with pytest.raises(TypeError) as info:
+        x.rechunk({'blah': 4})
+
+    assert 'blah' in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        x.rechunk({100: 4})
+
+    assert '100' in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        x.rechunk({-100: 4})
+
+    assert '-100' in str(info.value)

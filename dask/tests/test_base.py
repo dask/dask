@@ -5,21 +5,26 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
+import time
+from collections import OrderedDict
+
 from toolz import merge
 
 import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin, optimize)
+                       DaskMethodsMixin, optimize, unpack_collections,
+                       named_schedulers, get_scheduler)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode
+from dask.compatibility import long, unicode, PY2
+from dask.diagnostics import Profiler
 
 
 def import_or_none(path):
-    with ignoring():
+    with ignoring(BaseException):
         return pytest.importorskip(path)
     return None
 
@@ -115,7 +120,7 @@ def test_tokenize_numpy_array_on_object_dtype():
             tokenize(np.array(['a', None, 'aaa'], dtype=object)))
     assert (tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) ==
             tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)))
-    if sys.version_info[0] == 2:
+    if PY2:
         assert (tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) ==
                 tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)))
 
@@ -203,6 +208,29 @@ def test_tokenize_pandas():
     assert tokenize(a) == tokenize(b)
 
 
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame({'x\ud83d': [1, 2, 3], 'y\ud83d': ['4', 'asd\ud83d', None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_mixed_unicode_bytes():
+    df = pd.DataFrame({u'ö'.encode('utf8'): [1, 2, 3], u'ö': [u'ö', u'ö'.encode('utf8'), None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_no_pickle():
+    class NoPickle(object):
+        # pickling not supported because it is a local class
+        pass
+
+    df = pd.DataFrame({'x': ['foo', None, NoPickle()]})
+    tokenize(df)
+
+
 def test_tokenize_kwargs():
     assert tokenize(5, x=1) == tokenize(5, x=1)
     assert tokenize(5) != tokenize(5, x=1)
@@ -285,6 +313,7 @@ def test_tokenize_base_types(x):
 
 
 @pytest.mark.skipif('not np')
+@pytest.mark.filterwarnings("ignore:the matrix:PendingDeprecationWarning")
 def test_tokenize_numpy_matrix():
     rng = np.random.RandomState(1234)
     a = np.asmatrix(rng.rand(100))
@@ -340,6 +369,65 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection())
     assert not is_dask_collection(DummyCollection)
+
+
+try:
+    import dataclasses
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+except ImportError:
+    dataclasses = None
+
+
+def test_unpack_collections():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+
+    def build(a, b, c, iterator):
+        t = (a, b,                              # Top-level collections
+                {'a': a,                        # dict
+                 a: b,                          # collections as keys
+                 'b': [1, 2, [b]],              # list
+                 'c': 10,                       # other builtins pass through unchanged
+                 'd': (c, 2),                   # tuple
+                 'e': {a, 2, 3},                # set
+                 'f': OrderedDict([('a', a)])}, # OrderedDict
+                iterator)                       # Iterator
+
+        if dataclasses is not None:
+            t[2]['f'] = ADataClass(a=a)
+
+        return t
+
+    args = build(a, b, c, (i for i in [a, b, c]))
+
+    collections, repack = unpack_collections(*args)
+    assert len(collections) == 3
+
+    # Replace collections with `'~a'` strings
+    result = repack(['~a', '~b', '~c'])
+    sol = build('~a', '~b', '~c', ['~a', '~b', '~c'])
+    assert result == sol
+
+    # traverse=False
+    collections, repack = unpack_collections(*args, traverse=False)
+    assert len(collections) == 2  # just a and b
+    assert repack(collections) == args
+
+    # No collections
+    collections, repack = unpack_collections(1, 2, {'a': 3})
+    assert not collections
+    assert repack(collections) == (1, 2, {'a': 3})
+
+    # Result that looks like a task
+    def fail(*args):
+        raise ValueError("Shouldn't have been called")
+
+    collections, repack = unpack_collections(a, (fail, 1), [(fail, 2, 3)],
+                                             traverse=False)
+    repack(collections)  # Smoketest task literals
+    repack([(fail, 1)])  # Smoketest results that look like tasks
 
 
 class Tuple(DaskMethodsMixin):
@@ -425,18 +513,18 @@ def test_compute_no_opt():
     # Check that with the kwarg, the optimization doesn't happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
-        o.compute(get=dask.get, optimize_graph=False)
+        o.compute(scheduler='single-threaded', optimize_graph=False)
     assert len([k for k in keys if 'mul' in k[0]]) == 4
     assert len([k for k in keys if 'add' in k[0]]) == 4
     # Check that without the kwarg, the optimization does happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
-        o.compute(get=dask.get)
+        o.compute(scheduler='single-threaded')
     # Names of fused tasks have been merged, and the original key is an alias.
     # Otherwise, the lengths below would be 4 and 0.
     assert len([k for k in keys if 'mul' in k[0]]) == 8
     assert len([k for k in keys if 'add' in k[0]]) == 4
-    assert len([k for k in keys if 'add-map-mul' in k[0]]) == 4  # See? Renamed
+    assert len([k for k in keys if 'add-from_sequence-mul' in k[0]]) == 4  # See? Renamed
 
 
 @pytest.mark.skipif('not da')
@@ -485,6 +573,25 @@ def test_compute_array_dataframe():
     pd.util.testing.assert_series_equal(df_out, df.a + 2)
 
 
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_valid_unicode_in_bytes():
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=[u'ö'.encode('utf8')],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=['\ud83d'],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
 @pytest.mark.skipif('not da or not db')
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
@@ -492,7 +599,7 @@ def test_compute_array_bag():
 
     pytest.raises(ValueError, lambda: compute(x, b))
 
-    xx, bb = compute(x, b, get=dask.get)
+    xx, bb = compute(x, b, scheduler='single-threaded')
     assert np.allclose(xx, np.arange(5))
     assert bb == [1, 2, 3]
 
@@ -547,11 +654,23 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
 
 
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_lists(tmpdir):
+    pytest.importorskip('graphviz')
+    fn = os.path.join(str(tmpdir), 'myfile.dot')
+    dask.visualize([{'abc-xyz': (add, 1, 2)}], filename=fn)
+    with open(fn) as f:
+        text = f.read()
+    assert 'abc-xyz' in text
+
+
 @pytest.mark.skipif('not da')
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
-    pytest.importorskip('matplotlib')
+    pytest.importorskip('graphviz')
+    pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:
         x.visualize(color='order', filename=fn, cmap='RdBu')
@@ -561,7 +680,6 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    import sys
     from textwrap import dedent
 
     defn = dedent("""
@@ -578,6 +696,7 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
 
 
 def inc_to_dec(dsk, keys):
+    dsk = dict(dsk)
     for key in dsk:
         if dsk[key][0] == inc:
             dsk[key] = (dec,) + dsk[key][1:]
@@ -588,7 +707,7 @@ def test_optimizations_keyword():
     x = dask.delayed(inc)(1)
     assert x.compute() == 2
 
-    with dask.set_options(optimizations=[inc_to_dec]):
+    with dask.config.set(optimizations=[inc_to_dec]):
         assert x.compute() == 0
 
     assert x.compute() == 2
@@ -617,20 +736,33 @@ def test_optimize():
     assert dask.compute(x3, y3, z3) == sols
 
     # Optimize respects global optimizations as well
-    with dask.set_options(optimizations=[inc_to_dec]):
+    with dask.config.set(optimizations=[inc_to_dec]):
         x4, y4, z4 = optimize(x, y, z)
     for a, b in zip([x3, y3, z3], [x4, y4, z4]):
         assert dict(a.dask) == dict(b.dask)
 
 
-# TODO: remove after deprecation cycle of `dask.optimize` module is completed
-def test_optimize_has_deprecated_module_functions_as_attributes():
-    import dask.optimize as deprecated_optimize
-    # Function has method attributes
-    assert dask.optimize.cull is deprecated_optimize.cull
-    assert dask.optimize.inline is deprecated_optimize.inline
-    with pytest.warns(UserWarning):
-        dask.optimize.cull({}, [])
+def test_optimize_nested():
+    a = dask.delayed(inc)(1)
+    b = dask.delayed(inc)(a)
+    c = a + b
+
+    result = optimize({'a': a, 'b': [1, 2, b]}, (c, 2))
+
+    a2 = result[0]['a']
+    b2 = result[0]['b'][2]
+    c2 = result[1][0]
+
+    assert isinstance(a2, Delayed)
+    assert isinstance(b2, Delayed)
+    assert isinstance(c2, Delayed)
+    assert dict(a2.dask) == dict(b2.dask) == dict(c2.dask)
+    assert compute(*result) == ({'a': 2, 'b': [1, 2, 3]}, (5, 2))
+
+    res = optimize([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 5
 
 
 def test_default_imports():
@@ -657,6 +789,22 @@ def test_persist_literals():
     assert persist(1, 2, 3) == (1, 2, 3)
 
 
+def test_persist_nested():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+    result = persist({'a': a, 'b': [1, 2, b]}, (c, 2))
+    assert isinstance(result[0]['a'], Delayed)
+    assert isinstance(result[0]['b'][2], Delayed)
+    assert isinstance(result[1][0], Delayed)
+    assert compute(*result) == ({'a': 6, 'b': [1, 2, 7]}, (8, 2))
+
+    res = persist([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 8
+
+
 def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
@@ -678,7 +826,7 @@ def test_persist_array_bag():
     with pytest.raises(ValueError):
         persist(x, b)
 
-    xx, bb = persist(x, b, get=dask.get)
+    xx, bb = persist(x, b, scheduler='single-threaded')
 
     assert isinstance(xx, da.Array)
     assert isinstance(bb, db.Bag)
@@ -712,15 +860,15 @@ def test_optimize_globals():
 
     assert_eq(x + 1, np.ones(10) + 1)
 
-    with dask.set_options(array_optimize=optimize_double):
+    with dask.config.set(array_optimize=optimize_double):
         assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
 
     assert_eq(x + 1, np.ones(10) + 1)
 
     b = db.range(10, npartitions=2)
 
-    with dask.set_options(array_optimize=optimize_double):
-        xx, bb = dask.compute(x + 1, b.map(inc), get=dask.get)
+    with dask.config.set(array_optimize=optimize_double):
+        xx, bb = dask.compute(x + 1, b.map(inc), scheduler='single-threaded')
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
 
 
@@ -734,5 +882,79 @@ def test_optimize_None():
         assert dsk == dict(y.dask)  # but they aren't
         return dask.get(dsk, keys)
 
-    with dask.set_options(array_optimize=None, get=my_get):
+    with dask.config.set(array_optimize=None, scheduler=my_get):
         y.compute()
+
+
+def test_scheduler_keyword():
+    def schedule(dsk, keys, **kwargs):
+        return [[123]]
+
+    named_schedulers['foo'] = schedule
+
+    x = delayed(inc)(1)
+
+    try:
+        assert x.compute() == 2
+        assert x.compute(scheduler='foo') == 123
+
+        with dask.config.set(scheduler='foo'):
+            assert x.compute() == 123
+        assert x.compute() == 2
+
+        with dask.config.set(scheduler='foo'):
+            assert x.compute(scheduler='threads') == 2
+    finally:
+        del named_schedulers['foo']
+
+
+def test_raise_get_keyword():
+    x = delayed(inc)(1)
+
+    with pytest.raises(TypeError) as info:
+        x.compute(get=dask.get)
+
+    assert 'scheduler=' in str(info.value)
+
+
+def test_get_scheduler():
+    assert get_scheduler() is None
+    assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler(scheduler='sync') is dask.local.get_sync
+    with dask.config.set(scheduler='threads'):
+        assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler() is None
+
+
+def test_callable_scheduler():
+    called = [False]
+
+    def get(dsk, keys, *args, **kwargs):
+        called[0] = True
+        return dask.get(dsk, keys)
+
+    assert delayed(lambda: 1)().compute(scheduler=get) == 1
+    assert called[0]
+
+
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_num_workers_config(scheduler):
+    # Regression test for issue #4082
+
+    @delayed
+    def f(x):
+        time.sleep(0.5)
+        return x
+
+    a = [f(i) for i in range(5)]
+    num_workers = 3
+    with dask.config.set(num_workers=num_workers), Profiler() as prof:
+        a = compute(*a, scheduler=scheduler)
+
+    workers = {i.worker_id for i in prof.results}
+
+    assert len(workers) == num_workers
+
+
+if sys.version_info >= (3, 5):
+    from dask.tests.py3_test_await import *  # noqa F401

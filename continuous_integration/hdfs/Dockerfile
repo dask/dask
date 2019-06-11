@@ -5,9 +5,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install CDH5 in a single node: Pseudo Distributed
-# Docs: http://www.cloudera.com/content/www/en-us/documentation/enterprise/latest/topics/cdh_qs_yarn_pseudo.html
+# Docs: https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cdh_qs_yarn_pseudo.html 
 ADD docker-files/cloudera.pref /etc/apt/preferences.d/cloudera.pref
-RUN curl -s http://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh/archive.key | apt-key add - && \
+RUN curl -s https://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh/archive.key | apt-key add - && \
     echo 'deb [arch=amd64] http://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh xenial-cdh5 contrib' > /etc/apt/sources.list.d/cloudera.list && \
     echo 'deb-src http://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh xenial-cdh5 contrib' >> /etc/apt/sources.list.d/cloudera.list && \
     apt-get update && \

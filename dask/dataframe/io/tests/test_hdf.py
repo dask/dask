@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-import sys
 import os
 import dask
 import pytest
@@ -313,11 +312,9 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, '/data_*_*')
 
 
-@pytest.mark.parametrize('get', [dask.get,
-                                 dask.threaded.get,
-                                 dask.multiprocessing.get])
+@pytest.mark.parametrize('scheduler', ['sync', 'threads', 'processes'])
 @pytest.mark.parametrize('npartitions', [1, 4, 10])
-def test_to_hdf_schedulers(get, npartitions):
+def test_to_hdf_schedulers(scheduler, npartitions):
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'],
                        'y': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]},
@@ -326,20 +323,20 @@ def test_to_hdf_schedulers(get, npartitions):
 
     # test single file single node
     with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data', get=get)
+        a.to_hdf(fn, '/data', scheduler=scheduler)
         out = pd.read_hdf(fn, '/data')
         assert_eq(df, out)
 
     # test multiple files single node
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data_*.h5')
-        a.to_hdf(fn, '/data', get=get)
+        a.to_hdf(fn, '/data', scheduler=scheduler)
         out = dd.read_hdf(fn, '/data')
         assert_eq(df, out)
 
     # test single file multiple nodes
     with tmpfile('h5') as fn:
-        a.to_hdf(fn, '/data*', get=get)
+        a.to_hdf(fn, '/data*', scheduler=scheduler)
         out = dd.read_hdf(fn, '/data*')
         assert_eq(df, out)
 
@@ -353,9 +350,13 @@ def test_to_hdf_kwargs():
         df2 = pd.read_hdf(fn, 'foo4')
         tm.assert_frame_equal(df, df2)
 
+    # test shorthand 't' for table
+    with tmpfile('h5') as fn:
+        ddf.to_hdf(fn, 'foo4', format='t', min_itemsize=4)
+        df2 = pd.read_hdf(fn, 'foo4')
+        tm.assert_frame_equal(df, df2)
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 3),
-                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
+
 def test_to_fmt_warns():
     pytest.importorskip('tables')
     df16 = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
@@ -408,6 +409,14 @@ def test_read_hdf(data, compare):
 
         assert (sorted(dd.read_hdf(fn, '/data', mode='r').dask) ==
                 sorted(dd.read_hdf(fn, '/data', mode='r').dask))
+
+    with tmpfile('h5') as fn:
+        sorted_data = data.sort_index()
+        sorted_data.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_index=True, mode='r')
+        assert a.npartitions == 2
+
+        compare(a.compute(), sorted_data)
 
 
 def test_read_hdf_multiply_open():
@@ -470,7 +479,7 @@ def test_hdf_globbing():
         df.to_hdf(os.path.join(tdir, 'two.h5'), '/bar/data', format='table')
         df.to_hdf(os.path.join(tdir, 'two.h5'), '/foo/data', format='table')
 
-        with dask.set_options(get=dask.get):
+        with dask.config.set(scheduler='sync'):
             res = dd.read_hdf(os.path.join(tdir, 'one.h5'), '/*/data',
                               chunksize=2)
             assert res.npartitions == 2
@@ -504,7 +513,7 @@ def test_hdf_file_list():
         df.iloc[:2].to_hdf(os.path.join(tdir, 'one.h5'), 'dataframe', format='table')
         df.iloc[2:].to_hdf(os.path.join(tdir, 'two.h5'), 'dataframe', format='table')
 
-        with dask.set_options(get=dask.get):
+        with dask.config.set(scheduler='sync'):
             input_files = [os.path.join(tdir, 'one.h5'), os.path.join(tdir, 'two.h5')]
             res = dd.read_hdf(input_files, 'dataframe')
             tm.assert_frame_equal(res.compute(), df)
@@ -523,6 +532,7 @@ def test_read_hdf_doesnt_segfault():
 
 
 def test_hdf_filenames():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     ddf = dd.from_pandas(df, npartitions=2)

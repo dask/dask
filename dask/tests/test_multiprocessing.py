@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function
+
+import sys
 import multiprocessing
 from operator import add
 import pickle
@@ -6,21 +9,26 @@ import random
 import numpy as np
 
 import pytest
-
+import dask
 from dask import compute, delayed
-from dask.context import set_options
-from dask.multiprocessing import get, _dumps, _loads, remote_exception
+from dask.multiprocessing import (
+    get, _dumps, get_context, remote_exception
+)
 from dask.utils_test import inc
 
 
 def test_pickle_globals():
-    """ For the function f(x) defined below, the only globals added in pickling
-    should be 'np' and '__builtins__'"""
-    def f(x):
-        return np.sin(x) + np.cos(x)
+    """ Unrelated globals should not be included in serialized bytes """
+    def unrelated_function(a):
+        return np.array([a])
 
-    assert set(['np', '__builtins__']) == set(
-        _loads(_dumps(f)).__globals__.keys())
+    def my_small_function(a, b):
+        return a + b
+
+    b = _dumps(my_small_function)
+    assert b'my_small_function' in b
+    assert b'unrelated_function' not in b
+    assert b'numpy' not in b
 
 
 def bad():
@@ -96,13 +104,13 @@ def test_unpicklable_args_generate_errors():
 
 def test_reuse_pool():
     pool = multiprocessing.Pool()
-    with set_options(pool=pool):
+    with dask.config.set(pool=pool):
         assert get({'x': (inc, 1)}, 'x') == 2
         assert get({'x': (inc, 1)}, 'x') == 2
 
 
 def test_dumps_loads():
-    with set_options(func_dumps=pickle.dumps, func_loads=pickle.loads):
+    with dask.config.set(func_dumps=pickle.dumps, func_loads=pickle.loads):
         assert get({'x': 1, 'y': (add, 'x', 2)}, 'y') == 3
 
 
@@ -126,7 +134,74 @@ def test_random_seeds(random):
         return tuple(random.randint(0, 10000) for i in range(5))
 
     N = 10
-    with set_options(get=get):
+    with dask.config.set(scheduler='processes'):
         results, = compute([delayed(f, pure=False)() for i in range(N)])
 
     assert len(set(results)) == N
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="Windows doesn't support different contexts")
+@pytest.mark.skipif(sys.version_info.major == 2,
+                    reason="Python 2 doesn't support different contexts")
+def test_custom_context_used_python3_posix():
+    """ The 'multiprocessing.context' config is used to create the pool.
+
+    We assume default is 'fork', and therefore test for 'spawn'.  If default
+    context is changed this test will need to be modified to be different than
+    that.
+    """
+    # We check for spawn by ensuring subprocess doesn't have modules only
+    # parent process should have:
+    def check_for_pytest():
+        import sys
+        return "FAKE_MODULE_FOR_TEST" in sys.modules
+
+    import sys
+    sys.modules["FAKE_MODULE_FOR_TEST"] = 1
+    try:
+        with dask.config.set({"multiprocessing.context": "spawn"}):
+            result = get({"x": (check_for_pytest,)}, "x")
+        assert not result
+    finally:
+        del sys.modules["FAKE_MODULE_FOR_TEST"]
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="Windows doesn't support different contexts")
+@pytest.mark.skipif(sys.version_info.major == 2,
+                    reason="Python 2 doesn't support different contexts")
+def test_get_context_using_python3_posix():
+    """ get_context() respects configuration.
+
+    If default context is changed this test will need to change too.
+    """
+    assert get_context() is multiprocessing.get_context(None)
+    with dask.config.set({"multiprocessing.context": "forkserver"}):
+        assert get_context() is multiprocessing.get_context("forkserver")
+    with dask.config.set({"multiprocessing.context": "spawn"}):
+        assert get_context() is multiprocessing.get_context("spawn")
+
+
+@pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
+                    reason="Python 3 POSIX supports different contexts")
+def test_custom_context_ignored_elsewhere():
+    """ On Python 2/Windows, setting 'multiprocessing.context' doesn't explode.
+
+    Presumption is it's not used since unsupported, but mostly we care about
+    not breaking anything.
+    """
+    assert get({'x': (inc, 1)}, 'x') == 2
+    with pytest.warns(UserWarning):
+        with dask.config.set({"multiprocessing.context": "forkserver"}):
+            assert get({'x': (inc, 1)}, 'x') == 2
+
+
+@pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
+                    reason="Python 3 POSIX supports different contexts")
+def test_get_context_always_default():
+    """ On Python 2/Windows, get_context() always returns same context."""
+    assert get_context() is multiprocessing
+    with pytest.warns(UserWarning):
+        with dask.config.set({"multiprocessing.context": "forkserver"}):
+            assert get_context() is multiprocessing

@@ -5,7 +5,17 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import (
+    assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
+)
+
+
+skip_if_no_get_dummies_sparse = pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
+                                                   reason='sparse added.')
+skip_if_no_get_dummies_dtype = pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
+                                                  reason='dtype added.')
+skip_if_get_dummies_dtype = pytest.mark.skipif(PANDAS_VERSION >= '0.23.0',
+                                               reason='dtype added.')
 
 
 @pytest.mark.parametrize('data', [
@@ -78,10 +88,78 @@ def test_get_dummies_kwargs():
     assert_eq(res, exp)
     tm.assert_index_equal(res.columns, pd.Index([1, 2, 3, 5, np.nan]))
 
-    msg = 'sparse=True is not supported'
-    with pytest.raises(NotImplementedError) as err:
-        dd.get_dummies(ds, sparse=True)
-    assert msg in str(err.value)
+
+def test_get_dummies_sparse():
+    s = pd.Series(pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']))
+    ds = dd.from_pandas(s, 2)
+
+    exp = pd.get_dummies(s, sparse=True)
+    res = dd.get_dummies(ds, sparse=True)
+    assert_eq(exp, res)
+
+    if PANDAS_GT_0240:
+        exp_dtype = 'Sparse[uint8, 0]'
+    else:
+        exp_dtype = 'uint8'
+    assert res.compute().a.dtype == exp_dtype
+    assert pd.api.types.is_sparse(res.a.compute())
+
+    exp = pd.get_dummies(s.to_frame(name='a'), sparse=True)
+    res = dd.get_dummies(ds.to_frame(name='a'), sparse=True)
+    assert_eq(exp, res)
+    assert pd.api.types.is_sparse(res.a_a.compute())
+
+
+@skip_if_no_get_dummies_sparse
+def test_get_dummies_sparse_mix():
+    df = pd.DataFrame({
+        "A": pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']),
+        "B": [0, 0, 1],
+    })
+    ddf = dd.from_pandas(df, 2)
+
+    exp = pd.get_dummies(df, sparse=True)
+    res = dd.get_dummies(ddf, sparse=True)
+    assert_eq(exp, res)
+
+    if PANDAS_GT_0240:
+        exp_dtype = 'Sparse[uint8, 0]'
+    else:
+        exp_dtype = 'uint8'
+    assert res.compute().A_a.dtype == exp_dtype
+    assert pd.api.types.is_sparse(res.A_a.compute())
+
+
+@skip_if_no_get_dummies_dtype
+def test_get_dummies_dtype():
+    df = pd.DataFrame({
+        "A": pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']),
+        "B": [0, 0, 1],
+    })
+    ddf = dd.from_pandas(df, 2)
+
+    exp = pd.get_dummies(df, dtype='float64')
+    res = dd.get_dummies(ddf, dtype='float64')
+    assert_eq(exp, res)
+    assert res.compute().A_a.dtype == 'float64'
+
+    # dask's get_dummies on a pandas dataframe.
+    assert_eq(dd.get_dummies(df, dtype='float64'), exp)
+    assert res.compute().A_a.dtype == 'float64'
+
+
+@skip_if_get_dummies_dtype
+def test_get_dummies_dtype_raises():
+    df = pd.DataFrame({
+        "A": pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']),
+        "B": [0, 0, 1],
+    })
+    ddf = dd.from_pandas(df, 2)
+
+    with pytest.raises(ValueError) as m:
+        dd.get_dummies(ddf, dtype='float64')
+
+    assert m.match("0.23.0")
 
 
 def test_get_dummies_errors():

@@ -1,6 +1,6 @@
 Kubernetes Native
 =================
 
-See external documentation on Daskernetes_ for more information.
+See external documentation on Dask-Kubernetes_ for more information.
 
-.. _Daskernetes: https://daskernetes.readthedocs.io
+.. _Dask-Kubernetes: https://kubernetes.dask.org

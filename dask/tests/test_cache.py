@@ -1,8 +1,8 @@
+from dask.callbacks import Callback
 from dask.cache import Cache
 from dask.local import get_sync
 from dask.threaded import get
 from operator import add
-from dask.context import _globals
 from time import sleep
 import pytest
 
@@ -38,7 +38,7 @@ def test_cache():
 
     assert flag == [2]  # no x present
 
-    assert not _globals['callbacks']
+    assert not Callback.active
 
 
 def test_cache_with_number():
@@ -46,6 +46,18 @@ def test_cache_with_number():
     assert isinstance(c.cache, cachey.Cache)
     assert c.cache.available_bytes == 10000
     assert c.cache.limit == 1
+
+
+def test_cache_correctness():
+    # https://github.com/dask/dask/issues/3631
+    c = Cache(10000)
+    da = pytest.importorskip('dask.array')
+    from numpy import ones, zeros
+    z = da.from_array(zeros(1), chunks=10)
+    o = da.from_array(ones(1), chunks=10)
+    with c:
+        assert (z.compute() == 0).all()
+        assert (o.compute() == 1).all()
 
 
 def f(duration, size, *args):

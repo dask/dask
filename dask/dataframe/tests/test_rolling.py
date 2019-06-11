@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 
 N = 40
 df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
@@ -52,7 +52,7 @@ def test_map_overlap(npartitions):
         assert_eq(res, sol)
 
 
-def test_map_partitions_names():
+def test_map_overlap_names():
     npartitions = 3
     ddf = dd.from_pandas(df, npartitions)
 
@@ -70,7 +70,7 @@ def test_map_partitions_names():
     assert res4._name != res._name
 
 
-def test_map_partitions_errors():
+def test_map_overlap_errors():
     # Non-integer
     with pytest.raises(ValueError):
         ddf.map_overlap(shifted_sum, 0.5, 3, 0, 2, c=2)
@@ -89,6 +89,18 @@ def test_map_partitions_errors():
                         0, 2, c=2)
 
 
+def test_map_overlap_provide_meta():
+    df = pd.DataFrame({'x': [1, 2, 4, 7, 11],
+                       'y': [1., 2., 3., 4., 5.]}).rename_axis('myindex')
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Provide meta spec, but not full metadata
+    res = ddf.map_overlap(lambda df: df.rolling(2).sum(), 2, 0,
+                          meta={'x': 'i8', 'y': 'i8'})
+    sol = df.rolling(2).sum()
+    assert_eq(res, sol)
+
+
 def mad(x):
     return np.fabs(x - x.mean()).mean()
 
@@ -100,15 +112,15 @@ rolling_method_args_check_less_precise = [
     ('median', (), False),
     ('min', (), False),
     ('max', (), False),
-    ('std', (), False),
-    ('var', (), False),
-    ('skew', (), True),   # here and elsewhere, results for kurt and skew are
-    ('kurt', (), True),   # checked with check_less_precise=True so that we are
-                          # only looking at 3ish decimal places for the equality check
-                          # rather than 5ish. I have encountered a case where a test
-                          # seems to have failed due to numerical problems with kurt.
-                          # So far, I am only weakening the check for kurt and skew,
-                          # as they involve third degree powers and higher
+    ('std', (), True),
+    ('var', (), True),
+    ('skew', (), True),  # here and elsewhere, results for kurt and skew are
+    ('kurt', (), True),  # checked with check_less_precise=True so that we are
+    # only looking at 3ish decimal places for the equality check
+    # rather than 5ish. I have encountered a case where a test
+    # seems to have failed due to numerical problems with kurt.
+    # So far, I am only weakening the check for kurt and skew,
+    # as they involve third degree powers and higher
     ('quantile', (.38,), False),
     ('apply', (mad,), False),
 ]
@@ -122,16 +134,26 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     # DataFrame
     prolling = df.rolling(window, center=center)
     drolling = ddf.rolling(window, center=center)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    if method == 'apply' and PANDAS_VERSION >= '0.23.0':
+        kwargs = {'raw': False}
+    else:
+        kwargs = {}
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
 
     # Series
     prolling = df.a.rolling(window, center=center)
     drolling = ddf.a.rolling(window, center=center)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
+
+
+@pytest.mark.skipif(PANDAS_VERSION >= '0.23.0', reason="Raw is allowed.")
+def test_rolling_raw_pandas_lt_0230_raises():
+    with pytest.raises(TypeError):
+        df.rolling(2).apply(mad, raw=True)
 
 
 def test_rolling_raises():
@@ -209,24 +231,49 @@ def test_time_rolling_constructor():
 @pytest.mark.parametrize('window', ['1S', '2S', '3S', pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
     # DataFrame
+    if method == 'apply' and PANDAS_VERSION >= '0.23.0':
+        kwargs = {"raw": False}
+    else:
+        kwargs = {}
     prolling = ts.rolling(window)
     drolling = dts.rolling(window)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
 
     # Series
     prolling = ts.a.rolling(window)
     drolling = dts.a.rolling(window)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
 
 
-@pytest.mark.parametrize('window', [pd.Timedelta('31s'), pd.Timedelta('1M')])
-def test_time_rolling_window_too_large(window):
-    with pytest.raises(ValueError):
-        dts.map_overlap(ts_shifted_sum, window, window, window, window, c=2)
+@pytest.mark.parametrize('window,N', [('1s', 10), ('2s', 10), ('10s', 10), ('10h', 10),
+                                      ('10s', 100), ('10h', 100)])
+def test_time_rolling_large_window_fixed_chunks(window, N):
+    df = pd.DataFrame({'a': pd.date_range('2016-01-01 00:00:00', periods=N, freq='1s'),
+                       'b': np.random.randint(100, size=(N,))})
+    df = df.set_index('a')
+    ddf = dd.from_pandas(df, 5)
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
+    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
+
+
+@pytest.mark.parametrize('window', ['2s', '5s', '20s', '10h'])
+def test_time_rolling_large_window_variable_chunks(window):
+    df = pd.DataFrame({'a': pd.date_range('2016-01-01 00:00:00', periods=100, freq='1s'),
+                       'b': np.random.randint(100, size=(100,))})
+    ddf = dd.from_pandas(df, 5)
+    ddf = ddf.repartition(divisions=[
+        0, 5, 20, 28, 33, 54, 79, 80, 82, 99
+    ])
+    df = df.set_index('a')
+    ddf = ddf.set_index('a')
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
+    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
 @pytest.mark.parametrize('before, after', [
@@ -241,3 +288,23 @@ def test_time_rolling(before, after):
     result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
     expected = dts.compute().rolling(window).count()
     assert_eq(result, expected)
+
+
+def test_rolling_agg_aggregate():
+    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(df.rolling(window=3).agg([np.mean, np.std]),
+              ddf.rolling(window=3).agg([np.mean, np.std]))
+
+    assert_eq(df.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}),
+              ddf.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}))
+
+    assert_eq(df.rolling(window=3).agg([np.sum, np.mean]),
+              ddf.rolling(window=3).agg([np.sum, np.mean]))
+
+    assert_eq(df.rolling(window=3).agg({'A': [np.sum, np.mean]}),
+              ddf.rolling(window=3).agg({'A': [np.sum, np.mean]}))
+
+    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1)),
+              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1)))

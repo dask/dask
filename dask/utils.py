@@ -1,24 +1,24 @@
 from __future__ import absolute_import, division, print_function
 
+from datetime import timedelta
 import functools
 import inspect
 import os
 import shutil
 import sys
 import tempfile
+import re
 from errno import ENOENT
-from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
-from numbers import Integral
+from numbers import Integral, Number
 from threading import Lock
-import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
+from .compatibility import (get_named_args, getargspec, PY3, unicode,
+                            bind_method, Iterator)
 from .core import get_deps
-from .context import _globals
 from .optimization import key_split    # noqa: F401
 
 
@@ -197,6 +197,10 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """
     with (tmp_cwd() if use_tmpdir else noop_context()):
         for filename, text in d.items():
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError:
+                pass
             f = open(filename, 'w' + mode)
             try:
                 f.write(text)
@@ -268,7 +272,7 @@ def random_state_data(n, random_state=None):
     """
     import numpy as np
 
-    if not isinstance(random_state, np.random.RandomState):
+    if not all(hasattr(random_state, attr) for attr in ['normal', 'beta', 'bytes', 'uniform']):
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
@@ -406,12 +410,20 @@ class Dispatch(object):
                 return lk[cls2]
         raise TypeError("No dispatch for {0}".format(cls))
 
-    def __call__(self, arg):
+    def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
         meth = self.dispatch(type(arg))
-        return meth(arg)
+        return meth(arg, *args, **kwargs)
+
+    @property
+    def __doc__(self):
+        try:
+            func = self.dispatch(object)
+            return func.__doc__
+        except TypeError:
+            return "Single Dispatch for %s" % self.__name__
 
 
 def ensure_not_exists(filename):
@@ -429,9 +441,12 @@ def _skip_doctest(line):
     # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
-        return stripped
+        return line
     elif '>>>' in stripped and '+SKIP' not in stripped:
-        return line + '  # doctest: +SKIP'
+        if '# doctest:' in line:
+            return line + ', +SKIP'
+        else:
+            return line + '  # doctest: +SKIP'
     else:
         return line
 
@@ -460,8 +475,91 @@ def extra_titles(doc):
     return '\n'.join(lines)
 
 
+def ignore_warning(doc, cls, name, extra=""):
+    """Expand docstring by adding disclaimer and extra text"""
+    import inspect
+    if inspect.isclass(cls):
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" \
+             "" % (cls.__module__, cls.__name__, name)
+    else:
+        l1 = "This docstring was copied from %s.%s. \n\n" \
+             "" % (cls.__name__, name)
+    l2 = "Some inconsistencies with the Dask version may exist."
+
+    i = doc.find('\n\n')
+    if i != -1:
+        # Insert our warning
+        head = doc[:i + 2]
+        tail = doc[i + 2:]
+        # Indentation of next line
+        indent = re.match(r'\s*', tail).group(0)
+        # Insert the warning, indented, with a blank line before and after
+        if extra:
+            more = [indent, extra.rstrip('\n') + '\n\n']
+        else:
+            more = []
+        bits = [
+            head,
+            indent, l1,
+            indent, l2, '\n\n'
+        ] + more + [tail]
+        doc = ''.join(bits)
+
+    return doc
+
+
+def unsupported_arguments(doc, args):
+    """ Mark unsupported arguments with a disclaimer """
+    lines = doc.split('\n')
+    for arg in args:
+        subset = [(i, line) for i, line in enumerate(lines)
+                  if re.match(r'^\s*' + arg + ' ?:', line)]
+        if len(subset) == 1:
+            [(i, line)] = subset
+            lines[i] = line + "  (Not supported in Dask)"
+    return '\n'.join(lines)
+
+
+def _derived_from(cls, method, ua_args=[], extra=""):
+    """ Helper function for derived_from to ease testing """
+    # do not use wraps here, as it hides keyword arguments displayed
+    # in the doc
+    original_method = getattr(cls, method.__name__)
+    doc = original_method.__doc__
+    if doc is None:
+        doc = ''
+
+    # Insert disclaimer that this is a copied docstring
+    if doc:
+        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+    elif extra:
+        doc += extra.rstrip('\n') + '\n\n'
+
+    # Mark unsupported arguments
+    try:
+        method_args = get_named_args(method)
+        original_args = get_named_args(original_method)
+        not_supported = [m for m in original_args if m not in method_args]
+    except ValueError:
+        not_supported = []
+    if len(ua_args) > 0:
+        not_supported.extend(ua_args)
+    if len(not_supported) > 0:
+        doc = unsupported_arguments(doc, not_supported)
+
+    doc = skip_doctest(doc)
+    doc = extra_titles(doc)
+
+    return doc
+
+
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
+
+    The output structure will be: top line of docstring, disclaimer about this
+    being auto-derived, any extra text associated with the method being patched,
+    the body of the docstring and finally, the list of keywords that exist in
+    the original method but not in the dask version.
 
     Parameters
     ----------
@@ -474,35 +572,11 @@ def derived_from(original_klass, version=None, ua_args=[]):
         original but not in Dask will automatically be added.
     """
     def wrapper(method):
-        method_name = method.__name__
-
         try:
-            # do not use wraps here, as it hides keyword arguments displayed
-            # in the doc
-            original_method = getattr(original_klass, method_name)
-            doc = original_method.__doc__
-            if doc is None:
-                doc = ''
-
-            try:
-                method_args = get_named_args(method)
-                original_args = get_named_args(original_method)
-                not_supported = [m for m in original_args if m not in method_args]
-            except ValueError:
-                not_supported = []
-
-            if len(ua_args) > 0:
-                not_supported.extend(ua_args)
-
-            if len(not_supported) > 0:
-                note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't support the following argument(s).\n\n")
-                args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
-                doc = doc + note + args
-            doc = skip_doctest(doc)
-            doc = extra_titles(doc)
-
-            method.__doc__ = doc
+            extra = (getattr(method, '__doc__', None) or "")
+            method.__doc__ = _derived_from(
+                original_klass, method, ua_args=ua_args, extra=extra
+            )
             return method
 
         except AttributeError:
@@ -510,7 +584,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method_name)
+                msg = "Base package doesn't support '{0}'.".format(method.__name__)
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -548,15 +622,34 @@ def funcname(func):
         return str(func)
 
 
+def typename(typ):
+    """
+    Return the name of a type
+
+    Examples
+    --------
+    >>> typename(int)
+    'int'
+
+    >>> from dask.core import literal
+    >>> typename(literal)
+    'dask.core.literal'
+    """
+    if not typ.__module__ or typ.__module__ == 'builtins':
+        return typ.__name__
+    else:
+        return typ.__module__ + '.' + typ.__name__
+
+
 def ensure_bytes(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_bytes(u'123')
-    '123'
+    b'123'
     >>> ensure_bytes('123')
-    '123'
+    b'123'
     >>> ensure_bytes(b'123')
-    '123'
+    b'123'
     """
     if isinstance(s, bytes):
         return s
@@ -570,11 +663,11 @@ def ensure_unicode(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_unicode(u'123')
-    u'123'
+    '123'
     >>> ensure_unicode('123')
-    u'123'
+    '123'
     >>> ensure_unicode(b'123')
-    u'123'
+    '123'
     """
     if isinstance(s, unicode):
         return s
@@ -770,11 +863,11 @@ class SerializableLock(object):
             self.lock = Lock()
             SerializableLock._locks[self.token] = self.lock
 
-    def acquire(self, *args):
-        return self.lock.acquire(*args)
+    def acquire(self, *args, **kwargs):
+        return self.lock.acquire(*args, **kwargs)
 
-    def release(self, *args):
-        return self.lock.release(*args)
+    def release(self, *args, **kwargs):
+        return self.lock.release(*args, **kwargs)
 
     def __enter__(self):
         self.lock.__enter__()
@@ -782,9 +875,8 @@ class SerializableLock(object):
     def __exit__(self, *args):
         self.lock.__exit__(*args)
 
-    @property
     def locked(self):
-        return self.locked
+        return self.lock.locked()
 
     def __getstate__(self):
         return self.token
@@ -798,20 +890,17 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, collection=None):
-    """Get the effective get method used in a given situation"""
-    return (get or _globals.get('get') or
-            getattr(collection, '__dask_scheduler__', None))
-
-
-def get_scheduler_lock(get=None, collection=None):
+def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
-    actual_get = effective_get(get, collection)
+    from .base import get_scheduler
+    actual_get = get_scheduler(collections=[collection],
+                               scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
+
     return SerializableLock()
 
 
@@ -893,6 +982,278 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (hasattr(x, '__array__') and
-            hasattr(x, 'shape') and x.shape and
-            hasattr(x, 'dtype'))
+    from .base import is_dask_collection
+
+    return (
+        hasattr(x, 'shape') and x.shape and
+        hasattr(x, 'dtype') and
+        not any(is_dask_collection(n) for n in x.shape)
+    )
+
+
+def is_dataframe_like(df):
+    """ Looks like a Pandas DataFrame """
+    typ = type(df)
+    return (all(hasattr(typ, name)
+                for name in ('groupby', 'head', 'merge', 'mean')) and
+            all(hasattr(df, name) for name in ('dtypes',)) and not
+            any(hasattr(typ, name)
+                for name in ('value_counts', 'dtype')))
+
+
+def is_series_like(s):
+    """ Looks like a Pandas Series """
+    typ = type(s)
+    return (all(hasattr(typ, name) for name in ('groupby', 'head', 'mean')) and
+            all(hasattr(s, name) for name in ('dtype', 'name')) and
+            'index' not in typ.__name__.lower())
+
+
+def is_index_like(s):
+    """ Looks like a Pandas Index """
+    typ = type(s)
+    return (all(hasattr(s, name) for name in ('name', 'dtype'))
+            and 'index' in typ.__name__.lower())
+
+
+def natural_sort_key(s):
+    """
+    Sorting `key` function for performing a natural sort on a collection of
+    strings
+
+    See https://en.wikipedia.org/wiki/Natural_sort_order
+
+    Parameters
+    ----------
+    s : str
+        A string that is an element of the collection being sorted
+
+    Returns
+    -------
+    tuple[str or int]
+        Tuple of the parts of the input string where each part is either a
+        string or an integer
+
+    Examples
+    --------
+    >>> a = ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    >>> sorted(a)
+    ['f0', 'f1', 'f10', 'f11', 'f19', 'f2', 'f20', 'f21', 'f8', 'f9']
+    >>> sorted(a, key=natural_sort_key)
+    ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    """
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r'(\d+)', s)]
+
+
+def factors(n):
+    """ Return the factors of an integer
+
+    https://stackoverflow.com/a/6800214/616616
+    """
+    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
+    return set(functools.reduce(list.__add__, seq))
+
+
+def parse_bytes(s):
+    """ Parse byte string to numbers
+
+    >>> parse_bytes('100')
+    100
+    >>> parse_bytes('100 MB')
+    100000000
+    >>> parse_bytes('100M')
+    100000000
+    >>> parse_bytes('5kB')
+    5000
+    >>> parse_bytes('5.4 kB')
+    5400
+    >>> parse_bytes('1kiB')
+    1024
+    >>> parse_bytes('1e6')
+    1000000
+    >>> parse_bytes('1e6 kB')
+    1000000000
+    >>> parse_bytes('MB')
+    1000000
+    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    ValueError: Could not interpret 'foos' as a byte unit
+    """
+    s = s.replace(' ', '')
+    if not s[0].isdigit():
+        s = '1' + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    try:
+        n = float(prefix)
+    except ValueError:
+        raise ValueError("Could not interpret '%s' as a number" % prefix)
+
+    try:
+        multiplier = byte_sizes[suffix.lower()]
+    except KeyError:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+
+    result = n * multiplier
+    return int(result)
+
+
+byte_sizes = {
+    'kB': 10**3,
+    'MB': 10**6,
+    'GB': 10**9,
+    'TB': 10**12,
+    'PB': 10**15,
+    'KiB': 2**10,
+    'MiB': 2**20,
+    'GiB': 2**30,
+    'TiB': 2**40,
+    'PiB': 2**50,
+    'B': 1,
+    '': 1,
+}
+byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
+byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
+byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def format_time(n):
+    """ format integers as time
+
+    >>> format_time(1)
+    '1.00 s'
+    >>> format_time(0.001234)
+    '1.23 ms'
+    >>> format_time(0.00012345)
+    '123.45 us'
+    >>> format_time(123.456)
+    '123.46 s'
+    """
+    if n >= 1:
+        return "%.2f s" % n
+    if n >= 1e-3:
+        return "%.2f ms" % (n * 1e3)
+    return "%.2f us" % (n * 1e6)
+
+
+def format_bytes(n):
+    """ Format bytes as text
+
+    >>> format_bytes(1)
+    '1 B'
+    >>> format_bytes(1234)
+    '1.23 kB'
+    >>> format_bytes(12345678)
+    '12.35 MB'
+    >>> format_bytes(1234567890)
+    '1.23 GB'
+    >>> format_bytes(1234567890000)
+    '1.23 TB'
+    >>> format_bytes(1234567890000000)
+    '1.23 PB'
+    """
+    if n > 1e15:
+        return "%0.2f PB" % (n / 1e15)
+    if n > 1e12:
+        return "%0.2f TB" % (n / 1e12)
+    if n > 1e9:
+        return "%0.2f GB" % (n / 1e9)
+    if n > 1e6:
+        return "%0.2f MB" % (n / 1e6)
+    if n > 1e3:
+        return "%0.2f kB" % (n / 1000)
+    return "%d B" % n
+
+
+timedelta_sizes = {
+    "s": 1,
+    "ms": 1e-3,
+    "us": 1e-6,
+    "ns": 1e-9,
+    "m": 60,
+    "h": 3600,
+    "d": 3600 * 24,
+}
+
+tds2 = {
+    "second": 1,
+    "minute": 60,
+    "hour": 60 * 60,
+    "day": 60 * 60 * 24,
+    "millisecond": 1e-3,
+    "microsecond": 1e-6,
+    "nanosecond": 1e-9,
+}
+tds2.update({k + "s": v for k, v in tds2.items()})
+timedelta_sizes.update(tds2)
+timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
+
+
+def parse_timedelta(s, default="seconds"):
+    """ Parse timedelta string to number of seconds
+
+    Examples
+    --------
+    >>> parse_timedelta('3s')
+    3
+    >>> parse_timedelta('3.5 seconds')
+    3.5
+    >>> parse_timedelta('300ms')
+    0.3
+    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
+    3
+    """
+    if isinstance(s, timedelta):
+        s = s.total_seconds()
+        return int(s) if int(s) == s else s
+    if isinstance(s, Number):
+        s = str(s)
+    s = s.replace(" ", "")
+    if not s[0].isdigit():
+        s = "1" + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:] or default
+
+    n = float(prefix)
+
+    multiplier = timedelta_sizes[suffix.lower()]
+
+    result = n * multiplier
+    if int(result) == result:
+        result = int(result)
+    return result
+
+
+def has_keyword(func, keyword):
+    try:
+        if PY3:
+            return keyword in inspect.signature(func).parameters
+        else:
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
+    except Exception:
+        return False
+
+
+def ndimlist(seq):
+    if not isinstance(seq, (list, tuple)):
+        return 0
+    elif not seq:
+        return 1
+    else:
+        return 1 + ndimlist(seq[0])

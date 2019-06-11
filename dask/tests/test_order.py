@@ -40,7 +40,7 @@ def test_ordering_keeps_groups_together(abcde):
 
 @pytest.mark.xfail(reason="Can't please 'em all")
 def test_avoid_broker_nodes(abcde):
-    """
+    r"""
 
     b0    b1  b2
     |      \  /
@@ -66,7 +66,7 @@ def test_avoid_broker_nodes(abcde):
 
 
 def test_base_of_reduce_preferred(abcde):
-    """
+    r"""
                a3
               /|
             a2 |
@@ -95,7 +95,7 @@ def test_base_of_reduce_preferred(abcde):
 
 @pytest.mark.xfail(reason="Can't please 'em all")
 def test_avoid_upwards_branching(abcde):
-    """
+    r"""
          a1
          |
          a2
@@ -125,7 +125,7 @@ def test_avoid_upwards_branching(abcde):
 
 
 def test_avoid_upwards_branching_complex(abcde):
-    """
+    r"""
          a1
          |
     e2   a2  d2  d3
@@ -146,8 +146,10 @@ def test_avoid_upwards_branching_complex(abcde):
            (a, 2): (f, (a, 3)),
            (a, 3): (f, (b, 1), (c, 1)),
            (b, 1): (f, (b, 2)),
+           (b, 2): (f,),
            (c, 1): (f, (c, 2)),
            (c, 2): (f, (c, 3)),
+           (c, 3): (f,),
            (d, 1): (f, (c, 1)),
            (d, 2): (f, (d, 1)),
            (d, 3): (f, (d, 1)),
@@ -161,7 +163,7 @@ def test_avoid_upwards_branching_complex(abcde):
 
 @pytest.mark.xfail(reason="this case is ambiguous")
 def test_deep_bases_win_over_dependents(abcde):
-    """
+    r"""
     It's not clear who should run first, e or d
 
     1.  d is nicer because it exposes parallelism
@@ -230,7 +232,7 @@ def test_order_doesnt_fail_on_mixed_type_keys(abcde):
 def test_gh_3055():
     da = pytest.importorskip('dask.array')
     A, B = 20, 99
-    x = da.random.normal(size=(A, B), chunks=(1, None))
+    orig = x = da.random.normal(size=(A, B), chunks=(1, None))
     for _ in range(2):
         y = (x[:, None, :] * x[:, :, None]).cumsum(axis=0)
         x = x.cumsum(axis=0)
@@ -239,7 +241,12 @@ def test_gh_3055():
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
     L = [o[k] for k in w.__dask_keys__()]
-    assert sorted(L) == L
+    assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
+
+    L = [o[k] for kk in orig.__dask_keys__() for k in kk]
+    assert sum(x > len(o) / 2 for x in L) > len(L) / 3  # some start later
+
+    assert sorted(L) == L  # operate in order
 
 
 def test_type_comparisions_ok(abcde):
@@ -249,7 +256,7 @@ def test_type_comparisions_ok(abcde):
 
 
 def test_prefer_short_dependents(abcde):
-    """
+    r"""
 
          a
          |
@@ -270,7 +277,7 @@ def test_prefer_short_dependents(abcde):
 
 @pytest.mark.xfail(reason="This is challenging to do precisely")
 def test_run_smaller_sections(abcde):
-    """
+    r"""
             aa
            / |
       b   d  bb dd
@@ -351,3 +358,176 @@ def test_local_parents_of_reduction(abcde):
     dask.get(dsk, [a1, b1, c1])  # trigger computation
 
     assert log == expected
+
+
+def test_nearest_neighbor(abcde):
+    r"""
+
+    a1  a2  a3  a4  a5  a6  a7 a8  a9
+     \  |  /  \ |  /  \ |  / \ |  /
+        b1      b2      b3     b4
+
+    Want to finish off a local group before moving on.
+    This is difficult because all groups are connected.
+    """
+    a, b, c, _, _ = abcde
+    a1, a2, a3, a4, a5, a6, a7, a8, a9 = [a + i for i in '123456789']
+    b1, b2, b3, b4 = [b + i for i in '1234']
+
+    dsk = {b1: (f,),
+           b2: (f,),
+           b3: (f,),
+           b4: (f,),
+           a1: (f, b1),
+           a2: (f, b1),
+           a3: (f, b1, b2),
+           a4: (f, b2),
+           a5: (f, b2, b3),
+           a6: (f, b3),
+           a7: (f, b3, b4),
+           a8: (f, b4),
+           a9: (f, b4)}
+
+    o = order(dsk)
+
+    assert 3 < sum(o[a + i] < len(o) / 2 for i in '123456789') < 7
+    assert 1 < sum(o[b + i] < len(o) / 2 for i in '1234') < 4
+    assert o[min([b1, b2, b3, b4])] == 0
+
+
+def test_string_ordering():
+    """ Prefer ordering tasks by name first """
+    dsk = {('a', 1): (f,), ('a', 2): (f,), ('a', 3): (f,)}
+    o = order(dsk)
+    assert o == {('a', 1): 0,
+                 ('a', 2): 1,
+                 ('a', 3): 2}
+
+
+def test_string_ordering_dependents():
+    """ Prefer ordering tasks by name first even when in dependencies """
+    dsk = {('a', 1): (f, 'b'), ('a', 2): (f, 'b'), ('a', 3): (f, 'b'),
+           'b': (f,)}
+    o = order(dsk)
+    assert o == {'b': 0,
+                 ('a', 1): 1,
+                 ('a', 2): 2,
+                 ('a', 3): 3}
+
+
+def test_prefer_short_narrow(abcde):
+    # See test_prefer_short_ancestor for a fail case.
+    a, b, c, _, _ = abcde
+    dsk = {
+        (a, 0): 0,
+        (b, 0): 0,
+        (c, 0): 0,
+        (c, 1): (f, (c, 0), (a, 0), (b, 0)),
+        (a, 1): 1,
+        (b, 1): 1,
+        (c, 2): (f, (c, 1), (a, 1), (b, 1)),
+    }
+    o = order(dsk)
+    assert o[(b, 0)] < o[(b, 1)]
+    assert o[(b, 0)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(c, 2)]
+
+
+def test_prefer_short_ancestor(abcde):
+    r"""
+    From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
+
+    Two cases, one where chunks of an array are independent, and one where the
+    chunks of an array have a shared source. We handled the independent one
+    "well" earlier.
+
+    Good:
+
+                    c2
+                   / \ \
+                  /   \ \
+                c1     \ \
+              / | \     \ \
+            c0  a0 b0   a1 b1
+
+    Bad:
+
+                    c2
+                   / \ \
+                  /   \ \
+                c1     \ \
+              / | \     \ \
+            c0  a0 b0   a1 b1
+                   \ \   / /
+                    \ \ / /
+                      a-b
+
+
+    The difference is that all the `a` and `b` tasks now have a common
+    ancestor.
+
+    We would like to choose c1 *before* a1, and b1 because
+
+    * we can release a0 and b0 once c1 is done
+    * we don't need a1 and b1 to compute c1.
+    """
+    a, b, c, _, _ = abcde
+    ab = a + b
+
+    dsk = {
+        ab: 0,
+        (a, 0): (f, ab, 0, 0),
+        (b, 0): (f, ab, 0, 1),
+        (c, 0): 0,
+        (c, 1): (f, (c, 0), (a, 0), (b, 0)),
+        (a, 1): (f, ab, 1, 0),
+        (b, 1): (f, ab, 1, 1),
+        (c, 2): (f, (c, 1), (a, 1), (b, 1)),
+    }
+    o = order(dsk)
+
+    assert o[(b, 0)] < o[(b, 1)]
+    assert o[(b, 0)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(a, 1)]
+
+
+def test_map_overlap(abcde):
+    r"""
+      b1      b3      b5
+       |\    / | \  / |
+      c1  c2  c3  c4  c5
+       |/  | \ | / | \|
+      d1  d2  d3  d4  d5
+       |       |      |
+      e1      e2      e5
+
+    Want to finish b1 before we start on e5
+    """
+    a, b, c, d, e = abcde
+    dsk = {
+        (e, 1): (f,),
+        (d, 1): (f, (e, 1)),
+        (c, 1): (f, (d, 1)),
+        (b, 1): (f, (c, 1), (c, 2)),
+
+        (d, 2): (f,),
+        (c, 2): (f, (d, 1), (d, 2), (d, 3)),
+
+        (e, 3): (f,),
+        (d, 3): (f, (e, 3)),
+        (c, 3): (f, (d, 3)),
+        (b, 3): (f, (c, 2), (c, 3), (c, 4)),
+
+        (d, 4): (f,),
+        (c, 4): (f, (d, 3), (d, 4), (d, 5)),
+
+        (e, 5): (f,),
+        (d, 5): (f, (e, 5)),
+        (c, 5): (f, (d, 5)),
+        (b, 5): (f, (c, 4), (c, 5))
+    }
+
+    o = order(dsk)
+
+    assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]

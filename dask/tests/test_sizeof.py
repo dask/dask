@@ -22,7 +22,7 @@ def test_containers():
 
 def test_numpy():
     np = pytest.importorskip('numpy')
-    assert sizeof(np.empty(1000, dtype='f8')) == 8000
+    assert 8000 <= sizeof(np.empty(1000, dtype='f8')) <= 9000
     dt = np.dtype('f8')
     assert sizeof(dt) == sys.getsizeof(dt)
 
@@ -34,13 +34,19 @@ def test_pandas():
 
     assert sizeof(df) >= sizeof(df.x) + sizeof(df.y) - sizeof(df.index)
     assert sizeof(df.x) >= sizeof(df.index)
-    if pd.__version__ >= '0.17.1':
-        assert sizeof(df.y) >= 100 * 3
+    assert sizeof(df.y) >= 100 * 3
     assert sizeof(df.index) >= 20
 
     assert isinstance(sizeof(df), int)
     assert isinstance(sizeof(df.x), int)
     assert isinstance(sizeof(df.index), int)
+
+
+def test_pandas_repeated_column():
+    pd = pytest.importorskip('pandas')
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    assert sizeof(df[['x', 'x', 'x']]) > sizeof(df)
 
 
 def test_sparse_matrix():
@@ -54,3 +60,33 @@ def test_sparse_matrix():
     assert sizeof(sp.tocsr()) >= 232
     assert sizeof(sp.todok()) >= 192
     assert sizeof(sp.tolil()) >= 204
+
+
+def test_serires_object_dtype():
+    pd = pytest.importorskip('pandas')
+    s = pd.Series(['a'] * 1000)
+    assert sizeof('a') * 1000 < sizeof(s) < 2 * sizeof('a') * 1000
+
+    s = pd.Series(['a' * 1000] * 1000)
+    assert sizeof(s) > 1000000
+
+
+def test_dataframe_object_dtype():
+    pd = pytest.importorskip('pandas')
+    df = pd.DataFrame({'x': ['a'] * 1000})
+    assert sizeof('a') * 1000 < sizeof(df) < 2 * sizeof('a') * 1000
+
+    s = pd.Series(['a' * 1000] * 1000)
+    assert sizeof(s) > 1000000
+
+
+def test_empty():
+    pd = pytest.importorskip('pandas')
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a' * 100, 'b' * 100, 'c' * 100]},
+                      index=[10, 20, 30])
+    empty = df.head(0)
+
+    assert sizeof(empty) > 0
+    assert sizeof(empty.x) > 0
+    assert sizeof(empty.y) > 0
+    assert sizeof(empty.index) > 0

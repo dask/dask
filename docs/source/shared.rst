@@ -29,11 +29,9 @@ scalable to very many tasks on a single machine.
    :alt: Embarrassingly parallel dask flow
 
 To keep the memory footprint small, we choose to keep ready-to-run tasks in a
-LIFO stack such that the most recently made available tasks get priority.  This
-encourages the completion of chains of related tasks before new chains are started.
-This can also be queried in constant time.
-
-More info: :doc:`scheduling policy <scheduling-policy>`.
+last-in-first-out stack such that the most recently made available tasks get
+priority.  This encourages the completion of chains of related tasks before new
+chains are started.  This can also be queried in constant time.
 
 
 Performance
@@ -84,11 +82,11 @@ mediated by using a global or contextual pool:
 
    >>> from multiprocessing.pool import ThreadPool
    >>> pool = ThreadPool()
-   >>> da.set_options(pool=pool)  # set global threadpool
+   >>> dask.config.set(pool=pool)  # set global threadpool
 
    or
 
-   >>> with set_options(pool=pool)  # use threadpool throughout with block
+   >>> with dask.config.set(pool=pool)  # use threadpool throughout with block
    ...     ...
 
 We now measure scaling the number of tasks and scaling the density of the

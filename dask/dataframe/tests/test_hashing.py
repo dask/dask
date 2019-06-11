@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
+from pandas.util import hash_pandas_object
 
 import pytest
 
-from dask.dataframe.hashing import hash_pandas_object
 from dask.dataframe.utils import assert_eq
 
 

@@ -11,6 +11,14 @@ import dask
 from dask.bytes.core import read_bytes, open_files, get_fs
 from dask.compatibility import unicode, PY2
 
+
+try:
+    import distributed
+    from distributed import Client
+    from distributed.utils_test import cluster, loop  # noqa: F401
+except (ImportError, SyntaxError):
+    distributed = None
+
 try:
     import hdfs3
 except ImportError:
@@ -33,10 +41,10 @@ basedir = '/tmp/test-dask'
 
 
 # This fixture checks for a minimum pyarrow version
-@pytest.fixture(params=[pytest.mark.skipif(not hdfs3, 'hdfs3',
-                                           reason='hdfs3 not found'),
-                        pytest.mark.skipif(not PYARROW_DRIVER, 'pyarrow',
-                                           reason='required pyarrow version not found')])
+@pytest.fixture(params=[
+    pytest.param('hdfs3', marks=pytest.mark.skipif(not hdfs3, reason='hdfs3 not found')),
+    pytest.param('pyarrow', marks=pytest.mark.skipif(not PYARROW_DRIVER,
+                                                     reason='required pyarrow version not found'))])
 def hdfs(request):
     if request.param == 'hdfs3':
         hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
@@ -47,7 +55,7 @@ def hdfs(request):
         hdfs.rm(basedir, recursive=True)
     hdfs.mkdir(basedir)
 
-    with dask.set_options(hdfs_driver=request.param):
+    with dask.config.set(hdfs_driver=request.param):
         yield hdfs
 
     if hdfs.exists(basedir):
@@ -66,16 +74,16 @@ def test_fs_driver_backends():
     from dask.bytes.pyarrow import PyArrowHadoopFileSystem
 
     fs1, token1 = get_fs('hdfs')
-    assert isinstance(fs1, HDFS3HadoopFileSystem)
+    assert isinstance(fs1, PyArrowHadoopFileSystem)
 
-    with dask.set_options(hdfs_driver='pyarrow'):
+    with dask.config.set(hdfs_driver='hdfs3'):
         fs2, token2 = get_fs('hdfs')
-    assert isinstance(fs2, PyArrowHadoopFileSystem)
+    assert isinstance(fs2, HDFS3HadoopFileSystem)
 
     assert token1 != token2
 
     with pytest.raises(ValueError):
-        with dask.set_options(hdfs_driver='not-a-valid-driver'):
+        with dask.config.set(hdfs_driver='not-a-valid-driver'):
             get_fs('hdfs')
 
 
@@ -193,13 +201,13 @@ def test_read_text(hdfs):
         f.write('a b\nc d'.encode())
 
     b = db.read_text('hdfs://%s/text.*.txt' % basedir)
-    with dask.set_options(pool=pool):
+    with dask.config.set(pool=pool):
         result = b.str.strip().str.split().map(len).compute()
 
     assert result == [2, 2, 2, 2, 2, 2]
 
     b = db.read_text('hdfs://%s/other.txt' % basedir)
-    with dask.set_options(pool=pool):
+    with dask.config.set(pool=pool):
         result = b.str.split().flatten().compute()
 
     assert result == ['a', 'b', 'c', 'd']
@@ -232,6 +240,8 @@ def test_pyarrow_compat():
 
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
+    if LooseVersion(pyarrow.__version__) == '0.13.0':
+        pytest.skip('pyarrow 0.13.0 not supported for parquet')
     dd = pytest.importorskip('dask.dataframe')
     import pandas as pd
     import numpy as np
@@ -297,8 +307,9 @@ def test_glob(hdfs):
             {basedir + p for p in ['/a', '/a1', '/a2', '/a3', '/b1', '/c', '/c2']})
 
 
-def test_distributed(hdfs):
-    dist = pytest.importorskip('distributed')
+@pytest.mark.skipif(not distributed,                                    # noqa: F811
+                    reason="Skipped as distributed is not installed.")  # noqa: F811
+def test_distributed(hdfs, loop):     # noqa: F811
     dd = pytest.importorskip('dask.dataframe')
 
     with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
@@ -307,6 +318,7 @@ def test_distributed(hdfs):
     with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
         f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-    with dist.Client(n_workers=2, threads_per_worker=1):
-        df = dd.read_csv('hdfs://%s/*.csv' % basedir)
-        assert df.id.sum().compute() == 1 + 2 + 3 + 4
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop):  # noqa: F811
+            df = dd.read_csv('hdfs://%s/*.csv' % basedir)
+            assert df.id.sum().compute() == 1 + 2 + 3 + 4

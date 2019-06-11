@@ -7,7 +7,7 @@ Some differences
 
 """
 # This is lightly adapted from scipy.stats 0.19
-# http://github.com/scipy/scipy/blob/v0.19.0/scipy/stats/stats.py
+# https://github.com/scipy/scipy/blob/v0.19.0/scipy/stats/stats.py
 # The original copyright notice follows:
 
 # Copyright 2002 Gary Strangman.  All rights reserved

@@ -3,13 +3,14 @@ from __future__ import absolute_import, division, print_function
 from itertools import product
 import math
 from numbers import Integral, Number
-from operator import add, getitem, itemgetter
+from operator import getitem, itemgetter
+import warnings
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck, concat
+from toolz import memoize, merge, pluck, concat
 
 from .. import core
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
 
 colon = slice(None, None, None)
@@ -41,7 +42,7 @@ def sanitize_index(ind):
     >>> sanitize_index(np.array([False, True, True]))
     array([1, 2])
     >>> type(sanitize_index(np.int32(0)))
-    <type 'int'>
+    <class 'int'>
     >>> sanitize_index(1.0)
     1
     >>> sanitize_index(0.5)
@@ -68,7 +69,7 @@ def sanitize_index(ind):
         return np.asanyarray(nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
-    elif np.issubdtype(index_array.dtype, float):
+    elif np.issubdtype(index_array.dtype, np.floating):
         int_index = index_array.astype(np.intp)
         if np.allclose(index_array, int_index):
             return int_index
@@ -171,7 +172,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):
-        n = sum(isinstance(ind, int) for ind in index[:x])
+        n = sum(isinstance(ind, Integral) for ind in index[:x])
         if n:
             where_none[i] -= n
 
@@ -240,7 +241,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # lists and full slices.  Just use take
     if all(isinstance(i, np.ndarray) or i == slice(None, None, None)
-            for i in index):
+           for i in index):
         axis = where_list[0]
         blockdims2, dsk3 = take(out_name, in_name, blockdims,
                                 index[where_list[0]], axis=axis)
@@ -363,23 +364,34 @@ def _slice_1d(dim_shape, lengths, index):
 
     And negative slicing
 
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3))
-    {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -20, -3)}
 
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3))
-    {0: slice(-2, -8, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -8, -3)}
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
+    chunk_boundaries = np.cumsum(lengths, dtype=np.int64)
+
     if isinstance(index, Integral):
-        i = 0
-        ind = index
-        lens = list(lengths)
-        while ind >= lens[0]:
-            i += 1
-            ind -= lens.pop(0)
-        return {i: ind}
+        # use right-side search to be consistent with previous result
+        i = chunk_boundaries.searchsorted(index, side='right')
+        if i > 0:
+            # the very first chunk has no relative shift
+            ind = index - chunk_boundaries[i - 1]
+        else:
+            ind = index
+        return {int(i): int(ind)}
 
     assert isinstance(index, slice)
 
@@ -391,7 +403,7 @@ def _slice_1d(dim_shape, lengths, index):
         start = index.start or 0
         stop = index.stop if index.stop is not None else dim_shape
     else:
-        start = index.start or dim_shape - 1
+        start = index.start if index.start is not None else dim_shape - 1
         start = dim_shape - 1 if start >= dim_shape else start
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
@@ -403,7 +415,19 @@ def _slice_1d(dim_shape, lengths, index):
 
     d = dict()
     if step > 0:
-        for i, length in enumerate(lengths):
+        istart = chunk_boundaries.searchsorted(start, side='right')
+        istop = chunk_boundaries.searchsorted(stop, side='left')
+
+        # the bound is not exactly tight; make it tighter?
+        istop = min(istop + 1, len(lengths))
+
+        # jump directly to istart
+        if istart > 0:
+            start = start - chunk_boundaries[istart - 1]
+            stop = stop - chunk_boundaries[istart - 1]
+
+        for i in range(istart, istop):
+            length = lengths[i]
             if start < length and stop > 0:
                 d[i] = slice(start, min(stop, length), step)
                 start = (start - length) % step
@@ -412,8 +436,16 @@ def _slice_1d(dim_shape, lengths, index):
             stop -= length
     else:
         rstart = start  # running start
-        chunk_boundaries = list(accumulate(add, lengths))
-        for i, chunk_stop in reversed(list(enumerate(chunk_boundaries))):
+
+        istart = chunk_boundaries.searchsorted(start, side='left')
+        istop = chunk_boundaries.searchsorted(stop, side='right')
+
+        # the bound is not exactly tight; make it tighter?
+        istart = min(istart + 1, len(chunk_boundaries) - 1)
+        istop = max(istop - 1, -1)
+
+        for i in range(istart, istop, -1):
+            chunk_stop = chunk_boundaries[i]
             # create a chunk start and stop
             if i == 0:
                 chunk_start = 0
@@ -473,62 +505,49 @@ def issorted(seq):
     return np.all(seq[:-1] <= seq[1:])
 
 
-def take_sorted(outname, inname, blockdims, index, axis=0):
-    """ Index array with sorted list index
+def slicing_plan(chunks, index):
+    """ Construct a plan to slice chunks with the given index
 
-    Forms a dask for the following case
+    Parameters
+    ----------
+    chunks : Tuple[int]
+        One dimensions worth of chunking information
+    index : np.ndarray[int]
+        The index passed to slice on that dimension
 
-        x[:, [1, 3, 5, 10], ...]
-
-    where the index, ``[1, 3, 5, 10]`` is sorted in non-decreasing order.
-
-    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
-    >>> blockdims
-    ((3, 1),)
-    >>> dsk  # doctest: +SKIP
-    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
-     ('y', 1): (getitem, ('x', 2), ([7],))}
-
-    See Also
-    --------
-    take - calls this function
+    Returns
+    -------
+    out : List[Tuple[int, np.ndarray]]
+        A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+    index = np.asanyarray(index)
+    cum_chunks = np.cumsum(chunks)
 
-    index_lists = partition_by_size(sizes, index)
-    where_index = [i for i, il in enumerate(index_lists) if len(il)]
-    index_lists = [il for il in index_lists if len(il)]
+    chunk_locations = np.searchsorted(cum_chunks, index, side='right')
+    where = np.where(np.diff(chunk_locations))[0] + 1
+    where = np.concatenate([[0], where, [len(chunk_locations)]])
 
-    dims = [range(len(bd)) for bd in blockdims]
+    out = []
+    for i in range(len(where) - 1):
+        sub_index = index[where[i]:where[i + 1]]
+        chunk = chunk_locations[where[i]]
+        if chunk > 0:
+            sub_index = sub_index - cum_chunks[chunk - 1]
+        out.append((chunk, sub_index))
 
-    indims = list(dims)
-    indims[axis] = list(range(len(where_index)))
-    keys = list(product([outname], *indims))
-
-    outdims = list(dims)
-    outdims[axis] = where_index
-    slices = [[colon] * len(bd) for bd in blockdims]
-    slices[axis] = index_lists
-    slices = list(product(*slices))
-    inkeys = list(product([inname], *outdims))
-    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
-
-    blockdims2 = list(blockdims)
-    blockdims2[axis] = tuple(map(len, index_lists))
-
-    return tuple(blockdims2), dict(zip(keys, values))
+    return out
 
 
-def take(outname, inname, blockdims, index, axis=0):
+def take(outname, inname, chunks, index, axis=0):
     """ Index array with an iterable of index
 
     Handles a single index by a single list
 
     Mimics ``np.take``
 
-    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
-    >>> blockdims
-    ((4,),)
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> chunks
+    ((2, 1, 1),)
     >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
                                            (getitem, ('x', 2), ([7],))],
@@ -537,45 +556,42 @@ def take(outname, inname, blockdims, index, axis=0):
 
     When list is sorted we retain original block structure
 
-    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
-    >>> blockdims
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> chunks
     ((3, 1),)
     >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 2): (getitem, ('x', 2), ([7],))}
     """
+    plan = slicing_plan(chunks[axis], index)
+    if len(plan) >= len(chunks[axis]) * 10:
+        factor = math.ceil(len(plan) / len(chunks[axis]))
+        from .core import PerformanceWarning
+        warnings.warn("Slicing with an out-of-order index is generating %d "
+                      "times more chunks" % factor, PerformanceWarning,
+                      stacklevel=6)
 
-    index = np.asanyarray(index)
+    index_lists = [idx for _, idx in plan]
+    where_index = [i for i, _ in plan]
 
-    if issorted(index):
-        return take_sorted(outname, inname, blockdims, index, axis)
+    dims = [range(len(bd)) for bd in chunks]
 
-    if isinstance(index, np.ndarray) and index.ndim > 0:
-        sorted_idx = np.sort(index)
-    else:
-        sorted_idx = index
+    indims = list(dims)
+    indims[axis] = list(range(len(where_index)))
+    keys = list(product([outname], *indims))
 
-    n = len(blockdims)
-    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+    outdims = list(dims)
+    outdims[axis] = where_index
+    slices = [[colon] * len(bd) for bd in chunks]
+    slices[axis] = index_lists
+    slices = list(product(*slices))
+    inkeys = list(product([inname], *outdims))
+    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
 
-    index_lists = partition_by_size(sizes, sorted_idx)
-
-    dims = [[0] if axis == i else list(range(len(bd)))
-            for i, bd in enumerate(blockdims)]
-    keys = list(product([outname], *dims))
-
-    rev_index = np.searchsorted(sorted_idx, index)
-    vals = [(getitem, (np.concatenate,
-                       [(getitem, ((inname, ) + d[:axis] + (i, ) + d[axis + 1:]),
-                         ((colon, ) * axis + (IL, ) + (colon, ) * (n - axis - 1)))
-                        for i, IL in enumerate(index_lists) if len(IL)], axis),
-             ((colon, ) * axis + (rev_index, ) + (colon, ) * (n - axis - 1)))
-            for d in product(*dims)]
-
-    blockdims2 = list(blockdims)
-    blockdims2[axis] = (len(index), )
-
-    return tuple(blockdims2), dict(zip(keys, vals))
+    chunks2 = list(chunks)
+    chunks2[axis] = tuple(map(len, index_lists))
+    dsk = dict(zip(keys, values))
+    return tuple(chunks2), dsk
 
 
 def posify_index(shape, ind):
@@ -702,23 +718,23 @@ def normalize_slice(idx, dim):
     """
 
     if isinstance(idx, slice):
-        start, stop, step = idx.start, idx.stop, idx.step
-        if start is not None:
-            if start < 0 and not math.isnan(dim):
-                start = max(0, start + dim)
-            elif start > dim:
-                start = dim
-        if stop is not None:
-            if stop < 0 and not math.isnan(dim):
-                stop = max(0, stop + dim)
-            elif stop > dim:
-                stop = dim
-        if start == 0:
-            start = None
-        if stop == dim:
-            stop = None
-        if step == 1:
-            step = None
+        if math.isnan(dim):
+            return idx
+        start, stop, step = idx.indices(dim)
+        if step > 0:
+            if start == 0:
+                start = None
+            if stop >= dim:
+                stop = None
+            if step == 1:
+                step = None
+            if stop is not None and start is not None and stop < start:
+                stop = start
+        elif step < 0:
+            if start >= dim - 1:
+                start = None
+            if stop < 0:
+                stop = None
         return slice(start, stop, step)
     return idx
 
@@ -808,13 +824,28 @@ def check_index(ind, dimension):
     IndexError: Index out of bounds 5
 
     >>> check_index(slice(0, 3), 5)
+
+    >>> check_index([True], 1)
+    >>> check_index([True, True], 3)
+    Traceback (most recent call last):
+    ...
+    IndexError: Boolean array length 2 doesn't equal dimension 3
+    >>> check_index([True, True, True], 1)
+    Traceback (most recent call last):
+    ...
+    IndexError: Boolean array length 3 doesn't equal dimension 1
     """
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
     elif isinstance(ind, (list, np.ndarray)):
         x = np.asanyarray(ind)
-        if (x >= dimension).any() or (x < -dimension).any():
+        if x.dtype == bool:
+            if x.size != dimension:
+                raise IndexError(
+                    "Boolean array length %s doesn't equal dimension %s" %
+                    (x.size, dimension))
+        elif (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
@@ -832,8 +863,126 @@ def check_index(ind, dimension):
         raise IndexError(msg % (ind, dimension))
 
 
-def slice_with_dask_array(x, index):
-    from .core import Array, atop, elemwise
+def slice_with_int_dask_array(x, index):
+    """ Slice x with at most one 1D dask arrays of ints.
+
+    This is a helper function of :meth:`Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=int
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer where a 1D filter has been applied and
+    one less element where a zero-dimensional filter has been applied.
+    """
+    from .core import Array
+
+    assert len(index) == x.ndim
+    fancy_indexes = [
+        isinstance(idx, (tuple, list)) or
+        (isinstance(idx, (np.ndarray, Array)) and idx.ndim > 0)
+        for idx in index
+    ]
+    if sum(fancy_indexes) > 1:
+        raise NotImplementedError("Don't yet support nd fancy indexing)")
+
+    out_index = []
+    dropped_axis_cnt = 0
+    for in_axis, idx in enumerate(index):
+        out_axis = in_axis - dropped_axis_cnt
+        if isinstance(idx, Array) and idx.dtype.kind in 'iu':
+            if idx.ndim == 0:
+                idx = idx[np.newaxis]
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
+                x = x[tuple(
+                    0 if i == out_axis else slice(None)
+                    for i in range(x.ndim)
+                )]
+                dropped_axis_cnt += 1
+            elif idx.ndim == 1:
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
+                out_index.append(slice(None))
+            else:
+                raise NotImplementedError(
+                    "Slicing with dask.array of ints only permitted when "
+                    "the indexer has zero or one dimensions")
+        else:
+            out_index.append(idx)
+    return x, tuple(out_index)
+
+
+def slice_with_int_dask_array_on_axis(x, idx, axis):
+    """ Slice a ND dask array with a 1D dask arrays of ints along the given
+    axis.
+
+    This is a helper function of :func:`slice_with_int_dask_array`.
+    """
+    from .core import Array, blockwise, from_array
+    from . import chunk
+
+    assert 0 <= axis < x.ndim
+
+    if np.isnan(x.chunks[axis]).any():
+        raise NotImplementedError("Slicing an array with unknown chunks with "
+                                  "a dask.array of ints is not supported")
+
+    # Calculate the offset at which each chunk starts along axis
+    # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
+    offset = np.roll(np.cumsum(x.chunks[axis]), 1)
+    offset[0] = 0
+    offset = from_array(offset, chunks=1)
+    # Tamper with the declared chunks of offset to make blockwise align it with
+    # x[axis]
+    offset = Array(offset.dask, offset.name, (x.chunks[axis], ), offset.dtype)
+
+    # Define axis labels for blockwise
+    x_axes = tuple(range(x.ndim))
+    idx_axes = (x.ndim, )  # arbitrary index not already in x_axes
+    offset_axes = (axis, )
+    p_axes = x_axes[:axis + 1] + idx_axes + x_axes[axis + 1:]
+    y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1:]
+
+    # Calculate the cartesian product of every chunk of x vs every chunk of idx
+    p = blockwise(chunk.slice_with_int_dask_array,
+                  p_axes, x, x_axes, idx, idx_axes, offset, offset_axes,
+                  x_size=x.shape[axis], axis=axis, dtype=x.dtype)
+
+    # Aggregate on the chunks of x along axis
+    y = blockwise(chunk.slice_with_int_dask_array_aggregate,
+                  y_axes, idx, idx_axes, p, p_axes,
+                  concatenate=True, x_chunks=x.chunks[axis], axis=axis,
+                  dtype=x.dtype)
+    return y
+
+
+def slice_with_bool_dask_array(x, index):
+    """ Slice x with one or more dask arrays of bools
+
+    This is a helper function of `Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=bool
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer when a filter has been applied.
+
+    Note: The sliced x will have nan chunks on the sliced axes.
+    """
+    from .core import Array, blockwise, elemwise
 
     if all([len(index) == 1,
             isinstance(index[0], Array),
@@ -852,12 +1001,12 @@ def slice_with_dask_array(x, index):
         name = 'getitem-' + tokenize(x, index)
         dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
         chunks = ((np.nan,) * y.npartitions,)
-        return (Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype),
-                out_index)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[y])
+        return Array(graph, name, chunks, x.dtype), out_index
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
-            for ind in index):
-        raise NotImplementedError("Slicing with dask.array only permitted when "
+           for ind in index):
+        raise NotImplementedError("Slicing with dask.array of bools only permitted when "
                                   "the indexer has only one dimension or when "
                                   "it has the same dimension as the sliced "
                                   "array")
@@ -879,7 +1028,8 @@ def slice_with_dask_array(x, index):
 
     arginds = list(concat(arginds))
 
-    out = atop(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)), *arginds, dtype=x.dtype)
+    out = blockwise(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)),
+                    *arginds, dtype=x.dtype)
 
     chunks = []
     for ind, chunk in zip(index, out.chunks):

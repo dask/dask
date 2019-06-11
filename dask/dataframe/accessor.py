@@ -58,8 +58,11 @@ class Accessor(object):
                                            token=token, meta=meta)
 
     def _function_map(self, attr, *args, **kwargs):
-        meta = self._delegate_method(self._series._meta_nonempty,
-                                     self._accessor_name, attr, args, kwargs)
+        if 'meta' in kwargs:
+            meta = kwargs.pop('meta')
+        else:
+            meta = self._delegate_method(self._series._meta_nonempty,
+                                         self._accessor_name, attr, args, kwargs)
         token = '%s-%s' % (self._accessor_name, attr)
         return self._series.map_partitions(self._delegate_method,
                                            self._accessor_name, attr, args,
@@ -116,8 +119,17 @@ class StringAccessor(Accessor):
             raise AttributeError("Can only use .str accessor with object dtype")
 
     @derived_from(pd.core.strings.StringMethods)
-    def split(self, pat=None, n=-1):
-        return self._function_map('split', pat=pat, n=n)
+    def split(self, pat=None, n=-1, expand=False):
+        if expand:
+            if n == -1:
+                raise NotImplementedError(
+                    "To use the expand parameter you must specify the number of "
+                    "expected output columns with the n= parameter"
+                )
+            else:
+                meta = type(self._series._meta)([' '.join(['a'] * 2 * n)])
+                meta = meta.str.split(n=n, expand=expand, pat=pat)
+        return self._function_map('split', pat=pat, n=n, expand=expand, meta=meta)
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):

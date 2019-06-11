@@ -6,11 +6,12 @@ from operator import mul
 import numpy as np
 
 from .core import Array
+from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
+from ..highlevelgraph import HighLevelGraph
 from ..utils import M
-from .. import sharedict
 
 
 def reshape_rechunk(inshape, outshape, inchunks):
@@ -136,9 +137,12 @@ def reshape(x, shape):
     This is a parallelized version of the ``np.reshape`` function with the
     following limitations:
 
-    1.  It assumes that the array is stored in C-order
+    1.  It assumes that the array is stored in `row-major order`_
     2.  It only allows for reshapings that collapse or merge dimensions like
         ``(1, 2, 3, 4) -> (1, 6, 4)`` or ``(64,) -> (4, 4, 4)``
+
+    .. _`column-major order`: https://en.wikipedia.org/wiki/
+                              Row-_and_column-major_order
 
     When communication is necessary this algorithm depends on the logic within
     rechunk.  It endeavors to keep chunk sizes roughly the same when possible.
@@ -155,6 +159,10 @@ def reshape(x, shape):
     if len(known_sizes) < len(shape):
         if len(known_sizes) - len(shape) > 1:
             raise ValueError('can only specify one unknown dimension')
+        # Fastpath for x.reshape(-1) on 1D arrays, allows unknown shape in x
+        # for this case only.
+        if len(shape) == 1 and x.ndim == 1:
+            return x
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
@@ -167,14 +175,16 @@ def reshape(x, shape):
     if x.shape == shape:
         return x
 
+    meta = meta_from_array(x, len(shape))
+
     name = 'reshape-' + tokenize(x, shape)
 
     if x.npartitions == 1:
         key = next(flatten(x.__dask_keys__()))
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
-        return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
-                     dtype=x.dtype)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+        return Array(graph, name, chunks, meta=meta)
 
     # Logic for how to rechunk
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
@@ -186,5 +196,5 @@ def reshape(x, shape):
     shapes = list(product(*outchunks))
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
-    return Array(sharedict.merge((name, dsk), x2.dask), name, outchunks,
-                 dtype=x.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
+    return Array(graph, name, outchunks, meta=meta)

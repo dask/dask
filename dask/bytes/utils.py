@@ -51,6 +51,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         if windows_path:
             path = '%s:%s' % windows_path.groups()
 
+    if protocol in ['http', 'https']:
+        # for HTTP, we don't want to parse, as requests will anyway
+        return {'protocol': protocol, 'path': urlpath}
+
     options = {
         'protocol': protocol,
         'path': path,
@@ -96,7 +100,7 @@ def update_storage_options(options, inherited=None):
     if collisions:
         collisions = '\n'.join('- %r' % k for k in collisions)
         raise KeyError("Collision between inferred and specified storage "
-                       "options:\n%s")
+                       "options:\n%s" % collisions)
     options.update(inherited)
 
 

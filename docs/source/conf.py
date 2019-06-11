@@ -12,6 +12,7 @@
 # serve to show the default.
 
 import sys, os
+from shutil import copyfile
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -26,7 +27,8 @@ import sys, os
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax', 'sphinx.ext.intersphinx',
-              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc']
+              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc',
+              'sphinx_click.ext']
 
 numpydoc_show_class_members = False
 
@@ -41,9 +43,10 @@ source_suffix = '.rst'
 
 # The master toctree document.
 master_doc = 'index'
+html_extra_path = ['index.html']
 
 # General information about the project.
-project = u'dask'
+project = u'Dask'
 copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -86,7 +89,7 @@ exclude_patterns = []
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'default'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -94,19 +97,14 @@ pygments_style = 'sphinx'
 
 # -- Options for HTML output ---------------------------------------------------
 
-# Taken from docs.readthedocs.io:
-# on_rtd is whether we are on readthedocs.io
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
-
-if not on_rtd:  # only import and set the theme if we're building docs locally
-    import sphinx_rtd_theme
-    html_theme = 'sphinx_rtd_theme'
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_theme = 'dask_sphinx_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'logo_only': True
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
@@ -120,7 +118,8 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+# html_logo = "images/dask_horizontal_white_no_pad.svg"
+
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -193,7 +192,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'dask.tex', u'dask Documentation',
+  (master_doc, 'dask.tex', u'dask Documentation',
    u'Dask Development Team', 'manual'),
 ]
 
@@ -223,7 +222,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'dask', u'dask Documentation',
+    (master_doc, 'dask', u'dask Documentation',
      [u'Dask Development Team'], 1)
 ]
 
@@ -237,8 +236,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'dask', u'dask Documentation',
-   u'Dask Development Team', 'dask', 'One line description of project.',
+  (master_doc, 'Dask', u'dask Documentation',
+   u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -255,7 +254,7 @@ texinfo_documents = [
 # -- Options for Epub output ---------------------------------------------------
 
 # Bibliographic Dublin Core info.
-epub_title = u'dask'
+epub_title = u'Dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
 epub_copyright = u'2014-2018, Anaconda, Inc. and contributors'
@@ -301,14 +300,61 @@ extlinks = {
 
 #  --Options for sphinx extensions -----------------------------------------------
 
-intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
-                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
+intersphinx_mapping = {'pandas': ('https://pandas.pydata.org/pandas-docs/stable/',
+                                  'https://pandas.pydata.org/pandas-docs/stable/objects.inv'),
                        'numpy': ('https://docs.scipy.org/doc/numpy/',
                                  'https://docs.scipy.org/doc/numpy/objects.inv')}
 
-#  --Options for sphinx extensions -----------------------------------------------
+# Redirects
+# https://tech.signavio.com/2017/managing-sphinx-redirects
+redirect_files = [
+    # old html, new html
+    ('array-overview.html', 'array.html'),
+    ('array-ghost.html', 'array-overlap.html'),
+    ('dataframe-overview.html', 'dataframe.html'),
+    ('dataframe-performance.html', 'dataframe-best-practices.html'),
+    ('delayed-overview.html', 'delayed.html'),
+    ('scheduler-choice.html', 'setup.html'),
+    ('diagnostics.html', 'diagnostics-local.html'),
+    ('inspect.html', 'graphviz.html'),
+    ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
+    ('examples-tutorials.html', 'https://examples.dask.org'),
+    ('examples/array-extend.html', 'https://examples.dask.org'),
+    ('examples/array-hdf5.html', 'https://examples.dask.org'),
+    ('examples/array-numpy.html', 'https://examples.dask.org'),
+    ('examples/array-random.html', 'https://examples.dask.org'),
+    ('examples/bag-json.html', 'https://examples.dask.org'),
+    ('examples/bag-word-count-hdfs.html', 'https://examples.dask.org'),
+    ('examples/dataframe-csv.html', 'https://examples.dask.org'),
+    ('examples/dataframe-hdf5.html', 'https://examples.dask.org'),
+    ('examples/delayed-array.html', 'https://examples.dask.org'),
+    ('examples/delayed-custom.html', 'https://examples.dask.org'),
+    ('docs.html', 'index.html'),
+]
 
-intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
-                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
-                       'numpy': ('https://docs.scipy.org/doc/numpy/',
-                                 'https://docs.scipy.org/doc/numpy/objects.inv')}
+
+
+redirect_template = """\
+<html>
+  <head>
+    <meta http-equiv="refresh" content="1; url={new}" />
+    <script>
+      window.location.href = "{new}"
+    </script>
+  </head>
+</html>
+"""
+
+
+def copy_legacy_redirects(app, docname):
+    if app.builder.name == 'html':
+        for html_src_path, new in redirect_files:
+            page = redirect_template.format(new=new)
+            target_path = app.outdir + '/' + html_src_path
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            with open(target_path, 'w') as f:
+                f.write(page)
+
+
+def setup(app):
+    app.connect('build-finished', copy_legacy_redirects)

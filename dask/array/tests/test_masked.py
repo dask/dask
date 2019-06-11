@@ -7,6 +7,7 @@ import pytest
 import dask.array as da
 from dask.base import tokenize
 from dask.array.utils import assert_eq
+from copy import deepcopy
 
 pytest.importorskip("dask.array.ma")
 
@@ -26,6 +27,23 @@ def test_from_array_masked_array():
     m = np.ma.masked_array([1, 2, 3], mask=[True, True, False], fill_value=10)
     dm = da.from_array(m, chunks=(2,), asarray=False)
     assert_eq(dm, m)
+
+
+def test_copy_deepcopy():
+    t = np.ma.masked_array([1, 2], mask=[0, 1])
+    x = da.from_array(t, chunks=t.shape, asarray=False)
+    #x = da.arange(5, chunks=(2,))
+    y = x.copy()
+    memo = {}
+    y2 = deepcopy(x, memo=memo)
+
+    xx = da.ma.masked_where([False, True], [1,2])
+    assert_eq(x, xx)
+
+    assert_eq(y, t)
+    assert isinstance(y.compute(), np.ma.masked_array)
+    assert_eq(y2, t)
+    assert isinstance(y2.compute(), np.ma.masked_array)
 
 
 functions = [
@@ -106,7 +124,7 @@ def test_mixed_concatenate(func):
 
     dd = func(d)
     ss = func(s)
-    assert_eq(dd, ss)
+    assert_eq(dd, ss, check_meta=False)
 
 
 @pytest.mark.parametrize('func', functions)
@@ -120,7 +138,7 @@ def test_mixed_random(func):
     dd = func(d)
     ss = func(s)
 
-    assert_eq(dd, ss)
+    assert_eq(dd, ss, check_meta=False)
 
 
 def test_mixed_output_type():
@@ -313,3 +331,34 @@ def test_set_fill_value():
 
     with pytest.raises(ValueError):
         da.ma.set_fill_value(dmx, dx)
+
+
+def test_average_weights_with_masked_array():
+    mask = np.array([[True, False],
+                     [True, True],
+                     [False, True]])
+    data = np.arange(6).reshape((3, 2))
+    a = np.ma.array(data, mask=mask)
+    d_a = da.ma.masked_array(data=data, mask=mask, chunks=2)
+
+    weights = np.array([0.25, 0.75])
+    d_weights = da.from_array(weights, chunks=2)
+
+    np_avg = np.ma.average(a, weights=weights, axis=1)
+    da_avg = da.ma.average(d_a, weights=d_weights, axis=1)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_arithmetic_results_in_masked():
+    mask = np.array([[True, False],
+                     [True, True],
+                     [False, True]])
+    x = np.arange(6).reshape((3, 2))
+    masked = np.ma.array(x, mask=mask)
+    dx = da.from_array(x, chunks=(2, 2))
+
+    res = dx + masked
+    sol = x + masked
+    assert_eq(res, sol)
+    assert isinstance(res.compute(), np.ma.masked_array)
