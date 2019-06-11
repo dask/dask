@@ -326,7 +326,12 @@ def _cov_finalizer(df, cols):
     return pd.Series(vals, index=index)
 
 
-def mul_cols(df, cols):
+def _mul_cols(df, cols):
+    """Internal function to be used with apply to multiply
+    each column in a dataframe by every other column
+
+    a b c -> a*a, a*b, b*b, b*c, c*c
+    """
     _df = type(df)()
     for i, j in it.combinations_with_replacement(df[cols].columns, 2):
         col = "%s%s" % (i, j)
@@ -349,29 +354,29 @@ def _cov_chunk(df, *index):
     x = g.sum()
 
     level = len(index)
-    mul = g.apply(mul_cols, cols=cols).reset_index(level=level, drop=True)
+    mul = g.apply(_mul_cols, cols=cols).reset_index(level=level, drop=True)
     n = g[x.columns].count().rename(columns=lambda c: c + "-count")
 
     return (x, mul, n)
 
 
 def _cov_agg(_t, levels, ddof):
-    xs = []
+    sums = []
     muls = []
-    ns = []
+    counts = []
 
     # sometime we get a series back from concat combiner
     t = list(_t)
 
     cols = t[0][0].columns
     for x, mul, n in t:
-        xs.append(x)
+        sums.append(x)
         muls.append(mul)
-        ns.append(n)
+        counts.append(n)
 
-    total_sums = concat(xs).groupby(level=levels, sort=False).sum()
+    total_sums = concat(sums).groupby(level=levels, sort=False).sum()
     total_muls = concat(muls).groupby(level=levels, sort=False).sum()
-    total_counts = concat(ns).groupby(level=levels).sum()
+    total_counts = concat(counts).groupby(level=levels).sum()
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
         .groupby(level=levels)
@@ -1103,6 +1108,15 @@ class _GroupBy(object):
 
     @derived_from(pd.DataFrame)
     def cov(self, ddof=1, split_every=None, split_out=1):
+        """Groupby covariance is accomplished by
+
+        1. computing intermediate values for sum, count, and the product of
+        all columns: a b c -> a*a, a*b, b*b, b*c, c*c.
+
+        2. The values are then aggregated and the final covariance value is calculated:
+        cov(X,Y) = X*Y - Xbar * Ybar
+        """
+
         levels = _determine_levels(self.index)
 
         is_mask = any(is_series_like(s) for s in self.index)
