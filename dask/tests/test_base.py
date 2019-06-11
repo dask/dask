@@ -680,7 +680,6 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    import sys
     from textwrap import dedent
 
     defn = dedent("""
@@ -955,3 +954,7 @@ def test_num_workers_config(scheduler):
     workers = {i.worker_id for i in prof.results}
 
     assert len(workers) == num_workers
+
+
+if sys.version_info >= (3, 5):
+    from dask.tests.py3_test_await import *  # noqa F401
