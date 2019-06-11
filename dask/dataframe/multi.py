@@ -330,8 +330,8 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
     """
 
     dtype_mism = {(lo, ro): (left.dtypes[lo], right.dtypes[ro])
-              for lo, ro in zip(left_on, right_on)
-              if not left.dtypes[lo] is right.dtypes[ro]}
+                  for lo, ro in zip(left_on, right_on)
+                  if not left.dtypes[lo] is right.dtypes[ro]}
 
     if dtype_mism:
         col_str = '\n'.join('{}: {}'.format(cols, dtypes)
