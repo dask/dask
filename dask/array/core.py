@@ -2994,7 +2994,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
 
-    # Find array shape
+    # Find output array shape
     ndim = len(seq[0].shape)
     shape = tuple(
         sum((a.shape[i] for a in seq)) if i == axis else seq[0].shape[i]
