@@ -2981,6 +2981,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     seq = [asarray(a) for a in seq]
 
+    if not seq:
+        raise ValueError("Need array(s) to concatenate")
+
     # Coerce all arrays to the same type
     # Empty arrays can impact the output dtype
     from .utils import meta_from_array
