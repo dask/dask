@@ -1144,11 +1144,11 @@ class _GroupBy(object):
     def cov(self, ddof=1, split_every=None, split_out=1):
         """Groupby covariance is accomplished by
 
-        1. computing intermediate values for sum, count, and the product of
-        all columns: a b c -> a*a, a*b, b*b, b*c, c*c.
+        1. Computing intermediate values for sum, count, and the product of
+           all columns: a b c -> a*a, a*b, b*b, b*c, c*c.
 
         2. The values are then aggregated and the final covariance value is calculated:
-        cov(X,Y) = X*Y - Xbar * Ybar
+           cov(X,Y) = X*Y - Xbar * Ybar
         """
 
         levels = _determine_levels(self.index)
