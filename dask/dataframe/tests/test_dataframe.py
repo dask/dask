@@ -351,12 +351,6 @@ def test_describe(include, exclude, percentiles, subset):
     desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
     desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
 
-    # TODO: for timedelta columns there's overflow in var function, see #4233
-    # causing std to be nan, workaround this by dropping timedelta column before assertion
-    if 'f' in desc_ddf._meta:
-        desc_df = desc_df.drop('f', axis=1)
-        desc_ddf = desc_ddf.drop('f', axis=1)
-
     # Assert
     assert_eq(desc_ddf, desc_df)
 

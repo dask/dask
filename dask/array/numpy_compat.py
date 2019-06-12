@@ -5,6 +5,9 @@ from distutils.version import LooseVersion
 import numpy as np
 import warnings
 
+_numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
+
+
 # Taken from scikit-learn:
 # https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/fixes.py#L84
 try:
@@ -271,3 +274,9 @@ class _Recurser(object):
             # yield from ...
             for v in self.walk(xi, index + (i,)):
                 yield v
+
+
+if _numpy_116:
+    _unravel_index_keyword = "shape"
+else:
+    _unravel_index_keyword = "dims"

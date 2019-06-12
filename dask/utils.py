@@ -441,7 +441,7 @@ def _skip_doctest(line):
     # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
-        return stripped
+        return line
     elif '>>>' in stripped and '+SKIP' not in stripped:
         if '# doctest:' in line:
             return line + ', +SKIP'
@@ -477,7 +477,13 @@ def extra_titles(doc):
 
 def ignore_warning(doc, cls, name, extra=""):
     """Expand docstring by adding disclaimer and extra text"""
-    l1 = "This docstring was copied from %s.%s.%s. \n\n" % (cls.__module__, cls.__name__, name)
+    import inspect
+    if inspect.isclass(cls):
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" \
+             "" % (cls.__module__, cls.__name__, name)
+    else:
+        l1 = "This docstring was copied from %s.%s. \n\n" \
+             "" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find('\n\n')
@@ -506,7 +512,8 @@ def unsupported_arguments(doc, args):
     """ Mark unsupported arguments with a disclaimer """
     lines = doc.split('\n')
     for arg in args:
-        subset = [(i, line) for i, line in enumerate(lines) if re.match(r'^\s*' + arg + ' ?:', line)]
+        subset = [(i, line) for i, line in enumerate(lines)
+                  if re.match(r'^\s*' + arg + ' ?:', line)]
         if len(subset) == 1:
             [(i, line)] = subset
             lines[i] = line + "  (Not supported in Dask)"

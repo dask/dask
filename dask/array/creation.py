@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps, reduce
+from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
 from numbers import Integral, Number
@@ -11,12 +11,13 @@ from toolz import accumulate, sliding_window
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..compatibility import Sequence
+from ..utils import derived_from
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
-from .utils import AxisError
+from .utils import AxisError, meta_from_array, zeros_like_safe
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -322,7 +323,7 @@ def arange(*args, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
-@wraps(np.meshgrid)
+@derived_from(np)
 def meshgrid(*xi, **kwargs):
     indexing = kwargs.pop("indexing", "xy")
     sparse = bool(kwargs.pop("sparse", False))
@@ -410,7 +411,7 @@ def indices(dimensions, dtype=int, chunks='auto'):
     return grid
 
 
-def eye(N, chunks, M=None, k=0, dtype=float):
+def eye(N, chunks='auto', M=None, k=0, dtype=float):
     """
     Return a 2-D Array with ones on the diagonal and zeros elsewhere.
 
@@ -418,8 +419,13 @@ def eye(N, chunks, M=None, k=0, dtype=float):
     ----------
     N : int
       Number of rows in the output.
-    chunks: int
-        chunk size of resulting blocks
+    chunks : int, str
+        How to chunk the array. Must be one of the following forms:
+        -   A blocksize like 1000.
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
     M : int, optional
       Number of columns in the output. If None, defaults to `N`.
     k : int, optional
@@ -435,15 +441,17 @@ def eye(N, chunks, M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    if not isinstance(chunks, Integral):
-        raise ValueError('chunks must be an int')
-
-    token = tokenize(N, chunk, M, k, dtype)
-    name_eye = 'eye-' + token
-
     eye = {}
     if M is None:
         M = N
+
+    if not isinstance(chunks, (int, str)):
+        raise ValueError('chunks must be an int or string')
+    elif isinstance(chunks, str):
+        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+        chunks = chunks[0][0]
+    token = tokenize(N, chunks, M, k, dtype)
+    name_eye = 'eye-' + token
 
     vchunks = [chunks] * (N // chunks)
     if N % chunks != 0:
@@ -462,10 +470,14 @@ def eye(N, chunks, M=None, k=0, dtype=float):
                  chunks=(chunks, chunks), dtype=dtype)
 
 
-@wraps(np.diag)
+@derived_from(np)
 def diag(v):
     name = 'diag-' + tokenize(v)
-    if isinstance(v, np.ndarray):
+
+    meta = meta_from_array(v, 2 if v.ndim == 1 else 1)
+
+    if (isinstance(v, np.ndarray) or
+            (hasattr(v, '__array_function__') and not isinstance(v, Array))):
         if v.ndim == 1:
             chunks = ((v.shape[0],), (v.shape[0],))
             dsk = {(name, 0, 0): (np.diag, v)}
@@ -474,7 +486,7 @@ def diag(v):
             dsk = {(name, 0): (np.diag, v)}
         else:
             raise ValueError("Array must be 1d or 2d only")
-        return Array(dsk, name, chunks, dtype=v.dtype)
+        return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
         raise TypeError("v must be a dask array or numpy array, "
                         "got {0}".format(type(v)))
@@ -483,7 +495,7 @@ def diag(v):
             dsk = {(name, i): (np.diag, row[i])
                    for i, row in enumerate(v.__dask_keys__())}
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-            return Array(graph, name, (v.chunks[0],), dtype=v.dtype)
+            return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
@@ -497,12 +509,13 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
+                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-    return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
+    return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
 
 
-@wraps(np.diagonal)
+@derived_from(np)
 def diagonal(a, offset=0, axis1=0, axis2=1):
     name = 'diagonal-' + tokenize(a, offset, axis1, axis2)
 
@@ -566,7 +579,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     chunks = left_chunks + right_shape
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    return Array(graph, name, shape=shape, chunks=chunks, dtype=a.dtype)
+    meta = meta_from_array(a, len(shape))
+    return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
 
 
 def triu(m, k=0):
@@ -608,13 +622,15 @@ def triu(m, k=0):
     for i in range(rdim):
         for j in range(hdim):
             if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(zeros_like_safe,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
 def tril(m, k=0):
@@ -660,9 +676,11 @@ def tril(m, k=0):
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
-                dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(zeros_like_safe,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
@@ -673,7 +691,7 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
     return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
 
 
-@wraps(np.fromfunction)
+@derived_from(np)
 def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
@@ -691,7 +709,7 @@ def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
-@wraps(np.repeat)
+@derived_from(np)
 def repeat(a, repeats, axis=None):
     if axis is None:
         if a.ndim == 1:
@@ -737,7 +755,7 @@ def repeat(a, repeats, axis=None):
     return concatenate(out, axis=axis)
 
 
-@wraps(np.tile)
+@derived_from(np)
 def tile(A, reps):
     if not isinstance(reps, Integral):
         raise NotImplementedError("Only integer valued `reps` supported.")
@@ -1034,7 +1052,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     return result
 
 
-@wraps(np.pad)
+@derived_from(np)
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
 

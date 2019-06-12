@@ -421,6 +421,20 @@ def test_derived_from():
 
 
 @pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from_func():
+    import builtins
+
+    @derived_from(builtins)
+    def sum():
+        "extra docstring"
+        pass
+
+    assert "extra docstring\n\n" in sum.__doc__
+    assert "Return the sum of" in sum.__doc__
+    assert "This docstring was copied from builtins.sum" in sum.__doc__
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
 def test_derived_from_dask_dataframe():
     dd = pytest.importorskip('dask.dataframe')
 

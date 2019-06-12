@@ -252,7 +252,8 @@ def test_angle():
 
 
 def test_issignedinf():
-    arr = np.random.randint(-1, 2, size=(20, 20)).astype(float) / 0
+    with np.errstate(invalid='ignore', divide='ignore'):
+        arr = np.random.randint(-1, 2, size=(20, 20)).astype(float) / 0
     darr = da.from_array(arr, 3)
 
     assert_eq(np.isneginf(arr), da.isneginf(darr))
@@ -369,3 +370,31 @@ def test_out_shape_mismatch():
     y = da.arange(15, chunks=(5,))
     with pytest.raises(ValueError):
         assert np.log(x, out=y)
+
+
+def test_divmod():
+    arr1 = np.random.randint(1, 100, size=(20, 20))
+    arr2 = np.random.randint(1, 100, size=(20, 20))
+
+    darr1 = da.from_array(arr1, 3)
+    darr2 = da.from_array(arr2, 3)
+
+    result = np.divmod(darr1, 2.)
+    expected = np.divmod(arr1, 2.)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = np.divmod(darr1, darr2)
+    expected = np.divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, 2.)
+    expected = divmod(arr1, 2.)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, darr2)
+    expected = divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])

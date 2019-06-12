@@ -5,6 +5,7 @@ import math
 import warnings
 from functools import wraps, partial
 from numbers import Real, Integral
+from distutils.version import LooseVersion
 
 import numpy as np
 from toolz import concat, sliding_window, interleave
@@ -13,10 +14,10 @@ from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import funcname
+from ..utils import funcname, derived_from
 from . import chunk
 from .creation import arange, diag, empty, indices
-from .utils import safe_wraps, validate_axis
+from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
 
@@ -25,9 +26,10 @@ from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 from .einsumfuncs import einsum  # noqa
+from .numpy_compat import _unravel_index_keyword
 
 
-@wraps(np.array)
+@derived_from(np)
 def array(x, dtype=None, ndmin=None):
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
@@ -36,13 +38,13 @@ def array(x, dtype=None, ndmin=None):
     return x
 
 
-@wraps(np.result_type)
+@derived_from(np)
 def result_type(*args):
     args = [a if is_scalar_for_elemwise(a) else a.dtype for a in args]
     return np.result_type(*args)
 
 
-@wraps(np.atleast_3d)
+@derived_from(np)
 def atleast_3d(*arys):
     new_arys = []
     for x in arys:
@@ -62,7 +64,7 @@ def atleast_3d(*arys):
         return new_arys
 
 
-@wraps(np.atleast_2d)
+@derived_from(np)
 def atleast_2d(*arys):
     new_arys = []
     for x in arys:
@@ -80,7 +82,7 @@ def atleast_2d(*arys):
         return new_arys
 
 
-@wraps(np.atleast_1d)
+@derived_from(np)
 def atleast_1d(*arys):
     new_arys = []
     for x in arys:
@@ -96,13 +98,13 @@ def atleast_1d(*arys):
         return new_arys
 
 
-@wraps(np.vstack)
+@derived_from(np)
 def vstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_2d(x) for x in tup)
     return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
-@wraps(np.hstack)
+@derived_from(np)
 def hstack(tup, allow_unknown_chunksizes=False):
     if all(x.ndim == 1 for x in tup):
         return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
@@ -110,13 +112,13 @@ def hstack(tup, allow_unknown_chunksizes=False):
         return concatenate(tup, axis=1, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
-@wraps(np.dstack)
+@derived_from(np)
 def dstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_3d(x) for x in tup)
     return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
-@wraps(np.swapaxes)
+@derived_from(np)
 def swapaxes(a, axis1, axis2):
     if axis1 == axis2:
         return a
@@ -131,7 +133,7 @@ def swapaxes(a, axis1, axis2):
     return blockwise(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2, dtype=a.dtype)
 
 
-@wraps(np.transpose)
+@derived_from(np)
 def transpose(a, axes=None):
     if axes:
         if len(axes) != a.ndim:
@@ -171,12 +173,12 @@ def flip(m, axis):
     return m[sl]
 
 
-@wraps(np.flipud)
+@derived_from(np)
 def flipud(m):
     return flip(m, 0)
 
 
-@wraps(np.fliplr)
+@derived_from(np)
 def fliplr(m):
     return flip(m, 1)
 
@@ -192,7 +194,8 @@ def _tensordot(a, b, axes):
     # workaround may be removed when numpy version (currently 1.13.0) is bumped
     a_dims = np.array([a.shape[i] for i in axes[0]])
     b_dims = np.array([b.shape[i] for i in axes[1]])
-    if len(a_dims) > 0 and (a_dims == b_dims).all() and a_dims.min() == 0:
+    if (len(a_dims) > 0 and (a_dims == b_dims).all() and a_dims.min() == 0 and
+            LooseVersion(np.__version__) < LooseVersion("1.14")):
         x = np.zeros(tuple([s for i, s in enumerate(a.shape) if i not in axes[0]] +
                            [s for i, s in enumerate(b.shape) if i not in axes[1]]))
     else:
@@ -205,7 +208,7 @@ def _tensordot(a, b, axes):
     return x
 
 
-@wraps(np.tensordot)
+@derived_from(np)
 def tensordot(lhs, rhs, axes=2):
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
@@ -241,17 +244,17 @@ def tensordot(lhs, rhs, axes=2):
     return result
 
 
-@wraps(np.dot)
+@derived_from(np)
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-@wraps(np.vdot)
+@derived_from(np)
 def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-@safe_wraps(np.matmul)
+@derived_from(np)
 def matmul(a, b):
     a = asanyarray(a)
     b = asanyarray(b)
@@ -290,7 +293,7 @@ def matmul(a, b):
     return out
 
 
-@wraps(np.outer)
+@derived_from(np)
 def outer(a, b):
     a = a.flatten()
     b = b.flatten()
@@ -310,7 +313,7 @@ def _inner_apply_along_axis(arr,
     )
 
 
-@wraps(np.apply_along_axis)
+@derived_from(np)
 def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     arr = asarray(arr)
 
@@ -345,7 +348,7 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     return result
 
 
-@wraps(np.apply_over_axes)
+@derived_from(np)
 def apply_over_axes(func, a, axes):
     # Validate arguments
     a = asarray(a)
@@ -373,12 +376,12 @@ def apply_over_axes(func, a, axes):
     return result
 
 
-@wraps(np.ptp)
+@derived_from(np)
 def ptp(a, axis=None):
     return a.max(axis=axis) - a.min(axis=axis)
 
 
-@wraps(np.diff)
+@derived_from(np)
 def diff(a, n=1, axis=-1):
     a = asarray(a)
     n = int(n)
@@ -400,7 +403,7 @@ def diff(a, n=1, axis=-1):
     return r
 
 
-@wraps(np.ediff1d)
+@derived_from(np)
 def ediff1d(ary, to_end=None, to_begin=None):
     ary = asarray(ary)
 
@@ -437,7 +440,7 @@ def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
     return grad
 
 
-@wraps(np.gradient)
+@derived_from(np)
 def gradient(f, *varargs, **kwargs):
     f = asarray(f)
 
@@ -517,13 +520,13 @@ def gradient(f, *varargs, **kwargs):
 
 def _bincount_sum(bincounts, dtype=int):
     n = max(map(len, bincounts))
-    out = np.zeros(n, dtype=dtype)
+    out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
         out[:len(b)] += b
     return out
 
 
-@wraps(np.bincount)
+@derived_from(np)
 def bincount(x, weights=None, minlength=0):
     if x.ndim != 1:
         raise ValueError('Input array must be one dimensional. '
@@ -553,10 +556,12 @@ def bincount(x, weights=None, minlength=0):
     else:
         chunks = ((minlength,),)
 
-    return Array(graph, final_name, chunks, dtype)
+    meta = meta_from_array(x, 1, dtype=dtype)
+
+    return Array(graph, final_name, chunks, meta=meta)
 
 
-@wraps(np.digitize)
+@derived_from(np)
 def digitize(a, bins, right=False):
     bins = np.asarray(bins)
     dtype = np.digitize([0], bins, right=False).dtype
@@ -664,7 +669,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
-@wraps(np.cov)
+@derived_from(np)
 def cov(m, y=None, rowvar=1, bias=0, ddof=None):
     # This was copied almost verbatim from np.cov
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
@@ -713,7 +718,7 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
         return (dot(X, X.T.conj()) / fact).squeeze()
 
 
-@wraps(np.corrcoef)
+@derived_from(np)
 def corrcoef(x, y=None, rowvar=1):
     c = cov(x, y, rowvar)
     if c.shape == ():
@@ -724,7 +729,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
-@wraps(np.round)
+@derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
@@ -790,7 +795,7 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     return r
 
 
-@wraps(np.unique)
+@derived_from(np)
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     ar = ar.ravel()
 
@@ -923,7 +928,7 @@ def isin(element, test_elements, assume_unique=False, invert=False):
     return result
 
 
-@wraps(np.roll)
+@derived_from(np)
 def roll(array, shift, axis=None):
     result = array
 
@@ -971,12 +976,12 @@ def roll(array, shift, axis=None):
     return result
 
 
-@wraps(np.ravel)
+@derived_from(np)
 def ravel(array):
     return array.reshape((-1,))
 
 
-@wraps(np.squeeze)
+@derived_from(np)
 def squeeze(a, axis=None):
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
@@ -990,10 +995,12 @@ def squeeze(a, axis=None):
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
-    return a[sl]
+    a = a[sl]
+
+    return a
 
 
-@wraps(np.compress)
+@derived_from(np)
 def compress(condition, a, axis=None):
     condition = asarray(condition).astype(bool)
     a = asarray(a)
@@ -1019,14 +1026,14 @@ def compress(condition, a, axis=None):
     return a
 
 
-@wraps(np.extract)
+@derived_from(np)
 def extract(condition, arr):
     condition = asarray(condition).astype(bool)
     arr = asarray(arr)
     return compress(condition.ravel(), arr.ravel())
 
 
-@wraps(np.take)
+@derived_from(np)
 def take(a, indices, axis=0):
     axis = validate_axis(axis, a.ndim)
 
@@ -1045,7 +1052,7 @@ def _take_dask_array_from_numpy(a, indices, axis):
                               dtype=a.dtype)
 
 
-@wraps(np.around)
+@derived_from(np)
 def around(x, decimals=0):
     return map_blocks(partial(np.around, decimals=decimals), x, dtype=x.dtype)
 
@@ -1067,13 +1074,13 @@ def notnull(values):
     return ~isnull(values)
 
 
-@wraps(np.isclose)
+@derived_from(np)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
     func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
 
 
-@wraps(np.allclose)
+@derived_from(np)
 def allclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
     return isclose(arr1, arr2, rtol=rtol, atol=atol, equal_nan=equal_nan).all()
 
@@ -1082,7 +1089,7 @@ def variadic_choose(a, *choices):
     return np.choose(a, choices)
 
 
-@wraps(np.choose)
+@derived_from(np)
 def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
 
@@ -1109,7 +1116,7 @@ def isnonzero(a):
         return a.astype(bool)
 
 
-@wraps(np.argwhere)
+@derived_from(np)
 def argwhere(a):
     a = asarray(a)
 
@@ -1123,7 +1130,7 @@ def argwhere(a):
     return ind
 
 
-@wraps(np.where)
+@derived_from(np)
 def where(condition, x=None, y=None):
     if (x is None) != (y is None):
         raise ValueError("either both or neither of x and y should be given")
@@ -1143,17 +1150,17 @@ def where(condition, x=None, y=None):
         return elemwise(np.where, condition, x, y)
 
 
-@wraps(np.count_nonzero)
+@derived_from(np)
 def count_nonzero(a, axis=None):
     return isnonzero(asarray(a)).astype(np.intp).sum(axis=axis)
 
 
-@wraps(np.flatnonzero)
+@derived_from(np)
 def flatnonzero(a):
     return argwhere(asarray(a).ravel())[:, 0]
 
 
-@wraps(np.nonzero)
+@derived_from(np)
 def nonzero(a):
     ind = argwhere(a)
     if ind.ndim > 1:
@@ -1173,15 +1180,16 @@ def _unravel_index_kernel(indices, func_kwargs):
     return np.stack(np.unravel_index(indices, **func_kwargs))
 
 
-@wraps(np.unravel_index)
+@derived_from(np)
 def unravel_index(indices, dims, order='C'):
+    # TODO: deprecate dims as well?
     if dims and indices.size:
         unraveled_indices = tuple(indices.map_blocks(
             _unravel_index_kernel,
             dtype=np.intp,
             chunks=(((len(dims),),) + indices.chunks),
             new_axis=0,
-            func_kwargs={"dims": dims, "order": order}
+            func_kwargs={_unravel_index_keyword: dims, "order": order}
         ))
     else:
         unraveled_indices = tuple(
@@ -1191,7 +1199,7 @@ def unravel_index(indices, dims, order='C'):
     return unraveled_indices
 
 
-@wraps(np.piecewise)
+@derived_from(np)
 def piecewise(x, condlist, funclist, *args, **kw):
     return map_blocks(
         _int_piecewise,
@@ -1237,7 +1245,7 @@ def split_at_breaks(array, breaks, axis=0):
     return split_array
 
 
-@wraps(np.insert)
+@derived_from(np)
 def insert(arr, obj, values, axis):
     # axis is a required argument here to avoid needing to deal with the numpy
     # default case (which reshapes the array to make it flat)
@@ -1332,6 +1340,6 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
         return avg
 
 
-@wraps(np.average)
+@derived_from(np)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=False)
