@@ -401,8 +401,8 @@ def test_describe_empty_tdigest():
     # None-values, pre-compute dask df to bypass _meta check
     assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
     with warnings.catch_warnings():
-       # dask.dataframe should probably filter this, to match pandas, but
-       # it seems quite difficult.
+        # dask.dataframe should probably filter this, to match pandas, but
+        # it seems quite difficult.
         warnings.simplefilter('ignore', RuntimeWarning)
         assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
         assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))

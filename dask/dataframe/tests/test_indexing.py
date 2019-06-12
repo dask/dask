@@ -147,7 +147,6 @@ def test_loc2d_some_missing():
         assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
 
-
 def test_loc2d_with_known_divisions():
     df = pd.DataFrame(np.random.randn(20, 5),
                       index=list('abcdefghijklmnopqrst'),
