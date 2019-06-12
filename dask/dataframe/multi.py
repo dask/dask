@@ -69,7 +69,8 @@ from .core import (_Frame, DataFrame, Series, map_partitions, Index,
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories, is_dataframe_like, is_series_like
+from .utils import (strip_unknown_categories, is_dataframe_like,
+                    is_series_like, asciitable)
 
 
 def align_partitions(*dfs):
@@ -336,17 +337,17 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
 
     if (all(col in left.columns for col in left_on) and
             all(col in right.columns for col in right_on)):
-        dtype_mism = {(lo, ro): (left.dtypes[lo], right.dtypes[ro])
+        dtype_mism = [((lo, ro), left.dtypes[lo], right.dtypes[ro])
                       for lo, ro in zip(left_on, right_on)
-                      if not left.dtypes[lo] is right.dtypes[ro]}
+                      if not left.dtypes[lo] is right.dtypes[ro]]
 
         if dtype_mism:
-            col_str = '\n'.join('{}: {}'.format(cols, dtypes)
-                                for cols, dtypes in dtype_mism.items())
+            col_tb = asciitable(('Merge columns', 'left dtype', 'right dtype'),
+                                dtype_mism)
 
             warnings.warn(('Merging dataframes with merge column data '
                            'type mismatches: \n{}\nCast dtypes explicitly to '
-                           'avoid unexpected results.').format(col_str))
+                           'avoid unexpected results.').format(col_tb))
 
 
 @wraps(pd.merge)
