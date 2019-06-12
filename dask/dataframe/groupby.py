@@ -411,7 +411,8 @@ def _cov_agg(_t, levels, ddof):
                 pass
 
     for level in range(len(result.columns.levels)):
-        result.columns.set_levels(col_mapping.keys(), level=level, inplace=True)
+        keys = list(col_mapping.keys())
+        result.columns.set_levels(keys, level=level, inplace=True)
 
     result.index.set_names(idx_mapping, inplace=True)
 
