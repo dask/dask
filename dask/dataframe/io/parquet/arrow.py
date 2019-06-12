@@ -89,19 +89,19 @@ class ArrowEngine(Engine):
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
-                # TODO get names
-                # names = schema.names  # Not quite right when partitioning
+                names = dataset.metadata.schema.names
             else:
                 # Read from each individual piece (quite possibly slow)
                 row_groups = [
-                    piece.get_metadata(
-                        lambda fn: pq.ParquetFile(fs.open(fn, mode="rb"))
-                    ).row_group(0)
+                    piece.get_metadata().row_group(0)
                     for piece in pieces
                 ]
-                piece = pieces[0]
-                md = piece.get_metadata(lambda fn: pq.ParquetFile(fs.open(fn, mode="rb")))
-                names = md.schema.names
+                if dataset.metadata:
+                    names = dataset.metadata.schema.names
+                else:
+                    piece = pieces[0]
+                    md = piece.get_metadata()
+                    names = md.schema.names
 
             stats = []
             for row_group in row_groups:
@@ -211,18 +211,26 @@ class ArrowEngine(Engine):
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
         if parts:
-            metadata_path = fs.sep.join([path, '_common_metadata'])
+            metadata_path = fs.sep.join([path, '_metadata'])
+            common_metadata_path = fs.sep.join([path, '_common_metadata'])
             # Get only arguments specified in the function
             keywords = getargspec(pq.write_metadata).args
             kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
+            with fs.open(common_metadata_path, "wb") as fil:
+                pq.write_metadata(parts[0][0]['schema'], fil, **kwargs_meta)
+            # Aggregate metadata and write to _metadata file
+            _meta = parts[0][0]['meta']
+            for i in range(1, len(parts[0])):
+                _meta.append_row_groups(parts[i][0]['meta'])
             with fs.open(metadata_path, "wb") as fil:
-                pq.write_metadata(parts[0][0], fil, **kwargs_meta)
+                _meta.write_metadata_file(fil)
 
     @staticmethod
     def write_partition(
         df, path, fs, filename, partition_on, fmd=None, compression=None,
         return_metadata=True, with_metadata=True, **kwargs
     ):
+        md_list = []
         t = pa.Table.from_pandas(df, preserve_index=False)
         if partition_on:
             pq.write_to_dataset(
@@ -231,13 +239,15 @@ class ArrowEngine(Engine):
                 partition_cols=partition_on,
                 preserve_index=False,
                 filesystem=fs,
+                metadata_collector=md_list,
                 **kwargs
             )
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                pq.write_table(t, fil, compression=compression, **kwargs)
+                pq.write_table(t, fil, compression=compression,
+                               metadata_collector=md_list, **kwargs)
         # Return the schema needed to write the metadata
         if return_metadata:
-            return [t.schema]
+            return [{'schema': t.schema, 'meta': md_list[0]}]
         else:
             return []
