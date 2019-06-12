@@ -3004,10 +3004,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     # Drop empty arrays
     seq = [a for a in seq if a.size]
 
-    n = len(seq)
-    if n == 0:
-        return from_array(np.empty(shape=shape, dtype=meta.dtype))
-
     if axis < 0:
         axis = ndim + axis
     if axis >= ndim:
@@ -3015,7 +3011,10 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
 
-    if n == 1:
+    n = len(seq)
+    if n == 0:
+        return from_array(np.empty(shape=shape, dtype=meta.dtype))
+    elif n == 1:
         return seq[0]
 
     if (not allow_unknown_chunksizes and
