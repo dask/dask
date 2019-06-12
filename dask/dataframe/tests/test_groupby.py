@@ -990,8 +990,19 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         assert_eq(call(pdf.groupby(grouper(pdf))[['c', 'd']], agg_func),
                   call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
 
-        assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
-                  call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+        if agg_func == 'cov':
+            # there are sorting issues between pandas and chunk cov w/dask
+            df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
+            cols = sorted(list(df.columns))
+            df = df[cols]
+            dddf = call(ddf.groupby(grouper(ddf)), agg_func, split_every=2).compute()
+            dddf = dddf.sort_index()
+            cols = sorted(list(dddf.columns))
+            dddf = dddf[cols]
+            assert_eq(df, dddf)
+        else:
+            assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
+                      call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
 
 
 @pytest.mark.parametrize('grouper', [

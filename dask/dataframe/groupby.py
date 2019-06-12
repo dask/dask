@@ -346,7 +346,9 @@ def _cov_chunk(df, *index):
 
     # mapping columns to str(numerical) values allows us to easily handle
     # arbitrary column names (numbers, string, empty strings)
-    col_mapping = dict(zip(list(df.columns.values), map(str, range(len(df.columns)))))
+    col_mapping = collections.OrderedDict()
+    for i, c in enumerate(df.columns):
+        col_mapping[c] = str(i)
     df = df.rename(columns=col_mapping)
     cols = df._get_numeric_data().columns
 
@@ -410,13 +412,13 @@ def _cov_agg(_t, levels, ddof):
                 # when slicing the col_map will not have the index
                 pass
 
+    keys = list(col_mapping.keys())
     for level in range(len(result.columns.levels)):
-        keys = list(col_mapping.keys())
         result.columns.set_levels(keys, level=level, inplace=True)
 
     result.index.set_names(idx_mapping, inplace=True)
 
-    # stacking leads to a sorted index
+    # stacking can lead to a sorted index
     s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result
