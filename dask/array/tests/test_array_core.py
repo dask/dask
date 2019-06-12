@@ -357,6 +357,7 @@ def test_concatenate():
     assert (concatenate([a, b, c], axis=-1).chunks ==
             concatenate([a, b, c], axis=1).chunks)
 
+    pytest.raises(ValueError, lambda: concatenate([]))
     pytest.raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
