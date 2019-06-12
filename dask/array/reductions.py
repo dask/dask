@@ -4,6 +4,7 @@ import operator
 from functools import partial, wraps
 from itertools import product, repeat
 from math import factorial, log, ceil
+import warnings
 
 import numpy as np
 from numbers import Integral, Number
@@ -466,7 +467,8 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', meta=False,
 
     n = n.astype(np.int64)
     total = sum(A, dtype=dtype, **kwargs)
-    u = total / n
+    with warnings.catch_warnings(record=True):
+        u = total / n
     xs = [sum((A - u)**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
     return {'total': total, 'n': n, 'M': M}
