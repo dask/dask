@@ -13,7 +13,7 @@ from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions)
 from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
-                                  has_known_categories, clear_known_categories)
+                                  has_known_categories, clear_known_categories, PANDAS_GT_0230)
 
 import pytest
 
@@ -319,7 +319,11 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        expected = pd.concat([pd1, pd2], sort=False)
+        if PANDAS_GT_0230:
+            kwargs = {'sort': False}
+        else:
+            kwargs = {}
+        expected = pd.concat([pd1, pd2], **kwargs)
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
 
