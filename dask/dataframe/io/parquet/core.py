@@ -28,6 +28,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=True,
+    infer_divisions=False,
 ):
     """
     Read ParquetFile into a Dask DataFrame
