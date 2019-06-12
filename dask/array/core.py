@@ -731,7 +731,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
-    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
+    sources2 = [Array(sources_dsk, e.name, e.chunks, meta=e) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -774,7 +774,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             )
 
         result = tuple(
-            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, s.dtype)
+            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, meta=s)
             for s, t in zip(sources, toks)
         )
 
@@ -857,27 +857,39 @@ class Array(DaskMethodsMixin):
         Shape of the entire array
     chunks: iterable of tuples
         block sizes along each dimension
+    dtype : str or dtype
+        Typecode or data-type for the new Dask Array
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
 
     See Also
     --------
     dask.array.from_array
     """
-    __slots__ = 'dask', '_name', '_cached_keys', '_chunks', 'dtype'
+    __slots__ = 'dask', '_name', '_cached_keys', '_chunks', '_meta'
 
-    def __new__(cls, dask, name, chunks, dtype, shape=None):
+    def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
-        if dtype is None:
-            raise ValueError("You must specify the dtype of the array")
-        self.dtype = np.dtype(dtype)
+        if dtype is not None and meta is not None:
+            raise TypeError("You must not specify both meta and dtype")
+        if dtype is None and meta is None:
+            raise ValueError("You must specify the meta or dtype of the array")
 
-        self._chunks = normalize_chunks(chunks, shape, dtype=self.dtype)
+        self._chunks = normalize_chunks(chunks, shape, dtype=dtype or meta.dtype)
         if self._chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
+
+        if dtype:
+            self._meta = np.empty((0,) * self.ndim, dtype=dtype)
+        else:
+            from .utils import meta_from_array
+            self._meta = meta_from_array(meta, meta.ndim)
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -944,8 +956,8 @@ class Array(DaskMethodsMixin):
         return tuple(max(c) for c in self.chunks)
 
     @property
-    def _meta(self):
-        return np.empty(shape=(), dtype=self.dtype)
+    def dtype(self):
+        return self._meta.dtype
 
     def _get_chunks(self):
         return self._chunks
@@ -1049,8 +1061,9 @@ class Array(DaskMethodsMixin):
             '    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>' % (str(self.shape), str(self.chunksize)),
             '    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>' % (
                 len(self.__dask_graph__()), self.npartitions),
-            '    <tr><th> DType </th><td> %s </td><td></td></tr>' % self.dtype,
-            '  </tbody>',
+            '    <tr><th> Type </th><td> %s </td><td> %s.%s </td></tr>' %
+            (self.dtype, type(self._meta).__module__.split('.')[0], type(self._meta).__name__),
+            '  </tbody>'
             '</table>'
         ]
         return '\n'.join(table)
@@ -1217,7 +1230,7 @@ class Array(DaskMethodsMixin):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError('boolean index array should have 1 dimension')
             y = where(key, value, self)
-            self.dtype = y.dtype
+            self._meta = y._meta
             self.dask = y.dask
             self.name = y.name
             self._chunks = y.chunks
@@ -1267,7 +1280,40 @@ class Array(DaskMethodsMixin):
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
-        return Array(graph, out, chunks, dtype=self.dtype)
+
+        if isinstance(index2, tuple):
+            new_index = []
+            for i in range(len(index2)):
+                if not isinstance(index2[i], tuple):
+                    types = [Integral, list, np.ndarray]
+                    cond = any([isinstance(index2[i], t) for t in types])
+                    new_index.append(slice(0, 0) if cond else index2[i])
+                else:
+                    new_index.append(tuple([Ellipsis if j is not None else
+                                            None for j in index2[i]]))
+            new_index = tuple(new_index)
+            meta = self._meta[new_index].astype(self.dtype)
+        else:
+            meta = self._meta[index2].astype(self.dtype)
+
+        # Exception for object dtype and ndim == 1, which results in primitive types
+        if not (meta.dtype == object and meta.ndim == 1):
+
+            # If meta still has more dimensions than actual data
+            if meta.ndim > len(chunks):
+                try:
+                    meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
+                except TypeError:
+                    meta = meta.reshape((0,) * max(len(chunks), 1))
+
+            # Ensure all dimensions are 0
+            if not np.isscalar(meta):
+                meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
+                # If return array is 0-D, ensure _meta is 0-D
+                if len(chunks) == 0:
+                    meta = meta.sum()
+
+        return Array(graph, out, chunks, meta=meta)
 
     def _vindex(self, key):
         if not isinstance(key, tuple):
@@ -1336,7 +1382,7 @@ class Array(DaskMethodsMixin):
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
-        return Array(graph, name, chunks, self.dtype)
+        return Array(graph, name, chunks, meta=self)
 
     @property
     def blocks(self):
@@ -1622,6 +1668,14 @@ class Array(DaskMethodsMixin):
         from .routines import matmul
         return matmul(other, self)
 
+    def __divmod__(self, other):
+        from .ufunc import divmod
+        return divmod(self, other)
+
+    def __rdivmod__(self, other):
+        from .ufunc import divmod
+        return divmod(other, self)
+
     @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
         from .reductions import any
@@ -1887,7 +1941,7 @@ class Array(DaskMethodsMixin):
         if self.npartitions == 1:
             return self.map_blocks(M.copy)
         else:
-            return Array(self.dask, self.name, self.chunks, self.dtype)
+            return Array(self.dask, self.name, self.chunks, meta=self)
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -2331,7 +2385,12 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
                     dtype=x.dtype)
         dsk[original_name] = x
 
-    return Array(dsk, name, chunks, dtype=x.dtype)
+    # Workaround for TileDB, its indexing is 1-based,
+    # and doesn't seems to support 0-length slicing
+    if x.__class__.__module__.split('.')[0] == 'tiledb' and hasattr(x, '_ctx_'):
+        return Array(dsk, name, chunks, dtype=x.dtype)
+
+    return Array(dsk, name, chunks, meta=x)
 
 
 def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):
@@ -2947,6 +3006,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
 
+    from .utils import meta_from_array
+    metas = [getattr(s, '_meta', s) for s in seq]
+    metas = [meta_from_array(m, getattr(m, 'ndim', 1)) for m in metas]
+    meta = np.concatenate(metas)
+
     uc_args = list(concat(zip(seq, inds)))
     _, seq = unify_chunks(*uc_args, warn=False)
 
@@ -2961,8 +3025,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if len(set(seq_dtypes)) > 1:
         dt = reduce(np.promote_types, seq_dtypes)
         seq = [x.astype(dt) for x in seq]
-    else:
-        dt = seq_dtypes[0]
 
     names = [a.name for a in seq]
 
@@ -2976,7 +3038,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     dsk = dict(zip(keys, values))
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
 
-    return Array(graph, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, meta=meta)
 
 
 def load_store_chunk(x, out, index, lock, return_stored, load_stored):
@@ -3357,7 +3419,7 @@ def handle_out(out, result):
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
         out.dask = result.dask
-        out.dtype = result.dtype
+        out._meta = result._meta
         out.name = result.name
     elif out is not None:
         msg = ("The out parameter is not fully supported."

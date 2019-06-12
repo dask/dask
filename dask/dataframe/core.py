@@ -33,6 +33,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike, typename, skip_doctest)
 from ..array.core import Array, normalize_arg
+from ..array.utils import empty_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -1461,16 +1462,103 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     axis=axis, skipna=skipna, ddof=ddof)
             return handle_out(out, result)
         else:
-            num = self._get_numeric_data()
-            x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
-            x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
-            n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var'
-            result = map_partitions(methods.var_aggregate, x2, x, n,
-                                    token=name, meta=meta, ddof=ddof)
+            if self.ndim == 1:
+                result = self._var_1d(self, skipna, ddof, split_every)
+                return handle_out(out, result)
+
+            count_timedeltas = len(self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns)
+
+            if count_timedeltas == len(self._meta.columns):
+                result = self._var_timedeltas(skipna, ddof, split_every)
+            elif count_timedeltas > 0:
+                result = self._var_mixed(skipna, ddof, split_every)
+            else:
+                result = self._var_numeric(skipna, ddof, split_every)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
+
+    def _var_numeric(self, skipna=True, ddof=1, split_every=False):
+        num = self.select_dtypes(include=['number', 'bool'], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype('f8')
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(array_values, axis=0, ddof=ddof, split_every=split_every)
+
+        name = self._token_prefix + 'var-numeric' + tokenize(num, split_every)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        var_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_var_name = (array_var._name,) + (0,) * len(var_shape)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, num._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_timedeltas(self, skipna=True, ddof=1, split_every=False):
+        timedeltas = self.select_dtypes(include=[np.timedelta64])
+
+        var_timedeltas = [self._var_1d(timedeltas[col_idx], skipna, ddof, split_every)
+                          for col_idx in timedeltas._meta.columns]
+        var_timedelta_names = [(v._name, 0) for v in var_timedeltas]
+
+        name = self._token_prefix + 'var-timedeltas-' + tokenize(timedeltas, split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, var_timedelta_names, timedeltas._meta.columns)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=var_timedeltas)
+
+        return new_dd_object(graph, name, timedeltas._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_mixed(self, skipna=True, ddof=1, split_every=False):
+        data = self.select_dtypes(include=['number', 'bool', np.timedelta64])
+
+        timedelta_vars = self._var_timedeltas(skipna, ddof, split_every)
+        numeric_vars = self._var_numeric(skipna, ddof, split_every)
+
+        name = self._token_prefix + 'var-mixed-' + tokenize(data, split_every)
+
+        layer = {(name, 0): (methods.var_mixed_concat,
+                             (numeric_vars._name, 0),
+                             (timedelta_vars._name, 0),
+                             data._meta.columns)}
+
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[numeric_vars, timedelta_vars])
+        return new_dd_object(graph, name, self._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_1d(self, column, skipna=True, ddof=1, split_every=False):
+        is_timedelta = is_timedelta64_dtype(column._meta)
+
+        if is_timedelta:
+            if not skipna:
+                is_nan = column.isna()
+                column = column.astype('i8')
+                column = column.mask(is_nan)
+            else:
+                column = column.dropna().astype('i8')
+
+        if PANDAS_VERSION >= '0.24.0':
+            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+                column = column.astype('f8')
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype('f8')
+
+        name = self._token_prefix + 'var-1d-' + tokenize(column, split_every)
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(column.values, axis=0, ddof=ddof, split_every=split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, (array_var._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, column._meta_nonempty.var(), divisions=[None, None])
 
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):
@@ -1503,6 +1591,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'sem'
             result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return result
@@ -2485,6 +2574,16 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def memory_usage(self, index=True, deep=False):
         result = self.map_partitions(M.memory_usage, index=index, deep=deep)
         return delayed(sum)(result.to_delayed())
+
+    def __divmod__(self, other):
+        res1 = self // other
+        res2 = self % other
+        return res1, res2
+
+    def __rdivmod__(self, other):
+        res1 = other // self
+        res2 = other % self
+        return res1, res2
 
 
 class Index(Series):
@@ -3595,7 +3694,8 @@ def elemwise(op, *args, **kwargs):
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
-        parts = [d._meta if _is_broadcastable(d) or isinstance(d, Array)
+        parts = [d._meta if _is_broadcastable(d)
+                 else empty_like_safe(d, (), dtype=d.dtype) if isinstance(d, Array)
                  else d._meta_nonempty for d in dasks]
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
