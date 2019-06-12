@@ -2994,14 +2994,19 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
 
+    # Find array shape
+    ndim = len(seq[0].shape)
+    shape = tuple(
+        sum((a.shape[i] for a in seq)) if i == axis else seq[0].shape[i]
+        for i in range(ndim)
+    )
+
     # Drop empty arrays
     seq = [a for a in seq if a.size]
 
     n = len(seq)
     if n == 0:
-        return from_array(np.empty(shape=(), dtype=meta.dtype))
-
-    ndim = len(seq[0].shape)
+        return from_array(np.empty(shape=shape, dtype=meta.dtype))
 
     if axis < 0:
         axis = ndim + axis
