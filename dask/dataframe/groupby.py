@@ -302,7 +302,7 @@ def _cov_finalizer(df, cols):
     num_elements = len(list(it.product(cols, repeat=2)))
     num_cols = len(cols)
     vals = list(range(num_elements))
-    col_idx_mapping = dict(zip(cols, range(len(cols))))
+    col_idx_mapping = dict(zip(cols, range(num_cols)))
     for i, j in it.combinations_with_replacement(df[cols].columns, 2):
         x = col_idx_mapping[i]
         y = col_idx_mapping[j]
@@ -333,7 +333,7 @@ def _mul_cols(df, cols):
     a b c -> a*a, a*b, b*b, b*c, c*c
     """
     _df = type(df)()
-    for i, j in it.combinations_with_replacement(df[cols].columns, 2):
+    for i, j in it.combinations_with_replacement(cols, 2):
         col = "%s%s" % (i, j)
         _df[col] = df[i] * df[j]
     return _df
@@ -343,21 +343,26 @@ def _cov_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
+
+    # mapping columns to str(numerical) values allows us to easily handle
+    # arbitrary column names (numbers, string, empty strings)
+    col_mapping = dict(zip(list(df.columns.values), map(str, range(len(df.columns)))))
+    df = df.rename(columns=col_mapping)
     cols = df._get_numeric_data().columns
 
-    # when grouping by boolean series don't drop columns
+    # when grouping by external series don't exclude columns
     is_mask = any(is_series_like(s) for s in index)
     if not is_mask:
-        # casting to numpy may be problematic for non-pandas DataFrames
+        index = [col_mapping[k] for k in index]
         cols = cols.drop(np.array(index))
+
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
     level = len(index)
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=level, drop=True)
-    n = g[x.columns].count().rename(columns=lambda c: c + "-count")
-
-    return (x, mul, n)
+    n = g[x.columns].count().rename(columns=lambda c: "{}-count".format(c))
+    return (x, mul, n, col_mapping)
 
 
 def _cov_agg(_t, levels, ddof):
@@ -369,10 +374,11 @@ def _cov_agg(_t, levels, ddof):
     t = list(_t)
 
     cols = t[0][0].columns
-    for x, mul, n in t:
+    for x, mul, n, col_mapping in t:
         sums.append(x)
         muls.append(mul)
         counts.append(n)
+        col_mapping = col_mapping
 
     total_sums = concat(sums).groupby(level=levels, sort=False).sum()
     total_muls = concat(muls).groupby(level=levels, sort=False).sum()
@@ -382,6 +388,34 @@ def _cov_agg(_t, levels, ddof):
         .groupby(level=levels)
         .apply(_cov_finalizer, cols=cols)
     )
+
+    inv_col_mapping = {v: k for k, v in col_mapping.items()}
+    idx_vals = result.index.names
+    idx_mapping = list()
+
+    # when index is None we probably have selected a particular column
+    # df.groupby('a')[['b']].cov()
+    if len(idx_vals) == 1 and all(n is None for n in idx_vals):
+        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+
+    for idx, val in enumerate(idx_vals):
+        idx_name = inv_col_mapping.get(val, val)
+        idx_mapping.append(idx_name)
+
+        if len(result.columns.levels[0]) < len(col_mapping):
+            # removing index from col_mapping (produces incorrect multiindexes)
+            try:
+                col_mapping.pop(idx_name)
+            except KeyError:
+                # when slicing the col_map will not have the index
+                pass
+
+    for level in range(len(result.columns.levels)):
+        result.columns.set_levels(col_mapping.keys(), level=level, inplace=True)
+
+    result.index.set_names(idx_mapping, inplace=True)
+
+    # stacking leads to a sorted index
     s_result = result.stack(dropna=False)
     assert is_dataframe_like(s_result)
     return s_result

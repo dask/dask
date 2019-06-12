@@ -990,15 +990,8 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         assert_eq(call(pdf.groupby(grouper(pdf))[['c', 'd']], agg_func),
                   call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
 
-        if agg_func == 'cov':
-            # stacking in covariance leads to a sorted index:
-            df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
-            cols = sorted(list(df.columns))
-            df = df[cols]
-            assert_eq(df, call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
-        else:
-            assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
-                      call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+        assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
+                    call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -1638,16 +1631,31 @@ def test_groupby_group_keys():
     expected = pdf.groupby('a', group_keys=False).apply(func)
     assert_eq(expected, ddf.groupby('a', group_keys=False).apply(func, meta=expected))
 
-
-def test_groupby_cov():
+@pytest.mark.parametrize('columns', [
+                         ['a', 'b', 'c'],
+                         np.array([1.0, 2.0, 3.0]),
+                         ['1', '2', '3'],
+                         ['', 'a', 'b'],
+                         ])
+def test_groupby_cov(columns):
     rows = 20
     cols = 3
     np.random.seed(11)
     data = np.random.randn(rows, cols)
-    df = pd.DataFrame(data, columns=list("abc"))
+    df = pd.DataFrame(data, columns=columns)
     df["key"] = np.random.randint(0, cols, size=rows)
     ddf = dd.from_pandas(df, npartitions=3)
 
     expected = df.groupby("key").cov()
     result = ddf.groupby("key").cov()
-    assert_eq(expected, result)
+    # when using numerical values for columns
+    # the column mapping and stacking leads to a float typed
+    # MultiIndex.  Pandas will normally create a object typed
+    # MultiIndex
+    if isinstance(columns, np.ndarray):
+        result = result.compute()
+        # don't bother checking index -- MulitIndex levels are in a frozenlist
+        result.columns = result.columns.astype(np.dtype('O'))
+        assert_eq(expected, result, check_index=False)
+    else:
+        assert_eq(expected, result)
