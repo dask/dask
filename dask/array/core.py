@@ -2980,6 +2980,10 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     stack
     """
     n = len(seq)
+
+    if n == 0:
+        raise ValueError("Need array(s) to concatenate")
+
     ndim = len(seq[0].shape)
 
     if axis < 0:
