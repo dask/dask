@@ -991,7 +991,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
                   call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
 
         assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
-                    call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+                  call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -1630,6 +1630,7 @@ def test_groupby_group_keys():
 
     expected = pdf.groupby('a', group_keys=False).apply(func)
     assert_eq(expected, ddf.groupby('a', group_keys=False).apply(func, meta=expected))
+
 
 @pytest.mark.parametrize('columns', [
                          ['a', 'b', 'c'],
