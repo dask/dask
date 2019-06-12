@@ -889,7 +889,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if safe:
             head = safe_head
         else:
-            head = _unsafe_head
+            head = M.head
 
         if npartitions > 1:
             name_p = 'head-partial-%d-%s' % (n, self._name)
@@ -4843,12 +4843,8 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
     return res
 
 
-def _unsafe_head(df, n):
-    return df.head(n=n)
-
-
 def safe_head(df, n):
-    r = _unsafe_head(df, n)
+    r = M.head(df, n)
     if len(r) != n:
         msg = ("Insufficient elements for `head`. {0} elements "
                "requested, only {1} elements available. Try passing larger "
