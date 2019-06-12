@@ -21,6 +21,8 @@ from .compatibility import (get_named_args, getargspec, PY3, unicode,
 from .core import get_deps
 from .optimization import key_split    # noqa: F401
 
+import numpy as np
+
 
 system_encoding = sys.getdefaultencoding()
 if system_encoding == 'ascii':
@@ -1257,3 +1259,64 @@ def ndimlist(seq):
         return 1
     else:
         return 1 + ndimlist(seq[0])
+
+
+class _HashIdWrapper(object):
+    """Hash and compare a wrapped object by identity instead of value"""
+
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __eq__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is other.wrapped
+
+    def __ne__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is not other.wrapped
+
+    def __hash__(self):
+        return id(self.wrapped)
+
+    def __array__(self):
+        return np.array(self.wrapped)
+
+
+@functools.lru_cache()
+def _cumsum(seq):
+    seq = np.array(seq)
+    dtype = np.int64 if np.issubdtype(seq.dtype, np.integer) else seq.dtype
+    out = np.empty(len(seq) + 1, dtype)
+    out[0] = 0
+    np.cumsum(seq, out=out[1:], dtype=dtype)
+    return out
+
+
+def cached_cumsum(seq, initial_zero=False):
+    """Compute :meth:`np.cumsum` with caching.
+
+    Caching is by the identify of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist.
+
+    The result has type int64 if the sequence contains integers, and
+    otherwise the type of ``np.array(seq)``.
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to cumulatively sum.
+    initial_zero : bool, optional
+        If true, the return value is prefixed with a zero.
+    """
+    if isinstance(seq, tuple):
+        result = _cumsum(_HashIdWrapper(seq))
+    else:
+        # If it's not a tuple, it's probably mutable. Bypass the cache.
+        result = _cumsum.__wrapped__(seq)
+
+    if not initial_zero:
+        result = result[1:]
+    return result

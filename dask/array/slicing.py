@@ -12,6 +12,7 @@ from toolz import memoize, merge, pluck, concat
 from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
+from ..utils import cached_cumsum
 
 colon = slice(None, None, None)
 
@@ -273,7 +274,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
-    shape = tuple(map(sum, blockdims))
+    shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
@@ -381,7 +382,7 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
-    chunk_boundaries = np.cumsum(lengths, dtype=np.int64)
+    chunk_boundaries = cached_cumsum(lengths)
 
     if isinstance(index, Integral):
         # use right-side search to be consistent with previous result
