@@ -2988,6 +2988,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     metas = [meta_from_array(m, getattr(m, 'ndim', 1)) for m in metas]
     meta = np.concatenate(metas)
 
+    # Promote types to match meta
+    seq = [a.astype(meta.dtype) for a in seq]
+
     # Drop empty arrays
     seq = [a for a in seq if a.size]
 
