@@ -3011,6 +3011,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     metas = [meta_from_array(m, getattr(m, 'ndim', 1)) for m in metas]
     meta = np.concatenate(metas)
 
+    seq = [a.astype(meta.dtype) for a in seq]
+
     uc_args = list(concat(zip(seq, inds)))
     _, seq = unify_chunks(*uc_args, warn=False)
 
@@ -3020,11 +3022,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
               seq[0].chunks[axis + 1:])
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
-
-    seq_dtypes = [a.dtype for a in seq]
-    if len(set(seq_dtypes)) > 1:
-        dt = reduce(np.promote_types, seq_dtypes)
-        seq = [x.astype(dt) for x in seq]
 
     names = [a.name for a in seq]
 
