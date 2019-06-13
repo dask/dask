@@ -739,6 +739,7 @@ def test_timestamp_index(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
+    import pdb; pdb.set_trace()
     assert_eq(ddf, ddf2)
 
 
@@ -993,7 +994,7 @@ def test_columns_name(tmp_path, engine):
     ddf = dd.from_pandas(df, 2)
 
     ddf.to_parquet(tmp_path, engine=engine)
-    result = dd.read_parquet(tmp_path, engine=engine)
+    result = dd.read_parquet(tmp_path, engine=engine, index=['idx'])
     assert_eq(result, df)
 
 
