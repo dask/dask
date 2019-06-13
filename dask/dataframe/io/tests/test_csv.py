@@ -1276,6 +1276,7 @@ def test_to_csv_header(header, header_first_partition_only, expected_first, expe
             assert line == expected_next
         os.remove(filename)
 
+
 def test_to_csv_line_ending():
     df = pd.DataFrame({'x': [0]})
     ddf = dd.from_pandas(df, npartitions=1)
