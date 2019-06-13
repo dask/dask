@@ -17,8 +17,7 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
 try:
-    #import fastparquet
-    fastparquet = False
+    import fastparquet
 except ImportError:
     fastparquet = False
 
@@ -1389,5 +1388,5 @@ def test_datasets_timeseries(tmp_path):
     df.to_parquet(tmp_path)
 
     df2 = dd.read_parquet(tmp_path)
-
+    # Fails. Need compute to translate int to timestamp
     assert_eq(df, df2)
