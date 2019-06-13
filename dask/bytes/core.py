@@ -162,15 +162,18 @@ class OpenFile(object):
         The encoding to use if opened in text mode.
     errors : str or None, optional
         How to handle encoding errors if opened in text mode.
+    newline : None, '', '\n', '\r', or '\r\n'.
+        Passed to TextIOWrapper in text mode
     """
     def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
-                 errors=None):
+                 errors=None, newline=None):
         self.fs = fs
         self.path = path
         self.mode = mode
         self.compression = get_compression(path, compression)
         self.encoding = encoding
         self.errors = errors
+        self.newline = newline
         self.fobjects = []
 
     def __reduce__(self):
@@ -191,7 +194,7 @@ class OpenFile(object):
 
         if 't' in self.mode:
             f = io.TextIOWrapper(f, encoding=self.encoding,
-                                 errors=self.errors)
+                                 errors=self.errors, newline=self.newline)
             fobjects.append(f)
 
         self.fobjects = fobjects
@@ -208,7 +211,8 @@ class OpenFile(object):
 
 
 def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
-               errors=None, name_function=None, num=1, **kwargs):
+               errors=None, name_function=None, num=1, newline=None,
+               **kwargs):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
     Parameters
@@ -232,6 +236,8 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     num : int [1]
         if writing mode, number of files we expect to create (passed to
         name+function)
+    newline : None, '', '\n', '\r', or '\r\n'.
+        Passed to TextIOWrapper in text mode
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -250,7 +256,7 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
                                              storage_options=kwargs)
 
     return [OpenFile(fs, path, mode=mode, compression=compression,
-                     encoding=encoding, errors=errors)
+                     encoding=encoding, errors=errors, newline=newline)
             for path in paths]
 
 
