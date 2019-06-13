@@ -232,6 +232,7 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.cov
    DataFrameGroupBy.first
    DataFrameGroupBy.last
 
