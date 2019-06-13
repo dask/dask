@@ -1058,12 +1058,11 @@ class _HashIdWrapper(object):
     def __hash__(self):
         return id(self.wrapped)
 
-    def __array__(self):
-        return np.array(self.wrapped)
-
 
 @functools.lru_cache()
 def _cumsum(seq):
+    if isinstance(seq, _HashIdWrapper):
+        return _cumsum(seq.wrapped)
     seq = np.array(seq)
     dtype = np.int64 if np.issubdtype(seq.dtype, np.integer) else seq.dtype
     out = np.empty(len(seq) + 1, dtype)
@@ -1090,10 +1089,12 @@ def cached_cumsum(seq, initial_zero=False):
         If true, the return value is prefixed with a zero.
     """
     if isinstance(seq, tuple):
+        # Look up by identity first, to avoid a linear-time __hash__
+        # if we've seen this tuple object before.
         result = _cumsum(_HashIdWrapper(seq))
     else:
-        # If it's not a tuple, it's probably mutable. Bypass the cache.
-        result = _cumsum.__wrapped__(seq)
+        # Construct a temporary tuple, and look up by value.
+        result = _cumsum(tuple(seq))
 
     if not initial_zero:
         result = result[1:]
