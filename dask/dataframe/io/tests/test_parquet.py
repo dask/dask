@@ -1006,12 +1006,11 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
 
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10,
                        'y': [1, 2, 3] * 10})
+    df.index.name = 'index'
     ddf = dd.from_pandas(df, npartitions=3)
 
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
-    out.index.name = None
-
     assert_eq(out, ddf)
 
 
@@ -1333,13 +1332,13 @@ def test_append_cat_fp(tmpdir):
 
 def test_passing_parquetfile(tmpdir):
     import shutil
-    fp = pytest.importorskip('fastparquet')
+    check_fastparquet()
     path = str(tmpdir)
     df = pd.DataFrame({"x": [1, 3, 2, 4]})
     ddf = dd.from_pandas(df, npartitions=1)
 
     dd.to_parquet(ddf, path)
-    pf = fp.ParquetFile(path)
+    pf = fastparquet.ParquetFile(path)
     shutil.rmtree(path)
 
     # should pass, because no need to re-read metadata
@@ -1388,5 +1387,5 @@ def test_datasets_timeseries(tmp_path):
     df.to_parquet(tmp_path)
 
     df2 = dd.read_parquet(tmp_path)
-    # Fails. Need compute to translate int to timestamp
+    # Need compute to get correct timestamp here
     assert_eq(df, df2)
