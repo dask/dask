@@ -2437,6 +2437,30 @@ def test_corr():
     pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
+    # Series with same names (see https://github.com/dask/dask/issues/4906)
+    a = df.A
+    b = df.B.rename('A')
+    da = dd.from_pandas(a, npartitions=6)
+    db = dd.from_pandas(b, npartitions=7)
+
+    res = da.corr(db)
+    res2 = da.corr(db, split_every=2)
+    res3 = da.corr(db, min_periods=10)
+    res4 = da.corr(db, min_periods=10, split_every=2)
+    sol = da.corr(db)
+    sol2 = da.corr(db, min_periods=10)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert_eq(res3, sol2)
+    assert_eq(res4, sol2)
+    assert res._name == da.corr(db)._name
+    assert res._name != res2._name
+    assert res3._name != res4._name
+    assert res._name != res3._name
+
+    pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
+    pytest.raises(TypeError, lambda: da.corr(ddf))
+
 
 def test_cov_corr_meta():
     df = pd.DataFrame({'a': np.array([1, 2, 3]),
