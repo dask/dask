@@ -2981,12 +2981,26 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     seq = [asarray(a) for a in seq]
 
-    n = len(seq)
-
-    if n == 0:
+    if not seq:
         raise ValueError("Need array(s) to concatenate")
 
+    from .utils import meta_from_array
+    metas = [s._meta for s in seq]
+    metas = [meta_from_array(m, m.ndim) for m in metas]
+    meta = np.concatenate(metas)
+
+    # Promote types to match meta
+    seq = [a.astype(meta.dtype) for a in seq]
+
+    # Find output array shape
     ndim = len(seq[0].shape)
+    shape = tuple(
+        sum((a.shape[i] for a in seq)) if i == axis else seq[0].shape[i]
+        for i in range(ndim)
+    )
+
+    # Drop empty arrays
+    seq = [a for a in seq if a.size]
 
     if axis < 0:
         axis = ndim + axis
@@ -2995,7 +3009,10 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
 
-    if n == 1:
+    n = len(seq)
+    if n == 0:
+        return from_array(np.empty(shape=shape, dtype=meta.dtype))
+    elif n == 1:
         return seq[0]
 
     if (not allow_unknown_chunksizes and
@@ -3011,13 +3028,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     inds = [list(range(ndim)) for i in range(n)]
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
-
-    from .utils import meta_from_array
-    metas = [getattr(s, '_meta', s) for s in seq]
-    metas = [meta_from_array(m, getattr(m, 'ndim', 1)) for m in metas]
-    meta = np.concatenate(metas)
-
-    seq = [a.astype(meta.dtype) for a in seq]
 
     uc_args = list(concat(zip(seq, inds)))
     _, seq = unify_chunks(*uc_args, warn=False)
