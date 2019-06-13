@@ -188,7 +188,7 @@ def read_parquet(
             columns = [columns]
 
         if sanitize_cols:
-            columns = [ col for col in columns if col not in index]
+            columns = [col for col in columns if col not in index]
         if set(index).intersection(columns):
             raise ValueError("Specified index and column names must not "
                              "intersect")
@@ -211,7 +211,6 @@ def read_parquet(
         )
         for i, part in enumerate(parts)
     }
-
     if index:
         meta = meta.set_index(index)
 

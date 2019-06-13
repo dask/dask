@@ -39,7 +39,11 @@ class ArrowEngine(Engine):
         # We would like to resolve these to the correct dataframe names
         # as soon as possible.
 
-        dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
+        dataset = pq.ParquetDataset(
+            paths,
+            filesystem=get_pyarrow_filesystem(fs),
+            open_file_func=lambda fn: pq.ParquetFile(fs.open(fn, mode="rb"))
+        )
 
         if dataset.partitions is not None:
             partitions = [
