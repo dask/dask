@@ -12,7 +12,7 @@ from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
                         extra_titles, asciitable, itemgetter, partial_by_order,
                         has_keyword, derived_from, parse_timedelta,
-                        parse_bytes, cached_cumsum)
+                        parse_bytes)
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
 
@@ -482,30 +482,3 @@ def test_parse_timedelta():
     assert parse_timedelta("1", default="seconds") == 1
     assert parse_timedelta("1", default="ms") == 0.001
     assert parse_timedelta(1, default="ms") == 0.001
-
-
-def test_cached_cumsum():
-    a = (1, 2, 3, 4)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_array_equal(x, [1, 3, 6, 10])
-    assert x.dtype == np.int64
-    np.testing.assert_array_equal(y, [0, 1, 3, 6, 10])
-    assert y.dtype == np.int64
-
-
-def test_cached_cumsum_nan():
-    a = (1, np.nan, 3)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_array_equal(x, [1, np.nan, np.nan])
-    assert x.dtype == np.float64
-    np.testing.assert_array_equal(y, [0, 1, np.nan, np.nan])
-    assert y.dtype == np.float64
-
-
-def test_cached_cumsum_non_tuple():
-    a = [1, 2, 3]
-    np.testing.assert_array_equal(cached_cumsum(a), [1, 3, 6])
-    a[1] = 4
-    np.testing.assert_array_equal(cached_cumsum(a), [1, 5, 8])
