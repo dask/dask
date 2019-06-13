@@ -2434,9 +2434,6 @@ def test_corr():
     assert res3._name != res4._name
     assert res._name != res3._name
 
-    pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
-    pytest.raises(TypeError, lambda: da.corr(ddf))
-
     # Series with same names (see https://github.com/dask/dask/issues/4906)
     a = df.A
     b = df.B.rename('A')
