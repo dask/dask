@@ -427,6 +427,28 @@ def test_concatenate_fixlen_strings():
               da.concatenate([a, b]))
 
 
+def test_concatenate_zero_size():
+
+    x = np.random.random(10)
+    y = da.from_array(x, chunks=3)
+    result_np = np.concatenate([x, x[:0]])
+    result_da = da.concatenate([y, y[:0]])
+    assert_eq(result_np, result_da)
+    assert result_da is y
+
+    # dtype of a size 0 arrays can affect the output dtype
+    result_np = np.concatenate([np.zeros(0, dtype=float), np.zeros(1, dtype=int)])
+    result_da = da.concatenate([da.zeros(0, dtype=float), da.zeros(1, dtype=int)])
+
+    assert_eq(result_np, result_da)
+
+    # All empty arrays case
+    result_np = np.concatenate([np.zeros(0), np.zeros(0)])
+    result_da = da.concatenate([da.zeros(0), da.zeros(0)])
+
+    assert_eq(result_np, result_da)
+
+
 def test_block_simple_row_wise():
     a1 = np.ones((2, 2))
     a2 = 2 * a1
