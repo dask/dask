@@ -2435,6 +2435,23 @@ def test_corr():
     assert res._name != res3._name
 
     # Series with same names (see https://github.com/dask/dask/issues/4906)
+
+    a0 = df.A
+    b0 = df.B
+    a1 = df.A
+    b1 = df.B.rename('A')
+
+    da0 = dd.from_pandas(a0, npartitions=6)
+    db0 = dd.from_pandas(b0, npartitions=7)
+
+    da1 = dd.from_pandas(a1, npartitions=6)
+    db1 = dd.from_pandas(b1, npartitions=7)
+
+    res0 = da0.corr(db0, split_every=2)
+    res1 = da1.corr(db1, split_every=2)
+
+    assert_eq(res0, res1)
+
     a = df.A
     b = df.B.rename('A')
     da = dd.from_pandas(a, npartitions=6)
