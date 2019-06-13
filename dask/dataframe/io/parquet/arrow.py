@@ -30,7 +30,7 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def read_metadata(
-        fs, fs_token, paths, categories=None, index=None, gather_statistics=None
+        fs, paths, categories=None, index=None, gather_statistics=None
     ):
 
         # In pyarrow, the physical storage field names may differ from
@@ -79,6 +79,9 @@ class ArrowEngine(Engine):
 
         meta = _meta_from_dtypes(all_columns, dtypes)
         meta = clear_known_categories(meta, cols=categories)
+
+        if gather_statistics is None and dataset.metadata:
+            gather_statistics = True
 
         if gather_statistics and pieces:
             # Read from _metadata file
@@ -144,7 +147,7 @@ class ArrowEngine(Engine):
         )
 
     @staticmethod
-    def write(df, fs, fs_token, path, append=False, partition_on=None, **kwargs):
+    def write(df, fs, path, append=False, partition_on=None, **kwargs):
         if append:
             try:
                 dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
