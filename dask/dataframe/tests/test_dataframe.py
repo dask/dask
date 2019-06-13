@@ -3269,15 +3269,20 @@ def test_to_datetime():
     df = pd.DataFrame({'year': [2015, 2016],
                        'month': [2, 3],
                        'day': [4, 5]})
+    df.index.name = 'ix'
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
 
     s = pd.Series(['3/11/2000', '3/12/2000', '3/13/2000'] * 100)
-    ds = dd.from_pandas(s, npartitions=10)
+    s.index = s.values
+    ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     assert_eq(pd.to_datetime(s, infer_datetime_format=True),
               dd.to_datetime(ds, infer_datetime_format=True))
+    assert_eq(pd.to_datetime(s.index, infer_datetime_format=True),
+              dd.to_datetime(ds.index, infer_datetime_format=True),
+              check_divisions=False)
 
 
 def test_to_timedelta():

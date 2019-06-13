@@ -350,6 +350,42 @@ def test_concat_different_dtypes(join):
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+@pytest.mark.parametrize('on_index', [True, False])
+def test_merge_columns_dtypes(how, on_index):
+    # tests results of merges with merge columns having different dtypes;
+    # asserts that either the merge was successful or the corresponding warning is raised
+    # addresses issue #4574
+
+    df1 = pd.DataFrame({"A": list(np.arange(5).astype(float)) * 2,
+                        "B": list(np.arange(5)) * 2})
+    df2 = pd.DataFrame({"A": np.arange(5), "B": np.arange(5)})
+
+    a = dd.from_pandas(df1, 2)  # merge column "A" is float
+    b = dd.from_pandas(df2, 2)  # merge column "A" is int
+
+    on = ["A"]
+    left_index = right_index = on_index
+
+    if on_index:
+        a = a.set_index("A")
+        b = b.set_index("A")
+        on = None
+
+    with pytest.warns(None) as record:
+        result = dd.merge(a, b, on=on, how=how,
+                          left_index=left_index, right_index=right_index)
+
+    warned = any('merge column data type mismatches' in str(r) for r in record)
+
+    # result type depends on merge operation -> convert to pandas
+    result = result if isinstance(result, pd.DataFrame) else result.compute()
+
+    has_nans = result.isna().values.any()
+
+    assert (has_nans and warned) or not has_nans
+
+
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_merge(how, shuffle):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
