@@ -547,8 +547,7 @@ def test_frame_series_arithmetic_methods():
             assert_eq(l.truediv(r, fill_value=0), el.truediv(er, fill_value=0))
             assert_eq(l.floordiv(r, fill_value=1), el.floordiv(er, fill_value=1))
             assert_eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0))
-
-        assert_eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0))
+            assert_eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0))
 
         assert_eq(l.radd(r, fill_value=0), el.radd(er, fill_value=0))
         assert_eq(l.rsub(r, fill_value=0), el.rsub(er, fill_value=0))
@@ -561,8 +560,7 @@ def test_frame_series_arithmetic_methods():
             assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
             assert_eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
             assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
-
-        assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
+            assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
 
     for l, r, el, er in [(ddf1, ds2, pdf1, ps2), (ddf1, ddf2.X, pdf1, pdf2.X)]:
         assert_eq(l, el)

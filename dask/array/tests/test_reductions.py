@@ -82,7 +82,8 @@ def test_reductions_1D(dtype):
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
                       split_every=True):
-    with warnings.catch_warnings(record=True):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # overflow
         assert_eq(da_func(darr), np_func(narr))
         assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
         assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
