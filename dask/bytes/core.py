@@ -162,7 +162,7 @@ class OpenFile(object):
         The encoding to use if opened in text mode.
     errors : str or None, optional
         How to handle encoding errors if opened in text mode.
-    newline : None, '', '\n', '\r', or '\r\n'.
+    newline : {None, '', '\n', '\r', '\r\n'}
         Passed to TextIOWrapper in text mode
     """
     def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
@@ -236,7 +236,7 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     num : int [1]
         if writing mode, number of files we expect to create (passed to
         name+function)
-    newline : None, '', '\n', '\r', or '\r\n'.
+    newline : {None, '', '\n', '\r', '\r\n'}
         Passed to TextIOWrapper in text mode
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
