@@ -446,6 +446,7 @@ def test_categorical(tmpdir, write_engine, read_engine):
 
 def test_append(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
+    check_fastparquet()
     tmp = str(tmpdir)
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
@@ -466,6 +467,7 @@ def test_append(tmpdir, engine):
 
 def test_append_create(tmp_path, engine):
     """Test that appended parquet equal to the original one."""
+    check_fastparquet()
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
                        'f': np.arange(1000, dtype=np.float64),
@@ -484,6 +486,7 @@ def test_append_create(tmp_path, engine):
 
 
 def test_append_with_partition(tmpdir, engine):
+    check_fastparquet()
     tmp = str(tmpdir)
     df0 = pd.DataFrame({'lat': np.arange(0, 10), 'lon': np.arange(10, 20),
                         'value': np.arange(100, 110)})
@@ -1314,6 +1317,7 @@ def test_informative_error_messages():
 
 def test_append_cat_fp(tmpdir):
     pytest.importorskip('fastparquet')
+    check_fastparquet()
     path = str(tmpdir)
     # https://github.com/dask/dask/issues/4120
     df = pd.DataFrame({"x": ["a", "a", "b", "a", "b"]})
