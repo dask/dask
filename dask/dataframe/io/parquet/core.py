@@ -27,8 +27,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    gather_statistics=True,
-    infer_divisions=False,
+    gather_statistics=None,
 ):
     """
     Read ParquetFile into a Dask DataFrame
@@ -72,13 +71,11 @@ def read_parquet(
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet reader library to use. If only one library is installed, it
         will use that one; if both, it will use 'fastparquet'
-    infer_divisions : bool or None (default).
-        By default, divisions are inferred if the read `engine` supports
-        doing so efficiently and the `index` of the underlying dataset is
-        sorted across the individual parquet files. Set to ``True`` to
-        force divisions to be inferred in all cases. Note that this may
-        require reading metadata from each file in the dataset, which may
-        be expensive. Set to ``False`` to never infer divisions.
+    gather_statistics : bool or None (default).
+        Gather the statistics for each dataset partition. By default,
+        this will only be done if the _metadata file is available. Otherwise,
+        statistics will only be gathered if True, because the footer of
+        every file will be parsed (which is very slow on some systems).
 
     Examples
     --------
@@ -118,7 +115,7 @@ def read_parquet(
     if isinstance(engine, str):
         engine = get_engine(engine)
 
-    fs, fs_token, paths = get_fs_token_paths(
+    fs, _, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
 
@@ -126,14 +123,17 @@ def read_parquet(
 
     meta, statistics, parts = engine.read_metadata(
         fs,
-        fs_token,
         paths,
         categories=categories,
         index=index,
         gather_statistics=gather_statistics,
     )
 
+    sanitize_cols = False
     if columns is None:
+        # User didn't specify columns, so remove intersection with
+        # user-specified index values (if necessary)
+        sanitize_cols = True 
         columns = meta.columns
 
     if not set(columns).issubset(set(meta.columns)):
@@ -181,8 +181,20 @@ def read_parquet(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    if index and index not in columns:
-        columns = list(columns) + [index]
+    if index:
+        if isinstance(index, str):
+            index = [index]
+        if isinstance(columns, str):
+            columns = [columns]
+
+        if sanitize_cols:
+            columns = [ col for col in columns if col not in index]
+        if set(index).intersection(columns):
+            raise ValueError("Specified index and column names must not "
+                             "intersect")
+        for ind in index:
+            if ind not in columns:
+                columns = columns + [ind]
 
     meta = meta[list(columns)]
 
@@ -199,6 +211,7 @@ def read_parquet(
         )
         for i, part in enumerate(parts)
     }
+
     if index:
         meta = meta.set_index(index)
 
@@ -250,8 +263,7 @@ def to_parquet(
         default is ``"default"``, which uses the default compression for
         whichever engine is selected.
     write_index : boolean, optional
-        Whether or not to write the index. Defaults to True *if* divisions are
-        known.
+        Whether or not to write the index. Defaults to True.
     append : bool, optional
         If False (default), construct data-set from scratch. If True, add new
         row-group(s) to an existing data-set. In the latter case, the data-set
@@ -302,13 +314,16 @@ def to_parquet(
     if isinstance(engine, str):
         engine = get_engine(engine)
 
-    fs, fs_token, _ = get_fs_token_paths(
+    fs, _, _ = get_fs_token_paths(
         path, mode="wb", storage_options=storage_options
     )
     # Trim any protocol information from the path before forwarding
     # ideally, this should be done as a method of the file-system
     path = infer_storage_options(path)["path"]
 
+    # By default, for simplicity, we are preserving the index as a column.
+    # Any read operation will need to specify the index name to get the same
+    # dataframe back (for a round trip)
     if write_index:
         df = df.reset_index()
 

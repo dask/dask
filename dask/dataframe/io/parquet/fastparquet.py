@@ -81,7 +81,7 @@ class FastParquetEngine(Engine):
 
     @staticmethod
     def read_metadata(
-        fs, fs_token, paths, categories=None, index=None, gather_statistics=None
+        fs, paths, categories=None, index=None, gather_statistics=None
     ):
         """
 

@@ -112,6 +112,7 @@ def test_local(tmpdir, write_engine, read_engine):
 
     files = os.listdir(tmp)
     assert '_common_metadata' in files
+    assert '_metadata' in files
     assert 'part.0.parquet' in files
 
     df2 = dd.read_parquet(tmp, index=False, engine=read_engine)
@@ -134,7 +135,10 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine)
-    read_df = dd.read_parquet(fn, engine=read_engine)
+    if index:
+        read_df = dd.read_parquet(fn, index='a', engine=read_engine)
+    else:
+        read_df = dd.read_parquet(fn, engine=read_engine)
     assert_eq(ddf, read_df)
 
 
@@ -175,17 +179,16 @@ def test_read_list(tmpdir, write_engine, read_engine):
     assert_eq(ddf, ddf2)
 
 
-@write_read_engines_xfail
-def test_columns_index(tmpdir, write_engine, read_engine):
+@pytest.mark.xfail
+@write_read_engines()
+def test_columns_auto_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
 
-    # With Index
-    # ----------
+    # XFAIL, auto index selection not longer supported (for simplicity)
     # ### Emtpy columns ###
     # With divisions if supported
-    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, index='myindex'),
-              ddf[[]])
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine), ddf[[]])
 
     # No divisions
     assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, gather_statistics=False),
@@ -199,6 +202,23 @@ def test_columns_index(tmpdir, write_engine, read_engine):
     # No divisions
     assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine, gather_statistics=False),
               ddf[['x']].clear_divisions(), check_divisions=True)
+
+
+@write_read_engines_xfail
+def test_columns_index(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    ddf.to_parquet(fn, engine=write_engine)
+
+    # With Index
+    # ----------
+    # ### Emtpy columns, specify index ###
+    # With divisions if supported
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, index='myindex'),
+              ddf[[]])
+
+    # No divisions
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, index='myindex',
+              gather_statistics=False), ddf[[]].clear_divisions(), check_divisions=True)
 
     # ### Single column, specify index ###
     # With divisions if supported
@@ -278,13 +298,13 @@ def test_columns_index_with_multi_index(tmpdir, engine):
             ddf = dd.read_parquet(fn, engine=engine)
     else:
         import pyarrow as pa
-        pq.write_table(pa.Table.from_pandas(df), fn)
+        pq.write_table(pa.Table.from_pandas(df.reset_index(), preserve_index=False), fn)
 
         # Pyarrow supports multi-index reads
-        ddf = dd.read_parquet(fn, engine=engine)
+        ddf = dd.read_parquet(fn, engine=engine, index=index.names)
         assert_eq(ddf, df)
 
-        d = dd.read_parquet(fn, columns='a', engine=engine)
+        d = dd.read_parquet(fn, columns='a', engine=engine, index=index.names)
         assert_eq(d, df['a'])
 
         d = dd.read_parquet(fn, index=['a', 'b'], columns=['x0', 'x1'], engine=engine)
@@ -294,14 +314,14 @@ def test_columns_index_with_multi_index(tmpdir, engine):
     d = dd.read_parquet(fn, index=False, engine=engine)
     assert_eq(d, df2)
 
-    d = dd.read_parquet(fn, index=['a'], engine=engine)
+    d = dd.read_parquet(fn, columns=['b'], index=['a'], engine=engine)
     assert_eq(d, df2.set_index('a')[['b']])
 
-    d = dd.read_parquet(fn, index=['x0'], engine=engine)
+    d = dd.read_parquet(fn, columns=['a', 'b'], index=['x0'], engine=engine)
     assert_eq(d, df2.set_index('x0')[['a', 'b']])
 
     # Just columns
-    d = dd.read_parquet(fn, columns=['x0', 'a'], engine=engine)
+    d = dd.read_parquet(fn, columns=['x0', 'a'], index=['x1'], engine=engine)
     assert_eq(d, df2.set_index('x1')[['x0', 'a']])
 
     # Both index and columns
@@ -318,11 +338,12 @@ def test_columns_index_with_multi_index(tmpdir, engine):
             d = dd.read_parquet(fn, index=index, columns=['x0', 'a'], engine=engine)
 
     # Series output
-    for ind, col, sol_df in [(None, 'x0', df2.set_index('x1')),
+    for ind, col, sol_df in [('x1', 'x0', df2.set_index('x1')),
                              (False, 'b', df2),
-                             (False, 'x0', df2),
-                             ('a', 'x0', df2.set_index('a')),
-                             ('a', 'b', df2.set_index('a'))]:
+                             (False, 'x0', df2[['x0']]),
+                             ('a', 'x0', df2.set_index('a')[['x0']]),
+                             ('a', 'b', df2.set_index('a'))
+                             ]:
         d = dd.read_parquet(fn, index=ind, columns=col, engine=engine)
         assert_eq(d, sol_df[col])
 
