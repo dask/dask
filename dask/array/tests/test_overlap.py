@@ -219,6 +219,12 @@ def test_overlap():
     assert g.chunks == ((8, 8), (5, 5))
 
 
+def test_overlap_boundary_exception():
+    x = da.arange(10, chunks=5)
+    with pytest.raises(NotImplementedError):
+        assert x.map_overlap(lambda x: x + len(x), depth={0: (0, 2), 1:(0, 1)}, dtype=x.dtype)
+
+
 def test_map_overlap():
     x = da.arange(10, chunks=5)
     y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x.dtype)
@@ -236,9 +242,16 @@ def test_map_overlap():
                          boundary={0: 'reflect', 1: 'none'}, dtype=d.dtype)
     exp3 = d.map_overlap(lambda x: x + x.size, depth={1: 1},
                          boundary={1: 'reflect'}, dtype=d.dtype)
+    exp4 = d.map_overlap(lambda x: x + x.size, depth={1: (1,0)},
+                         boundary={0: 'none', 1: 'none'}, dtype=d.dtype)
     assert_eq(exp1, x + 16)
     assert_eq(exp2, x + 12)
     assert_eq(exp3, x + 8)
+    assert_eq(exp4,
+              np.block([[x[0:2,0:2] + 2,
+                         x[0:2,2:4] + 3],
+                        [x[2:4,0:2] + 2,
+                         x[2:4,2:4] + 3]]))
 
 
 @pytest.mark.parametrize("boundary", [

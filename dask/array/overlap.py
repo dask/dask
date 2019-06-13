@@ -206,47 +206,48 @@ def trim_internal(x, axes, boundary=None):
     olist = []
     for i, bd in enumerate(x.chunks):
         bdy = boundary.get(i, 'none')
+        overlaps = split_depth(axes.get(i,0))
         ilist = []
         for j, d in enumerate(bd):
             if bdy != 'none':
-                d = d - axes.get(i, 0) * 2  #TODO add support for assymmetrical axes
+                d = d - sum(overlaps)
+
             else:
-                d = d - axes.get(i, 0) if j != 0 else d
-                d = d - axes.get(i, 0) if j != len(bd) - 1 else d
+                d = d - overlaps[0] if j != 0 else d
+                d = d - overlaps[1] if j != len(bd) - 1 else d
             ilist.append(d)
         olist.append(tuple(ilist))
-
     chunks = tuple(olist)
 
     return map_blocks(partial(_trim, axes=axes, boundary=boundary),
                       x, chunks=chunks, dtype=x.dtype)
 
 
-def _trim(x, axes, boundary, block_info):  #TODO Add support for assymetrical axes
+def _trim(x, axes, boundary, block_info):  
     """Similar to dask.array.chunk.trim but requires one to specificy the
     boundary condition.
 
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
-    axes = [axes.get(i, 0) for i in range(x.ndim)]
-    axes_back = (-ax if ax else None for ax in axes)
+    axes = [ split_depth(axes.get(i,0)) for i in range(x.ndim)]
+    axes_back = (neg_depth(ax) if sum(ax) else (None, None) for ax in axes)
 
     trim_front = (
         0 if (chunk_location == 0 and
-              boundary.get(i, 'none') == 'none') else ax
+              boundary.get(i, 'none') == 'none') else ax[0]
         for i, (chunk_location, ax) in enumerate(
             zip(block_info[0]['chunk-location'], axes)))
     trim_back = (
         None if (chunk_location == chunks - 1 and
-                 boundary.get(i, 'none') == 'none') else ax
+                 boundary.get(i, 'none') == 'none') else ax[1]
         for i, (chunks, chunk_location, ax) in enumerate(zip(
             block_info[0]['num-chunks'],
             block_info[0]['chunk-location'],
             axes_back)))
-
-    return x[tuple(slice(front, back)
-             for front, back in zip(trim_front, trim_back))]
+    ind = tuple(slice(front, back)
+                for front, back in zip(trim_front, trim_back)) 
+    return x[ind]
 
 
 def periodic(x, axis, depth):
@@ -431,7 +432,11 @@ def overlap(x, depth, boundary):
     # is depth larger than chunk size?
     depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
     for d, c in zip(depth_values, x.chunks):
-        if d > min(c):
+        if isinstance(d,tuple):
+            maxd = max(d)
+        else:
+            maxd = d
+        if maxd > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
                              "smallest chunk size %d. Rechunk your array\n"
                              "with a larger chunk size or a chunk size that\n"
@@ -539,6 +544,11 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
+    for i in range(x.ndim):
+        if isinstance(depth2[i],tuple):
+            if boundary2[i] != 'none':
+                raise NotImplementedError
+
     assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
     assert all(type(c) is int for cc in g.chunks for c in cc)
@@ -563,11 +573,26 @@ def coerce_depth(ndim, depth):
 
 
 def coerce_boundary(ndim, boundary):
+    default = 'reflect'
     if boundary is None:
-        boundary = 'reflect'
+        boundary = default 
     if not isinstance(boundary, (tuple, dict)):
         boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(ndim), boundary))
-
+    if isinstance(boundary,dict):
+        for i in range(ndim):
+            if i not in boundary:
+                boundary.update({i:default})
     return boundary
+
+
+def split_depth(x):
+    if isinstance(x,tuple):
+        return x
+    else:
+        return (x,x)
+
+
+def neg_depth(x):
+    return tuple( -i for i in x)
