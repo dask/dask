@@ -1,21 +1,27 @@
-import dask.array as da
 import numpy as np
 import pytest
 
 from dask.array.utils import meta_from_array
 
-funcs = [np.asarray]
+asarrays = [np.asarray]
+
 try:
     import sparse
-    funcs.append(sparse.COO.from_numpy)
+    asarrays.append(sparse.COO.from_numpy)
+except ImportError:
+    pass
+
+try:
+    import cupy
+    asarrays.append(cupy.asarray)
 except ImportError:
     pass
 
 
-@pytest.mark.parametrize("func", funcs)
-def test_meta_from_array(func):
+@pytest.mark.parametrize("asarray", asarrays)
+def test_meta_from_array(asarray):
     x = np.ones((1, 2, 3), dtype='float32')
-    x = func(x)
+    x = asarray(x)
 
     assert meta_from_array(x).shape == (0, 0, 0)
     assert meta_from_array(x).dtype == 'float32'
