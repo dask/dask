@@ -3885,7 +3885,7 @@ def test_auto_chunks_h5py():
 def test_no_warnings_from_blockwise():
     x = da.ones((15, 15), chunks=(5, 5))
 
-    with warnings.catch_warnings(record=True) as record:
+    with pytest.warns(None) as record:
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
 
     assert not record
