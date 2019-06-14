@@ -139,6 +139,16 @@ def test_tokenize_numpy_memmap():
 
     assert y != z
 
+    #Test two different memmaps into the same numpy file
+    file = open('demo_data', 'wb')
+    file.write(b'ashekwicht')
+    file.close()
+    file = open('demo_data', 'rb')
+    mmap1 = np.memmap(file, dtype=np.uint8, mode='r', offset=0, shape=5)
+    mmap2 = np.memmap(file, dtype=np.uint8, mode='r', offset=5, shape=5)
+    assert(tokenize(mmap1) != tokenize(mmap2))
+    os.remove('demo_data')
+
     with tmpfile('.npy') as fn:
         x = np.random.normal(size=(10, 10))
         np.save(fn, x)
