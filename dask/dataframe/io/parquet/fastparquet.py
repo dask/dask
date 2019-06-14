@@ -186,7 +186,7 @@ class FastParquetEngine(Engine):
 
     @staticmethod
     def initialize_write(df, fs, path, append=False, partition_on=None,
-                        ignore_divisions=False, **kwargs):
+                        ignore_divisions=False, division_info=None, **kwargs):
         if append:
             try:
                 # to append to a dataset without _metadata, need to load

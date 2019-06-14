@@ -226,7 +226,6 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
         df = df.set_index(index)
     return df
 
-
 def to_parquet(
     df,
     path,
@@ -320,13 +319,20 @@ def to_parquet(
     # ideally, this should be done as a method of the file-system
     path = infer_storage_options(path)["path"]
 
+    # Save divisions and corresponding index name
+    # TODO: What if the division are not along the index?
+    division_info = { 'divisions': df.divisions,
+                      'name': df.index.name }
+    if division_info['name'] == None:
+        division_info['name'] = 'index'
+
     # By default, for simplicity, we are preserving the index as a column.
     # Any read operation will need to specify the index name to get the same
     # dataframe back (for a round trip)
     if write_index:
         df = df.reset_index()
 
-    # Do some 
+    # Do some engine-agnostic intialization
     fs.mkdirs(path)
     object_encoding = kwargs.pop("object_encoding", "utf8")
     if object_encoding == "infer" or (
@@ -341,8 +347,10 @@ def to_parquet(
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
     meta, i_offset = engine.initialize_write(df, fs, path, append=append,
-             ignore_divisions=ignore_divisions, partition_on=partition_on)
+             ignore_divisions=ignore_divisions, partition_on=partition_on,
+             division_info=division_info)
 
+    # Use i_offset and df.npartitions to define file-name list
     filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
 
     # write parts

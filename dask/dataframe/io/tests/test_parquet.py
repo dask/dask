@@ -17,7 +17,8 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
 try:
-    import fastparquet
+    #import fastparquet
+    fastparquet = False
 except ImportError:
     fastparquet = False
 
@@ -483,7 +484,6 @@ def test_append_create(tmp_path, engine):
 
 
 def test_append_with_partition(tmpdir, engine):
-    check_fastparquet()
     tmp = str(tmpdir)
     df0 = pd.DataFrame({'lat': np.arange(0, 10), 'lon': np.arange(10, 20),
                         'value': np.arange(100, 110)})
@@ -563,7 +563,6 @@ def test_append_wo_index(tmpdir):
 
 def test_append_overlapping_divisions(tmpdir):
     """Test raising of error when divisions overlapping."""
-    check_fastparquet()
     tmp = str(tmpdir)
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
