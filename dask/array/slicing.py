@@ -5,6 +5,7 @@ import math
 from numbers import Integral, Number
 from operator import getitem, itemgetter
 import warnings
+import functools
 
 import numpy as np
 from toolz import memoize, merge, pluck, concat
@@ -273,7 +274,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
-    shape = tuple(map(sum, blockdims))
+    shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
@@ -381,7 +382,7 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
-    chunk_boundaries = np.cumsum(lengths, dtype=np.int64)
+    chunk_boundaries = cached_cumsum(lengths)
 
     if isinstance(index, Integral):
         # use right-side search to be consistent with previous result
@@ -521,7 +522,7 @@ def slicing_plan(chunks, index):
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
     index = np.asanyarray(index)
-    cum_chunks = np.cumsum(chunks)
+    cum_chunks = cached_cumsum(chunks)
 
     chunk_locations = np.searchsorted(cum_chunks, index, side='right')
     where = np.where(np.diff(chunk_locations))[0] + 1
@@ -1036,3 +1037,65 @@ def slice_with_bool_dask_array(x, index):
 
 def getitem_variadic(x, *index):
     return x[index]
+
+
+class _HashIdWrapper(object):
+    """Hash and compare a wrapped object by identity instead of value"""
+
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __eq__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is other.wrapped
+
+    def __ne__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is not other.wrapped
+
+    def __hash__(self):
+        return id(self.wrapped)
+
+
+@functools.lru_cache()
+def _cumsum(seq):
+    if isinstance(seq, _HashIdWrapper):
+        return _cumsum(seq.wrapped)
+    seq = np.array(seq)
+    dtype = np.int64 if np.issubdtype(seq.dtype, np.integer) else seq.dtype
+    out = np.empty(len(seq) + 1, dtype)
+    out[0] = 0
+    np.cumsum(seq, out=out[1:], dtype=dtype)
+    return out
+
+
+def cached_cumsum(seq, initial_zero=False):
+    """Compute :meth:`np.cumsum` with caching.
+
+    Caching is by the identify of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist.
+
+    The result has type int64 if the sequence contains integers, and
+    otherwise the type of ``np.array(seq)``.
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to cumulatively sum.
+    initial_zero : bool, optional
+        If true, the return value is prefixed with a zero.
+    """
+    if isinstance(seq, tuple):
+        # Look up by identity first, to avoid a linear-time __hash__
+        # if we've seen this tuple object before.
+        result = _cumsum(_HashIdWrapper(seq))
+    else:
+        # Construct a temporary tuple, and look up by value.
+        result = _cumsum(tuple(seq))
+
+    if not initial_zero:
+        result = result[1:]
+    return result
