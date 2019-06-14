@@ -849,7 +849,7 @@ def test_to_parquet_consistent_schema_partition_pyarrow(tmpdir, engine):
     assert np.array_equal(ddf2['partition_column'], df['partition_column'])
 
 
-def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir, engine):
+def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
     check_fastparquet()
     check_pyarrow()
     fn = str(tmpdir.join('dask.pa'))
@@ -862,11 +862,24 @@ def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir, engine):
     df['strings'] = pd.Series(strings)
 
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(fn, engine=engine, partition_on=['partition_column'])
+    schema = pa.schema([
+        ('arrays', pa.list_(pa.int64())),
+        ('strings', pa.list_(pa.string()))
+    ])
+    engine = 'pyarrow'
+    ddf.to_parquet(
+        fn, 
+        engine=engine, 
+        partition_on=['partition_column'],
+        schema=schema)
     ddf2 = dd.read_parquet(fn, engine=engine)
 
-    assert np.array_equal(ddf2['arrays'], arrays)
-    assert np.array_equal(ddf2['strings'], strings)
+    # np.isnan not support for dtype "object"
+    isnan = [str(a) == "nan" for a in arrays]  
+    expected_arrays = np.where(isnan, None, arrays)
+    resulting_arrays = ddf2.compute()['arrays'].values
+    for i in range(resulting_arrays.size):
+        assert np.array_equal(resulting_arrays[i], expected_arrays[i])
     assert np.array_equal(ddf2['partition_column'], df['partition_column'])
 
 

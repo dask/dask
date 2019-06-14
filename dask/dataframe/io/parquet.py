@@ -958,7 +958,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
 
 _pyarrow_write_table_kwargs = {'row_group_size', 'version', 'use_dictionary',
                                'compression', 'use_deprecated_int96_timestamps',
-                               'coerce_timestamps', 'flavor', 'chunk_size'}
+                               'coerce_timestamps', 'flavor', 'chunk_size', 'schema'}
 
 _pyarrow_write_metadata_kwargs = {'version', 'use_deprecated_int96_timestamps',
                                   'coerce_timestamps'}
@@ -1000,7 +1000,11 @@ def _write_partition_pyarrow(df, path, fs, filename, write_index,
                              partition_on, metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
-    t = pa.Table.from_pandas(df, preserve_index=write_index)
+    if 'schema' in kwargs:
+        schema = kwargs.pop('schema')
+        t = pa.Table.from_pandas(df, preserve_index=write_index, schema=schema)
+    else:
+        t = pa.Table.from_pandas(df, preserve_index=write_index)
 
     if partition_on:
         parquet.write_to_dataset(t, path, partition_cols=partition_on,
