@@ -17,7 +17,7 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
 try:
-    import fastparquet
+    fastparquet = False #import fastparquet
 except ImportError:
     fastparquet = False
 
@@ -739,7 +739,6 @@ def test_timestamp_index(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
-    import pdb; pdb.set_trace()
     assert_eq(ddf, ddf2)
 
 

@@ -189,27 +189,17 @@ class ArrowEngine(Engine):
         return delayed(writes)
 
     @staticmethod
-    def create_metadata(df, fs, path, append=False, partition_on=None,
+    def initialize_write(df, fs, path, append=False, partition_on=None,
                         ignore_divisions=False, **kwargs):
-        fs.mkdirs(path)
+        meta = None
+        i_offset = 0
         if ignore_divisions:
             raise NotImplementedError("`ignore_divisions` not implemented"
                                       " for `engine='pyarrow'`")
-        object_encoding = kwargs.pop("object_encoding", "utf8")
-        if object_encoding == "infer" or (
-            isinstance(object_encoding,
-                       dict) and "infer" in object_encoding.values()
-        ):
-            raise ValueError(
-                '"infer" not allowed as object encoding, '
-                "because this required data in memory."
-            )
         if append:
             raise NotImplementedError("`append` not implemented for "
                                       "`engine='pyarrow'`")
-        filenames = ["part.%i.parquet" % (i + 0) for i in
-                     range(df.npartitions)]
-        return None, filenames
+        return meta, i_offset
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):

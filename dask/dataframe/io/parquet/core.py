@@ -326,8 +326,9 @@ def to_parquet(
     if write_index:
         df = df.reset_index()
 
-    # create parquet metadata, includes loading of existing stuff is appending
-    meta, filenames = engine.create_metadata(df, fs, path, append=append,
+    # Engine-specific initialization steps to write the dataset.
+    # Possibly create parquet metadata, and load existing stuff if appending
+    meta, filenames = engine.initialize_write(df, fs, path, append=append,
              ignore_divisions=ignore_divisions, partition_on=partition_on)
 
     # write parts
