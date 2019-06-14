@@ -32,4 +32,5 @@ source activate test-imports
 (test_import "Bag" "toolz partd cloudpickle" "import dask.bag") && \
 (test_import "Array" "toolz numpy" "import dask.array") && \
 (test_import "Dataframe" "numpy pandas toolz partd cloudpickle" "import dask.dataframe") && \
+(test_import "Diagnostics" "bokeh" "import dask.diagnostics") && \
 (test_import "Distributed" "distributed s3fs" "import dask.distributed")
