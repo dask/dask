@@ -17,8 +17,7 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
 try:
-    #import fastparquet
-    fastparquet = False
+    import fastparquet
 except ImportError:
     fastparquet = False
 
