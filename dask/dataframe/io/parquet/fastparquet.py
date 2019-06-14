@@ -185,29 +185,14 @@ class FastParquetEngine(Engine):
         return pf.read_row_group_file(piece, columns, categories)
 
     @staticmethod
-    def create_metadata(df, fs, path, append=False, partition_on=None,
-                        ignore_divisions=False, **kwargs):
-
-        fs.mkdirs(path)
-        sep = fs.sep
-
-        object_encoding = kwargs.pop("object_encoding", "utf8")
-        if object_encoding == "infer" or (
-                isinstance(object_encoding,
-                           dict) and "infer" in object_encoding.values()
-        ):
-            raise ValueError(
-                '"infer" not allowed as object encoding, '
-                "because this required data in memory."
-            )
-
-        divisions = df.divisions
+    def initialize_write(df, fs, path, append=False, partition_on=None,
+                        ignore_divisions=False, division_info=None, **kwargs):
         if append:
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open,
-                                                 sep=sep)
+                                                 sep=fs.sep)
             except (IOError, ValueError):
                 # append for create
                 append = False
@@ -241,11 +226,11 @@ class FastParquetEngine(Engine):
             if not ignore_divisions:
                 minmax = fastparquet.api.sorted_partitioned_columns(pf)
                 old_end = minmax[index_cols[0]]["max"][-1]
-                if divisions[0] < old_end:
+                if df.divisions[0] < old_end:
                     raise ValueError(
                         "Appended divisions overlapping with the previous ones."
                         "\n"
-                        "Previous: {} | New: {}".format(old_end, divisions[0])
+                        "Previous: {} | New: {}".format(old_end, df.divisions[0])
                     )
         else:
             fmd = fastparquet.writer.make_metadata(
@@ -256,9 +241,7 @@ class FastParquetEngine(Engine):
             )
             i_offset = 0
 
-        filenames = ["part.%i.parquet" % (i + i_offset) for i in
-                     range(df.npartitions)]
-        return fmd, filenames
+        return fmd, i_offset
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):

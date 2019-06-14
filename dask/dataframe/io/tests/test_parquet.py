@@ -540,7 +540,6 @@ def test_partition_on_cats_2(tmpdir, engine):
 
 def test_append_wo_index(tmpdir):
     """Test append with write_index=False."""
-    check_fastparquet()
     tmp = str(tmpdir.join('tmp1.parquet'))
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
@@ -566,7 +565,6 @@ def test_append_wo_index(tmpdir):
 
 def test_append_overlapping_divisions(tmpdir):
     """Test raising of error when divisions overlapping."""
-    check_fastparquet()
     tmp = str(tmpdir)
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
@@ -587,7 +585,6 @@ def test_append_overlapping_divisions(tmpdir):
 
 def test_append_different_columns(tmpdir):
     """Test raising of error when non equal columns."""
-    check_fastparquet()
     tmp = str(tmpdir)
     df1 = pd.DataFrame({'i32': np.arange(100, dtype=np.int32)})
     df2 = pd.DataFrame({'i64': np.arange(100, dtype=np.int64)})
@@ -993,7 +990,7 @@ def test_columns_name(tmp_path, engine):
     ddf = dd.from_pandas(df, 2)
 
     ddf.to_parquet(tmp_path, engine=engine)
-    result = dd.read_parquet(tmp_path, engine=engine)
+    result = dd.read_parquet(tmp_path, engine=engine, index=['idx'])
     assert_eq(result, df)
 
 

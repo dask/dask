@@ -78,8 +78,8 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def create_metadata(df, fs, path, append=False, **kwargs):
-        """Create engine-specific metadata instance for this dataset
+    def initialize_write(df, fs, path, append=False, **kwargs):
+        """Perform engine-specific initialization steps for this dataset
 
         Parameters
         ----------

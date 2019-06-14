@@ -189,27 +189,77 @@ class ArrowEngine(Engine):
         return delayed(writes)
 
     @staticmethod
-    def create_metadata(df, fs, path, append=False, partition_on=None,
-                        ignore_divisions=False, **kwargs):
-        fs.mkdirs(path)
-        if ignore_divisions:
-            raise NotImplementedError("`ignore_divisions` not implemented"
-                                      " for `engine='pyarrow'`")
-        object_encoding = kwargs.pop("object_encoding", "utf8")
-        if object_encoding == "infer" or (
-            isinstance(object_encoding,
-                       dict) and "infer" in object_encoding.values()
-        ):
-            raise ValueError(
-                '"infer" not allowed as object encoding, '
-                "because this required data in memory."
-            )
+    def initialize_write(df, fs, path, append=False, partition_on=None,
+                        ignore_divisions=False, division_info=None, **kwargs):
+        dataset = meta = None
+        i_offset = 0
+        if division_info is None:
+            ignore_divisions = True
+        
         if append:
-            raise NotImplementedError("`append` not implemented for "
-                                      "`engine='pyarrow'`")
-        filenames = ["part.%i.parquet" % (i + 0) for i in
-                     range(df.npartitions)]
-        return None, filenames
+            try:
+                # Allow append if there is a dataset.metadata object available
+                # (or maybe if there is pandas metadata available)
+                dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
+                if not dataset.metadata:
+                    raise NotImplementedError("_metadata file needed to `append` "
+                                              "with `engine='pyarrow'`")
+            except (IOError, ValueError, IndexError):
+                append = False
+        if append:
+            names = dataset.metadata.schema.names
+            dtypes = _get_pyarrow_dtypes(dataset.schema.to_arrow_schema(), None)
+            if (set(names) != set(df.columns) - set(partition_on)):
+                # TODO: Handle catagories/partition_on correctly
+                raise ValueError(
+                    "Appended columns not the same.\n"
+                    "Previous: {} | New: {}".format(names,
+                                                    list(df.columns))
+                )
+            elif (pd.Series(dtypes).loc[names] != df[names].dtypes).any():
+                raise ValueError(
+                    "Appended dtypes differ.\n{}".format(
+                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
+                    )
+                )
+            else:
+                df = df[names + partition_on]
+            i_offset = len(dataset.pieces)
+
+            # TODO: Make sure `division_info` meets edge cases
+            if not ignore_divisions:
+                if not set(names).intersection([division_info['name']]):
+                    ignore_divisions = True
+            if not ignore_divisions:
+                old_end = None
+                row_groups = [
+                    dataset.metadata.row_group(i)
+                    for i in range(dataset.metadata.num_row_groups)
+                ]
+                for row_group in row_groups:
+                    for i, name in enumerate(names):
+                        if name != division_info['name']:
+                            continue
+                        column = row_group.column(i)
+                        if column.statistics:
+                            if not old_end:
+                                old_end = column.statistics.max
+                            else:
+                                old_end = max(old_end, column.statistics.max)
+                            break
+                    else:
+                        raise ValueError("Couldn't calculate upper limit"
+                                         " of old visions.")
+
+                divisions = division_info['divisions']
+                if divisions[0] < old_end:
+                    raise ValueError(
+                        "Appended divisions overlapping with the previous ones."
+                        "\n"
+                        "Previous: {} | New: {}".format(old_end, divisions[0])
+                    )
+
+        return meta, i_offset
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
@@ -223,7 +273,7 @@ class ArrowEngine(Engine):
                 pq.write_metadata(parts[0][0]['schema'], fil, **kwargs_meta)
             # Aggregate metadata and write to _metadata file
             _meta = parts[0][0]['meta']
-            for i in range(1, len(parts[0])):
+            for i in range(1, len(parts)):
                 _meta.append_row_groups(parts[i][0]['meta'])
             with fs.open(metadata_path, "wb") as fil:
                 _meta.write_metadata_file(fil)
@@ -240,7 +290,6 @@ class ArrowEngine(Engine):
                 t,
                 path,
                 partition_cols=partition_on,
-                preserve_index=False,
                 filesystem=fs,
                 metadata_collector=md_list,
                 **kwargs
