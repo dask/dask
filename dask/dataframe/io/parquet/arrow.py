@@ -191,14 +191,45 @@ class ArrowEngine(Engine):
     @staticmethod
     def initialize_write(df, fs, path, append=False, partition_on=None,
                         ignore_divisions=False, **kwargs):
-        meta = None
+        dataset = meta = None
         i_offset = 0
+
         if ignore_divisions:
             raise NotImplementedError("`ignore_divisions` not implemented"
                                       " for `engine='pyarrow'`")
+
         if append:
-            raise NotImplementedError("`append` not implemented for "
-                                      "`engine='pyarrow'`")
+            try:
+                # Allow append if there is a dataset.metadata object available
+                # (or maybe if there is pandas metadata available)
+                dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
+                if not dataset.metadata:
+                    raise NotImplementedError("_metadata file needed to `append` "
+                                              "with `engine='pyarrow'`")
+            except (IOError, ValueError, IndexError):
+                append = False
+        if append:
+            names = dataset.metadata.schema.names
+            dtypes = _get_pyarrow_dtypes(dataset.schema.to_arrow_schema(), None)
+            if (set(names) != set(df.columns) - set(partition_on)):
+                # TODO: Handle catagories/partition_on correctly
+                raise ValueError(
+                    "Appended columns not the same.\n"
+                    "Previous: {} | New: {}".format(names,
+                                                    list(df.columns))
+                )
+            elif (pd.Series(dtypes).loc[names] != df[names].dtypes).any():
+                raise ValueError(
+                    "Appended dtypes differ.\n{}".format(
+                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
+                    )
+                )
+            else:
+                df = df[names + partition_on]
+
+            i_offset = len(dataset.pieces)
+
+            # TODO: Deal with overlapping divisions etc...
         return meta, i_offset
 
     @staticmethod

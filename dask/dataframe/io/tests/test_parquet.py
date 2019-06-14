@@ -17,7 +17,7 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
 try:
-    fastparquet = False #import fastparquet
+    import fastparquet
 except ImportError:
     fastparquet = False
 
@@ -445,7 +445,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
 
 def test_append(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
-    check_fastparquet()
     tmp = str(tmpdir)
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
@@ -466,7 +465,6 @@ def test_append(tmpdir, engine):
 
 def test_append_create(tmp_path, engine):
     """Test that appended parquet equal to the original one."""
-    check_fastparquet()
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
                        'f': np.arange(1000, dtype=np.float64),
@@ -540,7 +538,6 @@ def test_partition_on_cats_2(tmpdir, engine):
 
 def test_append_wo_index(tmpdir):
     """Test append with write_index=False."""
-    check_fastparquet()
     tmp = str(tmpdir.join('tmp1.parquet'))
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
@@ -587,7 +584,6 @@ def test_append_overlapping_divisions(tmpdir):
 
 def test_append_different_columns(tmpdir):
     """Test raising of error when non equal columns."""
-    check_fastparquet()
     tmp = str(tmpdir)
     df1 = pd.DataFrame({'i32': np.arange(100, dtype=np.int32)})
     df2 = pd.DataFrame({'i64': np.arange(100, dtype=np.int64)})
