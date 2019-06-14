@@ -28,12 +28,27 @@ def normalize_to_array(x):
         return x
 
 
-def normalize_meta(x, ndim, dtype=None):
+def normalize_meta(x, ndim=None, dtype=None):
+    """ Normalize an array to appropriate meta object
+
+    Parameters
+    ----------
+    x: array-like
+    ndim: int
+    dtype: dtype
+
+    Returns
+    -------
+    array-like
+    """
+    if ndim is None:
+        ndim = x.ndim
     try:
         meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
         if meta.ndim != ndim:
             if ndim > x.ndim:
-                meta = x[(Ellipsis, ) + tuple(None for _ in range(ndim - meta.ndim))]
+                meta = meta[(Ellipsis, ) + tuple(None for _ in range(ndim - meta.ndim))]
+                meta = meta[tuple(slice(0, 0, None) for _ in range(meta.ndim))]
             elif ndim == 0:
                 meta = meta.sum()
             else:
