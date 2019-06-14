@@ -522,7 +522,7 @@ def slicing_plan(chunks, index):
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
     index = np.asanyarray(index)
-    cum_chunks = np.cumsum(chunks)
+    cum_chunks = cached_cumsum(chunks)
 
     chunk_locations = np.searchsorted(cum_chunks, index, side='right')
     where = np.where(np.diff(chunk_locations))[0] + 1

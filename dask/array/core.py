@@ -45,7 +45,7 @@ from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
-from .slicing import slice_array, replace_ellipsis
+from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
 
 config.update_defaults({'array': {
@@ -561,14 +561,14 @@ def map_blocks(func, *args, **kwargs):
                 if drop_axis:
                     # We concatenate along dropped axes, so we need to treat them
                     # as if there is only a single chunk.
-                    starts[i] = [(np.cumsum((0,) + arg.chunks[j])
+                    starts[i] = [(cached_cumsum(arg.chunks[j], initial_zero=True)
                                   if ind in out_ind else np.array([0, arg.shape[j]]))
                                  for j, ind in enumerate(in_ind)]
                     num_chunks[i] = tuple(len(s) - 1 for s in starts[i])
                 else:
-                    starts[i] = [np.cumsum((0,) + c) for c in arg.chunks]
+                    starts[i] = [cached_cumsum(c, initial_zero=True) for c in arg.chunks]
                     num_chunks[i] = arg.numblocks
-        out_starts = [np.cumsum((0,) + c) for c in out.chunks]
+        out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
         for k, v in dsk.items():
             vv = v
