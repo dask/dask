@@ -358,3 +358,4 @@ def copy_legacy_redirects(app, docname):
 
 def setup(app):
     app.connect('build-finished', copy_legacy_redirects)
+    app.add_javascript('custom.js')
