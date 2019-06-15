@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 from itertools import product
 from numbers import Integral
-
+from numpy import isscalar
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
@@ -42,13 +42,12 @@ def fractional_slice(task, axes):
 
         if t == r:
             index.append(slice(None, None, None))
-        elif t < r:
-            index.append(slice(0, left_depth ))
-        elif t > r and ( left_depth + right_depth ) == 0:
-            index.append(slice(0, 0))
+        elif t < r and right_depth:
+            index.append(slice(0, right_depth ))
+        elif t > r and left_depth:
+            index.append(slice(-left_depth, None))
         else:
-            index.append(slice(-right_depth, None))
-
+            index.append(slice(0, 0))
     index = tuple(index)
 
     if all(ind == slice(None, None, None) for ind in index):
@@ -206,15 +205,23 @@ def trim_internal(x, axes, boundary=None):
     olist = []
     for i, bd in enumerate(x.chunks):
         bdy = boundary.get(i, 'none')
-        overlaps = split_depth(axes.get(i,0))
+        overlap = axes.get(i,0)
         ilist = []
         for j, d in enumerate(bd):
             if bdy != 'none':
-                d = d - sum(overlaps)
+                if isinstance(overlap,tuple):
+                    d = d - sum(overlap)
+                else:
+                    d = d - overlap * 2
 
             else:
-                d = d - overlaps[0] if j != 0 else d
-                d = d - overlaps[1] if j != len(bd) - 1 else d
+                if isinstance(overlap,tuple):
+                    d = d - overlap[0] if j != 0 else d
+                    d = d - overlap[1] if j != len(bd) - 1 else d
+                else:
+                    d = d - overlap if j != 0 else d
+                    d = d - overlap if j != len(bd) - 1 else d
+
             ilist.append(d)
         olist.append(tuple(ilist))
     chunks = tuple(olist)
@@ -223,30 +230,35 @@ def trim_internal(x, axes, boundary=None):
                       x, chunks=chunks, dtype=x.dtype)
 
 
-def _trim(x, axes, boundary, block_info):  
+def _trim(x, axes, boundary, block_info):
     """Similar to dask.array.chunk.trim but requires one to specificy the
     boundary condition.
 
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
-    axes = [ split_depth(axes.get(i,0)) for i in range(x.ndim)]
-    axes_back = (neg_depth(ax) if sum(ax) else (None, None) for ax in axes)
+
+    axes = [ axes.get(i,0) for i in range(x.ndim)]
+    axes_front = ( ax[0] if isinstance(ax,tuple)
+                   else ax for ax in axes)
+    axes_back = ( -ax[1] if isinstance(ax,tuple) and ax[1]
+                  else -ax if isscalar(ax) and ax
+                  else None for ax in axes)
 
     trim_front = (
         0 if (chunk_location == 0 and
-              boundary.get(i, 'none') == 'none') else ax[0]
+              boundary.get(i, 'none') == 'none') else ax
         for i, (chunk_location, ax) in enumerate(
-            zip(block_info[0]['chunk-location'], axes)))
+            zip(block_info[0]['chunk-location'], axes_front)))
     trim_back = (
         None if (chunk_location == chunks - 1 and
-                 boundary.get(i, 'none') == 'none') else ax[1]
+                 boundary.get(i, 'none') == 'none') else ax
         for i, (chunks, chunk_location, ax) in enumerate(zip(
             block_info[0]['num-chunks'],
             block_info[0]['chunk-location'],
             axes_back)))
     ind = tuple(slice(front, back)
-                for front, back in zip(trim_front, trim_back)) 
+                for front, back in zip(trim_front, trim_back))
     return x[ind]
 
 
@@ -575,7 +587,7 @@ def coerce_depth(ndim, depth):
 def coerce_boundary(ndim, boundary):
     default = 'reflect'
     if boundary is None:
-        boundary = default 
+        boundary = default
     if not isinstance(boundary, (tuple, dict)):
         boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
@@ -587,12 +599,8 @@ def coerce_boundary(ndim, boundary):
     return boundary
 
 
-def split_depth(x):
-    if isinstance(x,tuple):
-        return x
-    else:
-        return (x,x)
-
-
 def neg_depth(x):
-    return tuple( -i for i in x)
+    if isinstance(x,tuple):
+        return tuple( -i for i in x)
+    else:
+        return -x

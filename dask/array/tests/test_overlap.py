@@ -56,9 +56,9 @@ def test_overlap_internal_asym():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
 
-    g = overlap_internal(d, {0: (0, 2), 1:(0, 1)})
+    g = overlap_internal(d, {0: (2, 0), 1:(1, 0)})
     result = g.compute(scheduler='sync')
-    assert g.chunks == ((4, 6), (4, 5))
+    assert g.chunks == ((6, 4), (5, 4))
 
     expected = np.array([
         [ 0,  1,  2,  3,    3,  4,  5,  6,  7],
@@ -73,7 +73,7 @@ def test_overlap_internal_asym():
         [48, 49, 50, 51,   51, 52, 53, 54, 55],
         [56, 57, 58, 59,   59, 60, 61, 62, 63]])
     assert_eq(result, expected)
-    assert same_keys(overlap_internal(d, {0: (0,2), 1: (0,1)}), g)
+    assert same_keys(overlap_internal(d, {0: (2,0), 1: (1,0)}), g)
 
 
 def test_overlap_internal_asym_small():
@@ -248,10 +248,10 @@ def test_map_overlap():
     assert_eq(exp2, x + 12)
     assert_eq(exp3, x + 8)
     assert_eq(exp4,
-              np.block([[x[0:2,0:2] + 2,
-                         x[0:2,2:4] + 3],
-                        [x[2:4,0:2] + 2,
-                         x[2:4,2:4] + 3]]))
+              np.block([[x[0:2,0:2] + 4,
+                         x[0:2,2:4] + 6],
+                        [x[2:4,0:2] + 4,
+                         x[2:4,2:4] + 6]]))
 
 
 @pytest.mark.parametrize("boundary", [
