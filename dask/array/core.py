@@ -888,8 +888,7 @@ class Array(DaskMethodsMixin):
         if dtype:
             self._meta = np.empty((0,) * self.ndim, dtype=dtype)
         else:
-            from .utils import meta_from_array
-            self._meta = meta_from_array(meta, meta.ndim)
+            self._meta = meta_from_array(meta)
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -2984,8 +2983,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
-    from .utils import meta_from_array
-    meta = np.concatenate([meta_from_array(s, s.ndim) for s in seq])
+    meta = np.concatenate([meta_from_array(s) for s in seq])
 
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
@@ -4167,3 +4165,6 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+
+from .utils import meta_from_array

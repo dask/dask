@@ -28,22 +28,19 @@ def normalize_to_array(x):
         return x
 
 
-def normalize_meta(x, ndim, dtype=None):
-    if ndim > x.ndim:
-        meta = x[(Ellipsis, ) + tuple(None for _ in range(ndim - x.ndim))]
-        meta = meta[tuple(slice(0, 0, None) for _ in range(meta.ndim))]
-    elif ndim < x.ndim:
-        meta = np.sum(x, axis=tuple(d for d in range((x.ndim - ndim))))
-    else:
-        meta = x
+def meta_from_array(x, ndim=None, dtype=None):
+    """ Normalize an array to appropriate meta object
 
-    if dtype:
-        meta = meta.astype(dtype)
+    Parameters
+    ----------
+    x: array-like
+    ndim: int
+    dtype: dtype
 
-    return meta
-
-
-def meta_from_array(x, ndim, dtype=None):
+    Returns
+    -------
+    array-like
+    """
     if isinstance(x, list) or isinstance(x, tuple):
         ndims = [0 if isinstance(a, numbers.Number)
                  else a.ndim if hasattr(a, 'ndim') else len(a) for a in x]
@@ -53,11 +50,28 @@ def meta_from_array(x, ndim, dtype=None):
     # x._meta must be a Dask Array, some libraries (e.g. zarr) implement a
     # _meta attribute that are incompatible with Dask Array._meta
     if hasattr(x, '_meta') and isinstance(x, Array):
-        meta = x._meta
-    else:
-        meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
+        x = x._meta
 
-    return normalize_meta(meta, ndim, dtype)
+    if ndim is None:
+        ndim = x.ndim
+
+    try:
+        meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
+        if meta.ndim != ndim:
+            if ndim > x.ndim:
+                meta = meta[(Ellipsis, ) + tuple(None for _ in range(ndim - meta.ndim))]
+                meta = meta[tuple(slice(0, 0, None) for _ in range(meta.ndim))]
+            elif ndim == 0:
+                meta = meta.sum()
+            else:
+                meta = meta.reshape((0,) * ndim)
+    except Exception:
+        meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
+
+    if dtype and meta.dtype != dtype:
+        meta = meta.astype(dtype)
+
+    return meta
 
 
 def allclose(a, b, equal_nan=False, **kwargs):
