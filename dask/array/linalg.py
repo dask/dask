@@ -798,9 +798,9 @@ def lu(a):
                 # l_permuted is not referred in upper triangulars
 
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
-    pp_meta = meta_from_array(a, a.ndim, dtype=pp.dtype)
-    ll_meta = meta_from_array(a, a.ndim, dtype=ll.dtype)
-    uu_meta = meta_from_array(a, a.ndim, dtype=uu.dtype)
+    pp_meta = meta_from_array(a, dtype=pp.dtype)
+    ll_meta = meta_from_array(a, dtype=ll.dtype)
+    uu_meta = meta_from_array(a, dtype=uu.dtype)
 
     graph = HighLevelGraph.from_collections(name_p, dsk, dependencies=[a])
     p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, meta=pp_meta)
@@ -1048,7 +1048,7 @@ def _cholesky(a):
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
-    meta = meta_from_array(a, a.ndim, dtype=cho.dtype)
+    meta = meta_from_array(a, dtype=cho.dtype)
 
     lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)
     # do not use .T, because part of transposed blocks are already calculated

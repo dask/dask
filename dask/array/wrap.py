@@ -73,7 +73,7 @@ def wrap_func_like(func, *args, **kwargs):
     Transform np creation function into blocked version
     """
     x = args[0]
-    meta = meta_from_array(x, x.ndim)
+    meta = meta_from_array(x)
     shape = kwargs.get('shape', x.shape)
 
     parsed = _parse_wrap_args(func, args, kwargs, shape)
