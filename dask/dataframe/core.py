@@ -2519,7 +2519,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         >>> def myadd(x, a, b=1):
         ...     return x + a + b
-        >>> res = ds.apply(myadd, args=(2,), b=1.5)
+        >>> res = ds.apply(myadd, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -3363,7 +3363,7 @@ class DataFrame(_Frame):
 
         >>> def myadd(row, a, b=1):
         ...     return row.sum() + a + b
-        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)
+        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
