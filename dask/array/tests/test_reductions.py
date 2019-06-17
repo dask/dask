@@ -278,14 +278,24 @@ def test_reductions_2D_nans():
         assert_eq(da.nanargmax(a), np.nanargmax(x))
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a), np.nanargmin(x))
-    assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+
+    with warnings.catch_warnings():
+        # RuntimeWarning: invalid value encountered in reduce
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
+        assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
-    assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
+
+    with warnings.catch_warnings():
+        # RuntimeWarning: invalid value encountered in reduce
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
+        assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
+
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
     with pytest.warns(None):  # all NaN axis warning
