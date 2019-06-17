@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import warnings
 
 import pytest
@@ -342,14 +343,20 @@ def test_nan():
 @pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
                                   'nanmax', 'max'])
 def test_nan_object(func):
-    x = np.array([[1, np.nan, 3, 4],
-                  [5, 6, 7, np.nan],
-                  [9, 10, 11, 12]]).astype(object)
-    d = da.from_array(x, chunks=(2, 2))
+    with warnings.catch_warnings():
+        if os.name == 'nt' and func in {'min', 'max'}:
+            # RuntimeWarning: invalid value encountered in reduce in wrapreduction
+            # from NumPy.
+            warnings.simplefilter('ignore', RuntimeWarning)
 
-    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
-    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
-    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
+        x = np.array([[1, np.nan, 3, 4],
+                      [5, 6, 7, np.nan],
+                      [9, 10, 11, 12]]).astype(object)
+        d = da.from_array(x, chunks=(2, 2))
+
+        assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+        assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+        assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():
