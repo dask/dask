@@ -10,7 +10,7 @@ import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
 from dask.blockwise import (Blockwise, rewrite_blockwise, optimize_blockwise, index_subs, blockwise)
 from dask.array.utils import assert_eq
-from dask.array.numpy_compat import _numpy_114
+from dask.array.numpy_compat import _numpy_116
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
@@ -379,10 +379,10 @@ def test_blockwise_chunks():
 
 def test_blockwise_numpy_arg():
     with warnings.catch_warnings():
-        if not _numpy_114:
+        if not _numpy_116:
             # Not sure why, but this DeprecationWarning is no longer
-            # showing up for NumPy >=1.14. So we only filter here
-            # for 1.13
+            # showing up for NumPy >=1.16. So we only filter here
+            # for 1.15 and earlier
             warnings.simplefilter("ignore", DeprecationWarning)
 
         x = da.arange(10, chunks=(5,))
