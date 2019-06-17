@@ -2437,6 +2437,21 @@ def test_corr():
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
 
+def test_corr_same_name():
+    # Series with same names (see https://github.com/dask/dask/issues/4906)
+
+    df = pd.util.testing.makeMissingDataframe(0.3, 42)
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    result = ddf.A.corr(ddf.B.rename('A'))
+    expected = ddf.A.corr(ddf.B)
+    assert_eq(result, expected)
+
+    # test with split_every
+    result2 = ddf.A.corr(ddf.B.rename('A'), split_every=2)
+    assert_eq(result2, expected)
+
+
 def test_cov_corr_meta():
     df = pd.DataFrame({'a': np.array([1, 2, 3]),
                        'b': np.array([1.0, 2.0, 3.0], dtype='f4'),
