@@ -12,12 +12,10 @@ from ..blockwise import blockwise as core_blockwise
 
 
 def blockwise_meta(func, dtype, *args, **kwargs):
+    from .utils import meta_from_array
     arrays = args[::2]
-    ndims = [a.ndim if hasattr(a, 'ndim') else 0 for a in arrays]
-    args_meta = [arg._meta if hasattr(arg, '_meta') else
-                 arg[tuple(slice(0, 0, None) for _ in range(nd))] if nd > 0 else arg
-                 for arg, nd in zip(arrays, ndims)]
-    kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
+    args_meta = list(map(meta_from_array, arrays))
+    kwargs_meta = {k: meta_from_array(v) for k, v in kwargs.items()}
 
     # TODO: look for alternative to this, causes issues when using map_blocks()
     # with np.vectorize, such as dask.array.routines._isnonzero_vec().

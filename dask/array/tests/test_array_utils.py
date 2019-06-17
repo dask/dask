@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import dask.array as da
 from dask.array.utils import meta_from_array
 
 asarrays = [np.asarray]
@@ -20,6 +21,9 @@ except ImportError:
 
 @pytest.mark.parametrize("asarray", asarrays)
 def test_meta_from_array(asarray):
+    x = np.array(1)
+    assert meta_from_array(x, ndim=1).shape == (0,)
+
     x = np.ones((1, 2, 3), dtype='float32')
     x = asarray(x)
 
@@ -30,3 +34,10 @@ def test_meta_from_array(asarray):
     assert meta_from_array(x, ndim=2).shape == (0, 0)
     assert meta_from_array(x, ndim=4).shape == (0, 0, 0, 0)
     assert meta_from_array(x, dtype="float64").dtype == "float64"
+
+    x = da.ones((1,))
+    assert isinstance(meta_from_array(x), np.ndarray)
+
+    assert meta_from_array(123) == 123
+    assert meta_from_array('foo') == 'foo'
+    assert meta_from_array(np.dtype('float32')) == np.dtype('float32')
