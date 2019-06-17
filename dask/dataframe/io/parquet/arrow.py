@@ -56,13 +56,14 @@ class ArrowEngine(Engine):
 
         if has_pandas_metadata:
             pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
-            index_names, column_names, storage_name_mapping, _ = _parse_pandas_metadata(
+            index_names, column_names, storage_name_mapping, column_index_names = _parse_pandas_metadata(
                 pandas_metadata
             )
         else:
             index_names = []
             column_names = schema.names
             storage_name_mapping = {k: k for k in column_names}
+            column_index_names = [None]
 
         column_names += [p for p in partitions if p not in column_names]
         column_names, index_names = _normalize_index_columns(
@@ -74,7 +75,7 @@ class ArrowEngine(Engine):
         pieces = sorted(dataset.pieces, key=lambda piece: natural_sort_key(piece.path))
 
         # Check that categories are included in columns
-        if not set(categories).intersection(all_columns):
+        if categories and not set(categories).intersection(all_columns):
             raise ValueError(
                 "categories not in available columns.\n"
                 "categories: {} | columns: {}".format(categories,
@@ -84,9 +85,10 @@ class ArrowEngine(Engine):
         dtypes = _get_pyarrow_dtypes(schema, categories)
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-        meta = _meta_from_dtypes(all_columns, dtypes)
-        meta = clear_known_categories(meta, cols=categories)
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols=(),
+                                 column_index_names=column_index_names)
 
+        meta = clear_known_categories(meta, cols=categories)
         if gather_statistics is None and dataset.metadata:
             gather_statistics = True
 
@@ -292,7 +294,7 @@ class ArrowEngine(Engine):
         return_metadata=True, with_metadata=True, **kwargs
     ):
         md_list = []
-        t = pa.Table.from_pandas(df, preserve_index=False)
+        t = pa.Table.from_pandas(df)
         if partition_on:
             pq.write_to_dataset(
                 t,
