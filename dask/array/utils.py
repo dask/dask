@@ -11,6 +11,7 @@ from toolz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
+from ..utils import ignoring
 
 try:
     AxisError = np.AxisError
@@ -85,10 +86,12 @@ def compute_meta(func, dtype, *args, **kwargs):
     # with np.vectorize, such as dask.array.routines._isnonzero_vec().
     if isinstance(func, np.vectorize):
         meta = func(*args_meta)
-        if hasattr(meta, 'dtype'):
-            return meta.astype(dtype)
-        else:
-            return None
+        if dtype:
+            try:
+                meta = meta.astype(dtype)
+            except AttributeError:
+                meta = None
+        return meta
 
     try:
         meta = func(*args_meta, **kwargs_meta)
@@ -101,10 +104,11 @@ def compute_meta(func, dtype, *args, **kwargs):
     except Exception:
         return None
 
-    if hasattr(meta, 'dtype'):
-        meta = meta.astype(dtype)
-    else:
-        return None
+    if dtype:
+        try:
+            meta = meta.astype(dtype)
+        except AttributeError:
+            meta = None
 
     return meta
 
