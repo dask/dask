@@ -607,11 +607,11 @@ def test_frame_series_arithmetic_methods():
                 assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
                 assert_eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
                 assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
+                assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
 
             assert_eq(l.radd(r, axis=axis), el.radd(er, axis=axis))
             assert_eq(l.rsub(r, axis=axis), el.rsub(er, axis=axis))
             assert_eq(l.rmul(r, axis=axis), el.rmul(er, axis=axis))
-            assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
 
 
 @pytest.mark.parametrize('split_every', [False, 2])
