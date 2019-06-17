@@ -956,9 +956,9 @@ def test_compress():
                 axis = axis or 0
                 assert np.isnan(res.shape[axis]).all()
                 assert np.isnan(res.chunks[axis]).all()
-            elif isinstance(dc, np.ndarray):
-                # If condition is a numpy array then we expect the shape of the
-                # compressed axis to be a number, i.e., not nan.
+            else:
+                # If condition is a not a dask array then we expect the shape of the
+                # compressed axis to be known, i.e., not nan.
                 axis = axis or 0
                 assert np.count_nonzero(dc) == res.shape[axis]
                 assert not np.isnan(res.chunks[axis]).any()
