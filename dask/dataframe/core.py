@@ -4348,7 +4348,7 @@ def cov_corr_chunk(df, corr=False):
     counts = np.zeros(shape)
     df = df.astype('float64', copy=False)
     for idx, col in enumerate(df):
-        mask = df[col].notnull()
+        mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
     cov = df.cov().values
@@ -4360,7 +4360,7 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df[x], mu[idx]) ** 2
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
