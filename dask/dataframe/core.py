@@ -2374,6 +2374,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
+        if is_series_like(arg) and is_dask_collection(arg):
+            return series_map(self, arg)
         if not (isinstance(arg, dict) or
                 callable(arg) or
                 is_series_like(arg) and not is_dask_collection(arg)):
@@ -5059,3 +5061,58 @@ def meta_warning(df):
                 "  Before: .apply(func)\n"
                 "  After:  .apply(func, meta=%s)\n" % str(meta_str))
     return msg
+
+
+def mapseries(base_chunk, concat_map):
+    return base_chunk.map(concat_map)
+
+
+def mapseries_combine(index, concat_result):
+    final_series = concat_result.sort_index()
+    final_series.index = index
+    return final_series
+
+
+def series_map(base_series, map_series):
+    npartitions = base_series.npartitions
+    split_out = map_series.npartitions
+
+    dsk = {}
+
+    base_token_key = tokenize(base_series, split_out)
+    base_split_prefix = 'base-split-{}'.format(base_token_key)
+    base_shard_prefix = 'base-shard-{}'.format(base_token_key)
+    for i, key in enumerate(base_series.__dask_keys__()):
+        dsk[(base_split_prefix, i)] = (hash_shard, key, split_out)
+        for j in range(split_out):
+            dsk[(base_shard_prefix, 0, i, j)] = (getitem, (base_split_prefix, i), j)
+
+    map_token_key = tokenize(map_series)
+    map_split_prefix = 'map-split-{}'.format(map_token_key)
+    map_shard_prefix = 'map-shard-{}'.format(map_token_key)
+    for i, key in enumerate(map_series.__dask_keys__()):
+        dsk[(map_split_prefix, i)] = (hash_shard, key, split_out, split_out_on_index, None)
+        for j in range(split_out):
+            dsk[(map_shard_prefix, 0, i, j)] = (getitem, (map_split_prefix, i), j)
+
+    token_key = tokenize(base_series, map_series)
+    map_prefix = 'map-series-{}'.format(token_key)
+    for i in range(npartitions):
+        for j in range(split_out):
+            dsk[(map_prefix, i, j)] = (mapseries,
+                                       (base_shard_prefix, 0, i, j),
+                                       (_concat, [(map_shard_prefix, 0, k, j) for k in range(split_out)]))
+
+    final_prefix = 'map-series-combine-{}'.format(token_key)
+    for i, key in enumerate(base_series.index.__dask_keys__()):
+        dsk[(final_prefix, i)] = (mapseries_combine, key, (_concat, [(map_prefix, i, j) for j in range(split_out)]))
+
+    meta = map_series._meta.copy()
+    meta.index = base_series._meta.index
+    meta = make_meta(meta)
+
+    dependencies = [base_series, map_series, base_series.index]
+    graph = HighLevelGraph.from_collections(final_prefix, dsk, dependencies=dependencies)
+    divisions = list(base_series.divisions)
+
+    return new_dd_object(graph, final_prefix, meta, divisions)
