@@ -5,6 +5,7 @@ from distutils.version import LooseVersion
 import numpy as np
 import warnings
 
+_numpy_114 = LooseVersion(np.__version__) >= "1.14.0"
 _numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 
 
