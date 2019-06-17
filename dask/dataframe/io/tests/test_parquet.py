@@ -703,12 +703,14 @@ def test_categories(tmpdir, engine):
     with pytest.raises(NotImplementedError):
         ddf2.y.cat.categories
     assert set(ddf2.y.compute().cat.categories) == {'a', 'b', 'c'}
-    cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories).compute()
+    cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories.sort_values()).compute()
     assert cats_set.tolist() == ['a', 'c', 'a', 'b']
-    assert_eq(ddf.y, ddf2.y, check_names=False)
-    with pytest.raises(TypeError):
-        # attempt to load as category that which is not so encoded
-        ddf2 = dd.read_parquet(fn, categories=['x'], engine=engine).compute()
+
+    if engine == 'fastparquet':
+        assert_eq(ddf.y, ddf2.y, check_names=False)
+        with pytest.raises(TypeError):
+            # attempt to load as category that which is not so encoded
+            ddf2 = dd.read_parquet(fn, categories=['x'], engine=engine).compute()
 
     with pytest.raises(ValueError):
         # attempt to load as category unknown column
