@@ -1291,9 +1291,12 @@ class Array(DaskMethodsMixin):
                     new_index.append(tuple([Ellipsis if j is not None else
                                             None for j in index2[i]]))
             new_index = tuple(new_index)
-            meta = self._meta[new_index].astype(self.dtype)
         else:
-            meta = self._meta[index2].astype(self.dtype)
+            new_index = index2
+        try:
+            meta = self._meta[new_index].astype(self.dtype)
+        except Exception:
+            meta = self._meta
 
         # Exception for object dtype and ndim == 1, which results in primitive types
         if not (meta.dtype == object and meta.ndim == 1):
@@ -1303,14 +1306,14 @@ class Array(DaskMethodsMixin):
                 try:
                     meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
                 except TypeError:
-                    meta = meta.reshape((0,) * max(len(chunks), 1))
+                    try:
+                        meta = meta.reshape((0,) * max(len(chunks), 1))
+                    except Exception:
+                        meta = meta
 
             # Ensure all dimensions are 0
             if not np.isscalar(meta):
-                meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
-                # If return array is 0-D, ensure _meta is 0-D
-                if len(chunks) == 0:
-                    meta = meta.sum()
+                meta = meta_from_array(meta)
 
         return Array(graph, out, chunks, meta=meta)
 

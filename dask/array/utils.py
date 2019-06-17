@@ -41,16 +41,19 @@ def meta_from_array(x, ndim=None, dtype=None):
     -------
     array-like
     """
+    # x._meta must be a Dask Array, some libraries (e.g. zarr) implement a
+    # _meta attribute that are incompatible with Dask Array._meta
+    if hasattr(x, '_meta') and isinstance(x, Array):
+        x = x._meta
+
+    if not hasattr(x, 'shape') or not hasattr(x, 'dtype'):
+        return x
+
     if isinstance(x, list) or isinstance(x, tuple):
         ndims = [0 if isinstance(a, numbers.Number)
                  else a.ndim if hasattr(a, 'ndim') else len(a) for a in x]
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
         return a if isinstance(x, list) else tuple(x)
-
-    # x._meta must be a Dask Array, some libraries (e.g. zarr) implement a
-    # _meta attribute that are incompatible with Dask Array._meta
-    if hasattr(x, '_meta') and isinstance(x, Array):
-        x = x._meta
 
     if ndim is None:
         ndim = x.ndim
