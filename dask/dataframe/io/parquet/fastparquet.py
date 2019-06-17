@@ -187,6 +187,17 @@ class FastParquetEngine(Engine):
     @staticmethod
     def initialize_write(df, fs, path, append=False, partition_on=None,
                         ignore_divisions=False, division_info=None, **kwargs):
+        fs.mkdirs(path)
+        object_encoding = kwargs.pop("object_encoding", "utf8")
+        if object_encoding == "infer" or (
+            isinstance(object_encoding,
+                        dict) and "infer" in object_encoding.values()
+        ):
+            raise ValueError(
+                '"infer" not allowed as object encoding, '
+                "because this required data in memory."
+            )
+
         if append:
             try:
                 # to append to a dataset without _metadata, need to load

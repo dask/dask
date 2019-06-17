@@ -195,7 +195,8 @@ class ArrowEngine(Engine):
         i_offset = 0
         if division_info is None:
             ignore_divisions = True
-        
+        fs.mkdirs(path)
+
         if append:
             try:
                 # Allow append if there is a dataset.metadata object available

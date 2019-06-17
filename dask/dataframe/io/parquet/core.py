@@ -332,18 +332,6 @@ def to_parquet(
     if write_index:
         df = df.reset_index()
 
-    # Do some engine-agnostic intialization
-    fs.mkdirs(path)
-    object_encoding = kwargs.pop("object_encoding", "utf8")
-    if object_encoding == "infer" or (
-        isinstance(object_encoding,
-                    dict) and "infer" in object_encoding.values()
-    ):
-        raise ValueError(
-            '"infer" not allowed as object encoding, '
-            "because this required data in memory."
-        )
-
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
     meta, i_offset = engine.initialize_write(df, fs, path, append=append,
