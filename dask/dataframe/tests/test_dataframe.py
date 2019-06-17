@@ -2434,46 +2434,22 @@ def test_corr():
     assert res3._name != res4._name
     assert res._name != res3._name
 
-    # Series with same names (see https://github.com/dask/dask/issues/4906)
-
-    a0 = df.A
-    b0 = df.B
-    a1 = df.A
-    b1 = df.B.rename('A')
-
-    da0 = dd.from_pandas(a0, npartitions=6)
-    db0 = dd.from_pandas(b0, npartitions=7)
-
-    da1 = dd.from_pandas(a1, npartitions=6)
-    db1 = dd.from_pandas(b1, npartitions=7)
-
-    res0 = da0.corr(db0, split_every=2)
-    res1 = da1.corr(db1, split_every=2)
-
-    assert_eq(res0, res1)
-
-    a = df.A
-    b = df.B.rename('A')
-    da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
-
-    res = da.corr(db)
-    res2 = da.corr(db, split_every=2)
-    res3 = da.corr(db, min_periods=10)
-    res4 = da.corr(db, min_periods=10, split_every=2)
-    sol = da.corr(db)
-    sol2 = da.corr(db, min_periods=10)
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert_eq(res3, sol2)
-    assert_eq(res4, sol2)
-    assert res._name == da.corr(db)._name
-    assert res._name != res2._name
-    assert res3._name != res4._name
-    assert res._name != res3._name
-
     pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+    
+def test_corr_same_name():
+    # Series with same names (see https://github.com/dask/dask/issues/4906)
+    
+    df = pd.util.testing.makeMissingDataframe(0.3, 42)
+    ddf = dd.from_pandas(df, npartitions=6))
+    
+    result = ddf.A.corr(ddf.B.rename('A'))
+    expected = ddf.A.corr(ddf.B)
+    assert_eq(result, expected)
+    
+    # test with split_every
+    result2 = ddf.A.corr(ddf.B.rename('A'), split_every=2)
+    assert_eq(result2, expected)
 
 
 def test_cov_corr_meta():
