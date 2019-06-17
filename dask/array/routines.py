@@ -1005,8 +1005,8 @@ def compress(condition, a, axis=None):
 
     if not is_arraylike(condition):
         # Allow `condition` to be anything array-like, otherwise ensure `condition`
-        # is a dask array.
-        condition = asarray(condition)
+        # is a numpy array.
+        condition = np.asarray(condition)
     condition = condition.astype(bool)
     a = asarray(a)
 
