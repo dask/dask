@@ -305,10 +305,15 @@ def test_concat(join):
                         index=[8, 9, 10, 11, 12, 13])
     ddf3 = dd.from_pandas(pdf3, 2)
 
+    if PANDAS_GT_0230:
+        kwargs = {"sort": False}
+    else:
+        kwargs = {}
+
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
 
-        expected = pd.concat([pd1, pd2], join=join, sort=False)
+        expected = pd.concat([pd1, pd2], join=join, **kwargs)
         result = dd.concat([dd1, dd2], join=join)
         assert_eq(result, expected)
 
@@ -319,10 +324,6 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        if PANDAS_GT_0230:
-            kwargs = {'sort': False}
-        else:
-            kwargs = {}
         expected = pd.concat([pd1, pd2], **kwargs)
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
