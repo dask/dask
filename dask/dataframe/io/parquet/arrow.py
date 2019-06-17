@@ -25,7 +25,6 @@ class ArrowEngine(Engine):
             )
 
         df = table.to_pandas(categories=categories, use_threads=False)
-
         return df[list(columns)]
 
     @staticmethod
@@ -73,6 +72,14 @@ class ArrowEngine(Engine):
         all_columns = index_names + column_names
 
         pieces = sorted(dataset.pieces, key=lambda piece: natural_sort_key(piece.path))
+
+        # Check that categories are included in columns
+        if not set(categories).intersection(all_columns):
+            raise ValueError(
+                "categories not in available columns.\n"
+                "categories: {} | columns: {}".format(categories,
+                                                list(all_columns))
+            )
 
         dtypes = _get_pyarrow_dtypes(schema, categories)
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
