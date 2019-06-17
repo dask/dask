@@ -1002,7 +1002,12 @@ def squeeze(a, axis=None):
 
 @derived_from(np)
 def compress(condition, a, axis=None):
-    condition = asarray(condition).astype(bool)
+
+    if not isinstance(condition, np.ndarray):
+        # Allow `condition` to be a numpy array, otherwise ensure `condition`
+        # is a dask array.
+        condition = asarray(condition)
+    condition = condition.astype(bool)
     a = asarray(a)
 
     if condition.ndim != 1:
