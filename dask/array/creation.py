@@ -15,7 +15,8 @@ from ..utils import derived_from
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
-                   broadcast_to, broadcast_arrays)
+                   broadcast_to, broadcast_arrays,
+                   cached_cumsum)
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
@@ -549,8 +550,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     diag_chunks = []
     chunk_offsets = []
-    cum1 = [0] + list(np.cumsum(a.chunks[axis1]))[:-1]
-    cum2 = [0] + list(np.cumsum(a.chunks[axis2]))[:-1]
+    cum1 = list(cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1])
+    cum2 = list(cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1])
     for co1, c1 in zip(cum1, a.chunks[axis1]):
         chunk_offsets.append([])
         for co2, c2 in zip(cum2, a.chunks[axis2]):
@@ -728,7 +729,7 @@ def repeat(a, repeats, axis=None):
     if repeats == 1:
         return a
 
-    cchunks = np.cumsum((0,) + a.chunks[axis])
+    cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
     slices = []
     for c_start, c_stop in sliding_window(2, cchunks):
         ls = np.linspace(c_start, c_stop, repeats).round(0)

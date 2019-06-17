@@ -628,7 +628,8 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
 
     files = open_files(filename, compression=compression, mode=mode,
                        encoding=encoding, name_function=name_function,
-                       num=df.npartitions, **(storage_options or {}))
+                       num=df.npartitions, newline='',
+                       **(storage_options or {}))
 
     to_csv_chunk = delayed(_write_csv, pure=False)
 
