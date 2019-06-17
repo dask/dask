@@ -14,7 +14,7 @@ from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import funcname, derived_from
+from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
 from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
@@ -1002,7 +1002,12 @@ def squeeze(a, axis=None):
 
 @derived_from(np)
 def compress(condition, a, axis=None):
-    condition = asarray(condition).astype(bool)
+
+    if not is_arraylike(condition):
+        # Allow `condition` to be anything array-like, otherwise ensure `condition`
+        # is a numpy array.
+        condition = np.asarray(condition)
+    condition = condition.astype(bool)
     a = asarray(a)
 
     if condition.ndim != 1:
