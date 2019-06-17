@@ -1280,40 +1280,9 @@ class Array(DaskMethodsMixin):
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
 
-        if isinstance(index2, tuple):
-            new_index = []
-            for i in range(len(index2)):
-                if not isinstance(index2[i], tuple):
-                    types = [Integral, list, np.ndarray]
-                    cond = any([isinstance(index2[i], t) for t in types])
-                    new_index.append(slice(0, 0) if cond else index2[i])
-                else:
-                    new_index.append(tuple([Ellipsis if j is not None else
-                                            None for j in index2[i]]))
-            new_index = tuple(new_index)
-        else:
-            new_index = index2
-        try:
-            meta = self._meta[new_index].astype(self.dtype)
-        except Exception:
-            meta = self._meta
-
-        # Exception for object dtype and ndim == 1, which results in primitive types
-        if not (meta.dtype == object and meta.ndim == 1):
-
-            # If meta still has more dimensions than actual data
-            if meta.ndim > len(chunks):
-                try:
-                    meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
-                except TypeError:
-                    try:
-                        meta = meta.reshape((0,) * max(len(chunks), 1))
-                    except Exception:
-                        meta = meta
-
-            # Ensure all dimensions are 0
-            if not np.isscalar(meta):
-                meta = meta_from_array(meta)
+        meta = meta_from_array(self._meta, ndim=len(chunks))
+        if np.isscalar(meta):
+            meta = np.array(meta)
 
         return Array(graph, out, chunks, meta=meta)
 
