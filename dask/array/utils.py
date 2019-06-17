@@ -46,7 +46,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     if hasattr(x, '_meta') and isinstance(x, Array):
         x = x._meta
 
-    if not hasattr(x, 'shape') or not hasattr(x, 'dtype'):
+    if not hasattr(x, 'shape') or not hasattr(x, 'dtype') or not isinstance(x.shape, tuple):
         return x
 
     if isinstance(x, list) or isinstance(x, tuple):
@@ -73,6 +73,38 @@ def meta_from_array(x, ndim=None, dtype=None):
 
     if dtype and meta.dtype != dtype:
         meta = meta.astype(dtype)
+
+    return meta
+
+
+def compute_meta(func, dtype, *args, **kwargs):
+    args_meta = list(map(meta_from_array, args))
+    kwargs_meta = {k: meta_from_array(v) for k, v in kwargs.items()}
+
+    # todo: look for alternative to this, causes issues when using map_blocks()
+    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+    if isinstance(func, np.vectorize):
+        meta = func(*args_meta)
+        if hasattr(meta, 'dtype'):
+            return meta.astype(dtype)
+        else:
+            return None
+
+    try:
+        meta = func(*args_meta, **kwargs_meta)
+    except TypeError as e:
+        if ("unexpected keyword argument" in str(e) or
+                "is an invalid keyword for" in str(e)):
+            raise
+        else:
+            return None
+    except Exception:
+        return None
+
+    if hasattr(meta, 'dtype'):
+        meta = meta.astype(dtype)
+    else:
+        return None
 
     return meta
 

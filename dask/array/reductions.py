@@ -12,11 +12,11 @@ from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, handle_out
-from .blockwise import blockwise, blockwise_meta
+from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
 from .ufunc import sqrt
-from .utils import full_like_safe, validate_axis
+from .utils import full_like_safe, validate_axis, compute_meta
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -148,11 +148,11 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
 
     if hasattr(x, '_meta'):
         try:
-            reduced_meta = blockwise_meta(chunk, x.dtype, x._meta, axis=axis,
-                                          keepdims=True, meta=True)
+            reduced_meta = compute_meta(chunk, x.dtype, x._meta, axis=axis,
+                                        keepdims=True, meta=True)
         except TypeError:
-            reduced_meta = blockwise_meta(chunk, x.dtype, x._meta, axis=axis,
-                                          keepdims=True)
+            reduced_meta = compute_meta(chunk, x.dtype, x._meta, axis=axis,
+                                        keepdims=True)
         except ValueError:
             pass
     else:
