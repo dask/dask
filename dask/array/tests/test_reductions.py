@@ -268,8 +268,12 @@ def test_reductions_2D_nans():
     with pytest.warns(None):  # all NaN axis warning
         reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
-    assert_eq(da.argmax(a), np.argmax(x))
-    assert_eq(da.argmin(a), np.argmin(x))
+    with warnings.catch_warnings():
+        # RuntimeWarning: invalid value encountered in reduce
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assert_eq(da.argmax(a), np.argmax(x))
+        assert_eq(da.argmin(a), np.argmin(x))
+
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a), np.nanargmax(x))
     with pytest.warns(None):  # all NaN axis warning
