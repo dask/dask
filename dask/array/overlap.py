@@ -7,9 +7,8 @@ from numbers import Integral
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
-from . import chunk
+from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
-from .utils import empty_like_safe, full_like_safe
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
@@ -301,8 +300,12 @@ def constant(x, axis, depth, value):
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
-    c = full_like_safe(getattr(x, '_meta', x), value, shape=tuple(map(sum, chunks)),
-                       chunks=tuple(chunks), dtype=x.dtype)
+    try:
+        c = wrap.full_like(getattr(x, '_meta', x), value, shape=tuple(map(sum, chunks)),
+                           chunks=tuple(chunks), dtype=x.dtype)
+    except TypeError:
+        c = wrap.full(tuple(map(sum, chunks)), value,
+                      chunks=tuple(chunks), dtype=x.dtype)
 
     return concatenate([c, x, c], axis=axis)
 
@@ -442,8 +445,11 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks = list(x.chunks)
             empty_chunks[k] = (d,)
 
-            empty = empty_like_safe(x, shape=empty_shape,
-                                    chunks=empty_chunks, dtype=x.dtype)
+            try:
+                empty = wrap.empty_like(getattr(x, '_meta', x), shape=empty_shape,
+                                        chunks=empty_chunks, dtype=x.dtype)
+            except TypeError:
+                empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
 
             out_chunks = list(x.chunks)
             ax_chunks = list(out_chunks[k])
