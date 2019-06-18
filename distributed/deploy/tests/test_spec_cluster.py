@@ -17,9 +17,9 @@ class BrokenWorker(Worker):
 
 
 worker_spec = {
-    0: {"cls": Worker, "options": {"ncores": 1}},
-    1: {"cls": Worker, "options": {"ncores": 2}},
-    "my-worker": {"cls": MyWorker, "options": {"ncores": 3}},
+    0: {"cls": Worker, "options": {"nthreads": 1}},
+    1: {"cls": Worker, "options": {"nthreads": 2}},
+    "my-worker": {"cls": MyWorker, "options": {"nthreads": 3}},
 }
 scheduler = {"cls": Scheduler, "options": {"port": 0}}
 
@@ -37,9 +37,9 @@ async def test_specification():
         assert isinstance(cluster.workers[1], Worker)
         assert isinstance(cluster.workers["my-worker"], MyWorker)
 
-        assert cluster.workers[0].ncores == 1
-        assert cluster.workers[1].ncores == 2
-        assert cluster.workers["my-worker"].ncores == 3
+        assert cluster.workers[0].nthreads == 1
+        assert cluster.workers[1].nthreads == 2
+        assert cluster.workers["my-worker"].nthreads == 3
 
         async with Client(cluster, asynchronous=True) as client:
             result = await client.submit(lambda x: x + 1, 10)
@@ -51,9 +51,9 @@ async def test_specification():
 
 def test_spec_sync(loop):
     worker_spec = {
-        0: {"cls": Worker, "options": {"ncores": 1}},
-        1: {"cls": Worker, "options": {"ncores": 2}},
-        "my-worker": {"cls": MyWorker, "options": {"ncores": 3}},
+        0: {"cls": Worker, "options": {"nthreads": 1}},
+        1: {"cls": Worker, "options": {"nthreads": 2}},
+        "my-worker": {"cls": MyWorker, "options": {"nthreads": 3}},
     }
     with SpecCluster(workers=worker_spec, scheduler=scheduler, loop=loop) as cluster:
         assert cluster.worker_spec is worker_spec
@@ -64,9 +64,9 @@ def test_spec_sync(loop):
         assert isinstance(cluster.workers[1], Worker)
         assert isinstance(cluster.workers["my-worker"], MyWorker)
 
-        assert cluster.workers[0].ncores == 1
-        assert cluster.workers[1].ncores == 2
-        assert cluster.workers["my-worker"].ncores == 3
+        assert cluster.workers[0].nthreads == 1
+        assert cluster.workers[1].nthreads == 2
+        assert cluster.workers["my-worker"].nthreads == 3
 
         with Client(cluster, loop=loop) as client:
             assert cluster.loop is cluster.scheduler.loop
@@ -83,7 +83,7 @@ def test_loop_started():
 
 @pytest.mark.asyncio
 async def test_scale():
-    worker = {"cls": Worker, "options": {"ncores": 1}}
+    worker = {"cls": Worker, "options": {"nthreads": 1}}
     async with SpecCluster(
         asynchronous=True, scheduler=scheduler, worker=worker
     ) as cluster:
@@ -134,9 +134,9 @@ async def test_new_worker_spec():
     class MyCluster(SpecCluster):
         def new_worker_spec(self):
             i = len(self.worker_spec)
-            return i, {"cls": Worker, "options": {"ncores": i + 1}}
+            return i, {"cls": Worker, "options": {"nthreads": i + 1}}
 
     async with MyCluster(asynchronous=True, scheduler=scheduler) as cluster:
         cluster.scale(3)
         for i in range(3):
-            assert cluster.worker_spec[i]["options"]["ncores"] == i + 1
+            assert cluster.worker_spec[i]["options"]["nthreads"] == i + 1

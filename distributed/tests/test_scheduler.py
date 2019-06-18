@@ -50,11 +50,11 @@ occupancy = defaultdict(lambda: 0)
 def test_administration(s, a, b):
     assert isinstance(s.address, str)
     assert s.address in str(s)
-    assert str(sum(s.ncores.values())) in repr(s)
-    assert str(len(s.ncores)) in repr(s)
+    assert str(sum(s.nthreads.values())) in repr(s)
+    assert str(len(s.nthreads)) in repr(s)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
 def test_respect_data_in_memory(c, s, a):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
@@ -106,14 +106,14 @@ def test_decide_worker_with_many_independent_leaves(c, s, a, b):
     assert nhits > 80
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_decide_worker_with_restrictions(client, s, a, b, c):
     x = client.submit(inc, 1, workers=[a.address, b.address])
     yield wait(x)
     assert x.key in a.data or x.key in b.data
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_move_data_over_break_restrictions(client, s, a, b, c):
     [x] = yield client.scatter([1], workers=b.address)
     y = client.submit(inc, x, workers=[a.address, b.address])
@@ -121,7 +121,7 @@ def test_move_data_over_break_restrictions(client, s, a, b, c):
     assert y.key in a.data or y.key in b.data
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_balance_with_restrictions(client, s, a, b, c):
     [x], [y] = yield [
         client.scatter([[1, 2, 3]], workers=a.address),
@@ -133,7 +133,7 @@ def test_balance_with_restrictions(client, s, a, b, c):
     assert s.tasks[z.key].who_has == {s.workers[c.address]}
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_no_valid_workers(client, s, a, b, c):
     x = client.submit(inc, 1, workers="127.0.0.5:9999")
     while not s.tasks:
@@ -145,7 +145,7 @@ def test_no_valid_workers(client, s, a, b, c):
         yield gen.with_timeout(timedelta(milliseconds=50), x)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_no_valid_workers_loose_restrictions(client, s, a, b, c):
     x = client.submit(inc, 1, workers="127.0.0.5:9999", allow_other_workers=True)
 
@@ -153,7 +153,7 @@ def test_no_valid_workers_loose_restrictions(client, s, a, b, c):
     assert result == 2
 
 
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_no_workers(client, s):
     x = client.submit(inc, 1)
     while not s.tasks:
@@ -165,7 +165,7 @@ def test_no_workers(client, s):
         yield gen.with_timeout(timedelta(milliseconds=50), x)
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_retire_workers_empty(s):
     yield s.retire_workers(workers=[])
 
@@ -207,7 +207,7 @@ def test_remove_worker_from_scheduler(s, a, b):
 
     assert a.address in s.stream_comms
     s.remove_worker(address=a.address)
-    assert a.address not in s.ncores
+    assert a.address not in s.nthreads
     assert len(s.workers[b.address].processing) == len(dsk)  # b owns everything
     s.validate_state()
 
@@ -215,14 +215,14 @@ def test_remove_worker_from_scheduler(s, a, b):
 @gen_cluster(config={"distributed.scheduler.events-cleanup-delay": "10 ms"})
 def test_clear_events_worker_removal(s, a, b):
     assert a.address in s.events
-    assert a.address in s.ncores
+    assert a.address in s.nthreads
     assert b.address in s.events
-    assert b.address in s.ncores
+    assert b.address in s.nthreads
 
     s.remove_worker(address=a.address)
     # Shortly after removal, the events should still be there
     assert a.address in s.events
-    assert a.address not in s.ncores
+    assert a.address not in s.nthreads
     s.validate_state()
 
     start = time()
@@ -253,7 +253,7 @@ def test_clear_events_client_removal(c, s, a, b):
 
 @gen_cluster()
 def test_add_worker(s, a, b):
-    w = Worker(s.address, ncores=3)
+    w = Worker(s.address, nthreads=3)
     w.data["x-5"] = 6
     w.data["y"] = 1
     yield w
@@ -267,7 +267,7 @@ def test_add_worker(s, a, b):
     )
 
     s.add_worker(
-        address=w.address, keys=list(w.data), ncores=w.ncores, services=s.services
+        address=w.address, keys=list(w.data), nthreads=w.nthreads, services=s.services
     )
 
     s.validate_state()
@@ -389,7 +389,7 @@ def test_delete_data(c, s, a, b):
         assert time() < start + 5
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
 def test_delete(c, s, a):
     x = c.submit(inc, 1)
     yield x
@@ -481,12 +481,12 @@ def test_ready_remove_worker(s, a, b):
         dependencies={"x-%d" % i: [] for i in range(20)},
     )
 
-    assert all(len(w.processing) > w.ncores for w in s.workers.values())
+    assert all(len(w.processing) > w.nthreads for w in s.workers.values())
 
     s.remove_worker(address=a.address)
 
     assert set(s.workers) == {b.address}
-    assert all(len(w.processing) > w.ncores for w in s.workers.values())
+    assert all(len(w.processing) > w.nthreads for w in s.workers.values())
 
 
 @gen_cluster(client=True, Worker=Nanny)
@@ -591,7 +591,7 @@ def test_coerce_address():
 @pytest.mark.skipif(
     sys.platform.startswith("win"), reason="file descriptors not really a thing"
 )
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_file_descriptors_dont_leak(s):
     psutil = pytest.importorskip("psutil")
     proc = psutil.Process()
@@ -624,12 +624,12 @@ def test_update_graph_culls(s, a, b):
     assert "z" not in s.dependencies
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_add_worker_is_idempotent(s):
-    s.add_worker(address=alice, ncores=1, resolve_address=False)
-    ncores = dict(s.ncores)
+    s.add_worker(address=alice, nthreads=1, resolve_address=False)
+    nthreads = dict(s.nthreads)
     s.add_worker(address=alice, resolve_address=False)
-    assert s.ncores == s.ncores
+    assert s.nthreads == s.nthreads
 
 
 def test_io_loop(loop):
@@ -654,7 +654,7 @@ def test_story(c, s, a, b):
     assert len(s.story(x.key, y.key)) > len(story)
 
 
-@gen_cluster(ncores=[], client=True)
+@gen_cluster(nthreads=[], client=True)
 def test_scatter_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
         yield s.scatter(data={"x": 1}, client="alice", timeout=0.1)
@@ -664,16 +664,16 @@ def test_scatter_no_workers(c, s):
         yield c.scatter(123, timeout=0.1)
     assert time() < start + 1.5
 
-    w = Worker(s.address, ncores=3)
+    w = Worker(s.address, nthreads=3)
     yield [c.scatter(data={"y": 2}, timeout=5), w._start()]
 
     assert w.data["y"] == 2
     yield w.close()
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_scheduler_sees_memory_limits(s):
-    w = yield Worker(s.address, ncores=3, memory_limit=12345)
+    w = yield Worker(s.address, nthreads=3, memory_limit=12345)
 
     assert s.workers[w.address].memory_limit == 12345
     yield w.close()
@@ -688,8 +688,8 @@ def test_retire_workers(c, s, a, b):
 
     workers = yield s.retire_workers()
     assert list(workers) == [a.address]
-    assert workers[a.address]["ncores"] == a.ncores
-    assert list(s.ncores) == [b.address]
+    assert workers[a.address]["nthreads"] == a.nthreads
+    assert list(s.nthreads) == [b.address]
 
     assert s.workers_to_close() == []
 
@@ -717,7 +717,7 @@ def test_retire_workers_n(c, s, a, b):
         yield gen.sleep(0.01)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 4)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 4)
 def test_workers_to_close(cl, s, *workers):
     s.task_duration["a"] = 4
     s.task_duration["b"] = 4
@@ -732,7 +732,7 @@ def test_workers_to_close(cl, s, *workers):
     assert len(wtc) == 1
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 4)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 4)
 def test_workers_to_close_grouped(c, s, *workers):
     groups = {
         workers[0].address: "a",
@@ -782,7 +782,7 @@ def test_retire_workers_no_suspicious_tasks(c, s, a, b):
     sys.platform.startswith("win"), reason="file descriptors not really a thing"
 )
 @pytest.mark.skipif(sys.version_info < (3, 6), reason="intermittent failure")
-@gen_cluster(client=True, ncores=[], timeout=240)
+@gen_cluster(client=True, nthreads=[], timeout=240)
 def test_file_descriptors(c, s):
     yield gen.sleep(0.1)
     psutil = pytest.importorskip("psutil")
@@ -793,7 +793,7 @@ def test_file_descriptors(c, s):
     N = 20
     nannies = yield [Nanny(s.address, loop=s.loop) for i in range(N)]
 
-    while len(s.ncores) < N:
+    while len(s.nthreads) < N:
         yield gen.sleep(0.1)
 
     num_fds_2 = proc.num_fds()
@@ -876,7 +876,7 @@ def test_occupancy_cleardown(c, s, a, b):
 
 
 @nodebug
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 30)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 30)
 def test_balance_many_workers(c, s, *workers):
     futures = c.map(slowinc, range(20), delay=0.2)
     yield wait(futures)
@@ -884,7 +884,7 @@ def test_balance_many_workers(c, s, *workers):
 
 
 @nodebug
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 30)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 30)
 def test_balance_many_workers_2(c, s, *workers):
     s.extensions["stealing"]._pc.callback_time = 100000000
     futures = c.map(slowinc, range(90), delay=0.2)
@@ -932,7 +932,7 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
     while not any(w.processing for w in s.workers.values()):
         yield gen.sleep(0.01)
 
-    w = Worker(s.address, ncores=1)
+    w = Worker(s.address, nthreads=1)
     w.put_key_in_memory(y.key, 3)
 
     yield w
@@ -951,7 +951,7 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
     yield w.close()
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
 def test_worker_breaks_and_returns(c, s, a):
     future = c.submit(slowinc, 1, delay=0.1)
     for i in range(10):
@@ -972,7 +972,7 @@ def test_worker_breaks_and_returns(c, s, a):
     assert states == {"memory": 1, "released": 10}
 
 
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_no_workers_to_memory(c, s):
     x = delayed(slowinc)(1, delay=0.4)
     y = delayed(slowinc)(x, delay=0.4)
@@ -983,7 +983,7 @@ def test_no_workers_to_memory(c, s):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    w = Worker(s.address, ncores=1)
+    w = Worker(s.address, nthreads=1)
     w.put_key_in_memory(y.key, 3)
 
     yield w
@@ -1013,7 +1013,7 @@ def test_no_worker_to_memory_restrictions(c, s, a, b):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    w = Worker(s.address, ncores=1, name="alice")
+    w = Worker(s.address, nthreads=1, name="alice")
     w.put_key_in_memory(y.key, 3)
 
     yield w
@@ -1122,7 +1122,7 @@ def test_retire_nannies_close(c, s, a, b):
     assert not s.workers
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 2)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 2)])
 def test_fifo_submission(c, s, w):
     futures = []
     for i in range(20):
@@ -1147,17 +1147,17 @@ def test_scheduler_file():
 
 
 @pytest.mark.xfail(reason="")
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_non_existent_worker(c, s):
     with dask.config.set({"distributed.comm.timeouts.connect": "100ms"}):
-        s.add_worker(address="127.0.0.1:5738", ncores=2, nbytes={}, host_info={})
+        s.add_worker(address="127.0.0.1:5738", nthreads=2, nbytes={}, host_info={})
         futures = c.map(inc, range(10))
         yield gen.sleep(0.300)
         assert not s.workers
         assert all(ts.state == "no-worker" for ts in s.tasks.values())
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_correct_bad_time_estimate(c, s, *workers):
     future = c.submit(slowinc, 1, delay=0)
     yield wait(future)
@@ -1255,7 +1255,7 @@ def test_log_tasks_during_restart(c, s, a, b):
     assert "exit" in str(s.events)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)
 def test_reschedule(c, s, a, b):
     yield c.submit(slowinc, -1, delay=0.1)  # learn cost
     x = c.map(slowinc, range(4), delay=0.1)
@@ -1324,7 +1324,7 @@ def test_retries(c, s, a, b):
 
 
 @pytest.mark.xfail(reason="second worker also errant for some reason")
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3, timeout=5)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3, timeout=5)
 def test_mising_data_errant_worker(c, s, w1, w2, w3):
     with dask.config.set({"distributed.comm.timeouts.connect": "1s"}):
         np = pytest.importorskip("numpy")
@@ -1457,7 +1457,7 @@ def test_closing_scheduler_closes_workers(s, a, b):
 
 
 @gen_cluster(
-    client=True, ncores=[("127.0.0.1", 1)], worker_kwargs={"resources": {"A": 1}}
+    client=True, nthreads=[("127.0.0.1", 1)], worker_kwargs={"resources": {"A": 1}}
 )
 def test_resources_reset_after_cancelled_task(c, s, w):
     future = c.submit(sleep, 0.2, resources={"A": 1})

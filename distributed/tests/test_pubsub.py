@@ -49,7 +49,7 @@ def test_speed(c, s, a, b):
     # print('duration', stop - start)  # I get around 3ms/roundtrip on my laptop
 
 
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_client(c, s):
     with pytest.raises(Exception):
         get_worker()

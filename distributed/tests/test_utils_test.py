@@ -50,7 +50,7 @@ def test_gen_cluster(c, s, a, b):
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
-    assert s.ncores == {w.address: w.ncores for w in [a, b]}
+    assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
 
 
 @pytest.mark.skip(reason="This hangs on travis")
@@ -74,13 +74,13 @@ def test_gen_cluster_without_client(s, a, b):
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
-    assert s.ncores == {w.address: w.ncores for w in [a, b]}
+    assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
 
 
 @gen_cluster(
     client=True,
     scheduler="tls://127.0.0.1",
-    ncores=[("tls://127.0.0.1", 1), ("tls://127.0.0.1", 2)],
+    nthreads=[("tls://127.0.0.1", 1), ("tls://127.0.0.1", 2)],
     security=tls_only_security(),
 )
 def test_gen_cluster_tls(e, s, a, b):
@@ -90,7 +90,7 @@ def test_gen_cluster_tls(e, s, a, b):
     for w in [a, b]:
         assert isinstance(w, Worker)
         assert w.address.startswith("tls://")
-    assert s.ncores == {w.address: w.ncores for w in [a, b]}
+    assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
 
 
 @gen_test()

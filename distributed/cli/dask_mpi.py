@@ -105,7 +105,7 @@ def main(
             scheduler_file=scheduler_file,
             loop=loop,
             name=rank if scheduler else None,
-            ncores=nthreads,
+            nthreads=nthreads,
             local_dir=local_directory,
             services={("dashboard", bokeh_worker_port): BokehWorker},
             memory_limit=memory_limit,

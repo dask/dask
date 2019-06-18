@@ -107,7 +107,7 @@ class CountsJSON(RequestHandler):
         scheduler = self.server
         erred = 0
         nbytes = 0
-        ncores = 0
+        nthreads = 0
         memory = 0
         processing = 0
         released = 0
@@ -124,7 +124,7 @@ class CountsJSON(RequestHandler):
             if ts.waiters:
                 waiting_data += 1
         for ws in scheduler.workers.values():
-            ncores += ws.ncores
+            nthreads += ws.nthreads
             memory += len(ws.has_what)
             nbytes += ws.nbytes
             processing += len(ws.processing)
@@ -132,7 +132,7 @@ class CountsJSON(RequestHandler):
         response = {
             "bytes": nbytes,
             "clients": len(scheduler.clients),
-            "cores": ncores,
+            "cores": nthreads,
             "erred": erred,
             "hosts": len(scheduler.host_info),
             "idle": len(scheduler.idle),

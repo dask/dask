@@ -11,7 +11,7 @@ from distributed.metrics import time
 from distributed.utils_test import div, gen_cluster
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 3)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_eventstream(c, s, *workers):
     pytest.importorskip("bokeh")
 

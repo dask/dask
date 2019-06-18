@@ -24,7 +24,7 @@ API
    Client.has_what
    Client.list_datasets
    Client.map
-   Client.ncores
+   Client.nthreads
    Client.persist
    Client.publish_dataset
    Client.profile

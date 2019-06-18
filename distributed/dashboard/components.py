@@ -276,7 +276,7 @@ class Processing(DashboardComponent):
     """
 
     def __init__(self, **kwargs):
-        data = self.processing_update({"processing": {}, "ncores": {}})
+        data = self.processing_update({"processing": {}, "nthreads": {}})
         self.source = ColumnDataSource(data)
 
         x_range = Range1d(-1, 1)
@@ -321,12 +321,12 @@ class Processing(DashboardComponent):
     def update(self, messages):
         with log_errors():
             msg = messages["processing"]
-            if not msg.get("ncores"):
+            if not msg.get("nthreads"):
                 return
             data = self.processing_update(msg)
             x_range = self.root.x_range
             max_right = max(data["right"])
-            cores = max(data["ncores"])
+            cores = max(data["nthreads"])
             if x_range.end < max_right:
                 x_range.end = max_right + 2
             elif x_range.end > 2 * max_right + cores:  # way out there, walk back
@@ -341,8 +341,8 @@ class Processing(DashboardComponent):
             names = sorted(names)
             processing = msg["processing"]
             processing = [processing[name] for name in names]
-            ncores = msg["ncores"]
-            ncores = [ncores[name] for name in names]
+            nthreads = msg["nthreads"]
+            nthreads = [nthreads[name] for name in names]
             n = len(names)
             d = {
                 "name": list(names),
@@ -350,7 +350,7 @@ class Processing(DashboardComponent):
                 "right": list(processing),
                 "top": list(range(n, 0, -1)),
                 "bottom": list(range(n - 1, -1, -1)),
-                "ncores": ncores,
+                "nthreads": nthreads,
             }
 
             d["alpha"] = [0.7] * n

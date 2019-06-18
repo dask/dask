@@ -39,7 +39,7 @@ def test_submit_after_failed_worker_sync(loop):
 
 @gen_cluster(client=True, timeout=60, active_rpc_timeout=10)
 def test_submit_after_failed_worker_async(c, s, a, b):
-    n = Nanny(s.address, ncores=2, loop=s.loop)
+    n = Nanny(s.address, nthreads=2, loop=s.loop)
     n.start(0)
     while len(s.workers) < 3:
         yield gen.sleep(0.1)
@@ -79,7 +79,7 @@ def test_gather_after_failed_worker(loop):
 @gen_cluster(
     client=True,
     Worker=Nanny,
-    ncores=[("127.0.0.1", 1)] * 4,
+    nthreads=[("127.0.0.1", 1)] * 4,
     config={"distributed.comm.timeouts.connect": "1s"},
 )
 def test_gather_then_submit_after_failed_workers(c, s, w, x, y, z):
@@ -117,7 +117,7 @@ def test_failed_worker_without_warning(c, s, a, b):
     yield gen.sleep(0.5)
 
     start = time()
-    while len(s.ncores) < 2:
+    while len(s.nthreads) < 2:
         yield gen.sleep(0.01)
         assert time() - start < 10
 
@@ -126,7 +126,7 @@ def test_failed_worker_without_warning(c, s, a, b):
     L2 = c.map(inc, range(10, 20))
     yield wait(L2)
     assert all(len(keys) > 0 for keys in s.has_what.values())
-    ncores2 = dict(s.ncores)
+    nthreads2 = dict(s.nthreads)
 
     yield c._restart()
 
@@ -134,12 +134,12 @@ def test_failed_worker_without_warning(c, s, a, b):
     yield wait(L)
     assert all(len(keys) > 0 for keys in s.has_what.values())
 
-    assert not (set(ncores2) & set(s.ncores))  # no overlap
+    assert not (set(nthreads2) & set(s.nthreads))  # no overlap
 
 
 @gen_cluster(Worker=Nanny, client=True, timeout=60)
 def test_restart(c, s, a, b):
-    assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
+    assert s.nthreads == {a.worker_address: 1, b.worker_address: 2}
 
     x = c.submit(inc, 1)
     y = c.submit(inc, x)
@@ -185,7 +185,7 @@ def test_restart_sync_no_center(loop):
             assert x.cancelled()
             y = c.submit(inc, 2)
             assert y.result() == 3
-            assert len(c.ncores()) == 2
+            assert len(c.nthreads()) == 2
 
 
 def test_restart_sync(loop):
@@ -198,7 +198,7 @@ def test_restart_sync(loop):
             c.restart()
             assert not sync(loop, c.scheduler.who_has)
             assert x.cancelled()
-            assert len(c.ncores()) == 2
+            assert len(c.nthreads()) == 2
 
             with pytest.raises(CancelledError):
                 x.result()
@@ -214,7 +214,7 @@ def test_restart_fast(c, s, a, b):
     start = time()
     yield c._restart()
     assert time() - start < 10
-    assert len(s.ncores) == 2
+    assert len(s.nthreads) == 2
 
     assert all(x.status == "cancelled" for x in L)
 
@@ -242,7 +242,7 @@ def test_restart_fast_sync(loop):
             start = time()
             c.restart()
             assert time() - start < 10
-            assert len(c.ncores()) == 2
+            assert len(c.nthreads()) == 2
 
             assert all(x.status == "cancelled" for x in L)
 
@@ -293,7 +293,7 @@ def test_restart_scheduler(s, a, b):
     gc.collect()
     addrs = (a.worker_address, b.worker_address)
     yield s.restart()
-    assert len(s.ncores) == 2
+    assert len(s.nthreads) == 2
     addrs2 = (a.worker_address, b.worker_address)
 
     assert addrs != addrs2
@@ -315,11 +315,11 @@ def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
 @gen_cluster(client=True, timeout=60, active_rpc_timeout=10)
 def test_broken_worker_during_computation(c, s, a, b):
     s.allowed_failures = 100
-    n = Nanny(s.address, ncores=2, loop=s.loop)
+    n = Nanny(s.address, nthreads=2, loop=s.loop)
     n.start(0)
 
     start = time()
-    while len(s.ncores) < 3:
+    while len(s.nthreads) < 3:
         yield gen.sleep(0.01)
         assert time() < start + 5
 
@@ -368,17 +368,17 @@ def test_restart_during_computation(c, s, a, b):
     yield c._restart()
     assert not s.rprocessing
 
-    assert len(s.ncores) == 2
+    assert len(s.nthreads) == 2
     assert not s.tasks
 
 
 @gen_cluster(client=True, timeout=60)
 def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
-    n = Nanny(s.address, ncores=2, loop=s.loop)
+    n = Nanny(s.address, nthreads=2, loop=s.loop)
     n.start(0)
 
     start = time()
-    while len(s.ncores) < 3:
+    while len(s.nthreads) < 3:
         yield gen.sleep(0.01)
         assert time() < start + 5
 
@@ -406,7 +406,7 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
 
 
 @pytest.mark.slow
-@gen_cluster(client=True, timeout=60, Worker=Nanny, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, timeout=60, Worker=Nanny, nthreads=[("127.0.0.1", 1)])
 def test_restart_timeout_on_long_running_task(c, s, a):
     with captured_logger("distributed.scheduler") as sio:
         future = c.submit(sleep, 3600)

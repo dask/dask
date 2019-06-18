@@ -42,7 +42,7 @@ def test_submit_from_worker(c, s, a, b):
     assert len([id for id in s.wants_what if id.lower().startswith("client")]) == 1
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)
 def test_scatter_from_worker(c, s, a, b):
     def func():
         with worker_client() as c:
@@ -78,12 +78,12 @@ def test_scatter_from_worker(c, s, a, b):
     assert result is True
 
     start = time()
-    while not all(v == 1 for v in s.ncores.values()):
+    while not all(v == 1 for v in s.nthreads.values()):
         yield gen.sleep(0.1)
         assert time() < start + 5
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)
 def test_scatter_singleton(c, s, a, b):
     np = pytest.importorskip("numpy")
 
@@ -96,7 +96,7 @@ def test_scatter_singleton(c, s, a, b):
     yield c.submit(func)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 2)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)
 def test_gather_multi_machine(c, s, a, b):
     a_address = a.address
     b_address = b.address
@@ -162,7 +162,7 @@ def test_async(c, s, a, b):
         assert time() < start + 3
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 3)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 3)])
 def test_separate_thread_false(c, s, a):
     a.count = 0
 

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import gc
+import multiprocessing
 import subprocess
 import sys
 from time import sleep
@@ -90,7 +91,7 @@ def test_procs():
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers.values())
         with Client(c.scheduler.address) as e:
-            assert all(w.ncores == 3 for w in c.workers.values())
+            assert all(w.nthreads == 3 for w in c.workers.values())
             assert all(isinstance(w, Worker) for w in c.workers.values())
         repr(c)
 
@@ -105,7 +106,7 @@ def test_procs():
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers.values())
         with Client(c.scheduler.address) as e:
-            assert all(v == 3 for v in e.ncores().values())
+            assert all(v == 3 for v in e.nthreads().values())
 
             c.scale(3)
             assert all(isinstance(w, Nanny) for w in c.workers.values())
@@ -181,7 +182,7 @@ def test_Client_with_local(loop):
         1, scheduler_port=0, silence_logs=False, dashboard_address=None, loop=loop
     ) as c:
         with Client(c) as e:
-            assert len(e.ncores()) == len(c.workers)
+            assert len(e.nthreads()) == len(c.workers)
             assert c.scheduler_address in repr(c)
 
 
@@ -227,33 +228,33 @@ def test_Client_twice(loop):
 
 @pytest.mark.skipif("sys.version_info[0] == 2", reason="fork issues")
 def test_defaults():
-    from distributed.worker import _ncores
+    _nthreads = multiprocessing.cpu_count()
 
     with LocalCluster(
         scheduler_port=0, silence_logs=False, dashboard_address=None
     ) as c:
-        assert sum(w.ncores for w in c.workers.values()) == _ncores
+        assert sum(w.nthreads for w in c.workers.values()) == _nthreads
         assert all(isinstance(w, Nanny) for w in c.workers.values())
 
     with LocalCluster(
         processes=False, scheduler_port=0, silence_logs=False, dashboard_address=None
     ) as c:
-        assert sum(w.ncores for w in c.workers.values()) == _ncores
+        assert sum(w.nthreads for w in c.workers.values()) == _nthreads
         assert all(isinstance(w, Worker) for w in c.workers.values())
         assert len(c.workers) == 1
 
     with LocalCluster(
         n_workers=2, scheduler_port=0, silence_logs=False, dashboard_address=None
     ) as c:
-        if _ncores % 2 == 0:
-            expected_total_threads = max(2, _ncores)
+        if _nthreads % 2 == 0:
+            expected_total_threads = max(2, _nthreads)
         else:
-            # n_workers not a divisor of _ncores => threads are overcommitted
-            expected_total_threads = max(2, _ncores + 1)
-        assert sum(w.ncores for w in c.workers.values()) == expected_total_threads
+            # n_workers not a divisor of _nthreads => threads are overcommitted
+            expected_total_threads = max(2, _nthreads + 1)
+        assert sum(w.nthreads for w in c.workers.values()) == expected_total_threads
 
     with LocalCluster(
-        threads_per_worker=_ncores * 2,
+        threads_per_worker=_nthreads * 2,
         scheduler_port=0,
         silence_logs=False,
         dashboard_address=None,
@@ -261,12 +262,12 @@ def test_defaults():
         assert len(c.workers) == 1
 
     with LocalCluster(
-        n_workers=_ncores * 2,
+        n_workers=_nthreads * 2,
         scheduler_port=0,
         silence_logs=False,
         dashboard_address=None,
     ) as c:
-        assert all(w.ncores == 1 for w in c.workers.values())
+        assert all(w.nthreads == 1 for w in c.workers.values())
     with LocalCluster(
         threads_per_worker=2,
         n_workers=3,
@@ -275,7 +276,7 @@ def test_defaults():
         dashboard_address=None,
     ) as c:
         assert len(c.workers) == 3
-        assert all(w.ncores == 2 for w in c.workers.values())
+        assert all(w.nthreads == 2 for w in c.workers.values())
 
 
 def test_worker_params():
@@ -361,7 +362,7 @@ def test_bokeh(loop, processes):
 @pytest.mark.skipif(sys.version_info < (3, 6), reason="Unknown")
 def test_blocks_until_full(loop):
     with Client(loop=loop) as c:
-        assert len(c.ncores()) > 0
+        assert len(c.nthreads()) > 0
 
 
 @gen_test()
@@ -383,7 +384,7 @@ def test_scale_up_and_down():
     cluster.scale(2)
     yield cluster
     assert len(cluster.workers) == 2
-    assert len(cluster.scheduler.ncores) == 2
+    assert len(cluster.scheduler.nthreads) == 2
 
     cluster.scale(1)
     yield cluster

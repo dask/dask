@@ -19,7 +19,7 @@ class MyPlugin:
         self.worker._my_plugin_status = "teardown"
 
 
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_create_with_client(c, s):
     yield c.register_worker_plugin(MyPlugin(123))
 

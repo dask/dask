@@ -23,11 +23,11 @@ def test_get_scale_up_kwargs(loop):
         with Client(cluster, loop=loop) as c:
             future = c.submit(lambda x: x + 1, 1)
             assert future.result() == 2
-            assert c.ncores()
+            assert c.nthreads()
             assert alc.get_scale_up_kwargs() == {"n": 3}
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 4)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 4)
 def test_simultaneous_scale_up_and_down(c, s, *workers):
     class TestAdaptive(Adaptive):
         def get_scale_up_kwargs(self):
@@ -65,22 +65,22 @@ def test_adaptive_local_cluster(loop):
     ) as cluster:
         alc = Adaptive(cluster.scheduler, cluster, interval=100)
         with Client(cluster, loop=loop) as c:
-            assert not c.ncores()
+            assert not c.nthreads()
             future = c.submit(lambda x: x + 1, 1)
             assert future.result() == 2
-            assert c.ncores()
+            assert c.nthreads()
 
             sleep(0.1)
-            assert c.ncores()  # still there after some time
+            assert c.nthreads()  # still there after some time
 
             del future
 
             start = time()
-            while cluster.scheduler.ncores:
+            while cluster.scheduler.nthreads:
                 sleep(0.01)
                 assert time() < start + 5
 
-            assert not c.ncores()
+            assert not c.nthreads()
 
 
 @nodebug
@@ -128,7 +128,7 @@ def test_adaptive_local_cluster_multi_workers():
         yield cluster.close()
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 10, active_rpc_timeout=10)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 10, active_rpc_timeout=10)
 def test_adaptive_scale_down_override(c, s, *workers):
     class TestAdaptive(Adaptive):
         def __init__(self, *args, **kwargs):

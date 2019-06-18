@@ -25,7 +25,7 @@ In practice we represent these messages with dictionaries/mappings::
    {'op': 'register-worker',
     'address': '192.168.1.42',
     'name': 'alice',
-    'ncores': 4}
+    'nthreads': 4}
 
    {'x': b'...',
     'y': b'...'}

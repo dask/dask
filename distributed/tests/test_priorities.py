@@ -83,7 +83,7 @@ def test_expand_persist(c, s, a, b):
     assert s.tasks[low.key].state == "processing"
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
 def test_repeated_persists_same_priority(c, s, w):
     xs = [delayed(slowinc)(i, delay=0.05, dask_key_name="x-%d" % i) for i in range(10)]
     ys = [
@@ -107,7 +107,7 @@ def test_repeated_persists_same_priority(c, s, w):
     assert any(s.tasks[z.key].state == "memory" for z in zs)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
 def test_last_in_first_out(c, s, w):
     xs = [c.submit(slowinc, i, delay=0.05) for i in range(5)]
     ys = [c.submit(slowinc, x, delay=0.05) for x in xs]

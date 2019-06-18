@@ -188,7 +188,7 @@ def test_sparse_arrays(c, s, a, b):
     yield future
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
 def test_delayed_none(c, s, w):
     x = dask.delayed(None)
     y = dask.delayed(123)

@@ -44,8 +44,8 @@ class SpecCluster(Cluster):
     >>> from dask.distributed import Scheduler, Worker, Nanny
     >>> scheduler = {'cls': Scheduler, 'options': {"dashboard_address": ':8787'}}
     >>> workers = {
-    ...     'my-worker': {"cls": Worker, "options": {"ncores": 1}},
-    ...     'my-nanny': {"cls": Nanny, "options": {"ncores": 2}},
+    ...     'my-worker': {"cls": Worker, "options": {"nthreads": 1}},
+    ...     'my-nanny': {"cls": Nanny, "options": {"nthreads": 2}},
     ... }
     >>> cluster = SpecCluster(scheduler=scheduler, workers=workers)
 
@@ -53,8 +53,8 @@ class SpecCluster(Cluster):
 
     >>> cluster.worker_spec
     {
-       'my-worker': {"cls": Worker, "options": {"ncores": 1}},
-       'my-nanny': {"cls": Nanny, "options": {"ncores": 2}},
+       'my-worker': {"cls": Worker, "options": {"nthreads": 1}},
+       'my-nanny': {"cls": Nanny, "options": {"nthreads": 2}},
     }
 
     While the instantiation of this spec is stored in the ``.workers``

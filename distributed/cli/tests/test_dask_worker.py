@@ -58,7 +58,7 @@ def test_memory_limit(loop):
             ]
         ) as worker:
             with Client("127.0.0.1:8786", loop=loop) as c:
-                while not c.ncores():
+                while not c.nthreads():
                     sleep(0.1)
                 info = c.scheduler_info()
                 [d] = info["workers"].values()
@@ -218,7 +218,7 @@ def test_contact_listen_address(loop, nanny, listen_address):
             ]
         ) as worker:
             with Client("127.0.0.1:8786") as client:
-                while not client.ncores():
+                while not client.nthreads():
                     sleep(0.1)
                 info = client.scheduler_info()
                 assert "tcp://127.0.0.2:39837" in info["workers"]
@@ -243,7 +243,7 @@ def test_respect_host_listen_address(loop, nanny, host):
             ["dask-worker", "127.0.0.1:8786", nanny, "--no-dashboard", "--host", host]
         ) as worker:
             with Client("127.0.0.1:8786") as client:
-                while not client.ncores():
+                while not client.nthreads():
                     sleep(0.1)
                 info = client.scheduler_info()
 

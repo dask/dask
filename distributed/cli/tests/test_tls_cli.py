@@ -25,9 +25,9 @@ tls_args = ["--tls-ca-file", ca_file, "--tls-cert", keycert]
 tls_args_2 = ["--tls-ca-file", ca_file, "--tls-cert", cert, "--tls-key", key]
 
 
-def wait_for_cores(c, ncores=1):
+def wait_for_cores(c, nthreads=1):
     start = time()
-    while len(c.ncores()) < 1:
+    while len(c.nthreads()) < 1:
         sleep(0.1)
         assert time() < start + 10
 

@@ -76,7 +76,7 @@ class StateTable(DashboardComponent):
             w = self.worker
             d = {
                 "Stored": [len(w.data)],
-                "Executing": ["%d / %d" % (len(w.executing), w.ncores)],
+                "Executing": ["%d / %d" % (len(w.executing), w.nthreads)],
                 "Ready": [len(w.ready)],
                 "Waiting": [len(w.waiting_for_data)],
                 "Connections": [len(w.in_flight_workers)],
@@ -251,7 +251,7 @@ class ExecutingTimeSeries(DashboardComponent):
         fig = figure(
             title="Executing History",
             x_axis_type="datetime",
-            y_range=[-0.1, worker.ncores + 0.1],
+            y_range=[-0.1, worker.nthreads + 0.1],
             height=150,
             tools="",
             x_range=x_range,

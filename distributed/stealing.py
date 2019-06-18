@@ -333,7 +333,7 @@ class WorkStealing(SchedulerPlugin):
                 saturated = [
                     ws
                     for ws in saturated
-                    if combined_occupancy(ws) > 0.2 and len(ws.processing) > ws.ncores
+                    if combined_occupancy(ws) > 0.2 and len(ws.processing) > ws.nthreads
                 ]
             elif len(s.saturated) < 20:
                 saturated = sorted(saturated, key=combined_occupancy, reverse=True)
@@ -379,7 +379,7 @@ class WorkStealing(SchedulerPlugin):
                             continue
                         if combined_occupancy(sat) < 0.2:
                             continue
-                        if len(sat.processing) <= sat.ncores:
+                        if len(sat.processing) <= sat.nthreads:
                             continue
 
                         i += 1

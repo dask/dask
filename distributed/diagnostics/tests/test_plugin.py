@@ -34,7 +34,7 @@ def test_simple(c, s, a, b):
     assert counter not in s.plugins
 
 
-@gen_cluster(ncores=[], client=False)
+@gen_cluster(nthreads=[], client=False)
 def test_add_remove_worker(s):
     events = []
 

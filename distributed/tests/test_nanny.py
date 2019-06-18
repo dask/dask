@@ -22,28 +22,28 @@ from distributed.utils import ignoring, tmpfile
 from distributed.utils_test import gen_cluster, gen_test, inc, captured_logger
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_nanny(s):
-    n = yield Nanny(s.address, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, nthreads=2, loop=s.loop)
 
     with rpc(n.address) as nn:
         assert n.is_alive()
-        assert s.ncores[n.worker_address] == 2
+        assert s.nthreads[n.worker_address] == 2
         assert s.workers[n.worker_address].nanny == n.address
 
         yield nn.kill()
         assert not n.is_alive()
-        assert n.worker_address not in s.ncores
+        assert n.worker_address not in s.nthreads
         assert n.worker_address not in s.workers
 
         yield nn.kill()
         assert not n.is_alive()
-        assert n.worker_address not in s.ncores
+        assert n.worker_address not in s.nthreads
         assert n.worker_address not in s.workers
 
         yield nn.instantiate()
         assert n.is_alive()
-        assert s.ncores[n.worker_address] == 2
+        assert s.nthreads[n.worker_address] == 2
         assert s.workers[n.worker_address].nanny == n.address
 
         yield nn.terminate()
@@ -52,9 +52,9 @@ def test_nanny(s):
     yield n.close()
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_many_kills(s):
-    n = yield Nanny(s.address, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, nthreads=2, loop=s.loop)
     assert n.is_alive()
     yield [n.kill() for i in range(5)]
     yield [n.kill() for i in range(5)]
@@ -65,13 +65,13 @@ def test_many_kills(s):
 def test_str(s, a, b):
     assert a.worker_address in str(a)
     assert a.worker_address in repr(a)
-    assert str(a.ncores) in str(a)
-    assert str(a.ncores) in repr(a)
+    assert str(a.nthreads) in str(a)
+    assert str(a.nthreads) in repr(a)
 
 
-@gen_cluster(ncores=[], timeout=20, client=True)
+@gen_cluster(nthreads=[], timeout=20, client=True)
 def test_nanny_process_failure(c, s):
-    n = yield Nanny(s.address, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, nthreads=2, loop=s.loop)
     first_dir = n.worker_dir
 
     assert os.path.exists(first_dir)
@@ -97,7 +97,7 @@ def test_nanny_process_failure(c, s):
     # assert n.worker_address != original_address  # most likely
 
     start = time()
-    while n.worker_address not in s.ncores or n.worker_dir is None:
+    while n.worker_address not in s.nthreads or n.worker_dir is None:
         yield gen.sleep(0.01)
         assert time() - start < 5
 
@@ -111,10 +111,10 @@ def test_nanny_process_failure(c, s):
     s.stop()
 
 
-@gen_cluster(ncores=[])
+@gen_cluster(nthreads=[])
 def test_run(s):
     pytest.importorskip("psutil")
-    n = yield Nanny(s.address, ncores=2, loop=s.loop)
+    n = yield Nanny(s.address, nthreads=2, loop=s.loop)
 
     with rpc(n.address) as nn:
         response = yield nn.run(function=dumps(lambda: 1))
@@ -126,7 +126,7 @@ def test_run(s):
 
 @pytest.mark.slow
 @gen_cluster(
-    Worker=Nanny, ncores=[("127.0.0.1", 1)], worker_kwargs={"reconnect": False}
+    Worker=Nanny, nthreads=[("127.0.0.1", 1)], worker_kwargs={"reconnect": False}
 )
 def test_close_on_disconnect(s, w):
     yield s.close()
@@ -157,7 +157,7 @@ def test_nanny_alt_worker_class(c, s, w1, w2):
 
 
 @pytest.mark.slow
-@gen_cluster(client=False, ncores=[])
+@gen_cluster(client=False, nthreads=[])
 def test_nanny_death_timeout(s):
     yield s.close()
     w = yield Nanny(s.address, death_timeout=1)
@@ -184,7 +184,7 @@ def test_random_seed(c, s, a, b):
 @pytest.mark.skipif(
     sys.platform.startswith("win"), reason="num_fds not supported on windows"
 )
-@gen_cluster(client=False, ncores=[])
+@gen_cluster(client=False, nthreads=[])
 def test_num_fds(s):
     psutil = pytest.importorskip("psutil")
     proc = psutil.Process()
@@ -212,7 +212,7 @@ def test_num_fds(s):
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
 )
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_worker_uses_same_host_as_nanny(c, s):
     for host in ["tcp://0.0.0.0", "tcp://127.0.0.2"]:
         n = Nanny(s.address)
@@ -237,7 +237,7 @@ def test_scheduler_file():
         s.stop()
 
 
-@gen_cluster(client=True, Worker=Nanny, ncores=[("127.0.0.1", 2)])
+@gen_cluster(client=True, Worker=Nanny, nthreads=[("127.0.0.1", 2)])
 def test_nanny_timeout(c, s, a):
     x = yield c.scatter(123)
     with captured_logger(
@@ -255,7 +255,7 @@ def test_nanny_timeout(c, s, a):
 
 
 @gen_cluster(
-    ncores=[("127.0.0.1", 1)],
+    nthreads=[("127.0.0.1", 1)],
     client=True,
     Worker=Nanny,
     worker_kwargs={"memory_limit": 1e8},
@@ -283,7 +283,7 @@ def test_nanny_terminate(c, s, a):
         assert "memory" in out.lower()
 
 
-@gen_cluster(ncores=[], client=True)
+@gen_cluster(nthreads=[], client=True)
 def test_avoid_memory_monitor_if_zero_limit(c, s):
     nanny = yield Nanny(s.address, loop=s.loop, memory_limit=0)
     typ = yield c.run(lambda dask_worker: type(dask_worker.data))
@@ -301,7 +301,7 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
     yield nanny.close()
 
 
-@gen_cluster(ncores=[], client=True)
+@gen_cluster(nthreads=[], client=True)
 def test_scheduler_address_config(c, s):
     with dask.config.set({"scheduler-address": s.address}):
         nanny = yield Nanny(loop=s.loop)
@@ -329,7 +329,7 @@ def test_wait_for_scheduler():
     assert "restart" not in log.lower(), log
 
 
-@gen_cluster(ncores=[], client=True)
+@gen_cluster(nthreads=[], client=True)
 def test_environment_variable(c, s):
     a = Nanny(s.address, loop=s.loop, memory_limit=0, env={"FOO": "123"})
     b = Nanny(s.address, loop=s.loop, memory_limit=0, env={"FOO": "456"})
@@ -339,7 +339,7 @@ def test_environment_variable(c, s):
     yield [a.close(), b.close()]
 
 
-@gen_cluster(ncores=[], client=True)
+@gen_cluster(nthreads=[], client=True)
 def test_data_types(c, s):
     w = yield Nanny(s.address, data=dict)
     r = yield c.run(lambda dask_worker: type(dask_worker.data))
@@ -353,7 +353,7 @@ def _noop(x):
 
 
 @gen_cluster(
-    ncores=[("127.0.0.1", 1)],
+    nthreads=[("127.0.0.1", 1)],
     client=True,
     Worker=Nanny,
     config={"distributed.worker.daemon": False},
@@ -368,7 +368,7 @@ def test_mp_process_worker_no_daemon(c, s, a):
 
 
 @gen_cluster(
-    ncores=[("127.0.0.1", 1)],
+    nthreads=[("127.0.0.1", 1)],
     client=True,
     Worker=Nanny,
     config={"distributed.worker.daemon": False},

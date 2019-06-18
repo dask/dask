@@ -162,9 +162,9 @@ class WorkerState(object):
        The total memory size, in bytes, used by the tasks this worker
        holds in memory (i.e. the tasks in this worker's :attr:`has_what`).
 
-    .. attribute:: ncores: int
+    .. attribute:: nthreads: int
 
-       The number of CPU cores made available on this worker.
+       The number of CPU threads made available on this worker.
 
     .. attribute:: resources: {str: Number}
 
@@ -218,7 +218,7 @@ class WorkerState(object):
         "name",
         "nanny",
         "nbytes",
-        "ncores",
+        "nthreads",
         "occupancy",
         "pid",
         "processing",
@@ -234,7 +234,7 @@ class WorkerState(object):
         address=None,
         pid=0,
         name=None,
-        ncores=0,
+        nthreads=0,
         memory_limit=0,
         local_directory=None,
         services=None,
@@ -243,7 +243,7 @@ class WorkerState(object):
         self.address = address
         self.pid = pid
         self.name = name
-        self.ncores = ncores
+        self.nthreads = nthreads
         self.memory_limit = memory_limit
         self.local_directory = local_directory
         self.services = services or {}
@@ -272,7 +272,7 @@ class WorkerState(object):
             address=self.address,
             pid=self.pid,
             name=self.name,
-            ncores=self.ncores,
+            nthreads=self.nthreads,
             memory_limit=self.memory_limit,
             local_directory=self.local_directory,
             services=self.services,
@@ -299,7 +299,7 @@ class WorkerState(object):
             "resources": self.resources,
             "local_directory": self.local_directory,
             "name": self.name,
-            "ncores": self.ncores,
+            "nthreads": self.nthreads,
             "memory_limit": self.memory_limit,
             "last_seen": self.last_seen,
             "services": self.services,
@@ -963,7 +963,7 @@ class Scheduler(ServerNode):
         # Worker state
         self.workers = sortedcontainers.SortedDict()
         for old_attr, new_attr, wrap in [
-            ("ncores", "ncores", None),
+            ("nthreads", "nthreads", None),
             ("worker_bytes", "nbytes", None),
             ("worker_resources", "resources", None),
             ("used_resources", "used_resources", None),
@@ -980,7 +980,7 @@ class Scheduler(ServerNode):
         self.idle = sortedcontainers.SortedSet(key=operator.attrgetter("address"))
         self.saturated = set()
 
-        self.total_ncores = 0
+        self.total_nthreads = 0
         self.total_occupancy = 0
         self.host_info = defaultdict(dict)
         self.resources = defaultdict(dict)
@@ -1128,7 +1128,7 @@ class Scheduler(ServerNode):
         return '<Scheduler: "%s" processes: %d cores: %d>' % (
             self.address,
             len(self.workers),
-            self.total_ncores,
+            self.total_nthreads,
         )
 
     def identity(self, comm=None):
@@ -1394,7 +1394,7 @@ class Scheduler(ServerNode):
         comm=None,
         address=None,
         keys=(),
-        ncores=None,
+        nthreads=None,
         name=None,
         resolve_address=True,
         nbytes=None,
@@ -1422,7 +1422,7 @@ class Scheduler(ServerNode):
             self.workers[address] = ws = WorkerState(
                 address=address,
                 pid=pid,
-                ncores=ncores,
+                nthreads=nthreads,
                 memory_limit=memory_limit,
                 name=name,
                 local_directory=local_directory,
@@ -1440,12 +1440,12 @@ class Scheduler(ServerNode):
                 return
 
             if "addresses" not in self.host_info[host]:
-                self.host_info[host].update({"addresses": set(), "cores": 0})
+                self.host_info[host].update({"addresses": set(), "nthreads": 0})
 
             self.host_info[host]["addresses"].add(address)
-            self.host_info[host]["cores"] += ncores
+            self.host_info[host]["nthreads"] += nthreads
 
-            self.total_ncores += ncores
+            self.total_nthreads += nthreads
             self.aliases[name] = address
 
             response = self.heartbeat_worker(
@@ -1465,7 +1465,7 @@ class Scheduler(ServerNode):
 
             self.stream_comms[address] = BatchedSend(interval="5ms", loop=self.loop)
 
-            if ws.ncores > len(ws.processing):
+            if ws.nthreads > len(ws.processing):
                 self.idle.add(ws)
 
             for plugin in self.plugins[:]:
@@ -1906,9 +1906,9 @@ class Scheduler(ServerNode):
 
             self.remove_resources(address)
 
-            self.host_info[host]["cores"] -= ws.ncores
+            self.host_info[host]["nthreads"] -= ws.nthreads
             self.host_info[host]["addresses"].remove(address)
-            self.total_ncores -= ws.ncores
+            self.total_nthreads -= ws.nthreads
 
             if not self.host_info[host]["addresses"]:
                 del self.host_info[host]
@@ -2489,22 +2489,22 @@ class Scheduler(ServerNode):
                 raise gen.TimeoutError("No workers found")
 
         if workers is None:
-            ncores = {w: ws.ncores for w, ws in self.workers.items()}
+            nthreads = {w: ws.nthreads for w, ws in self.workers.items()}
         else:
             workers = [self.coerce_address(w) for w in workers]
-            ncores = {w: self.workers[w].ncores for w in workers}
+            nthreads = {w: self.workers[w].nthreads for w in workers}
 
         assert isinstance(data, dict)
 
         keys, who_has, nbytes = yield scatter_to_workers(
-            ncores, data, rpc=self.rpc, report=False
+            nthreads, data, rpc=self.rpc, report=False
         )
 
         self.update_data(who_has=who_has, nbytes=nbytes, client=client)
 
         if broadcast:
             if broadcast == True:  # noqa: E712
-                n = len(ncores)
+                n = len(nthreads)
             else:
                 n = broadcast
             yield self.replicate(keys=keys, workers=workers, n=n)
@@ -3283,9 +3283,9 @@ class Scheduler(ServerNode):
     def get_ncores(self, comm=None, workers=None):
         if workers is not None:
             workers = map(self.coerce_address, workers)
-            return {w: self.workers[w].ncores for w in workers if w in self.workers}
+            return {w: self.workers[w].nthreads for w in workers if w in self.workers}
         else:
-            return {w: ws.ncores for w, ws in self.workers.items()}
+            return {w: ws.nthreads for w, ws in self.workers.items()}
 
     @gen.coroutine
     def get_call_stack(self, comm=None, keys=None):
@@ -4363,19 +4363,19 @@ class Scheduler(ServerNode):
         -  Idle: do not have enough work to stay busy
 
         They are considered saturated if they both have enough tasks to occupy
-        all of their cores, and if the expected runtime of those tasks is large
-        enough.
+        all of their threads, and if the expected runtime of those tasks is
+        large enough.
 
         This is useful for load balancing and adaptivity.
         """
-        if self.total_ncores == 0 or ws.status == "closed":
+        if self.total_nthreads == 0 or ws.status == "closed":
             return
         if occ is None:
             occ = ws.occupancy
-        nc = ws.ncores
+        nc = ws.nthreads
         p = len(ws.processing)
 
-        avg = self.total_occupancy / self.total_ncores
+        avg = self.total_occupancy / self.total_nthreads
 
         if p < nc or occ / nc < avg / 2:
             self.idle.add(ws)
@@ -4538,7 +4538,7 @@ class Scheduler(ServerNode):
         comm_bytes = sum(
             [dts.get_nbytes() for dts in ts.dependencies if ws not in dts.who_has]
         )
-        stack_time = ws.occupancy / ws.ncores
+        stack_time = ws.occupancy / ws.nthreads
         start_time = comm_bytes / self.bandwidth + stack_time
 
         if ts.actor:

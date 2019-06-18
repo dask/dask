@@ -11,7 +11,7 @@ from distributed.utils_test import gen_cluster
 from distributed.utils_test import client, cluster_fixture, loop  # noqa F401
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 8)] * 2)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 8)] * 2)
 def test_lock(c, s, a, b):
     c.set_metadata("locked", False)
 

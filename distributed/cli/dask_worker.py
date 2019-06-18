@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import atexit
 import logging
+import multiprocessing
 import gc
 import os
 from sys import exit
@@ -11,7 +12,6 @@ import click
 import dask
 from distributed import Nanny, Worker
 from distributed.utils import parse_timedelta
-from distributed.worker import _ncores
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
@@ -280,7 +280,7 @@ def main(
         port = worker_port
 
     if not nthreads:
-        nthreads = _ncores // nprocs
+        nthreads = multiprocessing.cpu_count() // nprocs
 
     if pid_file:
         with open(pid_file, "w") as f:
@@ -329,7 +329,7 @@ def main(
         t(
             scheduler,
             scheduler_file=scheduler_file,
-            ncores=nthreads,
+            nthreads=nthreads,
             services=services,
             loop=loop,
             resources=resources,

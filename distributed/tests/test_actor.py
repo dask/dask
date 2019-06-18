@@ -341,13 +341,13 @@ def test_many_computations(c, s, a, b):
     done = c.submit(lambda x: None, futures)
 
     while not done.done():
-        assert len(s.processing) <= a.ncores + b.ncores
+        assert len(s.processing) <= a.nthreads + b.nthreads
         yield gen.sleep(0.01)
 
     yield done
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 5)] * 2)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 5)] * 2)
 def test_thread_safety(c, s, a, b):
     class Unsafe(object):
         def __init__(self):
@@ -394,7 +394,7 @@ def test_load_balance(c, s, a, b):
     assert s.tasks[x.key].who_has != s.tasks[y.key].who_has  # second load balanced
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 5)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 5)
 def test_load_balance_map(c, s, *workers):
     class Foo(object):
         def __init__(self, x, y=None):
@@ -409,7 +409,7 @@ def test_load_balance_map(c, s, *workers):
     assert all(len(w.actors) == 2 for w in workers)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 4, Worker=Nanny)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 4, Worker=Nanny)
 def bench_param_server(c, s, *workers):
     import dask.array as da
     import numpy as np
@@ -506,7 +506,7 @@ def test_compute_sync(client):
 
 @gen_cluster(
     client=True,
-    ncores=[("127.0.0.1", 1)],
+    nthreads=[("127.0.0.1", 1)],
     config={"distributed.worker.profile.interval": "1ms"},
 )
 def test_actors_in_profile(c, s, a):

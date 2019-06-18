@@ -321,8 +321,8 @@ def test_WorkerTable(c, s, a, b):
     assert all(wt.source.data.values())
     assert all(len(v) == 2 for v in wt.source.data.values())
 
-    ncores = wt.source.data["ncores"]
-    assert all(ncores)
+    nthreads = wt.source.data["nthreads"]
+    assert all(nthreads)
 
 
 @gen_cluster(client=True)

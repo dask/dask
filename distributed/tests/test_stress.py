@@ -64,7 +64,7 @@ def test_stress_gc(loop, func, n):
 @pytest.mark.skipif(
     sys.platform.startswith("win"), reason="test can leave dangling RPC objects"
 )
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 8, timeout=None)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 8, timeout=None)
 def test_cancel_stress(c, s, *workers):
     da = pytest.importorskip("dask.array")
     x = da.random.random((50, 50), chunks=(2, 2))
@@ -93,7 +93,7 @@ def test_cancel_stress_sync(loop):
                 c.cancel(f)
 
 
-@gen_cluster(ncores=[], client=True, timeout=None)
+@gen_cluster(nthreads=[], client=True, timeout=None)
 def test_stress_creation_and_deletion(c, s):
     # Assertions are handled by the validate mechanism in the scheduler
     s.allowed_failures = 100000
@@ -108,7 +108,7 @@ def test_stress_creation_and_deletion(c, s):
     def create_and_destroy_worker(delay):
         start = time()
         while time() < start + 5:
-            n = Nanny(s.address, ncores=2, loop=s.loop)
+            n = Nanny(s.address, nthreads=2, loop=s.loop)
             n.start(0)
 
             yield gen.sleep(delay)
@@ -122,7 +122,7 @@ def test_stress_creation_and_deletion(c, s):
     )
 
 
-@gen_cluster(ncores=[("127.0.0.1", 1)] * 10, client=True, timeout=60)
+@gen_cluster(nthreads=[("127.0.0.1", 1)] * 10, client=True, timeout=60)
 def test_stress_scatter_death(c, s, *workers):
     import random
 
@@ -198,7 +198,7 @@ def vsum(*args):
 
 @pytest.mark.avoid_travis
 @pytest.mark.slow
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 80, timeout=1000)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 80, timeout=1000)
 def test_stress_communication(c, s, *workers):
     s.validate = False  # very slow otherwise
     da = pytest.importorskip("dask.array")
@@ -218,7 +218,7 @@ def test_stress_communication(c, s, *workers):
 
 
 @pytest.mark.skip
-@gen_cluster(client=True, ncores=[("127.0.0.1", 1)] * 10, timeout=60)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 10, timeout=60)
 def test_stress_steal(c, s, *workers):
     s.validate = False
     for w in workers:
@@ -244,7 +244,7 @@ def test_stress_steal(c, s, *workers):
 
 
 @pytest.mark.slow
-@gen_cluster(ncores=[("127.0.0.1", 1)] * 10, client=True, timeout=120)
+@gen_cluster(nthreads=[("127.0.0.1", 1)] * 10, client=True, timeout=120)
 def test_close_connections(c, s, *workers):
     da = pytest.importorskip("dask.array")
     x = da.random.random(size=(1000, 1000), chunks=(1000, 1))
@@ -269,7 +269,7 @@ def test_close_connections(c, s, *workers):
     reason="IOStream._handle_write blocks on large write_buffer"
     " https://github.com/tornadoweb/tornado/issues/2110"
 )
-@gen_cluster(client=True, timeout=20, ncores=[("127.0.0.1", 1)])
+@gen_cluster(client=True, timeout=20, nthreads=[("127.0.0.1", 1)])
 def test_no_delay_during_large_transfer(c, s, w):
     pytest.importorskip("crick")
     np = pytest.importorskip("numpy")

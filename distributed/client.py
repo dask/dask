@@ -770,12 +770,12 @@ class Client(Node):
         if addr:
             workers = info.get("workers", {})
             nworkers = len(workers)
-            ncores = sum(w["ncores"] for w in workers.values())
+            nthreads = sum(w["nthreads"] for w in workers.values())
             return "<%s: scheduler=%r processes=%d cores=%d>" % (
                 self.__class__.__name__,
                 addr,
                 nworkers,
-                ncores,
+                nthreads,
             )
         elif self.scheduler is not None:
             return "<%s: scheduler=%r>" % (
@@ -830,7 +830,7 @@ class Client(Node):
 
         if info:
             workers = len(info["workers"])
-            cores = sum(w["ncores"] for w in info["workers"].values())
+            cores = sum(w["nthreads"] for w in info["workers"].values())
             memory = sum(w["memory_limit"] for w in info["workers"].values())
             memory = format_bytes(memory)
             text2 = (
@@ -1868,19 +1868,19 @@ class Client(Node):
         else:
             data2 = valmap(to_serialize, data)
             if direct:
-                ncores = None
+                nthreads = None
                 start = time()
-                while not ncores:
-                    if ncores is not None:
+                while not nthreads:
+                    if nthreads is not None:
                         yield gen.sleep(0.1)
                     if time() > start + timeout:
                         raise gen.TimeoutError("No valid workers found")
-                    ncores = yield self.scheduler.ncores(workers=workers)
-                if not ncores:
+                    nthreads = yield self.scheduler.ncores(workers=workers)
+                if not nthreads:
                     raise ValueError("No valid workers")
 
                 _, who_has, nbytes = yield scatter_to_workers(
-                    ncores, data2, report=False, rpc=self.rpc
+                    nthreads, data2, report=False, rpc=self.rpc
                 )
 
                 yield self.scheduler.update_data(
@@ -3013,7 +3013,7 @@ class Client(Node):
             **kwargs
         )
 
-    def ncores(self, workers=None, **kwargs):
+    def nthreads(self, workers=None, **kwargs):
         """ The number of threads/cores available on each worker node
 
         Parameters
@@ -3024,7 +3024,7 @@ class Client(Node):
 
         Examples
         --------
-        >>> c.ncores()  # doctest: +SKIP
+        >>> c.threads()  # doctest: +SKIP
         {'192.168.1.141:46784': 8,
          '192.167.1.142:47548': 8,
          '192.167.1.143:47329': 8,
@@ -3042,6 +3042,8 @@ class Client(Node):
         if workers is not None and not isinstance(workers, (tuple, list, set)):
             workers = [workers]
         return self.sync(self.scheduler.ncores, workers=workers, **kwargs)
+
+    ncores = nthreads
 
     def who_has(self, futures=None, **kwargs):
         """ The workers storing each future's data
@@ -3067,7 +3069,7 @@ class Client(Node):
         See Also
         --------
         Client.has_what
-        Client.ncores
+        Client.nthreads
         """
         if futures is not None:
             futures = self.futures_of(futures)
@@ -3099,7 +3101,7 @@ class Client(Node):
         See Also
         --------
         Client.who_has
-        Client.ncores
+        Client.nthreads
         Client.processing
         """
         if isinstance(workers, tuple) and all(
@@ -3130,7 +3132,7 @@ class Client(Node):
         --------
         Client.who_has
         Client.has_what
-        Client.ncores
+        Client.nthreads
         """
         if isinstance(workers, tuple) and all(
             isinstance(i, (str, tuple)) for i in workers

@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
 from time import sleep
-import sys
 
 import pytest
 from tornado import gen
@@ -113,9 +112,8 @@ def test_picklability_sync(client):
     assert q.get() == 11
 
 
-@pytest.mark.skipif(sys.version_info[0] == 2, reason="Multi-client issues")
 @pytest.mark.slow
-@gen_cluster(client=True, ncores=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
 def test_race(c, s, *workers):
     def f(i):
         with worker_client() as c:

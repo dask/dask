@@ -110,19 +110,19 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(ncores, data, rpc=rpc, report=True, serializers=None):
+def scatter_to_workers(nthreads, data, rpc=rpc, report=True, serializers=None):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
-    how many cores they have.  ncores should be a dictionary mapping worker
+    how many cores they have.  nthreads should be a dictionary mapping worker
     identities to numbers of cores.
 
     See scatter for parameter docstring
     """
-    assert isinstance(ncores, dict)
+    assert isinstance(nthreads, dict)
     assert isinstance(data, dict)
 
-    workers = list(concat([w] * nc for w, nc in ncores.items()))
+    workers = list(concat([w] * nc for w, nc in nthreads.items()))
     names, data = list(zip(*data.items()))
 
     worker_iter = drop(_round_robin_counter[0] % len(workers), cycle(workers))

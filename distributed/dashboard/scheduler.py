@@ -189,7 +189,7 @@ class Occupancy(DashboardComponent):
             if total:
                 self.root.title.text = "Occupancy -- total time: %s  wall time: %s" % (
                     format_time(total),
-                    format_time(total / self.scheduler.total_ncores),
+                    format_time(total / self.scheduler.total_nthreads),
                 )
             else:
                 self.root.title.text = "Occupancy"
@@ -1179,7 +1179,7 @@ class WorkerTable(DashboardComponent):
         self.names = [
             "name",
             "address",
-            "ncores",
+            "nthreads",
             "cpu",
             "memory",
             "memory_limit",
@@ -1198,7 +1198,7 @@ class WorkerTable(DashboardComponent):
         table_names = [
             "name",
             "address",
-            "ncores",
+            "nthreads",
             "cpu",
             "memory",
             "memory_limit",
@@ -1223,7 +1223,7 @@ class WorkerTable(DashboardComponent):
             "read_bytes": NumberFormatter(format="0 b"),
             "write_bytes": NumberFormatter(format="0 b"),
             "num_fds": NumberFormatter(format="0"),
-            "ncores": NumberFormatter(format="0"),
+            "nthreads": NumberFormatter(format="0"),
         }
 
         if BOKEH_VERSION < "0.12.15":
@@ -1345,8 +1345,8 @@ class WorkerTable(DashboardComponent):
                 data["memory_percent"][-1] = ""
             data["memory_limit"][-1] = ws.memory_limit
             data["cpu"][-1] = ws.metrics["cpu"] / 100.0
-            data["cpu_fraction"][-1] = ws.metrics["cpu"] / 100.0 / ws.ncores
-            data["ncores"][-1] = ws.ncores
+            data["cpu_fraction"][-1] = ws.metrics["cpu"] / 100.0 / ws.nthreads
+            data["nthreads"][-1] = ws.nthreads
 
         self.source.data.update(data)
 

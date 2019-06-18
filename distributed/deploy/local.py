@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import atexit
 import logging
 import math
+import multiprocessing
 import warnings
 import weakref
 
@@ -11,7 +12,7 @@ from dask.utils import factors
 from .spec import SpecCluster
 from ..nanny import Nanny
 from ..scheduler import Scheduler
-from ..worker import Worker, parse_memory_limit, _ncores
+from ..worker import Worker, parse_memory_limit
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class LocalCluster(SpecCluster):
     --------
     >>> cluster = LocalCluster()  # Create a local cluster with as many workers as cores  # doctest: +SKIP
     >>> cluster  # doctest: +SKIP
-    LocalCluster("127.0.0.1:8786", workers=8, ncores=8)
+    LocalCluster("127.0.0.1:8786", workers=8, threads=8)
 
     >>> c = Client(cluster)  # connect to local cluster  # doctest: +SKIP
 
@@ -141,21 +142,23 @@ class LocalCluster(SpecCluster):
         worker_services = worker_services or {}
         if n_workers is None and threads_per_worker is None:
             if processes:
-                n_workers, threads_per_worker = nprocesses_nthreads(_ncores)
+                n_workers, threads_per_worker = nprocesses_nthreads()
             else:
                 n_workers = 1
-                threads_per_worker = _ncores
+                threads_per_worker = multiprocessing.cpu_count()
         if n_workers is None and threads_per_worker is not None:
-            n_workers = max(1, _ncores // threads_per_worker)
+            n_workers = max(1, multiprocessing.cpu_count() // threads_per_worker)
         if n_workers and threads_per_worker is None:
             # Overcommit threads per worker, rather than undercommit
-            threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
+            threads_per_worker = max(
+                1, int(math.ceil(multiprocessing.cpu_count() / n_workers))
+            )
         if n_workers and "memory_limit" not in worker_kwargs:
             worker_kwargs["memory_limit"] = parse_memory_limit("auto", 1, n_workers)
 
         worker_kwargs.update(
             {
-                "ncores": threads_per_worker,
+                "nthreads": threads_per_worker,
                 "services": worker_services,
                 "dashboard_address": worker_dashboard_address,
                 "interface": interface,
@@ -197,15 +200,15 @@ class LocalCluster(SpecCluster):
         )
 
     def __repr__(self):
-        return "%s(%r, workers=%d, ncores=%d)" % (
+        return "%s(%r, workers=%d, nthreads=%d)" % (
             type(self).__name__,
             self.scheduler_address,
             len(self.workers),
-            sum(w.ncores for w in self.workers.values()),
+            sum(w.nthreads for w in self.workers.values()),
         )
 
 
-def nprocesses_nthreads(n):
+def nprocesses_nthreads(n=multiprocessing.cpu_count()):
     """
     The default breakdown of processes and threads for a given number of cores
 

@@ -148,7 +148,7 @@ def test_timeout_get(c, s, a, b):
 
 @pytest.mark.skipif(sys.version_info[0] == 2, reason="Multi-client issues")
 @pytest.mark.slow
-@gen_cluster(client=True, ncores=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
 def test_race(c, s, *workers):
     NITERS = 50
 

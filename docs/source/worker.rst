@@ -100,7 +100,7 @@ are the available options::
      --name TEXT            Alias
      --memory-limit TEXT    Maximum bytes of memory that this worker should use.
                             Use 0 for unlimited, or 'auto' for
-                            TOTAL_MEMORY * min(1, ncores / total_cores)
+                            TOTAL_MEMORY * min(1, nthreads / total_nthreads)
      --no-nanny
      --help                 Show this message and exit.
 
@@ -151,7 +151,7 @@ command line ``--memory-limit`` keyword or the ``memory_limit=`` Python
 keyword argument, which sets the memory limit per worker processes launched
 by dask-worker ::
 
-    $ dask-worker tcp://scheduler:port --memory-limit=auto  # TOTAL_MEMORY * min(1, ncores / total_cores)
+    $ dask-worker tcp://scheduler:port --memory-limit=auto  # TOTAL_MEMORY * min(1, nthreads / total_nthreads)
     $ dask-worker tcp://scheduler:port --memory-limit=4e9  # four gigabytes per worker process.
 
 Workers use a few different heuristics to keep memory use beneath this limit:

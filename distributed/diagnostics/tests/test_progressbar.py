@@ -44,7 +44,7 @@ def test_TextProgressBar_empty(capsys):
     @gen_test()
     def f():
         s = yield Scheduler(port=0)
-        a, b = yield [Worker(s.address, ncores=1), Worker(s.address, ncores=1)]
+        a, b = yield [Worker(s.address, nthreads=1), Worker(s.address, nthreads=1)]
 
         progress = TextProgressBar([], scheduler=s.address, start=False, interval=0.01)
         yield progress.listen()

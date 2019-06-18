@@ -14,7 +14,7 @@ from distributed.utils_test import inc, gen_cluster, slowinc, slowadd
 from distributed.utils_test import client, cluster_fixture, loop, s, a, b  # noqa: F401
 
 
-@gen_cluster(client=True, ncores=[])
+@gen_cluster(client=True, nthreads=[])
 def test_resources(c, s):
     assert not s.worker_resources
     assert not s.resources
@@ -37,7 +37,7 @@ def test_resources(c, s):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 5}}),
         ("127.0.0.1", 1, {"resources": {"A": 1, "B": 1}}),
     ],
@@ -65,7 +65,7 @@ def test_resource_submit(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -80,7 +80,7 @@ def test_submit_many_non_overlapping(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -96,7 +96,7 @@ def test_move(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -114,7 +114,7 @@ def test_dont_work_steal(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -128,7 +128,7 @@ def test_map(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -147,7 +147,7 @@ def test_persist(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 11}}),
     ],
@@ -170,7 +170,7 @@ def test_compute(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -184,7 +184,7 @@ def test_get(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -222,7 +222,7 @@ def test_resources_str(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 4, {"resources": {"A": 2}}),
         ("127.0.0.1", 4, {"resources": {"A": 1}}),
     ],
@@ -240,7 +240,7 @@ def test_submit_many_non_overlapping(c, s, a, b):
     assert b.total_resources == b.available_resources
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 4, {"resources": {"A": 2, "B": 1}})])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 4, {"resources": {"A": 2, "B": 1}})])
 def test_minimum_resource(c, s, a):
     futures = c.map(slowinc, range(30), resources={"A": 1, "B": 1}, delay=0.02)
 
@@ -252,7 +252,7 @@ def test_minimum_resource(c, s, a):
     assert a.total_resources == a.available_resources
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 2, {"resources": {"A": 1}})])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 2, {"resources": {"A": 1}})])
 def test_prefer_constrained(c, s, a):
     futures = c.map(slowinc, range(1000), delay=0.1)
     constrained = c.map(inc, range(10), resources={"A": 1})
@@ -270,7 +270,7 @@ def test_prefer_constrained(c, s, a):
 @pytest.mark.skip(reason="")
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 2, {"resources": {"A": 1}}),
         ("127.0.0.1", 2, {"resources": {"A": 1}}),
     ],
@@ -284,7 +284,7 @@ def test_balance_resources(c, s, a, b):
     assert any(f.key in b.data for f in constrained)
 
 
-@gen_cluster(client=True, ncores=[("127.0.0.1", 2)])
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 2)])
 def test_set_resources(c, s, a):
     yield a.set_resources(A=2)
     assert a.total_resources["A"] == 2
@@ -303,7 +303,7 @@ def test_set_resources(c, s, a):
 
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -325,7 +325,7 @@ def test_persist_collections(c, s, a, b):
 @pytest.mark.skip(reason="Should protect resource keys from optimization")
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
@@ -346,7 +346,7 @@ def test_dont_optimize_out(c, s, a, b):
 @pytest.mark.xfail(reason="atop fusion seemed to break this")
 @gen_cluster(
     client=True,
-    ncores=[
+    nthreads=[
         ("127.0.0.1", 1, {"resources": {"A": 1}}),
         ("127.0.0.1", 1, {"resources": {"B": 1}}),
     ],
