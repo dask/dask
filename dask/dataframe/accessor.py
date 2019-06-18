@@ -39,6 +39,13 @@ class Accessor(object):
     def _validate(self, series):
         pass
 
+    @property
+    def _accessor(self):
+        meta = self._series._meta
+        if hasattr(meta, 'to_series'):  # is index-like
+            meta = meta.to_series()
+        return getattr(type(meta), self._accessor_name)
+
     @staticmethod
     def _delegate_property(obj, accessor, attr):
         out = getattr(getattr(obj, accessor, obj), attr)
@@ -96,7 +103,6 @@ class DatetimeAccessor(Accessor):
 
     >>> s.dt.microsecond  # doctest: +SKIP
     """
-    _accessor = pd.Series.dt
     _accessor_name = 'dt'
 
 
@@ -108,7 +114,6 @@ class StringAccessor(Accessor):
 
     >>> s.str.lower()  # doctest: +SKIP
     """
-    _accessor = pd.Series.str
     _accessor_name = 'str'
     _not_implemented = {'get_dummies'}
 
