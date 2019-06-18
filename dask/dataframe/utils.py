@@ -29,6 +29,7 @@ from ..utils import is_index_like as dask_is_index_like
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
+PANDAS_GT_0230 = PANDAS_VERSION >= LooseVersion("0.23.0")
 PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0rc1")
 HAS_INT_NA = PANDAS_GT_0240
 

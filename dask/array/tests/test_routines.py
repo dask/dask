@@ -550,6 +550,7 @@ def test_histogram_alternative_bins_range():
     assert_eq(b1, b2)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value:RuntimeWarning")
 def test_histogram_bins_range_with_nan_array():
     # Regression test for issue #3977
     v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)

@@ -876,6 +876,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         compute : bool, optional
             Whether to compute the result, default is True.
         """
+        return self._head(n=n, npartitions=npartitions, compute=compute, safe=True)
+
+    def _head(self, n, npartitions, compute, safe):
         if npartitions <= -1:
             npartitions = self.npartitions
         if npartitions > self.npartitions:
@@ -883,6 +886,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             raise ValueError(msg.format(self.npartitions, npartitions))
 
         name = 'head-%d-%d-%s' % (npartitions, n, self._name)
+        if safe:
+            head = safe_head
+        else:
+            head = M.head
 
         if npartitions > 1:
             name_p = 'head-partial-%d-%s' % (n, self._name)
@@ -892,9 +899,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 dsk[(name_p, i)] = (M.head, (self._name, i), n)
 
             concat = (_concat, [(name_p, i) for i in range(npartitions)])
-            dsk[(name, 0)] = (safe_head, concat, n)
+            dsk[(name, 0)] = (head, concat, n)
         else:
-            dsk = {(name, 0): (safe_head, (self._name, 0), n)}
+            dsk = {(name, 0): (head, (self._name, 0), n)}
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         result = new_dd_object(graph, name, self._meta,
@@ -1743,7 +1750,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             # count
             data.count(split_every=split_every),
             # most common value
-            vcounts.head(1, compute=False)
+            vcounts._head(1, npartitions=1, compute=False, safe=False)
         ]
 
         if is_datetime64_any_dtype(data._meta):
@@ -2512,7 +2519,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         >>> def myadd(x, a, b=1):
         ...     return x + a + b
-        >>> res = ds.apply(myadd, args=(2,), b=1.5)
+        >>> res = ds.apply(myadd, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -3356,7 +3363,7 @@ class DataFrame(_Frame):
 
         >>> def myadd(row, a, b=1):
         ...     return row.sum() + a + b
-        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)
+        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -4839,7 +4846,7 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
 
 
 def safe_head(df, n):
-    r = df.head(n=n)
+    r = M.head(df, n)
     if len(r) != n:
         msg = ("Insufficient elements for `head`. {0} elements "
                "requested, only {1} elements available. Try passing larger "
