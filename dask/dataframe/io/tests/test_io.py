@@ -522,7 +522,7 @@ def test_to_records_with_lengths(lengths):
 
     assert isinstance(result, da.Array)
 
-    expected_chunks = ((2, 2), (2,))
+    expected_chunks = ((2, 2),)
 
     assert result.chunks == expected_chunks
 

@@ -2050,7 +2050,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         return arr._chunks
 
-      def _is_index_level_reference(self, key):
+    def _is_index_level_reference(self, key):
         """
         Test whether a key is an index level reference
 
@@ -3520,7 +3520,7 @@ class DataFrame(_Frame):
         records = to_records(self)
 
         chunks = self._validate_chunks(records, lengths)
-        records._chunks = chunks
+        records._chunks = (chunks[0],)
 
         return records
 
