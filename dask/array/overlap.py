@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 from itertools import product
 from numbers import Integral
-from numpy import isscalar
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
@@ -242,7 +241,7 @@ def _trim(x, axes, boundary, block_info):
     axes_front = ( ax[0] if isinstance(ax,tuple)
                    else ax for ax in axes)
     axes_back = ( -ax[1] if isinstance(ax,tuple) and ax[1]
-                  else -ax if isscalar(ax) and ax
+                  else -ax if isinstance(ax,Integral) and ax
                   else None for ax in axes)
 
     trim_front = (
@@ -511,10 +510,12 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     depth: int, tuple, or dict
         The number of elements that each block should share with its neighbors
         If a tuple or dict then this can be different per axis
+        Assymetric depth may be specified using a dict value of (-/+) tuples
     boundary: str, tuple, dict
         How to handle the boundaries.
         Values include 'reflect', 'periodic', 'nearest', 'none',
         or any constant value like 0 or np.nan
+        Assymetric boundaries must specify boundary='none' 
     trim: bool
         Whether or not to trim ``depth`` elements from each block after
         calling the map function.
@@ -559,6 +560,8 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     for i in range(x.ndim):
         if isinstance(depth2[i],tuple):
             if boundary2[i] != 'none':
+                print("assymetric overlap only supports 'none'\
+                boundaries")
                 raise NotImplementedError
 
     assert all(type(c) is int for cc in x.chunks for c in cc)
