@@ -534,11 +534,13 @@ def test_to_records_raises():
                       index=pd.Index([1., 2., 3., 4.], name='ind'))
     ddf = dd.from_pandas(df, 2)
 
-    with pytest.raises(ValueError, message="3 != 2"):
+    with pytest.raises(ValueError):
         ddf.to_records(lengths=[2, 2, 2])
+        pytest.fail("3 != 2")
 
-    with pytest.raises(ValueError, message="Unexpected value"):
+    with pytest.raises(ValueError):
         ddf.to_records(lengths=5)
+        pytest.fail("Unexpected value")
 
 
 def test_from_delayed():
