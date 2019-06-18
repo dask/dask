@@ -28,3 +28,8 @@ These pages provide four options for profiling parallel code:
 2.  :ref:`Single threaded scheduler and a normal Python profiler <single-threaded-scheduler>`
 3.  :doc:`Diagnostics for the single-machine scheduler <diagnostics-local>`
 4.  :doc:`Dask distributed dashboard <diagnostics-distributed>`
+
+Additionally, if you are interested in understanding the various phases where
+slowdown can occur, you may wish to read the following:
+
+-  :doc:`Phases of computation <phases-of-computation>`

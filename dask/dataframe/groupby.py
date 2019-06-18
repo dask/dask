@@ -11,13 +11,14 @@ import pandas as pd
 from .core import (DataFrame, Series, aca, map_partitions,
                    new_dd_object, no_default, split_out_on_index,
                    _extract_meta)
-from .methods import drop_columns
+from .methods import drop_columns, concat
 from .shuffle import shuffle
 from .utils import (make_meta, insert_meta_param_description,
                     raise_on_meta_error, is_series_like, is_dataframe_like)
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
+from .. import compatibility
 
 
 # #############################################
@@ -87,7 +88,8 @@ def _maybe_slice(grouped, columns):
     """
     Slice columns if grouped is pd.DataFrameGroupBy
     """
-    if isinstance(grouped, pd.core.groupby.DataFrameGroupBy):
+    # FIXME: update with better groupby object detection (i.e.: ngroups, get_group)
+    if 'groupby' in type(grouped).__name__.lower():
         if columns is not None:
             if isinstance(columns, (tuple, list, set, pd.Index)):
                 columns = list(columns)
@@ -144,7 +146,8 @@ def _groupby_raise_unaligned(df, **kwargs):
 def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    g = df.groupby(grouper)
+    group_keys = kwargs.pop('group_keys', True)
+    g = df.groupby(grouper, group_keys=group_keys)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
@@ -179,6 +182,8 @@ class Aggregation(object):
     operations on Pandas dataframes in a map-reduce style. You need to specify
     what operation to do on each chunk of data, how to combine those chunks of
     data together, and then how to finalize the result.
+
+    See :ref:`dataframe.groupby.aggregate` for more.
 
     Parameters
     ----------
@@ -264,7 +269,7 @@ def _var_chunk(df, *index):
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index
-    return pd.concat([x, x2, n], axis=1)
+    return concat([x, x2, n], axis=1)
 
 
 def _var_combine(g, levels):
@@ -288,6 +293,137 @@ def _var_agg(g, levels, ddof):
     return result
 
 
+def _cov_combine(g, levels):
+    return g
+
+
+def _cov_finalizer(df, cols):
+    vals = []
+    num_elements = len(list(it.product(cols, repeat=2)))
+    num_cols = len(cols)
+    vals = list(range(num_elements))
+    col_idx_mapping = dict(zip(cols, range(num_cols)))
+    for i, j in it.combinations_with_replacement(df[cols].columns, 2):
+        x = col_idx_mapping[i]
+        y = col_idx_mapping[j]
+        idx = x + num_cols * y
+        mul_col = "%s%s" % (i, j)
+        ni = df["%s-count" % i]
+        nj = df["%s-count" % j]
+
+        n = np.sqrt(ni * nj)
+        div = n - 1
+        div[div < 0] = 0
+        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
+
+        vals[idx] = val
+        if i != j:
+            idx = num_cols * x + y
+            vals[idx] = val
+
+    level_1 = cols
+    index = pd.MultiIndex.from_product([level_1, level_1])
+    return pd.Series(vals, index=index)
+
+
+def _mul_cols(df, cols):
+    """Internal function to be used with apply to multiply
+    each column in a dataframe by every other column
+
+    a b c -> a*a, a*b, b*b, b*c, c*c
+    """
+    _df = type(df)()
+    for i, j in it.combinations_with_replacement(cols, 2):
+        col = "%s%s" % (i, j)
+        _df[col] = df[i] * df[j]
+    return _df
+
+
+def _cov_chunk(df, *index):
+    if is_series_like(df):
+        df = df.to_frame()
+    df = df.copy()
+
+    # mapping columns to str(numerical) values allows us to easily handle
+    # arbitrary column names (numbers, string, empty strings)
+    col_mapping = collections.OrderedDict()
+    for i, c in enumerate(df.columns):
+        col_mapping[c] = str(i)
+    df = df.rename(columns=col_mapping)
+    cols = df._get_numeric_data().columns
+
+    # when grouping by external series don't exclude columns
+    is_mask = any(is_series_like(s) for s in index)
+    if not is_mask:
+        index = [col_mapping[k] for k in index]
+        cols = cols.drop(np.array(index))
+
+    g = _groupby_raise_unaligned(df, by=index)
+    x = g.sum()
+
+    level = len(index)
+    mul = g.apply(_mul_cols, cols=cols).reset_index(level=level, drop=True)
+    n = g[x.columns].count().rename(columns=lambda c: "{}-count".format(c))
+    return (x, mul, n, col_mapping)
+
+
+def _cov_agg(_t, levels, ddof):
+    sums = []
+    muls = []
+    counts = []
+
+    # sometime we get a series back from concat combiner
+    t = list(_t)
+
+    cols = t[0][0].columns
+    for x, mul, n, col_mapping in t:
+        sums.append(x)
+        muls.append(mul)
+        counts.append(n)
+        col_mapping = col_mapping
+
+    total_sums = concat(sums).groupby(level=levels, sort=False).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=False).sum()
+    total_counts = concat(counts).groupby(level=levels).sum()
+    result = (
+        concat([total_sums, total_muls, total_counts], axis=1)
+        .groupby(level=levels)
+        .apply(_cov_finalizer, cols=cols)
+    )
+
+    inv_col_mapping = {v: k for k, v in col_mapping.items()}
+    idx_vals = result.index.names
+    idx_mapping = list()
+
+    # when index is None we probably have selected a particular column
+    # df.groupby('a')[['b']].cov()
+    if len(idx_vals) == 1 and all(n is None for n in idx_vals):
+        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+
+    for idx, val in enumerate(idx_vals):
+        idx_name = inv_col_mapping.get(val, val)
+        idx_mapping.append(idx_name)
+
+        if len(result.columns.levels[0]) < len(col_mapping):
+            # removing index from col_mapping (produces incorrect multiindexes)
+            try:
+                col_mapping.pop(idx_name)
+            except KeyError:
+                # when slicing the col_map will not have the index
+                pass
+
+    keys = list(col_mapping.keys())
+    for level in range(len(result.columns.levels)):
+        result.columns.set_levels(keys, level=level, inplace=True)
+
+    result.index.set_names(idx_mapping, inplace=True)
+
+    # stacking can lead to a sorted index
+    s_result = result.stack(dropna=False)
+    assert is_dataframe_like(s_result)
+    return s_result
+
+
 ###############################################################
 # nunique
 ###############################################################
@@ -298,7 +434,7 @@ def _nunique_df_chunk(df, *index, **kwargs):
 
     g = _groupby_raise_unaligned(df, by=index)
     if len(df) > 0:
-        grouped = g[[name]].apply(pd.DataFrame.drop_duplicates)
+        grouped = g[[name]].apply(M.drop_duplicates)
         # we set the index here to force a possibly duplicate index
         # for our reduce step
         if isinstance(levels, list):
@@ -671,7 +807,11 @@ def _groupby_apply_funcs(df, *index, **kwargs):
         else:
             result[result_column] = r
 
-    return pd.DataFrame(result)
+    if is_dataframe_like(df):
+        return type(df)(result)
+    else:
+        # Get the DataFrame type of this Series object
+        return type(df.head(0).to_frame())(result)
 
 
 def _compute_sum_of_squares(grouped, column):
@@ -688,7 +828,7 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level):
     for result_column, func, kwargs in finalize_funcs:
         result[result_column] = func(df, **kwargs)
 
-    return pd.DataFrame(result)
+    return type(df)(result)
 
 
 def _apply_func_to_column(df_like, column, func):
@@ -762,10 +902,13 @@ class _GroupBy(object):
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
+    group_keys: bool
+        Passed to pandas.DataFrame.groupby()
     """
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, group_keys=True):
 
         assert isinstance(df, (DataFrame, Series))
+        self.group_keys = group_keys
         self.obj = df
         # grouping key passed via groupby method
         self.index = _normalize_index(df, by)
@@ -796,7 +939,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        self._meta = self.obj._meta.groupby(index_meta)
+        self._meta = self.obj._meta.groupby(index_meta, group_keys=group_keys)
 
     @property
     def _meta_nonempty(self):
@@ -814,7 +957,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(index_meta)
+        grouped = sample.groupby(index_meta, group_keys=self.group_keys)
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(self, token, func, aggfunc=None, split_every=None,
@@ -1000,6 +1143,42 @@ class _GroupBy(object):
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 
+    @derived_from(pd.DataFrame)
+    def cov(self, ddof=1, split_every=None, split_out=1):
+        """Groupby covariance is accomplished by
+
+        1. Computing intermediate values for sum, count, and the product of
+           all columns: a b c -> a*a, a*b, b*b, b*c, c*c.
+
+        2. The values are then aggregated and the final covariance value is calculated:
+           cov(X,Y) = X*Y - Xbar * Ybar
+        """
+
+        levels = _determine_levels(self.index)
+
+        is_mask = any(is_series_like(s) for s in self.index)
+        if self._slice:
+            if is_mask:
+                self.obj = self.obj[self._slice]
+            else:
+                sliced_plus = list(self._slice) + list(self.index)
+                self.obj = self.obj[sliced_plus]
+
+        result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
+                     chunk=_cov_chunk,
+                     aggregate=_cov_agg, combine=_cov_combine,
+                     token=self._token_prefix + 'cov',
+                     aggregate_kwargs={'ddof': ddof, 'levels': levels},
+                     combine_kwargs={'levels': levels},
+                     split_every=split_every, split_out=split_out,
+                     split_out_setup=split_out_on_index)
+
+        if isinstance(self.obj, Series):
+            result = result[result.columns[0]]
+        if self._slice:
+            result = result[self._slice]
+        return result
+
     @derived_from(pd.core.groupby.GroupBy)
     def first(self, split_every=None, split_out=1):
         return self._aca_agg(token='first', func=M.first, split_every=split_every,
@@ -1101,6 +1280,17 @@ class _GroupBy(object):
         1.  The user should provide output metadata.
         2.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
+        3.  Dask's GroupBy.apply is not appropriate for aggregations. For custom
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
+
+        .. warning::
+
+           Pandas' groupby-apply can be used to to apply arbitrary functions,
+           including aggregations that result in one row per group. Dask's
+           groupby-apply will apply ``func`` once to each partition-group pair,
+           so when ``func`` is a reduction you'll end up with one row per
+           partition-group pair. To apply a custom aggregation with Dask,
+           use :class:`dask.dataframe.groupby.Aggregation`.
 
         Parameters
         ----------
@@ -1191,7 +1381,7 @@ class _GroupBy(object):
         # Perform embarrassingly parallel groupby-apply
         kwargs['meta'] = meta
         df5 = map_partitions(_groupby_slice_apply, df4, index2,
-                             self._slice, func, token=funcname(func), *args,
+                             self._slice, func, token=funcname(func), *args, group_keys=self.group_keys,
                              **kwargs)
 
         return df5
@@ -1213,7 +1403,8 @@ class DataFrameGroupBy(_GroupBy):
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(filter(pd.compat.isidentifier, self.obj.columns))))
+                      list(filter(compatibility.isidentifier,
+                                  self.obj.columns))))
 
     def __getattr__(self, key):
         try:
@@ -1237,7 +1428,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, **kwargs):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1255,7 +1446,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name

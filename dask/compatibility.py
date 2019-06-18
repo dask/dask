@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 import functools
 import inspect
 import operator
+import re
 import sys
 import types
 
@@ -104,7 +105,8 @@ if PY3:
         """Get all non ``*args/**kwargs`` arguments for a function"""
         s = inspect.signature(func)
         return [n for n, p in s.parameters.items()
-                if p.kind == p.POSITIONAL_OR_KEYWORD]
+                if p.kind in [p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY,
+                              p.KEYWORD_ONLY]]
 
     def reraise(exc, tb=None):
         if exc.__traceback__ is not tb:
@@ -112,6 +114,9 @@ if PY3:
         raise exc
 
     import pickle as cPickle
+
+    def isidentifier(s):
+        return s.isidentifier()
 
 else:
     import __builtin__ as builtins
@@ -306,6 +311,11 @@ else:
 
 
     import cPickle
+
+    _name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
+
+    def isidentifier(s):
+        return bool(_name_re.match(s))
 
 
 def getargspec(func):

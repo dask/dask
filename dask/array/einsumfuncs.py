@@ -1,11 +1,10 @@
 from __future__ import division, print_function, absolute_import
 
-from functools import wraps
-
 import numpy as np
 from numpy.compat import basestring
 
 from .core import blockwise, asarray, einsum_lookup
+from ..utils import derived_from
 
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
@@ -193,16 +192,11 @@ def parse_einsum_input(operands):
     return (input_subscripts, output_subscript, operands)
 
 
-@wraps(np.einsum)
+@derived_from(np)
 def einsum(*operands, **kwargs):
-    casting = kwargs.pop('casting', 'safe')
     dtype = kwargs.pop('dtype', None)
     optimize = kwargs.pop('optimize', False)
-    order = kwargs.pop('order', 'K')
     split_every = kwargs.pop('split_every', None)
-    if kwargs:
-        raise TypeError("einsum() got unexpected keyword "
-                        "argument(s) %s" % ",".join(kwargs))
 
     einsum_dtype = dtype
 
@@ -238,8 +232,8 @@ def einsum(*operands, **kwargs):
                        adjust_chunks={ind: 1 for ind in contract_inds}, dtype=dtype,
                        # np.einsum parameters
                        subscripts=subscripts, kernel_dtype=einsum_dtype,
-                       ncontract_inds=ncontract_inds, order=order,
-                       casting=casting, optimize=optimize)
+                       ncontract_inds=ncontract_inds,
+                       optimize=optimize, **kwargs)
 
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:

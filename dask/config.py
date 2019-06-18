@@ -252,7 +252,7 @@ def ensure_file(
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except OSError:
+    except (IOError, OSError):
         pass
 
 
@@ -448,7 +448,7 @@ def rename(aliases, config=config):
             new[n] = value
 
     for k in old:
-        del config[k]  # TODO: support nested keys
+        del config[canonical_name(k, config)]  # TODO: support nested keys
 
     set(new, config=config)
 
@@ -497,3 +497,14 @@ def expand_environment_variables(config):
 
 
 refresh()
+
+
+if yaml:
+    fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
+    ensure_file(source=fn)
+
+    with open(fn) as f:
+        _defaults = yaml.safe_load(f)
+
+    update_defaults(_defaults)
+    del fn, _defaults

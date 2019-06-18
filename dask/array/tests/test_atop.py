@@ -1,4 +1,5 @@
 import collections
+import warnings
 from operator import add
 
 import pytest
@@ -114,7 +115,6 @@ def test_optimize_blockwise():
     x = da.ones(10, chunks=(5,))
     y = ((((x + 1) + 2) + 3) + 4)
 
-    # dsk = da.optimization.optimize_blockwise(y.dask)
     dsk = da.optimization.optimize_blockwise(y.dask)
 
     assert isinstance(dsk, HighLevelGraph)
@@ -454,7 +454,9 @@ def test_validate_top_inputs():
 
 
 def test_gh_4176():
-    from dask.sharedict import ShareDict
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        from dask.sharedict import ShareDict
 
     def foo(A):
         return A[None, ...]

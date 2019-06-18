@@ -305,7 +305,7 @@ def test_check_meta():
         check_meta(d, meta.d.astype('f8'), numeric_equal=False)
     assert str(err.value) == ('Metadata mismatch found.\n'
                               '\n'
-                              'Partition type: `Series`\n'
+                              'Partition type: `pandas.core.series.Series`\n'
                               '+----------+---------+\n'
                               '|          | dtype   |\n'
                               '+----------+---------+\n'
@@ -322,7 +322,7 @@ def test_check_meta():
     exp = (
         'Metadata mismatch found in `from_delayed`.\n'
         '\n'
-        'Partition type: `DataFrame`\n'
+        'Partition type: `pandas.core.frame.DataFrame`\n'
         '+--------+----------+----------+\n'
         '| Column | Found    | Expected |\n'
         '+--------+----------+----------+\n'
@@ -331,6 +331,17 @@ def test_check_meta():
         '| e      | category | -        |\n'
         '+--------+----------+----------+')
     assert str(err.value) == exp
+
+
+def test_check_meta_typename():
+    df = pd.DataFrame({'x': []})
+    ddf = dd.from_pandas(df, npartitions=1)
+    check_meta(df, df)
+    with pytest.raises(Exception) as info:
+        check_meta(ddf, df)
+
+    assert "dask" in str(info.value)
+    assert "pandas" in str(info.value)
 
 
 def test_is_dataframe_like():

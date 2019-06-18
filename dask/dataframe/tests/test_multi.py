@@ -1,5 +1,6 @@
 import warnings
 
+import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -321,6 +322,63 @@ def test_concat(join):
         expected = pd.concat([pd1, pd2])
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize('join', ['inner', 'outer'])
+def test_concat_different_dtypes(join):
+    # check that the resulting dataframe has coherent dtypes
+    # refer to https://github.com/dask/dask/issues/4685
+    pdf1 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
+                         'y': list('abcdef')},
+                        index=[1, 2, 3, 4, 6, 7])
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({'x': [1.0, 2.0, 3.0, 4.0, 6.0, 7.0],
+                         'y': list('abcdef')},
+                        index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    expected = pd.concat([pdf1, pdf2], join=join)
+    result = dd.concat([ddf1, ddf2], join=join)
+    assert_eq(expected, result)
+
+    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
+    assert len(set(map(str, dtypes_list))) == 1  # all the same
+
+
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+@pytest.mark.parametrize('on_index', [True, False])
+def test_merge_columns_dtypes(how, on_index):
+    # tests results of merges with merge columns having different dtypes;
+    # asserts that either the merge was successful or the corresponding warning is raised
+    # addresses issue #4574
+
+    df1 = pd.DataFrame({"A": list(np.arange(5).astype(float)) * 2,
+                        "B": list(np.arange(5)) * 2})
+    df2 = pd.DataFrame({"A": np.arange(5), "B": np.arange(5)})
+
+    a = dd.from_pandas(df1, 2)  # merge column "A" is float
+    b = dd.from_pandas(df2, 2)  # merge column "A" is int
+
+    on = ["A"]
+    left_index = right_index = on_index
+
+    if on_index:
+        a = a.set_index("A")
+        b = b.set_index("A")
+        on = None
+
+    with pytest.warns(None) as record:
+        result = dd.merge(a, b, on=on, how=how,
+                          left_index=left_index, right_index=right_index)
+
+    warned = any('merge column data type mismatches' in str(r) for r in record)
+
+    # result type depends on merge operation -> convert to pandas
+    result = result if isinstance(result, pd.DataFrame) else result.compute()
+
+    has_nans = result.isna().values.any()
+
+    assert (has_nans and warned) or not has_nans
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])

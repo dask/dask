@@ -524,8 +524,9 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
                             type(df).__name__)
 
     if meta is None:
-        meta = dfs[0].compute()
-    meta = make_meta(meta)
+        meta = delayed(make_meta)(dfs[0]).compute()
+    else:
+        meta = make_meta(meta)
 
     name = prefix + '-' + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)

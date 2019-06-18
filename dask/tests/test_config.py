@@ -318,7 +318,7 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
 
 
 def test_rename():
-    aliases = {'foo-bar': 'foo.bar'}
+    aliases = {'foo_bar': 'foo.bar'}
     config = {'foo-bar': 123}
     rename(aliases, config=config)
     assert config == {'foo': {'bar': 123}}
@@ -392,3 +392,7 @@ def test_get_set_roundtrip(key):
 
 def test_merge_None_to_dict():
     assert dask.config.merge({'a': None, 'c': 0}, {'a': {'b': 1}}) == {'a': {'b': 1}, 'c': 0}
+
+
+def test_core_file():
+    assert 'temporary-directory' in dask.config.config

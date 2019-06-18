@@ -87,10 +87,6 @@ if [[ $NUMPY > '1.13.0' ]]; then
     fi
 fi
 
-if [[ $PYTHON == '2.7' ]]; then
-    pip install --no-deps backports.lzma mock
-fi
-
 pip install --upgrade --no-deps \
     cachey \
     graphviz \

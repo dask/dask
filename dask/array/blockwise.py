@@ -3,10 +3,38 @@ import warnings
 
 import toolz
 
+import numpy as np
+
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
+
+
+def blockwise_meta(func, dtype, *args, **kwargs):
+    from .utils import meta_from_array
+    arrays = args[::2]
+    args_meta = list(map(meta_from_array, arrays))
+    kwargs_meta = {k: meta_from_array(v) for k, v in kwargs.items()}
+
+    # TODO: look for alternative to this, causes issues when using map_blocks()
+    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+    if isinstance(func, np.vectorize):
+        meta = func(*args_meta)
+        return meta.astype(dtype)
+
+    try:
+        meta = func(*args_meta, **kwargs_meta)
+    except TypeError:
+        # The concatenate argument is an argument introduced by this
+        # function and may not be support by some external functions,
+        # such as in NumPy
+        kwargs_meta.pop('concatenate', None)
+        meta = func(*args_meta, **kwargs_meta)
+    except ValueError:
+        return None
+
+    return meta.astype(dtype)
 
 
 def blockwise(func, out_ind, *args, **kwargs):
@@ -203,7 +231,11 @@ def blockwise(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    return Array(graph, out, chunks, dtype=dtype)
+    try:
+        meta = blockwise_meta(func, dtype, *args, **kwargs)
+        return Array(graph, out, chunks, meta=meta)
+    except Exception:
+        return Array(graph, out, chunks, dtype=dtype)
 
 
 def atop(*args, **kwargs):

@@ -63,7 +63,8 @@ several options:
 2. A description of the appropriate names and dtypes.  This can take several forms:
 
     * A ``dict`` of ``{name: dtype}`` or an iterable of ``(name, dtype)``
-      specifies a DataFrame
+      specifies a DataFrame. Note that order is important: the order of the
+      names in ``meta`` should match the order of the columns
     * A tuple of ``(name, dtype)`` specifies a series
     * A dtype object or string (e.g. ``'f8'``) specifies a scalar
 

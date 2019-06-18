@@ -12,7 +12,7 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
@@ -476,8 +476,8 @@ def test_optimize(tmpdir, c):
     assert all(v[4] == c for v in dsk.values())
 
 
-@pytest.mark.skipif(not hasattr(pd.DataFrame, 'to_parquet'),
-                    reason="no to_parquet method")
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="new pyarrow assumes new-ish pandas versions")
 @write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join('test.parquet'))

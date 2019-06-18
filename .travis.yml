@@ -17,18 +17,9 @@ jobs:
   fast_finish: true
   include:
     - env:
-      - PYTHON=2.7
+      - PYTHON=3.5
       - NUMPY=1.13.0
       - PANDAS=0.21.1
-      - *test_and_lint
-      - *no_coverage
-      - *optimize
-      - *no_imports
-
-    - env:
-      - PYTHON=3.5
-      - NUMPY=1.14.1
-      - PANDAS=0.22.0
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -51,6 +42,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *imports
+      - *array_function
 
     - env: &py37_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow

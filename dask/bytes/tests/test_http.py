@@ -114,12 +114,12 @@ def test_ops_blocksize(dir_server):
 def test_errors(dir_server):
     f = open_files('http://localhost:8999/doesnotexist')[0]
     with pytest.raises(requests.exceptions.RequestException):
-        with f:
-            pass
+        with f as f:
+            f.read()
     f = open_files('http://nohost/')[0]
     with pytest.raises(requests.exceptions.RequestException):
-        with f:
-            pass
+        with f as f:
+            f.read()
     root = 'http://localhost:8999/'
     fn = files[0]
     f = open_files(root + fn, mode='wb')[0]
@@ -140,8 +140,18 @@ def test_files(dir_server):
             assert f.read() == open(os.path.join(dir_server, f2), 'rb').read()
 
 
+def test_open_glob(dir_server):
+    root = 'http://localhost:8999/'
+    fs = open_files(root + '/*')
+    assert fs[0].path == 'http://localhost:8999/a'
+    assert fs[1].path == 'http://localhost:8999/b'
+
+
 @pytest.mark.network
 def test_parquet():
+    from distutils.version import LooseVersion
+    if LooseVersion(requests.__version__) < LooseVersion("2.21.0"):
+        pytest.skip()
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')  # no pyarrow compatability FS yet
     df = dd.read_parquet([

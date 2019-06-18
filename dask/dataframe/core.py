@@ -11,6 +11,8 @@ from pprint import pformat
 import numpy as np
 import pandas as pd
 from pandas.util import cache_readonly, hash_pandas_object
+from pandas.api.types import is_bool_dtype, is_timedelta64_dtype, \
+    is_numeric_dtype, is_datetime64_any_dtype
 from toolz import merge, first, unique, partition_all, remove
 
 try:
@@ -24,12 +26,14 @@ from .. import core
 from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
 from ..compatibility import (apply, operator_div, bind_method, string_types,
+                             isidentifier,
                              Iterator, Sequence)
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike, typename, skip_doctest)
 from ..array.core import Array, normalize_arg
+from ..array.utils import empty_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -1132,7 +1136,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
-        arr = self.map_partitions(np.array, )
+        arr = self.values
 
         chunks = self._validate_chunks(arr, lengths)
         arr._chunks = chunks
@@ -1198,9 +1202,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         ----------
         window : int, str, offset
            Size of the moving window. This is the number of observations used
-           for calculating the statistic. The window size must not be so large
-           as to span more than one adjacent partition. If using an offset
-           or offset alias like '5D', the data must have a ``DatetimeIndex``
+           for calculating the statistic. When not using a ``DatetimeIndex``,
+           the window size must not be so large as to span more than one
+           adjacent partition. If using an offset or offset alias like '5D',
+           the data must have a ``DatetimeIndex``
 
            .. versionchanged:: 0.15.0
 
@@ -1241,6 +1246,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
+        """
+        .. note::
+
+           Pandas currently uses an ``object``-dtype column to represent
+           boolean data with missing values. This can cause issues for
+           boolean-specific operations, like ``|``. To enable boolean-
+           specific operations, at the cost of metadata that doesn't match
+           pandas, use ``.astype(bool)`` after the ``shift``.
+        """
         axis = self._validate_axis(axis)
         if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
@@ -1431,16 +1445,103 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     axis=axis, skipna=skipna, ddof=ddof)
             return handle_out(out, result)
         else:
-            num = self._get_numeric_data()
-            x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
-            x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
-            n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var'
-            result = map_partitions(methods.var_aggregate, x2, x, n,
-                                    token=name, meta=meta, ddof=ddof)
+            if self.ndim == 1:
+                result = self._var_1d(self, skipna, ddof, split_every)
+                return handle_out(out, result)
+
+            count_timedeltas = len(self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns)
+
+            if count_timedeltas == len(self._meta.columns):
+                result = self._var_timedeltas(skipna, ddof, split_every)
+            elif count_timedeltas > 0:
+                result = self._var_mixed(skipna, ddof, split_every)
+            else:
+                result = self._var_numeric(skipna, ddof, split_every)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
+
+    def _var_numeric(self, skipna=True, ddof=1, split_every=False):
+        num = self.select_dtypes(include=['number', 'bool'], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype('f8')
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(array_values, axis=0, ddof=ddof, split_every=split_every)
+
+        name = self._token_prefix + 'var-numeric' + tokenize(num, split_every)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        var_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_var_name = (array_var._name,) + (0,) * len(var_shape)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, num._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_timedeltas(self, skipna=True, ddof=1, split_every=False):
+        timedeltas = self.select_dtypes(include=[np.timedelta64])
+
+        var_timedeltas = [self._var_1d(timedeltas[col_idx], skipna, ddof, split_every)
+                          for col_idx in timedeltas._meta.columns]
+        var_timedelta_names = [(v._name, 0) for v in var_timedeltas]
+
+        name = self._token_prefix + 'var-timedeltas-' + tokenize(timedeltas, split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, var_timedelta_names, timedeltas._meta.columns)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=var_timedeltas)
+
+        return new_dd_object(graph, name, timedeltas._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_mixed(self, skipna=True, ddof=1, split_every=False):
+        data = self.select_dtypes(include=['number', 'bool', np.timedelta64])
+
+        timedelta_vars = self._var_timedeltas(skipna, ddof, split_every)
+        numeric_vars = self._var_numeric(skipna, ddof, split_every)
+
+        name = self._token_prefix + 'var-mixed-' + tokenize(data, split_every)
+
+        layer = {(name, 0): (methods.var_mixed_concat,
+                             (numeric_vars._name, 0),
+                             (timedelta_vars._name, 0),
+                             data._meta.columns)}
+
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[numeric_vars, timedelta_vars])
+        return new_dd_object(graph, name, self._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_1d(self, column, skipna=True, ddof=1, split_every=False):
+        is_timedelta = is_timedelta64_dtype(column._meta)
+
+        if is_timedelta:
+            if not skipna:
+                is_nan = column.isna()
+                column = column.astype('i8')
+                column = column.mask(is_nan)
+            else:
+                column = column.dropna().astype('i8')
+
+        if PANDAS_VERSION >= '0.24.0':
+            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+                column = column.astype('f8')
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype('f8')
+
+        name = self._token_prefix + 'var-1d-' + tokenize(column, split_every)
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(column.values, axis=0, ddof=ddof, split_every=split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, (array_var._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, column._meta_nonempty.var(), divisions=[None, None])
 
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):
@@ -1473,6 +1574,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'sem'
             result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return result
@@ -1519,12 +1621,74 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False, percentiles=None, percentiles_method='default'):
-        # currently, only numeric describe is supported
-        num = self._get_numeric_data()
-        if self.ndim == 2 and len(num.columns) == 0:
+    def describe(self,
+                 split_every=False,
+                 percentiles=None,
+                 percentiles_method='default',
+                 include=None,
+                 exclude=None):
+
+        if self._meta.ndim == 1:
+            return self._describe_1d(self, split_every, percentiles, percentiles_method)
+        elif (include is None) and (exclude is None):
+            data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
+
+            # when some numerics/timedeltas are found, by default keep them
+            if len(data.columns) == 0:
+                chosen_columns = self._meta.columns
+            else:
+                # check if there are timedelta or boolean columns
+                bools_and_timedeltas = self._meta.select_dtypes(include=[np.timedelta64, 'bool'])
+                if len(bools_and_timedeltas.columns) == 0:
+                    return self._describe_numeric(self, split_every, percentiles, percentiles_method)
+                else:
+                    chosen_columns = data.columns
+        elif include == 'all':
+            if exclude is not None:
+                msg = "exclude must be None when include is 'all'"
+                raise ValueError(msg)
+            chosen_columns = self._meta.columns
+        else:
+            chosen_columns = self._meta.select_dtypes(include=include, exclude=exclude)
+
+        stats = [self._describe_1d(self[col_idx], split_every,
+                                   percentiles, percentiles_method) for col_idx in chosen_columns]
+        stats_names = [(s._name, 0) for s in stats]
+
+        name = 'describe--' + tokenize(self, split_every)
+        layer = {(name, 0): (methods.describe_aggregate, stats_names)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
+        meta = self._meta_nonempty.describe(include=include, exclude=exclude)
+        return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _describe_1d(self, data, split_every=False,
+                     percentiles=None, percentiles_method='default'):
+        if is_bool_dtype(data._meta):
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
+        elif is_numeric_dtype(data._meta):
+            return self._describe_numeric(
+                data,
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method)
+        elif is_timedelta64_dtype(data._meta):
+            return self._describe_numeric(
+                data.dropna().astype('i8'),
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method,
+                is_timedelta_column=True)
+        else:
+            return self._describe_nonnumeric_1d(data, split_every=split_every)
+
+    def _describe_numeric(self, data, split_every=False, percentiles=None,
+                          percentiles_method='default', is_timedelta_column=False):
+
+        num = data._get_numeric_data()
+
+        if data.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
-        elif self.ndim == 1 and self.dtype == 'object':
+        elif data.ndim == 1 and data.dtype == 'object':
             raise ValueError("Cannot compute ``describe`` on object dtype.")
         if percentiles is None:
             percentiles = [0.25, 0.5, 0.75]
@@ -1543,10 +1707,40 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
-        name = 'describe--' + tokenize(self, split_every)
-        layer = {(name, 0): (methods.describe_aggregate, stats_names)}
+        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+
+        name = 'describe-numeric--' + tokenize(num, split_every)
+        layer = {(name, 0): (methods.describe_numeric_aggregate, stats_names, colname, is_timedelta_column)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = num._meta.describe()
+        meta = num._meta_nonempty.describe()
+        return new_dd_object(graph, name, meta, divisions=[None, None])
+
+    def _describe_nonnumeric_1d(self, data, split_every=False):
+        vcounts = data.value_counts(split_every)
+        count_nonzero = vcounts[vcounts != 0]
+        count_unique = count_nonzero.size
+
+        stats = [
+            # nunique
+            count_unique,
+            # count
+            data.count(split_every=split_every),
+            # most common value
+            vcounts.head(1, compute=False)
+        ]
+
+        if is_datetime64_any_dtype(data._meta):
+            min_ts = data.dropna().astype('i8').min(split_every=split_every)
+            max_ts = data.dropna().astype('i8').max(split_every=split_every)
+            stats += [min_ts, max_ts]
+
+        stats_names = [(s._name, 0) for s in stats]
+        colname = data._meta.name
+
+        name = 'describe-nonnumeric-1d--' + tokenize(data, split_every)
+        layer = {(name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
+        meta = data._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
@@ -1915,6 +2109,7 @@ class Series(_Frame):
     _partition_type = pd.Series
     _is_partition_type = staticmethod(is_series_like)
     _token_prefix = 'series-'
+    _accessors = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -2186,6 +2381,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
+        if is_series_like(arg) and is_dask_collection(arg):
+            return series_map(self, arg)
         if not (isinstance(arg, dict) or
                 callable(arg) or
                 is_series_like(arg) and not is_dask_collection(arg)):
@@ -2387,12 +2584,23 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         result = self.map_partitions(M.memory_usage, index=index, deep=deep)
         return delayed(sum)(result.to_delayed())
 
+    def __divmod__(self, other):
+        res1 = self // other
+        res2 = self % other
+        return res1, res2
+
+    def __rdivmod__(self, other):
+        res1 = other // self
+        res2 = other % self
+        return res1, res2
+
 
 class Index(Series):
 
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = 'index-'
+    _accessors = set()
 
     _dt_attributes = {'nanosecond', 'microsecond', 'millisecond', 'dayofyear',
                       'minute', 'hour', 'day', 'dayofweek', 'second', 'week',
@@ -2523,6 +2731,7 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = 'dataframe-'
+    _accessors = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -2646,8 +2855,8 @@ class DataFrame(_Frame):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(c for c in self.columns if
-                 (isinstance(c, pd.compat.string_types) and
-                  pd.compat.isidentifier(c)))
+                 (isinstance(c, string_types) and
+                  isidentifier(c)))
         return list(o)
 
     def _ipython_key_completions_(self):
@@ -2808,7 +3017,7 @@ class DataFrame(_Frame):
                     callable(v) or pd.api.types.is_scalar(v) or
                     is_index_like(v)):
                 raise TypeError("Column assignment doesn't support type "
-                                "{0}".format(type(v).__name__))
+                                "{0}".format(typename(type(v))))
             if callable(v):
                 kwargs[k] = v(self)
 
@@ -3503,7 +3712,8 @@ def elemwise(op, *args, **kwargs):
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
-        parts = [d._meta if _is_broadcastable(d) or isinstance(d, Array)
+        parts = [d._meta if _is_broadcastable(d)
+                 else empty_like_safe(d, (), dtype=d.dtype) if isinstance(d, Array)
                  else d._meta_nonempty for d in dasks]
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
@@ -3545,8 +3755,11 @@ def handle_out(out, result):
         if not isinstance(out, Scalar):
             out.divisions = result.divisions
     elif out is not None:
-        msg = ("The out parameter is not fully supported."
-               " Received type %s, expected %s " % ( type(out).__name__, type(result).__name__))
+        msg = (
+            "The out parameter is not fully supported."
+            " Received type %s, expected %s " % (
+                typename(type(out)), typename(type(result)))
+        )
         raise NotImplementedError(msg)
     else:
         return result
@@ -4151,7 +4364,7 @@ def cov_corr_chunk(df, corr=False):
     counts = np.zeros(shape)
     df = df.astype('float64', copy=False)
     for idx, col in enumerate(df):
-        mask = df[col].notnull()
+        mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
     cov = df.cov().values
@@ -4163,7 +4376,7 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df[x], mu[idx]) ** 2
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
@@ -4682,8 +4895,15 @@ def maybe_shift_divisions(df, periods, freq):
 
 
 @wraps(pd.to_datetime)
-def to_datetime(arg, **kwargs):
-    meta = pd.Series([pd.Timestamp('2000')])
+def to_datetime(arg, meta=None, **kwargs):
+    if meta is None:
+        if isinstance(arg, Index):
+            meta = pd.DatetimeIndex([])
+            meta.name = arg.name
+        else:
+            meta = pd.Series([pd.Timestamp('2000')])
+            meta.index = meta.index.astype(arg.index.dtype)
+            meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
@@ -4857,3 +5077,58 @@ def meta_warning(df):
                 "  Before: .apply(func)\n"
                 "  After:  .apply(func, meta=%s)\n" % str(meta_str))
     return msg
+
+
+def mapseries(base_chunk, concat_map):
+    return base_chunk.map(concat_map)
+
+
+def mapseries_combine(index, concat_result):
+    final_series = concat_result.sort_index()
+    final_series.index = index
+    return final_series
+
+
+def series_map(base_series, map_series):
+    npartitions = base_series.npartitions
+    split_out = map_series.npartitions
+
+    dsk = {}
+
+    base_token_key = tokenize(base_series, split_out)
+    base_split_prefix = 'base-split-{}'.format(base_token_key)
+    base_shard_prefix = 'base-shard-{}'.format(base_token_key)
+    for i, key in enumerate(base_series.__dask_keys__()):
+        dsk[(base_split_prefix, i)] = (hash_shard, key, split_out)
+        for j in range(split_out):
+            dsk[(base_shard_prefix, 0, i, j)] = (getitem, (base_split_prefix, i), j)
+
+    map_token_key = tokenize(map_series)
+    map_split_prefix = 'map-split-{}'.format(map_token_key)
+    map_shard_prefix = 'map-shard-{}'.format(map_token_key)
+    for i, key in enumerate(map_series.__dask_keys__()):
+        dsk[(map_split_prefix, i)] = (hash_shard, key, split_out, split_out_on_index, None)
+        for j in range(split_out):
+            dsk[(map_shard_prefix, 0, i, j)] = (getitem, (map_split_prefix, i), j)
+
+    token_key = tokenize(base_series, map_series)
+    map_prefix = 'map-series-{}'.format(token_key)
+    for i in range(npartitions):
+        for j in range(split_out):
+            dsk[(map_prefix, i, j)] = (mapseries,
+                                       (base_shard_prefix, 0, i, j),
+                                       (_concat, [(map_shard_prefix, 0, k, j) for k in range(split_out)]))
+
+    final_prefix = 'map-series-combine-{}'.format(token_key)
+    for i, key in enumerate(base_series.index.__dask_keys__()):
+        dsk[(final_prefix, i)] = (mapseries_combine, key, (_concat, [(map_prefix, i, j) for j in range(split_out)]))
+
+    meta = map_series._meta.copy()
+    meta.index = base_series._meta.index
+    meta = make_meta(meta)
+
+    dependencies = [base_series, map_series, base_series.index]
+    graph = HighLevelGraph.from_collections(final_prefix, dsk, dependencies=dependencies)
+    divisions = list(base_series.divisions)
+
+    return new_dd_object(graph, final_prefix, meta, divisions)

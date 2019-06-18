@@ -67,11 +67,8 @@ all = np.all
 nansum = np.nansum
 nanprod = np.nanprod
 
-try:
-    from numpy import nancumprod, nancumsum
-except ImportError:  # pragma: no cover
-    nancumprod = npcompat.nancumprod
-    nancumsum = npcompat.nancumsum
+nancumprod = np.nancumprod
+nancumsum = np.nancumsum
 
 nanmin = np.nanmin
 nanmax = np.nanmax

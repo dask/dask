@@ -19,13 +19,13 @@ _implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
 try:
     import cytoolz
     from cytoolz import (frequencies, merge_with, join, reduceby,
-                         count, pluck, groupby, topk)
+                         count, pluck, groupby, topk, unique)
     if LooseVersion(cytoolz.__version__) > '0.7.3':
         from cytoolz import accumulate  # noqa: F811
         _implement_accumulate = True
 except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
-                       count, pluck, groupby, topk)
+                       count, pluck, groupby, topk, unique)
 
 from .. import config
 from .avro import to_avro
@@ -819,17 +819,31 @@ class Bag(DaskMethodsMixin):
         return self.reduction(func, compose(func, toolz.concat), out_type=Bag,
                               split_every=split_every, name='topk')
 
-    def distinct(self):
+    def distinct(self, key=None):
         """ Distinct elements of collection
 
         Unordered without repeats.
 
+        Parameters
+        ----------
+        key: {callable,str}
+            Defines uniqueness of items in bag by calling ``key`` on each item.
+            If a string is passed ``key`` is considered to be ``lambda x: x[key]``.
+
+        Examples
+        --------
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
+        >>> b = from_sequence([{'name': 'Alice'}, {'name': 'Bob'}, {'name': 'Alice'}])
+        >>> b.distinct(key=lambda x: x['name']).compute()
+        [{'name': 'Alice'}, {'name': 'Bob'}]
+        >>> b.distinct(key='name').compute()
+        [{'name': 'Alice'}, {'name': 'Bob'}]
         """
-        return self.reduction(set, merge_distinct, out_type=Bag,
-                              name='distinct')
+        func = chunk_distinct if key is None else partial(chunk_distinct, key=key)
+        agg = merge_distinct if key is None else partial(merge_distinct, key=key)
+        return self.reduction(func, agg, out_type=Bag, name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
                   out_type=Item, name=None):
@@ -1098,6 +1112,37 @@ class Bag(DaskMethodsMixin):
         Defaults to 8.
 
         >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
+
+        Examples
+        --------
+
+        We can compute the maximum of some ``(key, value)`` pairs, grouped
+        by the ``key``. (You might be better off converting the ``Bag`` to
+        a ``dask.dataframe`` and using its groupby).
+
+        >>> import random
+        >>> import dask.bag as db
+
+        >>> tokens = list('abcdefg')
+        >>> values = range(10000)
+        >>> a = [(random.choice(tokens), random.choice(values))
+        ...       for _ in range(100)]
+        >>> a[:2]  # doctest: +SKIP
+        [('g', 676), ('a', 871)]
+
+        >>> a = db.from_sequence(a)
+
+        >>> def binop(t, x):
+        ...     return max((t, x), key=lambda x: x[1])
+
+        >>> a.foldby(lambda x: x[0], binop).compute()  # doctest: +SKIP
+        [('g', ('g', 984)),
+         ('a', ('a', 871)),
+         ('b', ('b', 999)),
+         ('c', ('c', 765)),
+         ('f', ('f', 955)),
+         ('e', ('e', 991)),
+         ('d', ('d', 854))]
 
         See Also
         --------
@@ -1636,8 +1681,15 @@ def from_delayed(values):
     return Bag(graph, name, len(values))
 
 
-def merge_distinct(seqs):
-    return set().union(*seqs)
+def chunk_distinct(seq, key=None):
+    key2 = key
+    if key is not None and not callable(key):
+        key2 = lambda x: x[key]
+    return list(unique(seq, key=key2))
+
+
+def merge_distinct(seqs, key=None):
+    return chunk_distinct(toolz.concat(seqs), key=key)
 
 
 def merge_frequencies(seqs):

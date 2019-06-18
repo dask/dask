@@ -276,7 +276,7 @@ def test_rename_series_method():
 
 
 @pytest.mark.parametrize('method,test_values', [('tdigest', (6, 10)), ('dask', (4, 20))])
-def test_describe(method, test_values):
+def test_describe_numeric(method, test_values):
     if method == 'tdigest':
         pytest.importorskip('crick')
     # prepare test case which approx quantiles will be the same as actuals
@@ -306,19 +306,101 @@ def test_describe(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-@pytest.mark.parametrize('method', ['tdigest', 'dask'])
-def test_describe_empty(method):
-    if method == 'tdigest':
-        pytest.importorskip('crick')
-    # https://github.com/dask/dask/issues/2326
-    ddf = dd.from_pandas(pd.DataFrame({"A": ['a', 'b']}), 2)
-    with pytest.raises(ValueError) as rec:
-        ddf.describe(percentiles_method=method)
-    assert 'DataFrame contains only non-numeric data.' in str(rec)
+@pytest.mark.parametrize('include,exclude,percentiles,subset', [
+    (None, None, None, ['c','d']),  # numeric
+    (None, None, None, ['c', 'd', 'f']),  # numeric + timedelta
+    (None, None, None, ['c', 'd', 'g']),  # numeric + bool
+    (None, None, None, ['c', 'd', 'f', 'g']),  # numeric + bool + timedelta
+    (None, None, None, ['f', 'g']),  # bool + timedelta
+    ('all', None, None, None),
+    (['number'], None, [0.25, 0.5], None),
+    ([np.timedelta64], None, None, None),
+    (['number', 'object'], None, [0.25, 0.75], None),
+    (None, ['number', 'object'], None, None),
+    (['object', 'datetime', 'bool'], None, None, None)
+])
+def test_describe(include, exclude, percentiles, subset):
+    data = {
+        'a': ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        'c': [None, 0, 1, 2, 3, 4] * 2,
+        'd': [None, 0, 1] * 4,
+        'e': [pd.Timestamp('2017-05-09 00:00:00.006000'),
+              pd.Timestamp('2017-05-09 00:00:00.006000'),
+              pd.Timestamp('2017-05-09 07:56:23.858694'),
+              pd.Timestamp('2017-05-09 05:59:58.938999'),
+              None,
+              None] * 2,
+        'f': [np.timedelta64(3, 'D'),
+              np.timedelta64(1, 'D'),
+              None,
+              None,
+              np.timedelta64(3, 'D'),
+              np.timedelta64(1, 'D')] * 2,
+        'g': [True, False, True] * 4
+    }
 
-    with pytest.raises(ValueError) as rec:
-        ddf.A.describe(percentiles_method=method)
-    assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
+    # Arrange
+    df = pd.DataFrame(data)
+
+    if subset is not None:
+        df = df.loc[:, subset]
+
+    ddf = dd.from_pandas(df, 2)
+
+    # Act
+    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
+    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+
+    # Assert
+    assert_eq(desc_ddf, desc_df)
+
+    # Check series
+    if subset is None:
+        for col in ['a', 'c', 'e', 'g']:
+            assert_eq(
+                df[col].describe(include=include, exclude=exclude),
+                ddf[col].describe(include=include, exclude=exclude))
+
+
+def test_describe_empty():
+    df_none = pd.DataFrame({"A": [None, None]})
+    ddf_none = dd.from_pandas(df_none, 2)
+    df_len0 = pd.DataFrame({"A": [], "B":[]})
+    ddf_len0 = dd.from_pandas(df_len0, 2)
+    ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
+
+    # Pandas have different dtypes for resulting describe dataframe if there are only
+    # None-values, pre-compute dask df to bypass _meta check
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='dask').compute())
+
+    with pytest.raises(ValueError):
+        ddf_len0.describe(percentiles_method='dask').compute()
+
+    with pytest.raises(ValueError):
+        ddf_len0.describe(percentiles_method='dask').compute()
+
+    with pytest.raises(ValueError):
+        ddf_nocols.describe(percentiles_method='dask').compute()
+
+
+def test_describe_empty_tdigest():
+    pytest.importorskip('crick')
+
+    df_none = pd.DataFrame({"A": [None, None]})
+    ddf_none = dd.from_pandas(df_none, 2)
+    df_len0 = pd.DataFrame({"A": []})
+    ddf_len0 = dd.from_pandas(df_len0, 2)
+    ddf_nocols = dd.from_pandas(pd.DataFrame({}), 2)
+
+    # Pandas have different dtypes for resulting describe dataframe if there are only
+    # None-values, pre-compute dask df to bypass _meta check
+    assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
+
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+
+    with pytest.raises(ValueError):
+        ddf_nocols.describe(percentiles_method='tdigest').compute()
 
 
 def test_describe_for_possibly_unsorted_q():
@@ -1089,7 +1171,6 @@ def test_map():
     assert_eq(ddf.b.map(lk), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=('b', 'i8')), df.b.map(lk))
-    pytest.raises(TypeError, lambda: ddf.a.map(d.b))
 
 
 def test_concat():
@@ -2127,10 +2208,10 @@ def test_to_dask_array_raises(as_frame):
     if as_frame:
         a = a.to_frame()
 
-    with pytest.raises(ValueError, message="4 != 2"):
+    with pytest.raises(ValueError, match="4 != 2"):
         a.to_dask_array((1, 2, 3, 4))
 
-    with pytest.raises(ValueError, message="Unexpected value"):
+    with pytest.raises(ValueError, match="Unexpected value"):
         a.to_dask_array(5)
 
 
@@ -2354,6 +2435,21 @@ def test_corr():
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
+def test_corr_same_name():
+    # Series with same names (see https://github.com/dask/dask/issues/4906)
+
+    df = pd.util.testing.makeMissingDataframe(0.3, 42)
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    result = ddf.A.corr(ddf.B.rename('A'))
+    expected = ddf.A.corr(ddf.B)
+    assert_eq(result, expected)
+
+    # test with split_every
+    result2 = ddf.A.corr(ddf.B.rename('A'), split_every=2)
+    assert_eq(result2, expected)
 
 
 def test_cov_corr_meta():
@@ -3179,15 +3275,20 @@ def test_to_datetime():
     df = pd.DataFrame({'year': [2015, 2016],
                        'month': [2, 3],
                        'day': [4, 5]})
+    df.index.name = 'ix'
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
 
     s = pd.Series(['3/11/2000', '3/12/2000', '3/13/2000'] * 100)
-    ds = dd.from_pandas(s, npartitions=10)
+    s.index = s.values
+    ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     assert_eq(pd.to_datetime(s, infer_datetime_format=True),
               dd.to_datetime(ds, infer_datetime_format=True))
+    assert_eq(pd.to_datetime(s.index, infer_datetime_format=True),
+              dd.to_datetime(ds.index, infer_datetime_format=True),
+              check_divisions=False)
 
 
 def test_to_timedelta():
@@ -3629,3 +3730,49 @@ def test_str_expand_more_columns():
     ds = dd.from_pandas(s, npartitions=2)
 
     s.str.split(n=10, expand=True).compute()
+
+
+def test_dtype_cast():
+    df = pd.DataFrame({
+        'A': np.arange(10, dtype=np.int32),
+        'B': np.arange(10, dtype=np.int64),
+        'C': np.arange(10, dtype=np.float32),
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.A.dtype == np.int32
+    assert ddf.B.dtype == np.int64
+    assert ddf.C.dtype == np.float32
+
+    col = pd.Series(np.arange(10, dtype=np.float32)) / 2
+    assert col.dtype == np.float32
+
+    ddf = ddf.assign(D=col)
+    assert ddf.D.dtype == np.float32
+    assert ddf.C.dtype == np.float32
+    # fails
+    assert ddf.B.dtype == np.int64
+    # fails
+    assert ddf.A.dtype == np.int32
+
+
+@pytest.mark.parametrize("base_npart", [1, 4])
+@pytest.mark.parametrize("map_npart", [1, 3])
+@pytest.mark.parametrize("sorted_index", [False, True])
+@pytest.mark.parametrize("sorted_map_index", [False, True])
+def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
+    base = pd.Series([''.join(np.random.choice(['a', 'b', 'c'], size=3)) for x in range(100)])
+    if not sorted_index:
+        index = np.arange(100)
+        np.random.shuffle(index)
+        base.index = index
+    map_index = [''.join(x) for x in product('abc', repeat=3)]
+    mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
+    if not sorted_map_index:
+        map_index = np.array(map_index)
+        np.random.shuffle(map_index)
+        mapper.index = map_index
+    expected = base.map(mapper)
+    dask_base = dd.from_pandas(base, npartitions=base_npart)
+    dask_map = dd.from_pandas(mapper, npartitions=map_npart)
+    result = dask_base.map(dask_map)
+    dd.utils.assert_eq(expected, result)
