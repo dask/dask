@@ -951,8 +951,18 @@ def test_compress():
             res = da.compress(dc, a, axis=axis)
             assert_eq(np.compress(c, x, axis=axis), res)
             if isinstance(dc, da.Array):
+                # If condition is a dask array then we expect the shape of the
+                # compressed array to be nan, because we won't know that until
+                # the result is computed.
                 axis = axis or 0
+                assert np.isnan(res.shape[axis]).all()
                 assert np.isnan(res.chunks[axis]).all()
+            else:
+                # If condition is a not a dask array then we expect the shape of the
+                # compressed axis to be known, i.e., not nan.
+                axis = axis or 0
+                assert np.count_nonzero(dc) == res.shape[axis]
+                assert not np.isnan(res.chunks[axis]).any()
 
     with pytest.raises(ValueError):
         da.compress([True, False], a, axis=100)

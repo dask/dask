@@ -116,7 +116,6 @@ def test_optimize_blockwise():
     x = da.ones(10, chunks=(5,))
     y = ((((x + 1) + 2) + 3) + 4)
 
-    # dsk = da.optimization.optimize_blockwise(y.dask)
     dsk = da.optimization.optimize_blockwise(y.dask)
 
     assert isinstance(dsk, HighLevelGraph)
