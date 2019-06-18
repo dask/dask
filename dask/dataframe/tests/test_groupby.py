@@ -295,7 +295,13 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     if agg_func == 'mean':
         assert_eq(dask_agg(), pandas_agg().astype(float))
     else:
-        assert_eq(dask_agg(), pandas_agg())
+        a = dask_agg()
+        with warnings.catch_warnings():
+            # pandas does `.cov([[1], [1]])` which numpy warns on (all NaN).
+            # Pandas does strange things with exceptions in groupby.
+            warnings.simplefilter('ignore', RuntimeWarning)
+            b = pandas_agg()
+        assert_eq(a, b)
 
 
 def test_groupby_multilevel_agg():
@@ -434,6 +440,7 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize('empty', [True, False])
+@pytest.mark.filterwarnings("ignore:0 should be:DeprecationWarning")  # fixed in new pandas.
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]

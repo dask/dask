@@ -255,6 +255,7 @@ tsv_blocks = [[b'aa\tbb\n1\t1.0\n2\t2.0', b'10\t20\n30\t40'],
 
 @pytest.mark.parametrize('reader,blocks', [(pd.read_csv, csv_blocks),
                                            (pd.read_table, tsv_blocks)])
+@read_table_mark
 def test_enforce_dtypes(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b'\n')[0] + b'\n'
@@ -266,6 +267,7 @@ def test_enforce_dtypes(reader, blocks):
 
 @pytest.mark.parametrize('reader,blocks', [(pd.read_csv, csv_blocks),
                                            (pd.read_table, tsv_blocks)])
+@read_table_mark
 def test_enforce_columns(reader, blocks):
     # Replace second header with different column name
     blocks = [blocks[0], [blocks[1][0].replace(b'a', b'A'), blocks[1][1]]]

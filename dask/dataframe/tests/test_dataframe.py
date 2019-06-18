@@ -79,6 +79,7 @@ def test_head_tail():
             sorted(d.tail(3, compute=False).dask))
 
 
+@pytest.mark.filterwarnings("ignore:Insufficient:UserWarning")
 def test_head_npartitions():
     assert_eq(d.head(5, npartitions=2), full.head(5))
     assert_eq(d.head(5, npartitions=2, compute=False), full.head(5))
@@ -90,6 +91,10 @@ def test_head_npartitions():
 
 
 def test_head_npartitions_warn():
+    match = '5 elements requested, only 3 elements'
+    with pytest.warns(UserWarning, match=match):
+        d.head(5)
+
     with pytest.warns(None):
         d.head(100)
 
@@ -395,9 +400,12 @@ def test_describe_empty_tdigest():
     # Pandas have different dtypes for resulting describe dataframe if there are only
     # None-values, pre-compute dask df to bypass _meta check
     assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
-
-    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
-    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+    with warnings.catch_warnings():
+        # dask.dataframe should probably filter this, to match pandas, but
+        # it seems quite difficult.
+        warnings.simplefilter('ignore', RuntimeWarning)
+        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
 
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method='tdigest').compute()

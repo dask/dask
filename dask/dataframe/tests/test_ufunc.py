@@ -142,7 +142,8 @@ def test_ufunc_array_wrap(ufunc):
 
 _UFUNCS_2ARG = ['logaddexp', 'logaddexp2', 'arctan2',
                 'hypot', 'copysign', 'nextafter', 'ldexp',
-                'fmod', 'logical_and', 'logical_or',
+                pytest.param('fmod', marks=[pytest.mark.filterwarnings("ignore::RuntimeWarning")]),
+                'logical_and', 'logical_or',
                 'logical_xor', 'maximum', 'minimum',
                 'fmax', 'fmin', 'greater',
                 'greater_equal', 'less', 'less_equal',

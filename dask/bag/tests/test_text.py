@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import pytest
 from toolz import partial
 
+import dask
 from dask import compute
 from dask.utils import filetexts
 from dask.bytes import compression
@@ -55,12 +56,16 @@ def test_read_text(fmt, bs, encoding):
 def test_files_per_partition():
     files3 = {'{:02}.txt'.format(n): 'line from {:02}' for n in range(20)}
     with filetexts(files3):
-        b = read_text('*.txt', files_per_partition=10)
+        # single-threaded scheduler to ensure the warning happens in the
+        # same thread as the pytest.warns
+        with dask.config.set({'scheduler': 'single-threaded'}):
+            with pytest.warns(UserWarning):
+                b = read_text('*.txt', files_per_partition=10)
+                l = len(b.take(100, npartitions=1))
 
-        l = len(b.take(100, npartitions=1))
-        assert l == 10, "10 files should be grouped into one partition"
+            assert l == 10, "10 files should be grouped into one partition"
 
-        assert b.count().compute() == 20, "All 20 lines should be read"
+            assert b.count().compute() == 20, "All 20 lines should be read"
 
 
 def test_errors():

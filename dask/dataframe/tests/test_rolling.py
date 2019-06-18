@@ -306,5 +306,9 @@ def test_rolling_agg_aggregate():
     assert_eq(df.rolling(window=3).agg({'A': [np.sum, np.mean]}),
               ddf.rolling(window=3).agg({'A': [np.sum, np.mean]}))
 
-    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1)),
-              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1)))
+    kwargs = {}
+    if PANDAS_VERSION >= '0.23.0':
+        kwargs['raw'] = True
+
+    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
+              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs))

@@ -112,6 +112,7 @@ def test_tensordot():
 
 
 @pytest.mark.parametrize('func', functions)
+@pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
 def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     y = da.random.random((2, 3, 4), chunks=(1, 2, 2))
@@ -128,6 +129,7 @@ def test_mixed_concatenate(func):
 
 
 @pytest.mark.parametrize('func', functions)
+@pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
     d[d < 0.4] = 0
