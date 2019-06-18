@@ -598,10 +598,11 @@ def test_frame_series_arithmetic_methods():
             assert_eq(l.mul(r, axis=axis), el.mul(er, axis=axis))
             assert_eq(l.div(r, axis=axis), el.div(er, axis=axis))
             assert_eq(l.truediv(r, axis=axis), el.truediv(er, axis=axis))
-            assert_eq(l.floordiv(r, axis=axis), el.floordiv(er, axis=axis))
-            assert_eq(l.mod(r, axis=axis), el.mod(er, axis=axis))
             with warnings.catch_warnings():
+                # https://github.com/pandas-dev/pandas/issues/26793
                 warnings.simplefilter("ignore", RuntimeWarning)
+                assert_eq(l.floordiv(r, axis=axis), el.floordiv(er, axis=axis))
+                assert_eq(l.mod(r, axis=axis), el.mod(er, axis=axis))
                 assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
                 assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
                 assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
