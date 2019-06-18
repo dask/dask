@@ -515,7 +515,7 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
         How to handle the boundaries.
         Values include 'reflect', 'periodic', 'nearest', 'none',
         or any constant value like 0 or np.nan
-        Assymetric boundaries must specify boundary='none' 
+        Assymetric boundaries must specify boundary='none'
     trim: bool
         Whether or not to trim ``depth`` elements from each block after
         calling the map function.
@@ -600,10 +600,3 @@ def coerce_boundary(ndim, boundary):
             if i not in boundary:
                 boundary.update({i:default})
     return boundary
-
-
-def neg_depth(x):
-    if isinstance(x,tuple):
-        return tuple( -i for i in x)
-    else:
-        return -x
