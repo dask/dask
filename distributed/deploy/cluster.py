@@ -123,7 +123,7 @@ class Cluster(object):
 
     def _widget_status(self):
         workers = len(self.scheduler.workers)
-        cores = sum(ws.ncores for ws in self.scheduler.workers.values())
+        cores = sum(ws.nthreads for ws in self.scheduler.workers.values())
         memory = sum(ws.memory_limit for ws in self.scheduler.workers.values())
         memory = format_bytes(memory)
         text = """
