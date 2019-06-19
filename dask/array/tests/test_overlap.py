@@ -52,13 +52,12 @@ def test_overlap_internal():
     assert same_keys(overlap_internal(d, {0: 2, 1: 1}), g)
 
 
-def test_overlap_internal_asym():
+def test_overlap_internal_asymmetric():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
 
-    g = overlap_internal(d, {0: (2, 0), 1:(1, 0)})
-    result = g.compute(scheduler='sync')
-    assert g.chunks == ((6, 4), (5, 4))
+    result = overlap_internal(d, {0: (2, 0), 1:(1, 0)})
+    assert result.chunks == ((6, 4), (5, 4))
 
     expected = np.array([
         [ 0,  1,  2,  3,    3,  4,  5,  6,  7],
@@ -73,23 +72,22 @@ def test_overlap_internal_asym():
         [48, 49, 50, 51,   51, 52, 53, 54, 55],
         [56, 57, 58, 59,   59, 60, 61, 62, 63]])
     assert_eq(result, expected)
-    assert same_keys(overlap_internal(d, {0: (2,0), 1: (1,0)}), g)
+    assert same_keys(overlap_internal(d, {0: (2,0), 1: (1,0)}), result)
 
 
-def test_overlap_internal_asym_small():
+def test_overlap_internal_asymmetric_small():
     x = np.arange(32).reshape((2,16))
     d = da.from_array(x, chunks=(2,4))
 
-    g = overlap_internal(d, {0: (0,0), 1: (1,1)})
-    result = g.compute(scheduler='sync')
-    assert g.chunks == ((2,), (5,6,6,5))
+    result = overlap_internal(d, {0: (0,0), 1: (1,1)})
+    assert result.chunks == ((2,), (5,6,6,5))
 
     expected = np.array([
         [0, 1, 2, 3, 4,    3, 4, 5, 6, 7, 8,   7, 8, 9, 10, 11, 12,   11, 12, 13, 14, 15],
         [16, 17, 18, 19, 20,    19, 20, 21, 22, 23, 24,   23, 24, 25, 26, 27, 28,   27, 28, 29, 30, 31 ]])
 
     assert_eq(result, expected)
-    assert same_keys(overlap_internal(d, {0: (0,0), 1: (1,1)}), g)
+    assert same_keys(overlap_internal(d, {0: (0,0), 1: (1,1)}), result)
 
 
 def test_trim_internal():
@@ -219,10 +217,13 @@ def test_overlap():
     assert g.chunks == ((8, 8), (5, 5))
 
 
-def test_overlap_boundary_exception():
+def test_asymmetric_overlap_boundary_exception():
     x = da.arange(10, chunks=5)
     with pytest.raises(NotImplementedError):
-        assert x.map_overlap(lambda x: x + len(x), depth={0: (0, 2), 1:(0, 1)}, dtype=x.dtype)
+        x.map_overlap(lambda x: x + len(x),
+                      depth={0: (0, 2)},
+                      boundary='reflect',
+                      dtype=x.dtype)
 
 
 def test_map_overlap():
