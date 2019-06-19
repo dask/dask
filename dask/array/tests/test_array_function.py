@@ -104,3 +104,78 @@ def test_array_function_cupy_svd():
     assert_eq(u, u_base)
     assert_eq(s, s_base)
     assert_eq(v, v_base)
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize('func', [
+    lambda x: np.concatenate([x, x, x]),
+    lambda x: np.cov(x, x),
+    lambda x: np.dot(x, x),
+    lambda x: np.dstack(x),
+    lambda x: np.flip(x, axis=0),
+    lambda x: np.hstack(x),
+    lambda x: np.matmul(x, x),
+    lambda x: np.mean(x),
+    lambda x: np.stack([x, x]),
+    lambda x: np.sum(x),
+    lambda x: np.var(x),
+    lambda x: np.vstack(x),
+    lambda x: np.linalg.norm(x)])
+def test_unregistered_func(func):
+    def wrap(func_name):
+        def wrapped(self, *a, **kw):
+            return type(self)(getattr(self.arr, func_name)(*a, **kw))
+
+        return wrapped
+
+    def dispatch(func_name):
+        def wrapped(self, *a, **kw):
+            return getattr(self.arr, func_name)(*a, **kw)
+
+        return wrapped
+
+    def dispatch_property(prop_name):
+        @property
+        def wrapped(self, *a, **kw):
+            return getattr(self.arr, prop_name)
+
+        return wrapped
+
+    class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
+        __array_priority__ = 20
+
+        def __init__(self, arr):
+            self.arr = arr[...]
+
+        def __array__(self, **kwargs):
+            return np.asarray(self.arr, **kwargs)
+
+        def __array_function__(self, f, t, arrs, kw):
+            arrs = tuple(arr if not isinstance(arr, type(self)) else arr.arr for arr in arrs)
+            return type(self)(self.arr.__array_function__(f, (np.ndarray,), arrs, kw))
+
+        __getitem__ = wrap('__getitem__')
+
+        __setitem__ = dispatch('__setitem__')
+
+        def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+            inputs = tuple(i if not isinstance(i, type(self)) else i.arr for i in inputs)
+            return type(self)(getattr(ufunc, method)(*inputs, **kwargs))
+
+        shape = dispatch_property('shape')
+        ndim = dispatch_property('ndim')
+        dtype = dispatch_property('dtype')
+
+        astype = wrap('astype')
+        sum = wrap('sum')
+        prod = wrap('prod')
+
+    x = EncapsulateNDArray(np.random.random((100, 100)))
+    y = da.from_array(x, chunks=(50, 50))
+
+    assert_eq(x, y, check_meta=False)
+
+    xx = func(x)
+    yy = func(y)
+
+    assert_eq(xx, yy, check_meta=False)

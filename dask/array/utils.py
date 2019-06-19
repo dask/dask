@@ -276,4 +276,3 @@ def _is_nep18_active():
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
-NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, '__array_function__', None)

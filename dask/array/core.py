@@ -3757,7 +3757,8 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    from .utils import IS_NEP18_ACTIVE, NDARRAY_ARRAY_FUNCTION
+    from .utils import IS_NEP18_ACTIVE
+    NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, '__array_function__', None)
 
     arrays = concrete(arrays)
     if not arrays:
