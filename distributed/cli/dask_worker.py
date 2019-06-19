@@ -373,7 +373,10 @@ def main(
 
     try:
         loop.run_sync(run)
-    except (KeyboardInterrupt, TimeoutError):
+    except TimeoutError:
+        # We already log the exception in nanny / worker. Don't do it again.
+        raise TimeoutError("Timed out starting worker.") from None
+    except KeyboardInterrupt:
         pass
     finally:
         logger.info("End worker")

@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import pytest
+from click.testing import CliRunner
 
 pytest.importorskip("requests")
 
@@ -9,6 +10,7 @@ import sys
 import os
 from time import sleep
 
+import distributed.cli.dask_worker
 from distributed import Client
 from distributed.metrics import time
 from distributed.utils import sync, tmpfile
@@ -292,3 +294,15 @@ def test_dashboard_non_standard_ports(loop):
 
         with pytest.raises(Exception):
             requests.get("http://localhost:4833/status/")
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("no_nanny", [True, False])
+def test_worker_timeout(no_nanny):
+    runner = CliRunner()
+    args = ["192.168.1.100:7777", "--death-timeout=1"]
+    if no_nanny:
+        args.append("--no-nanny")
+    result = runner.invoke(distributed.cli.dask_worker.main, args)
+    assert result.exit_code != 0
+    assert str(result.exception).startswith("Timed out")

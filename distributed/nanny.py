@@ -304,7 +304,13 @@ class Nanny(ServerNode):
                 )
             except gen.TimeoutError:
                 yield self.close(timeout=self.death_timeout)
-                raise gen.Return("timed out")
+                logger.exception(
+                    "Timed out connecting Nanny '%s' to scheduler '%s'",
+                    self,
+                    self.scheduler_addr,
+                )
+                raise
+
         else:
             result = yield self.process.start()
         raise gen.Return(result)

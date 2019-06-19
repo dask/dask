@@ -736,9 +736,11 @@ def test_hold_onto_dependents(c, s, a, b):
 def test_worker_death_timeout(s):
     with dask.config.set({"distributed.comm.timeouts.connect": "1s"}):
         yield s.close()
-        w = yield Worker(s.address, death_timeout=1)
+        w = Worker(s.address, death_timeout=1)
 
-    yield gen.sleep(2)
+    with pytest.raises(gen.TimeoutError):
+        yield w
+
     assert w.status == "closed"
 
 

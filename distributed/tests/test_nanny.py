@@ -160,9 +160,10 @@ def test_nanny_alt_worker_class(c, s, w1, w2):
 @gen_cluster(client=False, nthreads=[])
 def test_nanny_death_timeout(s):
     yield s.close()
-    w = yield Nanny(s.address, death_timeout=1)
+    w = Nanny(s.address, death_timeout=1)
+    with pytest.raises(gen.TimeoutError):
+        yield w
 
-    yield gen.sleep(3)
     assert w.status == "closed"
 
 

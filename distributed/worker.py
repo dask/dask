@@ -708,8 +708,14 @@ class Worker(ServerNode):
         logger.info("-" * 49)
         while True:
             if self.death_timeout and time() > start + self.death_timeout:
+                logger.exception(
+                    "Timed out when connecting to scheduler '%s'",
+                    self.scheduler.address,
+                )
                 yield self.close(timeout=1)
-                return
+                raise gen.TimeoutError(
+                    "Timed out connecting to scheduler '%s'" % self.scheduler.address
+                )
             if self.status in ("closed", "closing"):
                 raise gen.Return
             try:
