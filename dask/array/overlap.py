@@ -30,7 +30,6 @@ def fractional_slice(task, axes):
 
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
-
         depth = axes.get(i,0)
         if isinstance(depth,tuple):
             left_depth = depth[0]
@@ -90,7 +89,6 @@ def expand_key(k, dims, name=None, axes=None):
         return rv
 
     shape = []
-
     for i, ind in enumerate(k[1:]):
         num = 1
         if ind > 0:
@@ -122,13 +120,13 @@ def overlap_internal(x, axes):
     The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-
     dims = list(map(len, x.chunks))
-
     expand_key2 = partial(expand_key, dims=dims, axes=axes)
+
     # Make keys for each of the surrounding sub-arrays
     interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
                          map(flatten), concat, list)
+
     name = 'overlap-' + tokenize(x, axes)
     getitem_name = 'getitem-' + tokenize(x, axes)
     interior_slices = {}
@@ -143,9 +141,7 @@ def overlap_internal(x, axes):
                                            (concrete, expand_key2((None,) + k, name=getitem_name)))
 
     chunks = []
-
     for i, bds in enumerate(x.chunks):
-
         depth = axes.get(i,0)
         if isinstance(depth,tuple):
             left_depth = depth[0]
@@ -236,13 +232,12 @@ def _trim(x, axes, boundary, block_info):
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
-
-    axes = [ axes.get(i,0) for i in range(x.ndim)]
-    axes_front = ( ax[0] if isinstance(ax,tuple)
-                   else ax for ax in axes)
-    axes_back = ( -ax[1] if isinstance(ax,tuple) and ax[1]
-                  else -ax if isinstance(ax,Integral) and ax
-                  else None for ax in axes)
+    axes = [axes.get(i,0) for i in range(x.ndim)]
+    axes_front = (ax[0] if isinstance(ax,tuple)
+                  else ax for ax in axes)
+    axes_back = (-ax[1] if isinstance(ax,tuple) and ax[1]
+                 else -ax if isinstance(ax,Integral) and ax
+                 else None for ax in axes)
 
     trim_front = (
         0 if (chunk_location == 0 and
@@ -443,10 +438,7 @@ def overlap(x, depth, boundary):
     # is depth larger than chunk size?
     depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
     for d, c in zip(depth_values, x.chunks):
-        if isinstance(d,tuple):
-            maxd = max(d)
-        else:
-            maxd = d
+        maxd = max(d) if isinstance(d, tuple) else d
         if maxd > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
                              "smallest chunk size %d. Rechunk your array\n"
