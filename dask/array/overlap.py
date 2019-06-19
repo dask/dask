@@ -501,13 +501,14 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
         The function to apply to each extended block
     depth: int, tuple, or dict
         The number of elements that each block should share with its neighbors
-        If a tuple or dict then this can be different per axis
-        Assymetric depth may be specified using a dict value of (-/+) tuples
+        If a tuple or dict then this can be different per axis.
+        Asymmetric depths may be specified using a dict value of (-/+) tuples.
+        Note that asymmetric depths are currently only supported when
+        ``boundary`` is 'none'.
     boundary: str, tuple, dict
         How to handle the boundaries.
         Values include 'reflect', 'periodic', 'nearest', 'none',
         or any constant value like 0 or np.nan
-        Assymetric boundaries must specify boundary='none'
     trim: bool
         Whether or not to trim ``depth`` elements from each block after
         calling the map function.
