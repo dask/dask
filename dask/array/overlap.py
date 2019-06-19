@@ -30,8 +30,8 @@ def fractional_slice(task, axes):
 
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
-        depth = axes.get(i,0)
-        if isinstance(depth,tuple):
+        depth = axes.get(i, 0)
+        if isinstance(depth, tuple):
             left_depth = depth[0]
             right_depth = depth[1]
         else:
@@ -41,7 +41,7 @@ def fractional_slice(task, axes):
         if t == r:
             index.append(slice(None, None, None))
         elif t < r and right_depth:
-            index.append(slice(0, right_depth ))
+            index.append(slice(0, right_depth))
         elif t > r and left_depth:
             index.append(slice(-left_depth, None))
         else:
@@ -137,13 +137,15 @@ def overlap_internal(x, axes):
             interior_slices[(getitem_name,) + k] = frac_slice
         else:
             interior_slices[(getitem_name,) + k] = (x.name,) + k
-            overlap_blocks[(name,) + k] = (concatenate3,
-                                           (concrete, expand_key2((None,) + k, name=getitem_name)))
+            overlap_blocks[(name,) + k] = (
+                concatenate3,
+                (concrete, expand_key2((None,) + k, name=getitem_name)),
+            )
 
     chunks = []
     for i, bds in enumerate(x.chunks):
-        depth = axes.get(i,0)
-        if isinstance(depth,tuple):
+        depth = axes.get(i, 0)
+        if isinstance(depth, tuple):
             left_depth = depth[0]
             right_depth = depth[1]
         else:
@@ -157,7 +159,7 @@ def overlap_internal(x, axes):
             right = [bds[-1] + right_depth]
             mid = []
             for bd in bds[1:-1]:
-                mid.append(bd + left_depth + right_depth )
+                mid.append(bd + left_depth + right_depth)
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
@@ -199,18 +201,18 @@ def trim_internal(x, axes, boundary=None):
 
     olist = []
     for i, bd in enumerate(x.chunks):
-        bdy = boundary.get(i, 'none')
-        overlap = axes.get(i,0)
+        bdy = boundary.get(i, "none")
+        overlap = axes.get(i, 0)
         ilist = []
         for j, d in enumerate(bd):
-            if bdy != 'none':
-                if isinstance(overlap,tuple):
+            if bdy != "none":
+                if isinstance(overlap, tuple):
                     d = d - sum(overlap)
                 else:
                     d = d - overlap * 2
 
             else:
-                if isinstance(overlap,tuple):
+                if isinstance(overlap, tuple):
                     d = d - overlap[0] if j != 0 else d
                     d = d - overlap[1] if j != len(bd) - 1 else d
                 else:
@@ -572,10 +574,10 @@ def coerce_depth(ndim, depth):
         depth = (depth,) * ndim
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
-    if isinstance(depth,dict):
+    if isinstance(depth, dict):
         for i in range(ndim):
             if i not in depth:
-                depth.update({i:0})
+                depth.update({i: 0})
     return depth
 
 
@@ -587,8 +589,8 @@ def coerce_boundary(ndim, boundary):
         boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(ndim), boundary))
-    if isinstance(boundary,dict):
+    if isinstance(boundary, dict):
         for i in range(ndim):
             if i not in boundary:
-                boundary.update({i:default})
+                boundary.update({i: default})
     return boundary
