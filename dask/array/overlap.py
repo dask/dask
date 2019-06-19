@@ -560,9 +560,8 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     for i in range(x.ndim):
         if isinstance(depth2[i],tuple):
             if boundary2[i] != 'none':
-                print("assymetric overlap only supports 'none'\
-                boundaries")
-                raise NotImplementedError
+                raise NotImplementedError("Asymmetric overlap is currently only "
+                                          "implemented for boundary='none'")
 
     assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
