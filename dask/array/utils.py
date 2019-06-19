@@ -11,7 +11,7 @@ from toolz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring
+from ..utils import ignoring, is_arraylike
 
 try:
     AxisError = np.AxisError
@@ -47,6 +47,9 @@ def meta_from_array(x, ndim=None, dtype=None):
     if hasattr(x, '_meta') and isinstance(x, Array):
         x = x._meta
 
+    if np.isscalar(x):
+        x = np.array(x)
+
     if not hasattr(x, 'shape') or not hasattr(x, 'dtype') or not isinstance(x.shape, tuple):
         return x
 
@@ -72,6 +75,9 @@ def meta_from_array(x, ndim=None, dtype=None):
     except Exception:
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
+    if np.isscalar(meta):
+        meta = np.array(meta)
+
     if dtype and meta.dtype != dtype:
         meta = meta.astype(dtype)
 
@@ -86,29 +92,28 @@ def compute_meta(func, dtype, *args, **kwargs):
     # with np.vectorize, such as dask.array.routines._isnonzero_vec().
     if isinstance(func, np.vectorize):
         meta = func(*args_meta)
-        if dtype:
-            try:
+        if dtype and getattr(meta, 'dtype', None) != dtype:
+            with ignoring(AttributeError):
                 meta = meta.astype(dtype)
-            except AttributeError:
-                meta = None
-        return meta
 
-    try:
-        meta = func(*args_meta, **kwargs_meta)
-    except TypeError as e:
-        if ("unexpected keyword argument" in str(e) or
-                "is an invalid keyword for" in str(e)):
-            raise
-        else:
-            return None
-    except Exception:
-        return None
-
-    if dtype:
+    else:
         try:
+            meta = func(*args_meta, **kwargs_meta)
+        except TypeError as e:
+            if ("unexpected keyword argument" in str(e) or
+                    "is an invalid keyword for" in str(e)):
+                raise
+            else:
+                return None
+        except Exception:
+            return None
+
+    if dtype and getattr(meta, 'dtype', None) != dtype:
+        with ignoring(AttributeError):
             meta = meta.astype(dtype)
-        except AttributeError:
-            meta = None
+
+    if np.isscalar(meta):
+        meta = np.array(meta)
 
     return meta
 
