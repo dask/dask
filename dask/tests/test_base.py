@@ -124,6 +124,19 @@ def test_tokenize_numpy_array_on_object_dtype():
         assert (tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) ==
                 tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)))
 
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_memmap_offset(tmpdir):
+    #Test two different memmaps into the same numpy file
+    fn = str(tmpdir.join("demo_data"))
+
+    with open(fn, 'wb') as f:
+        f.write(b'ashekwicht')
+
+    with open(fn, 'rb') as f:
+        mmap1 = np.memmap(f, dtype=np.uint8, mode='r', offset=0, shape=5)
+        mmap2 = np.memmap(f, dtype=np.uint8, mode='r', offset=5, shape=5)
+
+        assert(tokenize(mmap1) != tokenize(mmap2))
 
 @pytest.mark.skipif('not np')
 def test_tokenize_numpy_memmap():

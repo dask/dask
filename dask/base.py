@@ -747,6 +747,8 @@ def register_numpy():
             if hasattr(x.base, 'ctypes'):
                 offset = (x.ctypes.get_as_parameter().value -
                           x.base.ctypes.get_as_parameter().value)
+            elif hasattr(x, 'offset'):
+                offset = getattr(x, 'offset')
             else:
                 offset = 0  # root memmap's have mmap object as base
             return (x.filename, os.path.getmtime(x.filename), x.dtype,
