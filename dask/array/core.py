@@ -848,7 +848,6 @@ class Array(DaskMethodsMixin):
 
     Parameters
     ----------
-
     dask : dict
         Task dependency graph
     name : string
@@ -880,15 +879,24 @@ class Array(DaskMethodsMixin):
             raise TypeError("You must not specify both meta and dtype")
         if dtype is None and meta is None:
             raise ValueError("You must specify the meta or dtype of the array")
+        if meta is not None:
+            meta = meta_from_array(meta)
 
-        self._chunks = normalize_chunks(chunks, shape, dtype=dtype or meta.dtype)
+        if (isinstance(chunks, str) or
+                isinstance(chunks, tuple) and
+                chunks and
+                any(isinstance(c, str) for c in chunks)):
+            dt = dtype or meta.dtype
+        else:
+            dt = None
+        self._chunks = normalize_chunks(chunks, shape, dtype=dt)
         if self._chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
         if dtype:
             self._meta = np.empty((0,) * self.ndim, dtype=dtype)
         else:
-            self._meta = meta_from_array(meta)
+            self._meta = meta
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)

@@ -84,33 +84,34 @@ def meta_from_array(x, ndim=None, dtype=None):
     return meta
 
 
-def compute_meta(func, dtype, *args, **kwargs):
+def compute_meta(func, _dtype, *args, **kwargs):
     args_meta = list(map(meta_from_array, args))
-    kwargs_meta = {k: meta_from_array(v) for k, v in kwargs.items()}
+    kwargs_meta = {k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()}
 
     # todo: look for alternative to this, causes issues when using map_blocks()
     # with np.vectorize, such as dask.array.routines._isnonzero_vec().
     if isinstance(func, np.vectorize):
         meta = func(*args_meta)
-        if dtype and getattr(meta, 'dtype', None) != dtype:
+        if _dtype and getattr(meta, 'dtype', None) != _dtype:
             with ignoring(AttributeError):
-                meta = meta.astype(dtype)
+                meta = meta.astype(_dtype)
 
     else:
         try:
             meta = func(*args_meta, **kwargs_meta)
         except TypeError as e:
             if ("unexpected keyword argument" in str(e) or
-                    "is an invalid keyword for" in str(e)):
+                    "is an invalid keyword for" in str(e) or
+                    "Did not understand the following kwargs" in str(e)):
                 raise
             else:
                 return None
         except Exception:
             return None
 
-    if dtype and getattr(meta, 'dtype', None) != dtype:
+    if _dtype and getattr(meta, 'dtype', None) != _dtype:
         with ignoring(AttributeError):
-            meta = meta.astype(dtype)
+            meta = meta.astype(_dtype)
 
     if np.isscalar(meta):
         meta = np.array(meta)

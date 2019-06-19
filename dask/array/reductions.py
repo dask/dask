@@ -16,7 +16,7 @@ from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
 from .ufunc import sqrt
-from .utils import full_like_safe, validate_axis, compute_meta
+from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -42,7 +42,7 @@ def divide(a, b, dtype=None):
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
               split_every=None, combine=None, name=None, out=None,
-              concatenate=True, output_size=1):
+              concatenate=True, output_size=1, meta=None):
     """ General version of reductions
 
     Parameters
@@ -142,11 +142,11 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
-    tmp = blockwise(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
+    tmp = blockwise(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=float)
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
 
-    if hasattr(x, '_meta'):
+    if meta is None and hasattr(x, '_meta'):
         try:
             reduced_meta = compute_meta(chunk, x.dtype, x._meta, axis=axis,
                                         keepdims=True, meta=True)
@@ -164,6 +164,8 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     if keepdims and output_size != 1:
         result._chunks = tuple((output_size, ) if i in axis else c
                                for i, c in enumerate(tmp.chunks))
+    if meta is not None:
+        result._meta = meta
     return handle_out(out, result)
 
 
@@ -255,7 +257,7 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
     # some functions can't compute empty arrays (those for which reduced_meta
     # fall into the ValueError exception) and we have to rely on reshaping
     # the array according to len(out_chunks)
-    if not np.isscalar(meta) and meta.ndim != len(out_chunks):
+    if is_arraylike(meta) and meta.ndim != len(out_chunks):
         if len(out_chunks) == 0:
             meta = meta.sum()
         else:
@@ -264,7 +266,9 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        return Array(graph, name, out_chunks, meta=meta.astype(dtype))
+        with ignoring(AttributeError):
+            meta = meta.astype(dtype)
+        return Array(graph, name, out_chunks, meta=meta)
 
 
 @wraps(chunk.sum)
@@ -986,10 +990,26 @@ def argtopk(a, k, axis=-1, split_every=None):
     # index only.
     aggregate = partial(chunk.argtopk_aggregate, k=k)
 
+    if isinstance(axis, Number):
+        naxis = 1
+    else:
+        naxis = len(axis)
+
+    meta = a._meta.astype(np.intp).reshape((0,) * (a.ndim - naxis + 1))
+
     return reduction(
-        a_plus_idx, chunk=chunk_combine, combine=chunk_combine,
-        aggregate=aggregate, axis=axis, keepdims=True, dtype=np.intp,
-        split_every=split_every, concatenate=False, output_size=abs(k))
+        a_plus_idx,
+        chunk=chunk_combine,
+        combine=chunk_combine,
+        aggregate=aggregate,
+        axis=axis,
+        keepdims=True,
+        dtype=np.intp,
+        split_every=split_every,
+        concatenate=False,
+        output_size=abs(k),
+        meta=meta,
+    )
 
 
 @wraps(np.trace)

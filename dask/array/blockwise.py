@@ -3,16 +3,26 @@ import warnings
 
 import toolz
 
-import numpy as np
-
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
 
 
-def blockwise(func, out_ind, *args, name=None, token=None, dtype=None,
-        adjust_chunks=None, new_axes=None, align_arrays=True, concatenate=None, **kwargs):
+def blockwise(
+    func,
+    out_ind,
+    *args,
+    name=None,
+    token=None,
+    dtype=None,
+    adjust_chunks=None,
+    new_axes=None,
+    align_arrays=True,
+    concatenate=None,
+    meta=None,
+    **kwargs
+):
     """ Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
@@ -127,9 +137,6 @@ def blockwise(func, out_ind, *args, name=None, token=None, dtype=None,
 
     from .core import Array, unify_chunks, normalize_arg
 
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
-
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
@@ -203,8 +210,9 @@ def blockwise(func, out_ind, *args, name=None, token=None, dtype=None,
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    from .utils import compute_meta
-    meta = compute_meta(func, dtype, *args[::2], **kwargs)
+    if meta is None:
+        from .utils import compute_meta
+        meta = compute_meta(func, dtype, *args[::2], **kwargs)
     if meta is not None:
         return Array(graph, out, chunks, meta=meta)
     else:

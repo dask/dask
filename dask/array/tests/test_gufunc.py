@@ -541,3 +541,22 @@ def test_apply_gufunc_via_numba_02():
     y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
 
     assert_eq(x, y)
+
+
+def test_preserve_meta_type():
+    sparse = pytest.importorskip('sparse')
+
+    def stats(x):
+        return np.mean(x, axis=-1), np.std(x, axis=-1)
+
+    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = a.map_blocks(sparse.COO.from_numpy)
+    mean, std = apply_gufunc(stats, "(i)->(),()", a,
+                             output_dtypes=2 * (a.dtype,))
+
+    assert isinstance(a._meta, sparse.COO)
+    assert isinstance(mean._meta, sparse.COO)
+    assert isinstance(std._meta, sparse.COO)
+
+    assert_eq(mean, mean)
+    assert_eq(std, std)
