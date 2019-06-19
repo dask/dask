@@ -297,8 +297,7 @@ def frexp(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
-                        shape=(1, ) * x.ndim, dtype=x.dtype)
+    a = empty_like_safe(getattr(x, '_meta', x), shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
@@ -319,8 +318,7 @@ def modf(x):
     rdsk = {(right,) + key[1:]: (getitem, key, 1)
             for key in core.flatten(tmp.__dask_keys__())}
 
-    a = empty_like_safe(x._meta if hasattr(x, '_meta') else x,
-                        shape=(1, ) * x.ndim, dtype=x.dtype)
+    a = empty_like_safe(getattr(x, '_meta', x), shape=(1, ) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])

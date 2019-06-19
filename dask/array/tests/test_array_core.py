@@ -3783,6 +3783,7 @@ def test_partitions_indexer():
         x.partitions[100, 100]
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
 def test_dask_array_holds_scipy_sparse_containers():
     pytest.importorskip('scipy.sparse')
     import scipy.sparse
@@ -3903,3 +3904,12 @@ def test_auto_chunks_h5py():
             with dask.config.set({'array.chunk-size': '1 MiB'}):
                 x = da.from_array(d)
                 assert x.chunks == ((256, 256, 256, 232), (512, 488))
+
+
+def test_no_warnings_from_blockwise():
+    x = da.ones((15, 15), chunks=(5, 5))
+
+    with pytest.warns(None) as record:
+        (x.dot(x.T + 1) - x.mean(axis=0)).std()
+
+    assert not record

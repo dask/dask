@@ -332,7 +332,7 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     try:
-        c = wrap.full_like(x._meta, value, shape=tuple(map(sum, chunks)),
+        c = wrap.full_like(getattr(x, '_meta', x), value, shape=tuple(map(sum, chunks)),
                            chunks=tuple(chunks), dtype=x.dtype)
     except TypeError:
         c = wrap.full(tuple(map(sum, chunks)), value,
@@ -481,7 +481,7 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks[k] = (d,)
 
             try:
-                empty = wrap.empty_like(x, shape=empty_shape,
+                empty = wrap.empty_like(getattr(x, '_meta', x), shape=empty_shape,
                                         chunks=empty_chunks, dtype=x.dtype)
             except TypeError:
                 empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)

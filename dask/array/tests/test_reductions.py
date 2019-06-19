@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import warnings
 
 import pytest
@@ -82,7 +83,8 @@ def test_reductions_1D(dtype):
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
                       split_every=True):
-    with warnings.catch_warnings(record=True):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # overflow
         assert_eq(da_func(darr), np_func(narr))
         assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
         assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
@@ -266,20 +268,34 @@ def test_reductions_2D_nans():
     with pytest.warns(None):  # all NaN axis warning
         reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
-    assert_eq(da.argmax(a), np.argmax(x))
-    assert_eq(da.argmin(a), np.argmin(x))
+    with warnings.catch_warnings():
+        # RuntimeWarning: invalid value encountered in reduce
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assert_eq(da.argmax(a), np.argmax(x))
+        assert_eq(da.argmin(a), np.argmin(x))
+
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a), np.nanargmax(x))
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a), np.nanargmin(x))
-    assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+
+    with warnings.catch_warnings():
+        # RuntimeWarning: invalid value encountered in reduce
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
+        assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
-    assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
+
+    with warnings.catch_warnings():
+        # RuntimeWarning: invalid value encountered in reduce
+        warnings.simplefilter("ignore", RuntimeWarning)
+        assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
+        assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
+
     with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
     with pytest.warns(None):  # all NaN axis warning
@@ -341,14 +357,20 @@ def test_nan():
 @pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
                                   'nanmax', 'max'])
 def test_nan_object(func):
-    x = np.array([[1, np.nan, 3, 4],
-                  [5, 6, 7, np.nan],
-                  [9, 10, 11, 12]]).astype(object)
-    d = da.from_array(x, chunks=(2, 2))
+    with warnings.catch_warnings():
+        if os.name == 'nt' and func in {'min', 'max'}:
+            # RuntimeWarning: invalid value encountered in reduce in wrapreduction
+            # from NumPy.
+            warnings.simplefilter('ignore', RuntimeWarning)
 
-    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
-    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
-    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
+        x = np.array([[1, np.nan, 3, 4],
+                      [5, 6, 7, np.nan],
+                      [9, 10, 11, 12]]).astype(object)
+        d = da.from_array(x, chunks=(2, 2))
+
+        assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+        assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+        assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():

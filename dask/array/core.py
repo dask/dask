@@ -888,8 +888,7 @@ class Array(DaskMethodsMixin):
         if dtype:
             self._meta = np.empty((0,) * self.ndim, dtype=dtype)
         else:
-            from .utils import meta_from_array
-            self._meta = meta_from_array(meta, meta.ndim)
+            self._meta = meta_from_array(meta)
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -1281,37 +1280,9 @@ class Array(DaskMethodsMixin):
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
 
-        if isinstance(index2, tuple):
-            new_index = []
-            for i in range(len(index2)):
-                if not isinstance(index2[i], tuple):
-                    types = [Integral, list, np.ndarray]
-                    cond = any([isinstance(index2[i], t) for t in types])
-                    new_index.append(slice(0, 0) if cond else index2[i])
-                else:
-                    new_index.append(tuple([Ellipsis if j is not None else
-                                            None for j in index2[i]]))
-            new_index = tuple(new_index)
-            meta = self._meta[new_index].astype(self.dtype)
-        else:
-            meta = self._meta[index2].astype(self.dtype)
-
-        # Exception for object dtype and ndim == 1, which results in primitive types
-        if not (meta.dtype == object and meta.ndim == 1):
-
-            # If meta still has more dimensions than actual data
-            if meta.ndim > len(chunks):
-                try:
-                    meta = np.sum(meta, axis=tuple([i for i in range(meta.ndim - len(chunks))]))
-                except TypeError:
-                    meta = meta.reshape((0,) * max(len(chunks), 1))
-
-            # Ensure all dimensions are 0
-            if not np.isscalar(meta):
-                meta = meta[tuple([slice(0, 0) for i in range(meta.ndim)])]
-                # If return array is 0-D, ensure _meta is 0-D
-                if len(chunks) == 0:
-                    meta = meta.sum()
+        meta = meta_from_array(self._meta, ndim=len(chunks))
+        if np.isscalar(meta):
+            meta = np.array(meta)
 
         return Array(graph, out, chunks, meta=meta)
 
@@ -2984,8 +2955,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
-    from .utils import meta_from_array
-    meta = np.concatenate([meta_from_array(s, s.ndim) for s in seq])
+    meta = np.concatenate([meta_from_array(s) for s in seq])
 
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
@@ -4167,3 +4137,6 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+
+from .utils import meta_from_array

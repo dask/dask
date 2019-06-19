@@ -126,7 +126,6 @@ def test_loc2d():
     assert_eq(d.loc[3:8, ['a']], full.loc[3:8, ['a']])
     assert_eq(d.loc[:8, ['a']], full.loc[:8, ['a']])
     assert_eq(d.loc[3:, ['a']], full.loc[3:, ['a']])
-    assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
     # 3d
     with pytest.raises(pd.core.indexing.IndexingError):
@@ -141,6 +140,11 @@ def test_loc2d():
 
     with pytest.raises(pd.core.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
+
+
+def test_loc2d_some_missing():
+    with pytest.warns(FutureWarning):
+        assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
 
 def test_loc2d_with_known_divisions():
