@@ -419,6 +419,7 @@ Other functions
 
 .. autofunction:: concat
 .. autofunction:: merge
+.. autofunction:: merge_asof
 
 .. currentmodule:: dask.dataframe.reshape
 

@@ -11,7 +11,7 @@ from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
-                                  _maybe_align_partitions, merge_asof)
+                                  _maybe_align_partitions)
 from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
                                   has_known_categories, clear_known_categories, PANDAS_GT_0230)
 
@@ -269,7 +269,7 @@ def test_merge_asof_indexed():
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
-    c = merge_asof(a, b, left_index=True, right_index=True)
+    c = dd.merge_asof(a, b, left_index=True, right_index=True)
 
     assert_eq(c, C)
 
@@ -281,7 +281,7 @@ def test_merge_asof_on():
     b = dd.from_pandas(B, npartitions=2)
 
     C = pd.merge_asof(A, B, on='a').set_index('a')
-    c = merge_asof(a, b, on='a')
+    c = dd.merge_asof(a, b, on='a')
     assert_eq(c, C)
 
 
@@ -295,8 +295,8 @@ def test_merge_asof_on(allow_exact_matches, direction):
 
     C = pd.merge_asof(A, B, on='a', allow_exact_matches=allow_exact_matches,
                       direction=direction).set_index('a')
-    c = merge_asof(a, b, on='a', allow_exact_matches=allow_exact_matches,
-                   direction=direction)
+    c = dd.merge_asof(a, b, on='a', allow_exact_matches=allow_exact_matches,
+                      direction=direction)
     assert_eq(c, C)
 
 
@@ -307,7 +307,7 @@ def test_merge_asof_indexed():
     b = dd.from_pandas(B, npartitions=2)
 
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
-    c = merge_asof(a, b, left_index=True, right_index=True)
+    c = dd.merge_asof(a, b, left_index=True, right_index=True)
     assert_eq(c, C)
 
 
@@ -338,7 +338,7 @@ def test_merge_asof_on_by():
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker').set_index('time')
-    c = merge_asof(b, a, on='time', by='ticker')
+    c = dd.merge_asof(b, a, on='time', by='ticker')
     assert_eq(c, C)
 
 
@@ -369,7 +369,7 @@ def test_merge_asof_on_by_tolerance():
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('2ms')).set_index('time')
-    c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('2ms'))
+    c = dd.merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('2ms'))
     assert_eq(c, C)
 
 
@@ -401,8 +401,8 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
 
     C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
                       allow_exact_matches=False).set_index('time')
-    c = merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
-                   allow_exact_matches=False)
+    c = dd.merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
+                      allow_exact_matches=False)
     assert_eq(c, C)
 
 
@@ -412,7 +412,7 @@ def test_merge_asof_unsorted_raises():
     B = pd.DataFrame({'a': [2, 1, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
     b = dd.from_pandas(B, npartitions=2)
 
-    result = merge_asof(a, b, on="a")
+    result = dd.merge_asof(a, b, on="a")
     # raise at runtime
     with pytest.raises(ValueError, match="right keys"):
         result.compute()
