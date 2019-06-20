@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .core import new_dd_object, Series
+from ..array.core import Array
 from .utils import is_index_like
 from . import methods
 from ..base import tokenize
@@ -96,6 +97,8 @@ class _LocIndexer(_IndexerBase):
         """ Helper function for the .loc accessor """
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
+        elif isinstance(iindexer, Array):
+            return self._loc_array(iindexer, cindexer)
 
         if self.obj.known_divisions:
             iindexer = self._maybe_partial_time_string(iindexer)
@@ -133,6 +136,10 @@ class _LocIndexer(_IndexerBase):
         meta = self._make_meta(iindexer, cindexer)
         return self.obj.map_partitions(methods.loc, iindexer, cindexer,
                                        token='loc-series', meta=meta)
+
+    def _loc_array(self, iindexer, cindexer):
+        iindexer_series = iindexer.to_dask_dataframe('_', self.obj.index)
+        return self._loc_series(iindexer_series, cindexer)
 
     def _loc_list(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
