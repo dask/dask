@@ -3744,12 +3744,27 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    from .utils import IS_NEP18_ACTIVE
+    # We need this as __array_function__ may not exist on older NumPy versions.
+    # And to reduce verbosity.
+    NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, '__array_function__', None)
+
     arrays = concrete(arrays)
     if not arrays:
         return np.empty(0)
 
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
+
+    if (IS_NEP18_ACTIVE and not all(NDARRAY_ARRAY_FUNCTION is
+                                    getattr(arr, '__array_function__', NDARRAY_ARRAY_FUNCTION)
+                                    for arr in arrays)):
+        try:
+            x = unpack_singleton(arrays)
+            return _concatenate2(arrays, axes=tuple(range(x.ndim)))
+        except TypeError:
+            pass
+
     if concatenate_lookup.dispatch(type(advanced)) is not np.concatenate:
         x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))
