@@ -1559,7 +1559,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
 
 
 @pytest.mark.parametrize('use_index', [True, False])
-@pytest.mark.parametrize('n', [1, 5])
+@pytest.mark.parametrize('n', [2, 5])
 @pytest.mark.parametrize('partition_size', ['1kiB'])
 @pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
 def test_repartition_partition_size(use_index, n, partition_size, transform):
