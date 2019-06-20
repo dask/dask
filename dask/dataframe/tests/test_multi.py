@@ -274,13 +274,13 @@ def test_merge_asof_indexed():
     assert_eq(c, C)
 
 
-def test_merge_asof_on():
+def test_merge_asof_on_basic():
     A = pd.DataFrame({'a': [1, 5, 10], 'left_val': ['a', 'b', 'c']})
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
     b = dd.from_pandas(B, npartitions=2)
 
-    C = pd.merge_asof(A, B, on='a').set_index('a')
+    C = pd.merge_asof(A, B, on='a')
     c = dd.merge_asof(a, b, on='a')
     assert_eq(c, C)
 
