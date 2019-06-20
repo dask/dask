@@ -9,6 +9,7 @@ from distributed.submit import _submit
 @click.command()
 @click.argument("remote_client_address", type=str, required=True)
 @click.argument("filepath", type=str, required=True)
+@click.version_option()
 def main(remote_client_address, filepath):
     @gen.coroutine
     def f():

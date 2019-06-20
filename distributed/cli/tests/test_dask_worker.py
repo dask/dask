@@ -296,6 +296,12 @@ def test_dashboard_non_standard_ports(loop):
             requests.get("http://localhost:4833/status/")
 
 
+def test_version_option():
+    runner = CliRunner()
+    result = runner.invoke(distributed.cli.dask_worker.main, ["--version"])
+    assert result.exit_code == 0
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("no_nanny", [True, False])
 def test_worker_timeout(no_nanny):

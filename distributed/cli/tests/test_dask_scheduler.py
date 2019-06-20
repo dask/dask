@@ -13,7 +13,9 @@ import tempfile
 from time import sleep
 
 from tornado import gen
+from click.testing import CliRunner
 
+import distributed
 from distributed import Scheduler, Client
 from distributed.utils import get_ip, get_ip_interface, tmpfile
 from distributed.utils_test import (
@@ -23,6 +25,7 @@ from distributed.utils_test import (
 )
 from distributed.utils_test import loop  # noqa: F401
 from distributed.metrics import time
+import distributed.cli.dask_scheduler
 
 
 def test_defaults(loop):
@@ -374,3 +377,9 @@ def test_preload_command_default(loop):
 
     finally:
         shutil.rmtree(tmpdir)
+
+
+def test_version_option():
+    runner = CliRunner()
+    result = runner.invoke(distributed.cli.dask_scheduler.main, ["--version"])
+    assert result.exit_code == 0

@@ -7,3 +7,9 @@ def test_dask_remote():
     result = runner.invoke(main, ["--help"])
     assert "--host TEXT     IP or hostname of this server" in result.output
     assert result.exit_code == 0
+
+
+def test_version_option():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--version"])
+    assert result.exit_code == 0

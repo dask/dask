@@ -8,12 +8,14 @@ import pytest
 pytest.importorskip("mpi4py")
 
 import requests
+from click.testing import CliRunner
 
 from distributed import Client
 from distributed.utils import tmpfile
 from distributed.metrics import time
 from distributed.utils_test import popen
 from distributed.utils_test import loop  # noqa: F401
+from distributed.cli.dask_remote import main
 
 
 @pytest.mark.parametrize("nanny", ["--nanny", "--no-nanny"])
@@ -96,3 +98,9 @@ def test_bokeh(loop):
 
     with pytest.raises(Exception):
         requests.get("http://localhost:59583/status/")
+
+
+def test_version_option():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--version"])
+    assert result.exit_code == 0

@@ -63,6 +63,7 @@ loop = IOLoop()
     help="Worker's Bokeh port for visual diagnostics",
 )
 @click.option("--bokeh-prefix", type=str, default=None, help="Prefix for the bokeh app")
+@click.version_option()
 def main(
     scheduler_file,
     interface,

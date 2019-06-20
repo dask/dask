@@ -101,6 +101,7 @@ from distributed.cli.utils import check_python_3
     help="Worker to run. Defaults to distributed.cli.dask_worker",
 )
 @click.pass_context
+@click.version_option()
 def main(
     ctx,
     scheduler,

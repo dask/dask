@@ -180,6 +180,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.argument(
     "preload_argv", nargs=-1, type=click.UNPROCESSED, callback=validate_preload_argv
 )
+@click.version_option()
 def main(
     scheduler,
     host,

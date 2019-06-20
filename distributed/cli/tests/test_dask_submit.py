@@ -7,3 +7,9 @@ def test_submit_runs_as_a_cli():
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0
     assert "Usage: main [OPTIONS] REMOTE_CLIENT_ADDRESS FILEPATH" in result.output
+
+
+def test_version_option():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--version"])
+    assert result.exit_code == 0
