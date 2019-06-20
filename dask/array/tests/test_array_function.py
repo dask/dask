@@ -124,19 +124,11 @@ def test_array_function_cupy_svd():
 def test_unregistered_func(func):
     def wrap(func_name):
         """
-        Wrap a function that returns an array.
+        Wrap a function.
         """
         def wrapped(self, *a, **kw):
-            return type(self)(getattr(self.arr, func_name)(*a, **kw))
-
-        return wrapped
-
-    def dispatch(func_name):
-        """
-        Wrap a function that doesn't return an array.
-        """
-        def wrapped(self, *a, **kw):
-            return getattr(self.arr, func_name)(*a, **kw)
+            a = getattr(self.arr, func_name)(*a, **kw)
+            return a if not isinstance(a, np.ndarray) else type(self)(a)
 
         return wrapped
 
@@ -160,22 +152,26 @@ def test_unregistered_func(func):
         __array_priority__ = 20
 
         def __init__(self, arr):
-            self.arr = arr[...]
+            self.arr = arr
 
         def __array__(self, **kwargs):
             return np.asarray(self.arr, **kwargs)
 
         def __array_function__(self, f, t, arrs, kw):
             arrs = tuple(arr if not isinstance(arr, type(self)) else arr.arr for arr in arrs)
-            return type(self)(self.arr.__array_function__(f, (np.ndarray,), arrs, kw))
+            t = tuple(ti for ti in t if not issubclass(ti, type(self)))
+            print(t)
+            a = self.arr.__array_function__(f, t, arrs, kw)
+            return a if not isinstance(a, np.ndarray) else type(self)(a)
 
         __getitem__ = wrap('__getitem__')
 
-        __setitem__ = dispatch('__setitem__')
+        __setitem__ = wrap('__setitem__')
 
         def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
             inputs = tuple(i if not isinstance(i, type(self)) else i.arr for i in inputs)
-            return type(self)(getattr(ufunc, method)(*inputs, **kwargs))
+            a = getattr(ufunc, method)(*inputs, **kwargs)
+            return a if not isinstance(a, np.ndarray) else type(self)(a)
 
         shape = dispatch_property('shape')
         ndim = dispatch_property('ndim')
