@@ -280,7 +280,7 @@ def test_merge_asof_on_basic():
     B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
     b = dd.from_pandas(B, npartitions=2)
 
-    C = pd.merge_asof(A, B, on='a')
+    C = pd.merge_asof(A, B, on='a').set_index('a')
     c = dd.merge_asof(a, b, on='a')
     assert_eq(c, C)
 
