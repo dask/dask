@@ -552,16 +552,16 @@ def test_preserve_meta_type():
     sparse = pytest.importorskip('sparse')
 
     def stats(x):
-        return np.sum(x, axis=-1), np.std(x, axis=-1)
+        return np.sum(x, axis=-1), np.mean(x, axis=-1)
 
     a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
     a = a.map_blocks(sparse.COO.from_numpy)
-    sum, std = apply_gufunc(stats, "(i)->(),()", a,
+    sum, mean = apply_gufunc(stats, "(i)->(),()", a,
                              output_dtypes=2 * (a.dtype,))
 
     assert isinstance(a._meta, sparse.COO)
     assert isinstance(sum._meta, sparse.COO)
-    assert isinstance(std._meta, sparse.COO)
+    assert isinstance(mean._meta, sparse.COO)
 
     assert_eq(sum, sum)
-    assert_eq(std, std)
+    assert_eq(mean, mean)

@@ -378,14 +378,15 @@ significantly.".format(dim))
     except ValueError:
         # If computing meta doesn't work, provide it explicitly based on
         # provided dtypes
+        sample = arginds[0]._meta
         if isinstance(output_dtypes, tuple):
             meta = tuple(
-                np.empty((0,) * len(ocd), dtype=odt)
+                meta_from_array(sample, dtype=odt)
                 for ocd, odt in zip(output_coredimss, output_dtypes)
             )
         else:
             meta = tuple(
-                np.empty((0,) * len(ocd), dtype=odt)
+                meta_from_array(sample, dtype=odt)
                 for ocd, odt in zip((output_coredimss,), (output_dtypes,))
             )
         tmp = blockwise(
@@ -522,7 +523,6 @@ class gufunc(object):
     >>> mean, std = gustats(a)
     >>> mean.compute().shape
     (10, 20)
-
 
     >>> a = da.random.normal(size=(   20,30), chunks=(10, 30))
     >>> b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
