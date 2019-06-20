@@ -332,9 +332,11 @@ def test_merge_asof_on_by():
     prices_B = [51.95, 51.95, 720.77, 720.92, 98.00]
     quantities_B = [75, 155, 100, 100, 100]
 
-    A = pd.DataFrame({'time': times_A, 'ticker': tickers_A, 'bid': bids_A, 'ask': asks_A})
+    A = pd.DataFrame({'time': times_A, 'ticker': tickers_A, 'bid': bids_A, 'ask': asks_A},
+                     columns=['time', 'ticker', 'bid', 'ask'])
     a = dd.from_pandas(A, npartitions=4)
-    B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B})
+    B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B},
+                     columns=['time', 'ticker', 'price', 'quantity'])
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker')

@@ -59,6 +59,7 @@ from functools import wraps, partial
 import warnings
 
 from toolz import merge_sorted, unique, first
+import numpy as np
 import pandas as pd
 
 from ..base import tokenize, is_dask_collection
@@ -584,7 +585,45 @@ def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
     if next is not None:
         frames.append(next)
 
-    return pd.merge_asof(left, pd.concat(frames), **kwargs)
+    frame = pd.concat(frames)
+    return pd.merge_asof(left, frame, **kwargs)
+
+
+def get_unsorted_columns(frames):
+    """
+    Determine the unsorted colunn order.
+
+    This should match the output of concat([frames], sort=False)
+    for pandas >=0.23
+    """
+    new_columns = pd.concat([frame._meta for frame in frames]).columns
+    order = []
+    for frame in frames:
+        order.append(new_columns.get_indexer_for(frame.columns))
+
+    order = np.concatenate(order)
+    order = pd.unique(order)
+    order = new_columns.take(order)
+    return order
+
+
+def concat_and_unsort(frames, columns):
+    """
+    Compatibility concat for Pandas <0.23.0
+
+    Concatenates and then selects the desired (unsorted) column order.
+    """
+    return pd.concat(frames)[columns]
+
+
+def _concat_compat(frames, left, right):
+    if PANDAS_GT_0230:
+        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
+        # we only care about sort, to silence warnings.
+        return (pd.concat, frames, 0, 'outer', None, False, None, None, None, False, False)
+    else:
+        columns = get_unsorted_columns([left, right])
+        return (concat_and_unsort, frames, columns)
 
 
 def merge_asof_indexed(left, right, **kwargs):
@@ -613,17 +652,13 @@ def merge_asof_indexed(left, right, **kwargs):
             head = (heads._name, j) if heads is not None else None
             frames.append((apply, merge_asof_padded, [slice, (right._name, j),
                            tail, head], kwargs))
-        args = (pd.concat, frames)
-        if PANDAS_GT_0230:
-            # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
-            # we only care about sort, to silence warnings.
-            args += (0, 'outer', None, False, None, None, None, False, False)
-
+        args = _concat_compat(frames, left, right)
         dsk[(name, i)] = args
 
     graph = HighLevelGraph.from_collections(name, dsk,
                                             dependencies=dependencies)
-    return new_dd_object(graph, name, meta, left.divisions)
+    result = new_dd_object(graph, name, meta, left.divisions)
+    return result
 
 
 @wraps(pd.merge_asof)
@@ -678,6 +713,7 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
     result = merge_asof_indexed(left, right, **kwargs)
     if left_on or right_on:
         result = result.reset_index()
+
     return result
 
 
