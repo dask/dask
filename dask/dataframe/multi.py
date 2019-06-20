@@ -71,7 +71,7 @@ from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
 from .utils import (strip_unknown_categories, is_dataframe_like,
-                    is_series_like, asciitable)
+                    is_series_like, asciitable, PANDAS_GT_0230)
 
 
 def align_partitions(*dfs):
@@ -613,7 +613,13 @@ def merge_asof_indexed(left, right, **kwargs):
             head = (heads._name, j) if heads is not None else None
             frames.append((apply, merge_asof_padded, [slice, (right._name, j),
                            tail, head], kwargs))
-        dsk[(name, i)] = (pd.concat, frames)
+        args = (pd.concat, frames)
+        if PANDAS_GT_0230:
+            # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
+            # we only care about sort, to silence warnings.
+            args += (0, 'outer', None, False, None, None, None, False, False)
+
+        dsk[(name, i)] = args
 
     graph = HighLevelGraph.from_collections(name, dsk,
                                             dependencies=dependencies)
@@ -669,7 +675,10 @@ def merge_asof(left, right, on=None, left_on=None, right_on=None,
     if not left.known_divisions or not right.known_divisions:
         raise ValueError("merge_asof input must be sorted!")
 
-    return merge_asof_indexed(left, right, **kwargs)
+    result = merge_asof_indexed(left, right, **kwargs)
+    if left_on or right_on:
+        result = result.reset_index()
+    return result
 
 
 ###############################################################

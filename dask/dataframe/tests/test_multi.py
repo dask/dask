@@ -280,7 +280,7 @@ def test_merge_asof_on_basic():
     B = pd.DataFrame({'a': [1, 2, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
     b = dd.from_pandas(B, npartitions=2)
 
-    C = pd.merge_asof(A, B, on='a').set_index('a')
+    C = pd.merge_asof(A, B, on='a')
     c = dd.merge_asof(a, b, on='a')
     assert_eq(c, C)
 
@@ -294,7 +294,7 @@ def test_merge_asof_on(allow_exact_matches, direction):
     b = dd.from_pandas(B, npartitions=2)
 
     C = pd.merge_asof(A, B, on='a', allow_exact_matches=allow_exact_matches,
-                      direction=direction).set_index('a')
+                      direction=direction)
     c = dd.merge_asof(a, b, on='a', allow_exact_matches=allow_exact_matches,
                       direction=direction)
     assert_eq(c, C)
@@ -337,9 +337,7 @@ def test_merge_asof_on_by():
     B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B})
     b = dd.from_pandas(B, npartitions=3)
 
-    C = pd.merge_asof(B, A, on='time', by='ticker').set_index('time')
-    c = dd.merge_asof(b, a, on='time', by='ticker')
-    assert_eq(c, C)
+    C = pd.merge_asof(B, A, on='time', by='ticker')
 
 
 def test_merge_asof_on_by_tolerance():
@@ -368,9 +366,9 @@ def test_merge_asof_on_by_tolerance():
     B = pd.DataFrame({'time': times_B, 'ticker': tickers_B, 'price': prices_B, 'quantity': quantities_B})
     b = dd.from_pandas(B, npartitions=3)
 
-    C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('2ms')).set_index('time')
+    C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('2ms'))
     c = dd.merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('2ms'))
-    assert_eq(c, C)
+    assert_eq(c, C, check_index=False)
 
 
 def test_merge_asof_on_by_tolerance_no_exact_matches():
@@ -400,10 +398,10 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
-                      allow_exact_matches=False).set_index('time')
+                      allow_exact_matches=False)
     c = dd.merge_asof(b, a, on='time', by='ticker', tolerance=pd.Timedelta('10ms'),
                       allow_exact_matches=False)
-    assert_eq(c, C)
+    assert_eq(c, C, check_index=False)
 
 
 def test_merge_asof_unsorted_raises():
