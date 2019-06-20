@@ -42,8 +42,17 @@ def blockwise_token(i, prefix='_'):
     return prefix + '%d' % i
 
 
-def blockwise(func, output, output_indices, *arrind_pairs, numblocks=None,
-        concatenate=None, new_axes=None, dependencies=(), **kwargs):
+def blockwise(
+    func,
+    output,
+    output_indices,
+    *arrind_pairs,
+    numblocks=None,
+    concatenate=None,
+    new_axes=None,
+    dependencies=(),
+    **kwargs
+):
     """ Create a Blockwise symbolic mutable mapping
 
     This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
