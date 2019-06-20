@@ -2508,7 +2508,7 @@ def _check_regular_chunks(chunkset):
     return True
 
 
-def from_delayed(value, shape, dtype, name=None):
+def from_delayed(value, shape, dtype=None, meta=None, name=None):
     """ Create a dask array from a dask delayed value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
@@ -2518,24 +2518,27 @@ def from_delayed(value, shape, dtype, name=None):
 
     Examples
     --------
-    >>> from dask import delayed
-    >>> value = delayed(np.ones)(5)
-    >>> array = from_delayed(value, (5,), float)
+    >>> import dask
+    >>> import dask.array as da
+    >>> value = dask.delayed(np.ones)(5)
+    >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
     dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
-    from dask.delayed import delayed, Delayed
+    from ..delayed import delayed, Delayed
+
     if not isinstance(value, Delayed) and hasattr(value, 'key'):
         value = delayed(value)
-    name = name or 'from-value-' + tokenize(value, shape, dtype)
+
+    name = name or 'from-value-' + tokenize(value, shape, dtype, meta)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
-    return Array(graph, name, chunks, dtype)
+    return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
