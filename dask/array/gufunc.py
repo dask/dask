@@ -10,6 +10,7 @@ except ImportError:
     from toolz import concat, merge, unique
 
 from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
+from .utils import meta_from_array
 from ..highlevelgraph import HighLevelGraph
 from ..core import flatten
 
@@ -397,11 +398,12 @@ significantly.".format(dim))
         leaf_name = "%s_%d-%s" % (name, i, token)
         leaf_dsk = {(leaf_name,) + key[1:] + core_chunkinds: ((getitem, key, i) if nout else key) for key in keys}
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
+        meta = meta_from_array(tmp._meta, len(output_shape), dtype=odt)
         leaf_arr = Array(graph,
                          leaf_name,
                          chunks=output_chunks,
                          shape=output_shape,
-                         dtype=odt)
+                         meta=meta)
 
         ### Axes:
         if keepdims:

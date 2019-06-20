@@ -5,6 +5,7 @@ import math
 import warnings
 from functools import wraps, partial
 from numbers import Real, Integral
+from distutils.version import LooseVersion
 
 import numpy as np
 from toolz import concat, sliding_window, interleave
@@ -13,10 +14,10 @@ from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import funcname, derived_from
+from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
 from .creation import arange, diag, empty, indices
-from .utils import safe_wraps, validate_axis
+from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
 
@@ -193,7 +194,8 @@ def _tensordot(a, b, axes):
     # workaround may be removed when numpy version (currently 1.13.0) is bumped
     a_dims = np.array([a.shape[i] for i in axes[0]])
     b_dims = np.array([b.shape[i] for i in axes[1]])
-    if len(a_dims) > 0 and (a_dims == b_dims).all() and a_dims.min() == 0:
+    if (len(a_dims) > 0 and (a_dims == b_dims).all() and a_dims.min() == 0 and
+            LooseVersion(np.__version__) < LooseVersion("1.14")):
         x = np.zeros(tuple([s for i, s in enumerate(a.shape) if i not in axes[0]] +
                            [s for i, s in enumerate(b.shape) if i not in axes[1]]))
     else:
@@ -482,7 +484,7 @@ def gradient(f, *varargs, **kwargs):
             if np.min(c) < kwargs["edge_order"] + 1:
                 raise ValueError(
                     'Chunk size must be larger than edge_order + 1. '
-                    'Minimum chunk for aixs {} is {}. Rechunk to '
+                    'Minimum chunk for axis {} is {}. Rechunk to '
                     'proceed.'.format(np.min(c), ax))
 
         if np.isscalar(varargs[i]):
@@ -518,7 +520,7 @@ def gradient(f, *varargs, **kwargs):
 
 def _bincount_sum(bincounts, dtype=int):
     n = max(map(len, bincounts))
-    out = np.zeros(n, dtype=dtype)
+    out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
         out[:len(b)] += b
     return out
@@ -554,7 +556,9 @@ def bincount(x, weights=None, minlength=0):
     else:
         chunks = ((minlength,),)
 
-    return Array(graph, final_name, chunks, dtype)
+    meta = meta_from_array(x, 1, dtype=dtype)
+
+    return Array(graph, final_name, chunks, meta=meta)
 
 
 @derived_from(np)
@@ -991,12 +995,19 @@ def squeeze(a, axis=None):
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
-    return a[sl]
+    a = a[sl]
+
+    return a
 
 
 @derived_from(np)
 def compress(condition, a, axis=None):
-    condition = asarray(condition).astype(bool)
+
+    if not is_arraylike(condition):
+        # Allow `condition` to be anything array-like, otherwise ensure `condition`
+        # is a numpy array.
+        condition = np.asarray(condition)
+    condition = condition.astype(bool)
     a = asarray(a)
 
     if condition.ndim != 1:

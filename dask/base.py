@@ -156,6 +156,23 @@ class DaskMethodsMixin(object):
         (result,) = compute(self, traverse=False, **kwargs)
         return result
 
+    def __await__(self):
+        try:
+            from distributed import wait, futures_of
+        except ImportError:
+            raise ImportError(
+                "Using async/await with dask requires the `distributed` package"
+            )
+        from tornado import gen
+
+        @gen.coroutine
+        def f():
+            if futures_of(self):
+                yield wait(self)
+            raise gen.Return(self)
+
+        return f().__await__()
+
 
 def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs):
     """Compute a graph as if it were of type cls.
@@ -730,6 +747,8 @@ def register_numpy():
             if hasattr(x.base, 'ctypes'):
                 offset = (x.ctypes.get_as_parameter().value -
                           x.base.ctypes.get_as_parameter().value)
+            elif hasattr(x, 'offset'):
+                offset = getattr(x, 'offset')
             else:
                 offset = 0  # root memmap's have mmap object as base
             return (x.filename, os.path.getmtime(x.filename), x.dtype,

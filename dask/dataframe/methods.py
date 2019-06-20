@@ -121,16 +121,17 @@ def mean_aggregate(s, n):
         return np.float64(np.nan)
 
 
-def var_aggregate(x2, x, n, ddof):
-    try:
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter('always')
-            result = (x2 / n) - (x / n)**2
-        if ddof != 0:
-            result = result * n / (n - ddof)
-        return result
-    except ZeroDivisionError:
-        return np.float64(np.nan)
+def wrap_var_reduction(array_var, index):
+    if isinstance(array_var, np.ndarray) or isinstance(array_var, list):
+        return pd.Series(array_var, index=index)
+
+    return array_var
+
+
+def var_mixed_concat(numeric_var, timedelta_var, columns):
+    vars = pd.concat([numeric_var, timedelta_var])
+
+    return vars.reindex(index=columns)
 
 
 def describe_aggregate(values):

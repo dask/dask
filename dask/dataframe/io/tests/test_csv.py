@@ -255,6 +255,7 @@ tsv_blocks = [[b'aa\tbb\n1\t1.0\n2\t2.0', b'10\t20\n30\t40'],
 
 @pytest.mark.parametrize('reader,blocks', [(pd.read_csv, csv_blocks),
                                            (pd.read_table, tsv_blocks)])
+@read_table_mark
 def test_enforce_dtypes(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b'\n')[0] + b'\n'
@@ -266,6 +267,7 @@ def test_enforce_dtypes(reader, blocks):
 
 @pytest.mark.parametrize('reader,blocks', [(pd.read_csv, csv_blocks),
                                            (pd.read_table, tsv_blocks)])
+@read_table_mark
 def test_enforce_columns(reader, blocks):
     # Replace second header with different column name
     blocks = [blocks[0], [blocks[1][0].replace(b'a', b'A'), blocks[1][1]]]
@@ -1275,3 +1277,22 @@ def test_to_csv_header(header, header_first_partition_only, expected_first, expe
             line = fp.readline()
             assert line == expected_next
         os.remove(filename)
+
+
+def test_to_csv_line_ending():
+    df = pd.DataFrame({'x': [0]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    expected = {b'0\r\n', b'0\n'} # either/or
+    # For comparison...
+    # unexpected = {b'0\r\r\n'}
+    # This test addresses GH4809, and checks that only (at most) one
+    #  '\r' character is written per line when writing to csv.
+    #  In case it's correct (on UNIX) to have no '\r' at all, this test
+    #  considers either '\r\n' or '\n' as appropriate line endings,
+    #  but not '\r\r\n'.
+    with tmpdir() as dn:
+        ddf.to_csv(os.path.join(dn, 'foo*.csv'), header=False, index=False)
+        filename = os.path.join(dn, 'foo0.csv')
+        with open(filename, 'rb') as f:
+            raw = f.read()
+    assert raw in expected

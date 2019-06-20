@@ -172,6 +172,11 @@ def test_Array():
 
     assert len(a) == shape[0]
 
+    with pytest.raises(ValueError):
+        Array(dsk, name, chunks, shape=shape)
+    with pytest.raises(TypeError):
+        Array(dsk, name, chunks, shape=shape, dtype='f8', meta=np.empty(0, 0))
+
 
 def test_uneven_chunks():
     a = Array({}, 'x', chunks=(3, 3), shape=(10, 10), dtype='f8')
@@ -352,11 +357,12 @@ def test_concatenate():
     assert (concatenate([a, b, c], axis=-1).chunks ==
             concatenate([a, b, c], axis=1).chunks)
 
+    pytest.raises(ValueError, lambda: concatenate([]))
     pytest.raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
-@pytest.mark.parametrize('dtypes', [(('>f8', '>f8'), '>f8'),
-                                    (('<f4', '<f8'), '=f8')])
+@pytest.mark.parametrize('dtypes', [(('>f8', '>f8'), 'float64'),
+                                    (('<f4', '<f8'), 'float64')])
 def test_concatenate_types(dtypes):
     dts_in, dt_out = dtypes
     arrs = [np.zeros(4, dtype=dt) for dt in dts_in]
@@ -419,6 +425,28 @@ def test_concatenate_fixlen_strings():
 
     assert_eq(np.concatenate([x, y]),
               da.concatenate([a, b]))
+
+
+def test_concatenate_zero_size():
+
+    x = np.random.random(10)
+    y = da.from_array(x, chunks=3)
+    result_np = np.concatenate([x, x[:0]])
+    result_da = da.concatenate([y, y[:0]])
+    assert_eq(result_np, result_da)
+    assert result_da is y
+
+    # dtype of a size 0 arrays can affect the output dtype
+    result_np = np.concatenate([np.zeros(0, dtype=float), np.zeros(1, dtype=int)])
+    result_da = da.concatenate([da.zeros(0, dtype=float), da.zeros(1, dtype=int)])
+
+    assert_eq(result_np, result_da)
+
+    # All empty arrays case
+    result_np = np.concatenate([np.zeros(0), np.zeros(0)])
+    result_da = da.concatenate([da.zeros(0), da.zeros(0)])
+
+    assert_eq(result_np, result_da)
 
 
 def test_block_simple_row_wise():
@@ -1315,6 +1343,13 @@ def test_slicing_with_ndarray():
     assert_eq(d[np.array([True, False, True] + [False] * 5)], x[[0, 2]])
 
 
+def test_slicing_flexible_type():
+    a = np.array([['a', 'b'], ['c', 'd']])
+    b = da.from_array(a, 2)
+
+    assert_eq(a[:, 0], b[:, 0])
+
+
 def test_dtype():
     d = da.ones((4, 4), chunks=(2, 2))
 
@@ -2006,6 +2041,9 @@ def test_optimize():
 
 def test_slicing_with_non_ndarrays():
     class ARangeSlice(object):
+        dtype = np.dtype('i8')
+        ndim = 1
+
         def __init__(self, start, stop):
             self.start = start
             self.stop = stop
@@ -2015,6 +2053,7 @@ def test_slicing_with_non_ndarrays():
 
     class ARangeSlicable(object):
         dtype = np.dtype('i8')
+        ndim = 1
 
         def __init__(self, n):
             self.n = n
@@ -2911,6 +2950,13 @@ def test_from_delayed():
     assert_eq(x, np.ones((5, 3)))
 
 
+def test_from_delayed_meta():
+    v = delayed(np.ones)((5, 3))
+    x = from_delayed(v, shape=(5, 3), meta=np.ones(0))
+    assert isinstance(x, Array)
+    assert isinstance(x._meta, np.ndarray)
+
+
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x
@@ -3744,6 +3790,7 @@ def test_partitions_indexer():
         x.partitions[100, 100]
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
 def test_dask_array_holds_scipy_sparse_containers():
     pytest.importorskip('scipy.sparse')
     import scipy.sparse
@@ -3864,3 +3911,12 @@ def test_auto_chunks_h5py():
             with dask.config.set({'array.chunk-size': '1 MiB'}):
                 x = da.from_array(d)
                 assert x.chunks == ((256, 256, 256, 232), (512, 488))
+
+
+def test_no_warnings_from_blockwise():
+    x = da.ones((15, 15), chunks=(5, 5))
+
+    with pytest.warns(None) as record:
+        (x.dot(x.T + 1) - x.mean(axis=0)).std()
+
+    assert not record

@@ -3,8 +3,9 @@ import random
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
 sparse = pytest.importorskip('sparse')
 if sparse:
@@ -71,6 +72,10 @@ def test_basic(func):
             assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
+@pytest.mark.skipif(
+    sparse.__version__ < '0.7.0+10',
+    reason='fixed in https://github.com/pydata/sparse/pull/256'
+)
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
@@ -136,3 +141,41 @@ def test_mixed_output_type():
     zz = z.compute()
     assert isinstance(zz, sparse.COO)
     assert zz.nnz == y.compute().nnz
+
+
+def test_metadata():
+    y = da.random.random((10, 10), chunks=(5, 5))
+    y[y < 0.8] = 0
+    z = sparse.COO.from_numpy(y.compute())
+    y = y.map_blocks(sparse.COO.from_numpy)
+
+    assert isinstance(y._meta, sparse.COO)
+    assert isinstance((y + 1)._meta, sparse.COO)
+    assert isinstance(y.sum(axis=0)._meta, sparse.COO)
+    assert isinstance(y.var(axis=0)._meta, sparse.COO)
+    assert isinstance(y[:5, ::2]._meta, sparse.COO)
+    assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
+    assert isinstance((y - z)._meta, sparse.COO)
+    if IS_NEP18_ACTIVE:
+        assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+
+
+def test_html_repr():
+    y = da.random.random((10, 10), chunks=(5, 5))
+    y[y < 0.8] = 0
+    y = y.map_blocks(sparse.COO.from_numpy)
+
+    text = y._repr_html_()
+
+    assert "COO" in text
+    assert "sparse" in text
+
+
+def test_from_delayed_meta():
+    def f():
+        return sparse.COO.from_numpy(np.eye(3))
+
+    d = dask.delayed(f)()
+    x = da.from_delayed(d, shape=(3, 3), meta=sparse.COO.from_numpy(np.eye(1)))
+    assert isinstance(x._meta, sparse.COO)
+    assert_eq(x, x)

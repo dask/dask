@@ -33,6 +33,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike, typename, skip_doctest)
 from ..array.core import Array, normalize_arg
+from ..array.utils import empty_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -875,6 +876,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         compute : bool, optional
             Whether to compute the result, default is True.
         """
+        return self._head(n=n, npartitions=npartitions, compute=compute, safe=True)
+
+    def _head(self, n, npartitions, compute, safe):
         if npartitions <= -1:
             npartitions = self.npartitions
         if npartitions > self.npartitions:
@@ -882,6 +886,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             raise ValueError(msg.format(self.npartitions, npartitions))
 
         name = 'head-%d-%d-%s' % (npartitions, n, self._name)
+        if safe:
+            head = safe_head
+        else:
+            head = M.head
 
         if npartitions > 1:
             name_p = 'head-partial-%d-%s' % (n, self._name)
@@ -891,9 +899,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 dsk[(name_p, i)] = (M.head, (self._name, i), n)
 
             concat = (_concat, [(name_p, i) for i in range(npartitions)])
-            dsk[(name, 0)] = (safe_head, concat, n)
+            dsk[(name, 0)] = (head, concat, n)
         else:
-            dsk = {(name, 0): (safe_head, (self._name, 0), n)}
+            dsk = {(name, 0): (head, (self._name, 0), n)}
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         result = new_dd_object(graph, name, self._meta,
@@ -1132,31 +1140,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Returns
         -------
         """
-        from dask.array.core import normalize_chunks
-
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
         arr = self.values
 
-        if isinstance(lengths, Sequence):
-            lengths = tuple(lengths)
+        chunks = self._validate_chunks(arr, lengths)
+        arr._chunks = chunks
 
-            if len(lengths) != self.npartitions:
-                raise ValueError(
-                    "The number of items in 'lengths' does not match "
-                    "the number of partitions. "
-                    "{} != {}".format(len(lengths), self.npartitions)
-                )
-
-            if self.ndim == 1:
-                chunks = normalize_chunks((lengths,))
-            else:
-                chunks = normalize_chunks((lengths, (len(self.columns),)))
-
-            arr._chunks = chunks
-        elif lengths is not None:
-            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
         return arr
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
@@ -1262,6 +1253,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
+        """
+        .. note::
+
+           Pandas currently uses an ``object``-dtype column to represent
+           boolean data with missing values. This can cause issues for
+           boolean-specific operations, like ``|``. To enable boolean-
+           specific operations, at the cost of metadata that doesn't match
+           pandas, use ``.astype(bool)`` after the ``shift``.
+        """
         axis = self._validate_axis(axis)
         if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
@@ -1452,16 +1452,103 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     axis=axis, skipna=skipna, ddof=ddof)
             return handle_out(out, result)
         else:
-            num = self._get_numeric_data()
-            x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
-            x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
-            n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var'
-            result = map_partitions(methods.var_aggregate, x2, x, n,
-                                    token=name, meta=meta, ddof=ddof)
+            if self.ndim == 1:
+                result = self._var_1d(self, skipna, ddof, split_every)
+                return handle_out(out, result)
+
+            count_timedeltas = len(self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns)
+
+            if count_timedeltas == len(self._meta.columns):
+                result = self._var_timedeltas(skipna, ddof, split_every)
+            elif count_timedeltas > 0:
+                result = self._var_mixed(skipna, ddof, split_every)
+            else:
+                result = self._var_numeric(skipna, ddof, split_every)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
+
+    def _var_numeric(self, skipna=True, ddof=1, split_every=False):
+        num = self.select_dtypes(include=['number', 'bool'], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype('f8')
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(array_values, axis=0, ddof=ddof, split_every=split_every)
+
+        name = self._token_prefix + 'var-numeric' + tokenize(num, split_every)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        var_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_var_name = (array_var._name,) + (0,) * len(var_shape)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, array_var_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, num._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_timedeltas(self, skipna=True, ddof=1, split_every=False):
+        timedeltas = self.select_dtypes(include=[np.timedelta64])
+
+        var_timedeltas = [self._var_1d(timedeltas[col_idx], skipna, ddof, split_every)
+                          for col_idx in timedeltas._meta.columns]
+        var_timedelta_names = [(v._name, 0) for v in var_timedeltas]
+
+        name = self._token_prefix + 'var-timedeltas-' + tokenize(timedeltas, split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, var_timedelta_names, timedeltas._meta.columns)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=var_timedeltas)
+
+        return new_dd_object(graph, name, timedeltas._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_mixed(self, skipna=True, ddof=1, split_every=False):
+        data = self.select_dtypes(include=['number', 'bool', np.timedelta64])
+
+        timedelta_vars = self._var_timedeltas(skipna, ddof, split_every)
+        numeric_vars = self._var_numeric(skipna, ddof, split_every)
+
+        name = self._token_prefix + 'var-mixed-' + tokenize(data, split_every)
+
+        layer = {(name, 0): (methods.var_mixed_concat,
+                             (numeric_vars._name, 0),
+                             (timedelta_vars._name, 0),
+                             data._meta.columns)}
+
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[numeric_vars, timedelta_vars])
+        return new_dd_object(graph, name, self._meta_nonempty.var(), divisions=[None, None])
+
+    def _var_1d(self, column, skipna=True, ddof=1, split_every=False):
+        is_timedelta = is_timedelta64_dtype(column._meta)
+
+        if is_timedelta:
+            if not skipna:
+                is_nan = column.isna()
+                column = column.astype('i8')
+                column = column.mask(is_nan)
+            else:
+                column = column.dropna().astype('i8')
+
+        if PANDAS_VERSION >= '0.24.0':
+            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+                column = column.astype('f8')
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype('f8')
+
+        name = self._token_prefix + 'var-1d-' + tokenize(column, split_every)
+
+        var = da.nanvar if skipna or skipna is None else da.var
+        array_var = var(column.values, axis=0, ddof=ddof, split_every=split_every)
+
+        layer = {(name, 0): (methods.wrap_var_reduction, (array_var._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
+
+        return new_dd_object(graph, name, column._meta_nonempty.var(), divisions=[None, None])
 
     @derived_from(pd.DataFrame)
     def std(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):
@@ -1494,6 +1581,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             n = num.count(split_every=split_every)
             name = self._token_prefix + 'sem'
             result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
+
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return result
@@ -1645,7 +1733,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             # count
             data.count(split_every=split_every),
             # most common value
-            vcounts.head(1, compute=False)
+            vcounts._head(1, npartitions=1, compute=False, safe=False)
         ]
 
         if is_datetime64_any_dtype(data._meta):
@@ -1944,6 +2032,30 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         will not work.
         """
         return self.map_partitions(methods.values)
+
+    def _validate_chunks(self, arr, lengths):
+        from dask.array.core import normalize_chunks
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            return chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+
+        return arr._chunks
 
     def _is_index_level_reference(self, key):
         """
@@ -2276,6 +2388,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
+        if is_series_like(arg) and is_dask_collection(arg):
+            return series_map(self, arg)
         if not (isinstance(arg, dict) or
                 callable(arg) or
                 is_series_like(arg) and not is_dask_collection(arg)):
@@ -2412,7 +2526,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         >>> def myadd(x, a, b=1):
         ...     return x + a + b
-        >>> res = ds.apply(myadd, args=(2,), b=1.5)
+        >>> res = ds.apply(myadd, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -2476,6 +2590,16 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def memory_usage(self, index=True, deep=False):
         result = self.map_partitions(M.memory_usage, index=index, deep=deep)
         return delayed(sum)(result.to_delayed())
+
+    def __divmod__(self, other):
+        res1 = self // other
+        res2 = self % other
+        return res1, res2
+
+    def __rdivmod__(self, other):
+        res1 = other // self
+        res2 = other % self
+        return res1, res2
 
 
 class Index(Series):
@@ -3246,7 +3370,7 @@ class DataFrame(_Frame):
 
         >>> def myadd(row, a, b=1):
         ...     return row.sum() + a + b
-        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)
+        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -3394,9 +3518,18 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
-    def to_records(self, index=False):
+    def to_records(self, index=False, lengths=None):
         from .io import to_records
-        return to_records(self)
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        records = to_records(self)
+
+        chunks = self._validate_chunks(records, lengths)
+        records._chunks = (chunks[0],)
+
+        return records
 
     @derived_from(pd.DataFrame)
     def to_html(self, max_rows=5):
@@ -3586,7 +3719,8 @@ def elemwise(op, *args, **kwargs):
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
-        parts = [d._meta if _is_broadcastable(d) or isinstance(d, Array)
+        parts = [d._meta if _is_broadcastable(d)
+                 else empty_like_safe(d, (), dtype=d.dtype) if isinstance(d, Array)
                  else d._meta_nonempty for d in dasks]
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
@@ -4237,7 +4371,7 @@ def cov_corr_chunk(df, corr=False):
     counts = np.zeros(shape)
     df = df.astype('float64', copy=False)
     for idx, col in enumerate(df):
-        mask = df[col].notnull()
+        mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
     cov = df.cov().values
@@ -4249,7 +4383,7 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df[x], mu[idx]) ** 2
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
@@ -4728,7 +4862,7 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
 
 
 def safe_head(df, n):
-    r = df.head(n=n)
+    r = M.head(df, n)
     if len(r) != n:
         msg = ("Insufficient elements for `head`. {0} elements "
                "requested, only {1} elements available. Try passing larger "
@@ -4768,8 +4902,15 @@ def maybe_shift_divisions(df, periods, freq):
 
 
 @wraps(pd.to_datetime)
-def to_datetime(arg, **kwargs):
-    meta = pd.Series([pd.Timestamp('2000')])
+def to_datetime(arg, meta=None, **kwargs):
+    if meta is None:
+        if isinstance(arg, Index):
+            meta = pd.DatetimeIndex([])
+            meta.name = arg.name
+        else:
+            meta = pd.Series([pd.Timestamp('2000')])
+            meta.index = meta.index.astype(arg.index.dtype)
+            meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
@@ -5063,3 +5204,58 @@ def suffix_reduction(f, ddf, identity, **kwargs):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, meta, divisions)
+
+
+def mapseries(base_chunk, concat_map):
+    return base_chunk.map(concat_map)
+
+
+def mapseries_combine(index, concat_result):
+    final_series = concat_result.sort_index()
+    final_series.index = index
+    return final_series
+
+
+def series_map(base_series, map_series):
+    npartitions = base_series.npartitions
+    split_out = map_series.npartitions
+
+    dsk = {}
+
+    base_token_key = tokenize(base_series, split_out)
+    base_split_prefix = 'base-split-{}'.format(base_token_key)
+    base_shard_prefix = 'base-shard-{}'.format(base_token_key)
+    for i, key in enumerate(base_series.__dask_keys__()):
+        dsk[(base_split_prefix, i)] = (hash_shard, key, split_out)
+        for j in range(split_out):
+            dsk[(base_shard_prefix, 0, i, j)] = (getitem, (base_split_prefix, i), j)
+
+    map_token_key = tokenize(map_series)
+    map_split_prefix = 'map-split-{}'.format(map_token_key)
+    map_shard_prefix = 'map-shard-{}'.format(map_token_key)
+    for i, key in enumerate(map_series.__dask_keys__()):
+        dsk[(map_split_prefix, i)] = (hash_shard, key, split_out, split_out_on_index, None)
+        for j in range(split_out):
+            dsk[(map_shard_prefix, 0, i, j)] = (getitem, (map_split_prefix, i), j)
+
+    token_key = tokenize(base_series, map_series)
+    map_prefix = 'map-series-{}'.format(token_key)
+    for i in range(npartitions):
+        for j in range(split_out):
+            dsk[(map_prefix, i, j)] = (mapseries,
+                                       (base_shard_prefix, 0, i, j),
+                                       (_concat, [(map_shard_prefix, 0, k, j) for k in range(split_out)]))
+
+    final_prefix = 'map-series-combine-{}'.format(token_key)
+    for i, key in enumerate(base_series.index.__dask_keys__()):
+        dsk[(final_prefix, i)] = (mapseries_combine, key, (_concat, [(map_prefix, i, j) for j in range(split_out)]))
+
+    meta = map_series._meta.copy()
+    meta.index = base_series._meta.index
+    meta = make_meta(meta)
+
+    dependencies = [base_series, map_series, base_series.index]
+    graph = HighLevelGraph.from_collections(final_prefix, dsk, dependencies=dependencies)
+    divisions = list(base_series.divisions)
+
+    return new_dd_object(graph, final_prefix, meta, divisions)

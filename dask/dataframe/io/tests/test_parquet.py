@@ -2,6 +2,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import os
+import warnings
 from distutils.version import LooseVersion
 
 import numpy as np
@@ -12,7 +13,7 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet import _parse_pandas_metadata
 from dask.utils import natural_sort_key
 
@@ -476,8 +477,8 @@ def test_optimize(tmpdir, c):
     assert all(v[4] == c for v in dsk.values())
 
 
-@pytest.mark.skipif(not hasattr(pd.DataFrame, 'to_parquet'),
-                    reason="no to_parquet method")
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="new pyarrow assumes new-ish pandas versions")
 @write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join('test.parquet'))
@@ -1346,12 +1347,17 @@ def test_with_tz(tmpdir, engine):
     if engine == 'fastparquet' and fastparquet.__version__ < LooseVersion(
             '0.3.0'):
         pytest.skip("fastparquet<0.3.0 did not support this")
-    fn = str(tmpdir)
-    df = pd.DataFrame([[0]], columns=['a'], dtype='datetime64[ns, UTC]')
-    df = dd.from_pandas(df, 1)
-    df.to_parquet(fn, engine=engine)
-    df2 = dd.read_parquet(fn, engine=engine)
-    assert_eq(df, df2, check_divisions=False, check_index=False)
+
+    with warnings.catch_warnings():
+        if engine == "fastparquet":
+            # fastparquet-442
+            warnings.simplefilter("ignore", DeprecationWarning)
+            fn = str(tmpdir)
+            df = pd.DataFrame([[0]], columns=['a'], dtype='datetime64[ns, UTC]')
+            df = dd.from_pandas(df, 1)
+            df.to_parquet(fn, engine=engine)
+            df2 = dd.read_parquet(fn, engine=engine)
+            assert_eq(df, df2, check_divisions=False, check_index=False)
 
 
 def test_arrow_partitioning(tmpdir):

@@ -400,7 +400,7 @@ def from_dask_array(x, columns=None, index=None):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
         if index.npartitions != x.numblocks[0]:
             msg = (
-                "'index' must have the same number of blocks as 'x'. "
+                "The index and array have different numbers of blocks. "
                 "({} != {})".format(index.npartitions, x.numblocks[0])
             )
             raise ValueError(msg)

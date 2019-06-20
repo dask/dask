@@ -13,7 +13,7 @@ from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions, merge_asof)
 from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
-                                  has_known_categories, clear_known_categories)
+                                  has_known_categories, clear_known_categories, PANDAS_GT_0230)
 
 import pytest
 
@@ -449,10 +449,15 @@ def test_concat(join):
                         index=[8, 9, 10, 11, 12, 13])
     ddf3 = dd.from_pandas(pdf3, 2)
 
+    if PANDAS_GT_0230:
+        kwargs = {"sort": False}
+    else:
+        kwargs = {}
+
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
 
-        expected = pd.concat([pd1, pd2], join=join)
+        expected = pd.concat([pd1, pd2], join=join, **kwargs)
         result = dd.concat([dd1, dd2], join=join)
         assert_eq(result, expected)
 
@@ -463,7 +468,7 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        expected = pd.concat([pd1, pd2])
+        expected = pd.concat([pd1, pd2], **kwargs)
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
 
@@ -487,6 +492,42 @@ def test_concat_different_dtypes(join):
 
     dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
     assert len(set(map(str, dtypes_list))) == 1  # all the same
+
+
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+@pytest.mark.parametrize('on_index', [True, False])
+def test_merge_columns_dtypes(how, on_index):
+    # tests results of merges with merge columns having different dtypes;
+    # asserts that either the merge was successful or the corresponding warning is raised
+    # addresses issue #4574
+
+    df1 = pd.DataFrame({"A": list(np.arange(5).astype(float)) * 2,
+                        "B": list(np.arange(5)) * 2})
+    df2 = pd.DataFrame({"A": np.arange(5), "B": np.arange(5)})
+
+    a = dd.from_pandas(df1, 2)  # merge column "A" is float
+    b = dd.from_pandas(df2, 2)  # merge column "A" is int
+
+    on = ["A"]
+    left_index = right_index = on_index
+
+    if on_index:
+        a = a.set_index("A")
+        b = b.set_index("A")
+        on = None
+
+    with pytest.warns(None) as record:
+        result = dd.merge(a, b, on=on, how=how,
+                          left_index=left_index, right_index=right_index)
+
+    warned = any('merge column data type mismatches' in str(r) for r in record)
+
+    # result type depends on merge operation -> convert to pandas
+    result = result if isinstance(result, pd.DataFrame) else result.compute()
+
+    has_nans = result.isna().values.any()
+
+    assert (has_nans and warned) or not has_nans
 
 
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
@@ -1371,7 +1412,8 @@ def test_append():
     s = pd.Series([7, 8], name=6, index=['a', 'b'])
 
     def check_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-        with warnings.catch_warnings(record=True):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
             expected = pandas_obj.append(pandas_append)
 
         result = dask_obj.append(dask_append)

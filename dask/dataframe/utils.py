@@ -29,6 +29,7 @@ from ..utils import is_index_like as dask_is_index_like
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
+PANDAS_GT_0230 = PANDAS_VERSION >= LooseVersion("0.23.0")
 PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0rc1")
 HAS_INT_NA = PANDAS_GT_0240
 
@@ -107,7 +108,8 @@ An empty ``pd.DataFrame`` or ``pd.Series`` that matches the dtypes and
 column names of the output. This metadata is necessary for many algorithms
 in dask dataframe to work.  For ease of use, some alternative inputs are
 also available. Instead of a ``DataFrame``, a ``dict`` of ``{name: dtype}``
-or iterable of ``(name, dtype)`` can be provided. Instead of a series, a
+or iterable of ``(name, dtype)`` can be provided (note that the order of
+the names should match the order of the columns). Instead of a series, a
 tuple of ``(name, dtype)`` can be used. If not provided, dask will try to
 infer the metadata. This may lead to unexpected results, so providing
 ``meta`` is recommended. For more information, see
