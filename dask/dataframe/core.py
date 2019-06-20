@@ -876,6 +876,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         compute : bool, optional
             Whether to compute the result, default is True.
         """
+        return self._head(n=n, npartitions=npartitions, compute=compute, safe=True)
+
+    def _head(self, n, npartitions, compute, safe):
         if npartitions <= -1:
             npartitions = self.npartitions
         if npartitions > self.npartitions:
@@ -883,6 +886,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             raise ValueError(msg.format(self.npartitions, npartitions))
 
         name = 'head-%d-%d-%s' % (npartitions, n, self._name)
+        if safe:
+            head = safe_head
+        else:
+            head = M.head
 
         if npartitions > 1:
             name_p = 'head-partial-%d-%s' % (n, self._name)
@@ -892,9 +899,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 dsk[(name_p, i)] = (M.head, (self._name, i), n)
 
             concat = (_concat, [(name_p, i) for i in range(npartitions)])
-            dsk[(name, 0)] = (safe_head, concat, n)
+            dsk[(name, 0)] = (head, concat, n)
         else:
-            dsk = {(name, 0): (safe_head, (self._name, 0), n)}
+            dsk = {(name, 0): (head, (self._name, 0), n)}
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         result = new_dd_object(graph, name, self._meta,
@@ -1133,31 +1140,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Returns
         -------
         """
-        from dask.array.core import normalize_chunks
-
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
         arr = self.values
 
-        if isinstance(lengths, Sequence):
-            lengths = tuple(lengths)
+        chunks = self._validate_chunks(arr, lengths)
+        arr._chunks = chunks
 
-            if len(lengths) != self.npartitions:
-                raise ValueError(
-                    "The number of items in 'lengths' does not match "
-                    "the number of partitions. "
-                    "{} != {}".format(len(lengths), self.npartitions)
-                )
-
-            if self.ndim == 1:
-                chunks = normalize_chunks((lengths,))
-            else:
-                chunks = normalize_chunks((lengths, (len(self.columns),)))
-
-            arr._chunks = chunks
-        elif lengths is not None:
-            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
         return arr
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
@@ -1743,7 +1733,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             # count
             data.count(split_every=split_every),
             # most common value
-            vcounts.head(1, compute=False)
+            vcounts._head(1, npartitions=1, compute=False, safe=False)
         ]
 
         if is_datetime64_any_dtype(data._meta):
@@ -2042,6 +2032,30 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         will not work.
         """
         return self.map_partitions(methods.values)
+
+    def _validate_chunks(self, arr, lengths):
+        from dask.array.core import normalize_chunks
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            return chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+
+        return arr._chunks
 
     def _is_index_level_reference(self, key):
         """
@@ -2374,6 +2388,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
+        if is_series_like(arg) and is_dask_collection(arg):
+            return series_map(self, arg)
         if not (isinstance(arg, dict) or
                 callable(arg) or
                 is_series_like(arg) and not is_dask_collection(arg)):
@@ -2510,7 +2526,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         >>> def myadd(x, a, b=1):
         ...     return x + a + b
-        >>> res = ds.apply(myadd, args=(2,), b=1.5)
+        >>> res = ds.apply(myadd, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -3354,7 +3370,7 @@ class DataFrame(_Frame):
 
         >>> def myadd(row, a, b=1):
         ...     return row.sum() + a + b
-        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)
+        >>> res = ddf.apply(myadd, axis=1, args=(2,), b=1.5)  # doctest: +SKIP
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -3502,9 +3518,18 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
-    def to_records(self, index=False):
+    def to_records(self, index=False, lengths=None):
         from .io import to_records
-        return to_records(self)
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        records = to_records(self)
+
+        chunks = self._validate_chunks(records, lengths)
+        records._chunks = (chunks[0],)
+
+        return records
 
     @derived_from(pd.DataFrame)
     def to_html(self, max_rows=5):
@@ -4346,7 +4371,7 @@ def cov_corr_chunk(df, corr=False):
     counts = np.zeros(shape)
     df = df.astype('float64', copy=False)
     for idx, col in enumerate(df):
-        mask = df[col].notnull()
+        mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
     cov = df.cov().values
@@ -4358,7 +4383,7 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df[x], mu[idx]) ** 2
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
@@ -4837,7 +4862,7 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
 
 
 def safe_head(df, n):
-    r = df.head(n=n)
+    r = M.head(df, n)
     if len(r) != n:
         msg = ("Insufficient elements for `head`. {0} elements "
                "requested, only {1} elements available. Try passing larger "
@@ -5059,3 +5084,58 @@ def meta_warning(df):
                 "  Before: .apply(func)\n"
                 "  After:  .apply(func, meta=%s)\n" % str(meta_str))
     return msg
+
+
+def mapseries(base_chunk, concat_map):
+    return base_chunk.map(concat_map)
+
+
+def mapseries_combine(index, concat_result):
+    final_series = concat_result.sort_index()
+    final_series.index = index
+    return final_series
+
+
+def series_map(base_series, map_series):
+    npartitions = base_series.npartitions
+    split_out = map_series.npartitions
+
+    dsk = {}
+
+    base_token_key = tokenize(base_series, split_out)
+    base_split_prefix = 'base-split-{}'.format(base_token_key)
+    base_shard_prefix = 'base-shard-{}'.format(base_token_key)
+    for i, key in enumerate(base_series.__dask_keys__()):
+        dsk[(base_split_prefix, i)] = (hash_shard, key, split_out)
+        for j in range(split_out):
+            dsk[(base_shard_prefix, 0, i, j)] = (getitem, (base_split_prefix, i), j)
+
+    map_token_key = tokenize(map_series)
+    map_split_prefix = 'map-split-{}'.format(map_token_key)
+    map_shard_prefix = 'map-shard-{}'.format(map_token_key)
+    for i, key in enumerate(map_series.__dask_keys__()):
+        dsk[(map_split_prefix, i)] = (hash_shard, key, split_out, split_out_on_index, None)
+        for j in range(split_out):
+            dsk[(map_shard_prefix, 0, i, j)] = (getitem, (map_split_prefix, i), j)
+
+    token_key = tokenize(base_series, map_series)
+    map_prefix = 'map-series-{}'.format(token_key)
+    for i in range(npartitions):
+        for j in range(split_out):
+            dsk[(map_prefix, i, j)] = (mapseries,
+                                       (base_shard_prefix, 0, i, j),
+                                       (_concat, [(map_shard_prefix, 0, k, j) for k in range(split_out)]))
+
+    final_prefix = 'map-series-combine-{}'.format(token_key)
+    for i, key in enumerate(base_series.index.__dask_keys__()):
+        dsk[(final_prefix, i)] = (mapseries_combine, key, (_concat, [(map_prefix, i, j) for j in range(split_out)]))
+
+    meta = map_series._meta.copy()
+    meta.index = base_series._meta.index
+    meta = make_meta(meta)
+
+    dependencies = [base_series, map_series, base_series.index]
+    graph = HighLevelGraph.from_collections(final_prefix, dsk, dependencies=dependencies)
+    divisions = list(base_series.divisions)
+
+    return new_dd_object(graph, final_prefix, meta, divisions)
