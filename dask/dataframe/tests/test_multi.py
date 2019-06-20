@@ -339,7 +339,7 @@ def test_merge_asof_on_by():
 
     C = pd.merge_asof(B, A, on='time', by='ticker')
     c = dd.merge_asof(b, a, on='time', by='ticker')
-    assert_eq(c, C)
+    assert_eq(c, C, check_index=False)
 
 
 def test_merge_asof_on_by_tolerance():
