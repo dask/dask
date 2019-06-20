@@ -338,6 +338,8 @@ def test_merge_asof_on_by():
     b = dd.from_pandas(B, npartitions=3)
 
     C = pd.merge_asof(B, A, on='time', by='ticker')
+    c = dd.merge_asof(b, a, on='time', by='ticker')
+    assert_eq(c, C)
 
 
 def test_merge_asof_on_by_tolerance():
