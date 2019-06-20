@@ -114,8 +114,8 @@ def test_loc_with_array_different_partition():
     ddf = dd.from_pandas(df, 3)
 
     assert_eq(ddf.loc[(ddf.A > 0).values], df.loc[(df.A > 0).values])
-    pytest.raises(ValueError,
-                  lambda: ddf.loc[(ddf.A > 0).repartition(['a', 'g', 'k', 'o', 't']).values].compute())
+    with pytest.raises(ValueError):
+        ddf.loc[(ddf.A > 0).repartition(['a', 'g', 'k', 'o', 't']).values]
 
 
 def test_loc_with_series_different_partition():
