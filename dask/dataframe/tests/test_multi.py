@@ -406,6 +406,18 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
     assert_eq(c, C)
 
 
+def test_merge_asof_unsorted_raises():
+    A = pd.DataFrame({'a': [1, 5, 10], 'left_val': ['a', 'b', 'c']})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({'a': [2, 1, 3, 6, 7], 'right_val': [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    result = merge_asof(a, b, on="a")
+    # raise at runtime
+    with pytest.raises(ValueError, match="right keys"):
+        result.compute()
+
+
 @pytest.mark.parametrize('join', ['inner', 'outer'])
 def test_indexed_concat(join):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7], 'y': list('abcdef')},
