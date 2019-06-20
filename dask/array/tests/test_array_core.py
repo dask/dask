@@ -2950,6 +2950,13 @@ def test_from_delayed():
     assert_eq(x, np.ones((5, 3)))
 
 
+def test_from_delayed_meta():
+    v = delayed(np.ones)((5, 3))
+    x = from_delayed(v, shape=(5, 3), meta=np.ones(0))
+    assert isinstance(x, Array)
+    assert isinstance(x._meta, np.ndarray)
+
+
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x
