@@ -104,3 +104,99 @@ def test_array_function_cupy_svd():
     assert_eq(u, u_base)
     assert_eq(s, s_base)
     assert_eq(v, v_base)
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize('func', [
+    lambda x: np.concatenate([x, x, x]),
+    lambda x: np.cov(x, x),
+    lambda x: np.dot(x, x),
+    lambda x: np.dstack(x),
+    lambda x: np.flip(x, axis=0),
+    lambda x: np.hstack(x),
+    lambda x: np.matmul(x, x),
+    lambda x: np.mean(x),
+    lambda x: np.stack([x, x]),
+    lambda x: np.sum(x),
+    lambda x: np.var(x),
+    lambda x: np.vstack(x),
+    lambda x: np.linalg.norm(x)])
+def test_unregistered_func(func):
+    def wrap(func_name):
+        """
+        Wrap a function.
+        """
+        def wrapped(self, *a, **kw):
+            a = getattr(self.arr, func_name)(*a, **kw)
+            return a if not isinstance(a, np.ndarray) else type(self)(a)
+
+        return wrapped
+
+    def dispatch_property(prop_name):
+        """
+        Wrap a simple property.
+        """
+        @property
+        def wrapped(self, *a, **kw):
+            return getattr(self.arr, prop_name)
+
+        return wrapped
+
+    class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
+        """
+        A class that "mocks" ndarray by encapsulating an ndarray and using
+        protocols to "look like" an ndarray. Basically tests whether Dask
+        works fine with something that is essentially an array but uses
+        protocols instead of being an actual array.
+        """
+        __array_priority__ = 20
+
+        def __init__(self, arr):
+            self.arr = arr
+
+        def __array__(self, **kwargs):
+            return np.asarray(self.arr, **kwargs)
+
+        def __array_function__(self, f, t, arrs, kw):
+            arrs = tuple(arr if not isinstance(arr, type(self)) else arr.arr for arr in arrs)
+            t = tuple(ti for ti in t if not issubclass(ti, type(self)))
+            print(t)
+            a = self.arr.__array_function__(f, t, arrs, kw)
+            return a if not isinstance(a, np.ndarray) else type(self)(a)
+
+        __getitem__ = wrap('__getitem__')
+
+        __setitem__ = wrap('__setitem__')
+
+        def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+            inputs = tuple(i if not isinstance(i, type(self)) else i.arr for i in inputs)
+            a = getattr(ufunc, method)(*inputs, **kwargs)
+            return a if not isinstance(a, np.ndarray) else type(self)(a)
+
+        shape = dispatch_property('shape')
+        ndim = dispatch_property('ndim')
+        dtype = dispatch_property('dtype')
+
+        astype = wrap('astype')
+        sum = wrap('sum')
+        prod = wrap('prod')
+
+    # Wrap a procol-based encapsulated ndarray
+    x = EncapsulateNDArray(np.random.random((100, 100)))
+
+    # See if Dask holds the array fine
+    y = da.from_array(x, chunks=(50, 50))
+
+    # Check if it's an equivalent array
+    assert_eq(x, y, check_meta=False)
+
+    # Perform two NumPy functions, one on the
+    # Encapsulated array
+    xx = func(x)
+
+    # And one on the Dask array holding these
+    # encapsulated arrays
+    yy = func(y)
+
+    # Check that they are equivalent arrays.
+    assert_eq(xx, yy, check_meta=False)
