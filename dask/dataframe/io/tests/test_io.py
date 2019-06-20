@@ -370,7 +370,9 @@ def test_from_dask_array_index_raises():
     with pytest.raises(ValueError) as m:
         dd.from_dask_array(a.values, index=b.index)
 
-    assert m.match("must have the same number")
+    assert m.match("index")
+    assert m.match("number")
+    assert m.match("blocks")
     assert m.match("4 != 2")
 
 
