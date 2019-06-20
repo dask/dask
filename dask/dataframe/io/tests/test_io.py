@@ -370,7 +370,9 @@ def test_from_dask_array_index_raises():
     with pytest.raises(ValueError) as m:
         dd.from_dask_array(a.values, index=b.index)
 
-    assert m.match("must have the same number")
+    assert m.match("index")
+    assert m.match("number")
+    assert m.match("blocks")
     assert m.match("4 != 2")
 
 
@@ -503,6 +505,44 @@ def test_to_records():
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.to_records(), ddf.to_records())
+
+
+@pytest.mark.parametrize('lengths', [
+    [2, 2],
+    True,
+])
+def test_to_records_with_lengths(lengths):
+    pytest.importorskip('dask.array')
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.to_records(lengths=lengths)
+    assert_eq(df.to_records(), result)
+
+    assert isinstance(result, da.Array)
+
+    expected_chunks = ((2, 2),)
+
+    assert result.chunks == expected_chunks
+
+
+def test_to_records_raises():
+    pytest.importorskip('dask.array')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                      index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(df, 2)
+
+    with pytest.raises(ValueError):
+        ddf.to_records(lengths=[2, 2, 2])
+        pytest.fail("3 != 2")
+
+    with pytest.raises(ValueError):
+        ddf.to_records(lengths=5)
+        pytest.fail("Unexpected value")
 
 
 def test_from_delayed():

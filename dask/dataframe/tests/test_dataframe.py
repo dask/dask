@@ -79,6 +79,7 @@ def test_head_tail():
             sorted(d.tail(3, compute=False).dask))
 
 
+@pytest.mark.filterwarnings("ignore:Insufficient:UserWarning")
 def test_head_npartitions():
     assert_eq(d.head(5, npartitions=2), full.head(5))
     assert_eq(d.head(5, npartitions=2, compute=False), full.head(5))
@@ -90,6 +91,10 @@ def test_head_npartitions():
 
 
 def test_head_npartitions_warn():
+    match = '5 elements requested, only 3 elements'
+    with pytest.warns(UserWarning, match=match):
+        d.head(5)
+
     with pytest.warns(None):
         d.head(100)
 
@@ -351,12 +356,6 @@ def test_describe(include, exclude, percentiles, subset):
     desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
     desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
 
-    # TODO: for timedelta columns there's overflow in var function, see #4233
-    # causing std to be nan, workaround this by dropping timedelta column before assertion
-    if 'f' in desc_ddf._meta:
-        desc_df = desc_df.drop('f', axis=1)
-        desc_ddf = desc_ddf.drop('f', axis=1)
-
     # Assert
     assert_eq(desc_ddf, desc_df)
 
@@ -401,9 +400,12 @@ def test_describe_empty_tdigest():
     # Pandas have different dtypes for resulting describe dataframe if there are only
     # None-values, pre-compute dask df to bypass _meta check
     assert_eq(df_none.describe(), ddf_none.describe(percentiles_method='tdigest').compute())
-
-    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
-    assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+    with warnings.catch_warnings():
+        # dask.dataframe should probably filter this, to match pandas, but
+        # it seems quite difficult.
+        warnings.simplefilter('ignore', RuntimeWarning)
+        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
+        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method='tdigest'))
 
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method='tdigest').compute()
@@ -1177,7 +1179,6 @@ def test_map():
     assert_eq(ddf.b.map(lk), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=('b', 'i8')), df.b.map(lk))
-    pytest.raises(TypeError, lambda: ddf.a.map(d.b))
 
 
 def test_concat():
@@ -2477,6 +2478,21 @@ def test_corr():
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
 
+def test_corr_same_name():
+    # Series with same names (see https://github.com/dask/dask/issues/4906)
+
+    df = pd.util.testing.makeMissingDataframe(0.3, 42)
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    result = ddf.A.corr(ddf.B.rename('A'))
+    expected = ddf.A.corr(ddf.B)
+    assert_eq(result, expected)
+
+    # test with split_every
+    result2 = ddf.A.corr(ddf.B.rename('A'), split_every=2)
+    assert_eq(result2, expected)
+
+
 def test_cov_corr_meta():
     df = pd.DataFrame({'a': np.array([1, 2, 3]),
                        'b': np.array([1.0, 2.0, 3.0], dtype='f4'),
@@ -3300,15 +3316,20 @@ def test_to_datetime():
     df = pd.DataFrame({'year': [2015, 2016],
                        'month': [2, 3],
                        'day': [4, 5]})
+    df.index.name = 'ix'
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
 
     s = pd.Series(['3/11/2000', '3/12/2000', '3/13/2000'] * 100)
-    ds = dd.from_pandas(s, npartitions=10)
+    s.index = s.values
+    ds = dd.from_pandas(s, npartitions=10, sort=False)
 
     assert_eq(pd.to_datetime(s, infer_datetime_format=True),
               dd.to_datetime(ds, infer_datetime_format=True))
+    assert_eq(pd.to_datetime(s.index, infer_datetime_format=True),
+              dd.to_datetime(ds.index, infer_datetime_format=True),
+              check_divisions=False)
 
 
 def test_to_timedelta():
@@ -3773,3 +3794,26 @@ def test_dtype_cast():
     assert ddf.B.dtype == np.int64
     # fails
     assert ddf.A.dtype == np.int32
+
+
+@pytest.mark.parametrize("base_npart", [1, 4])
+@pytest.mark.parametrize("map_npart", [1, 3])
+@pytest.mark.parametrize("sorted_index", [False, True])
+@pytest.mark.parametrize("sorted_map_index", [False, True])
+def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
+    base = pd.Series([''.join(np.random.choice(['a', 'b', 'c'], size=3)) for x in range(100)])
+    if not sorted_index:
+        index = np.arange(100)
+        np.random.shuffle(index)
+        base.index = index
+    map_index = [''.join(x) for x in product('abc', repeat=3)]
+    mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
+    if not sorted_map_index:
+        map_index = np.array(map_index)
+        np.random.shuffle(map_index)
+        mapper.index = map_index
+    expected = base.map(mapper)
+    dask_base = dd.from_pandas(base, npartitions=base_npart)
+    dask_map = dd.from_pandas(mapper, npartitions=map_npart)
+    result = dask_base.map(dask_map)
+    dd.utils.assert_eq(expected, result)

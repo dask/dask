@@ -13,7 +13,7 @@ from dask.dataframe.utils import (
     assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION,
 )
 
-AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last', 'prod']
+AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'cov', 'nunique', 'first', 'last', 'prod']
 
 
 @pytest.fixture(params=AGG_FUNCS)
@@ -282,6 +282,10 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     dask_group = grouper(ddf)
     pandas_group = grouper(df)
 
+    # covariance only works with N+1 columns
+    if isinstance(pandas_group, pd.core.groupby.SeriesGroupBy) and agg_func == 'cov':
+        return
+
     dask_agg = getattr(dask_group, agg_func)
     pandas_agg = getattr(pandas_group, agg_func)
 
@@ -291,7 +295,13 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     if agg_func == 'mean':
         assert_eq(dask_agg(), pandas_agg().astype(float))
     else:
-        assert_eq(dask_agg(), pandas_agg())
+        a = dask_agg()
+        with warnings.catch_warnings():
+            # pandas does `.cov([[1], [1]])` which numpy warns on (all NaN).
+            # Pandas does strange things with exceptions in groupby.
+            warnings.simplefilter('ignore', RuntimeWarning)
+            b = pandas_agg()
+        assert_eq(a, b)
 
 
 def test_groupby_multilevel_agg():
@@ -430,6 +440,7 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize('empty', [True, False])
+@pytest.mark.filterwarnings("ignore:0 should be:DeprecationWarning")  # fixed in new pandas.
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
@@ -582,6 +593,7 @@ def test_split_apply_combine_on_series(empty):
     assert_dask_graph(ddf.groupby('b').a.max(), 'series-groupby-max')
     assert_dask_graph(ddf.groupby('b').a.count(), 'series-groupby-count')
     assert_dask_graph(ddf.groupby('b').a.var(), 'series-groupby-var')
+    assert_dask_graph(ddf.groupby('b').a.cov(), 'series-groupby-cov')
     assert_dask_graph(ddf.groupby('b').a.first(), 'series-groupby-first')
     assert_dask_graph(ddf.groupby('b').a.last(), 'series-groupby-last')
     assert_dask_graph(ddf.groupby('b').a.prod(), 'series-groupby-prod')
@@ -616,7 +628,8 @@ def test_groupby_reduction_split(keyword):
     # DataFrame
     for m in AGG_FUNCS:
         # nunique is not implemented for DataFrameGroupBy
-        if m == 'nunique':
+        # covariance is not a series aggregation
+        if m in ('nunique', 'cov'):
             continue
         res = call(ddf.groupby('b'), m, **{keyword: 2})
         sol = call(pdf.groupby('b'), m)
@@ -630,6 +643,9 @@ def test_groupby_reduction_split(keyword):
 
     # Series, post select
     for m in AGG_FUNCS:
+        # covariance is not a series aggregation
+        if m == 'cov':
+            continue
         res = call(ddf.groupby('b').a, m, **{keyword: 2})
         sol = call(pdf.groupby('b').a, m)
         assert_eq(res, sol)
@@ -642,6 +658,9 @@ def test_groupby_reduction_split(keyword):
 
     # Series, pre select
     for m in AGG_FUNCS:
+        # covariance is not a series aggregation
+        if m == 'cov':
+            continue
         res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
@@ -651,6 +670,7 @@ def test_groupby_reduction_split(keyword):
 
     res = call(ddf.a.groupby(ddf.b), 'var', ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), 'var', ddof=2)
+
     assert_eq(res, sol)
     assert call(ddf.a.groupby(ddf.b), 'var', ddof=2)._name != res._name
 
@@ -855,8 +875,8 @@ def test_series_aggregate__examples(spec, split_every, grouper):
 def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
 
-    # nunique is not supported in specs
-    if spec == 'nunique':
+    # nunique/cov is not supported in specs
+    if spec in ('nunique', 'cov'):
         return
 
     pdf = pd.DataFrame({'a': [1, 1, 3, 3],
@@ -967,16 +987,29 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
 
     ddf = dd.from_pandas(pdf, npartitions=10)
 
-    assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
-              call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
+    # covariance only works with N+1 columns
+    if agg_func != 'cov':
+        assert_eq(call(pdf.groupby(grouper(pdf))['c'], agg_func),
+                  call(ddf.groupby(grouper(ddf))['c'], agg_func, split_every=2))
 
     # not supported by pandas
     if agg_func != 'nunique':
         assert_eq(call(pdf.groupby(grouper(pdf))[['c', 'd']], agg_func),
                   call(ddf.groupby(grouper(ddf))[['c', 'd']], agg_func, split_every=2))
 
-        assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
-                  call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
+        if agg_func == 'cov':
+            # there are sorting issues between pandas and chunk cov w/dask
+            df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
+            cols = sorted(list(df.columns))
+            df = df[cols]
+            dddf = call(ddf.groupby(grouper(ddf)), agg_func, split_every=2).compute()
+            dddf = dddf.sort_index()
+            cols = sorted(list(dddf.columns))
+            dddf = dddf[cols]
+            assert_eq(df, dddf)
+        else:
+            assert_eq(call(pdf.groupby(grouper(pdf)), agg_func),
+                      call(ddf.groupby(grouper(ddf)), agg_func, split_every=2))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -992,6 +1025,10 @@ def test_series_aggregations_multilevel(grouper, agg_func):
 
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
+
+    # covariance is not a series aggregation
+    if agg_func == 'cov':
+        return
 
     pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
                         'b': [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
@@ -1611,3 +1648,32 @@ def test_groupby_group_keys():
 
     expected = pdf.groupby('a', group_keys=False).apply(func)
     assert_eq(expected, ddf.groupby('a', group_keys=False).apply(func, meta=expected))
+
+
+@pytest.mark.parametrize('columns', [
+                         ['a', 'b', 'c'],
+                         np.array([1.0, 2.0, 3.0]),
+                         ['1', '2', '3'],
+                         ['', 'a', 'b'],
+                         ])
+def test_groupby_cov(columns):
+    rows = 20
+    cols = 3
+    data = np.random.randn(rows, cols)
+    df = pd.DataFrame(data, columns=columns)
+    df["key"] = np.random.randint(0, cols, size=rows)
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    expected = df.groupby("key").cov()
+    result = ddf.groupby("key").cov()
+    # when using numerical values for columns
+    # the column mapping and stacking leads to a float typed
+    # MultiIndex.  Pandas will normally create a object typed
+    # MultiIndex
+    if isinstance(columns, np.ndarray):
+        result = result.compute()
+        # don't bother checking index -- MulitIndex levels are in a frozenlist
+        result.columns = result.columns.astype(np.dtype('O'))
+        assert_eq(expected, result, check_index=False)
+    else:
+        assert_eq(expected, result)

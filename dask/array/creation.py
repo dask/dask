@@ -11,13 +11,14 @@ from toolz import accumulate, sliding_window
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..compatibility import Sequence
+from ..utils import derived_from
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
-                   broadcast_to, broadcast_arrays)
+                   broadcast_to, broadcast_arrays,
+                   cached_cumsum)
 from .wrap import empty, ones, zeros, full
-from .utils import AxisError
-from ..utils import derived_from
+from .utils import AxisError, meta_from_array, zeros_like_safe
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -473,7 +474,11 @@ def eye(N, chunks='auto', M=None, k=0, dtype=float):
 @derived_from(np)
 def diag(v):
     name = 'diag-' + tokenize(v)
-    if isinstance(v, np.ndarray):
+
+    meta = meta_from_array(v, 2 if v.ndim == 1 else 1)
+
+    if (isinstance(v, np.ndarray) or
+            (hasattr(v, '__array_function__') and not isinstance(v, Array))):
         if v.ndim == 1:
             chunks = ((v.shape[0],), (v.shape[0],))
             dsk = {(name, 0, 0): (np.diag, v)}
@@ -482,7 +487,7 @@ def diag(v):
             dsk = {(name, 0): (np.diag, v)}
         else:
             raise ValueError("Array must be 1d or 2d only")
-        return Array(dsk, name, chunks, dtype=v.dtype)
+        return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
         raise TypeError("v must be a dask array or numpy array, "
                         "got {0}".format(type(v)))
@@ -491,7 +496,7 @@ def diag(v):
             dsk = {(name, i): (np.diag, row[i])
                    for i, row in enumerate(v.__dask_keys__())}
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-            return Array(graph, name, (v.chunks[0],), dtype=v.dtype)
+            return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
@@ -505,9 +510,10 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
+                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-    return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
+    return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
 
 
 @derived_from(np)
@@ -544,8 +550,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     diag_chunks = []
     chunk_offsets = []
-    cum1 = [0] + list(np.cumsum(a.chunks[axis1]))[:-1]
-    cum2 = [0] + list(np.cumsum(a.chunks[axis2]))[:-1]
+    cum1 = list(cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1])
+    cum2 = list(cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1])
     for co1, c1 in zip(cum1, a.chunks[axis1]):
         chunk_offsets.append([])
         for co2, c2 in zip(cum2, a.chunks[axis2]):
@@ -574,7 +580,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     chunks = left_chunks + right_shape
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    return Array(graph, name, shape=shape, chunks=chunks, dtype=a.dtype)
+    meta = meta_from_array(a, len(shape))
+    return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
 
 
 def triu(m, k=0):
@@ -616,13 +623,15 @@ def triu(m, k=0):
     for i in range(rdim):
         for j in range(hdim):
             if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(zeros_like_safe,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
 def tril(m, k=0):
@@ -668,9 +677,11 @@ def tril(m, k=0):
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
-                dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
+                dsk[(name, i, j)] = (partial(zeros_like_safe,
+                                             shape=(m.chunks[0][i], m.chunks[1][j])),
+                                     m._meta)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
@@ -718,7 +729,7 @@ def repeat(a, repeats, axis=None):
     if repeats == 1:
         return a
 
-    cchunks = np.cumsum((0,) + a.chunks[axis])
+    cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
     slices = []
     for c_start, c_stop in sliding_window(2, cchunks):
         ls = np.linspace(c_start, c_stop, repeats).round(0)

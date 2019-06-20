@@ -126,6 +126,21 @@ def test_tokenize_numpy_array_on_object_dtype():
 
 
 @pytest.mark.skipif('not np')
+def test_tokenize_numpy_memmap_offset(tmpdir):
+    #Test two different memmaps into the same numpy file
+    fn = str(tmpdir.join("demo_data"))
+
+    with open(fn, 'wb') as f:
+        f.write(b'ashekwicht')
+
+    with open(fn, 'rb') as f:
+        mmap1 = np.memmap(f, dtype=np.uint8, mode='r', offset=0, shape=5)
+        mmap2 = np.memmap(f, dtype=np.uint8, mode='r', offset=5, shape=5)
+
+        assert(tokenize(mmap1) != tokenize(mmap2))
+
+
+@pytest.mark.skipif('not np')
 def test_tokenize_numpy_memmap():
     with tmpfile('.npy') as fn:
         x = np.arange(5)
@@ -680,7 +695,6 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    import sys
     from textwrap import dedent
 
     defn = dedent("""
@@ -955,3 +969,7 @@ def test_num_workers_config(scheduler):
     workers = {i.worker_id for i in prof.results}
 
     assert len(workers) == num_workers
+
+
+if sys.version_info >= (3, 5):
+    from dask.tests.py3_test_await import *  # noqa F401

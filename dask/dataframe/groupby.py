@@ -18,6 +18,7 @@ from .utils import (make_meta, insert_meta_param_description,
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
+from .. import compatibility
 
 
 # #############################################
@@ -290,6 +291,137 @@ def _var_agg(g, levels, ddof):
     result[(n - ddof) == 0] = np.nan
     assert is_dataframe_like(result)
     return result
+
+
+def _cov_combine(g, levels):
+    return g
+
+
+def _cov_finalizer(df, cols):
+    vals = []
+    num_elements = len(list(it.product(cols, repeat=2)))
+    num_cols = len(cols)
+    vals = list(range(num_elements))
+    col_idx_mapping = dict(zip(cols, range(num_cols)))
+    for i, j in it.combinations_with_replacement(df[cols].columns, 2):
+        x = col_idx_mapping[i]
+        y = col_idx_mapping[j]
+        idx = x + num_cols * y
+        mul_col = "%s%s" % (i, j)
+        ni = df["%s-count" % i]
+        nj = df["%s-count" % j]
+
+        n = np.sqrt(ni * nj)
+        div = n - 1
+        div[div < 0] = 0
+        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
+
+        vals[idx] = val
+        if i != j:
+            idx = num_cols * x + y
+            vals[idx] = val
+
+    level_1 = cols
+    index = pd.MultiIndex.from_product([level_1, level_1])
+    return pd.Series(vals, index=index)
+
+
+def _mul_cols(df, cols):
+    """Internal function to be used with apply to multiply
+    each column in a dataframe by every other column
+
+    a b c -> a*a, a*b, b*b, b*c, c*c
+    """
+    _df = type(df)()
+    for i, j in it.combinations_with_replacement(cols, 2):
+        col = "%s%s" % (i, j)
+        _df[col] = df[i] * df[j]
+    return _df
+
+
+def _cov_chunk(df, *index):
+    if is_series_like(df):
+        df = df.to_frame()
+    df = df.copy()
+
+    # mapping columns to str(numerical) values allows us to easily handle
+    # arbitrary column names (numbers, string, empty strings)
+    col_mapping = collections.OrderedDict()
+    for i, c in enumerate(df.columns):
+        col_mapping[c] = str(i)
+    df = df.rename(columns=col_mapping)
+    cols = df._get_numeric_data().columns
+
+    # when grouping by external series don't exclude columns
+    is_mask = any(is_series_like(s) for s in index)
+    if not is_mask:
+        index = [col_mapping[k] for k in index]
+        cols = cols.drop(np.array(index))
+
+    g = _groupby_raise_unaligned(df, by=index)
+    x = g.sum()
+
+    level = len(index)
+    mul = g.apply(_mul_cols, cols=cols).reset_index(level=level, drop=True)
+    n = g[x.columns].count().rename(columns=lambda c: "{}-count".format(c))
+    return (x, mul, n, col_mapping)
+
+
+def _cov_agg(_t, levels, ddof):
+    sums = []
+    muls = []
+    counts = []
+
+    # sometime we get a series back from concat combiner
+    t = list(_t)
+
+    cols = t[0][0].columns
+    for x, mul, n, col_mapping in t:
+        sums.append(x)
+        muls.append(mul)
+        counts.append(n)
+        col_mapping = col_mapping
+
+    total_sums = concat(sums).groupby(level=levels, sort=False).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=False).sum()
+    total_counts = concat(counts).groupby(level=levels).sum()
+    result = (
+        concat([total_sums, total_muls, total_counts], axis=1)
+        .groupby(level=levels)
+        .apply(_cov_finalizer, cols=cols)
+    )
+
+    inv_col_mapping = {v: k for k, v in col_mapping.items()}
+    idx_vals = result.index.names
+    idx_mapping = list()
+
+    # when index is None we probably have selected a particular column
+    # df.groupby('a')[['b']].cov()
+    if len(idx_vals) == 1 and all(n is None for n in idx_vals):
+        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+
+    for idx, val in enumerate(idx_vals):
+        idx_name = inv_col_mapping.get(val, val)
+        idx_mapping.append(idx_name)
+
+        if len(result.columns.levels[0]) < len(col_mapping):
+            # removing index from col_mapping (produces incorrect multiindexes)
+            try:
+                col_mapping.pop(idx_name)
+            except KeyError:
+                # when slicing the col_map will not have the index
+                pass
+
+    keys = list(col_mapping.keys())
+    for level in range(len(result.columns.levels)):
+        result.columns.set_levels(keys, level=level, inplace=True)
+
+    result.index.set_names(idx_mapping, inplace=True)
+
+    # stacking can lead to a sorted index
+    s_result = result.stack(dropna=False)
+    assert is_dataframe_like(s_result)
+    return s_result
 
 
 ###############################################################
@@ -1011,6 +1143,42 @@ class _GroupBy(object):
         result = map_partitions(np.sqrt, v, meta=v)
         return result
 
+    @derived_from(pd.DataFrame)
+    def cov(self, ddof=1, split_every=None, split_out=1):
+        """Groupby covariance is accomplished by
+
+        1. Computing intermediate values for sum, count, and the product of
+           all columns: a b c -> a*a, a*b, b*b, b*c, c*c.
+
+        2. The values are then aggregated and the final covariance value is calculated:
+           cov(X,Y) = X*Y - Xbar * Ybar
+        """
+
+        levels = _determine_levels(self.index)
+
+        is_mask = any(is_series_like(s) for s in self.index)
+        if self._slice:
+            if is_mask:
+                self.obj = self.obj[self._slice]
+            else:
+                sliced_plus = list(self._slice) + list(self.index)
+                self.obj = self.obj[sliced_plus]
+
+        result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
+                     chunk=_cov_chunk,
+                     aggregate=_cov_agg, combine=_cov_combine,
+                     token=self._token_prefix + 'cov',
+                     aggregate_kwargs={'ddof': ddof, 'levels': levels},
+                     combine_kwargs={'levels': levels},
+                     split_every=split_every, split_out=split_out,
+                     split_out_setup=split_out_on_index)
+
+        if isinstance(self.obj, Series):
+            result = result[result.columns[0]]
+        if self._slice:
+            result = result[self._slice]
+        return result
+
     @derived_from(pd.core.groupby.GroupBy)
     def first(self, split_every=None, split_out=1):
         return self._aca_agg(token='first', func=M.first, split_every=split_every,
@@ -1235,7 +1403,8 @@ class DataFrameGroupBy(_GroupBy):
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(filter(pd.compat.isidentifier, self.obj.columns))))
+                      list(filter(compatibility.isidentifier,
+                                  self.obj.columns))))
 
     def __getattr__(self, key):
         try:

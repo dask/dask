@@ -186,3 +186,19 @@ So you (or your users) can now create and store a dask ``DataFrame`` or
    Dask Name: from_pandas, 3 tasks
 
 Notice the ``decimal`` dtype.
+
+.. _dataframe.accessors:
+
+Accessors
+---------
+
+Many extension arrays expose their functionality on Series or DataFrame objects
+using accessors. Dask provides decorators to register accessors similar to pandas. See
+`the pandas documentation on accessors <http://pandas.pydata.org/pandas-docs/stable/development/extending.html#registering-custom-accessors>`_
+for more.
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: dask.dataframe.extensions.register_dataframe_accessor
+.. autofunction:: dask.dataframe.extensions.register_series_accessor
+.. autofunction:: dask.dataframe.extensions.register_index_accessor

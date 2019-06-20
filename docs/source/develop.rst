@@ -118,7 +118,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 2.7, 3.5, 3.6, and 3.7 in a single codebase.
+Dask supports Python versions 3.5, 3.6, and 3.7.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -247,14 +247,6 @@ Dask verifies style uniformity with the ``flake8`` tool::
 
    pip install flake8
    flake8 dask
-
-
-Changelog
-~~~~~~~~~
-
-Every significative code contribution should be listed in the
-:doc:`changelog` under the corresponding version.  When submitting a Pull
-Request in GitHub, please add to that file explaining what was added/modified.
 
 
 Contributing to Documentation

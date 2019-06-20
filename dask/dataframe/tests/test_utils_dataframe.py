@@ -5,7 +5,8 @@ import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
                                   UNKNOWN_CATEGORIES, is_dataframe_like,
-                                  is_series_like, is_index_like)
+                                  is_series_like, is_index_like,
+                                  PANDAS_GT_0240)
 
 import pytest
 
@@ -223,7 +224,12 @@ def test_meta_nonempty_index():
 
     levels = [pd.Int64Index([1], name='a'),
               pd.Float64Index([1.0], name='b')]
-    idx = pd.MultiIndex(levels=levels, labels=[[0], [0]], names=['a', 'b'])
+    codes = [[0], [0]]
+    if PANDAS_GT_0240:
+        kwargs = {'codes': codes}
+    else:
+        kwargs = {'labels': codes}
+    idx = pd.MultiIndex(levels=levels, names=['a', 'b'], **kwargs)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):
@@ -234,7 +240,15 @@ def test_meta_nonempty_index():
     levels = [pd.Int64Index([1], name='a'),
               pd.CategoricalIndex(data=['xyx'], categories=['xyx'], name='b'),
               pd.TimedeltaIndex([np.timedelta64(1, 'D')], name='timedelta')]
-    idx = pd.MultiIndex(levels=levels, labels=[[0], [0], [0]], names=['a', 'b', 'timedelta'])
+
+    codes = [[0], [0], [0]]
+    if PANDAS_GT_0240:
+        kwargs = {'codes': codes}
+    else:
+        kwargs = {'labels': codes}
+
+    idx = pd.MultiIndex(levels=levels, names=['a', 'b', 'timedelta'],
+                        **kwargs)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):

@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 import functools
 import inspect
 import operator
+import re
 import sys
 import types
 
@@ -113,6 +114,9 @@ if PY3:
         raise exc
 
     import pickle as cPickle
+
+    def isidentifier(s):
+        return s.isidentifier()
 
 else:
     import __builtin__ as builtins
@@ -307,6 +311,11 @@ else:
 
 
     import cPickle
+
+    _name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
+
+    def isidentifier(s):
+        return bool(_name_re.match(s))
 
 
 def getargspec(func):
