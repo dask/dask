@@ -123,18 +123,27 @@ def test_array_function_cupy_svd():
     lambda x: np.linalg.norm(x)])
 def test_unregistered_func(func):
     def wrap(func_name):
+        """
+        Wrap a function that returns an array.
+        """
         def wrapped(self, *a, **kw):
             return type(self)(getattr(self.arr, func_name)(*a, **kw))
 
         return wrapped
 
     def dispatch(func_name):
+        """
+        Wrap a function that doesn't return an array.
+        """
         def wrapped(self, *a, **kw):
             return getattr(self.arr, func_name)(*a, **kw)
 
         return wrapped
 
     def dispatch_property(prop_name):
+        """
+        Wrap a simple property.
+        """
         @property
         def wrapped(self, *a, **kw):
             return getattr(self.arr, prop_name)
@@ -142,6 +151,12 @@ def test_unregistered_func(func):
         return wrapped
 
     class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
+        """
+        A class that "mocks" ndarray by encapsulating an ndarray and using
+        protocols to "look like" an ndarray. Basically tests whether Dask
+        works fine with something that is essentially an array but uses
+        protocols instead of being an actual array.
+        """
         __array_priority__ = 20
 
         def __init__(self, arr):
@@ -170,12 +185,22 @@ def test_unregistered_func(func):
         sum = wrap('sum')
         prod = wrap('prod')
 
+    # Wrap a procol-based encapsulated ndarray
     x = EncapsulateNDArray(np.random.random((100, 100)))
+
+    # See if Dask holds the array fine
     y = da.from_array(x, chunks=(50, 50))
 
+    # Check if it's an equivalent array
     assert_eq(x, y, check_meta=False)
 
+    # Perform two NumPy functions, one on the
+    # Encapsulated array
     xx = func(x)
+
+    # And one on the Dask array holding these
+    # encapsulated arrays
     yy = func(y)
 
+    # Check that they are equivalent arrays.
     assert_eq(xx, yy, check_meta=False)
