@@ -37,6 +37,8 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
     "url_query": "q=1", "extra": "value"}
     """
+    urlpath = stringify_path(urlpath)  # re, urllib don't support pathlib.Path objects
+
     # Handle Windows paths including disk name in this special case
     if re.match(r"^[a-zA-Z]:[\\/]", urlpath):
         return {"protocol": "file", "path": urlpath}

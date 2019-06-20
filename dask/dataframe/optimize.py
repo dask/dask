@@ -27,9 +27,9 @@ def optimize(dsk, keys, **kwargs):
         dsk, dependencies = cull(dsk, [keys])
     dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
     if fastparquet:
-        from .io.parquet import _read_parquet_row_group
-
-        dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
+        # from .io.parquet.fastparquet import _read_parquet_row_group
+        # dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
+        pass  # TODO: in abeyance
 
     dsk, dependencies = fuse(
         dsk,

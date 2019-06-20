@@ -48,7 +48,9 @@ def _get_pyarrow_dtypes(schema, categories):
     return dtypes
 
 
-def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_names):
+def _meta_from_dtypes(
+    to_read_columns, file_dtypes, index_cols=(), column_index_names=()
+):
     """Get the final metadata for the dask.dataframe
 
     Parameters
@@ -75,6 +77,8 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
     )
     df = meta[list(to_read_columns)]
 
+    if len(column_index_names) == 1:
+        df.columns.name = column_index_names[0]
     if not index_cols:
         return df
     if not isinstance(index_cols, list):
@@ -85,8 +89,6 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
     if len(index_cols) == 1 and index_cols[0] == "__index_level_0__":
         df.index.name = None
 
-    if len(column_index_names) == 1:
-        df.columns.name = column_index_names[0]
-    else:
+    if len(column_index_names) > 1:
         df.columns.names = column_index_names
     return df
