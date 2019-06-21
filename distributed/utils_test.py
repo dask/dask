@@ -22,6 +22,7 @@ import textwrap
 import threading
 from time import sleep
 import uuid
+import warnings
 import weakref
 
 try:
@@ -841,6 +842,7 @@ def end_cluster(s, workers):
 
 def gen_cluster(
     nthreads=[("127.0.0.1", 1), ("127.0.0.1", 2)],
+    ncores=None,
     scheduler="127.0.0.1",
     timeout=10,
     security=None,
@@ -865,6 +867,10 @@ def gen_cluster(
         start
         end
     """
+    if ncores is not None:
+        warnings.warn("ncores= has moved to nthreads=")
+        nthreads = ncores
+
     worker_kwargs = merge(
         {"memory_limit": TOTAL_MEMORY, "death_timeout": 5}, worker_kwargs
     )

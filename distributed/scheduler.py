@@ -13,6 +13,7 @@ import os
 import pickle
 import random
 import six
+import warnings
 import weakref
 
 import psutil
@@ -306,6 +307,11 @@ class WorkerState(object):
             "metrics": self.metrics,
             "nanny": self.nanny,
         }
+
+    @property
+    def ncores(self):
+        warnings.warn("WorkerState.ncores has moved to WorkerState.nthreads")
+        return self.nthreads
 
 
 class TaskState(object):
