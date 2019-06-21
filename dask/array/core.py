@@ -3684,6 +3684,9 @@ def stack(seq, axis=0):
     --------
     concatenate
     """
+    if not seq:
+        raise ValueError("Need array(s) to stack")
+
     n = len(seq)
     ndim = len(seq[0].shape)
     if axis < 0:
