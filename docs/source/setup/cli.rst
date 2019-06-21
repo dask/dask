@@ -83,13 +83,14 @@ the same commands to many machines.  We recommend searching online for "cluster
 ssh" or "cssh".
 
 
-API
----
+CLI Options
+-----------
 
-.. warning::
+.. note::
 
    The command line documentation here may differ depending on your installed
-   version. We recommend referring to the output of ``<command> --help``.
+   version. We recommend referring to the output of ``dask-scheduler --help``
+   and ``dask-worker --help``.
 
 .. click:: distributed.cli.dask_scheduler:main
    :prog: dask-scheduler
@@ -97,16 +98,4 @@ API
 
 .. click:: distributed.cli.dask_worker:main
    :prog: dask-worker
-   :show-nested:
-
-.. click:: distributed.cli.dask_ssh:main
-   :prog: dask-ssh
-   :show-nested:
-
-.. click:: distributed.cli.dask_submit:main
-   :prog: dask-submit
-   :show-nested:
-
-.. click:: distributed.cli.dask_remote:main
-   :prog: dask-remote
    :show-nested:
