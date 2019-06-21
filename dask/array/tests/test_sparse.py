@@ -3,6 +3,7 @@ import random
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
@@ -157,6 +158,7 @@ def test_metadata():
     assert isinstance((y - z)._meta, sparse.COO)
     if IS_NEP18_ACTIVE:
         assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+        assert isinstance(np.stack([y, y])._meta, sparse.COO)
 
 
 def test_html_repr():
@@ -168,3 +170,13 @@ def test_html_repr():
 
     assert "COO" in text
     assert "sparse" in text
+
+
+def test_from_delayed_meta():
+    def f():
+        return sparse.COO.from_numpy(np.eye(3))
+
+    d = dask.delayed(f)()
+    x = da.from_delayed(d, shape=(3, 3), meta=sparse.COO.from_numpy(np.eye(1)))
+    assert isinstance(x._meta, sparse.COO)
+    assert_eq(x, x)

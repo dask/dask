@@ -2516,7 +2516,7 @@ def _check_regular_chunks(chunkset):
     return True
 
 
-def from_delayed(value, shape, dtype, name=None):
+def from_delayed(value, shape, dtype=None, meta=None, name=None):
     """ Create a dask array from a dask delayed value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
@@ -2526,24 +2526,27 @@ def from_delayed(value, shape, dtype, name=None):
 
     Examples
     --------
-    >>> from dask import delayed
-    >>> value = delayed(np.ones)(5)
-    >>> array = from_delayed(value, (5,), float)
+    >>> import dask
+    >>> import dask.array as da
+    >>> value = dask.delayed(np.ones)(5)
+    >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
     dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
-    from dask.delayed import delayed, Delayed
+    from ..delayed import delayed, Delayed
+
     if not isinstance(value, Delayed) and hasattr(value, 'key'):
         value = delayed(value)
-    name = name or 'from-value-' + tokenize(value, shape, dtype)
+
+    name = name or 'from-value-' + tokenize(value, shape, dtype, meta)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
-    return Array(graph, name, chunks, dtype)
+    return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
@@ -3689,14 +3692,18 @@ def stack(seq, axis=0):
     --------
     concatenate
     """
+    seq = [asarray(a) for a in seq]
+
+    if not seq:
+        raise ValueError("Need array(s) to stack")
+
+    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
+    seq = [x.astype(meta.dtype) for x in seq]
+
     n = len(seq)
-    ndim = len(seq[0].shape)
+    ndim = meta.ndim - 1
     if axis < 0:
         axis = ndim + axis + 1
-    if axis > ndim:
-        raise ValueError("Axis must not be greater than number of dimensions"
-                         "\nData has %d dimensions, but got axis=%d" %
-                         (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError("Stacked arrays must have the same shape. "
@@ -3709,9 +3716,6 @@ def stack(seq, axis=0):
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
     _, seq = unify_chunks(*uc_args)
-
-    dt = reduce(np.promote_types, [a.dtype for a in seq])
-    seq = [x.astype(dt) for x in seq]
 
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
     chunks = (seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:])
@@ -3729,7 +3733,7 @@ def stack(seq, axis=0):
     layer = dict(zip(keys, values))
     graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
 
-    return Array(graph, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, meta=meta)
 
 
 def concatenate3(arrays):
@@ -3749,12 +3753,27 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    from .utils import IS_NEP18_ACTIVE
+    # We need this as __array_function__ may not exist on older NumPy versions.
+    # And to reduce verbosity.
+    NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, '__array_function__', None)
+
     arrays = concrete(arrays)
     if not arrays:
         return np.empty(0)
 
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
+
+    if (IS_NEP18_ACTIVE and not all(NDARRAY_ARRAY_FUNCTION is
+                                    getattr(arr, '__array_function__', NDARRAY_ARRAY_FUNCTION)
+                                    for arr in arrays)):
+        try:
+            x = unpack_singleton(arrays)
+            return _concatenate2(arrays, axes=tuple(range(x.ndim)))
+        except TypeError:
+            pass
+
     if concatenate_lookup.dispatch(type(advanced)) is not np.concatenate:
         x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))

@@ -280,6 +280,7 @@ def test_stack():
                                            (colon, colon, None))
     assert same_keys(s2, stack([a, b, c], axis=2))
 
+    pytest.raises(ValueError, lambda: stack([]))
     pytest.raises(ValueError, lambda: stack([a, b, c], axis=3))
 
     assert set(b.dask.keys()).issubset(s2.dask.keys())
@@ -2948,6 +2949,13 @@ def test_from_delayed():
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
     assert isinstance(x, Array)
     assert_eq(x, np.ones((5, 3)))
+
+
+def test_from_delayed_meta():
+    v = delayed(np.ones)((5, 3))
+    x = from_delayed(v, shape=(5, 3), meta=np.ones(0))
+    assert isinstance(x, Array)
+    assert isinstance(x._meta, np.ndarray)
 
 
 def test_A_property():

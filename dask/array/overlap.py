@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 from itertools import product
 from numbers import Integral
-
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
 
@@ -32,15 +31,21 @@ def fractional_slice(task, axes):
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
         depth = axes.get(i, 0)
+        if isinstance(depth, tuple):
+            left_depth = depth[0]
+            right_depth = depth[1]
+        else:
+            left_depth = depth
+            right_depth = depth
+
         if t == r:
             index.append(slice(None, None, None))
-        elif t < r:
-            index.append(slice(0, depth))
-        elif t > r and depth == 0:
-            index.append(slice(0, 0))
+        elif t < r and right_depth:
+            index.append(slice(0, right_depth))
+        elif t > r and left_depth:
+            index.append(slice(-left_depth, None))
         else:
-            index.append(slice(-depth, None))
-
+            index.append(slice(0, 0))
     index = tuple(index)
 
     if all(ind == slice(None, None, None) for ind in index):
@@ -92,11 +97,11 @@ def expand_key(k, dims, name=None, axes=None):
             num += 1
         shape.append(num)
 
-    args = [inds(i, ind) if axes.get(i, 0) else [ind] for i, ind in enumerate(k[1:])]
+    args = [inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])]
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
-    shape2 = [d if axes.get(i, 0) else 1 for i, d in enumerate(shape)]
+    shape2 = [d if any((axes.get(i, 0),)) else 1 for i, d in enumerate(shape)]
     result = reshapelist(shape2, seq)
     return result
 
@@ -132,19 +137,29 @@ def overlap_internal(x, axes):
             interior_slices[(getitem_name,) + k] = frac_slice
         else:
             interior_slices[(getitem_name,) + k] = (x.name,) + k
-            overlap_blocks[(name,) + k] = (concatenate3,
-                                           (concrete, expand_key2((None,) + k, name=getitem_name)))
+            overlap_blocks[(name,) + k] = (
+                concatenate3,
+                (concrete, expand_key2((None,) + k, name=getitem_name)),
+            )
 
     chunks = []
     for i, bds in enumerate(x.chunks):
+        depth = axes.get(i, 0)
+        if isinstance(depth, tuple):
+            left_depth = depth[0]
+            right_depth = depth[1]
+        else:
+            left_depth = depth
+            right_depth = depth
+
         if len(bds) == 1:
             chunks.append(bds)
         else:
-            left = [bds[0] + axes.get(i, 0)]
-            right = [bds[-1] + axes.get(i, 0)]
+            left = [bds[0] + left_depth]
+            right = [bds[-1] + right_depth]
             mid = []
             for bd in bds[1:-1]:
-                mid.append(bd + axes.get(i, 0) * 2)
+                mid.append(bd + left_depth + right_depth)
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
@@ -186,17 +201,26 @@ def trim_internal(x, axes, boundary=None):
 
     olist = []
     for i, bd in enumerate(x.chunks):
-        bdy = boundary.get(i, 'none')
+        bdy = boundary.get(i, "none")
+        overlap = axes.get(i, 0)
         ilist = []
         for j, d in enumerate(bd):
-            if bdy != 'none':
-                d = d - axes.get(i, 0) * 2
+            if bdy != "none":
+                if isinstance(overlap, tuple):
+                    d = d - sum(overlap)
+                else:
+                    d = d - overlap * 2
+
             else:
-                d = d - axes.get(i, 0) if j != 0 else d
-                d = d - axes.get(i, 0) if j != len(bd) - 1 else d
+                if isinstance(overlap, tuple):
+                    d = d - overlap[0] if j != 0 else d
+                    d = d - overlap[1] if j != len(bd) - 1 else d
+                else:
+                    d = d - overlap if j != 0 else d
+                    d = d - overlap if j != len(bd) - 1 else d
+
             ilist.append(d)
         olist.append(tuple(ilist))
-
     chunks = tuple(olist)
 
     return map_blocks(partial(_trim, axes=axes, boundary=boundary),
@@ -210,14 +234,18 @@ def _trim(x, axes, boundary, block_info):
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
-    axes = [axes.get(i, 0) for i in range(x.ndim)]
-    axes_back = (-ax if ax else None for ax in axes)
+    axes = [axes.get(i,0) for i in range(x.ndim)]
+    axes_front = (ax[0] if isinstance(ax,tuple)
+                  else ax for ax in axes)
+    axes_back = (-ax[1] if isinstance(ax,tuple) and ax[1]
+                 else -ax if isinstance(ax,Integral) and ax
+                 else None for ax in axes)
 
     trim_front = (
         0 if (chunk_location == 0 and
               boundary.get(i, 'none') == 'none') else ax
         for i, (chunk_location, ax) in enumerate(
-            zip(block_info[0]['chunk-location'], axes)))
+            zip(block_info[0]['chunk-location'], axes_front)))
     trim_back = (
         None if (chunk_location == chunks - 1 and
                  boundary.get(i, 'none') == 'none') else ax
@@ -225,9 +253,9 @@ def _trim(x, axes, boundary, block_info):
             block_info[0]['num-chunks'],
             block_info[0]['chunk-location'],
             axes_back)))
-
-    return x[tuple(slice(front, back)
-             for front, back in zip(trim_front, trim_back))]
+    ind = tuple(slice(front, back)
+                for front, back in zip(trim_front, trim_back))
+    return x[ind]
 
 
 def periodic(x, axis, depth):
@@ -412,7 +440,8 @@ def overlap(x, depth, boundary):
     # is depth larger than chunk size?
     depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
     for d, c in zip(depth_values, x.chunks):
-        if d > min(c):
+        maxd = max(d) if isinstance(d, tuple) else d
+        if maxd > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
                              "smallest chunk size %d. Rechunk your array\n"
                              "with a larger chunk size or a chunk size that\n"
@@ -474,7 +503,10 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
         The function to apply to each extended block
     depth: int, tuple, or dict
         The number of elements that each block should share with its neighbors
-        If a tuple or dict then this can be different per axis
+        If a tuple or dict then this can be different per axis.
+        Asymmetric depths may be specified using a dict value of (-/+) tuples.
+        Note that asymmetric depths are currently only supported when
+        ``boundary`` is 'none'.
     boundary: str, tuple, dict
         How to handle the boundaries.
         Values include 'reflect', 'periodic', 'nearest', 'none',
@@ -520,6 +552,12 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
+    for i in range(x.ndim):
+        if isinstance(depth2[i], tuple) and boundary2[i] != 'none':
+            raise NotImplementedError("Asymmetric overlap is currently only implemented "
+                                      "for boundary='none', however boundary for dimension "
+                                      "{} is {}".format(i, boundary2[i]))
+
     assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
     assert all(type(c) is int for cc in g.chunks for c in cc)
@@ -536,16 +574,23 @@ def coerce_depth(ndim, depth):
         depth = (depth,) * ndim
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
-
+    if isinstance(depth, dict):
+        for i in range(ndim):
+            if i not in depth:
+                depth.update({i: 0})
     return depth
 
 
 def coerce_boundary(ndim, boundary):
+    default = 'reflect'
     if boundary is None:
-        boundary = 'reflect'
+        boundary = default
     if not isinstance(boundary, (tuple, dict)):
         boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(ndim), boundary))
-
+    if isinstance(boundary, dict):
+        for i in range(ndim):
+            if i not in boundary:
+                boundary.update({i: default})
     return boundary

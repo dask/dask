@@ -10,7 +10,7 @@ try:
                      demo, to_hdf, to_records, to_bag, read_json, to_json,
                      read_fwf)
     from .optimize import optimize
-    from .multi import merge, concat
+    from .multi import merge, concat, merge_asof
     from . import rolling, backends
     from ..base import compute
     from .reshape import get_dummies, pivot_table, melt
