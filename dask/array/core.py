@@ -224,7 +224,7 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    concatenate = concatenate_lookup.dispatch(type(max(arrays, key=lambda x: x.__array_priority__)))
+    concatenate = concatenate_lookup.dispatch(type(max(arrays, key=lambda x: getattr(x, '__array_priority__', 0))))
     return concatenate(arrays, axis=axes[0])
 
 

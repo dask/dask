@@ -424,7 +424,8 @@ def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, meta=
 
 def mean_agg(pairs, dtype='f8', axis=None, meta=False, **kwargs):
     ns = deepmap(lambda pair: pair['n'], pairs) if not meta else pairs
-    n = _concatenate2(ns, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+    n = _concatenate2(ns, axes=axis)
+    n = np.sum(n, axis=axis, dtype=dtype, **kwargs)
 
     if meta:
         return n
