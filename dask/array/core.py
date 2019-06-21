@@ -3700,10 +3700,12 @@ def stack(seq, axis=0):
     meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
     seq = [x.astype(meta.dtype) for x in seq]
 
-    n = len(seq)
     ndim = meta.ndim - 1
     if axis < 0:
         axis = ndim + axis + 1
+
+    seq = [a for a in seq if a.size]
+    n = len(seq)
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
