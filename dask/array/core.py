@@ -3689,6 +3689,9 @@ def stack(seq, axis=0):
     if not seq:
         raise ValueError("Need array(s) to stack")
 
+    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
+    seq = [x.astype(meta.dtype) for x in seq]
+
     n = len(seq)
     ndim = len(seq[0].shape)
     if axis < 0:
@@ -3709,9 +3712,6 @@ def stack(seq, axis=0):
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
     _, seq = unify_chunks(*uc_args)
-
-    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
-    seq = [x.astype(meta.dtype) for x in seq]
 
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
     chunks = (seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:])
