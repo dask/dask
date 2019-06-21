@@ -92,10 +92,6 @@ def compute_meta(func, _dtype, *args, **kwargs):
     # with np.vectorize, such as dask.array.routines._isnonzero_vec().
     if isinstance(func, np.vectorize):
         meta = func(*args_meta)
-        if _dtype and getattr(meta, 'dtype', None) != _dtype:
-            with ignoring(AttributeError):
-                meta = meta.astype(_dtype)
-
     else:
         try:
             meta = func(*args_meta, **kwargs_meta)
