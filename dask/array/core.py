@@ -2265,7 +2265,7 @@ def round_to(c, s):
 
 
 def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True,
-               getitem=None):
+               getitem=None, meta=None):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -2301,6 +2301,10 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
+    meta : Array-like, optional
+        The metadata for the resulting dask array.  This is the kind of array
+        that will result from slicing the input array.
+        Defaults to the input array.
 
     Examples
     --------
@@ -2369,7 +2373,10 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     if x.__class__.__module__.split('.')[0] == 'tiledb' and hasattr(x, '_ctx_'):
         return Array(dsk, name, chunks, dtype=x.dtype)
 
-    return Array(dsk, name, chunks, meta=x)
+    if meta is None:
+        meta = x
+
+    return Array(dsk, name, chunks, meta=meta)
 
 
 def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):

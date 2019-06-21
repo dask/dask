@@ -3922,3 +3922,11 @@ def test_no_warnings_from_blockwise():
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
 
     assert not record
+
+
+def test_from_array_meta():
+    sparse = pytest.importorskip('sparse')
+    x = np.ones(10)
+    meta = sparse.COO.from_numpy(x)
+    y = da.from_array(x, meta=meta)
+    assert isinstance(y._meta, sparse.COO)
