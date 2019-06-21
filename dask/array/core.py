@@ -3684,6 +3684,8 @@ def stack(seq, axis=0):
     --------
     concatenate
     """
+    seq = [asarray(a) for a in seq]
+
     if not seq:
         raise ValueError("Need array(s) to stack")
 
