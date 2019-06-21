@@ -3696,10 +3696,6 @@ def stack(seq, axis=0):
     ndim = meta.ndim - 1
     if axis < 0:
         axis = ndim + axis + 1
-    if axis > ndim:
-        raise ValueError("Axis must not be greater than number of dimensions"
-                         "\nData has %d dimensions, but got axis=%d" %
-                         (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError("Stacked arrays must have the same shape. "
