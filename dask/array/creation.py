@@ -389,7 +389,10 @@ def indices(dimensions, dtype=int, chunks='auto'):
     """
     dimensions = tuple(dimensions)
     dtype = np.dtype(dtype)
-    chunks = tuple(chunks)
+    if isinstance(chunks, str):
+        chunks = normalize_chunks(chunks, shape=dimensions, dtype=dtype)
+    else:
+        chunks = tuple(chunks)
 
     if len(dimensions) != len(chunks):
         raise ValueError("Need same number of chunks as dimensions.")
