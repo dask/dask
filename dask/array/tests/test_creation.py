@@ -201,6 +201,7 @@ def test_indices_dimensions_chunks():
         shape = (10000, 10000)
         expected = normalize_chunks('auto', shape=shape, dtype=int)
         result = da.indices(shape, chunks='auto')
+        # indices prepends a dimension
         actual = result.chunks[1:]
         assert expected == actual
 
