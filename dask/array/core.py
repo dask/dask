@@ -3684,17 +3684,18 @@ def stack(seq, axis=0):
     --------
     concatenate
     """
+    seq = [asarray(a) for a in seq]
+
     if not seq:
         raise ValueError("Need array(s) to stack")
 
+    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
+    seq = [x.astype(meta.dtype) for x in seq]
+
     n = len(seq)
-    ndim = len(seq[0].shape)
+    ndim = meta.ndim - 1
     if axis < 0:
         axis = ndim + axis + 1
-    if axis > ndim:
-        raise ValueError("Axis must not be greater than number of dimensions"
-                         "\nData has %d dimensions, but got axis=%d" %
-                         (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError("Stacked arrays must have the same shape. "
@@ -3707,9 +3708,6 @@ def stack(seq, axis=0):
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
     _, seq = unify_chunks(*uc_args)
-
-    dt = reduce(np.promote_types, [a.dtype for a in seq])
-    seq = [x.astype(dt) for x in seq]
 
     assert len(set(a.chunks for a in seq)) == 1  # same chunks
     chunks = (seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:])
@@ -3727,7 +3725,7 @@ def stack(seq, axis=0):
     layer = dict(zip(keys, values))
     graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
 
-    return Array(graph, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, meta=meta)
 
 
 def concatenate3(arrays):
