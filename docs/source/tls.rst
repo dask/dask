@@ -4,9 +4,9 @@
 TLS/SSL
 =======
 
-Currently dask distributed has experimental support for TLS/SSL communication,
+Dask distributed has support for TLS/SSL communication,
 providing mutual authentication and encryption of communications between cluster
-endpoints (Clients, Schedulers and Workers).
+endpoints (Clients, Schedulers, and Workers).
 
 TLS is enabled by using a ``tls`` address such as ``tls://`` (the default
 being ``tcp``, which sends data unauthenticated and unencrypted).  In
