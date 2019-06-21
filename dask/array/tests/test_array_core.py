@@ -280,6 +280,7 @@ def test_stack():
                                            (colon, colon, None))
     assert same_keys(s2, stack([a, b, c], axis=2))
 
+    pytest.raises(ValueError, lambda: stack([]))
     pytest.raises(ValueError, lambda: stack([a, b, c], axis=3))
 
     assert set(b.dask.keys()).issubset(s2.dask.keys())
