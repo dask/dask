@@ -85,7 +85,7 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 
 def compute_meta(func, _dtype, *args, **kwargs):
-    args_meta = list(map(meta_from_array, args))
+    args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
     kwargs_meta = {k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()}
 
     # todo: look for alternative to this, causes issues when using map_blocks()
