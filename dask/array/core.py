@@ -3693,7 +3693,7 @@ def stack(seq, axis=0):
     seq = [x.astype(meta.dtype) for x in seq]
 
     n = len(seq)
-    ndim = len(seq[0].shape)
+    ndim = meta.ndim - 1
     if axis < 0:
         axis = ndim + axis + 1
     if axis > ndim:
