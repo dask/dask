@@ -67,11 +67,8 @@ generally useful to users.  The diagnostic server on the scheduler is
 particularly valuable, and is served on port ``8787`` by default (configurable
 with the ``--bokeh-port`` keyword).
 
-.. note::
-
-    For more information about relevant ports, please take a look at the help
-    pages with ``dask-scheduler --help`` and ``dask-worker --help``
-
+For more information about relevant ports, please take a look at the available
+:ref:`command line options <worker-scheduler-cli-options>`.
 
 Automated Tools
 ---------------
@@ -82,6 +79,8 @@ SGE/SLURM/Torque or Yarn/Mesos.  Additionally, cluster SSH tools exist to send
 the same commands to many machines.  We recommend searching online for "cluster
 ssh" or "cssh".
 
+
+.. _worker-scheduler-cli-options:
 
 CLI Options
 -----------
