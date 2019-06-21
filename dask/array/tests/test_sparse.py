@@ -159,6 +159,7 @@ def test_metadata():
     if IS_NEP18_ACTIVE:
         assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
         assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
+        assert isinstance(np.stack([y, y])._meta, sparse.COO)
 
 
 def test_html_repr():
