@@ -3903,6 +3903,7 @@ def test_auto_chunks_h5py():
             d = f['x']
             with dask.config.set({'array.chunk-size': '1 MiB'}):
                 x = da.from_array(d)
+                assert isinstance(x._meta, np.ndarray)
                 assert x.chunks == ((256, 256, 256, 232), (512, 488))
 
 
