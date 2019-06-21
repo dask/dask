@@ -3688,14 +3688,6 @@ def stack(seq, axis=0):
 
     if not seq:
         raise ValueError("Need array(s) to stack")
-
-    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
-    seq = [x.astype(meta.dtype) for x in seq]
-
-    n = len(seq)
-    ndim = meta.ndim - 1
-    if axis < 0:
-        axis = ndim + axis + 1
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError("Stacked arrays must have the same shape. "
@@ -3704,6 +3696,14 @@ def stack(seq, axis=0):
                                                     seq[0].shape,
                                                     idx[0] + 1,
                                                     seq[idx[0]].shape))
+
+    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
+    seq = [x.astype(meta.dtype) for x in seq]
+
+    n = len(seq)
+    ndim = meta.ndim - 1
+    if axis < 0:
+        axis = ndim + axis + 1
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
