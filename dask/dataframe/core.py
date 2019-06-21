@@ -5086,6 +5086,126 @@ def meta_warning(df):
     return msg
 
 
+def prefix_reduction(f, ddf, identity, **kwargs):
+    """ Computes the prefix sums of f on df
+
+    If df has partitions [P1, P2, ..., Pn], then returns the DataFrame with
+    partitions [f(identity, P1),
+                f(f(identity, P1), P2),
+                f(f(f(identity, P1), P2), P3),
+                ...]
+
+    Parameters
+    ----------
+    f : callable
+        an associative function f
+    ddf : dd.DataFrame
+    identity : pd.DataFrame
+        an identity element of f, that is f(identity, df) = f(df, identity) = df
+    kwargs : ??
+        keyword arguments of f ??
+    """
+    dsk = dict()
+    name = 'prefix_reduction-' + tokenize(f, ddf, identity, **kwargs)
+    meta = ddf._meta
+    n = len(ddf.divisions) - 1
+    divisions = [None] * (n + 1)
+
+    N = 1
+    while N < n:
+        N *= 2
+    for i in range(n):
+        dsk[(name, i, 1, 0)] = (apply, f, [(ddf._name, i), identity], kwargs)
+    for i in range(n, N):
+        dsk[(name, i, 1, 0)] = identity
+
+    d = 1
+    while d < N:
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (apply, f,
+                                                    [(name, i + d - 1, d, 0),
+                                                     (name, i + 2 * d - 1, d, 0)],
+                                                    kwargs)
+        d *= 2
+
+    dsk[(name, N - 1, N, 1)] = identity
+
+    while d > 1:
+        d //= 2
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + d - 1, d, 1)] = (name, i + 2 * d - 1, 2 * d, 1)
+            dsk[(name, i + 2 * d - 1, d, 1)] = (apply, f,
+                                                [(name, i + 2 * d - 1, 2 * d, 1),
+                                                 (name, i + d - 1, d, 0)],
+                                                kwargs)
+
+    for i in range(n):
+        dsk[(name, i)] = (apply, f, [(name, i, 1, 1), identity], kwargs)
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    return new_dd_object(graph, name, meta, divisions)
+
+
+def suffix_reduction(f, ddf, identity, **kwargs):
+    """ Computes the suffix sums of f on df
+
+    If df has partitions [P1, P2, ..., Pn], then returns the DataFrame with
+    partitions [f(P1, f(P2, ...f(Pn, identity)...)),
+                f(P2, ...f(Pn, identity)...),
+                ...f(Pn, identity)...,
+                ...]
+
+    Parameters
+    ----------
+    f : callable
+        an associative function f
+    ddf : dd.DataFrame
+    identity : pd.DataFrame
+        an identity element of f, that is f(identity, df) = f(df, identity) = df
+    kwargs : ??
+        keyword arguments of f ??
+    """
+    dsk = dict()
+    name = 'suffix_reduction-' + tokenize(f, ddf, identity, **kwargs)
+    meta = ddf._meta
+    n = len(ddf.divisions) - 1
+    divisions = [None] * (n + 1)
+
+    N = 1
+    while N < n:
+        N *= 2
+    for i in range(n):
+        dsk[(name, i, 1, 0)] = (apply, f, [(ddf._name, n - 1 - i), identity], kwargs)
+    for i in range(n, N):
+        dsk[(name, i, 1, 0)] = identity
+
+    d = 1
+    while d < N:
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + 2 * d - 1, 2 * d, 0)] = (apply, f,
+                                                    [(name, i + 2 * d - 1, d, 0),
+                                                     (name, i + d - 1, d, 0)],
+                                                    kwargs)
+        d *= 2
+
+    dsk[(name, N - 1, N, 1)] = identity
+
+    while d > 1:
+        d //= 2
+        for i in range(0, N, 2 * d):
+            dsk[(name, i + d - 1, d, 1)] = (name, i + 2 * d - 1, 2 * d, 1)
+            dsk[(name, i + 2 * d - 1, d, 1)] = (apply, f,
+                                                [(name, i + d - 1, d, 0),
+                                                 (name, i + 2 * d - 1, 2 * d, 1)],
+                                                kwargs)
+
+    for i in range(n):
+        dsk[(name, i)] = (apply, f, [(name, n - 1 - i, 1, 1), identity], kwargs)
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    return new_dd_object(graph, name, meta, divisions)
+
+
 def mapseries(base_chunk, concat_map):
     return base_chunk.map(concat_map)
 

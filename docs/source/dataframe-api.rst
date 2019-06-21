@@ -414,11 +414,13 @@ Other functions
 
 .. autofunction:: compute
 .. autofunction:: map_partitions
+.. autofunction:: to_datetime
 
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
 .. autofunction:: merge
+.. autofunction:: merge_asof
 
 .. currentmodule:: dask.dataframe.reshape
 

@@ -59,18 +59,20 @@ from functools import wraps, partial
 import warnings
 
 from toolz import merge_sorted, unique, first
+import numpy as np
 import pandas as pd
 
 from ..base import tokenize, is_dask_collection
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
-                   _maybe_from_pandas, new_dd_object, is_broadcastable)
+                   _maybe_from_pandas, new_dd_object, is_broadcastable,
+                   prefix_reduction, suffix_reduction)
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
 from .utils import (strip_unknown_categories, is_dataframe_like,
-                    is_series_like, asciitable)
+                    is_series_like, asciitable, PANDAS_GT_0230)
 
 
 def align_partitions(*dfs):
@@ -445,6 +447,274 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes, shuffle=shuffle,
                          indicator=indicator)
+
+
+###############################################################
+# ASOF Join
+###############################################################
+
+def fix_overlap(ddf):
+    """ Ensures that ddf.divisions are all distinct and that the upper bound on
+    each partition is exclusive
+    """
+    if not ddf.known_divisions:
+        raise ValueError("Can only fix overlap when divisions are known")
+
+    def body(df, index):
+        return df.drop(index, inplace=True) if index in df else df
+
+    def overlap(df, index):
+        return df.loc[[index]] if index in df else None
+
+    dsk = dict()
+    name = 'fix-overlap-' + tokenize(ddf)
+
+    n = len(ddf.divisions) - 1
+    divisions = []
+    for i in range(n):
+        if i > 0 and ddf.divisions[i - 1] == ddf.divisions[i]:
+            frames = dsk[(name, len(divisions) - 1)][1]
+        else:
+            frames = []
+            if i > 0:
+                frames.append((overlap, (ddf._name, i - 1), ddf.divisions[i]))
+            divisions.append(ddf.divisions[i])
+            dsk[(name, len(divisions) - 1)] = (pd.concat, frames)
+
+        if i == n - 1 or ddf.divisions[i + 1] == ddf.divisions[i]:
+            frames.append((ddf._name, i))
+        else:
+            frames.append((body, (ddf._name, i), ddf.divisions[i + 1]))
+    divisions.append(ddf.divisions[-1])
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    return new_dd_object(graph, name, ddf._meta, divisions)
+
+
+def most_recent_tail(left, right):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    if right.empty:
+        return left
+    return right.tail(1)
+
+
+def most_recent_tail_summary(left, right, by=None):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    return pd.concat([left, right]).drop_duplicates(subset=by, keep='last')
+
+
+def compute_tails(ddf, by=None):
+    """ For each partition, returns the last row of the most recent nonempty
+    partition.
+    """
+    empty = ddf._meta.iloc[0:0]
+
+    if by is None:
+        return prefix_reduction(most_recent_tail, ddf, empty)
+    else:
+        kwargs = {'by': by}
+        return prefix_reduction(most_recent_tail_summary, ddf, empty, **kwargs)
+
+
+def most_recent_head(left, right):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    if left.empty:
+        return right
+    return left.head(1)
+
+
+def most_recent_head_summary(left, right, by=None):
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+    return pd.concat([left, right]).drop_duplicates(subset=by, keep='first')
+
+
+def compute_heads(ddf, by=None):
+    """ For each partition, returns the first row of the next nonempty
+    partition.
+    """
+    empty = ddf._meta.iloc[0:0]
+
+    if by is None:
+        return suffix_reduction(most_recent_head, ddf, empty)
+    else:
+        kwargs = {'by': by}
+        return suffix_reduction(most_recent_head_summary, ddf, empty, **kwargs)
+
+
+def pair_partitions(L, R):
+    """ Returns which partitions to pair for the merge_asof algorithm and the
+    bounds on which to split them up
+    """
+    result = []
+
+    n, m = len(L) - 1, len(R) - 1
+    i, j = 0, -1
+    while R[j + 1] <= L[i]:
+        j += 1
+    J = []
+    while i < n:
+        partition = 0 if j < 0 else m - 1 if j >= m else j
+        lower = R[j] if j >= 0 and R[j] > L[i] else None
+        upper = R[j + 1] if j + 1 < m and (i == n - 1 or R[j + 1] < L[i + 1]) else None
+
+        J.append((partition, lower, upper))
+
+        i1 = i + 1 if j + 1 == m or (i + 1 < n and R[j + 1] >= L[i + 1]) else i
+        j1 = j + 1 if i + 1 == n or (j + 1 < m and L[i + 1] >= R[j + 1]) else j
+        if i1 > i:
+            result.append(J)
+            J = []
+        i, j = i1, j1
+
+    return result
+
+
+def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
+    """ merge_asof but potentially adding rows to the beginning/end of right """
+    if left is None or right is None:
+        raise ValueError('dafuq did u do')
+
+    frames = []
+    if prev is not None:
+        frames.append(prev)
+    frames.append(right)
+    if next is not None:
+        frames.append(next)
+
+    frame = pd.concat(frames)
+    return pd.merge_asof(left, frame, **kwargs)
+
+
+def get_unsorted_columns(frames):
+    """
+    Determine the unsorted colunn order.
+
+    This should match the output of concat([frames], sort=False)
+    for pandas >=0.23
+    """
+    new_columns = pd.concat([frame._meta for frame in frames]).columns
+    order = []
+    for frame in frames:
+        order.append(new_columns.get_indexer_for(frame.columns))
+
+    order = np.concatenate(order)
+    order = pd.unique(order)
+    order = new_columns.take(order)
+    return order
+
+
+def concat_and_unsort(frames, columns):
+    """
+    Compatibility concat for Pandas <0.23.0
+
+    Concatenates and then selects the desired (unsorted) column order.
+    """
+    return pd.concat(frames)[columns]
+
+
+def _concat_compat(frames, left, right):
+    if PANDAS_GT_0230:
+        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
+        # we only care about sort, to silence warnings.
+        return (pd.concat, frames, 0, 'outer', None, False, None, None, None, False, False)
+    else:
+        columns = get_unsorted_columns([left, right])
+        return (concat_and_unsort, frames, columns)
+
+
+def merge_asof_indexed(left, right, **kwargs):
+    left = fix_overlap(left)
+    right = fix_overlap(right)
+
+    dsk = dict()
+    name = 'asof-join-indexed-' + tokenize(left, right, **kwargs)
+    meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
+
+    dependencies = [left, right]
+    tails = heads = None
+    if kwargs['direction'] in ['backward', 'nearest']:
+        tails = compute_tails(right, by=kwargs['right_by'])
+        dependencies.append(tails)
+    if kwargs['direction'] in ['forward', 'nearest']:
+        heads = compute_heads(right, by=kwargs['right_by'])
+        dependencies.append(heads)
+
+    for i, J in enumerate(pair_partitions(left.divisions, right.divisions)):
+        frames = []
+        for j, lower, upper in J:
+            slice = (methods.boundary_slice, (left._name, i),
+                     lower, upper, False)
+            tail = (tails._name, j) if tails is not None else None
+            head = (heads._name, j) if heads is not None else None
+            frames.append((apply, merge_asof_padded, [slice, (right._name, j),
+                           tail, head], kwargs))
+        args = _concat_compat(frames, left, right)
+        dsk[(name, i)] = args
+
+    graph = HighLevelGraph.from_collections(name, dsk,
+                                            dependencies=dependencies)
+    result = new_dd_object(graph, name, meta, left.divisions)
+    return result
+
+
+@wraps(pd.merge_asof)
+def merge_asof(left, right, on=None, left_on=None, right_on=None,
+               left_index=False, right_index=False, by=None, left_by=None,
+               right_by=None, suffixes=('_x', '_y'), tolerance=None,
+               allow_exact_matches=True, direction='backward'):
+    if direction not in ['backward', 'forward', 'nearest']:
+        raise ValueError("Invalid merge_asof direction. Choose from 'backward'"
+                         " 'forward', or 'nearest'")
+
+    kwargs = {'on': on, 'left_on': left_on, 'right_on': right_on,
+              'left_index': left_index, 'right_index': right_index,
+              'by': by, 'left_by': left_by, 'right_by': right_by,
+              'suffixes': suffixes, 'tolerance': tolerance,
+              'allow_exact_matches': allow_exact_matches,
+              'direction': direction}
+
+    if left is None or right is None:
+        raise ValueError("Cannot merge_asof on empty DataFrames")
+
+    #if is_dataframe_like(left) and is_dataframe_like(right):
+    if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+        return pd.merge_asof(left, right, **kwargs)
+
+    if on is not None:
+        left_on = right_on = on
+    for o in [left_on, right_on]:
+        if isinstance(o, _Frame):
+            raise NotImplementedError(
+                "Dask collections not currently allowed in merge columns")
+
+    if not is_dask_collection(left):
+        left = from_pandas(left, npartitions=1)
+    if left_on is not None:
+        left = left.set_index(left_on, sorted=True)
+
+    if not is_dask_collection(right):
+        right = from_pandas(right, npartitions=1)
+    if right_on is not None:
+        right = right.set_index(right_on, sorted=True)
+
+    if by is not None:
+        kwargs['left_by'] = kwargs['right_by'] = by
+
+    del kwargs['on'], kwargs['left_on'], kwargs['right_on'], kwargs['by']
+    kwargs['left_index'] = kwargs['right_index'] = True
+
+    if not left.known_divisions or not right.known_divisions:
+        raise ValueError("merge_asof input must be sorted!")
+
+    result = merge_asof_indexed(left, right, **kwargs)
+    if left_on or right_on:
+        result = result.reset_index()
+
+    return result
 
 
 ###############################################################
