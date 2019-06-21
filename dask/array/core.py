@@ -2958,7 +2958,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
-    meta = np.concatenate([meta_from_array(s) for s in seq])
+    meta = np.concatenate([meta_from_array(s) for s in seq], axis=axis)
 
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
