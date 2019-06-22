@@ -2329,6 +2329,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
         dtype=x.dtype,
         previous_chunks=previous_chunks
     )
+
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2337,6 +2338,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
         original_name = name = 'array-' + str(uuid.uuid1())
     else:
         original_name = name
+
     if lock is True:
         lock = SerializableLock()
 
@@ -2368,7 +2370,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     if meta is None:
         meta = x
 
-    return Array(dsk, name, chunks, meta=meta)
+    return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, 'dtype', None))
 
 
 def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):

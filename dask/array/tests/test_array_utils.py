@@ -58,3 +58,5 @@ def test_meta_from_array_type_inputs():
         dtype=np.float
     )
     assert_eq(x, x)
+
+    assert da.from_array(np.ones(5).astype(np.int32), meta=np.ndarray).dtype == np.int32
