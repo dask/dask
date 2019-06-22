@@ -34,21 +34,34 @@ def meta_from_array(x, ndim=None, dtype=None):
 
     Parameters
     ----------
-    x: array-like
+    x: array-like, callable
+        Either an object that looks sufficiently like a Numpy array,
+        or a callable that accepts shape and dtype keywords
     ndim: int
-    dtype: dtype
+        Number of dimensions of the array
+    dtype: Numpy dtype
+        A valid input for ``np.dtype``
 
     Returns
     -------
-    array-like
+    array-like with zero elements of the correct dtype
     """
-    # x._meta must be a Dask Array, some libraries (e.g. zarr) implement a
-    # _meta attribute that are incompatible with Dask Array._meta
+    # If using x._meta, x must be a Dask Array, some libraries (e.g. zarr)
+    # implement a _meta attribute that are incompatible with Dask Array._meta
     if hasattr(x, '_meta') and isinstance(x, Array):
         x = x._meta
 
+    if dtype is None and x is None:
+        raise ValueError("You must specify the meta or dtype of the array")
+
     if np.isscalar(x):
         x = np.array(x)
+
+    if x is None:
+        x = np.ndarray
+
+    if isinstance(x, type):
+        x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
     if not hasattr(x, 'shape') or not hasattr(x, 'dtype') or not isinstance(x.shape, tuple):
         return x
