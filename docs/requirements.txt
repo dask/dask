@@ -5,3 +5,4 @@ dask
 numpydoc
 sphinx
 dask_sphinx_theme
+sphinx-click

@@ -10,8 +10,8 @@ For example, S3 buckets could not be visible from your local machine and hence a
 attempt to create a dask graph from local machine may not work.
 
 
-Submitting dask Applications with `dask-submit`
------------------------------------------------
+Submitting dask Applications with ``dask-submit``
+-------------------------------------------------
 
 In order to remotely submit scripts to the cluster from a local machine or a CI/CD
 environment, we need to run a remote client on the same machine as the scheduler::
@@ -20,7 +20,7 @@ environment, we need to run a remote client on the same machine as the scheduler
    dask-remote --port 8788
 
 
-After making sure the `dask-remote` is running, you can submit a script by::
+After making sure the ``dask-remote`` is running, you can submit a script by::
 
    #local machine
    dask-submit <dask-remote-address>:<port> <script.py>
@@ -28,7 +28,7 @@ After making sure the `dask-remote` is running, you can submit a script by::
 
 Some of the commonly used arguments are:
 
--  ``REMOTE_CLIENT_ADDRESS``: host name where dask-remote client is running
+-  ``REMOTE_CLIENT_ADDRESS``: host name where ``dask-remote`` client is running
 -  ``FILEPATH``: Local path to file containing dask application
 
 For example, given the following dask application saved in a file called
@@ -36,6 +36,7 @@ For example, given the following dask application saved in a file called
 
 .. code-block:: python
 
+   # script.py
    from distributed import Client
 
    def inc(x):
@@ -50,3 +51,21 @@ For example, given the following dask application saved in a file called
 We can submit this application from a local machine by running::
 
    dask-submit <remote-client-address>:<port> script.py
+
+
+CLI Options
+-----------
+
+.. note::
+
+   The command line documentation here may differ depending on your installed
+   version. We recommend referring to the output of ``dask-remote --help``
+   and ``dask-submit --help``.
+
+.. click:: distributed.cli.dask_remote:main
+   :prog: dask-remote
+   :show-nested:
+
+.. click:: distributed.cli.dask_submit:main
+   :prog: dask-submit
+   :show-nested:
