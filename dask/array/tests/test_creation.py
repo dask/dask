@@ -7,6 +7,7 @@ from toolz import concat
 
 import dask
 import dask.array as da
+from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
 
 
@@ -186,11 +187,6 @@ def test_arange_float_step():
     assert_eq(darr, nparr)
 
 
-def test_indices_no_chunks():
-    with pytest.raises(ValueError):
-        da.indices((1,))
-
-
 def test_indices_wrong_chunks():
     with pytest.raises(ValueError):
         da.indices((1,), chunks=tuple())
@@ -200,6 +196,14 @@ def test_indices_dimensions_chunks():
     chunks = ((1, 4, 2, 3), (5, 5))
     darr = da.indices((10, 10), chunks=chunks)
     assert darr.chunks == ((1, 1),) + chunks
+
+    with dask.config.set({'array.chunk-size': '50 MiB'}):
+        shape = (10000, 10000)
+        expected = normalize_chunks('auto', shape=shape, dtype=int)
+        result = da.indices(shape, chunks='auto')
+        # indices prepends a dimension
+        actual = result.chunks[1:]
+        assert expected == actual
 
 
 def test_empty_indicies():
