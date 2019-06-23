@@ -42,7 +42,17 @@ def blockwise_token(i, prefix='_'):
     return prefix + '%d' % i
 
 
-def blockwise(func, output, output_indices, *arrind_pairs, **kwargs):
+def blockwise(
+    func,
+    output,
+    output_indices,
+    *arrind_pairs,
+    numblocks=None,
+    concatenate=None,
+    new_axes=None,
+    dependencies=(),
+    **kwargs
+):
     """ Create a Blockwise symbolic mutable mapping
 
     This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
@@ -53,10 +63,7 @@ def blockwise(func, output, output_indices, *arrind_pairs, **kwargs):
     make_blockwise_graph
     Blockwise
     """
-    numblocks = kwargs.pop('numblocks')
-    concatenate = kwargs.pop('concatenate', None)
-    new_axes = kwargs.pop('new_axes', {})
-    dependencies = kwargs.pop('dependencies', [])
+    new_axes = new_axes or {}
 
     arrind_pairs = list(arrind_pairs)
 

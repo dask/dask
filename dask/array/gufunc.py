@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-from itertools import count
 import re
 
 try:
@@ -368,14 +367,41 @@ significantly.".format(dim))
     ### Use existing `blockwise` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
     ### Modifying `blockwise` could improve things here.
-    tmp = blockwise(
-        func,
-        loop_output_dims,
-        *arginds,
-        dtype=int,  # Only dummy dtype, anyone will do
-        concatenate=True,
-        **kwargs
-    )
+    try:
+        tmp = blockwise(  # First try to compute meta
+            func,
+            loop_output_dims,
+            *arginds,
+            concatenate=True,
+            **kwargs
+        )
+    except ValueError:
+        # If computing meta doesn't work, provide it explicitly based on
+        # provided dtypes
+        sample = arginds[0]._meta
+        if isinstance(output_dtypes, tuple):
+            meta = tuple(
+                meta_from_array(sample, dtype=odt)
+                for ocd, odt in zip(output_coredimss, output_dtypes)
+            )
+        else:
+            meta = tuple(
+                meta_from_array(sample, dtype=odt)
+                for ocd, odt in zip((output_coredimss,), (output_dtypes,))
+            )
+        tmp = blockwise(
+            func,
+            loop_output_dims,
+            *arginds,
+            concatenate=True,
+            meta=meta,
+            **kwargs
+        )
+
+    if isinstance(tmp._meta, tuple):
+        metas = tmp._meta
+    else:
+        metas = (tmp._meta,)
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
@@ -390,7 +416,7 @@ significantly.".format(dim))
 
     ## Split output
     leaf_arrs = []
-    for i, ocd, odt, oax in zip(count(0), output_coredimss, output_dtypes, output_axes):
+    for i, (ocd, odt, oax, meta) in enumerate(zip(output_coredimss, output_dtypes, output_axes, metas)):
         core_output_shape = tuple(core_shapes[d] for d in ocd)
         core_chunkinds = len(ocd) * (0,)
         output_shape = loop_output_shape + core_output_shape
@@ -398,7 +424,7 @@ significantly.".format(dim))
         leaf_name = "%s_%d-%s" % (name, i, token)
         leaf_dsk = {(leaf_name,) + key[1:] + core_chunkinds: ((getitem, key, i) if nout else key) for key in keys}
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
-        meta = meta_from_array(tmp._meta, len(output_shape), dtype=odt)
+        meta = meta_from_array(meta, len(output_shape), dtype=odt)
         leaf_arr = Array(graph,
                          leaf_name,
                          chunks=output_chunks,
@@ -497,7 +523,6 @@ class gufunc(object):
     >>> mean, std = gustats(a)
     >>> mean.compute().shape
     (10, 20)
-
 
     >>> a = da.random.normal(size=(   20,30), chunks=(10, 30))
     >>> b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
