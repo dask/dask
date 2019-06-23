@@ -13,6 +13,15 @@ from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.dataframe.utils import assert_eq
 
 
+class CustomFSPath:
+    """For testing fspath on unknown objects"""
+    def __init__(self, path):
+        self.path = path
+
+    def __fspath__(self):
+        return self.path
+
+
 def test_to_hdf():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -517,13 +526,27 @@ def test_hdf_file_list():
             tm.assert_frame_equal(res.compute(), df)
 
 
-def test_hdf_pathlib():
+def test_hdf_pattern_pathlib():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+                       'y': [1, 2, 3, 4]},
+                      index=[1., 2., 3., 4.])
 
     with tmpdir() as tdir:
         df.to_hdf(os.path.join(tdir, 'test.h5'), 'dataframe', format='table')
         path = pathlib.Path(tdir) / 'test.h5'
+        res = dd.read_hdf(path, 'dataframe')
+        assert_eq(res, df)
+
+
+def test_hdf_pattern_fspath():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]},
+                      index=[1., 2., 3., 4.])
+
+    with tmpdir() as tdir:
+        f = os.path.join(tdir, 'test.h5')
+        df.to_hdf(f, 'dataframe', format='table')
+        path = CustomFSPath(f)
         res = dd.read_hdf(path, 'dataframe')
         assert_eq(res, df)
 

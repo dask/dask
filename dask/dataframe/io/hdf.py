@@ -406,8 +406,12 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
-    if isinstance(pattern, pathlib.Path):
+    # Convert pathlib.Path and objects supporting the fspath protocol to a string
+    if hasattr(pattern, '__fspath__'):
+        pattern = pattern.__fspath__()
+    elif isinstance(pattern, pathlib.Path):
         pattern = str(pattern)
+
     if isinstance(pattern, str):
         paths = sorted(glob(pattern))
     else:
