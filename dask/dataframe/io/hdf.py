@@ -5,6 +5,7 @@ from glob import glob
 import os
 import uuid
 from warnings import warn
+import pathlib
 
 import pandas as pd
 from toolz import merge
@@ -405,8 +406,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
-    if _HAVE_PATHLIB and isinstance(pattern, pathlib.Path):
-        pattern = unicode(pattern)
+    if isinstance(pattern, pathlib.Path):
+        pattern = str(pattern)
     if isinstance(pattern, str):
         paths = sorted(glob(pattern))
     else:

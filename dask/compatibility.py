@@ -81,8 +81,6 @@ if PY3:
         # Fallback to top-level definition
         pass
 
-    import pathlib
-    _HAVE_PATHLIB = True
     from urllib.request import urlopen
     from urllib.parse import urlparse, urlsplit, quote, unquote
     FileNotFoundError = FileNotFoundError
@@ -133,16 +131,6 @@ else:
     from urllib2 import urlopen
     from urlparse import urlparse, urlsplit
     from urllib import quote, unquote
-    try:
-        import pathlib2 as pathlib
-        _HAVE_PATHLIB = True
-    except ImportError:
-        try:
-            import pathlib
-            _HAVE_PATHLIB = True
-        except ImportError:
-            _HAVE_PATHLIB = False
-
     unicode = unicode
     string_types = (basestring,)
     long = long
