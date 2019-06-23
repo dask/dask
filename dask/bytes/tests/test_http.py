@@ -1,7 +1,7 @@
 import os
 import pytest
-import requests
 import subprocess
+import sys
 import time
 
 from dask.bytes.core import open_files
@@ -9,6 +9,7 @@ from dask.compatibility import PY2
 from dask.utils import tmpdir
 
 files = ['a', 'b']
+requests = pytest.importorskip('requests')
 
 
 @pytest.fixture(scope='module')
@@ -19,9 +20,9 @@ def dir_server():
                 f.write(b'a' * 10000)
 
         if PY2:
-            cmd = ['python', '-m', 'SimpleHTTPServer', '8999']
+            cmd = [sys.executable, '-m', 'SimpleHTTPServer', '8999']
         else:
-            cmd = ['python', '-m', 'http.server', '8999']
+            cmd = [sys.executable, '-m', 'http.server', '8999']
         p = subprocess.Popen(cmd, cwd=d)
         timeout = 10
         while True:
@@ -43,6 +44,33 @@ def test_simple(dir_server):
     f = open_files(root + fn)[0]
     with f as f:
         data = f.read()
+    assert data == open(os.path.join(dir_server, fn), 'rb').read()
+
+
+def test_loc(dir_server):
+    root = 'http://localhost:8999/'
+    fn = files[0]
+    f = open_files(root + fn)[0]
+    expected = open(os.path.join(dir_server, fn), 'rb').read()
+    with f as f:
+        data = f.read(2)
+        assert data == expected[:2]
+        assert f.loc == 2
+        f.seek(0)
+        data = f.read(3)
+        assert data == expected[:3]
+        f.seek(1, 1)
+        assert f.loc == 4
+
+
+def test_fetch_range_with_headers(dir_server):
+    # https://github.com/dask/dask/issues/4479
+    root = 'http://localhost:8999/'
+    fn = files[0]
+    headers = {'Date': 'Wed, 21 Oct 2015 07:28:00 GMT'}
+    f = open_files(root + fn, headers=headers)[0]
+    with f as f:
+        data = f.read(length=1) + f.read(length=-1)
     assert data == open(os.path.join(dir_server, fn), 'rb').read()
 
 
@@ -70,6 +98,8 @@ def test_ops_blocksize(dir_server):
     with f as f:
         # it's OK to read the whole file
         assert f.read() == data
+        # and now the file magically has a size
+        assert f.size == len(data)
 
     # note that if we reuse f from above, because it is tokenized, we get
     # the same open file - where is this cached?
@@ -84,12 +114,12 @@ def test_ops_blocksize(dir_server):
 def test_errors(dir_server):
     f = open_files('http://localhost:8999/doesnotexist')[0]
     with pytest.raises(requests.exceptions.RequestException):
-        with f:
-            pass
+        with f as f:
+            f.read()
     f = open_files('http://nohost/')[0]
     with pytest.raises(requests.exceptions.RequestException):
-        with f:
-            pass
+        with f as f:
+            f.read()
     root = 'http://localhost:8999/'
     fn = files[0]
     f = open_files(root + fn, mode='wb')[0]
@@ -110,8 +140,18 @@ def test_files(dir_server):
             assert f.read() == open(os.path.join(dir_server, f2), 'rb').read()
 
 
+def test_open_glob(dir_server):
+    root = 'http://localhost:8999/'
+    fs = open_files(root + '/*')
+    assert fs[0].path == 'http://localhost:8999/a'
+    assert fs[1].path == 'http://localhost:8999/b'
+
+
 @pytest.mark.network
 def test_parquet():
+    from distutils.version import LooseVersion
+    if LooseVersion(requests.__version__) < LooseVersion("2.21.0"):
+        pytest.skip()
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')  # no pyarrow compatability FS yet
     df = dd.read_parquet([
@@ -123,6 +163,7 @@ def test_parquet():
                                    'n_comment']
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696")
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts

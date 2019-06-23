@@ -18,9 +18,12 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
+from .utils import validate_axis
 from .wrap import empty
-from .. import sharedict
+from .. import config
 
 
 def cumdims_label(chunks, const):
@@ -134,7 +137,7 @@ def _old_to_new(old_chunks, new_chunks):
     sums2 = [sum(n) for n in new_known]
 
     if not sums == sums2:
-        raise ValueError('Cannot change dimensions from to %r' % sums2)
+        raise ValueError('Cannot change dimensions from %r to %r' % (sums, sums2))
     if not n_missing == n_missing2:
         raise ValueError('Chunks must be unchanging along unknown dimensions')
 
@@ -174,81 +177,54 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def blockdims_dict_to_tuple(old, new):
-    """
-
-    >>> blockdims_dict_to_tuple((4, 5, 6), {1: 10})
-    (4, 10, 6)
-    """
-    newlist = list(old)
-    for k, v in new.items():
-        newlist[k] = v
-    return tuple(newlist)
-
-
-def blockshape_dict_to_tuple(old_chunks, d):
-    """
-
-    >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: 3})
-    ((4, 4), (3, 3, 3, 1))
-    """
-    shape = tuple(map(sum, old_chunks))
-    new_chunks = list(old_chunks)
-    for k, v in d.items():
-        div = shape[k] // v
-        mod = shape[k] % v
-        new_chunks[k] = (v,) * div + ((mod,) if mod else ())
-    return tuple(new_chunks)
-
-
-DEFAULT_THRESHOLD = 4
-DEFAULT_BLOCK_SIZE_LIMIT = 1e8
-
-
-def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
-            block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
+def rechunk(x, chunks, threshold=None, block_size_limit=None):
     """
     Convert blocks in dask array x for new chunks.
 
-    >>> import dask.array as da
-    >>> a = np.random.uniform(0, 1, 7**4).reshape((7,) * 4)
-    >>> x = da.from_array(a, chunks=((2, 3, 2),)*4)
-    >>> x.chunks
-    ((2, 3, 2), (2, 3, 2), (2, 3, 2), (2, 3, 2))
-
-    >>> y = rechunk(x, chunks=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
-    >>> y.chunks
-    ((2, 4, 1), (4, 2, 1), (4, 3), (7,))
-
-    chunks also accept dict arguments mapping axis to blockshape
-
-    >>> y = rechunk(x, chunks={1: 2})  # rechunk axis 1 with blockshape 2
-
     Parameters
     ----------
-
-    x:   dask array
-    chunks:  tuple
-        The new block dimensions to create
+    x: dask array
+        Array to be rechunked.
+    chunks:  int, tuple or dict
+        The new block dimensions to create. -1 indicates the full size of the
+        corresponding dimension.
     threshold: int
-        The graph growth factor under which we don't bother
-        introducing an intermediate step
+        The graph growth factor under which we don't bother introducing an
+        intermediate step.
     block_size_limit: int
-        The maximum block size (in bytes) we want to produce during an
-        intermediate step
-    """
-    threshold = threshold or DEFAULT_THRESHOLD
-    block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE_LIMIT
+        The maximum block size (in bytes) we want to produce
+        Defaults to the configuration value ``array.chunk-size``
 
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones((1000, 1000), chunks=(100, 100))
+
+    Specify uniform chunk sizes with a tuple
+
+    >>> y = x.rechunk((1000, 10))
+
+    Or chunk only specific dimensions with a dictionary
+
+    >>> y = x.rechunk({0: 1000})
+
+    Use the value ``-1`` to specify that you want a single chunk along a
+    dimension or the value ``"auto"`` to specify that dask can freely rechunk a
+    dimension to attain blocks of a uniform block size
+
+    >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
+    """
     if isinstance(chunks, dict):
-        if not chunks or isinstance(next(iter(chunks.values())), int):
-            chunks = blockshape_dict_to_tuple(x.chunks, chunks)
-        else:
-            chunks = blockdims_dict_to_tuple(x.chunks, chunks)
+        chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
+        for i in range(x.ndim):
+            if i not in chunks:
+                chunks[i] = x.chunks[i]
     if isinstance(chunks, (tuple, list)):
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
-    chunks = normalize_chunks(chunks, x.shape)
+    chunks = normalize_chunks(chunks, x.shape, limit=block_size_limit,
+                              dtype=x.dtype, previous_chunks=x.chunks)
+
     if chunks == x.chunks:
         return x
     ndim = x.ndim
@@ -455,8 +431,8 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
 
 
 def plan_rechunk(old_chunks, new_chunks, itemsize,
-                 threshold=DEFAULT_THRESHOLD,
-                 block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
+                 threshold=None,
+                 block_size_limit=None):
     """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 
@@ -476,6 +452,11 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     No intermediate steps will be planned if any dimension of ``old_chunks``
     is unknown.
     """
+    threshold = threshold or config.get('array.rechunk-threshold')
+    block_size_limit = block_size_limit or config.get('array.chunk-size')
+    if isinstance(block_size_limit, str):
+        block_size_limit = parse_bytes(block_size_limit)
+
     ndim = len(new_chunks)
     steps = []
     has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
@@ -542,8 +523,8 @@ def _compute_rechunk(x, chunks):
     x2 = dict()
     intermediates = dict()
     token = tokenize(x, chunks)
-    merge_temp_name = 'rechunk-merge-' + token
-    split_temp_name = 'rechunk-split-' + token
+    merge_name = 'rechunk-merge-' + token
+    split_name = 'rechunk-split-' + token
     split_name_suffixes = count()
 
     # Pre-allocate old block references, to allow re-use and reduce the
@@ -556,7 +537,7 @@ def _compute_rechunk(x, chunks):
     new_index = product(*(range(len(c)) for c in chunks))
 
     for new_idx, cross1 in zip(new_index, crossed):
-        key = (merge_temp_name,) + new_idx
+        key = (merge_name,) + new_idx
         old_block_indices = [[cr[i][0] for cr in cross1] for i in range(ndim)]
         subdims1 = [len(set(old_block_indices[i]))
                     for i in range(ndim)]
@@ -567,22 +548,28 @@ def _compute_rechunk(x, chunks):
         # Iterate over the old blocks required to build the new block
         for rec_cat_index, ind_slices in enumerate(cross1):
             old_block_index, slices = zip(*ind_slices)
-            name = (split_temp_name, next(split_name_suffixes))
-            intermediates[name] = (getitem, old_blocks[old_block_index], slices)
-            rec_cat_arg_flat[rec_cat_index] = name
+            name = (split_name, next(split_name_suffixes))
+            old_index = old_blocks[old_block_index][1:]
+            if all(slc.start == 0 and slc.stop == x.chunks[i][ind]
+                   for i, (slc, ind) in enumerate(zip(slices, old_index))):
+                rec_cat_arg_flat[rec_cat_index] = old_blocks[old_block_index]
+            else:
+                intermediates[name] = (getitem, old_blocks[old_block_index], slices)
+                rec_cat_arg_flat[rec_cat_index] = name
 
         assert rec_cat_index == rec_cat_arg.size - 1
+
         # New block is formed by concatenation of sliced old blocks
         if all(d == 1 for d in rec_cat_arg.shape):
             x2[key] = rec_cat_arg.flat[0]
         else:
             x2[key] = (concatenate3, rec_cat_arg.tolist())
 
-    assert new_idx == tuple(len(c) - 1 for c in chunks)
     del old_blocks, new_index
 
-    x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
-    return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
+    layer = toolz.merge(x2, intermediates)
+    graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
+    return Array(graph, merge_name, chunks, meta=x)
 
 
 class _PrettyBlocks(object):

@@ -2,15 +2,21 @@ from collections import namedtuple
 from operator import add, setitem
 import pickle
 from random import random
+import types
 
 from toolz import identity, partial, merge
 import pytest
 
 import dask
-from dask import set_options, compute
+from dask import compute
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
+
+try:
+    from operator import matmul
+except ImportError:
+    matmul = None
 
 
 class Tuple(object):
@@ -33,6 +39,7 @@ class Tuple(object):
         return tuple, ()
 
 
+@pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_to_task_dask():
     a = delayed(1, name='a')
     b = delayed(2, name='b')
@@ -88,6 +95,23 @@ def test_delayed():
     assert a.key in b.dask
 
 
+def test_delayed_with_dataclass():
+    dataclasses = pytest.importorskip("dataclasses")
+
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+
+    literal = dask.delayed(3)
+    with_class = dask.delayed({"a": ADataClass(a=literal)})
+
+    def return_nested(obj):
+        return obj["a"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
 def test_operators():
     a = delayed([1, 2, 3])
     assert a[0].compute() == 1
@@ -101,6 +125,15 @@ def test_operators():
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
     assert (a ** 2).compute() == 100
+
+    if matmul:
+        class dummy:
+            def __matmul__(self, other):
+                return 4
+        c = delayed(dummy())  # noqa
+        d = delayed(dummy())  # noqa
+
+        assert (eval('c @ d')).compute() == 4
 
 
 def test_methods():
@@ -127,6 +160,16 @@ def test_method_getattr_call_same_task():
     assert getattr not in set(v[0] for v in o.__dask_graph__().values())
 
 
+def test_np_dtype_of_delayed():
+    # This used to result in a segfault due to recursion, see
+    # https://github.com/dask/dask/pull/4374#issuecomment-454381465
+    np = pytest.importorskip('numpy')
+    x = delayed(1)
+    with pytest.raises(TypeError):
+        np.dtype(x)
+    assert delayed(np.array([1], dtype='f8')).dtype.compute() == np.dtype('f8')
+
+
 def test_delayed_errors():
     a = delayed([1, 2, 3])
     # Immutable
@@ -147,6 +190,15 @@ def test_common_subexpressions():
     assert a[0].key in res.dask
     assert a.key in res.dask
     assert len(res.dask) == 3
+
+
+def test_delayed_optimize():
+    x = Delayed('b', {'a': 1,
+                      'b': (inc, 'a'),
+                      'c': (inc, 'b')})
+    (x2,) = dask.optimize(x)
+    # Delayed's __dask_optimize__ culls out 'c'
+    assert sorted(x2.dask.keys()) == ['a', 'b']
 
 
 def test_lists():
@@ -251,37 +303,37 @@ def test_pure_global_setting():
     # delayed functions
     func = delayed(add)
 
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert func(1, 2).key == func(1, 2).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert func(1, 2).key != func(1, 2).key
 
     func = delayed(add, pure=True)
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert func(1, 2).key == func(1, 2).key
 
     # delayed objects
     assert delayed(1).key != delayed(1).key
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert delayed(1).key == delayed(1).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert delayed(1, pure=True).key == delayed(1, pure=True).key
 
     # delayed methods
     data = delayed([1, 2, 3])
     assert data.index(1).key != data.index(1).key
 
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert data.index(1).key == data.index(1).key
         assert data.index(1, pure=False).key != data.index(1, pure=False).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert data.index(1, pure=True).key == data.index(1, pure=True).key
 
     # magic methods always pure
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert data.index.key == data.index.key
         element = data[0]
         assert (element + element).key == (element + element).key
@@ -346,6 +398,7 @@ def test_custom_delayed():
     assert compute(n, x2, x) == (3, (1, 2, 3, 4, 5, 6), (1, 2, 3))
 
 
+@pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_array_delayed():
     np = pytest.importorskip('numpy')
     da = pytest.importorskip('dask.array')
@@ -502,3 +555,54 @@ def test_keys_from_array():
     xs = [delayed(inc)(x) for x in X]
 
     _check_dsk(xs[0].dask)
+
+
+# Mostly copied from https://github.com/pytoolz/toolz/pull/220
+def test_delayed_decorator_on_method():
+    class A(object):
+        BASE = 10
+
+        def __init__(self, base):
+            self.BASE = base
+
+        @delayed
+        def addmethod(self, x, y):
+            return self.BASE + x + y
+
+        @classmethod
+        @delayed
+        def addclass(cls, x, y):
+            return cls.BASE + x + y
+
+        @staticmethod
+        @delayed
+        def addstatic(x, y):
+            return x + y
+
+    a = A(100)
+    assert a.addmethod(3, 4).compute() == 107
+    assert A.addmethod(a, 3, 4).compute() == 107
+
+    assert a.addclass(3, 4).compute() == 17
+    assert A.addclass(3, 4).compute() == 17
+
+    assert a.addstatic(3, 4).compute() == 7
+    assert A.addstatic(3, 4).compute() == 7
+
+    # We want the decorated methods to be actual methods for instance methods
+    # and class methods since their first arguments are the object and the
+    # class respectively. Or in other words, the first argument is generated by
+    # the runtime based on the object/class before the dot.
+    assert isinstance(a.addmethod, types.MethodType)
+    assert isinstance(A.addclass, types.MethodType)
+
+    # For static methods (and regular functions), the decorated methods should
+    # be Delayed objects.
+    assert isinstance(A.addstatic, Delayed)
+
+
+def test_attribute_of_attribute():
+    x = delayed(123)
+    assert isinstance(x.a, Delayed)
+    assert isinstance(x.a.b, Delayed)
+    assert isinstance(x.a.b.c, Delayed)

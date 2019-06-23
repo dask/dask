@@ -4,11 +4,10 @@ import numpy as np
 
 import pytest
 
-import dask
 import dask.dataframe as dd
 
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -33,18 +32,30 @@ def test_loc():
     assert_eq(d.loc[:8], full.loc[:8])
     assert_eq(d.loc[3:], full.loc[3:])
     assert_eq(d.loc[[5]], full.loc[[5]])
-    assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
-    assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
-    assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
+
+    if PANDAS_VERSION >= '0.23.0':
+        expected_warning = FutureWarning
+    else:
+        expected_warning = None
+
+    with pytest.warns(expected_warning):
+        assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
 
     assert_eq(d.a.loc[5], full.a.loc[5:5])
     assert_eq(d.a.loc[3:8], full.a.loc[3:8])
     assert_eq(d.a.loc[:8], full.a.loc[:8])
     assert_eq(d.a.loc[3:], full.a.loc[3:])
     assert_eq(d.a.loc[[5]], full.a.loc[[5]])
-    assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
-    assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
-    assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
+    with pytest.warns(expected_warning):
+        assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
     assert_eq(d.a.loc[[]], full.a.loc[[]])
     assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
 
@@ -62,7 +73,7 @@ def test_loc_non_informative_index():
     ddf.divisions = (None,) * 3
     assert not ddf.known_divisions
 
-    ddf.loc[20:30].compute(get=dask.get)
+    ddf.loc[20:30].compute(scheduler='sync')
 
     assert_eq(ddf.loc[20:30], df.loc[20:30])
 
@@ -87,6 +98,24 @@ def test_loc_with_series():
 
     assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
     assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
+
+
+def test_loc_with_array():
+    assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
+
+    assert sorted(d.loc[(d.a % 2).values].dask) == sorted(d.loc[(d.a % 2).values].dask)
+    assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
+
+
+def test_loc_with_array_different_partition():
+    df = pd.DataFrame(np.random.randn(20, 5),
+                      index=list('abcdefghijklmnopqrst'),
+                      columns=list('ABCDE'))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(ddf.loc[(ddf.A > 0).values], df.loc[(df.A > 0).values])
+    with pytest.raises(ValueError):
+        ddf.loc[(ddf.A > 0).repartition(['a', 'g', 'k', 'o', 't']).values]
 
 
 def test_loc_with_series_different_partition():
@@ -115,7 +144,6 @@ def test_loc2d():
     assert_eq(d.loc[3:8, ['a']], full.loc[3:8, ['a']])
     assert_eq(d.loc[:8, ['a']], full.loc[:8, ['a']])
     assert_eq(d.loc[3:, ['a']], full.loc[3:, ['a']])
-    assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
     # 3d
     with pytest.raises(pd.core.indexing.IndexingError):
@@ -130,6 +158,11 @@ def test_loc2d():
 
     with pytest.raises(pd.core.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
+
+
+def test_loc2d_some_missing():
+    with pytest.warns(FutureWarning):
+        assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
 
 def test_loc2d_with_known_divisions():
@@ -230,6 +263,22 @@ def test_getitem_slice():
     assert_eq(ddf['a':'e'], df['a':'e'])
     assert_eq(ddf['a':'b'], df['a':'b'])
     assert_eq(ddf['f':], df['f':])
+
+
+def test_getitem_integer_slice():
+    df = pd.DataFrame({'A': range(6)})
+    ddf = dd.from_pandas(df, 2)
+    # integer slicing is iloc based
+    with pytest.raises(NotImplementedError):
+        ddf[1:3]
+
+    df = pd.DataFrame({'A': range(6)},
+                      index=[1., 2., 3., 5., 10., 11.])
+    ddf = dd.from_pandas(df, 2)
+    # except for float dtype indexes
+    assert_eq(ddf[2:8], df[2:8])
+    assert_eq(ddf[2:], df[2:])
+    assert_eq(ddf[:8], df[:8])
 
 
 def test_loc_on_numpy_datetimes():
@@ -364,3 +413,96 @@ def test_getitem_period_str():
 
     assert_eq(df['2011-01':'2012-05'], ddf['2011-01':'2012-05'])
     assert_eq(df['2011':'2015'], ddf['2011':'2015'])
+
+
+def test_to_series():
+
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_series(), ddf.index.to_series())
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_series(), ddf.index.to_series())
+
+
+def test_to_frame():
+
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(), ddf.index.to_frame())
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(), ddf.index.to_frame())
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.24.0',
+                    reason="No renaming for index")
+def test_to_frame_name():
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(name='foo'), ddf.index.to_frame(name='foo'))
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(name='bar'), ddf.index.to_frame(name='bar'))
+
+
+@pytest.mark.parametrize('indexer', [
+    0,
+    [0],
+    [0, 1],
+    [1, 0],
+    [False, True, True]
+])
+def test_iloc(indexer):
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.iloc[:, indexer]
+    expected = df.iloc[:, indexer]
+
+    assert_eq(result, expected)
+
+
+def test_iloc_series():
+    s = pd.Series([1, 2, 3])
+    ds = dd.from_pandas(s, 2)
+    with pytest.raises(AttributeError):
+        ds.iloc[:]
+
+
+def test_iloc_raises():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+
+    with pytest.raises(NotImplementedError):
+        ddf.iloc[[0, 1], :]
+
+    with pytest.raises(NotImplementedError):
+        ddf.iloc[[0, 1], [0, 1]]
+
+    with pytest.raises(ValueError):
+        ddf.iloc[[0, 1], [0, 1], [1, 2]]
+
+    with pytest.raises(IndexError):
+        ddf.iloc[:, [5, 6]]

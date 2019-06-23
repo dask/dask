@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
+
 pd = pytest.importorskip('pandas')
 import pandas.util.testing as tm
 
@@ -17,157 +18,91 @@ _BASE_UFUNCS = ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
                 'arcsinh', 'arccosh', 'arctanh', 'deg2rad', 'rad2deg',
                 'isfinite', 'isinf', 'isnan', 'signbit',
                 'degrees', 'radians', 'rint', 'fabs', 'sign', 'absolute',
-                'floor', 'ceil', 'trunc', 'logical_not']
+                'floor', 'ceil', 'trunc', 'logical_not', 'cbrt', 'exp2',
+                'negative', 'reciprocal', 'spacing']
 
 
+@pytest.mark.parametrize('pandas_input', [
+                         pd.Series(np.random.randint(1, 100, size=20)),
+                         pd.Series(np.abs(np.random.randn(100))),
+                         pd.DataFrame({'A': np.random.randint(1, 100, size=20),
+                                       'B': np.random.randint(1, 100, size=20),
+                                       'C': np.abs(np.random.randn(20))}),
+                         pd.Series(np.random.randint(1, 100, size=20),
+                                   index=list('abcdefghijklmnopqrst')),
+                         pd.Series(np.abs(np.random.randn(20)),
+                                   index=list('abcdefghijklmnopqrst')),
+                         pd.DataFrame({'A': np.random.randint(1, 100, size=20),
+                                       'B': np.random.randint(1, 100, size=20),
+                                       'C': np.abs(np.random.randn(20))},
+                                      index=list('abcdefghijklmnopqrst'))])
 @pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
-def test_ufunc(ufunc):
-
+def test_ufunc(pandas_input, ufunc):
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
-    s = pd.Series(np.random.randint(1, 100, size=20))
-    ds = dd.from_pandas(s, 3)
+    dask_input = dd.from_pandas(pandas_input, 3)
+    pandas_type = pandas_input.__class__
+    dask_type = dask_input.__class__
 
     # applying Dask ufunc doesn't trigger computation
     with pytest.warns(None):
         # Some cause warnings (arcsine)
-        assert isinstance(dafunc(ds), dd.Series)
-        assert_eq(dafunc(ds), npfunc(s))
+        assert isinstance(dafunc(dask_input), dask_type)
+        assert_eq(dafunc(dask_input), npfunc(pandas_input))
 
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ds), pd.Series)
-        assert_eq(npfunc(ds), npfunc(s))
-
-        # applying Dask ufunc to normal Series triggers computation
-        assert isinstance(dafunc(s), pd.Series)
-        assert_eq(dafunc(s), npfunc(s))
-
-    s = pd.Series(np.abs(np.random.randn(100)))
-    ds = dd.from_pandas(s, 3)
-
-    with pytest.warns(None):
-        # applying Dask ufunc doesn't trigger computation
-        assert isinstance(dafunc(ds), dd.Series)
-        assert_eq(dafunc(ds), npfunc(s))
-
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ds), pd.Series)
-        assert_eq(npfunc(ds), npfunc(s))
+        # applying NumPy ufunc is lazy
+        if isinstance(npfunc, np.ufunc):
+            assert isinstance(npfunc(dask_input), dask_type)
+        else:
+            assert isinstance(npfunc(dask_input), pandas_type)
+        assert_eq(npfunc(dask_input), npfunc(pandas_input))
 
         # applying Dask ufunc to normal Series triggers computation
-        assert isinstance(dafunc(s), pd.Series)
-        assert_eq(dafunc(s), npfunc(s))
-
-    # DataFrame
-    df = pd.DataFrame({'A': np.random.randint(1, 100, size=20),
-                       'B': np.random.randint(1, 100, size=20),
-                       'C': np.abs(np.random.randn(20))})
-    ddf = dd.from_pandas(df, 3)
-
-    with pytest.warns(None):
-        # applying Dask ufunc doesn't trigger computation
-        assert isinstance(dafunc(ddf), dd.DataFrame)
-        assert_eq(dafunc(ddf), npfunc(df))
-
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ddf), pd.DataFrame)
-        assert_eq(npfunc(ddf), npfunc(df))
-
-        # applying Dask ufunc to normal Dataframe triggers computation
-        assert isinstance(dafunc(df), pd.DataFrame)
-        assert_eq(dafunc(df), npfunc(df))
+        assert isinstance(dafunc(pandas_input), pandas_type)
+        assert_eq(dafunc(dask_input), npfunc(pandas_input))
 
     # Index
+    if pandas_input.index.dtype in [object, str]:
+        return
     if ufunc in ('logical_not', 'signbit', 'isnan', 'isinf', 'isfinite'):
         return
 
     with pytest.warns(None):
-        assert isinstance(dafunc(ddf.index), dd.Index)
-        assert_eq(dafunc(ddf.index), npfunc(df.index))
+        assert isinstance(dafunc(dask_input.index), dd.Index)
+        assert_eq(dafunc(dask_input.index), npfunc(pandas_input.index),
+                  check_divisions=ufunc != 'spacing')
 
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ddf.index), pd.Index)
-        assert_eq(npfunc(ddf.index), npfunc(df.index))
+        # applying NumPy ufunc is lazy
+        if isinstance(npfunc, np.ufunc):
+            assert isinstance(npfunc(dask_input.index), dd.Index)
+        else:
+            assert isinstance(npfunc(dask_input.index), pd.Index)
+
+        assert_eq(npfunc(dask_input.index), npfunc(dask_input.index),
+                  check_divisions=ufunc != 'spacing')
 
     # applying Dask ufunc to normal Series triggers computation
     with pytest.warns(None):
         # some (da.log) cause warnings
-        assert isinstance(dafunc(df.index), pd.Index)
-        assert_eq(dafunc(df), npfunc(df))
-
-
-@pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
-def test_ufunc_with_index(ufunc):
-
-    dafunc = getattr(da, ufunc)
-    npfunc = getattr(np, ufunc)
-
-    s = pd.Series(np.random.randint(1, 100, size=20),
-                  index=list('abcdefghijklmnopqrst'))
-    ds = dd.from_pandas(s, 3)
-
-    # applying Dask ufunc doesn't trigger computation
-    with pytest.warns(None):
-        assert isinstance(dafunc(ds), dd.Series)
-        assert_eq(dafunc(ds), npfunc(s))
-
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ds), pd.Series)
-        assert_eq(npfunc(ds), npfunc(s))
-
-        # applying Dask ufunc to normal Series triggers computation
-        assert isinstance(dafunc(s), pd.Series)
-        assert_eq(dafunc(s), npfunc(s))
-
-    s = pd.Series(np.abs(np.random.randn(20)),
-                  index=list('abcdefghijklmnopqrst'))
-    ds = dd.from_pandas(s, 3)
-
-    with pytest.warns(None):
-        # applying Dask ufunc doesn't trigger computation
-        assert isinstance(dafunc(ds), dd.Series)
-        assert_eq(dafunc(ds), npfunc(s))
-
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ds), pd.Series)
-        assert_eq(npfunc(ds), npfunc(s))
-
-        # applying Dask ufunc to normal Series triggers computation
-        assert isinstance(dafunc(s), pd.Series)
-        assert_eq(dafunc(s), npfunc(s))
-
-    df = pd.DataFrame({'A': np.random.randint(1, 100, size=20),
-                       'B': np.random.randint(1, 100, size=20),
-                       'C': np.abs(np.random.randn(20))},
-                      index=list('abcdefghijklmnopqrst'))
-    ddf = dd.from_pandas(df, 3)
-
-    with pytest.warns(None):
-        # applying Dask ufunc doesn't trigger computation
-        assert isinstance(dafunc(ddf), dd.DataFrame)
-        assert_eq(dafunc(ddf), npfunc(df))
-
-        # applying NumPy ufunc triggers computation
-        assert isinstance(npfunc(ddf), pd.DataFrame)
-        assert_eq(npfunc(ddf), npfunc(df))
-
-        # applying Dask ufunc to normal DataFrame triggers computation
-        assert isinstance(dafunc(df), pd.DataFrame)
-        assert_eq(dafunc(df), npfunc(df))
+        assert isinstance(dafunc(pandas_input.index), pd.Index)
+        assert_eq(dafunc(pandas_input), npfunc(pandas_input))
 
 
 @pytest.mark.parametrize('ufunc', ['isreal', 'iscomplex', 'real', 'imag',
-                                   'angle', 'fix'])
+                                   'angle', 'fix', 'i0', 'sinc', 'nan_to_num'])
 def test_ufunc_array_wrap(ufunc):
     """
-    some np.ufuncs doesn't call __array_wrap__, it should work as below
+    some np.ufuncs doesn't call __array_wrap__
+    (or __array_ufunc__ starting from numpy v.1.13.0), it should work as below
 
     - da.ufunc(dd.Series) => dd.Series
     - da.ufunc(pd.Series) => np.ndarray
     - np.ufunc(dd.Series) => np.ndarray
     - np.ufunc(pd.Series) => np.ndarray
     """
+    if ufunc == 'fix' and np.__version__ >= '1.13.0':
+        pytest.skip('fix calls floor in a way that we do not yet support')
 
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
@@ -205,86 +140,250 @@ def test_ufunc_array_wrap(ufunc):
     tm.assert_numpy_array_equal(dafunc(df), npfunc(df))
 
 
-@pytest.mark.parametrize('ufunc', ['logaddexp', 'logaddexp2', 'arctan2',
-                                   'hypot', 'copysign', 'nextafter', 'ldexp',
-                                   'fmod', 'logical_and', 'logical_or',
-                                   'logical_xor', 'maximum', 'minimum',
-                                   'fmax', 'fmin'])
-def test_ufunc_with_2args(ufunc):
+_UFUNCS_2ARG = ['logaddexp', 'logaddexp2', 'arctan2',
+                'hypot', 'copysign', 'nextafter', 'ldexp',
+                pytest.param('fmod', marks=[pytest.mark.filterwarnings("ignore::RuntimeWarning")]),
+                'logical_and', 'logical_or',
+                'logical_xor', 'maximum', 'minimum',
+                'fmax', 'fmin', 'greater',
+                'greater_equal', 'less', 'less_equal',
+                'not_equal', 'equal', 'logical_or',
+                'logical_and', 'logical_xor']
+
+
+@pytest.mark.parametrize('ufunc', _UFUNCS_2ARG)
+@pytest.mark.parametrize('make_pandas_input', [
+    lambda: pd.Series(np.random.randint(1, 100, size=20)),
+    lambda: pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                         columns=['A', 'B'])
+])
+def test_ufunc_with_2args(ufunc, make_pandas_input):
 
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
-    s1 = pd.Series(np.random.randint(1, 100, size=20))
-    ds1 = dd.from_pandas(s1, 3)
+    pandas1 = make_pandas_input()
+    pandas2 = make_pandas_input()
 
-    s2 = pd.Series(np.random.randint(1, 100, size=20))
-    ds2 = dd.from_pandas(s2, 4)
+    dask1 = dd.from_pandas(pandas1, 3)
+    dask2 = dd.from_pandas(pandas2, 4)
+
+    pandas_type = pandas1.__class__
+    dask_type = dask1.__class__
 
     # applying Dask ufunc doesn't trigger computation
-    assert isinstance(dafunc(ds1, ds2), dd.Series)
-    assert_eq(dafunc(ds1, ds2), npfunc(s1, s2))
+    assert isinstance(dafunc(dask1, dask2), dask_type)
+    assert_eq(dafunc(dask1, dask2), npfunc(pandas1, pandas2))
 
-    # applying NumPy ufunc triggers computation
-    assert isinstance(npfunc(ds1, ds2), pd.Series)
-    assert_eq(npfunc(ds1, ds2), npfunc(s1, s2))
+    # should be fine with pandas as a second arg, too
+    assert isinstance(dafunc(dask1, pandas2), dask_type)
+    assert_eq(dafunc(dask1, pandas2), npfunc(pandas1, pandas2))
+
+    # applying NumPy ufunc is lazy
+    if isinstance(npfunc, np.ufunc):
+        assert isinstance(npfunc(dask1, dask2), dask_type)
+        assert isinstance(npfunc(dask1, pandas2), dask_type)
+    else:
+        assert isinstance(npfunc(dask1, dask2), pandas_type)
+        assert isinstance(npfunc(dask1, pandas2), pandas_type)
+
+    assert_eq(npfunc(dask1, dask2), npfunc(pandas1, pandas2))
+    assert_eq(npfunc(dask1, pandas2), npfunc(pandas1, pandas2))
 
     # applying Dask ufunc to normal Series triggers computation
-    assert isinstance(dafunc(s1, s2), pd.Series)
-    assert_eq(dafunc(s1, s2), npfunc(s1, s2))
-
-    df1 = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
-                       columns=['A', 'B'])
-    ddf1 = dd.from_pandas(df1, 3)
-
-    df2 = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
-                       columns=['A', 'B'])
-    ddf2 = dd.from_pandas(df2, 4)
-
-    # applying Dask ufunc doesn't trigger computation
-    assert isinstance(dafunc(ddf1, ddf2), dd.DataFrame)
-    assert_eq(dafunc(ddf1, ddf2), npfunc(df1, df2))
-
-    # applying NumPy ufunc triggers computation
-    assert isinstance(npfunc(ddf1, ddf2), pd.DataFrame)
-    assert_eq(npfunc(ddf1, ddf2), npfunc(df1, df2))
-
-    # applying Dask ufunc to normal DataFrame triggers computation
-    assert isinstance(dafunc(df1, df2), pd.DataFrame)
-    assert_eq(dafunc(df1, df2), npfunc(df1, df2))
+    assert isinstance(dafunc(pandas1, pandas2), pandas_type)
+    assert_eq(dafunc(pandas1, pandas2), npfunc(pandas1, pandas2))
 
 
-def test_clip():
+@pytest.mark.parametrize('pandas,min,max', [
+    (pd.Series(np.random.randint(1, 100, size=20)), 5, 50),
+    (pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                  columns=['A', 'B']), 5.5, 40.5)
+])
+def test_clip(pandas, min, max):
+
+    dask = dd.from_pandas(pandas, 3)
+    pandas_type = pandas.__class__
+    dask_type = dask.__class__
 
     # clip internally calls dd.Series.clip
 
-    s = pd.Series(np.random.randint(1, 100, size=20))
-    ds = dd.from_pandas(s, 3)
-
     # applying Dask ufunc doesn't trigger computation
-    assert isinstance(da.clip(ds, 5, 50), dd.Series)
-    assert_eq(da.clip(ds, 5, 50), np.clip(s, 5, 50))
+    assert isinstance(da.clip(dask, min, max), dask_type)
+    assert_eq(da.clip(dask, min, max), np.clip(pandas, min, max))
 
-    # applying Dask ufunc doesn't trigger computation
-    assert isinstance(np.clip(ds, 5, 50), dd.Series)
-    assert_eq(np.clip(ds, 5, 50), np.clip(s, 5, 50))
+    # applying Numpy ufunc doesn't trigger computation
+    assert isinstance(np.clip(dask, min, max), dask_type)
+    assert_eq(np.clip(dask, min, max), np.clip(pandas, min, max))
 
-    # applying Dask ufunc to normal Series triggers computation
-    assert isinstance(da.clip(s, 5, 50), pd.Series)
-    assert_eq(da.clip(s, 5, 50), np.clip(s, 5, 50))
+    # applying Dask ufunc to normal pandas objects triggers computation
+    assert isinstance(da.clip(pandas, min, max), pandas_type)
+    assert_eq(da.clip(pandas, min, max), np.clip(pandas, min, max))
 
-    df = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
-                      columns=['A', 'B'])
+
+@pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
+def test_frame_ufunc_out(ufunc):
+    npfunc = getattr(np, ufunc)
+    dafunc = getattr(da, ufunc)
+
+    input_matrix = np.random.randint(1, 100, size=(20, 2))
+
+    df = pd.DataFrame(input_matrix, columns=['A', 'B'])
+    ddf = dd.from_pandas(df, 3)
+    df_out = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                          columns=['Y', 'Z'])
+    ddf_out_np = dd.from_pandas(df_out, 3)
+    ddf_out_da = dd.from_pandas(df_out, 3)
+
+    with pytest.warns(None):
+        npfunc(ddf, out=ddf_out_np)
+        dafunc(ddf, out=ddf_out_da)
+        assert_eq(ddf_out_np, ddf_out_da)
+
+    with pytest.warns(None):
+        expected = pd.DataFrame(npfunc(input_matrix), columns=['A', 'B'])
+        assert_eq(ddf_out_np, expected)
+
+
+def test_frame_2ufunc_out():
+    input_matrix = np.random.randint(1, 100, size=(20, 2))
+
+    df = pd.DataFrame(input_matrix, columns=['A', 'B'])
     ddf = dd.from_pandas(df, 3)
 
-    # applying Dask ufunc doesn't trigger computation
-    assert isinstance(da.clip(ddf, 5.5, 40.5), dd.DataFrame)
-    assert_eq(da.clip(ddf, 5.5, 40.5), np.clip(df, 5.5, 40.5))
+    # column number mismatch
+    df_out = pd.DataFrame(np.random.randint(1, 100, size=(20, 3)),
+                          columns=['X', 'Y', 'Z'])
+    ddf_out = dd.from_pandas(df_out, 3)
+
+    with pytest.raises(ValueError):
+        np.sin(ddf, out=ddf_out)
+
+    # types mismatch
+    ddf_out = dd.from_pandas(pd.Series([0]),1)
+    with pytest.raises(TypeError):
+        np.sin(ddf, out=ddf_out)
+
+    df_out = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                          columns=['X', 'Y'])
+    ddf_out = dd.from_pandas(df_out, 3)
+
+    np.sin(ddf, out=ddf_out)
+    np.add(ddf_out, 10, out=ddf_out)
+
+    expected = pd.DataFrame(np.sin(input_matrix) + 10, columns=['A', 'B'])
+
+    assert_eq(ddf_out, expected)
+
+
+@pytest.mark.parametrize('arg1', [
+    pd.Series(np.abs(np.random.randn(100))),
+    pd.DataFrame({'A': np.random.randint(1, 100, size=20),
+                  'B': np.random.randint(1, 100, size=20),
+                  'C': np.abs(np.random.randn(20))})])
+@pytest.mark.parametrize('arg2', [2, dd.from_pandas(pd.Series([0]), 1).sum()])
+@pytest.mark.parametrize('ufunc', _UFUNCS_2ARG)
+def test_mixed_types(ufunc, arg1, arg2):
+    npfunc = getattr(np, ufunc)
+    dafunc = getattr(da, ufunc)
+
+    dask = dd.from_pandas(arg1, 3)
+
+    pandas_type = arg1.__class__
+    dask_type = dask.__class__
 
     # applying Dask ufunc doesn't trigger computation
-    assert isinstance(np.clip(ddf, 5.5, 40.5), dd.DataFrame)
-    assert_eq(np.clip(ddf, 5.5, 40.5), np.clip(df, 5.5, 40.5))
+    assert isinstance(dafunc(dask, arg2), dask_type)
+    assert_eq(dafunc(dask, arg2), npfunc(dask, arg2))
 
-    # applying Dask ufunc to normal DataFrame triggers computation
-    assert isinstance(da.clip(df, 5.5, 40.5), pd.DataFrame)
-    assert_eq(da.clip(df, 5.5, 40.5), np.clip(df, 5.5, 40.5))
+    # applying NumPy ufunc is lazy
+    assert isinstance(npfunc(dask, arg2), dask_type)
+    assert_eq(npfunc(dask, arg2), npfunc(arg1, arg2))
+
+    # applying Dask ufunc to normal Series triggers computation
+    assert isinstance(dafunc(arg1, arg2), pandas_type)
+    assert_eq(dafunc(arg1, arg2), npfunc(arg1, arg2))
+
+    # swapping arguments
+
+    # first parameter of ldexp should be array-like
+    if ufunc == 'ldexp':
+        return
+
+    # applying Dask ufunc doesn't trigger computation
+    assert isinstance(dafunc(arg2, dask), dask_type)
+    assert_eq(dafunc(arg2, dask), npfunc(arg2, dask))
+
+    # applying NumPy ufunc is lazy
+    assert isinstance(npfunc(arg2, dask), dask_type)
+    assert_eq(npfunc(arg2, dask), npfunc(arg2, dask))
+
+    # applying Dask ufunc to normal Series triggers computation
+    assert isinstance(dafunc(arg2, arg1), pandas_type)
+    assert_eq(dafunc(arg2, arg1), npfunc(arg2, arg1))
+
+
+@pytest.mark.parametrize('ufunc', _UFUNCS_2ARG)
+@pytest.mark.parametrize('pandas,darray',
+                         [(pd.Series(np.random.randint(1, 100, size=(100,))),
+                           da.from_array(np.random.randint(1, 100, size=(100,)),
+                                         chunks=(50,))),
+                          (pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
+                                        columns=['A', 'B']),
+                           da.from_array(np.random.randint(1, 100, size=(20, 2)),
+                                         chunks=(10, 2)))])
+def test_2args_with_array(ufunc, pandas, darray):
+    dafunc = getattr(da, ufunc)
+    npfunc = getattr(np, ufunc)
+
+    dask = dd.from_pandas(pandas, 2)
+    dask_type = dask.__class__
+
+    # applying Dask ufunc doesn't trigger computation
+    assert isinstance(dafunc(dask, darray), dask_type)
+    assert isinstance(dafunc(darray, dask), dask_type)
+
+    tm.assert_numpy_array_equal(dafunc(dask, darray).compute().values,
+                                npfunc(pandas.values, darray).compute())
+
+    # applying NumPy ufunc is lazy
+    assert isinstance(npfunc(dask, darray), dask_type)
+    assert isinstance(npfunc(darray, dask), dask_type)
+
+    tm.assert_numpy_array_equal(npfunc(dask, darray).compute().values,
+                                npfunc(pandas.values, darray.compute()))
+    tm.assert_numpy_array_equal(npfunc(darray, dask).compute().values,
+                                npfunc(darray.compute(), pandas.values))
+
+
+@pytest.mark.parametrize('redfunc', ['sum', 'prod', 'min', 'max', 'mean'])
+@pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
+@pytest.mark.parametrize('pandas',
+                         [pd.Series(np.abs(np.random.randn(100))),
+                          pd.DataFrame({'A': np.random.randint(1, 100, size=20),
+                                        'B': np.random.randint(1, 100, size=20),
+                                        'C': np.abs(np.random.randn(20))})])
+def test_ufunc_with_reduction(redfunc, ufunc, pandas):
+    dask = dd.from_pandas(pandas, 3)
+
+    np_redfunc = getattr(np, redfunc)
+    np_ufunc = getattr(np, ufunc)
+
+    with pytest.warns(None):
+        assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
+        assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
+
+
+@pytest.mark.parametrize('pandas',
+                         [pd.Series(np.random.randint(1, 100, size=100)),
+                          pd.DataFrame({'A': np.random.randint(1, 100, size=20),
+                                        'B': np.random.randint(1, 100, size=20),
+                                        'C': np.abs(np.random.randn(20))})])
+@pytest.mark.parametrize('scalar', [15, 16.4, np.int64(15), np.float64(16.4)])
+def test_ufunc_numpy_scalar_comparison(pandas, scalar):
+    # Regression test for issue #3392
+
+    dask_compare = scalar >= dd.from_pandas(pandas, npartitions=3)
+    pandas_compare = scalar >= pandas
+
+    assert_eq(dask_compare, pandas_compare)

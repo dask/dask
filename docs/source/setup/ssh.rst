@@ -24,3 +24,16 @@ Or you can specify a hostfile that includes a list of hosts::
 The ``dask-ssh`` utility depends on the ``paramiko``::
 
     pip install paramiko
+
+
+CLI Options
+----------- 
+
+.. note::
+
+   The command line documentation here may differ depending on your installed
+   version. We recommend referring to the output of ``dask-ssh --help``.
+
+.. click:: distributed.cli.dask_ssh:main
+   :prog: dask-ssh
+   :show-nested:

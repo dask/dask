@@ -1,23 +1,22 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
-import pytest
+from itertools import repeat
 import math
 import os
 import random
-import sys
-from collections import Iterator
-from itertools import repeat
 
 import partd
-from toolz import merge, join, filter, identity, valmap, groupby, pluck
+import pytest
+from toolz import merge, join, filter, identity, valmap, groupby, pluck, unique
 
 import dask
 import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
-from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.bag.utils import assert_eq
+from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
@@ -30,15 +29,6 @@ dsk = {('x', 0): (range, 5),
 L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
-
-
-def assert_eq(a, b):
-    if hasattr(a, 'compute'):
-        a = a.compute(get=dask.local.get_sync)
-    if hasattr(b, 'compute'):
-        b = b.compute(get=dask.local.get_sync)
-
-    assert a == b
 
 
 def iseven(x):
@@ -67,31 +57,31 @@ def test_bag_map():
     def myadd(a=1, b=2, c=3):
         return a + b + c
 
-    assert db.map(myadd, b).compute() == list(map(myadd, x))
-    assert db.map(myadd, a=b).compute() == list(map(myadd, x))
-    assert db.map(myadd, b, b2).compute() == list(map(myadd, x, x2))
-    assert db.map(myadd, b, 10).compute() == [myadd(i, 10) for i in x]
-    assert db.map(myadd, 10, b=b).compute() == [myadd(10, b=i) for i in x]
+    assert_eq(db.map(myadd, b), list(map(myadd, x)))
+    assert_eq(db.map(myadd, a=b), list(map(myadd, x)))
+    assert_eq(db.map(myadd, b, b2), list(map(myadd, x, x2)))
+    assert_eq(db.map(myadd, b, 10), [myadd(i, 10) for i in x])
+    assert_eq(db.map(myadd, 10, b=b), [myadd(10, b=i) for i in x])
 
     sol = [myadd(i, b=j, c=100) for (i, j) in zip(x, x2)]
-    assert db.map(myadd, b, b=b2, c=100).compute() == sol
+    assert_eq(db.map(myadd, b, b=b2, c=100), sol)
 
     sol = [myadd(i, c=100) for (i, j) in zip(x, x2)]
-    assert db.map(myadd, b, c=100).compute() == sol
+    assert_eq(db.map(myadd, b, c=100), sol)
 
     x_sum = sum(x)
     sol = [myadd(x_sum, b=i, c=100) for i in x2]
-    assert db.map(myadd, b.sum(), b=b2, c=100).compute() == sol
+    assert_eq(db.map(myadd, b.sum(), b=b2, c=100), sol)
 
     sol = [myadd(i, b=x_sum, c=100) for i in x2]
-    assert db.map(myadd, b2, b.sum(), c=100).compute() == sol
+    assert_eq(db.map(myadd, b2, b.sum(), c=100), sol)
 
     sol = [myadd(a=100, b=x_sum, c=i) for i in x2]
-    assert db.map(myadd, a=100, b=b.sum(), c=b2).compute() == sol
+    assert_eq(db.map(myadd, a=100, b=b.sum(), c=b2), sol)
 
     a = dask.delayed(10)
-    assert db.map(myadd, b, a).compute() == [myadd(i, 10) for i in x]
-    assert db.map(myadd, b, b=a).compute() == [myadd(i, b=10) for i in x]
+    assert_eq(db.map(myadd, b, a), [myadd(i, 10) for i in x])
+    assert_eq(db.map(myadd, b, b=a), [myadd(i, b=10) for i in x])
 
     # Mispatched npartitions
     fewer_parts = db.from_sequence(range(100), npartitions=5)
@@ -128,17 +118,6 @@ def test_map_method():
     x_sum = sum(x)
     assert (b.map(myadd, b.sum(), c=10).compute() ==
             [myadd(i, x_sum, 10) for i in x])
-
-    # check that map works with multiarg functions. Can be removed after
-    # deprecated behavior is removed
-    assert b.map(add, b2).compute() == list(map(add, x, x2))
-
-    # check that map works with vararg functions. Can be removed after
-    # deprecated behavior is removed
-    def vararg_inc(*args):
-        return inc(*args)
-
-    assert b.map(vararg_inc).compute(get=dask.get) == list(map(inc, x))
 
 
 def test_starmap():
@@ -236,8 +215,16 @@ def test_fold():
     assert set(d.fold(lambda a, b: ''.join([a, b]), initial='').compute()) == set('hello')
 
     e = db.from_sequence([[1], [2], [3]], npartitions=2)
-    with dask.set_options(get=dask.get):
-        assert set(e.fold(add, initial=[]).compute()) == set([1, 2, 3])
+    assert set(e.fold(add, initial=[]).compute(scheduler='sync')) == set([1, 2, 3])
+
+
+def test_fold_bag():
+    def binop(tot, x):
+        tot.add(x)
+        return tot
+    c = b.fold(binop, combine=set.union, initial=set(), out_type=Bag)
+    assert isinstance(c, Bag)
+    assert_eq(c, list(set(range(5))))
 
 
 def test_distinct():
@@ -247,6 +234,14 @@ def test_distinct():
     assert b.distinct().count().compute() == 5
     bag = db.from_sequence([0] * 50, npartitions=50)
     assert bag.filter(None).distinct().compute() == []
+
+
+def test_distinct_with_key():
+    seq = [{'a': i} for i in [0, 1, 2, 1, 2, 3, 2, 3, 4, 5]]
+    bag = db.from_sequence(seq, npartitions=3)
+    expected = list(unique(seq, key=lambda x: x['a']))
+    assert_eq(bag.distinct(key='a'), expected)
+    assert_eq(bag.distinct(key=lambda x: x['a']), expected)
 
 
 def test_frequencies():
@@ -264,7 +259,12 @@ def test_frequencies():
     assert dict(d) == dict(zip(range(10), [1] * 10))
     bag = db.from_sequence([0, 0, 0, 0], npartitions=4)
     bag2 = bag.filter(None).frequencies(split_every=2)
-    assert dict(bag2.compute(get=dask.get)) == {}
+    assert_eq(bag2, [])
+
+
+def test_frequencies_sorted():
+    b = db.from_sequence(['a', 'b', 'b', 'b', 'c', 'c'])
+    assert list(b.frequencies(sort=True).compute()) == [('b', 3), ('c', 2), ('a', 1)]
 
 
 def test_topk():
@@ -338,9 +338,9 @@ def test_tree_reductions():
 def test_aggregation(npartitions):
     L = list(range(15))
     b = db.range(15, npartitions=npartitions)
-    assert b.mean().compute(get=dask.get) == sum(L) / len(L)
-    assert b.sum().compute(get=dask.get) == sum(L)
-    assert b.count().compute(get=dask.get) == len(L)
+    assert_eq(b.mean(), sum(L) / len(L))
+    assert_eq(b.sum(), sum(L))
+    assert_eq(b.count(), len(L))
 
 
 @pytest.mark.parametrize('npartitions', [1, 10])
@@ -348,17 +348,18 @@ def test_non_splittable_reductions(npartitions):
     np = pytest.importorskip('numpy')
     data = list(range(100))
     c = db.from_sequence(data, npartitions=npartitions)
-    assert c.mean().compute() == np.mean(data)
-    assert c.std().compute(get=dask.get) == np.std(data)
+
+    assert_eq(c.mean(), np.mean(data))
+    assert_eq(c.std(), np.std(data))
 
 
 def test_std():
-    assert b.std().compute(get=dask.get) == math.sqrt(2.0)
+    assert_eq(b.std(), math.sqrt(2.0))
     assert float(b.std()) == math.sqrt(2.0)
 
 
 def test_var():
-    assert b.var().compute(get=dask.get) == 2.0
+    assert_eq(b.var(), 2.0)
     assert float(b.var()) == 2.0
 
 
@@ -421,23 +422,23 @@ def test_map_partitions_args_kwargs():
         return [max(a, b) for (a, b) in zip(x, y)]
 
     sol = maximum(x, y=10)
-    assert db.map_partitions(maximum, dx, y=10).compute() == sol
-    assert dx.map_partitions(maximum, y=10).compute() == sol
-    assert dx.map_partitions(maximum, 10).compute() == sol
+    assert_eq(db.map_partitions(maximum, dx, y=10), sol)
+    assert_eq(dx.map_partitions(maximum, y=10), sol)
+    assert_eq(dx.map_partitions(maximum, 10), sol)
 
     sol = maximum(x, y)
-    assert db.map_partitions(maximum, dx, dy).compute() == sol
-    assert dx.map_partitions(maximum, y=dy).compute() == sol
-    assert dx.map_partitions(maximum, dy).compute() == sol
+    assert_eq(db.map_partitions(maximum, dx, dy), sol)
+    assert_eq(dx.map_partitions(maximum, y=dy), sol)
+    assert_eq(dx.map_partitions(maximum, dy), sol)
 
     dy_mean = dy.mean().apply(int)
     sol = maximum(x, int(sum(y) / len(y)))
-    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
-    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+    assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
+    assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
     dy_mean = dask.delayed(dy_mean)
-    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
-    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+    assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
+    assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
 
 def test_random_sample_size():
@@ -518,18 +519,24 @@ def test_inline_singleton_lists():
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1)}
     out = {'c': (f, (list, 'a'), 1)}
-    assert inline_singleton_lists(inp) == out
+    assert inline_singleton_lists(inp, ['c']) == out
 
     out = {'c': (f, 'a', 1)}
     assert optimize(inp, ['c'], rename_fused_keys=False) == out
 
+    # If list is an output key, don't fuse it
+    assert inline_singleton_lists(inp, ['b', 'c']) == inp
+    assert optimize(inp, ['b', 'c'], rename_fused_keys=False) == inp
+
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1),
            'd': (f, 'b', 2)}
-    assert inline_singleton_lists(inp) == inp
+    assert inline_singleton_lists(inp, ['c', 'd']) == inp
 
-    inp = {'b': (4, 5)} # doesn't inline constants
-    assert inline_singleton_lists(inp) == inp
+    # Doesn't inline constants
+    inp = {'b': (4, 5),
+           'c': (f, 'b')}
+    assert inline_singleton_lists(inp, ['c']) == inp
 
 
 def test_take():
@@ -549,7 +556,7 @@ def test_take_npartitions():
 def test_take_npartitions_warn():
     # Use single-threaded scheduler so warnings are properly captured in the
     # same process
-    with dask.set_options(get=dask.get):
+    with dask.config.set(scheduler='sync'):
         with pytest.warns(UserWarning):
             b.take(100)
 
@@ -670,6 +677,13 @@ def test_from_long_sequence():
     L = list(range(1001))
     b = db.from_sequence(L)
     assert set(b) == set(L)
+
+
+def test_from_empty_sequence():
+    b = db.from_sequence([])
+    assert b.npartitions == 1
+    df = b.to_dataframe(meta={'a': 'int'}).compute()
+    assert df.empty, 'DataFrame is not empty'
 
 
 def test_product():
@@ -830,7 +844,7 @@ def test_to_textfiles(ext, myopen):
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     with tmpdir() as dir:
         c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
-        dask.compute(*c, get=dask.get)
+        dask.compute(*c, scheduler='sync')
         assert os.path.exists(os.path.join(dir, '1.' + ext))
 
         f = myopen(os.path.join(dir, '1.' + ext), 'rb')
@@ -851,7 +865,6 @@ def test_to_textfiles_name_function_preserves_order():
         assert seq == out
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_textfiles_name_function_warn():
     seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
     a = db.from_sequence(seq, npartitions=16)
@@ -898,10 +911,11 @@ def test_to_textfiles_inputs():
 def test_to_textfiles_endlines():
     b = db.from_sequence(['a', 'b', 'c'], npartitions=1)
     with tmpfile() as fn:
-        b.to_textfiles([fn])
-        with open(fn, 'r') as f:
-            result = f.readlines()
-        assert result == ['a\n', 'b\n', 'c']
+        for last_endline in False, True:
+            b.to_textfiles([fn], last_endline=last_endline)
+            with open(fn, 'r') as f:
+                result = f.readlines()
+            assert result == ['a\n', 'b\n', 'c\n' if last_endline else 'c']
 
 
 def test_string_namespace():
@@ -1049,7 +1063,7 @@ def test_from_delayed_iterator():
         bag.count(),
         bag.pluck('operations').count(),
         bag.pluck('operations').flatten().count(),
-        get=dask.get,
+        scheduler='sync',
     ) == (25, 25, 50)
 
 
@@ -1077,7 +1091,7 @@ def test_repartition(nin, nout):
     c = b.repartition(npartitions=nout)
 
     assert c.npartitions == nout
-    assert b.compute(get=dask.get) == c.compute(get=dask.get)
+    assert_eq(b, c)
     results = dask.get(c.dask, c.__dask_keys__())
     assert all(results)
 
@@ -1113,7 +1127,7 @@ def test_accumulate():
 
 def test_groupby_tasks():
     b = db.from_sequence(range(160), npartitions=4)
-    out = b.groupby(lambda x: x % 10, max_branch=4, method='tasks')
+    out = b.groupby(lambda x: x % 10, max_branch=4, shuffle='tasks')
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
@@ -1122,7 +1136,7 @@ def test_groupby_tasks():
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
     b = db.from_sequence(range(1000), npartitions=100)
-    out = b.groupby(lambda x: x % 123, method='tasks')
+    out = b.groupby(lambda x: x % 123, shuffle='tasks')
     assert len(out.dask) < 100**2
     partitions = dask.get(out.dask, out.__dask_keys__())
 
@@ -1132,7 +1146,7 @@ def test_groupby_tasks():
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
     b = db.from_sequence(range(10000), npartitions=345)
-    out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')
+    out = b.groupby(lambda x: x % 2834, max_branch=24, shuffle='tasks')
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
@@ -1145,27 +1159,28 @@ def test_groupby_tasks_names():
     b = db.from_sequence(range(160), npartitions=4)
     func = lambda x: x % 10
     func2 = lambda x: x % 20
-    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) ==
-            set(b.groupby(func, max_branch=4, method='tasks').dask))
-    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
-            set(b.groupby(func, max_branch=2, method='tasks').dask))
-    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
-            set(b.groupby(func2, max_branch=4, method='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, shuffle='tasks').dask) ==
+            set(b.groupby(func, max_branch=4, shuffle='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, shuffle='tasks').dask) !=
+            set(b.groupby(func, max_branch=2, shuffle='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, shuffle='tasks').dask) !=
+            set(b.groupby(func2, max_branch=4, shuffle='tasks').dask))
 
 
 @pytest.mark.parametrize('size,npartitions,groups', [(1000, 20, 100),
-                                                     (12345, 234, 1042)])
+                                                     (12345, 234, 1042),
+                                                     (100, 1, 50)])
 def test_groupby_tasks_2(size, npartitions, groups):
     func = lambda x: x % groups
-    b = db.range(size, npartitions=npartitions).groupby(func, method='tasks')
-    result = b.compute(get=dask.get)
+    b = db.range(size, npartitions=npartitions).groupby(func, shuffle='tasks')
+    result = b.compute(scheduler='sync')
     assert dict(result) == groupby(func, range(size))
 
 
 def test_groupby_tasks_3():
     func = lambda x: x % 10
-    b = db.range(20, npartitions=5).groupby(func, method='tasks', max_branch=2)
-    result = b.compute(get=dask.get)
+    b = db.range(20, npartitions=5).groupby(func, shuffle='tasks', max_branch=2)
+    result = b.compute(scheduler='sync')
     assert dict(result) == groupby(func, range(20))
     # assert b.npartitions == 5
 
@@ -1179,19 +1194,19 @@ def test_to_textfiles_empty_partitions():
 
 def test_reduction_empty():
     b = db.from_sequence(range(10), npartitions=100)
-    assert b.filter(lambda x: x % 2 == 0).max().compute(get=dask.get) == 8
-    assert b.filter(lambda x: x % 2 == 0).min().compute(get=dask.get) == 0
+    assert_eq(b.filter(lambda x: x % 2 == 0).max(), 8)
+    assert_eq(b.filter(lambda x: x % 2 == 0).min(), 0)
 
 
 @pytest.mark.parametrize('npartitions', [1, 2, 4])
 def test_reduction_empty_aggregate(npartitions):
     b = db.from_sequence([0, 0, 0, 1], npartitions=npartitions).filter(None)
-    assert b.min(split_every=2).compute(get=dask.get) == 1
-    vals = db.compute(b.min(split_every=2), b.max(split_every=2), get=dask.get)
+    assert_eq(b.min(split_every=2), 1)
+    vals = db.compute(b.min(split_every=2), b.max(split_every=2), scheduler='sync')
     assert vals == (1, 1)
     with pytest.raises(ValueError):
         b = db.from_sequence([0, 0, 0, 0], npartitions=npartitions)
-        b.filter(None).min(split_every=2).compute(get=dask.get)
+        b.filter(None).min(split_every=2).compute(scheduler='sync')
 
 
 class StrictReal(int):
@@ -1206,7 +1221,7 @@ class StrictReal(int):
 
 def test_reduction_with_non_comparable_objects():
     b = db.from_sequence([StrictReal(x) for x in range(10)], partition_size=2)
-    assert b.fold(max, max).compute(get=dask.get) == StrictReal(9)
+    assert_eq(b.fold(max, max), StrictReal(9))
 
 
 def test_reduction_with_sparse_matrices():
@@ -1216,7 +1231,7 @@ def test_reduction_with_sparse_matrices():
     def sp_reduce(a, b):
         return sp.vstack([a, b])
 
-    assert b.fold(sp_reduce, sp_reduce).compute(get=dask.get).shape == (4, 1)
+    assert b.fold(sp_reduce, sp_reduce).compute(scheduler='sync').shape == (4, 1)
 
 
 def test_empty():
@@ -1237,14 +1252,14 @@ def test_bag_picklable():
 
 def test_msgpack_unicode():
     b = db.from_sequence([{"a": 1}]).groupby("a")
-    result = b.compute(get=dask.get)
+    result = b.compute(scheduler='sync')
     assert dict(result) == {1: [{'a': 1}]}
 
 
 def test_bag_with_single_callable():
     f = lambda: None
     b = db.from_sequence([f])
-    assert list(b.compute(get=dask.get)) == [f]
+    assert_eq(b, [f])
 
 
 def test_optimize_fuse_keys():
@@ -1276,7 +1291,7 @@ def test_reductions_are_lazy():
 
     res = b.reduction(func, sum)
 
-    assert res.compute(get=dask.get) == sum(range(10))
+    assert_eq(res, sum(range(10)))
 
 
 def test_repeated_groupby():
@@ -1288,7 +1303,7 @@ def test_repeated_groupby():
 def test_temporary_directory(tmpdir):
     b = db.range(10, npartitions=4)
 
-    with dask.set_options(temporary_directory=str(tmpdir)):
+    with dask.config.set(temporary_directory=str(tmpdir)):
         b2 = b.groupby(lambda x: x % 2)
         b2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))
@@ -1296,10 +1311,10 @@ def test_temporary_directory(tmpdir):
 
 def test_empty_bag():
     b = db.from_sequence([])
-    assert b.map(inc).all().compute(get=dask.get)
-    assert not b.map(inc).any().compute(get=dask.get)
-    assert not b.map(inc).sum().compute(get=dask.get)
-    assert not b.map(inc).count().compute(get=dask.get)
+    assert_eq(b.map(inc).all(), True)
+    assert_eq(b.map(inc).any(), False)
+    assert_eq(b.map(inc).sum(), False)
+    assert_eq(b.map(inc).count(), False)
 
 
 def test_bag_paths():
@@ -1307,3 +1322,23 @@ def test_bag_paths():
     assert b.to_textfiles('foo*') == ['foo0', 'foo1']
     os.remove('foo0')
     os.remove('foo1')
+
+
+def test_map_partitions_arg():
+    def append_str(partition, s):
+        return [x + s for x in partition]
+
+    mybag = db.from_sequence(["a", "b", "c"])
+
+    assert_eq(mybag.map_partitions(append_str, "foo"),
+              ['afoo', 'bfoo', 'cfoo'])
+    assert_eq(mybag.map_partitions(append_str, dask.delayed("foo")),
+              ['afoo', 'bfoo', 'cfoo'])
+
+
+def test_map_keynames():
+    b = db.from_sequence([1, 2, 3])
+    d = dict(b.map(inc).__dask_graph__())
+    assert 'inc' in map(dask.utils.key_split, d)
+
+    assert set(b.map(inc).__dask_graph__()) != set(b.map_partitions(inc).__dask_graph__())

@@ -2,27 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 from distutils.version import LooseVersion
 
-from ..compatibility import builtins
 import numpy as np
 import warnings
 
-try:
-    isclose = np.isclose
-except AttributeError:
-    def isclose(*args, **kwargs):
-        raise RuntimeError("You need numpy version 1.7 or greater to use "
-                           "isclose.")
-
-try:
-    full = np.full
-except AttributeError:
-    def full(shape, fill_value, dtype=None, order=None):
-        """Our implementation of numpy.full because your numpy is old."""
-        if order is not None:
-            raise NotImplementedError("`order` kwarg is not supported upgrade "
-                                      "to Numpy 1.8 or greater for support.")
-        return np.multiply(fill_value, np.ones(shape, dtype=dtype),
-                           dtype=dtype)
+_numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 
 
 # Taken from scikit-learn:
@@ -54,324 +37,142 @@ except TypeError:
                                                     np.ma.core._DomainSafeDivide(),
                                                     0, 1)
 
-# functions copied from numpy
-try:
-    from numpy import broadcast_to, nanprod, nancumsum, nancumprod
-except ImportError:  # pragma: no cover
-    # these functions should arrive in numpy v1.10 to v1.12.  Until then,
-    # they are duplicated here
 
-    # See https://github.com/numpy/numpy/blob/master/LICENSE.txt
-    # or NUMPY_LICENSE.txt within this directory
-    def _maybe_view_as_subclass(original_array, new_array):
-        if type(original_array) is not type(new_array):
-            # if input was an ndarray subclass and subclasses were OK,
-            # then view the result as that subclass.
-            new_array = new_array.view(type=type(original_array))
-            # Since we have done something akin to a view from original_array, we
-            # should let the subclass finalize (if it has it implemented, i.e., is
-            # not None).
-            if new_array.__array_finalize__:
-                new_array.__array_finalize__(original_array)
-        return new_array
+if LooseVersion(np.__version__) < '1.15.0':
+    # These functions were added in numpy 1.15.0. For previous versions they
+    # are duplicated here
 
-    def _broadcast_to(array, shape, subok, readonly):
-        shape = tuple(shape) if np.iterable(shape) else (shape,)
-        array = np.array(array, copy=False, subok=subok)
-        if not shape and array.shape:
-            raise ValueError('cannot broadcast a non-scalar to a scalar array')
-        if builtins.any(size < 0 for size in shape):
-            raise ValueError('all elements of broadcast shape must be non-'
-                             'negative')
-        broadcast = np.nditer(
-            (array,), flags=['multi_index', 'zerosize_ok', 'refs_ok'],
-            op_flags=['readonly'], itershape=shape, order='C').itviews[0]
-        result = _maybe_view_as_subclass(array, broadcast)
-        if not readonly and array.flags.writeable:
-            result.flags.writeable = True
-        return result
+    def _make_along_axis_idx(arr_shape, indices, axis):
+        # compute dimensions to iterate over
+        if not np.issubdtype(indices.dtype, np.integer):
+            raise IndexError('`indices` must be an integer array')
+        if len(arr_shape) != indices.ndim:
+            raise ValueError(
+                "`indices` and `arr` must have the same number of dimensions")
+        shape_ones = (1,) * indices.ndim
+        dest_dims = list(range(axis)) + [None] + list(
+            range(axis + 1, indices.ndim))
 
-    def broadcast_to(array, shape, subok=False):
-        """Broadcast an array to a new shape.
+        # build a fancy index, consisting of orthogonal aranges, with the
+        # requested index inserted at the right location
+        fancy_index = []
+        for dim, n in zip(dest_dims, arr_shape):
+            if dim is None:
+                fancy_index.append(indices)
+            else:
+                ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim + 1:]
+                fancy_index.append(np.arange(n).reshape(ind_shape))
 
+        return tuple(fancy_index)
+
+    def take_along_axis(arr, indices, axis):
+        """
+        Take values from the input array by matching 1d index and data slices.
+        This iterates over matching 1d slices oriented along the specified axis in
+        the index and data arrays, and uses the former to look up values in the
+        latter. These slices can be different lengths.
+        Functions returning an index along an axis, like `argsort` and
+        `argpartition`, produce suitable indices for this function.
+        .. versionadded:: 1.15.0
         Parameters
         ----------
-        array : array_like
-            The array to broadcast.
-        shape : tuple
-            The shape of the desired array.
-        subok : bool, optional
-            If True, then sub-classes will be passed-through, otherwise
-            the returned array will be forced to be a base-class array (default).
-
+        arr: ndarray (Ni..., M, Nk...)
+            Source array
+        indices: ndarray (Ni..., J, Nk...)
+            Indices to take along each 1d slice of `arr`. This must match the
+            dimension of arr, but dimensions Ni and Nj only need to broadcast
+            against `arr`.
+        axis: int
+            The axis to take 1d slices along. If axis is None, the input array is
+            treated as if it had first been flattened to 1d, for consistency with
+            `sort` and `argsort`.
         Returns
         -------
-        broadcast : array
-            A readonly view on the original array with the given shape. It is
-            typically not contiguous. Furthermore, more than one element of a
-            broadcasted array may refer to a single memory location.
-
-        Raises
-        ------
-        ValueError
-            If the array is not compatible with the new shape according to NumPy's
-            broadcasting rules.
-
-        Examples
-        --------
-        >>> x = np.array([1, 2, 3])
-        >>> np.broadcast_to(x, (3, 3))  # doctest: +SKIP
-        array([[1, 2, 3],
-               [1, 2, 3],
-               [1, 2, 3]])
-        """
-        return _broadcast_to(array, shape, subok=subok, readonly=True)
-
-    def _replace_nan(a, val):
-        """
-        If `a` is of inexact type, make a copy of `a`, replace NaNs with
-        the `val` value, and return the copy together with a boolean mask
-        marking the locations where NaNs were present. If `a` is not of
-        inexact type, do nothing and return `a` together with a mask of None.
-
-        Note that scalars will end up as array scalars, which is important
-        for using the result as the value of the out argument in some
-        operations.
-
-        Parameters
-        ----------
-        a : array-like
-            Input array.
-        val : float
-            NaN values are set to val before doing the operation.
-
-        Returns
-        -------
-        y : ndarray
-            If `a` is of inexact type, return a copy of `a` with the NaNs
-            replaced by the fill value, otherwise return `a`.
-        mask: {bool, None}
-            If `a` is of inexact type, return a boolean mask marking locations of
-            NaNs, otherwise return None.
-
-        """
-        is_new = not isinstance(a, np.ndarray)
-        if is_new:
-            a = np.array(a)
-        if not issubclass(a.dtype.type, np.inexact):
-            return a, None
-        if not is_new:
-            # need copy
-            a = np.array(a, subok=True)
-
-        mask = np.isnan(a)
-        np.copyto(a, val, where=mask)
-        return a, mask
-
-    def nanprod(a, axis=None, dtype=None, out=None, keepdims=0):
-        """
-        Return the product of array elements over a given axis treating Not a
-        Numbers (NaNs) as zero.
-
-        One is returned for slices that are all-NaN or empty.
-
-        .. versionadded:: 1.10.0
-
-        Parameters
-        ----------
-        a : array_like
-            Array containing numbers whose sum is desired. If `a` is not an
-            array, a conversion is attempted.
-        axis : int, optional
-            Axis along which the product is computed. The default is to compute
-            the product of the flattened array.
-        dtype : data-type, optional
-            The type of the returned array and of the accumulator in which the
-            elements are summed.  By default, the dtype of `a` is used.  An
-            exception is when `a` has an integer type with less precision than
-            the platform (u)intp. In that case, the default will be either
-            (u)int32 or (u)int64 depending on whether the platform is 32 or 64
-            bits. For inexact inputs, dtype must be inexact.
-        out : ndarray, optional
-            Alternate output array in which to place the result.  The default
-            is ``None``. If provided, it must have the same shape as the
-            expected output, but the type will be cast if necessary.  See
-            `doc.ufuncs` for details. The casting of NaN to integer can yield
-            unexpected results.
-        keepdims : bool, optional
-            If True, the axes which are reduced are left in the result as
-            dimensions with size one. With this option, the result will
-            broadcast correctly against the original `arr`.
-
-        Returns
-        -------
-        y : ndarray or numpy scalar
-
-        See Also
-        --------
-        :func:`numpy.prod` : Product across array propagating NaNs.
-        isnan : Show which elements are NaN.
-
+        out: ndarray (Ni..., J, Nk...)
+            The indexed result.
         Notes
         -----
-        Numpy integer arithmetic is modular. If the size of a product exceeds
-        the size of an integer accumulator, its value will wrap around and the
-        result will be incorrect. Specifying ``dtype=double`` can alleviate
-        that problem.
-
-        Examples
-        --------
-        >>> np.nanprod(1)
-        1
-        >>> np.nanprod([1])
-        1
-        >>> np.nanprod([1, np.nan])
-        1.0
-        >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nanprod(a)
-        6.0
-        >>> np.nanprod(a, axis=0)
-        array([ 3.,  2.])
-
-        """
-        a, mask = _replace_nan(a, 1)
-        return np.prod(a, axis=axis, dtype=dtype, out=out, keepdims=keepdims)
-
-    def nancumsum(a, axis=None, dtype=None, out=None):
-        """
-        Return the cumulative sum of array elements over a given axis treating Not a
-        Numbers (NaNs) as zero.  The cumulative sum does not change when NaNs are
-        encountered and leading NaNs are replaced by zeros.
-
-        Zeros are returned for slices that are all-NaN or empty.
-
-        .. versionadded:: 1.12.0
-
-        Parameters
-        ----------
-        a : array_like
-            Input array.
-        axis : int, optional
-            Axis along which the cumulative sum is computed. The default
-            (None) is to compute the cumsum over the flattened array.
-        dtype : dtype, optional
-            Type of the returned array and of the accumulator in which the
-            elements are summed.  If `dtype` is not specified, it defaults
-            to the dtype of `a`, unless `a` has an integer dtype with a
-            precision less than that of the default platform integer.  In
-            that case, the default platform integer is used.
-        out : ndarray, optional
-            Alternative output array in which to place the result. It must
-            have the same shape and buffer length as the expected output
-            but the type will be cast if necessary. See `doc.ufuncs`
-            (Section "Output arguments") for more details.
-
-        Returns
-        -------
-        nancumsum : ndarray.
-            A new array holding the result is returned unless `out` is
-            specified, in which it is returned. The result has the same
-            size as `a`, and the same shape as `a` if `axis` is not None
-            or `a` is a 1-d array.
-
+        This is equivalent to (but faster than) the following use of `ndindex` and
+        `s_`, which sets each of ``ii`` and ``kk`` to a tuple of indices::
+            Ni, M, Nk = a.shape[:axis], a.shape[axis], a.shape[axis+1:]
+            J = indices.shape[axis]  # Need not equal M
+            out = np.empty(Nk + (J,) + Nk)
+            for ii in ndindex(Ni):
+                for kk in ndindex(Nk):
+                    a_1d       = a      [ii + s_[:,] + kk]
+                    indices_1d = indices[ii + s_[:,] + kk]
+                    out_1d     = out    [ii + s_[:,] + kk]
+                    for j in range(J):
+                        out_1d[j] = a_1d[indices_1d[j]]
+        Equivalently, eliminating the inner loop, the last two lines would be::
+                    out_1d[:] = a_1d[indices_1d]
         See Also
         --------
-        :func:`numpy.cumsum` : Cumulative sum across array propagating NaNs.
-        isnan : Show which elements are NaN.
-
+        take : Take along an axis, using the same indices for every 1d slice
+        put_along_axis :
+            Put values into the destination array by matching 1d index and data slices
         Examples
         --------
-        >>> np.nancumsum(1) #doctest: +SKIP
-        array([1])
-        >>> np.nancumsum([1]) #doctest: +SKIP
-        array([1])
-        >>> np.nancumsum([1, np.nan]) #doctest: +SKIP
-        array([ 1.,  1.])
-        >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumsum(a) #doctest: +SKIP
-        array([ 1.,  3.,  6.,  6.])
-        >>> np.nancumsum(a, axis=0) #doctest: +SKIP
-        array([[ 1.,  2.],
-               [ 4.,  2.]])
-        >>> np.nancumsum(a, axis=1) #doctest: +SKIP
-        array([[ 1.,  3.],
-               [ 3.,  3.]])
+        For this sample array
+        >>> a = np.array([[10, 30, 20], [60, 40, 50]])
 
+        We can sort either by using sort directly, or argsort and this function
+        >>> np.sort(a, axis=1)
+        array([[10, 20, 30],
+               [40, 50, 60]])
+        >>> ai = np.argsort(a, axis=1); ai
+        array([[0, 2, 1],
+               [1, 2, 0]])
+        >>> take_along_axis(a, ai, axis=1)
+        array([[10, 20, 30],
+               [40, 50, 60]])
+
+        The same works for max and min, if you expand the dimensions:
+        >>> np.expand_dims(np.max(a, axis=1), axis=1)
+        array([[30],
+               [60]])
+        >>> ai = np.expand_dims(np.argmax(a, axis=1), axis=1)
+        >>> ai
+        array([[1],
+               [0]])
+        >>> take_along_axis(a, ai, axis=1)
+        array([[30],
+               [60]])
+
+        If we want to get the max and min at the same time,
+        we can stack the indices first:
+        >>> ai_min = np.expand_dims(np.argmin(a, axis=1), axis=1)
+        >>> ai_max = np.expand_dims(np.argmax(a, axis=1), axis=1)
+        >>> ai = np.concatenate([ai_min, ai_max], axis=1)
+        >>> ai
+        array([[0, 1],
+               [1, 0]])
+        >>> take_along_axis(a, ai, axis=1)
+        array([[10, 30],
+               [40, 60]])
         """
-        a, mask = _replace_nan(a, 0)
-        return np.cumsum(a, axis=axis, dtype=dtype, out=out)
+        # normalize inputs
+        if axis is None:
+            arr = arr.flat
+            arr_shape = (len(arr),)  # flatiter has no .shape
+            axis = 0
+        else:
+            if axis < 0:
+                axis = arr.ndim + axis
+            arr_shape = arr.shape
 
-    def nancumprod(a, axis=None, dtype=None, out=None):
-        """
-        Return the cumulative product of array elements over a given axis treating Not a
-        Numbers (NaNs) as one.  The cumulative product does not change when NaNs are
-        encountered and leading NaNs are replaced by ones.
-
-        Ones are returned for slices that are all-NaN or empty.
-
-        .. versionadded:: 1.12.0
-
-        Parameters
-        ----------
-        a : array_like
-            Input array.
-        axis : int, optional
-            Axis along which the cumulative product is computed.  By default
-            the input is flattened.
-        dtype : dtype, optional
-            Type of the returned array, as well as of the accumulator in which
-            the elements are multiplied.  If *dtype* is not specified, it
-            defaults to the dtype of `a`, unless `a` has an integer dtype with
-            a precision less than that of the default platform integer.  In
-            that case, the default platform integer is used instead.
-        out : ndarray, optional
-            Alternative output array in which to place the result. It must
-            have the same shape and buffer length as the expected output
-            but the type of the resulting values will be cast if necessary.
-
-        Returns
-        -------
-        nancumprod : ndarray
-            A new array holding the result is returned unless `out` is
-            specified, in which case it is returned.
-
-        See Also
-        --------
-        :func:`numpy.cumprod` : Cumulative product across array propagating NaNs.
-        isnan : Show which elements are NaN.
-
-        Examples
-        --------
-        >>> np.nancumprod(1) #doctest: +SKIP
-        array([1])
-        >>> np.nancumprod([1]) #doctest: +SKIP
-        array([1])
-        >>> np.nancumprod([1, np.nan]) #doctest: +SKIP
-        array([ 1.,  1.])
-        >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumprod(a) #doctest: +SKIP
-        array([ 1.,  2.,  6.,  6.])
-        >>> np.nancumprod(a, axis=0) #doctest: +SKIP
-        array([[ 1.,  2.],
-               [ 3.,  2.]])
-        >>> np.nancumprod(a, axis=1) #doctest: +SKIP
-        array([[ 1.,  2.],
-               [ 3.,  3.]])
-
-        """
-        a, mask = _replace_nan(a, 1)
-        return np.cumprod(a, axis=axis, dtype=dtype, out=out)
+        # use the fancy index
+        return arr[_make_along_axis_idx(arr_shape, indices, axis)]
 
 
-def _make_sliced_dtype(dtype, index):
-    if LooseVersion(np.__version__) == LooseVersion("1.14.0"):
-        return _make_sliced_dtype_np_ge_14(dtype, index)
-    else:
-        return _make_sliced_dtype_np_lt_14(dtype, index)
-
-
-def _make_sliced_dtype_np_ge_14(dtype, index):
-    # For https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
+def _make_sliced_dtype_np_ge_16(dtype, index):
+    # This was briefly added in 1.14.0
+    # https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
+    # which was then reverted in 1.14.1 with
+    # https://github.com/numpy/numpy/pull/10411
+    # And then was finally released with
+    # https://github.com/numpy/numpy/pull/12447
+    # in version 1.16.0
     new = {
         'names': index,
         'formats': [dtype.fields[name][0] for name in index],
@@ -385,6 +186,13 @@ def _make_sliced_dtype_np_lt_14(dtype, index):
     # For numpy < 1.14
     dt = np.dtype([(name, dtype[name]) for name in index])
     return dt
+
+
+if LooseVersion(np.__version__) >= LooseVersion("1.16.0") or \
+   LooseVersion(np.__version__) == LooseVersion("1.14.0"):
+    _make_sliced_dtype = _make_sliced_dtype_np_ge_16
+else:
+    _make_sliced_dtype = _make_sliced_dtype_np_lt_14
 
 
 class _Recurser(object):
@@ -466,3 +274,9 @@ class _Recurser(object):
             # yield from ...
             for v in self.walk(xi, index + (i,)):
                 yield v
+
+
+if _numpy_116:
+    _unravel_index_keyword = "shape"
+else:
+    _unravel_index_keyword = "dims"

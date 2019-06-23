@@ -10,7 +10,7 @@ import dask
 import dask.array as da
 from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
-                                take, normalize_index)
+                                take, normalize_index, slicing_plan, cached_cumsum)
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -130,6 +130,16 @@ def test_slice_1d():
     result = _slice_1d(104, [20, 23, 27, 13, 21], slice(100, 27, -3))
     assert expected == result
 
+    # x=range(1000000000000)
+    # x[1000:]
+    expected = {0: slice(1000, 1000000000, 1)}
+    expected.update({ii: slice(None, None, None) for ii in range(1, 1000)})
+    # This array is large
+    result = _slice_1d(1000000000000,
+                       [1000000000] * 1000,
+                       slice(1000, None, None))
+    assert expected == result
+
 
 def test_slice_singleton_value_on_boundary():
     assert _slice_1d(15, [5, 5, 5], 10) == {2: 0}
@@ -241,36 +251,22 @@ def test_slicing_with_newaxis():
 
 def test_take():
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
-    expected = {('y', 0): (getitem, (np.concatenate,
-                                     [(getitem, ('x', 0), (np.array([1, 3, 5]),)),
-                                      (getitem, ('x', 2), (np.array([7]),))], 0),
-                           (np.array([2, 0, 3, 1]), ))}
+    expected = {('y', 0): (getitem, ('x', 0), (np.array([5, 1]),)),
+                ('y', 1): (getitem, ('x', 2), (np.array([7]),)),
+                ('y', 2): (getitem, ('x', 0), (np.array([3]),))}
     np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
-    assert chunks == ((4,),)
+    assert chunks == ((2, 1, 1),)
 
     chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [
                        5, 1, 47, 3], axis=0)
-    expected = {('y', 0, j): (getitem, (np.concatenate,
-                                        [(getitem, ('x', 0, j),
-                                          ([1, 3, 5], slice(None, None, None))),
-                                         (getitem, ('x', 2, j),
-                                          ([7], slice(None, None, None)))], 0),
-                              ([2, 0, 3, 1], slice(None, None, None)))
-                for j in range(2)}
+    expected = {('y', 0, 0): (getitem, ('x', 0, 0), (np.array([5, 1]), slice(None, None, None))),
+                ('y', 0, 1): (getitem, ('x', 0, 1), (np.array([5, 1]), slice(None, None, None))),
+                ('y', 1, 0): (getitem, ('x', 2, 0), (np.array([7]), slice(None, None, None))),
+                ('y', 1, 1): (getitem, ('x', 2, 1), (np.array([7]), slice(None, None, None))),
+                ('y', 2, 0): (getitem, ('x', 0, 0), (np.array([3]), slice(None, None, None))),
+                ('y', 2, 1): (getitem, ('x', 0, 1), (np.array([3]), slice(None, None, None)))}
     np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
-    assert chunks == ((4,), (20, 20))
-
-    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [
-                       5, 1, 37, 3], axis=1)
-    expected = {('y', i, 0): (getitem, (np.concatenate,
-                                        [(getitem, ('x', i, 0),
-                                          (slice(None, None, None), [1, 3, 5])),
-                                         (getitem, ('x', i, 1),
-                                          (slice(None, None, None), [17]))], 1),
-                              (slice(None, None, None), [2, 0, 3, 1]))
-                for i in range(4)}
-    np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
-    assert chunks == ((20, 20, 20, 20), (4,))
+    assert chunks == ((2, 1, 1), (20, 20))
 
 
 def test_take_sorted():
@@ -289,20 +285,6 @@ def test_take_sorted():
                           for i in range(4)))
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20), (3, 1))
-
-
-def test_slice_lists():
-    y, chunks = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
-                            (np.array([2, 1, 9]), slice(None, None, None)))
-    exp = {('y', 0, i): (getitem, (np.concatenate,
-                                   [(getitem, ('x', 0, i),
-                                     ([1, 2], slice(None, None, None))),
-                                    (getitem, ('x', 3, i),
-                                     ([0], slice(None, None, None)))], 0),
-                         ([1, 0, 2], slice(None, None, None)))
-           for i in range(4)}
-    np.testing.assert_equal(y, exp)
-    assert chunks == ((3,), (3, 3, 3, 1))
 
 
 def test_slicing_chunks():
@@ -329,7 +311,7 @@ def test_slicing_with_numpy_arrays():
     np.testing.assert_equal(a, b)
 
     i = [False, True, True, False, False,
-         False, False, False, False, True, False]
+         False, False, False, False, True]
     index = (i, slice(None, None, None))
     index = normalize_index(index, (10, 10))
     c, bd3 = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)), index)
@@ -431,6 +413,32 @@ def test_multiple_list_slicing():
     assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
 
+def test_boolean_list_slicing():
+    with pytest.raises(IndexError):
+        da.asarray(range(2))[[True]]
+    with pytest.raises(IndexError):
+        da.asarray(range(2))[[False, False, False]]
+    x = np.arange(5)
+    ind = [True, False, False, False, True]
+    assert_eq(da.asarray(x)[ind], x[ind])
+    # https://github.com/dask/dask/issues/3706
+    ind = [True]
+    assert_eq(da.asarray([0])[ind], np.arange(1)[ind])
+
+
+def test_boolean_numpy_array_slicing():
+    with pytest.raises(IndexError):
+        da.asarray(range(2))[np.array([True])]
+    with pytest.raises(IndexError):
+        da.asarray(range(2))[np.array([False, False, False])]
+    x = np.arange(5)
+    ind = np.array([True, False, False, False, True])
+    assert_eq(da.asarray(x)[ind], x[ind])
+    # https://github.com/dask/dask/issues/3706
+    ind = np.array([True])
+    assert_eq(da.asarray([0])[ind], np.arange(1)[ind])
+
+
 def test_empty_list():
     x = np.ones((5, 5, 5), dtype='i4')
     dx = da.from_array(x, chunks=2)
@@ -460,6 +468,7 @@ def test_slicing_consistent_names():
     assert same_keys(a[-11:11], a[:])
     assert same_keys(a[-11:-9], a[:1])
     assert same_keys(a[-1], a[9])
+    assert same_keys(a[0::-1], a[0:-11:-1])
 
 
 def test_slicing_consistent_names_after_normalization():
@@ -520,7 +529,92 @@ def test_oob_check():
         x[0, 0]
 
 
-def test_index_with_dask_array():
+@pytest.mark.parametrize('idx_chunks', [None, 3, 2, 1])
+@pytest.mark.parametrize('x_chunks', [None, (3, 5), (2, 3), (1, 2), (1, 1)])
+def test_index_with_int_dask_array(x_chunks, idx_chunks):
+    # test data is crafted to stress use cases:
+    # - pick from different chunks of x out of order
+    # - a chunk of x contains no matches
+    # - only one chunk of x
+    x = np.array([[10, 20, 30, 40, 50],
+                  [60, 70, 80, 90, 100],
+                  [110, 120, 130, 140, 150]])
+    idx = np.array([3, 0, 1])
+    expect = np.array([[40, 10, 20],
+                       [90, 60, 70],
+                       [140, 110, 120]])
+
+    if x_chunks is not None:
+        x = da.from_array(x, chunks=x_chunks)
+    if idx_chunks is not None:
+        idx = da.from_array(idx, chunks=idx_chunks)
+
+    assert_eq(x[:, idx], expect)
+    assert_eq(x.T[idx, :], expect.T)
+
+
+@pytest.mark.parametrize('chunks', [1, 2, 3])
+def test_index_with_int_dask_array_0d(chunks):
+    # Slice by 0-dimensional array
+    x = da.from_array([[10, 20, 30],
+                       [40, 50, 60]], chunks=chunks)
+    idx0 = da.from_array(1, chunks=1)
+    assert_eq(x[idx0, :], x[1, :])
+    assert_eq(x[:, idx0], x[:, 1])
+
+
+@pytest.mark.parametrize('chunks', [1, 2, 3, 4, 5])
+def test_index_with_int_dask_array_nanchunks(chunks):
+    # Slice by array with nan-sized chunks
+    a = da.arange(-2, 3, chunks=chunks)
+    assert_eq(a[a.nonzero()], np.array([-2, -1,  1,  2]))
+    # Edge case: the nan-sized chunks resolve to size 0
+    a = da.zeros(5, chunks=chunks)
+    assert_eq(a[a.nonzero()], np.array([]))
+
+
+@pytest.mark.parametrize('chunks', [2, 4])
+def test_index_with_int_dask_array_negindex(chunks):
+    a = da.arange(4, chunks=chunks)
+    idx = da.from_array([-1, -4], chunks=1)
+    assert_eq(a[idx], np.array([3, 0]))
+
+
+@pytest.mark.parametrize('chunks', [2, 4])
+def test_index_with_int_dask_array_indexerror(chunks):
+    a = da.arange(4, chunks=chunks)
+    idx = da.from_array([4], chunks=1)
+    with pytest.raises(IndexError):
+        a[idx].compute()
+    idx = da.from_array([-5], chunks=1)
+    with pytest.raises(IndexError):
+        a[idx].compute()
+
+
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'uint8', 'uint16', 'uint32', 'uint64'])
+def test_index_with_int_dask_array_dtypes(dtype):
+    a = da.from_array([10, 20, 30, 40], chunks=-1)
+    idx = da.from_array(np.array([1, 2]).astype(dtype), chunks=1)
+    assert_eq(a[idx], np.array([20, 30]))
+
+
+def test_index_with_int_dask_array_nocompute():
+    """ Test that when the indices are a dask array
+    they are not accidentally computed
+    """
+    def crash():
+        raise NotImplementedError()
+
+    x = da.arange(5, chunks=-1)
+    idx = da.Array({('x', 0): (crash,)}, name='x',
+                   chunks=((2,), ), dtype=np.int64)
+    result = x[idx]
+    with pytest.raises(NotImplementedError):
+        result.compute()
+
+
+def test_index_with_bool_dask_array():
     x = np.arange(36).reshape((6, 6))
     d = da.from_array(x, chunks=(3, 3))
     ind = np.asarray([True, True, False, True, False, False], dtype=bool)
@@ -530,7 +624,7 @@ def test_index_with_dask_array():
         assert_eq(x[x_index], d[index])
 
 
-def test_index_with_dask_array_2():
+def test_index_with_bool_dask_array_2():
     x = np.random.random((10, 10, 10))
     ind = np.random.random(10) > 0.5
 
@@ -652,3 +746,112 @@ def test_normalize_index():
     (result,) = normalize_index([-5, -2, 1], (np.nan,))
     assert result.tolist() == [-5, -2, 1]
     assert normalize_index(slice(-5, -2), (np.nan,)) == (slice(-5, -2),)
+
+
+def test_take_semi_sorted():
+    x = da.ones(10, chunks=(5,))
+    index = np.arange(15) % 10
+
+    y = x[index]
+    assert y.chunks == ((5, 5, 5),)
+
+
+@pytest.mark.parametrize('chunks,index,expected', [
+    (
+        (5, 5, 5),
+        np.arange(5, 15) % 10,
+        [(1, np.arange(5)),
+         (0, np.arange(5))]
+    ),
+    (
+        (5, 5, 5, 5),
+        np.arange(20) // 2,
+        [(0, np.arange(10) // 2),
+         (1, np.arange(10) // 2)]
+    ),
+    (
+        (10, 10),
+        [15, 2, 3, 15],
+        [(1, [5]),
+         (0, [2, 3]),
+         (1, [5])]
+    ),
+])
+def test_slicing_plan(chunks, index, expected):
+    plan = slicing_plan(chunks, index)
+    assert len(plan) == len(expected)
+    for (i, x), (j, y) in zip(plan, expected):
+        assert i == j
+        assert len(x) == len(y)
+        assert (x == y).all()
+
+
+def test_pathological_unsorted_slicing():
+    x = da.ones(100, chunks=10)
+
+    # [0, 10, 20, ... 90, 1, 11, 21, ... 91, ...]
+    index = np.arange(100).reshape(10, 10).ravel(order='F')
+
+    with pytest.warns(da.PerformanceWarning) as info:
+        x[index]
+
+    assert '10' in str(info.list[0])
+    assert 'out-of-order' in str(info.list[0])
+
+
+def test_cached_cumsum():
+    a = (1, 2, 3, 4)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    np.testing.assert_array_equal(x, [1, 3, 6, 10])
+    assert x.dtype == np.int64
+    np.testing.assert_array_equal(y, [0, 1, 3, 6, 10])
+    assert y.dtype == np.int64
+
+
+def test_cached_cumsum_nan():
+    a = (1, np.nan, 3)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    np.testing.assert_array_equal(x, [1, np.nan, np.nan])
+    assert x.dtype == np.float64
+    np.testing.assert_array_equal(y, [0, 1, np.nan, np.nan])
+    assert y.dtype == np.float64
+
+
+def test_cached_cumsum_non_tuple():
+    a = [1, 2, 3]
+    np.testing.assert_array_equal(cached_cumsum(a), [1, 3, 6])
+    a[1] = 4
+    np.testing.assert_array_equal(cached_cumsum(a), [1, 5, 8])
+
+
+@pytest.mark.parametrize('params', [(2, 2, 1), (5, 3, 2)])
+def test_setitem_with_different_chunks_preserves_shape(params):
+    """ Reproducer for https://github.com/dask/dask/issues/3730.
+
+    Mutating based on an array with different chunks can cause new chunks to be
+    used.  We need to ensure those new chunk sizes are applied to the mutated
+    array, otherwise the array won't generate the correct keys.
+    """
+    array_size, chunk_size1, chunk_size2 = params
+    x = da.zeros(array_size, chunks=chunk_size1)
+    mask = da.zeros(array_size, chunks=chunk_size2)
+    x[mask] = 1
+    result = x.compute()
+    assert x.shape == result.shape
+
+
+def test_gh3579():
+    assert_eq(np.arange(10)[0::-1], da.arange(10, chunks=3)[0::-1])
+    assert_eq(np.arange(10)[::-1], da.arange(10, chunks=3)[::-1])
+
+
+@pytest.mark.parametrize('lock', [True, False])
+@pytest.mark.parametrize('asarray', [True, False])
+@pytest.mark.parametrize('fancy', [True, False])
+def test_gh4043(lock, asarray, fancy):
+    a1 = da.from_array(np.zeros(3,), chunks=1, asarray=asarray, lock=lock, fancy=fancy)
+    a2 = da.from_array(np.ones(3,), chunks=1, asarray=asarray, lock=lock, fancy=fancy)
+    al = da.stack([a1, a2])
+    assert_eq(al, al)

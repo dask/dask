@@ -1,5 +1,4 @@
 
-import dask
 import dask.dataframe as dd
 
 import pandas as pd
@@ -35,11 +34,11 @@ rs = np.random.RandomState(96)
         'z': np.zeros((20000,))}),
     pd.DataFrame({'x': [1, 2, 3] * 1000}),
     pd.DataFrame({'x': np.random.random(1000)}),
-    pd.DataFrame({
-        'a': [1, 2, 3] * 3,
-        'b': [1.2, 3.4, 5.6] * 3,
-        'c': [1 + 2j, 3 + 4j, 5 + 6j] * 3,
-        'd': -np.arange(9, dtype=np.int8)}),
+    pytest.param(pd.DataFrame({'a': [1, 2, 3] * 3,
+                               'b': [1.2, 3.4, 5.6] * 3,
+                               'c': [1 + 2j, 3 + 4j, 5 + 6j] * 3,
+                               'd': -np.arange(9, dtype=np.int8)}),
+                 marks=[pytest.mark.filterwarnings("ignore::numpy.core.numeric.ComplexWarning")]),
     pd.Series([1, 2, 3] * 1000),
     pd.Series(np.random.random(1000)),
     pd.Series(np.random.random(1000), index=np.ones(1000)),
@@ -49,7 +48,7 @@ rs = np.random.RandomState(96)
 def test_basic(df, npartitions):
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    approx = ddf.nunique_approx().compute(get=dask.local.get_sync)
+    approx = ddf.nunique_approx().compute(scheduler='sync')
     exact = len(df.drop_duplicates())
     assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
 
@@ -60,7 +59,7 @@ def test_split_every(split_every, npartitions):
     df = pd.Series([1, 2, 3] * 1000)
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    approx = ddf.nunique_approx(split_every=split_every).compute(get=dask.local.get_sync)
+    approx = ddf.nunique_approx(split_every=split_every).compute(scheduler='sync')
     exact = len(df.drop_duplicates())
     assert abs(approx - exact) <= 2 or abs(approx - exact) / exact < 0.05
 

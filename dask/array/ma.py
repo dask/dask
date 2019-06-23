@@ -1,17 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps
-from distutils.version import LooseVersion
 
 import numpy as np
 
 from ..base import normalize_token
 from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
-                   asanyarray, atop)
-
-
-if LooseVersion(np.__version__) < '1.11.0':
-    raise ImportError("dask.array.ma requires numpy >= 1.11.0")
+                   asanyarray, blockwise)
+from .routines import _average
+from ..utils import derived_from
 
 
 @normalize_token.register(np.ma.masked_array)
@@ -105,7 +102,7 @@ def _tensordot(a, b, axes=2):
     return res.reshape(olda + oldb)
 
 
-@wraps(np.ma.filled)
+@derived_from(np.ma)
 def filled(a, fill_value=None):
     a = asanyarray(a)
     return a.map_blocks(np.ma.filled, fill_value=fill_value)
@@ -120,7 +117,7 @@ def _wrap_masked(f):
         ainds = tuple(range(a.ndim))[::-1]
         vinds = tuple(range(value.ndim))[::-1]
         oinds = max(ainds, vinds, key=len)
-        return atop(f, oinds, a, ainds, value, vinds, dtype=a.dtype)
+        return blockwise(f, oinds, a, ainds, value, vinds, dtype=a.dtype)
 
     return _
 
@@ -132,33 +129,33 @@ masked_less_equal = _wrap_masked(np.ma.masked_less_equal)
 masked_not_equal = _wrap_masked(np.ma.masked_not_equal)
 
 
-@wraps(np.ma.masked_equal)
+@derived_from(np.ma)
 def masked_equal(a, value):
     a = asanyarray(a)
     if getattr(value, 'shape', ()):
         raise ValueError("da.ma.masked_equal doesn't support array `value`s")
     inds = tuple(range(a.ndim))
-    return atop(np.ma.masked_equal, inds, a, inds, value, (), dtype=a.dtype)
+    return blockwise(np.ma.masked_equal, inds, a, inds, value, (), dtype=a.dtype)
 
 
-@wraps(np.ma.masked_invalid)
+@derived_from(np.ma)
 def masked_invalid(a):
     return asanyarray(a).map_blocks(np.ma.masked_invalid)
 
 
-@wraps(np.ma.masked_inside)
+@derived_from(np.ma)
 def masked_inside(x, v1, v2):
     x = asanyarray(x)
     return x.map_blocks(np.ma.masked_inside, v1, v2)
 
 
-@wraps(np.ma.masked_outside)
+@derived_from(np.ma)
 def masked_outside(x, v1, v2):
     x = asanyarray(x)
     return x.map_blocks(np.ma.masked_outside, v1, v2)
 
 
-@wraps(np.ma.masked_where)
+@derived_from(np.ma)
 def masked_where(condition, a):
     cshape = getattr(condition, 'shape', ())
     if cshape and cshape != a.shape:
@@ -168,11 +165,18 @@ def masked_where(condition, a):
     a = asanyarray(a)
     ainds = tuple(range(a.ndim))
     cinds = tuple(range(condition.ndim))
-    return atop(np.ma.masked_where, ainds, condition, cinds, a, ainds,
-                dtype=a.dtype)
+    return blockwise(
+        np.ma.masked_where,
+        ainds,
+        condition,
+        cinds,
+        a,
+        ainds,
+        dtype=a.dtype
+    )
 
 
-@wraps(np.ma.masked_values)
+@derived_from(np.ma)
 def masked_values(x, value, rtol=1e-05, atol=1e-08, shrink=True):
     x = asanyarray(x)
     if getattr(value, 'shape', ()):
@@ -181,19 +185,19 @@ def masked_values(x, value, rtol=1e-05, atol=1e-08, shrink=True):
                       atol=atol, shrink=shrink)
 
 
-@wraps(np.ma.fix_invalid)
+@derived_from(np.ma)
 def fix_invalid(a, fill_value=None):
     a = asanyarray(a)
     return a.map_blocks(np.ma.fix_invalid, fill_value=fill_value)
 
 
-@wraps(np.ma.getdata)
+@derived_from(np.ma)
 def getdata(a):
     a = asanyarray(a)
     return a.map_blocks(np.ma.getdata)
 
 
-@wraps(np.ma.getmaskarray)
+@derived_from(np.ma)
 def getmaskarray(a):
     a = asanyarray(a)
     return a.map_blocks(np.ma.getmaskarray)
@@ -204,7 +208,7 @@ def _masked_array(data, mask=np.ma.nomask, **kwargs):
     return np.ma.masked_array(data, mask=mask, dtype=dtype, **kwargs)
 
 
-@wraps(np.ma.masked_array)
+@derived_from(np.ma)
 def masked_array(data, mask=np.ma.nomask, fill_value=None,
                  **kwargs):
     data = asanyarray(data)
@@ -230,7 +234,7 @@ def masked_array(data, mask=np.ma.nomask, fill_value=None,
     else:
         kwargs['dtype'] = data.dtype
 
-    return atop(_masked_array, *arginds, **kwargs)
+    return blockwise(_masked_array, *arginds, **kwargs)
 
 
 def _set_fill_value(x, fill_value):
@@ -240,7 +244,7 @@ def _set_fill_value(x, fill_value):
     return x
 
 
-@wraps(np.ma.set_fill_value)
+@derived_from(np.ma)
 def set_fill_value(a, fill_value):
     a = asanyarray(a)
     if getattr(fill_value, 'shape', ()):
@@ -249,3 +253,8 @@ def set_fill_value(a, fill_value):
     res = a.map_blocks(_set_fill_value, fill_value)
     a.dask = res.dask
     a.name = res.name
+
+
+@derived_from(np.ma)
+def average(a, axis=None, weights=None, returned=False):
+    return _average(a, axis, weights, returned, is_masked=True)

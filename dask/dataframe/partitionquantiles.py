@@ -73,6 +73,7 @@ from __future__ import absolute_import, division, print_function
 import math
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64tz_dtype
 
 from toolz import merge, merge_sorted, take
 
@@ -374,6 +375,8 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
 
     if is_categorical_dtype(dtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
+    elif is_datetime64tz_dtype(dtype):
+        rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif 'datetime64' in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
@@ -436,7 +439,7 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     qs = np.linspace(0, 1, npartitions + 1)
     token = tokenize(df, qs, upsample)
     if random_state is None:
-        random_state = hash(token) % np.iinfo(np.int32).max
+        random_state = int(token, 16) % np.iinfo(np.int32).max
     state_data = random_state_data(df.npartitions, random_state)
 
     df_keys = df.__dask_keys__()

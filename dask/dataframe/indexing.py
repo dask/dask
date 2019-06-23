@@ -3,25 +3,30 @@ from __future__ import absolute_import, division, print_function
 from datetime import datetime
 from collections import defaultdict
 
-from toolz import merge
 import bisect
 import numpy as np
 import pandas as pd
 
 from .core import new_dd_object, Series
+from ..array.core import Array
+from .utils import is_index_like
 from . import methods
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from .. import compatibility
 
 
-class _LocIndexer(object):
-    """ Helper class for the .loc accessor """
-
+class _IndexerBase(object):
     def __init__(self, obj):
         self.obj = obj
 
     @property
     def _name(self):
         return self.obj._name
+
+    @property
+    def _meta_indexer(self):
+        raise NotImplementedError
 
     def _make_meta(self, iindexer, cindexer):
         """
@@ -30,7 +35,46 @@ class _LocIndexer(object):
         if cindexer is None:
             return self.obj
         else:
-            return self.obj._meta.loc[:, cindexer]
+            return self._meta_indexer[:, cindexer]
+
+
+class _iLocIndexer(_IndexerBase):
+
+    @property
+    def _meta_indexer(self):
+        return self.obj._meta.iloc
+
+    def __getitem__(self, key):
+
+        # dataframe
+        msg = ("'DataFrame.iloc' only supports selecting columns. "
+               "It must be used like 'df.iloc[:, column_indexer]'.")
+        if not isinstance(key, tuple):
+            raise NotImplementedError(msg)
+
+        if len(key) > 2:
+            raise ValueError("Too many indexers")
+
+        iindexer, cindexer = key
+
+        if iindexer != slice(None):
+            raise NotImplementedError(msg)
+
+        return self._iloc(iindexer, cindexer)
+
+    def _iloc(self, iindexer, cindexer):
+        assert iindexer == slice(None)
+        meta = self._make_meta( iindexer, cindexer)
+
+        return self.obj.map_partitions(methods.iloc, cindexer, meta=meta)
+
+
+class _LocIndexer(_IndexerBase):
+    """ Helper class for the .loc accessor """
+
+    @property
+    def _meta_indexer(self):
+        return self.obj._meta.loc
 
     def __getitem__(self, key):
 
@@ -53,6 +97,8 @@ class _LocIndexer(object):
         """ Helper function for the .loc accessor """
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
+        elif isinstance(iindexer, Array):
+            return self._loc_array(iindexer, cindexer)
 
         if self.obj.known_divisions:
             iindexer = self._maybe_partial_time_string(iindexer)
@@ -91,6 +137,10 @@ class _LocIndexer(object):
         return self.obj.map_partitions(methods.loc, iindexer, cindexer,
                                        token='loc-series', meta=meta)
 
+    def _loc_array(self, iindexer, cindexer):
+        iindexer_series = iindexer.to_dask_dataframe('_', self.obj.index)
+        return self._loc_series(iindexer_series, cindexer)
+
     def _loc_list(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
         parts = self._get_partitions(iindexer)
@@ -110,8 +160,8 @@ class _LocIndexer(object):
         else:
             divisions = [None, None]
             dsk = {(name, 0): meta.head(0)}
-        return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=divisions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
@@ -124,8 +174,8 @@ class _LocIndexer(object):
                            slice(iindexer, iindexer), cindexer)}
 
         meta = self._make_meta(iindexer, cindexer)
-        return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=[iindexer, iindexer])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
         if isinstance(keys, (list, np.ndarray)):
@@ -195,8 +245,8 @@ class _LocIndexer(object):
         assert len(divisions) == len(dsk) + 1
 
         meta = self._make_meta(iindexer, cindexer)
-        return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=divisions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
 
 def _partition_of_index_value(divisions, val):
@@ -260,24 +310,24 @@ def _maybe_partial_time_string(index, indexer, kind):
     if data has DatetimeIndex/PeriodIndex
     """
     # do not pass dd.Index
-    assert isinstance(index, pd.Index)
+    assert is_index_like(index)
 
     if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
         return indexer
 
     if isinstance(indexer, slice):
-        if isinstance(indexer.start, pd.compat.string_types):
+        if isinstance(indexer.start, compatibility.string_types):
             start = index._maybe_cast_slice_bound(indexer.start, 'left', kind)
         else:
             start = indexer.start
 
-        if isinstance(indexer.stop, pd.compat.string_types):
+        if isinstance(indexer.stop, compatibility.string_types):
             stop = index._maybe_cast_slice_bound(indexer.stop, 'right', kind)
         else:
             stop = indexer.stop
         return slice(start, stop)
 
-    elif isinstance(indexer, pd.compat.string_types):
+    elif isinstance(indexer, compatibility.string_types):
         start = index._maybe_cast_slice_bound(indexer, 'left', 'loc')
         stop = index._maybe_cast_slice_bound(indexer, 'right', 'loc')
         return slice(min(start, stop), max(start, stop))

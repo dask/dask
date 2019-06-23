@@ -21,11 +21,18 @@ class HDFS3Wrapper(pa.filesystem.DaskFileSystem):
 _MIN_PYARROW_VERSION_SUPPORTED = '0.8.1.dev81'
 
 
+def update_hdfs_options(options):
+    username = options.pop('username', None)
+    if username is not None:
+        options['user'] = username
+    return options
+
+
 class PyArrowHadoopFileSystem(object):
     sep = "/"
 
     def __init__(self, **kwargs):
-        self.fs = pa.hdfs.HadoopFileSystem(**kwargs)
+        self.fs = pa.hdfs.HadoopFileSystem(**update_hdfs_options(kwargs))
 
     @classmethod
     def from_pyarrow(cls, fs):

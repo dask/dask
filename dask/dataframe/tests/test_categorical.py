@@ -119,12 +119,14 @@ def test_is_categorical_dtype():
 
 
 def test_categorize():
-    meta = clear_known_categories(frames4[0])
+    # rename y to y_ to avoid pandas future warning about ambiguous
+    # levels
+    meta = clear_known_categories(frames4[0]).rename(columns={'y': 'y_'})
     ddf = dd.DataFrame({('unknown', i): df for (i, df) in enumerate(frames3)},
-                       'unknown', meta, [None] * 4)
+                       'unknown', meta, [None] * 4).rename(columns={'y': 'y_'})
     ddf = ddf.assign(w=ddf.w.cat.set_categories(['x', 'y', 'z']))
     assert ddf.w.cat.known
-    assert not ddf.y.cat.known
+    assert not ddf.y_.cat.known
     assert not ddf.index.cat.known
     df = ddf.compute()
 
@@ -132,27 +134,27 @@ def test_categorize():
         known_index = index is not False
         # By default categorize object and unknown cat columns
         ddf2 = ddf.categorize(index=index)
-        assert ddf2.y.cat.known
+        assert ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
         # Specifying split_every works
         ddf2 = ddf.categorize(index=index, split_every=2)
-        assert ddf2.y.cat.known
+        assert ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
         # Specifying one column doesn't affect others
         ddf2 = ddf.categorize('v', index=index)
-        assert not ddf2.y.cat.known
+        assert not ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
-        ddf2 = ddf.categorize('y', index=index)
-        assert ddf2.y.cat.known
+        ddf2 = ddf.categorize('y_', index=index)
+        assert ddf2.y_.cat.known
         assert ddf2.v.dtype == 'object'
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
@@ -188,7 +190,7 @@ def test_categorize_index():
     assert ddf.categorize(index=False) is ddf
 
     # Non-object dtype
-    ddf = dd.from_pandas(df.set_index(df.A), npartitions=5)
+    ddf = dd.from_pandas(df.set_index(df.A.rename('idx')), npartitions=5)
     df = ddf.compute()
 
     ddf2 = ddf.categorize(index=True)
@@ -205,7 +207,7 @@ def test_categorical_set_index(shuffle):
     df['y'] = pd.Categorical(df['y'], categories=['a', 'b', 'c'], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.set_options(get=dask.get, shuffle=shuffle):
+    with dask.config.set(scheduler='sync', shuffle=shuffle):
         b = a.set_index('y', npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']
@@ -264,9 +266,18 @@ def get_cat(x):
     return x if isinstance(x, pd.CategoricalIndex) else x.cat
 
 
-def assert_array_index_eq(left, right):
+def assert_array_index_eq(left, right, check_divisions=False):
     """left and right are equal, treating index and array as equivalent"""
-    assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else right)
+    assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else
+              right, check_divisions=check_divisions)
+
+
+def test_return_type_known_categories():
+    df = pd.DataFrame({"A": ['a', 'b', 'c']})
+    df['A'] = df['A'].astype('category')
+    dask_df = dd.from_pandas(df, 2)
+    ret_type = dask_df.A.cat.as_known()
+    assert isinstance(ret_type, dd.core.Series)
 
 
 class TestCategoricalAccessor:
@@ -281,7 +292,7 @@ class TestCategoricalAccessor:
         s, ds = series
         expected = getattr(get_cat(s), prop)
         result = getattr(get_cat(ds), prop)
-        compare(result, expected)
+        compare(result, expected, check_divisions=False)
 
     @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('method, kwargs', [
@@ -302,9 +313,11 @@ class TestCategoricalAccessor:
         s, ds = series
         expected = op(get_cat(s))
         result = op(get_cat(ds))
-        assert_eq(result, expected)
-        assert_eq(get_cat(result._meta).categories, get_cat(expected).categories)
-        assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered)
+        assert_eq(result, expected, check_divisions=False)
+        assert_eq(get_cat(result._meta).categories,
+                  get_cat(expected).categories, check_divisions=False)
+        assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered,
+                  check_divisions=False)
 
     def test_categorical_empty(self):
         # GH 1705

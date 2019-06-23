@@ -5,8 +5,8 @@ from operator import add, neg
 import sys
 import pytest
 
-optimize2 = (sys.flags.optimize == 2)
-if not optimize2:
+
+if sys.flags.optimize != 2:
     pytest.importorskip("graphviz")
     from dask.dot import dot_graph, task_label, label, to_graphviz
 else:
@@ -15,11 +15,20 @@ else:
 
 from dask import delayed
 from dask.utils import ensure_not_exists
-from IPython.display import Image, SVG
+try:
+    from IPython.display import Image, SVG
+except ImportError:
+    ipython_not_installed = True
+    Image = None
+    SVG = None
+else:
+    ipython_not_installed = False
+ipython_not_installed_mark = pytest.mark.skipif(ipython_not_installed,
+                                                reason='IPython not installed')
 
 
 # Since graphviz doesn't store a graph, we need to parse the output
-label_re = re.compile('.*\[label=(.*?) shape=(.*?)\]')
+label_re = re.compile(r'.*\[label=(.*?) shape=(.*?)\]')
 
 
 def get_label(line):
@@ -76,9 +85,7 @@ def test_to_graphviz():
     g = to_graphviz(dsk)
     labels = list(filter(None, map(get_label, g.body)))
     assert len(labels) == 10        # 10 nodes total
-    funcs = set(('add', 'sum', 'neg'))
-    assert set(labels).difference(dsk) == funcs
-    assert set(labels).difference(funcs) == set(dsk)
+    assert set(labels) == {'c', 'd', 'e', 'f', '""'}
     shapes = list(filter(None, map(get_shape, g.body)))
     assert set(shapes) == set(('box', 'circle'))
 
@@ -89,10 +96,8 @@ def test_to_graphviz_custom():
         data_attributes={'a': {'shape': 'square'}},
         function_attributes={'c': {'label': 'neg_c', 'shape': 'ellipse'}},
     )
-    labels = list(filter(None, map(get_label, g.body)))
-    funcs = set(('add', 'sum', 'neg', 'neg_c'))
-    assert set(labels).difference(dsk) == funcs
-    assert set(labels).difference(funcs) == set(dsk)
+    labels = set(filter(None, map(get_label, g.body)))
+    assert labels == {'neg_c', 'd', 'e', 'f', '""'}
     shapes = list(filter(None, map(get_shape, g.body)))
     assert set(shapes) == set(('box', 'circle', 'square', 'ellipse'))
 
@@ -111,50 +116,47 @@ def test_aliases():
     assert len(g.body) - len(labels) == 1   # Single edge
 
 
-def test_dot_graph(tmpdir):
+@pytest.mark.parametrize('format,typ', [
+    pytest.param('png', Image, marks=ipython_not_installed_mark),
+    pytest.param('jpeg', Image, marks=pytest.mark.xfail(reason='jpeg not always supported in dot')),
+    ('dot', type(None)),
+    ('pdf', type(None)),
+    pytest.param('svg', SVG, marks=ipython_not_installed_mark),
+])
+def test_dot_graph(tmpdir, format, typ):
     # Use a name that the shell would interpret specially to ensure that we're
     # not vulnerable to shell injection when interacting with `dot`.
     filename = str(tmpdir.join('$(touch should_not_get_created.txt)'))
 
-    # Map from format extension to expected return type.
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-    for format in result_types:
-        target = '.'.join([filename, format])
+    target = '.'.join([filename, format])
+    ensure_not_exists(target)
+    try:
+        result = dot_graph(dsk, filename=filename, format=format)
+
+        assert not os.path.exists('should_not_get_created.txt')
+        assert os.path.isfile(target)
+        assert isinstance(result, typ)
+    finally:
         ensure_not_exists(target)
-        try:
-            result = dot_graph(dsk, filename=filename, format=format)
-
-            assert not os.path.exists('should_not_get_created.txt')
-            assert os.path.isfile(target)
-            assert isinstance(result, result_types[format])
-        finally:
-            ensure_not_exists(target)
 
 
-def test_dot_graph_no_filename(tmpdir):
-    # Map from format extension to expected return type.
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-    for format in result_types:
-        before = tmpdir.listdir()
-        result = dot_graph(dsk, filename=None, format=format)
-        # We shouldn't write any files if filename is None.
-        after = tmpdir.listdir()
-        assert before == after
-        assert isinstance(result, result_types[format])
+@pytest.mark.parametrize('format,typ', [
+    pytest.param('png', Image, marks=ipython_not_installed_mark),
+    pytest.param('jpeg', Image, marks=pytest.mark.xfail(reason='jpeg not always supported in dot')),
+    ('dot', type(None)),
+    ('pdf', type(None)),
+    pytest.param('svg', SVG, marks=ipython_not_installed_mark),
+])
+def test_dot_graph_no_filename(tmpdir, format, typ):
+    before = tmpdir.listdir()
+    result = dot_graph(dsk, filename=None, format=format)
+    # We shouldn't write any files if filename is None.
+    after = tmpdir.listdir()
+    assert before == after
+    assert isinstance(result, typ)
 
 
+@ipython_not_installed_mark
 def test_dot_graph_defaults():
     # Test with default args.
     default_name = 'mydask'
@@ -170,26 +172,18 @@ def test_dot_graph_defaults():
         ensure_not_exists(target)
 
 
-def test_filenames_and_formats():
-    # Test with a variety of user provided args
-    filenames = ['mydaskpdf', 'mydask.pdf', 'mydask.pdf', 'mydaskpdf', 'mydask.pdf.svg']
-    formats = ['svg', None, 'svg', None, None]
-    targets = ['mydaskpdf.svg', 'mydask.pdf', 'mydask.pdf.svg', 'mydaskpdf.png', 'mydask.pdf.svg']
-
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-
-    for filename, format, target in zip(filenames, formats, targets):
-        expected_result_type = result_types[target.split('.')[-1]]
-        result = dot_graph(dsk, filename=filename, format=format)
-        assert os.path.isfile(target)
-        assert isinstance(result, expected_result_type)
-        ensure_not_exists(target)
+@pytest.mark.parametrize('filename,format,target,expected_result_type', [
+    pytest.param('mydaskpdf', 'svg', 'mydaskpdf.svg', SVG, marks=ipython_not_installed_mark),
+    ('mydask.pdf', None, 'mydask.pdf', type(None)),
+    pytest.param('mydask.pdf', 'svg', 'mydask.pdf.svg', SVG, marks=ipython_not_installed_mark),
+    pytest.param('mydaskpdf', None, 'mydaskpdf.png', Image, marks=ipython_not_installed_mark),
+    pytest.param('mydask.pdf.svg', None, 'mydask.pdf.svg', SVG, marks=ipython_not_installed_mark),
+])
+def test_filenames_and_formats(filename, format, target, expected_result_type):
+    result = dot_graph(dsk, filename=filename, format=format)
+    assert os.path.isfile(target)
+    assert isinstance(result, expected_result_type)
+    ensure_not_exists(target)
 
 
 def test_delayed_kwargs_apply():

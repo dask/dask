@@ -56,14 +56,6 @@ class TestGet(GetFunctionTestMixin):
     get = staticmethod(core.get)
 
 
-class TestRecursiveGet(GetFunctionTestMixin):
-    get = staticmethod(lambda d, k: core.get(d, k, recursive=True))
-
-    def test_get_stack_limit(self):
-        # will blow stack in recursive mode
-        pass
-
-
 def test_GetFunctionTestMixin_class():
     class TestCustomGetFail(GetFunctionTestMixin):
         get = staticmethod(lambda x, y: 1)
@@ -134,9 +126,9 @@ def test_get_deps():
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
-    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    {'a': set(), 'b': {'a'}, 'c': {'b'}}
     >>> dependents
-    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dsk = {'a': [1, 2, 3],
            'b': 'a',

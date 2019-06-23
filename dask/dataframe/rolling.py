@@ -4,11 +4,13 @@ import datetime
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
+from numbers import Integral
 
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
+from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
-from .utils import make_meta
+from .utils import make_meta, PANDAS_VERSION
 
 
 def overlap_chunk(func, prev_part, current_part, next_part, before, after,
@@ -18,14 +20,13 @@ def overlap_chunk(func, prev_part, current_part, next_part, before, after,
            "window size. Try using ``df.repartition`` "
            "to increase the partition size.")
 
-    if prev_part is not None and isinstance(before, int):
+    if prev_part is not None and isinstance(before, Integral):
         if prev_part.shape[0] != before:
             raise NotImplementedError(msg)
 
-    if next_part is not None and isinstance(after, int):
+    if next_part is not None and isinstance(after, Integral):
         if next_part.shape[0] != after:
             raise NotImplementedError(msg)
-    # We validate that the window isn't too large for tiemdeltas in map_overlap
 
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
     combined = pd.concat(parts)
@@ -69,8 +70,8 @@ def map_overlap(func, df, before, after, *args, **kwargs):
             raise TypeError("Must have a `DatetimeIndex` when using string offset "
                             "for `before` and `after`")
     else:
-        if not (isinstance(before, int) and before >= 0 and
-                isinstance(after, int) and after >= 0):
+        if not (isinstance(before, Integral) and before >= 0 and
+                isinstance(after, Integral) and after >= 0):
             raise ValueError("before and after must be positive integers")
 
     if 'token' in kwargs:
@@ -84,40 +85,61 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop('meta')
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta)
+    meta = make_meta(meta, index=df._meta.index)
 
     name = '{0}-{1}'.format(func_name, token)
     name_a = 'overlap-prepend-' + tokenize(df, before)
     name_b = 'overlap-append-' + tokenize(df, after)
     df_name = df._name
 
-    dsk = df.dask.copy()
-
-    # Have to do the checks for too large windows in the time-delta case
-    # here instead of in `overlap_chunk`, since we can't rely on fix-frequency
-    # index
+    dsk = {}
 
     timedelta_partition_message = (
         "Partition size is less than specified window. "
         "Try using ``df.repartition`` to increase the partition size"
     )
 
-    if before and isinstance(before, int):
+    if before and isinstance(before, Integral):
         dsk.update({(name_a, i): (M.tail, (df_name, i), before)
                     for i in range(df.npartitions - 1)})
         prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
     elif isinstance(before, datetime.timedelta):
         # Assumes monotonic (increasing?) index
-        deltas = pd.Series(df.divisions).diff().iloc[1:-1]
+        divs = pd.Series(df.divisions)
+        deltas = divs.diff().iloc[1:-1]
+
+        # In the first case window-size is larger than at least one partition, thus it is
+        # necessary to calculate how many partitions must be used for each rolling task.
+        # Otherwise, these calculations can be skipped (faster)
+
         if (before > deltas).any():
-            raise ValueError(timedelta_partition_message)
-        dsk.update({(name_a, i): (_tail_timedelta, (df_name, i), (df_name, i + 1), before)
-                    for i in range(df.npartitions - 1)})
-        prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+            pt_z = divs[0]
+            for i in range(df.npartitions - 1):
+                # Select all indexes of relevant partitions between the current partition and
+                # the partition with the highest division outside the rolling window (before)
+                pt_i = divs[i + 1]
+
+                # lower-bound the search to the first division
+                lb = max(pt_i - before, pt_z)
+
+                first, j = divs[i], i
+                while first > lb and j > 0:
+                    first = first - deltas[j]
+                    j = j - 1
+
+                dsk.update({(name_a, i): (_tail_timedelta, [(df_name, k) for k in range(j, i + 1)],
+                                          (df_name, i + 1), before)})
+
+            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+
+        else:
+            dsk.update({(name_a, i): (_tail_timedelta, [(df_name, i)], (df_name, i + 1), before)
+                        for i in range(df.npartitions - 1)})
+            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
     else:
         prevs = [None] * df.npartitions
 
-    if after and isinstance(after, int):
+    if after and isinstance(after, Integral):
         dsk.update({(name_b, i): (M.head, (df_name, i), after)
                     for i in range(1, df.npartitions)})
         nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
@@ -137,7 +159,8 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 
-    return df._constructor(dsk, name, meta, df.divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    return df._constructor(graph, name, meta, df.divisions)
 
 
 def _head_timedelta(current, next_, after):
@@ -157,21 +180,22 @@ def _head_timedelta(current, next_, after):
     return next_[next_.index < (current.index.max() + after)]
 
 
-def _tail_timedelta(prev, current, before):
-    """Return rows of ``prev`` whose index is after the first
-    observation in ``current`` - ``before``.
+def _tail_timedelta(prevs, current, before):
+    """Return the concatenated rows of each dataframe in ``prevs`` whose
+    index is after the first observation in ``current`` - ``before``.
 
     Parameters
     ----------
     current : DataFrame
-    next_ : DataFrame
+    prevs : list of DataFrame objects
     before : timedelta
 
     Returns
     -------
     overlapped : DataFrame
     """
-    return prev[prev.index > (current.index.min() - before)]
+    selected = pd.concat([prev[prev.index > (current.index.min() - before)] for prev in prevs])
+    return selected
 
 
 def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
@@ -219,7 +243,7 @@ class Rolling(object):
         or multiple (False).
         """
         return (self.axis in (1, 'columns') or
-                (isinstance(self.window, int) and self.window <= 1) or
+                (isinstance(self.window, Integral) and self.window <= 1) or
                 self.obj.npartitions == 1)
 
     def _call_method(self, method_name, *args, **kwargs):
@@ -292,8 +316,26 @@ class Rolling(object):
         return self._call_method('quantile', quantile)
 
     @derived_from(pd_Rolling)
-    def apply(self, func, args=(), kwargs={}):
-        return self._call_method('apply', func, args=args, kwargs=kwargs)
+    def apply(self, func, args=(), kwargs={}, **kwds):
+        # TODO: In a future version of pandas this will change to
+        # raw=False. Think about inspecting the function signature and setting
+        # to that?
+        if PANDAS_VERSION >= '0.23.0':
+            kwds.setdefault("raw", None)
+        else:
+            if kwargs:
+                msg = ("Invalid argument to 'apply'. Keyword arguments "
+                       "should be given as a dict to the 'kwargs' arugment. ")
+                raise TypeError(msg)
+        return self._call_method('apply', func, args=args,
+                                 kwargs=kwargs, **kwds)
+
+    @derived_from(pd_Rolling)
+    def aggregate(self, func, args=(), kwargs={}, **kwds):
+        return self._call_method('agg', func, args=args,
+                                 kwargs=kwargs, **kwds)
+
+    agg = aggregate
 
     def __repr__(self):
 

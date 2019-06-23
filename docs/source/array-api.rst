@@ -22,6 +22,7 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argtopk
    argwhere
    around
    array
@@ -30,6 +31,7 @@ Top level user functions:
    atleast_1d
    atleast_2d
    atleast_3d
+   average
    bincount
    bitwise_and
    bitwise_not
@@ -56,11 +58,14 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   diagonal
    diff
+   divmod
    digitize
    dot
    dstack
    ediff1d
+   einsum
    empty
    empty_like
    exp
@@ -81,18 +86,23 @@ Top level user functions:
    frompyfunc
    full
    full_like
+   gradient
    histogram
    hstack
    hypot
    imag
    indices
    insert
+   invert
    isclose
    iscomplex
    isfinite
+   isin
    isinf
+   isneginf
    isnan
    isnull
+   isposinf
    isreal
    ldexp
    linspace
@@ -106,7 +116,8 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   map_blocks
+   ~core.map_blocks
+   map_overlap
    matmul
    max
    maximum
@@ -127,12 +138,17 @@ Top level user functions:
    nanstd
    nansum
    nanvar
+   nan_to_num
    nextafter
    nonzero
    notnull
    ones
    ones_like
+   outer
+   pad
    percentile
+   ~core.PerformanceWarning
+   piecewise
    prod
    ptp
    rad2deg
@@ -162,14 +178,15 @@ Top level user functions:
    tensordot
    tile
    topk
+   trace
    transpose
    tril
    triu
    trunc
    unique
+   unravel_index
    var
    vdot
-   vnorm
    vstack
    where
    zeros
@@ -213,12 +230,14 @@ Linear Algebra
    linalg.solve_triangular
    linalg.svd
    linalg.svd_compressed
+   linalg.sfqr
    linalg.tsqr
 
 Masked Arrays
 ~~~~~~~~~~~~~
 
 .. autosummary::
+   ma.average
    ma.filled
    ma.fix_invalid
    ma.getdata
@@ -262,6 +281,7 @@ Random
    random.pareto
    random.poisson
    random.power
+   random.randint
    random.random
    random.random_sample
    random.rayleigh
@@ -300,12 +320,14 @@ Image Support
 .. autosummary::
    image.imread
 
-Slightly Overlapping Ghost Computations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Slightly Overlapping Computations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
-   ghost.ghost
-   ghost.map_overlap
+   overlap.overlap
+   overlap.map_overlap
+   overlap.trim_internal
+   overlap.trim_overlap
 
 
 Create and Store Arrays
@@ -315,9 +337,24 @@ Create and Store Arrays
    from_array
    from_delayed
    from_npy_stack
+   from_zarr
+   from_tiledb
    store
    to_hdf5
+   to_zarr
    to_npy_stack
+   to_tiledb
+
+Generalized Ufuncs
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.gufunc
+
+.. autosummary::
+   apply_gufunc
+   as_gufunc
+   gufunc
+
 
 Internal functions
 ~~~~~~~~~~~~~~~~~~
@@ -325,8 +362,8 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   atop
-   top
+   blockwise
+   normalize_chunks
 
 
 Other functions
@@ -337,7 +374,6 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: store
-.. autofunction:: topk
 .. autofunction:: coarsen
 .. autofunction:: stack
 .. autofunction:: concatenate
@@ -358,6 +394,7 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argtopk
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
@@ -366,6 +403,7 @@ Other functions
 .. autofunction:: atleast_1d
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
+.. autofunction:: average
 .. autofunction:: bincount
 .. autofunction:: bitwise_and
 .. autofunction:: bitwise_not
@@ -392,6 +430,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diagonal
 .. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot
@@ -399,6 +438,7 @@ Other functions
 .. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: empty_like
+.. autofunction:: einsum
 .. autofunction:: exp
 .. autofunction:: expm1
 .. autofunction:: eye
@@ -417,18 +457,23 @@ Other functions
 .. autofunction:: frompyfunc
 .. autofunction:: full
 .. autofunction:: full_like
+.. autofunction:: gradient
 .. autofunction:: histogram
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag
 .. autofunction:: indices
 .. autofunction:: insert
+.. autofunction:: invert
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
+.. autofunction:: isin
 .. autofunction:: isinf
+.. autofunction:: isneginf
 .. autofunction:: isnan
 .. autofunction:: isnull
+.. autofunction:: isposinf
 .. autofunction:: isreal
 .. autofunction:: ldexp
 .. autofunction:: linspace
@@ -462,12 +507,16 @@ Other functions
 .. autofunction:: nanstd
 .. autofunction:: nansum
 .. autofunction:: nanvar
+.. autofunction:: nan_to_num
 .. autofunction:: nextafter
 .. autofunction:: nonzero
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: ones_like
+.. autofunction:: outer
+.. autofunction:: pad
 .. autofunction:: percentile
+.. autofunction:: piecewise
 .. autofunction:: prod
 .. autofunction:: ptp
 .. autofunction:: rad2deg
@@ -502,9 +551,9 @@ Other functions
 .. autofunction:: triu
 .. autofunction:: trunc
 .. autofunction:: unique
+.. autofunction:: unravel_index
 .. autofunction:: var
 .. autofunction:: vdot
-.. autofunction:: vnorm
 .. autofunction:: vstack
 .. autofunction:: where
 .. autofunction:: zeros
@@ -522,9 +571,11 @@ Other functions
 .. autofunction:: solve_triangular
 .. autofunction:: svd
 .. autofunction:: svd_compressed
+.. autofunction:: sfqr
 .. autofunction:: tsqr
 
 .. currentmodule:: dask.array.ma
+.. autofunction:: average
 .. autofunction:: filled
 .. autofunction:: fix_invalid
 .. autofunction:: getdata
@@ -543,19 +594,25 @@ Other functions
 .. autofunction:: masked_where
 .. autofunction:: set_fill_value
 
-.. currentmodule:: dask.array.ghost
+.. currentmodule:: dask.array.overlap
 
-.. autofunction:: ghost
+.. autofunction:: overlap
 .. autofunction:: map_overlap
+.. autofunction:: trim_internal
+.. autofunction:: trim_overlap
 
 .. currentmodule:: dask.array
 
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
+.. autofunction:: from_zarr
+.. autofunction:: from_tiledb
 .. autofunction:: store
 .. autofunction:: to_hdf5
+.. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
+.. autofunction:: to_tiledb
 
 .. currentmodule:: dask.array.fft
 
@@ -584,6 +641,7 @@ Other functions
 .. autofunction:: beta
 .. autofunction:: binomial
 .. autofunction:: chisquare
+.. autofunction:: choice
 .. autofunction:: exponential
 .. autofunction:: f
 .. autofunction:: gamma
@@ -601,6 +659,7 @@ Other functions
 .. autofunction:: pareto
 .. autofunction:: poisson
 .. autofunction:: power
+.. autofunction:: randint
 .. autofunction:: random
 .. autofunction:: random_sample
 .. autofunction:: rayleigh
@@ -635,11 +694,17 @@ Other functions
 
 .. autofunction:: imread
 
+.. currentmodule:: dask.array.gufunc
+
+.. autofunction:: apply_gufunc
+.. autofunction:: as_gufunc
+.. autofunction:: gufunc
+
 .. currentmodule:: dask.array.core
 
 .. autofunction:: map_blocks
-.. autofunction:: atop
-.. autofunction:: top
+.. autofunction:: blockwise
+.. autofunction:: normalize_chunks
 
 .. currentmodule:: dask.array
 
