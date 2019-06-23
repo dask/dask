@@ -527,6 +527,7 @@ def test_hdf_file_list():
 
 
 def test_hdf_pattern_pathlib():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]},
                       index=[1., 2., 3., 4.])
@@ -539,6 +540,7 @@ def test_hdf_pattern_pathlib():
 
 
 def test_hdf_pattern_fspath():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]},
                       index=[1., 2., 3., 4.])
