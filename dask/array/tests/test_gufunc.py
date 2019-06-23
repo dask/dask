@@ -8,6 +8,7 @@ import numpy as np
 
 from dask.array.core import Array
 from dask.array.gufunc import _parse_gufunc_signature, _validate_normalize_axes, apply_gufunc,gufunc, as_gufunc
+from dask.array.utils import IS_NEP18_ACTIVE
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:
@@ -541,3 +542,26 @@ def test_apply_gufunc_via_numba_02():
     y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
 
     assert_eq(x, y)
+
+
+@pytest.mark.skipif(
+    not IS_NEP18_ACTIVE,
+    reason="NEP18 required for sparse meta propagation"
+)
+def test_preserve_meta_type():
+    sparse = pytest.importorskip('sparse')
+
+    def stats(x):
+        return np.sum(x, axis=-1), np.mean(x, axis=-1)
+
+    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = a.map_blocks(sparse.COO.from_numpy)
+    sum, mean = apply_gufunc(stats, "(i)->(),()", a,
+                             output_dtypes=2 * (a.dtype,))
+
+    assert isinstance(a._meta, sparse.COO)
+    assert isinstance(sum._meta, sparse.COO)
+    assert isinstance(mean._meta, sparse.COO)
+
+    assert_eq(sum, sum)
+    assert_eq(mean, mean)
