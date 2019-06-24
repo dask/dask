@@ -87,10 +87,10 @@ class Accessor(object):
 
     def __getattr__(self, key):
         if key in self._delegates:
-            if isinstance(getattr(self._accessor, key), property):
-                return self._property_map(key)
-            else:
+            if callable(getattr(self._accessor, key)):
                 return partial(self._function_map, key)
+            else:
+                return self._property_map(key)
         else:
             raise AttributeError(key)
 
