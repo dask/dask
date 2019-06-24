@@ -1038,17 +1038,20 @@ def test_statistical_profiling(c, s, a, b):
     assert profile["count"]
 
 
+@pytest.mark.slow
 @nodebug
-@gen_cluster(client=True)
+@gen_cluster(client=True, timeout=20)
 def test_statistical_profiling_2(c, s, a, b):
     da = pytest.importorskip("dask.array")
-    for i in range(5):
+    while True:
         x = da.random.random(1000000, chunks=(10000,))
         y = (x + x * 2) - x.sum().persist()
         yield wait(y)
-    profile = a.get_profile()
-    assert profile["count"]
-    assert "sum" in str(profile) or "random" in str(profile)
+
+        profile = a.get_profile()
+        text = str(profile)
+        if profile["count"] and "sum" in text and "random" in text:
+            break
 
 
 @gen_cluster(

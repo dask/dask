@@ -1,12 +1,66 @@
 Changelog
 =========
 
+2.0.0 - 2019-06-25
+------------------
+
+-  **Drop support for Python 2**
+-  Relax warnings before release (:pr:`2796`) `Matthew Rocklin`_
+-  Deprecate --bokeh/--no-bokeh CLI (:pr:`2800`) `Tom Augspurger`_
+-  Typo in bokeh service_kwargs for dask-worker (:pr:`2783`) `Tom Augspurger`_
+-  Update command line cli options docs (:pr:`2794`) `James Bourbeau`_
+-  Remove "experimental" from TLS docs (:pr:`2793`) `James Bourbeau`_
+-  Add warnings around ncores= keywords (:pr:`2791`) `Matthew Rocklin`_
+-  Add --version option to scheduler and worker CLI (:pr:`2782`) `Tom Augspurger`_
+-  Raise when workers initialization times out (:pr:`2784`) `Tom Augspurger`_
+-  Replace ncores with nthreads throughout codebase (:pr:`2758`) `Matthew Rocklin`_
+-  Add unknown pytest markers (:pr:`2764`) `Tom Augspurger`_
+-  Delay lookup of allowed failures. (:pr:`2761`) `Tom Augspurger`_
+-  Change address -> worker in ColumnDataSource for nbytes plot (:pr:`2755`) `Matthew Rocklin`_
+-  Remove module state in Prometheus Handlers (:pr:`2760`) `Matthew Rocklin`_
+-  Add stress test for UCX (:pr:`2759`) `Matthew Rocklin`_
+-  Add nanny logs (:pr:`2744`) `Tom Augspurger`_
+-  Move some of the adaptive logic into the scheduler (:pr:`2735`) `Matthew Rocklin`_
+-  Add SpecCluster.new_worker_spec method (:pr:`2751`) `Matthew Rocklin`_
+-  Worker dashboard fixes (:pr:`2747`) `Matthew Rocklin`_
+-  Add async context managers to scheduler/worker classes (:pr:`2745`) `Matthew Rocklin`_
+-  Fix the resource key representation before sending graphs (:pr:`2733`) `Michael Spiegel`_
+-  Allow user to configure whether workers are daemon. (:pr:`2739`) `Caleb`_
+-  Pin pytest >=4 with pip in appveyor and python 3.5 (:pr:`2737`) `Matthew Rocklin`_
+-  Add Experimental UCX Comm (:pr:`2591`) `Ben Zaitlen`_ `Tom Augspurger`_ `Matthew Rocklin`_
+-  Close nannies gracefully (:pr:`2731`) `Matthew Rocklin`_
+-  add kwargs to progressbars (:pr:`2638`) `Manuel Garrido`_
+-  Add back LocalCluster.__repr__. (:pr:`2732`) `Loïc Estève`_
+-  Move bokeh module to dashboard (:pr:`2724`) `Matthew Rocklin`_
+-  Close clusters at exit (:pr:`2730`) `Matthew Rocklin`_
+-  Add SchedulerPlugin TaskState example (:pr:`2622`) `Matt Nicolls`_
+-  Add SpecificationCluster (:pr:`2675`) `Matthew Rocklin`_
+-  Replace register_worker_callbacks with worker plugins (:pr:`2453`) `Matthew Rocklin`_
+-  Proxy worker dashboards from scheduler dashboard (:pr:`2715`) `Ben Zaitlen`_
+-  Add docstring to Scheduler.check_idle_saturated (:pr:`2721`) `Matthew Rocklin`_
+-  Refer to LocalCluster in Client docstring (:pr:`2719`) `Matthew Rocklin`_
+-  Remove special casing of Scikit-Learn BaseEstimator serialization (:pr:`2713`) `Matthew Rocklin`_
+-  Fix two typos in Pub class docstring (:pr:`2714`) `Magnus Nord`_
+-  Support uploading files with multiple modules (:pr:`2587`) `Sam Grayson`_
+-  Change the main workers bokeh page to /status (:pr:`2689`) `Ben Zaitlen`_
+-  Cleanly stop periodic callbacks in Client (:pr:`2705`) `Matthew Rocklin`_
+-  Disable pan tool for the Progress, Byte Stored and Tasks Processing plot (:pr:`2703`) `Mathieu Dugré`_
+-  Except errors in Nanny's memory monitor if process no longer exists (:pr:`2701`) `Matthew Rocklin`_
+-  Handle heartbeat when worker has just left (:pr:`2702`) `Matthew Rocklin`_
+-  Modify styling of histograms for many-worker dashboard plots (:pr:`2695`) `Mathieu Dugré`_
+-  Add method to wait for n workers before continuing (:pr:`2688`) `Daniel Farrell`_
+-  Support computation on delayed(None) (:pr:`2697`)  `Matthew Rocklin`_
+-  Cleanup localcluster (:pr:`2693`)  `Matthew Rocklin`_
+-  Use 'temporary-directory' from dask.config for Worker's directory (:pr:`2654`) `Matthew Rocklin`_
+-  Remove support for Iterators and Queues (:pr:`2671`) `Matthew Rocklin`_
+
+
 1.28.1 - 2019-05-13
 -------------------
 
 This is a small bugfix release due to a config change upstream.
 
--  Use config accessor method for "scheduler-address" (#2676) `James Bourbeau`_
+-  Use config accessor method for "scheduler-address" (:pr:`2676`) `James Bourbeau`_
 
 
 1.28.0 - 2019-05-08
@@ -1039,3 +1093,10 @@ significantly without many new features.
 .. _`condoratberlin`: https://github.com/condoratberlin
 .. _`K.-Michael Aye`: https://github.com/michaelaye
 .. _`@plbertrand`: https://github.com/plbertrand
+.. _`Michael Spiegel`: https://github.com/Spiegel0
+.. _`Caleb`: https://github.com/calebho
+.. _`Ben Zaitlen`: https://github.com/quasiben
+.. _`Manuel Garrido`: https://github.com/manugarri
+.. _`Magnus Nord`: https://github.com/magnunor
+.. _`Sam Grayson`: https://github.com/charmoniumQ
+.. _`Mathieu Dugré`: https://github.com/mathdugre

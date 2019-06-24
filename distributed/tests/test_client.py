@@ -51,7 +51,7 @@ from distributed.client import (
     futures_of,
     temp_default_client,
 )
-from distributed.compatibility import PY3
+from distributed.compatibility import PY3, WINDOWS
 
 from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
@@ -2732,9 +2732,7 @@ def test_persist_get(c, s, a, b):
     assert result == ((1 + 1) + (2 + 2)) + 10
 
 
-@pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="num_fds not supported on windows"
-)
+@pytest.mark.skipif(WINDOWS, reason="num_fds not supported on windows")
 def test_client_num_fds(loop):
     psutil = pytest.importorskip("psutil")
     with cluster() as (s, [a, b]):
@@ -3084,9 +3082,7 @@ def test_client_replicate_sync(c):
     assert y.result() == 3
 
 
-@pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="Windows timer too coarse-grained"
-)
+@pytest.mark.skipif(WINDOWS, reason="Windows timer too coarse-grained")
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 4)] * 1)
 def test_task_load_adapts_quickly(c, s, a):
     future = c.submit(slowinc, 1, delay=0.2)  # slow
@@ -3573,9 +3569,7 @@ def test_reconnect_timeout(c, s):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    sys.platform.startswith("win"), reason="num_fds not supported on windows"
-)
+@pytest.mark.skipif(WINDOWS, reason="num_fds not supported on windows")
 @pytest.mark.skipif(
     sys.version_info[0] == 2, reason="Semaphore.acquire doesn't support timeout option"
 )
@@ -5522,7 +5516,11 @@ def test_profile_bokeh(c, s, a, b):
     assert isinstance(figure, Model)
 
     with tmpfile("html") as fn:
-        yield c.profile(filename=fn)
+        try:
+            yield c.profile(filename=fn)
+        except PermissionError:
+            if WINDOWS:
+                pytest.xfail()
         assert os.path.exists(fn)
 
 
