@@ -1,17 +1,15 @@
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-
-import os
-import dask
 import pytest
 
+import os
 from time import sleep
+import pathlib
 
+import dask
 import dask.dataframe as dd
-
 from dask.utils import tmpfile, tmpdir, dependency_depth
-
 from dask.dataframe.utils import assert_eq
 
 
@@ -517,6 +515,19 @@ def test_hdf_file_list():
             input_files = [os.path.join(tdir, 'one.h5'), os.path.join(tdir, 'two.h5')]
             res = dd.read_hdf(input_files, 'dataframe')
             tm.assert_frame_equal(res.compute(), df)
+
+
+def test_hdf_pattern_pathlike():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]},
+                      index=[1., 2., 3., 4.])
+
+    with tmpdir() as tdir:
+        df.to_hdf(os.path.join(tdir, 'test.h5'), 'dataframe', format='table')
+        path = pathlib.Path(tdir) / 'test.h5'
+        res = dd.read_hdf(path, 'dataframe')
+        assert_eq(res, df)
 
 
 def test_read_hdf_doesnt_segfault():

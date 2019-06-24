@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import math
 import os
 import re
+import pathlib
 
 from toolz import identity
 
@@ -265,3 +266,32 @@ def build_name_function(max_int):
         return str(i).zfill(pad_length)
 
     return name_function
+
+
+def stringify_path(filepath):
+    """ Attempt to convert a path-like object to a string.
+
+    Parameters
+    ----------
+    filepath : object to be converted
+
+    Returns
+    -------
+    filepath_str : maybe a string version of the object
+
+    Notes
+    -----
+    Objects supporting the fspath protocol (Python 3.6+) are coerced
+    according to its __fspath__ method.
+
+    For backwards compatibility with older Python version, pathlib.Path
+    objects are specially coerced.
+
+    Any other object is passed through unchanged, which includes bytes,
+    strings, buffers, or anything else that's not even path-like.
+    """
+    if hasattr(filepath, '__fspath__'):
+        return filepath.__fspath__()
+    elif isinstance(filepath, pathlib.Path):
+        return str(filepath)
+    return filepath
