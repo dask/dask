@@ -379,9 +379,15 @@ def indices(dimensions, dtype=int, chunks='auto'):
         The shape of the index grid.
     dtype : dtype, optional
         Type to use for the array. Default is ``int``.
-    chunks : sequence of ints
-        The number of samples on each block. Note that the last block will have
-        fewer samples if ``len(array) % chunks != 0``.
+    chunks : sequence of ints, str
+        The size of each block.  Must be one of the following forms:
+
+        -   A blocksize like (500, 1000)
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
+        Note that the last block will have fewer samples if ``len(array) % chunks != 0``.
 
     Returns
     -------
@@ -389,7 +395,7 @@ def indices(dimensions, dtype=int, chunks='auto'):
     """
     dimensions = tuple(dimensions)
     dtype = np.dtype(dtype)
-    chunks = tuple(chunks)
+    chunks = normalize_chunks(chunks, shape=dimensions, dtype=dtype)
 
     if len(dimensions) != len(chunks):
         raise ValueError("Need same number of chunks as dimensions.")
@@ -422,6 +428,7 @@ def eye(N, chunks='auto', M=None, k=0, dtype=float):
       Number of rows in the output.
     chunks : int, str
         How to chunk the array. Must be one of the following forms:
+
         -   A blocksize like 1000.
         -   A size in bytes, like "100 MiB" which will choose a uniform
             block-like shape

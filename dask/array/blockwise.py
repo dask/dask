@@ -3,41 +3,26 @@ import warnings
 
 import toolz
 
-import numpy as np
-
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
 
 
-def blockwise_meta(func, dtype, *args, **kwargs):
-    from .utils import meta_from_array
-    arrays = args[::2]
-    args_meta = list(map(meta_from_array, arrays))
-    kwargs_meta = {k: meta_from_array(v) for k, v in kwargs.items()}
-
-    # TODO: look for alternative to this, causes issues when using map_blocks()
-    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
-    if isinstance(func, np.vectorize):
-        meta = func(*args_meta)
-        return meta.astype(dtype)
-
-    try:
-        meta = func(*args_meta, **kwargs_meta)
-    except TypeError:
-        # The concatenate argument is an argument introduced by this
-        # function and may not be support by some external functions,
-        # such as in NumPy
-        kwargs_meta.pop('concatenate', None)
-        meta = func(*args_meta, **kwargs_meta)
-    except ValueError:
-        return None
-
-    return meta.astype(dtype)
-
-
-def blockwise(func, out_ind, *args, **kwargs):
+def blockwise(
+    func,
+    out_ind,
+    *args,
+    name=None,
+    token=None,
+    dtype=None,
+    adjust_chunks=None,
+    new_axes=None,
+    align_arrays=True,
+    concatenate=None,
+    meta=None,
+    **kwargs
+):
     """ Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
@@ -137,12 +122,8 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
     """
-    out = kwargs.pop('name', None)      # May be None at this point
-    token = kwargs.pop('token', None)
-    dtype = kwargs.pop('dtype', None)
-    adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.pop('new_axes', {})
-    align_arrays = kwargs.pop('align_arrays', True)
+    out = name
+    new_axes = new_axes or {}
 
     # Input Validation
     if len(set(out_ind)) != len(out_ind):
@@ -155,9 +136,6 @@ def blockwise(func, out_ind, *args, **kwargs):
         raise ValueError("Unknown dimension", new)
 
     from .core import Array, unify_chunks, normalize_arg
-
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
@@ -212,7 +190,8 @@ def blockwise(func, out_ind, *args, **kwargs):
                          base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
     graph = core_blockwise(func, out, out_ind, *argindsstr, numblocks=numblocks,
-                           dependencies=dependencies, new_axes=new_axes, **kwargs2)
+                           dependencies=dependencies, new_axes=new_axes,
+                           concatenate=concatenate, **kwargs2)
     graph = HighLevelGraph.from_collections(out, graph,
                                             dependencies=arrays + dependencies)
 
@@ -231,10 +210,12 @@ def blockwise(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    try:
-        meta = blockwise_meta(func, dtype, *args, **kwargs)
+    if meta is None:
+        from .utils import compute_meta
+        meta = compute_meta(func, dtype, *args[::2], **kwargs)
+    if meta is not None:
         return Array(graph, out, chunks, meta=meta)
-    except Exception:
+    else:
         return Array(graph, out, chunks, dtype=dtype)
 
 

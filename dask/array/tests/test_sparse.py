@@ -158,6 +158,7 @@ def test_metadata():
     assert isinstance((y - z)._meta, sparse.COO)
     if IS_NEP18_ACTIVE:
         assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+        assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
         assert isinstance(np.stack([y, y])._meta, sparse.COO)
         assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
 

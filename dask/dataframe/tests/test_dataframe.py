@@ -17,7 +17,7 @@ from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (repartition_divisions, aca, _concat, Scalar,
-                                 has_parallel_type)
+                                 has_parallel_type, iter_chunks, total_mem_usage)
 from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
@@ -1544,7 +1544,7 @@ def test_repartition_on_pandas_dataframe():
 @pytest.mark.parametrize('use_index', [True, False])
 @pytest.mark.parametrize('n', [1, 2, 4, 5])
 @pytest.mark.parametrize('k', [1, 2, 4, 5])
-@pytest.mark.parametrize('dtype', [int, float, 'M8[ns]'])
+@pytest.mark.parametrize('dtype', [float, 'M8[ns]'])
 @pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
@@ -1557,6 +1557,30 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     assert b.npartitions == k
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
+
+
+@pytest.mark.parametrize('use_index', [True, False])
+@pytest.mark.parametrize('n', [2, 5])
+@pytest.mark.parametrize('partition_size', ['1kiB'])
+@pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
+def test_repartition_partition_size(use_index, n, partition_size, transform):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
+                       'y': list('abdabd') * 10},
+                      index=pd.Series([10, 20, 30, 40, 50, 60] * 10))
+    df = transform(df)
+    a = dd.from_pandas(df, npartitions=n, sort=use_index)
+    b = a.repartition(partition_size=partition_size)
+    assert_eq(a, b, check_divisions=False)
+    assert np.alltrue(b.map_partitions(total_mem_usage).compute() <= 1024)
+    parts = dask.get(b.dask, b.__dask_keys__())
+    assert all(map(len, parts))
+
+
+def test_iter_chunks():
+    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
+    assert list(iter_chunks(sizes, 19)) == [[14], [8, 5], [9, 7], [9, 1], [19], [8], [19]]
+    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
+    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
 
 
 def test_repartition_npartitions_same_limits():
@@ -1631,6 +1655,15 @@ def test_repartition_freq_month():
 
     assert_eq(df, ddf)
     assert 2 < ddf.npartitions <= 6
+
+
+def test_repartition_input_errors():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(ValueError):
+        ddf.repartition(npartitions=5, divisions=[None, None])
+    with pytest.raises(ValueError):
+        ddf.repartition(npartitions=5, partition_size='5MiB')
 
 
 def test_embarrassingly_parallel_operations():

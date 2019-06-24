@@ -224,7 +224,7 @@ def _concatenate2(arrays, axes=[]):
         return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
-    concatenate = concatenate_lookup.dispatch(type(max(arrays, key=lambda x: x.__array_priority__)))
+    concatenate = concatenate_lookup.dispatch(type(max(arrays, key=lambda x: getattr(x, '__array_priority__', 0))))
     return concatenate(arrays, axis=axes[0])
 
 
@@ -848,7 +848,6 @@ class Array(DaskMethodsMixin):
 
     Parameters
     ----------
-
     dask : dict
         Task dependency graph
     name : string
@@ -876,19 +875,20 @@ class Array(DaskMethodsMixin):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
-        if dtype is not None and meta is not None:
-            raise TypeError("You must not specify both meta and dtype")
-        if dtype is None and meta is None:
-            raise ValueError("You must specify the meta or dtype of the array")
+        meta = meta_from_array(meta, dtype=dtype)
 
-        self._chunks = normalize_chunks(chunks, shape, dtype=dtype or meta.dtype)
+        if (isinstance(chunks, str) or
+                isinstance(chunks, tuple) and
+                chunks and
+                any(isinstance(c, str) for c in chunks)):
+            dt = meta.dtype
+        else:
+            dt = None
+        self._chunks = normalize_chunks(chunks, shape, dtype=dt)
         if self._chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
-        if dtype:
-            self._meta = np.empty((0,) * self.ndim, dtype=dtype)
-        else:
-            self._meta = meta_from_array(meta)
+        self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -2257,7 +2257,7 @@ def round_to(c, s):
 
 
 def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True,
-               getitem=None):
+               getitem=None, meta=None):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -2293,6 +2293,10 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
+    meta : Array-like, optional
+        The metadata for the resulting dask array.  This is the kind of array
+        that will result from slicing the input array.
+        Defaults to the input array.
 
     Examples
     --------
@@ -2325,6 +2329,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
         dtype=x.dtype,
         previous_chunks=previous_chunks
     )
+
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2333,6 +2338,7 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
         original_name = name = 'array-' + str(uuid.uuid1())
     else:
         original_name = name
+
     if lock is True:
         lock = SerializableLock()
 
@@ -2361,7 +2367,10 @@ def from_array(x, chunks='auto', name=None, lock=False, asarray=True, fancy=True
     if x.__class__.__module__.split('.')[0] == 'tiledb' and hasattr(x, '_ctx_'):
         return Array(dsk, name, chunks, dtype=x.dtype)
 
-    return Array(dsk, name, chunks, meta=x)
+    if meta is None:
+        meta = x
+
+    return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, 'dtype', None))
 
 
 def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):
@@ -2953,12 +2962,14 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
+    from . import wrap
+
     seq = [asarray(a) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
-    meta = np.concatenate([meta_from_array(s) for s in seq])
+    meta = np.concatenate([meta_from_array(s) for s in seq], axis=axis)
 
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
@@ -2982,7 +2993,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq)
     if n == 0:
-        return from_array(np.empty(shape=shape, dtype=meta.dtype))
+        try:
+            return wrap.empty_like(meta, shape=shape, chunks=shape,
+                                   dtype=meta.dtype)
+        except TypeError:
+            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
         return seq[0]
 

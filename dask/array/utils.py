@@ -11,6 +11,7 @@ from toolz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
+from ..utils import ignoring, is_arraylike
 
 try:
     AxisError = np.AxisError
@@ -33,20 +34,36 @@ def meta_from_array(x, ndim=None, dtype=None):
 
     Parameters
     ----------
-    x: array-like
+    x: array-like, callable
+        Either an object that looks sufficiently like a Numpy array,
+        or a callable that accepts shape and dtype keywords
     ndim: int
-    dtype: dtype
+        Number of dimensions of the array
+    dtype: Numpy dtype
+        A valid input for ``np.dtype``
 
     Returns
     -------
-    array-like
+    array-like with zero elements of the correct dtype
     """
-    # x._meta must be a Dask Array, some libraries (e.g. zarr) implement a
-    # _meta attribute that are incompatible with Dask Array._meta
+    # If using x._meta, x must be a Dask Array, some libraries (e.g. zarr)
+    # implement a _meta attribute that are incompatible with Dask Array._meta
     if hasattr(x, '_meta') and isinstance(x, Array):
         x = x._meta
 
-    if not hasattr(x, 'shape') or not hasattr(x, 'dtype'):
+    if dtype is None and x is None:
+        raise ValueError("You must specify the meta or dtype of the array")
+
+    if np.isscalar(x):
+        x = np.array(x)
+
+    if x is None:
+        x = np.ndarray
+
+    if isinstance(x, type):
+        x = x(shape=(0,) * (ndim or 0), dtype=dtype)
+
+    if not hasattr(x, 'shape') or not hasattr(x, 'dtype') or not isinstance(x.shape, tuple):
         return x
 
     if isinstance(x, list) or isinstance(x, tuple):
@@ -71,8 +88,42 @@ def meta_from_array(x, ndim=None, dtype=None):
     except Exception:
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
+    if np.isscalar(meta):
+        meta = np.array(meta)
+
     if dtype and meta.dtype != dtype:
         meta = meta.astype(dtype)
+
+    return meta
+
+
+def compute_meta(func, _dtype, *args, **kwargs):
+    args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
+    kwargs_meta = {k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()}
+
+    # todo: look for alternative to this, causes issues when using map_blocks()
+    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+    if isinstance(func, np.vectorize):
+        meta = func(*args_meta)
+    else:
+        try:
+            meta = func(*args_meta, **kwargs_meta)
+        except TypeError as e:
+            if ("unexpected keyword argument" in str(e) or
+                    "is an invalid keyword for" in str(e) or
+                    "Did not understand the following kwargs" in str(e)):
+                raise
+            else:
+                return None
+        except Exception:
+            return None
+
+    if _dtype and getattr(meta, 'dtype', None) != _dtype:
+        with ignoring(AttributeError):
+            meta = meta.astype(_dtype)
+
+    if np.isscalar(meta):
+        meta = np.array(meta)
 
     return meta
 
