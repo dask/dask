@@ -2962,6 +2962,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
+    from . import wrap
+
     seq = [asarray(a) for a in seq]
 
     if not seq:
@@ -2991,7 +2993,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq)
     if n == 0:
-        return from_array(np.empty(shape=shape, dtype=meta.dtype))
+        try:
+            return wrap.empty_like(meta, shape=shape, chunks=shape,
+                                   dtype=meta.dtype)
+        except TypeError:
+            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
         return seq[0]
 
