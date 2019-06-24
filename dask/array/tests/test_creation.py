@@ -571,6 +571,9 @@ def test_tile_array_reps(shape, chunks, reps):
     ((10, 11), (4, 5), 0, 'reflect', {}),
     ((10, 11), (4, 5), 0, 'symmetric', {}),
     ((10, 11), (4, 5), 0, 'wrap', {}),
+    ((10, 11), (4, 5), 0, 'maximum', {'stat_length': 0}),
+    ((10, 11), (4, 5), 0, 'mean', {'stat_length': 0}),
+    ((10, 11), (4, 5), 0, 'minimum', {'stat_length': 0}),
 ])
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     np_a = np.random.random(shape)
