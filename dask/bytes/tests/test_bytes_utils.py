@@ -1,4 +1,5 @@
 import io
+import os
 import pathlib
 
 import pytest
@@ -125,7 +126,7 @@ def test_infer_storage_options_c(urlpath, expected_path):
 
 
 def test_stringify_path():
-    test_filepath = '/path/to/file.txt'
+    test_filepath = os.path.join('path', 'to', 'file.txt')
 
     # Pathlib.path
     path = pathlib.Path(test_filepath)
