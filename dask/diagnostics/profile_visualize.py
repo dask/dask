@@ -19,9 +19,11 @@ def unquote(expr):
     if istask(expr):
         if expr[0] in (tuple, list, set):
             return expr[0](map(unquote, expr[1]))
-        elif (expr[0] == dict and
-              isinstance(expr[1], list) and
-              isinstance(expr[1][0], list)):
+        elif (
+            expr[0] == dict
+            and isinstance(expr[1], list)
+            and isinstance(expr[1][0], list)
+        ):
             return dict(map(unquote, expr[1]))
     return expr
 
@@ -64,56 +66,58 @@ def pprint_task(task, keys, label_size=60):
         func = task[0]
         if func is apply:
             head = funcname(task[1])
-            tail = ')'
+            tail = ")"
             args = unquote(task[2]) if len(task) > 2 else ()
             kwargs = unquote(task[3]) if len(task) > 3 else {}
         else:
-            if hasattr(func, 'funcs'):
-                head = '('.join(funcname(f) for f in func.funcs)
-                tail = ')' * len(func.funcs)
+            if hasattr(func, "funcs"):
+                head = "(".join(funcname(f) for f in func.funcs)
+                tail = ")" * len(func.funcs)
             else:
                 head = funcname(task[0])
-                tail = ')'
+                tail = ")"
             args = task[1:]
             kwargs = {}
         if args or kwargs:
-            label_size2 = int((label_size - len(head) - len(tail)) //
-                              (len(args) + len(kwargs)))
+            label_size2 = int(
+                (label_size - len(head) - len(tail)) // (len(args) + len(kwargs))
+            )
             pprint = lambda t: pprint_task(t, keys, label_size2)
         if args:
             if label_size2 > 5:
-                args = ', '.join(pprint(t) for t in args)
+                args = ", ".join(pprint(t) for t in args)
             else:
-                args = '...'
+                args = "..."
         else:
-            args = ''
+            args = ""
         if kwargs:
             if label_size2 > 5:
-                kwargs = ', ' + ', '.join('{0}={1}'.format(k, pprint(v))
-                                          for k, v in sorted(kwargs.items()))
+                kwargs = ", " + ", ".join(
+                    "{0}={1}".format(k, pprint(v)) for k, v in sorted(kwargs.items())
+                )
             else:
-                kwargs = ', ...'
+                kwargs = ", ..."
         else:
-            kwargs = ''
-        return '{0}({1}{2}{3}'.format(head, args, kwargs, tail)
+            kwargs = ""
+        return "{0}({1}{2}{3}".format(head, args, kwargs, tail)
     elif isinstance(task, list):
         if not task:
-            return '[]'
+            return "[]"
         elif len(task) > 3:
             result = pprint_task(task[:3], keys, label_size)
-            return result[:-1] + ', ...]'
+            return result[:-1] + ", ...]"
         else:
             label_size2 = int((label_size - 2 - 2 * len(task)) // len(task))
-            args = ', '.join(pprint_task(t, keys, label_size2) for t in task)
-            return '[{0}]'.format(args)
+            args = ", ".join(pprint_task(t, keys, label_size2) for t in task)
+            return "[{0}]".format(args)
     else:
         try:
             if task in keys:
-                return '_'
+                return "_"
             else:
-                return '*'
+                return "*"
         except TypeError:
-            return '*'
+            return "*"
 
 
 def get_colors(palette, funcs):
@@ -127,8 +131,8 @@ def get_colors(palette, funcs):
     funcs : iterable
         Iterable of function names
     """
-    palettes = import_required('bokeh.palettes', _BOKEH_MISSING_MSG)
-    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
+    palettes = import_required("bokeh.palettes", _BOKEH_MISSING_MSG)
+    tz = import_required("toolz", _TOOLZ_MISSING_MSG)
 
     unique_funcs = list(sorted(tz.unique(funcs)))
     n_funcs = len(unique_funcs)
@@ -168,14 +172,16 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     -------
     The completed bokeh plot object.
     """
-    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     import bokeh
 
     if LooseVersion(bokeh.__version__) >= "0.12.10":
         from bokeh.io import state
+
         in_notebook = state.curstate().notebook
     else:
         from bokeh.io import _state
+
         in_notebook = _state._notebook
 
     if not in_notebook:
@@ -211,13 +217,13 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
 
 
 def _get_figure_keywords():
-    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     o = bp.Figure.properties()
-    o.add('tools')
+    o.add("tools")
     return o
 
 
-def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
+def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -239,47 +245,64 @@ def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
     -------
     The completed bokeh plot object.
     """
-    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
-    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
-    defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,xwheel_zoom,xpan",
-                    toolbar_location='above',
-                    plot_width=800, plot_height=300)
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    _get_figure_keywords())
+    tz = import_required("toolz", _TOOLZ_MISSING_MSG)
+
+    defaults = dict(
+        title="Profile Results",
+        tools="hover,save,reset,xwheel_zoom,xpan",
+        toolbar_location="above",
+        plot_width=800,
+        plot_height=300,
+    )
+    defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
 
         id_group = tz.groupby(itemgetter(4), results)
-        timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
-                       id_group.items())
-        id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
-                     key=itemgetter(1), reverse=True)))
+        timings = dict(
+            (k, [i.end_time - i.start_time for i in v]) for (k, v) in id_group.items()
+        )
+        id_lk = dict(
+            (t[0], n)
+            for (n, t) in enumerate(
+                sorted(timings.items(), key=itemgetter(1), reverse=True)
+            )
+        )
 
         left = min(starts)
         right = max(ends)
 
-        p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
-                      x_range=[0, right - left], **defaults)
+        p = bp.figure(
+            y_range=[str(i) for i in range(len(id_lk))],
+            x_range=[0, right - left],
+            **defaults
+        )
 
         data = {}
-        data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
-        data['x'] = [w / 2 + s - left for (w, s) in zip(width, starts)]
-        data['y'] = [id_lk[i] + 1 for i in ids]
-        data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
-        data['color'] = get_colors(palette, funcs)
-        data['key'] = [str(i) for i in keys]
+        data["width"] = width = [e - s for (s, e) in zip(starts, ends)]
+        data["x"] = [w / 2 + s - left for (w, s) in zip(width, starts)]
+        data["y"] = [id_lk[i] + 1 for i in ids]
+        data["function"] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
+        data["color"] = get_colors(palette, funcs)
+        data["key"] = [str(i) for i in keys]
 
         source = bp.ColumnDataSource(data=data)
 
-        p.rect(source=source, x='x', y='y', height=1, width='width',
-               color='color', line_color='gray')
+        p.rect(
+            source=source,
+            x="x",
+            y="y",
+            height=1,
+            width="width",
+            color="color",
+            line_color="gray",
+        )
     else:
-        p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10],
-                      **defaults)
+        p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10], **defaults)
     p.grid.grid_line_color = None
     p.axis.axis_line_color = None
     p.axis.major_tick_line_color = None
@@ -297,12 +320,12 @@ def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
         <span style="font-size: 10px; font-family: Monaco, monospace;">@function</span>
     </div>
     """
-    hover.point_policy = 'follow_mouse'
+    hover.point_policy = "follow_mouse"
 
     return p
 
 
-def plot_resources(results, palette='Viridis', **kwargs):
+def plot_resources(results, palette="Viridis", **kwargs):
     """Plot resource usage in a bokeh plot.
 
     Parameters
@@ -320,36 +343,42 @@ def plot_resources(results, palette='Viridis', **kwargs):
     -------
     The completed bokeh plot object.
     """
-    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
-    defaults = dict(title="Profile Results",
-                    tools="save,reset,xwheel_zoom,xpan",
-                    toolbar_location='above',
-                    plot_width=800, plot_height=300)
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    _get_figure_keywords())
+    defaults = dict(
+        title="Profile Results",
+        tools="save,reset,xwheel_zoom,xpan",
+        toolbar_location="above",
+        plot_width=800,
+        plot_height=300,
+    )
+    defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
     if results:
         t, mem, cpu = zip(*results)
         left, right = min(t), max(t)
         t = [i - left for i in t]
-        p = bp.figure(y_range=fix_bounds(0, max(cpu), 100),
-                      x_range=fix_bounds(0, right - left, 1),
-                      **defaults)
+        p = bp.figure(
+            y_range=fix_bounds(0, max(cpu), 100),
+            x_range=fix_bounds(0, right - left, 1),
+            **defaults
+        )
     else:
         t = mem = cpu = []
         p = bp.figure(y_range=(0, 100), x_range=(0, 1), **defaults)
     colors = palettes.all_palettes[palette][6]
-    p.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
+    p.line(t, cpu, color=colors[0], line_width=4, legend="% CPU")
     p.yaxis.axis_label = "% CPU"
-    p.extra_y_ranges = {'memory': Range1d(*fix_bounds(min(mem) if mem else 0,
-                                                      max(mem) if mem else 100,
-                                                      100))}
-    p.line(t, mem, color=colors[2], y_range_name='memory', line_width=4,
-           legend='Memory')
-    p.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'),
-                 'right')
+    p.extra_y_ranges = {
+        "memory": Range1d(
+            *fix_bounds(min(mem) if mem else 0, max(mem) if mem else 100, 100)
+        )
+    }
+    p.line(
+        t, mem, color=colors[2], y_range_name="memory", line_width=4, legend="Memory"
+    )
+    p.add_layout(LinearAxis(y_range_name="memory", axis_label="Memory (MB)"), "right")
     p.xaxis.axis_label = "Time (s)"
     return p
 
@@ -359,8 +388,9 @@ def fix_bounds(start, end, min_span):
     return start, max(end, start + min_span)
 
 
-def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
-               label_size=60, **kwargs):
+def plot_cache(
+    results, dsk, start_time, metric_name, palette="Viridis", label_size=60, **kwargs
+):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -386,16 +416,19 @@ def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
     -------
     The completed bokeh plot object.
     """
-    bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
+    bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
-    tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
-    defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,wheel_zoom,xpan",
-                    toolbar_location='above',
-                    plot_width=800, plot_height=300)
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    _get_figure_keywords())
+    tz = import_required("toolz", _TOOLZ_MISSING_MSG)
+
+    defaults = dict(
+        title="Profile Results",
+        tools="hover,save,reset,wheel_zoom,xpan",
+        toolbar_location="above",
+        plot_width=800,
+        plot_height=300,
+    )
+    defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
         starts, ends = list(zip(*results))[3:]
@@ -413,9 +446,15 @@ def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
         p = bp.figure(x_range=[0, max(tics)], **defaults)
 
         for (key, val), color in zip(data.items(), get_colors(palette, data.keys())):
-            p.line('x', 'y', line_color=color, line_width=3,
-                   source=bp.ColumnDataSource({'x': tics, 'y': val,
-                                               'label': [key for i in val]}))
+            p.line(
+                "x",
+                "y",
+                line_color=color,
+                line_width=3,
+                source=bp.ColumnDataSource(
+                    {"x": tics, "y": val, "label": [key for i in val]}
+                ),
+            )
 
     else:
         p = bp.figure(y_range=[0, 10], x_range=[0, 10], **defaults)

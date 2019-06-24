@@ -20,6 +20,7 @@ def optimize(dsk, keys, **kwargs):
 
     dsk = ensure_dict(dsk)
     from .io import dataframe_from_ctable
+
     if isinstance(keys, list):
         dsk, dependencies = cull(dsk, list(core.flatten(keys)))
     else:
@@ -27,9 +28,14 @@ def optimize(dsk, keys, **kwargs):
     dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
     if fastparquet:
         from .io.parquet import _read_parquet_row_group
+
         dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
 
-    dsk, dependencies = fuse(dsk, keys, dependencies=dependencies,
-                             fuse_subgraphs=config.get('fuse_subgraphs', True))
+    dsk, dependencies = fuse(
+        dsk,
+        keys,
+        dependencies=dependencies,
+        fuse_subgraphs=config.get("fuse_subgraphs", True),
+    )
     dsk, _ = cull(dsk, keys)
     return dsk

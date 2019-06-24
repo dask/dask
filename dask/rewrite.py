@@ -100,10 +100,10 @@ class Token(object):
 
 
 # A variable to represent *all* variables in a discrimination net
-VAR = Token('?')
+VAR = Token("?")
 # Represents the end of the traversal of an expression. We can't use `None`,
 # 'False', etc... here, as anything may be an argument to a function.
-END = Token('end')
+END = Token("end")
 
 
 class Node(tuple):
@@ -192,8 +192,7 @@ class RewriteRule(object):
         return term
 
     def __str__(self):
-        return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs,
-                                                   self.vars)
+        return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs, self.vars)
 
     def __repr__(self):
         return str(self)
@@ -368,8 +367,7 @@ def _bottom_up(net, term):
     return net._rewrite(term)
 
 
-strategies = {'top_level': _top_level,
-              'bottom_up': _bottom_up}
+strategies = {"top_level": _top_level, "bottom_up": _bottom_up}
 
 
 def _match(S, N):

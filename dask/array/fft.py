@@ -16,10 +16,12 @@ from .creation import arange as _arange
 from ..utils import derived_from
 
 
-chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
-               "has a single chunk. An FFT operation was tried on axis %s \n"
-               "which has chunks %s. To change the array's chunks use "
-               "dask.Array.rechunk.")
+chunk_error = (
+    "Dask array only supports taking an FFT along an axis that \n"
+    "has a single chunk. An FFT operation was tried on axis %s \n"
+    "which has chunks %s. To change the array's chunks use "
+    "dask.Array.rechunk."
+)
 
 fft_preamble = """
     Wrapping of %s
@@ -101,12 +103,14 @@ def _ihfft_out_chunks(a, s, axes):
     return chunks
 
 
-_out_chunk_fns = {'fft': _fft_out_chunks,
-                  'ifft': _fft_out_chunks,
-                  'rfft': _rfft_out_chunks,
-                  'irfft': _irfft_out_chunks,
-                  'hfft': _hfft_out_chunks,
-                  'ihfft': _ihfft_out_chunks}
+_out_chunk_fns = {
+    "fft": _fft_out_chunks,
+    "ifft": _fft_out_chunks,
+    "rfft": _rfft_out_chunks,
+    "irfft": _irfft_out_chunks,
+    "hfft": _hfft_out_chunks,
+    "ihfft": _ihfft_out_chunks,
+}
 
 
 def fft_wrap(fft_func, kind=None, dtype=None):
@@ -153,9 +157,9 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
     def func(a, s=None, axes=None):
         if axes is None:
-            if kind.endswith('2'):
+            if kind.endswith("2"):
                 axes = (-2, -1)
-            elif kind.endswith('n'):
+            elif kind.endswith("n"):
                 if s is None:
                     axes = tuple(range(a.ndim))
                 else:
@@ -181,15 +185,14 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         chunks = out_chunk_fn(a, s, axes)
 
         args = (s, axes)
-        if kind.endswith('fft'):
+        if kind.endswith("fft"):
             axis = None if axes is None else axes[0]
             n = None if s is None else s[0]
             args = (n, axis)
 
-        return a.map_blocks(fft_func, *args, dtype=_dtype,
-                            chunks=chunks)
+        return a.map_blocks(fft_func, *args, dtype=_dtype, chunks=chunks)
 
-    if kind.endswith('fft'):
+    if kind.endswith("fft"):
         _func = func
 
         def func(a, n=None, axis=None):
@@ -207,7 +210,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     func_name = fft_func.__name__
     func_fullname = func_mod.__name__ + "." + func_name
     if fft_func.__doc__ is not None:
-        func.__doc__ = (fft_preamble % (2 * (func_fullname,)))
+        func.__doc__ = fft_preamble % (2 * (func_fullname,))
         func.__doc__ += fft_func.__doc__
     func.__name__ = func_name
     return func
@@ -237,7 +240,7 @@ def _fftfreq_block(i, n, d):
 
 
 @derived_from(np.fft)
-def fftfreq(n, d=1.0, chunks='auto'):
+def fftfreq(n, d=1.0, chunks="auto"):
     n = int(n)
     d = float(d)
 
@@ -247,7 +250,7 @@ def fftfreq(n, d=1.0, chunks='auto'):
 
 
 @derived_from(np.fft)
-def rfftfreq(n, d=1.0, chunks='auto'):
+def rfftfreq(n, d=1.0, chunks="auto"):
     n = int(n)
     d = float(d)
 

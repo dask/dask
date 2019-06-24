@@ -17,11 +17,7 @@ def df_left():
     k = [i for s in partition_sizes for i in range(s)]
     vi = range(len(k))
 
-    return pd.DataFrame(dict(
-        idx=idx,
-        k=k,
-        v1=vi
-    )).set_index(['idx'])
+    return pd.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
 
 
 @pytest.fixture
@@ -33,11 +29,7 @@ def df_right():
     k = [i for s in partition_sizes for i in range(s)]
     vi = range(len(k))
 
-    return pd.DataFrame(dict(
-        idx=idx,
-        k=k,
-        v1=vi
-    )).set_index(['idx'])
+    return pd.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
 
 
 @pytest.fixture
@@ -74,30 +66,28 @@ def ddf_right_single(df_right):
     return dd.from_pandas(df_right, npartitions=1, sort=False)
 
 
-@pytest.fixture(params=['inner', 'left', 'right', 'outer'])
+@pytest.fixture(params=["inner", "left", "right", "outer"])
 def how(request):
     return request.param
 
 
-@pytest.fixture(params=[
-    'idx',
-    ['idx'],
-    ['idx', 'k'],
-    ['k', 'idx']])
+@pytest.fixture(params=["idx", ["idx"], ["idx", "k"], ["k", "idx"]])
 def on(request):
     return request.param
 
 
 # Tests
 # =====
-@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
-                    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)")
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.23.0",
+    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
+)
 def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle='tasks')
+    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle="tasks")
 
     # Assertions
     assert_eq(result, expected)
@@ -105,15 +95,17 @@ def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
     assert len(result.__dask_graph__()) < 80
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
-                    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)")
-@pytest.mark.parametrize('how', ['inner', 'left'])
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.23.0",
+    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
+)
+@pytest.mark.parametrize("how", ["inner", "left"])
 def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on, how):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle='tasks')
+    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle="tasks")
 
     # Assertions
     assert_eq(result, expected)
@@ -121,15 +113,17 @@ def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on
     assert len(result.__dask_graph__()) < 30
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
-                    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)")
-@pytest.mark.parametrize('how', ['inner', 'right'])
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.23.0",
+    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
+)
+@pytest.mark.parametrize("how", ["inner", "right"])
 def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on, how):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle='tasks')
+    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle="tasks")
 
     # Assertions
     assert_eq(result, expected)
@@ -137,14 +131,18 @@ def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on
     assert len(result.__dask_graph__()) < 30
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
-                    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)")
-def test_merge_known_to_unknown(df_left, df_right, ddf_left, ddf_right_unknown, on, how):
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.23.0",
+    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
+)
+def test_merge_known_to_unknown(
+    df_left, df_right, ddf_left, ddf_right_unknown, on, how
+):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle='tasks')
+    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle="tasks")
 
     # Assertions
     assert_eq(result, expected)
@@ -152,14 +150,18 @@ def test_merge_known_to_unknown(df_left, df_right, ddf_left, ddf_right_unknown, 
     assert len(result.__dask_graph__()) >= 400
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
-                    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)")
-def test_merge_unknown_to_known(df_left, df_right, ddf_left_unknown, ddf_right, on, how):
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.23.0",
+    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
+)
+def test_merge_unknown_to_known(
+    df_left, df_right, ddf_left_unknown, ddf_right, on, how
+):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle='tasks')
+    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle="tasks")
 
     # Assertions
     assert_eq(result, expected)
@@ -167,14 +169,18 @@ def test_merge_unknown_to_known(df_left, df_right, ddf_left_unknown, ddf_right, 
     assert len(result.__dask_graph__()) > 400
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
-                    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)")
-def test_merge_unknown_to_unknown(df_left, df_right, ddf_left_unknown, ddf_right_unknown, on, how):
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.23.0",
+    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
+)
+def test_merge_unknown_to_unknown(
+    df_left, df_right, ddf_left_unknown, ddf_right_unknown, on, how
+):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Merge unknown to unknown
-    result = ddf_left_unknown.merge(ddf_right_unknown, on=on, how=how, shuffle='tasks')
+    result = ddf_left_unknown.merge(ddf_right_unknown, on=on, how=how, shuffle="tasks")
 
     # Assertions
     assert_eq(result, expected)

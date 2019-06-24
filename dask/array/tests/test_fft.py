@@ -12,14 +12,7 @@ from dask.array.utils import assert_eq, same_keys
 from dask.array.core import normalize_chunks
 
 
-all_1d_funcnames = [
-    "fft",
-    "ifft",
-    "rfft",
-    "irfft",
-    "hfft",
-    "ihfft",
-]
+all_1d_funcnames = ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
 
 all_nd_funcnames = [
     "fft2",
@@ -53,22 +46,19 @@ def test_fft(funcname):
     da_fft = getattr(da.fft, funcname)
     np_fft = getattr(np.fft, funcname)
 
-    assert_eq(da_fft(darr),
-              np_fft(nparr))
+    assert_eq(da_fft(darr), np_fft(nparr))
 
 
 @pytest.mark.parametrize("funcname", all_nd_funcnames)
 def test_fft2n_shapes(funcname):
     da_fft = getattr(dask.array.fft, funcname)
     np_fft = getattr(np.fft, funcname)
-    assert_eq(da_fft(darr3),
-              np_fft(nparr))
-    assert_eq(da_fft(darr3, (8, 9)),
-              np_fft(nparr, (8, 9)))
-    assert_eq(da_fft(darr3, (8, 9), axes=(1, 0)),
-              np_fft(nparr, (8, 9), axes=(1, 0)))
-    assert_eq(da_fft(darr3, (12, 11), axes=(1, 0)),
-              np_fft(nparr, (12, 11), axes=(1, 0)))
+    assert_eq(da_fft(darr3), np_fft(nparr))
+    assert_eq(da_fft(darr3, (8, 9)), np_fft(nparr, (8, 9)))
+    assert_eq(da_fft(darr3, (8, 9), axes=(1, 0)), np_fft(nparr, (8, 9), axes=(1, 0)))
+    assert_eq(
+        da_fft(darr3, (12, 11), axes=(1, 0)), np_fft(nparr, (12, 11), axes=(1, 0))
+    )
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
@@ -76,18 +66,12 @@ def test_fft_n_kwarg(funcname):
     da_fft = getattr(da.fft, funcname)
     np_fft = getattr(np.fft, funcname)
 
-    assert_eq(da_fft(darr, 5),
-              np_fft(nparr, 5))
-    assert_eq(da_fft(darr, 13),
-              np_fft(nparr, 13))
-    assert_eq(da_fft(darr2, axis=0),
-              np_fft(nparr, axis=0))
-    assert_eq(da_fft(darr2, 5, axis=0),
-              np_fft(nparr, 5, axis=0))
-    assert_eq(da_fft(darr2, 13, axis=0),
-              np_fft(nparr, 13, axis=0))
-    assert_eq(da_fft(darr2, 12, axis=0),
-              np_fft(nparr, 12, axis=0))
+    assert_eq(da_fft(darr, 5), np_fft(nparr, 5))
+    assert_eq(da_fft(darr, 13), np_fft(nparr, 13))
+    assert_eq(da_fft(darr2, axis=0), np_fft(nparr, axis=0))
+    assert_eq(da_fft(darr2, 5, axis=0), np_fft(nparr, 5, axis=0))
+    assert_eq(da_fft(darr2, 13, axis=0), np_fft(nparr, 13, axis=0))
+    assert_eq(da_fft(darr2, 12, axis=0), np_fft(nparr, 12, axis=0))
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
@@ -156,12 +140,15 @@ def test_wrap_ffts(modname, funcname, dtype):
         assert_eq(wfunc(darrc), func(nparrc))
         assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
         assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
-        assert_eq(wfunc(darrc, n=len(darrc) - 1),
-                  func(nparrc, n=len(darrc) - 1))
-        assert_eq(wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
-                  func(nparrc, n=darrc.shape[1] - 1))
-        assert_eq(wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
-                  func(nparrc, axis=0, n=darr2c.shape[0] - 1))
+        assert_eq(wfunc(darrc, n=len(darrc) - 1), func(nparrc, n=len(darrc) - 1))
+        assert_eq(
+            wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
+            func(nparrc, n=darrc.shape[1] - 1),
+        )
+        assert_eq(
+            wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
+            func(nparrc, axis=0, n=darr2c.shape[0] - 1),
+        )
 
 
 @pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
@@ -186,7 +173,7 @@ def test_wrap_fftns(modname, funcname, dtype):
     assert_eq(wfunc(darr2c, axes=(0, 1)), func(nparrc, axes=(0, 1)))
     assert_eq(
         wfunc(darr2c, (darr2c.shape[0] - 1, darr2c.shape[1] - 1), (0, 1)),
-        func(nparrc, (nparrc.shape[0] - 1, nparrc.shape[1] - 1), (0, 1))
+        func(nparrc, (nparrc.shape[0] - 1, nparrc.shape[1] - 1), (0, 1)),
     )
 
 
@@ -206,7 +193,7 @@ def test_fftfreq(n, d, c):
 
 @pytest.mark.parametrize("n", [1, 2, 3, 6, 7])
 @pytest.mark.parametrize("d", [1.0, 0.5, 2 * np.pi])
-@pytest.mark.parametrize("c", [lambda m: (m // 2 + 1, ), lambda m: (1, m // 2)])
+@pytest.mark.parametrize("c", [lambda m: (m // 2 + 1,), lambda m: (1, m // 2)])
 def test_rfftfreq(n, d, c):
     c = [ci for ci in c(n) if ci != 0]
 
@@ -219,21 +206,11 @@ def test_rfftfreq(n, d, c):
 
 
 @pytest.mark.parametrize("funcname", ["fftshift", "ifftshift"])
-@pytest.mark.parametrize("axes", [
-    None,
-    0,
-    1,
-    2,
-    (0, 1),
-    (1, 2),
-    (0, 2),
-    (0, 1, 2),
-])
-@pytest.mark.parametrize("shape, chunks", [
-    [(5, 6, 7), (2, 3, 4)],
-    [(5, 6, 7), (2, 6, 4)],
-    [(5, 6, 7), (5, 6, 7)],
-])
+@pytest.mark.parametrize("axes", [None, 0, 1, 2, (0, 1), (1, 2), (0, 2), (0, 1, 2)])
+@pytest.mark.parametrize(
+    "shape, chunks",
+    [[(5, 6, 7), (2, 3, 4)], [(5, 6, 7), (2, 6, 4)], [(5, 6, 7), (5, 6, 7)]],
+)
 def test_fftshift(funcname, shape, chunks, axes):
     np_func = getattr(np.fft, funcname)
     da_func = getattr(da.fft, funcname)
@@ -254,25 +231,14 @@ def test_fftshift(funcname, shape, chunks, axes):
     assert_eq(d_r, a_r)
 
 
-@pytest.mark.parametrize("funcname1, funcname2", [
-    ("fftshift", "ifftshift"),
-    ("ifftshift", "fftshift"),
-])
-@pytest.mark.parametrize("axes", [
-    None,
-    0,
-    1,
-    2,
-    (0, 1),
-    (1, 2),
-    (0, 2),
-    (0, 1, 2),
-])
-@pytest.mark.parametrize("shape, chunks", [
-    [(5, 6, 7), (2, 3, 4)],
-    [(5, 6, 7), (2, 6, 4)],
-    [(5, 6, 7), (5, 6, 7)],
-])
+@pytest.mark.parametrize(
+    "funcname1, funcname2", [("fftshift", "ifftshift"), ("ifftshift", "fftshift")]
+)
+@pytest.mark.parametrize("axes", [None, 0, 1, 2, (0, 1), (1, 2), (0, 2), (0, 1, 2)])
+@pytest.mark.parametrize(
+    "shape, chunks",
+    [[(5, 6, 7), (2, 3, 4)], [(5, 6, 7), (2, 6, 4)], [(5, 6, 7), (5, 6, 7)]],
+)
 def test_fftshift_identity(funcname1, funcname2, shape, chunks, axes):
     da_func1 = getattr(da.fft, funcname1)
     da_func2 = getattr(da.fft, funcname2)

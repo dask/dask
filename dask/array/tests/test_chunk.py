@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
-pytest.importorskip('numpy')
+
+pytest.importorskip("numpy")
 
 import numpy as np
 

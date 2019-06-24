@@ -5,7 +5,7 @@ import pytest
 
 
 def parses(text):
-    cleaned = text.replace('&rarr;', '')  # xml doesn't like righarrow character
+    cleaned = text.replace("&rarr;", "")  # xml doesn't like righarrow character
     assert xml.etree.ElementTree.fromstring(cleaned) is not None  # parses cleanly
 
 
@@ -42,7 +42,7 @@ def test_repr_html():
     x = da.ones((3000, 10000), chunks=(1000, 1000))
     text = x._repr_html_()
 
-    assert 'MB' in text or 'MiB' in text
+    assert "MB" in text or "MiB" in text
     assert str(x.shape) in text
     assert str(x.dtype) in text
 
@@ -66,4 +66,4 @@ def test_draw_sizes():
 
 def test_3d():
     text = da.ones((10, 10, 10, 10, 10)).to_svg()
-    assert text.count("<svg" ) == 1
+    assert text.count("<svg") == 1

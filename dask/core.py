@@ -139,7 +139,7 @@ def get(dsk, out, cache=None):
     >>> get(d, 'y')
     2
     """
-    for k in (flatten(out) if isinstance(out, list) else [out]):
+    for k in flatten(out) if isinstance(out, list) else [out]:
         if k not in dsk:
             raise KeyError("{0} is not a key in the graph".format(k))
     if cache is None:
@@ -224,8 +224,7 @@ def get_deps(dsk):
     >>> dependents
     {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
-    dependencies = {k: get_dependencies(dsk, task=v)
-                    for k, v in dsk.items()}
+    dependencies = {k: get_dependencies(dsk, task=v) for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
     return dependencies, dependents
 
@@ -306,8 +305,9 @@ def subs(task, key, val):
                 # Can't do a simple equality check, since this may trigger
                 # a FutureWarning from NumPy about array equality
                 # https://github.com/dask/dask/pull/2457
-                if len(arg) == len(key) and all(type(aa) == type(bb) and aa == bb
-                                                for aa, bb in zip(arg, key)):
+                if len(arg) == len(key) and all(
+                    type(aa) == type(bb) and aa == bb for aa, bb in zip(arg, key)
+                ):
                     arg = val
 
             except (TypeError, AttributeError):
@@ -369,8 +369,8 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
                         if returncycle:
                             return cycle
                         else:
-                            cycle = '->'.join(str(x) for x in cycle)
-                            raise RuntimeError('Cycle detected in Dask: %s' % cycle)
+                            cycle = "->".join(str(x) for x in cycle)
+                            raise RuntimeError("Cycle detected in Dask: %s" % cycle)
                     next_nodes.append(nxt)
 
             if next_nodes:
@@ -436,13 +436,14 @@ def isdag(d, keys):
 
 class literal(object):
     """A small serializable object to wrap literal values without copying"""
-    __slots__ = ('data',)
+
+    __slots__ = ("data",)
 
     def __init__(self, data):
         self.data = data
 
     def __repr__(self):
-        return 'literal<type=%s>' % type(self.data).__name__
+        return "literal<type=%s>" % type(self.data).__name__
 
     def __reduce__(self):
         return (literal, (self.data,))

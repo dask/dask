@@ -79,6 +79,7 @@ def expand_key(k, dims, name=None, axes=None):
     [[('y',   0, 3.1), ('y',   0,   4)],
      [('y', 0.9, 3.1), ('y', 0.9,   4)]]
     """
+
     def inds(i, ind):
         rv = []
         if ind - 0.9 > 0:
@@ -97,7 +98,9 @@ def expand_key(k, dims, name=None, axes=None):
             num += 1
         shape.append(num)
 
-    args = [inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])]
+    args = [
+        inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])
+    ]
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
@@ -124,11 +127,12 @@ def overlap_internal(x, axes):
     expand_key2 = partial(expand_key, dims=dims, axes=axes)
 
     # Make keys for each of the surrounding sub-arrays
-    interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
-                         map(flatten), concat, list)
+    interior_keys = pipe(
+        x.__dask_keys__(), flatten, map(expand_key2), map(flatten), concat, list
+    )
 
-    name = 'overlap-' + tokenize(x, axes)
-    getitem_name = 'getitem-' + tokenize(x, axes)
+    name = "overlap-" + tokenize(x, axes)
+    getitem_name = "getitem-" + tokenize(x, axes)
     interior_slices = {}
     overlap_blocks = {}
     for k in interior_keys:
@@ -223,8 +227,9 @@ def trim_internal(x, axes, boundary=None):
         olist.append(tuple(ilist))
     chunks = tuple(olist)
 
-    return map_blocks(partial(_trim, axes=axes, boundary=boundary),
-                      x, chunks=chunks, dtype=x.dtype)
+    return map_blocks(
+        partial(_trim, axes=axes, boundary=boundary), x, chunks=chunks, dtype=x.dtype
+    )
 
 
 def _trim(x, axes, boundary, block_info):
@@ -234,27 +239,32 @@ def _trim(x, axes, boundary, block_info):
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
-    axes = [axes.get(i,0) for i in range(x.ndim)]
-    axes_front = (ax[0] if isinstance(ax,tuple)
-                  else ax for ax in axes)
-    axes_back = (-ax[1] if isinstance(ax,tuple) and ax[1]
-                 else -ax if isinstance(ax,Integral) and ax
-                 else None for ax in axes)
+    axes = [axes.get(i, 0) for i in range(x.ndim)]
+    axes_front = (ax[0] if isinstance(ax, tuple) else ax for ax in axes)
+    axes_back = (
+        -ax[1]
+        if isinstance(ax, tuple) and ax[1]
+        else -ax
+        if isinstance(ax, Integral) and ax
+        else None
+        for ax in axes
+    )
 
     trim_front = (
-        0 if (chunk_location == 0 and
-              boundary.get(i, 'none') == 'none') else ax
+        0 if (chunk_location == 0 and boundary.get(i, "none") == "none") else ax
         for i, (chunk_location, ax) in enumerate(
-            zip(block_info[0]['chunk-location'], axes_front)))
+            zip(block_info[0]["chunk-location"], axes_front)
+        )
+    )
     trim_back = (
-        None if (chunk_location == chunks - 1 and
-                 boundary.get(i, 'none') == 'none') else ax
-        for i, (chunks, chunk_location, ax) in enumerate(zip(
-            block_info[0]['num-chunks'],
-            block_info[0]['chunk-location'],
-            axes_back)))
-    ind = tuple(slice(front, back)
-                for front, back in zip(trim_front, trim_back))
+        None
+        if (chunk_location == chunks - 1 and boundary.get(i, "none") == "none")
+        else ax
+        for i, (chunks, chunk_location, ax) in enumerate(
+            zip(block_info[0]["num-chunks"], block_info[0]["chunk-location"], axes_back)
+        )
+    )
+    ind = tuple(slice(front, back) for front, back in zip(trim_front, trim_back))
     return x[ind]
 
 
@@ -264,12 +274,16 @@ def periodic(x, axis, depth):
     Useful to create periodic boundary conditions for overlap
     """
 
-    left = ((slice(None, None, None),) * axis +
-            (slice(0, depth),) +
-            (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis +
-             (slice(-depth, None),) +
-             (slice(None, None, None),) * (x.ndim - axis - 1))
+    left = (
+        (slice(None, None, None),) * axis
+        + (slice(0, depth),)
+        + (slice(None, None, None),) * (x.ndim - axis - 1)
+    )
+    right = (
+        (slice(None, None, None),) * axis
+        + (slice(-depth, None),)
+        + (slice(None, None, None),) * (x.ndim - axis - 1)
+    )
     l = x[left]
     r = x[right]
 
@@ -284,16 +298,22 @@ def reflect(x, axis, depth):
     This is the converse of ``periodic``
     """
     if depth == 1:
-        left = ((slice(None, None, None),) * axis +
-                (slice(0, 1),) +
-                (slice(None, None, None),) * (x.ndim - axis - 1))
+        left = (
+            (slice(None, None, None),) * axis
+            + (slice(0, 1),)
+            + (slice(None, None, None),) * (x.ndim - axis - 1)
+        )
     else:
-        left = ((slice(None, None, None),) * axis +
-                (slice(depth - 1, None, -1),) +
-                (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis +
-             (slice(-1, -depth - 1, -1),) +
-             (slice(None, None, None),) * (x.ndim - axis - 1))
+        left = (
+            (slice(None, None, None),) * axis
+            + (slice(depth - 1, None, -1),)
+            + (slice(None, None, None),) * (x.ndim - axis - 1)
+        )
+    right = (
+        (slice(None, None, None),) * axis
+        + (slice(-1, -depth - 1, -1),)
+        + (slice(None, None, None),) * (x.ndim - axis - 1)
+    )
     l = x[left]
     r = x[right]
 
@@ -308,12 +328,16 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
-    left = ((slice(None, None, None),) * axis +
-            (slice(0, 1),) +
-            (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis +
-             (slice(-1, -2, -1),) +
-             (slice(None, None, None),) * (x.ndim - axis - 1))
+    left = (
+        (slice(None, None, None),) * axis
+        + (slice(0, 1),)
+        + (slice(None, None, None),) * (x.ndim - axis - 1)
+    )
+    right = (
+        (slice(None, None, None),) * axis
+        + (slice(-1, -2, -1),)
+        + (slice(None, None, None),) * (x.ndim - axis - 1)
+    )
 
     l = concatenate([x[left]] * depth, axis=axis)
     r = concatenate([x[right]] * depth, axis=axis)
@@ -329,11 +353,17 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     try:
-        c = wrap.full_like(getattr(x, '_meta', x), value, shape=tuple(map(sum, chunks)),
-                           chunks=tuple(chunks), dtype=x.dtype)
+        c = wrap.full_like(
+            getattr(x, "_meta", x),
+            value,
+            shape=tuple(map(sum, chunks)),
+            chunks=tuple(chunks),
+            dtype=x.dtype,
+        )
     except TypeError:
-        c = wrap.full(tuple(map(sum, chunks)), value,
-                      chunks=tuple(chunks), dtype=x.dtype)
+        c = wrap.full(
+            tuple(map(sum, chunks)), value, chunks=tuple(chunks), dtype=x.dtype
+        )
 
     return concatenate([c, x, c], axis=axis)
 
@@ -367,14 +397,14 @@ def boundaries(x, depth=None, kind=None):
         if d == 0:
             continue
 
-        this_kind = kind.get(i, 'none')
-        if this_kind == 'none':
+        this_kind = kind.get(i, "none")
+        if this_kind == "none":
             continue
-        elif this_kind == 'periodic':
+        elif this_kind == "periodic":
             x = periodic(x, i, d)
-        elif this_kind == 'reflect':
+        elif this_kind == "reflect":
             x = reflect(x, i, d)
-        elif this_kind == 'nearest':
+        elif this_kind == "nearest":
             x = nearest(x, i, d)
         elif i in kind:
             x = constant(x, i, d, kind[i])
@@ -442,15 +472,18 @@ def overlap(x, depth, boundary):
     for d, c in zip(depth_values, x.chunks):
         maxd = max(d) if isinstance(d, tuple) else d
         if maxd > min(c):
-            raise ValueError("The overlapping depth %d is larger than your\n"
-                             "smallest chunk size %d. Rechunk your array\n"
-                             "with a larger chunk size or a chunk size that\n"
-                             "more evenly divides the shape of your array." %
-                             (d, min(c)))
+            raise ValueError(
+                "The overlapping depth %d is larger than your\n"
+                "smallest chunk size %d. Rechunk your array\n"
+                "with a larger chunk size or a chunk size that\n"
+                "more evenly divides the shape of your array." % (d, min(c))
+            )
     x2 = boundaries(x, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
-    trim = dict((k, v * 2 if boundary2.get(k, 'none') != 'none' else 0)
-                for k, v in depth2.items())
+    trim = dict(
+        (k, v * 2 if boundary2.get(k, "none") != "none" else 0)
+        for k, v in depth2.items()
+    )
     x4 = chunk.trim(x3, trim)
     return x4
 
@@ -467,7 +500,7 @@ def add_dummy_padding(x, depth, boundary):
     """
     for k, v in boundary.items():
         d = depth.get(k, 0)
-        if v == 'none' and d > 0:
+        if v == "none" and d > 0:
             empty_shape = list(x.shape)
             empty_shape[k] = d
 
@@ -475,8 +508,12 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks[k] = (d,)
 
             try:
-                empty = wrap.empty_like(getattr(x, '_meta', x), shape=empty_shape,
-                                        chunks=empty_chunks, dtype=x.dtype)
+                empty = wrap.empty_like(
+                    getattr(x, "_meta", x),
+                    shape=empty_shape,
+                    chunks=empty_chunks,
+                    dtype=x.dtype,
+                )
             except TypeError:
                 empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
 
@@ -553,10 +590,12 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     boundary2 = coerce_boundary(x.ndim, boundary)
 
     for i in range(x.ndim):
-        if isinstance(depth2[i], tuple) and boundary2[i] != 'none':
-            raise NotImplementedError("Asymmetric overlap is currently only implemented "
-                                      "for boundary='none', however boundary for dimension "
-                                      "{} is {}".format(i, boundary2[i]))
+        if isinstance(depth2[i], tuple) and boundary2[i] != "none":
+            raise NotImplementedError(
+                "Asymmetric overlap is currently only implemented "
+                "for boundary='none', however boundary for dimension "
+                "{} is {}".format(i, boundary2[i])
+            )
 
     assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
@@ -582,7 +621,7 @@ def coerce_depth(ndim, depth):
 
 
 def coerce_boundary(ndim, boundary):
-    default = 'reflect'
+    default = "reflect"
     if boundary is None:
         boundary = default
     if not isinstance(boundary, (tuple, dict)):

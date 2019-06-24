@@ -9,9 +9,14 @@ from warnings import warn
 from toolz import merge
 
 from .compression import seekable_files, files as compress_files
-from .utils import (SeekableFile, read_block, infer_compression,
-                    infer_storage_options, build_name_function,
-                    update_storage_options)
+from .utils import (
+    SeekableFile,
+    read_block,
+    infer_compression,
+    infer_storage_options,
+    build_name_function,
+    update_storage_options,
+)
 from .. import config
 from ..compatibility import unicode
 from ..base import tokenize
@@ -19,8 +24,16 @@ from ..delayed import delayed
 from ..utils import import_required, is_integer, parse_bytes
 
 
-def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
-               sample='10 kiB', compression=None, include_path=False, **kwargs):
+def read_bytes(
+    urlpath,
+    delimiter=None,
+    not_zero=False,
+    blocksize="128 MiB",
+    sample="10 kiB",
+    compression=None,
+    include_path=False,
+    **kwargs
+):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -77,8 +90,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
         represented in the corresponding block.
 
     """
-    fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
-                                             storage_options=kwargs)
+    fs, fs_token, paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)
 
     if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
@@ -100,9 +112,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
             try:
                 size = logical_size(fs, path, compression)
             except ValueError:
-                raise ValueError("Cannot do chunked reads on files compressed "
-                                 "with compression=%r. To read, set "
-                                 "blocksize=None" % get_compression(path, compression))
+                raise ValueError(
+                    "Cannot do chunked reads on files compressed "
+                    "with compression=%r. To read, set "
+                    "blocksize=None" % get_compression(path, compression)
+                )
             off = list(range(0, size, blocksize))
             length = [blocksize] * len(off)
             if not_zero:
@@ -115,17 +129,23 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
 
     out = []
     for path, offset, length in zip(paths, offsets, lengths):
-        token = tokenize(fs_token, delimiter, path, fs.ukey(path),
-                         compression, offset)
-        keys = ['read-block-%s-%s' % (o, token) for o in offset]
-        values = [delayed_read(OpenFile(fs, path, compression=compression),
-                               o, l, delimiter, dask_key_name=key)
-                  for o, key, l in zip(offset, keys, length)]
+        token = tokenize(fs_token, delimiter, path, fs.ukey(path), compression, offset)
+        keys = ["read-block-%s-%s" % (o, token) for o in offset]
+        values = [
+            delayed_read(
+                OpenFile(fs, path, compression=compression),
+                o,
+                l,
+                delimiter,
+                dask_key_name=key,
+            )
+            for o, key, l in zip(offset, keys, length)
+        ]
         out.append(values)
 
     if sample:
         if sample is True:
-            sample = '10 kiB'  # backwards compatibility
+            sample = "10 kiB"  # backwards compatibility
         if isinstance(sample, str):
             sample = parse_bytes(sample)
         with OpenFile(fs, paths[0], compression=compression) as f:
@@ -165,8 +185,17 @@ class OpenFile(object):
     newline : {None, '', '\n', '\r', '\r\n'}
         Passed to TextIOWrapper in text mode
     """
-    def __init__(self, fs, path, mode='rb', compression=None, encoding=None,
-                 errors=None, newline=None):
+
+    def __init__(
+        self,
+        fs,
+        path,
+        mode="rb",
+        compression=None,
+        encoding=None,
+        errors=None,
+        newline=None,
+    ):
         self.fs = fs
         self.path = path
         self.mode = mode
@@ -177,11 +206,20 @@ class OpenFile(object):
         self.fobjects = []
 
     def __reduce__(self):
-        return (OpenFile, (self.fs, self.path, self.mode, self.compression,
-                           self.encoding, self.errors))
+        return (
+            OpenFile,
+            (
+                self.fs,
+                self.path,
+                self.mode,
+                self.compression,
+                self.encoding,
+                self.errors,
+            ),
+        )
 
     def __enter__(self):
-        mode = self.mode.replace('t', '').replace('b', '') + 'b'
+        mode = self.mode.replace("t", "").replace("b", "") + "b"
 
         f = SeekableFile(self.fs.open(self.path, mode=mode))
 
@@ -192,9 +230,10 @@ class OpenFile(object):
             f = compress(f, mode=mode)
             fobjects.append(f)
 
-        if 't' in self.mode:
-            f = io.TextIOWrapper(f, encoding=self.encoding,
-                                 errors=self.errors, newline=self.newline)
+        if "t" in self.mode:
+            f = io.TextIOWrapper(
+                f, encoding=self.encoding, errors=self.errors, newline=self.newline
+            )
             fobjects.append(f)
 
         self.fobjects = fobjects
@@ -210,9 +249,17 @@ class OpenFile(object):
         self.fobjects = []
 
 
-def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
-               errors=None, name_function=None, num=1, newline=None,
-               **kwargs):
+def open_files(
+    urlpath,
+    mode="rb",
+    compression=None,
+    encoding="utf8",
+    errors=None,
+    name_function=None,
+    num=1,
+    newline=None,
+    **kwargs
+):
     """ Given a path or paths, return a list of ``OpenFile`` objects.
 
     Parameters
@@ -251,17 +298,26 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     -------
     List of ``OpenFile`` objects.
     """
-    fs, fs_token, paths = get_fs_token_paths(urlpath, mode, num=num,
-                                             name_function=name_function,
-                                             storage_options=kwargs)
+    fs, fs_token, paths = get_fs_token_paths(
+        urlpath, mode, num=num, name_function=name_function, storage_options=kwargs
+    )
 
-    return [OpenFile(fs, path, mode=mode, compression=compression,
-                     encoding=encoding, errors=errors, newline=newline)
-            for path in paths]
+    return [
+        OpenFile(
+            fs,
+            path,
+            mode=mode,
+            compression=compression,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
+        for path in paths
+    ]
 
 
 def get_compression(urlpath, compression):
-    if compression == 'infer':
+    if compression == "infer":
         compression = infer_compression(urlpath)
     if compression is not None and compression not in compress_files:
         raise ValueError("Compression type %s not supported" % compression)
@@ -269,7 +325,7 @@ def get_compression(urlpath, compression):
 
 
 def infer_options(urlpath):
-    if hasattr(urlpath, 'name'):
+    if hasattr(urlpath, "name"):
         # deal with pathlib.Path objects - must be local
         urlpath = str(urlpath)
         ispath = True
@@ -277,10 +333,10 @@ def infer_options(urlpath):
         ispath = False
 
     options = infer_storage_options(urlpath)
-    protocol = options.pop('protocol')
-    urlpath = options.pop('path')
+    protocol = options.pop("protocol")
+    urlpath = options.pop("path")
 
-    if ispath and protocol != 'file':
+    if ispath and protocol != "file":
         raise ValueError("Only use pathlib.Path with local files.")
 
     return urlpath, protocol, options
@@ -303,12 +359,12 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     """
     expanded_paths = []
     paths = list(paths)
-    if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
+    if "w" in mode and sum([1 for p in paths if "*" in p]) > 1:
         raise ValueError("When writing data, only one filename mask can be specified.")
     for curr_path in paths:
-        if '*' in curr_path:
+        if "*" in curr_path:
             glob = True
-            if 'w' in mode:
+            if "w" in mode:
                 # expand using name_function
                 expanded_paths.extend(_expand_paths(curr_path, name_function, num))
             else:
@@ -318,13 +374,14 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
             glob = False
             expanded_paths.append(curr_path)
     # if we generated more paths that asked for, trim the list
-    if 'w' in mode and len(expanded_paths) > num and glob:
+    if "w" in mode and len(expanded_paths) > num and glob:
         expanded_paths = expanded_paths[:num]
     return expanded_paths
 
 
-def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
-                       storage_options=None):
+def get_fs_token_paths(
+    urlpath, mode="rb", num=1, name_function=None, storage_options=None
+):
     """Filesystem, deterministic token, and paths from a urlpath and options.
 
     Parameters
@@ -349,21 +406,25 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         paths, protocols, options_list = zip(*map(infer_options, urlpath))
         protocol = protocols[0]
         options = options_list[0]
-        if not (all(p == protocol for p in protocols) and
-                all(o == options for o in options_list)):
-            raise ValueError("When specifying a list of paths, all paths must "
-                             "share the same protocol and options")
+        if not (
+            all(p == protocol for p in protocols)
+            and all(o == options for o in options_list)
+        ):
+            raise ValueError(
+                "When specifying a list of paths, all paths must "
+                "share the same protocol and options"
+            )
         update_storage_options(options, storage_options)
         fs, fs_token = get_fs(protocol, options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
-    elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, 'name'):
+    elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, "name"):
         urlpath, protocol, options = infer_options(urlpath)
         update_storage_options(options, storage_options)
 
         fs, fs_token = get_fs(protocol, options)
 
-        if 'w' in mode:
+        if "w" in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
             paths = sorted(fs.glob(urlpath))
@@ -371,7 +432,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
             paths = [urlpath]
 
     else:
-        raise TypeError('url type not understood: %s' % urlpath)
+        raise TypeError("url type not understood: %s" % urlpath)
     fs.protocol = protocol
 
     return fs, fs_token, paths
@@ -380,17 +441,21 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 def get_mapper(fs, path):
     # This is not the right way to do this.
     # At the very least, we should have the correct failed import messages
-    if fs.protocol == 'file':
+    if fs.protocol == "file":
         from zarr.storage import DirectoryStore
+
         return DirectoryStore(path)
-    elif fs.protocol == 's3':
+    elif fs.protocol == "s3":
         from s3fs.mapping import S3Map
+
         return S3Map(path, fs)
-    elif fs.protocol in ['gcs', 'gs']:
+    elif fs.protocol in ["gcs", "gs"]:
         from gcsfs.mapping import GCSMap
+
         return GCSMap(path, fs)
-    elif fs.protocol == 'hdfs':
+    elif fs.protocol == "hdfs":
         from hdfs3.mapping import HDFSMap
+
         return HDFSMap(fs, path)
     else:
         raise ValueError('No mapper for protocol "%s"' % fs.protocol)
@@ -398,26 +463,30 @@ def get_mapper(fs, path):
 
 def _expand_paths(path, name_function, num):
     if isinstance(path, (str, unicode)):
-        if path.count('*') > 1:
+        if path.count("*") > 1:
             raise ValueError("Output path spec must contain at most one '*'.")
-        elif '*' not in path:
-            path = os.path.join(path, '*.part')
+        elif "*" not in path:
+            path = os.path.join(path, "*.part")
 
         if name_function is None:
             name_function = build_name_function(num - 1)
 
-        paths = [path.replace('*', name_function(i)) for i in range(num)]
+        paths = [path.replace("*", name_function(i)) for i in range(num)]
         if paths != sorted(paths):
-            warn("In order to preserve order between partitions paths created "
-                 "with ``name_function`` should sort to partition order")
+            warn(
+                "In order to preserve order between partitions paths created "
+                "with ``name_function`` should sort to partition order"
+            )
     elif isinstance(path, (tuple, list)):
         assert len(path) == num
         paths = list(path)
     else:
-        raise ValueError("Path should be either\n"
-                         "1. A list of paths: ['foo.json', 'bar.json', ...]\n"
-                         "2. A directory: 'foo/\n"
-                         "3. A path with a '*' in it: 'foo.*.json'")
+        raise ValueError(
+            "Path should be either\n"
+            "1. A list of paths: ['foo.json', 'bar.json', ...]\n"
+            "2. A directory: 'foo/\n"
+            "3. A path with a '*' in it: 'foo.*.json'"
+        )
     return paths
 
 
@@ -433,8 +502,8 @@ def get_hdfs_driver(driver="auto"):
     -------
     A filesystem class
     """
-    if driver == 'auto':
-        for d in ['pyarrow', 'hdfs3']:
+    if driver == "auto":
+        for d in ["pyarrow", "hdfs3"]:
             try:
                 return get_hdfs_driver(d)
             except RuntimeError:
@@ -442,22 +511,28 @@ def get_hdfs_driver(driver="auto"):
         else:
             raise RuntimeError("Please install either `pyarrow` (preferred) or `hdfs3`")
 
-    elif driver == 'hdfs3':
-        import_required('hdfs3', "`hdfs3` not installed")
+    elif driver == "hdfs3":
+        import_required("hdfs3", "`hdfs3` not installed")
         from dask.bytes.hdfs3 import HDFS3HadoopFileSystem as cls
+
         return cls
 
-    elif driver == 'pyarrow':
-        pa = import_required('pyarrow', "`pyarrow` not installed")
-        from dask.bytes.pyarrow import (_MIN_PYARROW_VERSION_SUPPORTED,
-                                        PyArrowHadoopFileSystem as cls)
+    elif driver == "pyarrow":
+        pa = import_required("pyarrow", "`pyarrow` not installed")
+        from dask.bytes.pyarrow import (
+            _MIN_PYARROW_VERSION_SUPPORTED,
+            PyArrowHadoopFileSystem as cls,
+        )
+
         if LooseVersion(pa.__version__) < _MIN_PYARROW_VERSION_SUPPORTED:
-            raise RuntimeError("pyarrow version >= %r required for hdfs driver "
-                               "support" % _MIN_PYARROW_VERSION_SUPPORTED)
+            raise RuntimeError(
+                "pyarrow version >= %r required for hdfs driver "
+                "support" % _MIN_PYARROW_VERSION_SUPPORTED
+            )
         return cls
 
     else:
-        raise ValueError('Unsupported hdfs driver: {0}'.format(driver))
+        raise ValueError("Unsupported hdfs driver: {0}".format(driver))
 
 
 def get_fs(protocol, storage_options=None):
@@ -473,46 +548,56 @@ def get_fs(protocol, storage_options=None):
     if protocol in _filesystems:
         cls = _filesystems[protocol]
 
-    elif protocol == 's3':
-        import_required('s3fs',
-                        "Need to install `s3fs` library for s3 support\n"
-                        "    conda install s3fs -c conda-forge\n"
-                        "    or\n"
-                        "    pip install s3fs")
+    elif protocol == "s3":
+        import_required(
+            "s3fs",
+            "Need to install `s3fs` library for s3 support\n"
+            "    conda install s3fs -c conda-forge\n"
+            "    or\n"
+            "    pip install s3fs",
+        )
         import dask.bytes.s3  # noqa, register the s3 backend
-        cls = _filesystems[protocol]
-
-    elif protocol in ('gs', 'gcs'):
-        import_required('gcsfs',
-                        "Need to install `gcsfs` library for Google Cloud Storage support\n"
-                        "    conda install gcsfs -c conda-forge\n"
-                        "    or\n"
-                        "    pip install gcsfs")
-        cls = _filesystems[protocol]
-
-    elif protocol in ['adl', 'adlfs']:
-
-        import_required('dask_adlfs',
-                        "Need to install `dask_adlfs` for Azure Datalake "
-                        "Storage support.\n"
-                        "First install azure-storage via pip or conda:\n"
-                        "    conda install -c conda-forge azure-storage\n"
-                        "    or\n"
-                        "    pip install azure-storage\n"
-                        "and then install `dask_adlfs` via pip:\n"
-                        "    pip install dask-adlfs")
 
         cls = _filesystems[protocol]
-    elif protocol == 'hdfs':
+
+    elif protocol in ("gs", "gcs"):
+        import_required(
+            "gcsfs",
+            "Need to install `gcsfs` library for Google Cloud Storage support\n"
+            "    conda install gcsfs -c conda-forge\n"
+            "    or\n"
+            "    pip install gcsfs",
+        )
+        cls = _filesystems[protocol]
+
+    elif protocol in ["adl", "adlfs"]:
+
+        import_required(
+            "dask_adlfs",
+            "Need to install `dask_adlfs` for Azure Datalake "
+            "Storage support.\n"
+            "First install azure-storage via pip or conda:\n"
+            "    conda install -c conda-forge azure-storage\n"
+            "    or\n"
+            "    pip install azure-storage\n"
+            "and then install `dask_adlfs` via pip:\n"
+            "    pip install dask-adlfs",
+        )
+
+        cls = _filesystems[protocol]
+    elif protocol == "hdfs":
         cls = get_hdfs_driver(config.get("hdfs_driver", "auto"))
 
-    elif protocol in ['http', 'https']:
-        import_required('requests',
-                        "Need to install `requests` for HTTP support\n"
-                        "   conda install requests\n"
-                        "    or\n"
-                        "   pip install requests")
+    elif protocol in ["http", "https"]:
+        import_required(
+            "requests",
+            "Need to install `requests` for HTTP support\n"
+            "   conda install requests\n"
+            "    or\n"
+            "   pip install requests",
+        )
         import dask.bytes.http  # noqa, registers HTTP backend
+
         cls = _filesystems[protocol]
 
     else:
@@ -528,8 +613,8 @@ def get_fs(protocol, storage_options=None):
 _filesystems = dict()
 
 
-def logical_size(fs, path, compression='infer'):
-    if compression == 'infer':
+def logical_size(fs, path, compression="infer"):
+    if compression == "infer":
         compression = infer_compression(path)
 
     if compression is None:
@@ -539,8 +624,10 @@ def logical_size(fs, path, compression='infer'):
             f.seek(0, 2)
             return f.tell()
     else:
-        raise ValueError("Cannot infer logical size from file compressed with "
-                         "compression=%r" % compression)
+        raise ValueError(
+            "Cannot infer logical size from file compressed with "
+            "compression=%r" % compression
+        )
 
 
 def get_pyarrow_filesystem(fs):
@@ -551,5 +638,6 @@ def get_pyarrow_filesystem(fs):
     try:
         return fs._get_pyarrow_filesystem()
     except AttributeError:
-        raise NotImplementedError("Using pyarrow with a %r "
-                                  "filesystem object" % type(fs).__name__)
+        raise NotImplementedError(
+            "Using pyarrow with a %r " "filesystem object" % type(fs).__name__
+        )

@@ -6,7 +6,7 @@ from operator import add
 from time import sleep
 import pytest
 
-cachey = pytest.importorskip('cachey')
+cachey = pytest.importorskip("cachey")
 
 
 flag = []
@@ -22,19 +22,19 @@ def test_cache():
     cc = Cache(c)
 
     with cc:
-        assert get({'x': (inc, 1)}, 'x') == 2
+        assert get({"x": (inc, 1)}, "x") == 2
 
     assert flag == [1]
-    assert c.data['x'] == 2
+    assert c.data["x"] == 2
 
     assert not cc.starttimes
     assert not cc.durations
 
     while flag:
         flag.pop()
-    dsk = {'x': (inc, 1), 'y': (inc, 2), 'z': (add, 'x', 'y')}
+    dsk = {"x": (inc, 1), "y": (inc, 2), "z": (add, "x", "y")}
     with cc:
-        assert get(dsk, 'z') == 5
+        assert get(dsk, "z") == 5
 
     assert flag == [2]  # no x present
 
@@ -51,8 +51,9 @@ def test_cache_with_number():
 def test_cache_correctness():
     # https://github.com/dask/dask/issues/3631
     c = Cache(10000)
-    da = pytest.importorskip('dask.array')
+    da = pytest.importorskip("dask.array")
     from numpy import ones, zeros
+
     z = da.from_array(zeros(1), chunks=10)
     o = da.from_array(ones(1), chunks=10)
     with c:
@@ -66,9 +67,9 @@ def f(duration, size, *args):
 
 
 def test_prefer_cheap_dependent():
-    dsk = {'x': (f, 0.01, 10), 'y': (f, 0.000001, 1, 'x')}
+    dsk = {"x": (f, 0.01, 10), "y": (f, 0.000001, 1, "x")}
     c = Cache(10000)
     with c:
-        get_sync(dsk, 'y')
+        get_sync(dsk, "y")
 
-    assert c.cache.scorer.cost['x'] < c.cache.scorer.cost['y']
+    assert c.cache.scorer.cost["x"] < c.cache.scorer.cost["y"]

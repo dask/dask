@@ -7,9 +7,18 @@ import dask
 from ..utils import insert_meta_param_description, make_meta
 
 
-def to_json(df, url_path, orient='records', lines=None, storage_options=None,
-            compute=True, encoding='utf-8', errors='strict',
-            compression=None, **kwargs):
+def to_json(
+    df,
+    url_path,
+    orient="records",
+    lines=None,
+    storage_options=None,
+    compute=True,
+    encoding="utf-8",
+    errors="strict",
+    compression=None,
+    **kwargs
+):
     """Write dataframe into JSON text files
 
     This utilises ``pandas.DataFrame.to_json()``, and most parameters are
@@ -45,22 +54,27 @@ def to_json(df, url_path, orient='records', lines=None, storage_options=None,
         String like 'gzip' or 'xz'.
     """
     if lines is None:
-        lines = orient == 'records'
-    if orient != 'records' and lines:
-        raise ValueError('Line-delimited JSON is only available with'
-                         'orient="records".')
-    kwargs['orient'] = orient
-    kwargs['lines'] = lines and orient == 'records'
+        lines = orient == "records"
+    if orient != "records" and lines:
+        raise ValueError(
+            "Line-delimited JSON is only available with" 'orient="records".'
+        )
+    kwargs["orient"] = orient
+    kwargs["lines"] = lines and orient == "records"
     outfiles = open_files(
-        url_path, 'wt', encoding=encoding,
+        url_path,
+        "wt",
+        encoding=encoding,
         errors=errors,
-        name_function=kwargs.pop('name_function', None),
+        name_function=kwargs.pop("name_function", None),
         num=df.npartitions,
         compression=compression,
         **(storage_options or {})
     )
-    parts = [dask.delayed(write_json_partition)(d, outfile, kwargs)
-             for outfile, d in zip(outfiles, df.to_delayed())]
+    parts = [
+        dask.delayed(write_json_partition)(d, outfile, kwargs)
+        for outfile, d in zip(outfiles, df.to_delayed())
+    ]
     if compute:
         dask.compute(parts)
         return [f.path for f in outfiles]
@@ -74,9 +88,20 @@ def write_json_partition(df, openfile, kwargs):
 
 
 @insert_meta_param_description
-def read_json(url_path, orient='records', lines=None, storage_options=None,
-              blocksize=None, sample=2**20, encoding='utf-8', errors='strict',
-              compression='infer', meta=None, engine=pd.read_json, **kwargs):
+def read_json(
+    url_path,
+    orient="records",
+    lines=None,
+    storage_options=None,
+    blocksize=None,
+    sample=2 ** 20,
+    encoding="utf-8",
+    errors="strict",
+    compression="infer",
+    meta=None,
+    engine=pd.read_json,
+    **kwargs
+):
     """Create a dataframe from a set of JSON files
 
     This utilises ``pandas.read_json()``, and most parameters are
@@ -141,39 +166,59 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
     >> dd.read_json('data/file*.csv', blocksize=2**28)
     """
     import dask.dataframe as dd
+
     if lines is None:
-        lines = orient == 'records'
-    if orient != 'records' and lines:
-        raise ValueError('Line-delimited JSON is only available with'
-                         'orient="records".')
-    if blocksize and (orient != 'records' or not lines):
-        raise ValueError("JSON file chunking only allowed for JSON-lines"
-                         "input (orient='records', lines=True).")
+        lines = orient == "records"
+    if orient != "records" and lines:
+        raise ValueError(
+            "Line-delimited JSON is only available with" 'orient="records".'
+        )
+    if blocksize and (orient != "records" or not lines):
+        raise ValueError(
+            "JSON file chunking only allowed for JSON-lines"
+            "input (orient='records', lines=True)."
+        )
     storage_options = storage_options or {}
     if blocksize:
-        first, chunks = read_bytes(url_path, b'\n', blocksize=blocksize,
-                                   sample=sample, compression=compression,
-                                   **storage_options)
+        first, chunks = read_bytes(
+            url_path,
+            b"\n",
+            blocksize=blocksize,
+            sample=sample,
+            compression=compression,
+            **storage_options
+        )
         chunks = list(dask.core.flatten(chunks))
         if meta is None:
             meta = read_json_chunk(first, encoding, errors, engine, kwargs)
         meta = make_meta(meta)
-        parts = [dask.delayed(read_json_chunk)(
-            chunk, encoding, errors, engine, kwargs, meta=meta
-        ) for chunk in chunks]
+        parts = [
+            dask.delayed(read_json_chunk)(
+                chunk, encoding, errors, engine, kwargs, meta=meta
+            )
+            for chunk in chunks
+        ]
         return dd.from_delayed(parts, meta=meta)
     else:
-        files = open_files(url_path, 'rt', encoding=encoding, errors=errors,
-                           compression=compression, **storage_options)
-        parts = [dask.delayed(read_json_file)(f, orient, lines, engine, kwargs)
-                 for f in files]
+        files = open_files(
+            url_path,
+            "rt",
+            encoding=encoding,
+            errors=errors,
+            compression=compression,
+            **storage_options
+        )
+        parts = [
+            dask.delayed(read_json_file)(f, orient, lines, engine, kwargs)
+            for f in files
+        ]
         return dd.from_delayed(parts, meta=meta)
 
 
 def read_json_chunk(chunk, encoding, errors, engine, kwargs, meta=None):
     s = io.StringIO(chunk.decode(encoding, errors))
     s.seek(0)
-    df = engine(s, orient='records', lines=True, **kwargs)
+    df = engine(s, orient="records", lines=True, **kwargs)
     if meta is not None and df.empty:
         return meta
     else:

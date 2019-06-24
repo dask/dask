@@ -39,7 +39,6 @@ class _IndexerBase(object):
 
 
 class _iLocIndexer(_IndexerBase):
-
     @property
     def _meta_indexer(self):
         return self.obj._meta.iloc
@@ -47,8 +46,10 @@ class _iLocIndexer(_IndexerBase):
     def __getitem__(self, key):
 
         # dataframe
-        msg = ("'DataFrame.iloc' only supports selecting columns. "
-               "It must be used like 'df.iloc[:, column_indexer]'.")
+        msg = (
+            "'DataFrame.iloc' only supports selecting columns. "
+            "It must be used like 'df.iloc[:, column_indexer]'."
+        )
         if not isinstance(key, tuple):
             raise NotImplementedError(msg)
 
@@ -64,7 +65,7 @@ class _iLocIndexer(_IndexerBase):
 
     def _iloc(self, iindexer, cindexer):
         assert iindexer == slice(None)
-        meta = self._make_meta( iindexer, cindexer)
+        meta = self._make_meta(iindexer, cindexer)
 
         return self.obj.map_partitions(methods.iloc, cindexer, meta=meta)
 
@@ -82,7 +83,7 @@ class _LocIndexer(_IndexerBase):
             # multi-dimensional selection
             if len(key) > self.obj.ndim:
                 # raise from pandas
-                msg = 'Too many indexers'
+                msg = "Too many indexers"
                 raise pd.core.indexing.IndexingError(msg)
 
             iindexer = key[0]
@@ -114,35 +115,38 @@ class _LocIndexer(_IndexerBase):
             if isinstance(iindexer, (list, np.ndarray)):
                 # applying map_pattition to each partitions
                 # results in duplicated NaN rows
-                msg = 'Cannot index with list against unknown division'
+                msg = "Cannot index with list against unknown division"
                 raise KeyError(msg)
             elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)
 
             meta = self._make_meta(iindexer, cindexer)
-            return self.obj.map_partitions(methods.try_loc, iindexer, cindexer,
-                                           meta=meta)
+            return self.obj.map_partitions(
+                methods.try_loc, iindexer, cindexer, meta=meta
+            )
 
     def _maybe_partial_time_string(self, iindexer):
         """
         Convert index-indexer for partial time string slicing
         if obj.index is DatetimeIndex / PeriodIndex
         """
-        iindexer = _maybe_partial_time_string(self.obj._meta_nonempty.index,
-                                              iindexer, kind='loc')
+        iindexer = _maybe_partial_time_string(
+            self.obj._meta_nonempty.index, iindexer, kind="loc"
+        )
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
         meta = self._make_meta(iindexer, cindexer)
-        return self.obj.map_partitions(methods.loc, iindexer, cindexer,
-                                       token='loc-series', meta=meta)
+        return self.obj.map_partitions(
+            methods.loc, iindexer, cindexer, token="loc-series", meta=meta
+        )
 
     def _loc_array(self, iindexer, cindexer):
-        iindexer_series = iindexer.to_dask_dataframe('_', self.obj.index)
+        iindexer_series = iindexer.to_dask_dataframe("_", self.obj.index)
         return self._loc_series(iindexer_series, cindexer)
 
     def _loc_list(self, iindexer, cindexer):
-        name = 'loc-%s' % tokenize(iindexer, self.obj)
+        name = "loc-%s" % tokenize(iindexer, self.obj)
         parts = self._get_partitions(iindexer)
         meta = self._make_meta(iindexer, cindexer)
 
@@ -151,8 +155,7 @@ class _LocIndexer(_IndexerBase):
             divisions = []
             items = sorted(parts.items())
             for i, (div, indexer) in enumerate(items):
-                dsk[name, i] = (methods.loc, (self._name, div),
-                                indexer, cindexer)
+                dsk[name, i] = (methods.loc, (self._name, div), indexer, cindexer)
                 # append minimum value as division
                 divisions.append(sorted(indexer)[0])
             # append maximum value of the last division
@@ -164,14 +167,20 @@ class _LocIndexer(_IndexerBase):
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
-        name = 'loc-%s' % tokenize(iindexer, self.obj)
+        name = "loc-%s" % tokenize(iindexer, self.obj)
         part = self._get_partitions(iindexer)
 
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
-            raise KeyError('the label [%s] is not in the index' % str(iindexer))
+            raise KeyError("the label [%s] is not in the index" % str(iindexer))
 
-        dsk = {(name, 0): (methods.loc, (self._name, part),
-                           slice(iindexer, iindexer), cindexer)}
+        dsk = {
+            (name, 0): (
+                methods.loc,
+                (self._name, part),
+                slice(iindexer, iindexer),
+                cindexer,
+            )
+        }
 
         meta = self._make_meta(iindexer, cindexer)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
@@ -188,7 +197,7 @@ class _LocIndexer(_IndexerBase):
         return _coerce_loc_index(self.obj.divisions, key)
 
     def _loc_slice(self, iindexer, cindexer):
-        name = 'loc-%s' % tokenize(iindexer, cindexer, self)
+        name = "loc-%s" % tokenize(iindexer, cindexer, self)
 
         assert isinstance(iindexer, slice)
         assert iindexer.step in (None, 1)
@@ -212,21 +221,41 @@ class _LocIndexer(_IndexerBase):
             istop = self._coerce_loc_index(iindexer.stop)
 
         if stop == start:
-            dsk = {(name, 0): (methods.loc, (self._name, start),
-                               slice(iindexer.start, iindexer.stop), cindexer)}
+            dsk = {
+                (name, 0): (
+                    methods.loc,
+                    (self._name, start),
+                    slice(iindexer.start, iindexer.stop),
+                    cindexer,
+                )
+            }
             divisions = [istart, istop]
         else:
-            dsk = {(name, 0): (methods.loc, (self._name, start),
-                               slice(iindexer.start, None), cindexer)}
+            dsk = {
+                (name, 0): (
+                    methods.loc,
+                    (self._name, start),
+                    slice(iindexer.start, None),
+                    cindexer,
+                )
+            }
             for i in range(1, stop - start):
                 if cindexer is None:
                     dsk[name, i] = (self._name, start + i)
                 else:
-                    dsk[name, i] = (methods.loc, (self._name, start + i),
-                                    slice(None, None), cindexer)
+                    dsk[name, i] = (
+                        methods.loc,
+                        (self._name, start + i),
+                        slice(None, None),
+                        cindexer,
+                    )
 
-            dsk[name, stop - start] = (methods.loc, (self._name, stop),
-                                       slice(None, iindexer.stop), cindexer)
+            dsk[name, stop - start] = (
+                methods.loc,
+                (self._name, stop),
+                slice(None, iindexer.stop),
+                cindexer,
+            )
 
             if iindexer.start is None:
                 div_start = self.obj.divisions[0]
@@ -238,9 +267,9 @@ class _LocIndexer(_IndexerBase):
             else:
                 div_stop = min(istop, self.obj.divisions[stop + 1])
 
-            divisions = ((div_start, ) +
-                         self.obj.divisions[start + 1:stop + 1] +
-                         (div_stop, ))
+            divisions = (
+                (div_start,) + self.obj.divisions[start + 1 : stop + 1] + (div_stop,)
+            )
 
         assert len(divisions) == len(dsk) + 1
 
@@ -317,19 +346,19 @@ def _maybe_partial_time_string(index, indexer, kind):
 
     if isinstance(indexer, slice):
         if isinstance(indexer.start, compatibility.string_types):
-            start = index._maybe_cast_slice_bound(indexer.start, 'left', kind)
+            start = index._maybe_cast_slice_bound(indexer.start, "left", kind)
         else:
             start = indexer.start
 
         if isinstance(indexer.stop, compatibility.string_types):
-            stop = index._maybe_cast_slice_bound(indexer.stop, 'right', kind)
+            stop = index._maybe_cast_slice_bound(indexer.stop, "right", kind)
         else:
             stop = indexer.stop
         return slice(start, stop)
 
     elif isinstance(indexer, compatibility.string_types):
-        start = index._maybe_cast_slice_bound(indexer, 'left', 'loc')
-        stop = index._maybe_cast_slice_bound(indexer, 'right', 'loc')
+        start = index._maybe_cast_slice_bound(indexer, "left", "loc")
+        stop = index._maybe_cast_slice_bound(indexer, "right", "loc")
         return slice(min(start, stop), max(start, stop))
 
     return indexer

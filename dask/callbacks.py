@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from contextlib import contextmanager
 
-__all__ = ['Callback', 'add_callbacks']
+__all__ = ["Callback", "add_callbacks"]
 
 
 class Callback(object):
@@ -44,9 +44,12 @@ class Callback(object):
     >>> with PrintKeys():  # doctest: +SKIP
     ...     x.compute()  # doctest: +SKIP
     """
+
     active = set()
 
-    def __init__(self, start=None, start_state=None, pretask=None, posttask=None, finish=None):
+    def __init__(
+        self, start=None, start_state=None, pretask=None, posttask=None, finish=None
+    ):
         if start:
             self._start = start
         if start_state:
@@ -60,7 +63,7 @@ class Callback(object):
 
     @property
     def _callback(self):
-        fields = ['_start', '_start_state', '_pretask', '_posttask', '_finish']
+        fields = ["_start", "_start_state", "_pretask", "_posttask", "_finish"]
         return tuple(getattr(self, i, None) for i in fields)
 
     def __enter__(self):
@@ -127,6 +130,7 @@ class add_callbacks(object):
     >>> with add_callbacks(callbacks):    # doctest: +SKIP
     ...     res.compute()
     """
+
     def __init__(self, *callbacks):
         self.callbacks = [normalize_callback(c) for c in callbacks]
         Callback.active.update(self.callbacks)

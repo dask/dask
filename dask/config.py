@@ -4,6 +4,7 @@ import ast
 import os
 import sys
 import threading
+
 try:
     import yaml
 except ImportError:
@@ -12,21 +13,21 @@ except ImportError:
 from .compatibility import makedirs, builtins, Mapping
 
 
-no_default = '__no_default__'
+no_default = "__no_default__"
 
 
 paths = [
-    os.getenv('DASK_ROOT_CONFIG', '/etc/dask'),
-    os.path.join(sys.prefix, 'etc', 'dask'),
-    os.path.join(os.path.expanduser('~'), '.config', 'dask'),
-    os.path.join(os.path.expanduser('~'), '.dask')
+    os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
+    os.path.join(sys.prefix, "etc", "dask"),
+    os.path.join(os.path.expanduser("~"), ".config", "dask"),
+    os.path.join(os.path.expanduser("~"), ".dask"),
 ]
 
-if 'DASK_CONFIG' in os.environ:
-    PATH = os.environ['DASK_CONFIG']
+if "DASK_CONFIG" in os.environ:
+    PATH = os.environ["DASK_CONFIG"]
     paths.append(PATH)
 else:
-    PATH = os.path.join(os.path.expanduser('~'), '.config', 'dask')
+    PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
 
 global_config = config = {}
@@ -53,7 +54,7 @@ def canonical_name(k, config):
         # config is not a mapping, return the same name as provided
         return k
 
-    altk = k.replace('_', '-') if '_' in k else k.replace('-', '_')
+    altk = k.replace("_", "-") if "_" in k else k.replace("-", "_")
 
     if altk in config:
         return altk
@@ -61,7 +62,7 @@ def canonical_name(k, config):
     return k
 
 
-def update(old, new, priority='new'):
+def update(old, new, priority="new"):
     """ Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -98,7 +99,7 @@ def update(old, new, priority='new'):
                 old[k] = {}
             update(old[k], v, priority=priority)
         else:
-            if priority == 'new' or k not in old:
+            if priority == "new" or k not in old:
                 old[k] = v
 
     return old
@@ -138,11 +139,16 @@ def collect_yaml(paths=paths):
         if os.path.exists(path):
             if os.path.isdir(path):
                 try:
-                    file_paths.extend(sorted([
-                        os.path.join(path, p)
-                        for p in os.listdir(path)
-                        if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
-                    ]))
+                    file_paths.extend(
+                        sorted(
+                            [
+                                os.path.join(path, p)
+                                for p in os.listdir(path)
+                                if os.path.splitext(p)[1].lower()
+                                in (".json", ".yaml", ".yml")
+                            ]
+                        )
+                    )
                 except OSError:
                     # Ignore permission errors
                     pass
@@ -179,8 +185,8 @@ def collect_env(env=None):
         env = os.environ
     d = {}
     for name, value in env.items():
-        if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('__', '.')
+        if name.startswith("DASK_"):
+            varname = name[5:].lower().replace("__", ".")
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
@@ -192,10 +198,7 @@ def collect_env(env=None):
     return result
 
 
-def ensure_file(
-        source,
-        destination=None,
-        comment=True):
+def ensure_file(source, destination=None, comment=True):
     """
     Copy file to default location if it does not already exist
 
@@ -235,18 +238,18 @@ def ensure_file(
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
-            tmp = '%s.tmp.%d' % (destination, os.getpid())
+            tmp = "%s.tmp.%d" % (destination, os.getpid())
             with open(source) as f:
                 lines = list(f)
 
             if comment:
-                lines = ['# ' + line
-                         if line.strip() and not line.startswith('#')
-                         else line
-                         for line in lines]
+                lines = [
+                    "# " + line if line.strip() and not line.startswith("#") else line
+                    for line in lines
+                ]
 
-            with open(tmp, 'w') as f:
-                f.write(''.join(lines))
+            with open(tmp, "w") as f:
+                f.write("".join(lines))
 
             try:
                 os.rename(tmp, destination)
@@ -269,6 +272,7 @@ class set(object):
     --------
     dask.config.get
     """
+
     def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
         if arg and not kwargs:
             kwargs = arg
@@ -278,14 +282,14 @@ class set(object):
             self.old = {}
 
             for key, value in kwargs.items():
-                self._assign(key.split('.'), value, config, old=self.old)
+                self._assign(key.split("."), value, config, old=self.old)
 
     def __enter__(self):
         return self.config
 
     def __exit__(self, type, value, traceback):
         for keys, value in self.old.items():
-            if value == '--delete--':
+            if value == "--delete--":
                 d = self.config
                 try:
                     while len(keys) > 1:
@@ -323,13 +327,13 @@ class set(object):
                 if key in d:
                     old[path_key] = d[key]
                 else:
-                    old[path_key] = '--delete--'
+                    old[path_key] = "--delete--"
             d[key] = value
         else:
             if key not in d:
                 d[key] = {}
                 if old is not None:
-                    old[tuple(path + [key])] = '--delete--'
+                    old[tuple(path + [key])] = "--delete--"
                 old = None
             cls._assign(keys[1:], value, d[key], path=path + [key], old=old)
 
@@ -393,7 +397,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
     config.clear()
 
     for d in defaults:
-        update(config, d, priority='old')
+        update(config, d, priority="old")
 
     update(config, collect(**kwargs))
 
@@ -420,7 +424,7 @@ def get(key, default=no_default, config=config):
     --------
     dask.config.set
     """
-    keys = key.split('.')
+    keys = key.split(".")
     result = config
     for k in keys:
         k = canonical_name(k, result)
@@ -463,11 +467,11 @@ def update_defaults(new, config=config, defaults=defaults):
         prioritizing older values over newer ones
     """
     defaults.append(new)
-    update(config, new, priority='old')
+    update(config, new, priority="old")
 
 
 def expand_environment_variables(config):
-    ''' Expand environment variables in a nested config dictionary
+    """ Expand environment variables in a nested config dictionary
 
     This function will recursively search through any nested dictionaries
     and/or lists.
@@ -485,7 +489,7 @@ def expand_environment_variables(config):
     --------
     >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
     {'x': [1, 2, 'my-username']}
-    '''
+    """
     if isinstance(config, Mapping):
         return {k: expand_environment_variables(v) for k, v in config.items()}
     elif isinstance(config, str):

@@ -127,11 +127,15 @@ def blockwise(
 
     # Input Validation
     if len(set(out_ind)) != len(out_ind):
-        raise ValueError("Repeated elements not allowed in output index",
-                         [k for k, v in toolz.frequencies(out_ind).items() if v > 1])
-    new = (set(out_ind)
-           - {a for arg in args[1::2] if arg is not None for a in arg}
-           - set(new_axes or ()))
+        raise ValueError(
+            "Repeated elements not allowed in output index",
+            [k for k, v in toolz.frequencies(out_ind).items() if v > 1],
+        )
+    new = (
+        set(out_ind)
+        - {a for arg in args[1::2] if arg is not None for a in arg}
+        - set(new_axes or ())
+    )
     if new:
         raise ValueError("Unknown dimension", new)
 
@@ -155,9 +159,10 @@ def blockwise(
     arginds = list(zip(arrays, args[1::2]))
 
     for arg, ind in arginds:
-        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
-            raise ValueError("Index string %s does not match array dimension %d"
-                             % (ind, arg.ndim))
+        if hasattr(arg, "ndim") and hasattr(ind, "__len__") and arg.ndim != len(ind):
+            raise ValueError(
+                "Index string %s does not match array dimension %d" % (ind, arg.ndim)
+            )
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
 
@@ -186,14 +191,25 @@ def blockwise(
 
     # Finish up the name
     if not out:
-        out = '%s-%s' % (token or utils.funcname(func).strip('_'),
-                         base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
+        out = "%s-%s" % (
+            token or utils.funcname(func).strip("_"),
+            base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
+        )
 
-    graph = core_blockwise(func, out, out_ind, *argindsstr, numblocks=numblocks,
-                           dependencies=dependencies, new_axes=new_axes,
-                           concatenate=concatenate, **kwargs2)
-    graph = HighLevelGraph.from_collections(out, graph,
-                                            dependencies=arrays + dependencies)
+    graph = core_blockwise(
+        func,
+        out,
+        out_ind,
+        *argindsstr,
+        numblocks=numblocks,
+        dependencies=dependencies,
+        new_axes=new_axes,
+        concatenate=concatenate,
+        **kwargs2
+    )
+    graph = HighLevelGraph.from_collections(
+        out, graph, dependencies=arrays + dependencies
+    )
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:
@@ -207,11 +223,13 @@ def blockwise(
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
                     raise NotImplementedError(
-                        "adjust_chunks values must be callable, int, or tuple")
+                        "adjust_chunks values must be callable, int, or tuple"
+                    )
     chunks = tuple(chunks)
 
     if meta is None:
         from .utils import compute_meta
+
         meta = compute_meta(func, dtype, *args[::2], **kwargs)
     if meta is not None:
         return Array(graph, out, chunks, meta=meta)

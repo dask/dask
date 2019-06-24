@@ -21,10 +21,12 @@ class HTTPFileSystem(object):
     Unlike other file-systems, HTTP is limited in that it does not provide glob
     or write capability.
     """
-    sep = '/'
 
-    def __init__(self, simple_links=True, block_size=None, same_schema=True,
-                 **storage_options):
+    sep = "/"
+
+    def __init__(
+        self, simple_links=True, block_size=None, same_schema=True, **storage_options
+    ):
         """
         Parameters
         ----------
@@ -41,8 +43,7 @@ class HTTPFileSystem(object):
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters passed on to requests
         """
-        self.block_size = (block_size if block_size is not None
-                           else DEFAULT_BLOCK_SIZE)
+        self.block_size = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
         self.simple_links = simple_links
         self.same_schema = same_schema
         self.kwargs = storage_options
@@ -60,24 +61,27 @@ class HTTPFileSystem(object):
         for l in links:
             if isinstance(l, tuple):
                 l = l[1]
-            if l.startswith('http'):
+            if l.startswith("http"):
                 if self.same_schema:
-                    if l.split(':', 1)[0] == url.split(':', 1)[0]:
+                    if l.split(":", 1)[0] == url.split(":", 1)[0]:
                         out.add(l)
-                elif l.replace('https', 'http').startswith(
-                        url.replace('https', 'http')):
+                elif l.replace("https", "http").startswith(
+                    url.replace("https", "http")
+                ):
                     # allowed to cross http <-> https
                     out.add(l)
-            elif l.startswith('/') and len(l) > 1:
-                out.add(parts.scheme + '://' + parts.netloc + l)
+            elif l.startswith("/") and len(l) > 1:
+                out.add(parts.scheme + "://" + parts.netloc + l)
             else:
-                if l not in ['..', '../', '']:
+                if l not in ["..", "../", ""]:
                     # Ignore FTP-like "parent"
-                    out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
-        out = out - {url, url + '/'}
+                    out.add("/".join([url.rstrip("/"), l.lstrip("/")]))
+        out = out - {url, url + "/"}
         if detail:
-            return [{'name': u, 'type': 'directory'
-                     if self.isdir(u) else 'file'} for u in out]
+            return [
+                {"name": u, "type": "directory" if self.isdir(u) else "file"}
+                for u in out
+            ]
         else:
             return list(sorted(out))
 
@@ -91,7 +95,7 @@ class HTTPFileSystem(object):
     def glob(self, path):
         return sorted(generic_glob(self, posixpath, path))
 
-    def open(self, url, mode='rb', block_size=None, **kwargs):
+    def open(self, url, mode="rb", block_size=None, **kwargs):
         """Make a file-like object
 
         Parameters
@@ -105,14 +109,14 @@ class HTTPFileSystem(object):
         kwargs: key-value
             Any other parameters, passed to requests calls
         """
-        if mode != 'rb':
+        if mode != "rb":
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
         if block_size:
             return HTTPFile(url, self.session, block_size, **self.kwargs)
         else:
             kw = self.kwargs.copy()
-            kw['stream'] = True
+            kw["stream"] = True
             r = self.session.get(url, **kw)
             r.raise_for_status()
             r.raw.decode_content = True
@@ -121,6 +125,7 @@ class HTTPFileSystem(object):
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
         from dask.base import tokenize
+
         return tokenize(url, self.kwargs)
 
     def size(self, url):
@@ -128,8 +133,8 @@ class HTTPFileSystem(object):
         return file_size(url, session=self.session, **self.kwargs)
 
 
-core._filesystems['http'] = HTTPFileSystem
-core._filesystems['https'] = HTTPFileSystem
+core._filesystems["http"] = HTTPFileSystem
+core._filesystems["https"] = HTTPFileSystem
 
 
 class HTTPFile(object):
@@ -159,12 +164,12 @@ class HTTPFile(object):
         self.kwargs = kwargs
         self.loc = 0
         self.session = session if session is not None else requests.Session()
-        self.blocksize = (block_size if block_size is not None
-                          else DEFAULT_BLOCK_SIZE)
+        self.blocksize = block_size if block_size is not None else DEFAULT_BLOCK_SIZE
 
         try:
-            self.size = file_size(url, self.session, allow_redirects=True,
-                                  **self.kwargs)
+            self.size = file_size(
+                url, self.session, allow_redirects=True, **self.kwargs
+            )
         except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
             self.size = None  # pragma: no cover
@@ -177,7 +182,7 @@ class HTTPFile(object):
                 raise err
             self.size = None  # pragma: no cover
 
-        self.cache = b''
+        self.cache = b""
         self.closed = False
         self.start = None
         self.end = None
@@ -197,7 +202,7 @@ class HTTPFile(object):
         Returns the position.
         """
         if self.size is None and (where, whence) not in [(0, 0), (0, 1)]:
-            raise ValueError('Cannot seek since size of file is not known')
+            raise ValueError("Cannot seek since size of file is not known")
         if whence == 0:
             nloc = where
         elif whence == 1:
@@ -205,9 +210,9 @@ class HTTPFile(object):
         elif whence == 2:
             nloc = self.size + where
         else:
-            raise ValueError('Whence must be in [1, 2, 3], but got %s' % whence)
+            raise ValueError("Whence must be in [1, 2, 3], but got %s" % whence)
         if nloc < 0:
-            raise ValueError('Seek before start of file')
+            raise ValueError("Seek before start of file")
         self.loc = nloc
         return nloc
 
@@ -227,7 +232,7 @@ class HTTPFile(object):
         """
         if length == 0:
             # asked for no data, so supply no data and shortcut doing work
-            return b''
+            return b""
         if length < 0 and self.loc == 0:
             # size was provided, but asked for whole file, so shortcut
             return self._fetch_all()
@@ -235,7 +240,7 @@ class HTTPFile(object):
             if length >= 0:  # pragma: no cover
                 # asked for specific amount of data, but we don't know how
                 # much is available
-                raise ValueError('File size is unknown, must read all data')
+                raise ValueError("File size is unknown, must read all data")
             else:
                 # asked for whole file
                 return self._fetch_all()
@@ -245,9 +250,9 @@ class HTTPFile(object):
             end = self.loc + length
         if self.loc >= self.size:
             # EOF (python files don't error, just return no data)
-            return b''
-        self. _fetch(self.loc, end)
-        data = self.cache[self.loc - self.start:end - self.start]
+            return b""
+        self._fetch(self.loc, end)
+        data = self.cache[self.loc - self.start : end - self.start]
         self.loc = end
         return data
 
@@ -308,21 +313,22 @@ class HTTPFile(object):
         requested, an exception is raised.
         """
         kwargs = self.kwargs.copy()
-        headers = kwargs.pop('headers', {})
-        headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
+        headers = kwargs.pop("headers", {})
+        headers["Range"] = "bytes=%i-%i" % (start, end - 1)
         r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
         r.raise_for_status()
         if r.status_code == 206:
             # partial content, as expected
             return r.content
-        if 'Content-Length' in r.headers:
-            cl = int(r.headers['Content-Length'])
+        if "Content-Length" in r.headers:
+            cl = int(r.headers["Content-Length"])
             if cl <= end - start:
                 # data size OK
                 return r.content
             else:
-                raise ValueError('Got more bytes (%i) than requested (%i)' % (
-                    cl, end - start))
+                raise ValueError(
+                    "Got more bytes (%i) than requested (%i)" % (cl, end - start)
+                )
         cl = 0
         out = []
         for chunk in r.iter_content(chunk_size=2 ** 20):
@@ -332,11 +338,12 @@ class HTTPFile(object):
                 cl += len(chunk)
                 if cl > end - start:
                     raise ValueError(
-                        'Got more bytes so far (>%i) than requested (%i)' % (
-                            cl, end - start))
+                        "Got more bytes so far (>%i) than requested (%i)"
+                        % (cl, end - start)
+                    )
             else:
                 break
-        return b''.join(out)
+        return b"".join(out)
 
     def __enter__(self):
         self.loc = 0
@@ -375,12 +382,12 @@ def file_size(url, session, **kwargs):
     'identity' (no compression) to get the true size of the target.
     """
     kwargs = kwargs.copy()
-    ar = kwargs.pop('allow_redirects', True)
-    head = kwargs.get('headers', {})
-    head['Accept-Encoding'] = 'identity'
+    ar = kwargs.pop("allow_redirects", True)
+    head = kwargs.get("headers", {})
+    head["Accept-Encoding"] = "identity"
     r = session.head(url, allow_redirects=ar, **kwargs)
     r.raise_for_status()
-    if 'Content-Length' in r.headers:
-        return int(r.headers['Content-Length'])
+    if "Content-Length" in r.headers:
+        return int(r.headers["Content-Length"])
     else:
         raise ValueError("Server did not supply size of %s" % url)
