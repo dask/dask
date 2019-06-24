@@ -15,12 +15,14 @@ thread_state = threading.local()
 
 def set_options(*args, **kwargs):
     """ Deprecated: see dask.config.set instead """
-    raise TypeError("The dask.set_options function has been deprecated.\n"
-                    "Please use dask.config.set instead\n\n"
-                    "  Before: with dask.set_options(foo='bar'):\n"
-                    "              ...\n"
-                    "  After:  with dask.config.set(foo='bar'):\n"
-                    "              ...")
+    raise TypeError(
+        "The dask.set_options function has been deprecated.\n"
+        "Please use dask.config.set instead\n\n"
+        "  Before: with dask.set_options(foo='bar'):\n"
+        "              ...\n"
+        "  After:  with dask.config.set(foo='bar'):\n"
+        "              ..."
+    )
 
 
 def globalmethod(default=None, key=None, falsey=None):

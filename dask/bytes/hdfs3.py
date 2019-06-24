@@ -20,7 +20,7 @@ class HDFS3HadoopFileSystem(object):
         out.fs = fs
         return out
 
-    def open(self, path, mode='rb', **kwargs):
+    def open(self, path, mode="rb", **kwargs):
         return self.fs.open(path, mode=mode, **kwargs)
 
     def glob(self, path):
@@ -30,11 +30,12 @@ class HDFS3HadoopFileSystem(object):
         return self.fs.makedirs(path)
 
     def ukey(self, path):
-        return tokenize(path, self.fs.info(path)['last_mod'])
+        return tokenize(path, self.fs.info(path)["last_mod"])
 
     def size(self, path):
-        return self.fs.info(path)['size']
+        return self.fs.info(path)["size"]
 
     def _get_pyarrow_filesystem(self):
         from .pyarrow import HDFS3Wrapper
+
         return HDFS3Wrapper(self.fs)

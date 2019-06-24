@@ -12,12 +12,18 @@ _numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 # https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/fixes.py#L84
 try:
     with warnings.catch_warnings():
-        if (not np.allclose(np.divide(.4, 1, casting="unsafe"),
-                            np.divide(.4, 1, casting="unsafe", dtype=np.float)) or
-            not np.allclose(np.divide(1, .5, dtype='i8'), 2) or
-           not np.allclose(np.divide(.4, 1), .4)):
-            raise TypeError('Divide not working with dtype: '
-                            'https://github.com/numpy/numpy/issues/3484')
+        if (
+            not np.allclose(
+                np.divide(0.4, 1, casting="unsafe"),
+                np.divide(0.4, 1, casting="unsafe", dtype=np.float),
+            )
+            or not np.allclose(np.divide(1, 0.5, dtype="i8"), 2)
+            or not np.allclose(np.divide(0.4, 1), 0.4)
+        ):
+            raise TypeError(
+                "Divide not working with dtype: "
+                "https://github.com/numpy/numpy/issues/3484"
+            )
         divide = np.divide
         ma_divide = np.ma.divide
 
@@ -33,25 +39,25 @@ except TypeError:
             x = x.astype(dtype)
         return x
 
-    ma_divide = np.ma.core._DomainedBinaryOperation(divide,
-                                                    np.ma.core._DomainSafeDivide(),
-                                                    0, 1)
+    ma_divide = np.ma.core._DomainedBinaryOperation(
+        divide, np.ma.core._DomainSafeDivide(), 0, 1
+    )
 
 
-if LooseVersion(np.__version__) < '1.15.0':
+if LooseVersion(np.__version__) < "1.15.0":
     # These functions were added in numpy 1.15.0. For previous versions they
     # are duplicated here
 
     def _make_along_axis_idx(arr_shape, indices, axis):
         # compute dimensions to iterate over
         if not np.issubdtype(indices.dtype, np.integer):
-            raise IndexError('`indices` must be an integer array')
+            raise IndexError("`indices` must be an integer array")
         if len(arr_shape) != indices.ndim:
             raise ValueError(
-                "`indices` and `arr` must have the same number of dimensions")
+                "`indices` and `arr` must have the same number of dimensions"
+            )
         shape_ones = (1,) * indices.ndim
-        dest_dims = list(range(axis)) + [None] + list(
-            range(axis + 1, indices.ndim))
+        dest_dims = list(range(axis)) + [None] + list(range(axis + 1, indices.ndim))
 
         # build a fancy index, consisting of orthogonal aranges, with the
         # requested index inserted at the right location
@@ -60,7 +66,7 @@ if LooseVersion(np.__version__) < '1.15.0':
             if dim is None:
                 fancy_index.append(indices)
             else:
-                ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim + 1:]
+                ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim + 1 :]
                 fancy_index.append(np.arange(n).reshape(ind_shape))
 
         return tuple(fancy_index)
@@ -174,10 +180,10 @@ def _make_sliced_dtype_np_ge_16(dtype, index):
     # https://github.com/numpy/numpy/pull/12447
     # in version 1.16.0
     new = {
-        'names': index,
-        'formats': [dtype.fields[name][0] for name in index],
-        'offsets': [dtype.fields[name][1] for name in index],
-        'itemsize': dtype.itemsize,
+        "names": index,
+        "formats": [dtype.fields[name][0] for name in index],
+        "offsets": [dtype.fields[name][1] for name in index],
+        "itemsize": dtype.itemsize,
     }
     return np.dtype(new)
 
@@ -188,8 +194,9 @@ def _make_sliced_dtype_np_lt_14(dtype, index):
     return dt
 
 
-if LooseVersion(np.__version__) >= LooseVersion("1.16.0") or \
-   LooseVersion(np.__version__) == LooseVersion("1.14.0"):
+if LooseVersion(np.__version__) >= LooseVersion("1.16.0") or LooseVersion(
+    np.__version__
+) == LooseVersion("1.14.0"):
     _make_sliced_dtype = _make_sliced_dtype_np_ge_16
 else:
     _make_sliced_dtype = _make_sliced_dtype_np_lt_14
@@ -207,12 +214,14 @@ class _Recurser(object):
     def __init__(self, recurse_if):
         self.recurse_if = recurse_if
 
-    def map_reduce(self,
-                   x,
-                   f_map=lambda x, **kwargs: x,
-                   f_reduce=lambda x, **kwargs: x,
-                   f_kwargs=lambda **kwargs: kwargs,
-                   **kwargs):
+    def map_reduce(
+        self,
+        x,
+        f_map=lambda x, **kwargs: x,
+        f_reduce=lambda x, **kwargs: x,
+        f_kwargs=lambda **kwargs: kwargs,
+        **kwargs
+    ):
         """
         Iterate over the nested list, applying:
         * ``f_map`` (T -> U) to items
@@ -245,15 +254,14 @@ class _Recurser(object):
               f_map(4, **kw1)
             ]],     **kw)
         """
+
         def f(x, **kwargs):
             if not self.recurse_if(x):
                 return f_map(x, **kwargs)
             else:
                 next_kwargs = f_kwargs(**kwargs)
-                return f_reduce((
-                    f(xi, **next_kwargs)
-                    for xi in x
-                ), **kwargs)
+                return f_reduce((f(xi, **next_kwargs) for xi in x), **kwargs)
+
         return f(x, **kwargs)
 
     def walk(self, x, index=()):
