@@ -25,7 +25,7 @@ Release per project:
 *   Upload to PyPI
 
         git clean -xfd
-        python setup.py sdist bdist_wheel --universal
+        python setup.py sdist bdist_wheel
         twine upload dist/*
 
 *   Wait for [conda-forge](https://conda-forge.github.io) bots to track the
