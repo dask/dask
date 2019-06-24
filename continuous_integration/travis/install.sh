@@ -93,7 +93,6 @@ pip install --quiet --upgrade --no-deps \
 
 pip install --quiet --upgrade \
     cityhash \
-    flake8 \
     mmh3 \
     pytest-xdist \
     xxhash \

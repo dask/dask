@@ -240,13 +240,37 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
    conda install -y graphviz
 
 
-Style
-~~~~~
+Code Formatting
+~~~~~~~~~~~~~~~
 
-Dask verifies style uniformity with the ``flake8`` tool::
+Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
+`Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent code
+format throughout the project. ``black`` and ``flake8`` can be installed with
+``pip``::
 
-   pip install flake8
+   pip install black flake8
+
+and then run from the root of the Dask repository::
+
+   black dask
    flake8 dask
+
+to auto-format your code. Additionally, many editors have plugins that will
+apply ``black`` as you edit files.
+
+Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
+to automatically run ``black`` and ``flake8`` when you make a git commit. This
+can be done by installing ``pre-commit``::
+
+   pip install pre-commit
+
+and then running::
+
+   pre-commit install
+
+from the root of the Dask repository. Now ``black`` and ``flake8`` will be run
+each time you commit changes. You can skip these checks with
+``git commit --no-verify``.
 
 
 Contributing to Documentation
