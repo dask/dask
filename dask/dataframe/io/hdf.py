@@ -14,7 +14,7 @@ from ...base import get_scheduler
 from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
-from ...bytes.utils import build_name_function
+from ...bytes.utils import build_name_function, stringify_path
 from ...compatibility import PY3
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
@@ -355,9 +355,9 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     Parameters
     ----------
-    pattern : string, list
-        File pattern (string), buffer to read from, or list of file
-        paths. Can contain wildcards.
+    pattern : string, pathlib.Path, list
+        File pattern (string), pathlib.Path, buffer to read from, or list of
+        file paths. Can contain wildcards.
     key : group identifier in the store. Can contain wildcards
     start : optional, integer (defaults to 0), row number to start at
     stop : optional, integer (defaults to None, the last row), row number to
@@ -405,6 +405,9 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
+    # Convert path-like objects to a string
+    pattern = stringify_path(pattern)
+
     if isinstance(pattern, str):
         paths = sorted(glob(pattern))
     else:
