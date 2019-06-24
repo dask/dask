@@ -1002,14 +1002,15 @@ def pad_stats(array, pad_width, mode, *args):
         pad_chunks = tuple(pad_chunks)
 
         result_idx = array[select]
-        if mode == "maximum":
-            result_idx = result_idx.max(axis=axes, keepdims=True)
-        elif mode == "mean":
-            result_idx = result_idx.mean(axis=axes, keepdims=True)
-        elif mode == "minimum":
-            result_idx = result_idx.min(axis=axes, keepdims=True)
+        if axes:
+            if mode == "maximum":
+                result_idx = result_idx.max(axis=axes, keepdims=True)
+            elif mode == "mean":
+                result_idx = result_idx.mean(axis=axes, keepdims=True)
+            elif mode == "minimum":
+                result_idx = result_idx.min(axis=axes, keepdims=True)
 
-        result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
+            result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
 
         result[idx] = result_idx
 
