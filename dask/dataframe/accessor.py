@@ -44,7 +44,7 @@ class Accessor(object):
         meta = self._series._meta
         if hasattr(meta, 'to_series'):  # is index-like
             meta = meta.to_series()
-        return getattr(type(meta), self._accessor_name)
+        return getattr(meta, self._accessor_name)
 
     @staticmethod
     def _delegate_property(obj, accessor, attr):
