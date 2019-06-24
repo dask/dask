@@ -462,6 +462,12 @@ def test_block_simple_row_wise():
 
     assert_eq(expected, result)
 
+    expected = np.block([a1, a2[:, :0]])
+    result = da.block([d1, d2[:, :0]])
+
+    assert result is d1
+    assert_eq(expected, result)
+
 
 def test_block_simple_column_wise():
     a1 = np.ones((2, 2))
@@ -487,6 +493,12 @@ def test_block_with_1d_arrays_row_wise():
     expected = np.block([a1, a2])
     result = da.block([d1, d2])
 
+    assert_eq(expected, result)
+
+    expected = np.block([a1, a2[:0]])
+    result = da.block([d1, d2[:0]])
+
+    assert result is d1
     assert_eq(expected, result)
 
 
@@ -653,6 +665,30 @@ def test_block_3d():
         ]
     ])
 
+    assert_eq(expected, result)
+
+    expected = np.block([
+        [
+            [a000,           a001[:, :, :0]],
+            [a010[:, :0, :], a011[:, :0, :0]],
+        ],
+        [
+            [a100[:0, :, :],  a101[:0, :, :0]],
+            [a110[:0, :0, :], a111[:0, :0, :0]],
+        ]
+    ])
+    result = da.block([
+        [
+            [d000,           d001[:, :, :0]],
+            [d010[:, :0, :], d011[:, :0, :0]],
+        ],
+        [
+            [d100[:0, :, :],  d101[:0, :, :0]],
+            [d110[:0, :0, :], d111[:0, :0, :0]],
+        ]
+    ])
+
+    assert result is d000
     assert_eq(expected, result)
 
 
