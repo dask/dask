@@ -347,7 +347,7 @@ def main(
             host=host,
             port=port,
             dashboard_address=dashboard_address if dashboard else None,
-            service_kwargs={"bokhe": {"prefix": dashboard_prefix}},
+            service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
             name=name if nprocs == 1 or not name else name + "-" + str(i),
             **kwargs
         )
