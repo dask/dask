@@ -5,7 +5,6 @@ from glob import glob
 import os
 import uuid
 from warnings import warn
-import pathlib
 
 import pandas as pd
 from toolz import merge
@@ -15,7 +14,7 @@ from ...base import get_scheduler
 from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
-from ...bytes.utils import build_name_function
+from ...bytes.utils import build_name_function, stringify_path
 from ...compatibility import PY3
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
@@ -406,11 +405,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
-    # Convert pathlib.Path and objects supporting the fspath protocol to a string
-    if hasattr(pattern, '__fspath__'):
-        pattern = pattern.__fspath__()
-    elif isinstance(pattern, pathlib.Path):
-        pattern = str(pattern)
+    # Convert path-like objects to a string
+    pattern = stringify_path(pattern)
 
     if isinstance(pattern, str):
         paths = sorted(glob(pattern))
