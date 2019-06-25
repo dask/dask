@@ -9,11 +9,21 @@ import pandas.util.testing as tm
 from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat, concat_kwargs
-from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
-                                  hash_join, concat_indexed_dataframes,
-                                  _maybe_align_partitions)
-from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
-                                  has_known_categories, clear_known_categories, PANDAS_GT_0230)
+from dask.dataframe.multi import (
+    align_partitions,
+    merge_indexed_dataframes,
+    hash_join,
+    concat_indexed_dataframes,
+    _maybe_align_partitions,
+)
+from dask.dataframe.utils import (
+    assert_eq,
+    assert_divisions,
+    make_meta,
+    has_known_categories,
+    clear_known_categories,
+    PANDAS_GT_0230,
+)
 
 import pytest
 
@@ -196,11 +206,11 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
 
 def list_eq(aa, bb):
     if isinstance(aa, dd.DataFrame):
-        a = aa.compute(scheduler='sync')
+        a = aa.compute(scheduler="sync")
     else:
         a = aa
     if isinstance(bb, dd.DataFrame):
-        b = bb.compute(scheduler='sync')
+        b = bb.compute(scheduler="sync")
     else:
         b = bb
     tm.assert_index_equal(a.columns, b.columns)
@@ -214,8 +224,8 @@ def list_eq(aa, bb):
     tm.assert_numpy_array_equal(av, bv)
 
 
-@pytest.mark.parametrize('how', ['inner', 'left', 'right', 'outer'])
-@pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
+@pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
+@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
 def test_hash_join(how, shuffle):
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
@@ -1131,31 +1141,36 @@ def test_merge_by_multiple_columns(how, shuffle):
 
 
 def test_melt():
-    pdf = pd.DataFrame({'A': list('abcd') * 5,
-                        'B': list('XY') * 10,
-                        'C': np.random.randn(20)})
+    pdf = pd.DataFrame(
+        {"A": list("abcd") * 5, "B": list("XY") * 10, "C": np.random.randn(20)}
+    )
     ddf = dd.from_pandas(pdf, 4)
 
-    list_eq(dd.melt(ddf),
-            pd.melt(pdf))
+    list_eq(dd.melt(ddf), pd.melt(pdf))
 
-    list_eq(dd.melt(ddf, id_vars='C'),
-            pd.melt(pdf, id_vars='C'))
-    list_eq(dd.melt(ddf, value_vars='C'),
-            pd.melt(pdf, value_vars='C'))
-    list_eq(dd.melt(ddf, value_vars=['A', 'C'], var_name='myvar'),
-            pd.melt(pdf, value_vars=['A', 'C'], var_name='myvar'))
-    list_eq(dd.melt(ddf, id_vars='B', value_vars=['A', 'C'], value_name='myval'),
-            pd.melt(pdf, id_vars='B', value_vars=['A', 'C'], value_name='myval'))
+    list_eq(dd.melt(ddf, id_vars="C"), pd.melt(pdf, id_vars="C"))
+    list_eq(dd.melt(ddf, value_vars="C"), pd.melt(pdf, value_vars="C"))
+    list_eq(
+        dd.melt(ddf, value_vars=["A", "C"], var_name="myvar"),
+        pd.melt(pdf, value_vars=["A", "C"], var_name="myvar"),
+    )
+    list_eq(
+        dd.melt(ddf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
+        pd.melt(pdf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
+    )
 
     # test again as DataFrame method
     list_eq(ddf.melt(), pdf.melt())
-    list_eq(ddf.melt(id_vars='C'), pdf.melt(id_vars='C'))
-    list_eq(ddf.melt(value_vars='C'), pdf.melt(value_vars='C'))
-    list_eq(ddf.melt(value_vars=['A', 'C'], var_name='myvar'),
-            pdf.melt(value_vars=['A', 'C'], var_name='myvar'))
-    list_eq(ddf.melt(id_vars='B', value_vars=['A', 'C'], value_name='myval'),
-            pdf.melt(id_vars='B', value_vars=['A', 'C'], value_name='myval'))
+    list_eq(ddf.melt(id_vars="C"), pdf.melt(id_vars="C"))
+    list_eq(ddf.melt(value_vars="C"), pdf.melt(value_vars="C"))
+    list_eq(
+        ddf.melt(value_vars=["A", "C"], var_name="myvar"),
+        pdf.melt(value_vars=["A", "C"], var_name="myvar"),
+    )
+    list_eq(
+        ddf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
+        pdf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
+    )
 
 
 def test_cheap_inner_merge_with_pandas_object():

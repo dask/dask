@@ -4079,8 +4079,14 @@ class DataFrame(_Frame):
             self, index=index, columns=columns, values=values, aggfunc=aggfunc
         )
 
-    def melt(self, id_vars=None, value_vars=None, var_name=None,
-             value_name='value', col_level=None):
+    def melt(
+        self,
+        id_vars=None,
+        value_vars=None,
+        var_name=None,
+        value_name="value",
+        col_level=None,
+    ):
         """
         Unpivots a DataFrame from wide format to long format, optionally leaving identifier variables set.
 
@@ -4114,8 +4120,15 @@ class DataFrame(_Frame):
         pandas.DataFrame.melt
         """
         from .reshape import melt
-        return melt(self, id_vars=id_vars, value_vars=value_vars, var_name=var_name,
-                    value_name=value_name, col_level=col_level)
+
+        return melt(
+            self,
+            id_vars=id_vars,
+            value_vars=value_vars,
+            var_name=var_name,
+            value_name=value_name,
+            col_level=col_level,
+        )
 
     def to_records(self, index=False, lengths=None):
         from .io import to_records

@@ -5,9 +5,7 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import (
-    assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
-)
+from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
 
 
 skip_if_no_get_dummies_sparse = pytest.mark.skipif(
