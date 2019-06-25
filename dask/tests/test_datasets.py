@@ -3,7 +3,7 @@ import pytest
 
 
 def test_mimesis():
-    pytest.importorskip('mimesis')
+    pytest.importorskip("mimesis")
 
     b = dask.datasets.make_people()
     assert b.take(5)
@@ -12,7 +12,7 @@ def test_mimesis():
 
 
 def test_full_dataset():
-    pytest.importorskip('mimesis')
+    pytest.importorskip("mimesis")
     b = dask.datasets.make_people(npartitions=2, records_per_partition=10)
     assert b.count().compute() == 20
 
@@ -28,7 +28,7 @@ def test_no_mimesis():
 
 
 def test_deterministic():
-    pytest.importorskip('mimesis')
+    pytest.importorskip("mimesis")
 
     b = dask.datasets.make_people(seed=123)
-    assert b.take(1)[0]['name'] == ('Leandro', 'Orr')
+    assert b.take(1)[0]["name"] == ("Leandro", "Orr")
