@@ -4,8 +4,11 @@ from .compatibility import Mapping
 
 import warnings
 
-warnings.warn("ShareDict has been deprecated in favor of HighLevelGraph "
-              "and will be removed in future versions", stacklevel=2)
+warnings.warn(
+    "ShareDict has been deprecated in favor of HighLevelGraph "
+    "and will be removed in future versions",
+    stacklevel=2,
+)
 
 
 class ShareDict(Mapping):
@@ -54,6 +57,7 @@ class ShareDict(Mapping):
     >>> s.dicts  # doctest: +SKIP
     {'a': {'x': 1, 'y': 2}, 'b': {'z': 3}}
     """
+
     def __init__(self, dicts=None, dependencies=None):
         self.dicts = dicts or dict()
         self.dependencies = dependencies or dict()
@@ -103,7 +107,7 @@ class ShareDict(Mapping):
 
 
 def merge(*dicts, **kwargs):
-    dependencies = kwargs.pop('dependencies', None)
+    dependencies = kwargs.pop("dependencies", None)
     assert not kwargs
     # assert dependencies is not None
     result = ShareDict()

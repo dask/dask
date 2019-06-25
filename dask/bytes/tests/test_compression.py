@@ -7,7 +7,7 @@ from dask.bytes.compression import compress, decompress, files
 def test_compression():
     assert set(compress) == set(decompress)
 
-    a = b'Hello, world!'
+    a = b"Hello, world!"
     for k in compress:
         comp = compress[k]
         decomp = decompress[k]
@@ -18,13 +18,13 @@ def test_compression():
             assert a != b
 
 
-@pytest.mark.parametrize('fmt,File', files.items())
-def test_files(fmt,File):
+@pytest.mark.parametrize("fmt,File", files.items())
+def test_files(fmt, File):
     if fmt is None:
         return
-    data = b'1234' * 1000
+    data = b"1234" * 1000
     out = BytesIO()
-    f = File(out, mode='wb')
+    f = File(out, mode="wb")
     f.write(data)
     f.close()
 
@@ -34,7 +34,7 @@ def test_files(fmt,File):
     assert len(data) > len(compressed)
 
     b = BytesIO(compressed)
-    g = File(b, mode='rb')
+    g = File(b, mode="rb")
     data2 = g.read()
     g.close()
     assert data == data2

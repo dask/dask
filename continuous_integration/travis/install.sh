@@ -89,16 +89,15 @@ fi
 
 pip install --quiet --upgrade --no-deps \
     cachey \
-    graphviz \
-    pandas_datareader
+    graphviz
 
 pip install --quiet --upgrade \
     cityhash \
-    flake8 \
     mmh3 \
     pytest-xdist \
     xxhash \
-    moto
+    moto \
+    pandas_datareader
 
 if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing PyArrow dev"
