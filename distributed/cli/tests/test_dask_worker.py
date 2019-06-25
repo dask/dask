@@ -312,3 +312,22 @@ def test_worker_timeout(no_nanny):
     result = runner.invoke(distributed.cli.dask_worker.main, args)
     assert result.exit_code != 0
     assert str(result.exception).startswith("Timed out")
+
+
+def test_bokeh_deprecation():
+    pytest.importorskip("bokeh")
+
+    runner = CliRunner()
+    with pytest.warns(UserWarning, match="dashboard"):
+        try:
+            runner.invoke(distributed.cli.dask_worker.main, ["--bokeh"])
+        except ValueError:
+            # didn't pass scheduler
+            pass
+
+    with pytest.warns(UserWarning, match="dashboard"):
+        try:
+            runner.invoke(distributed.cli.dask_worker.main, ["--no-bokeh"])
+        except ValueError:
+            # didn't pass scheduler
+            pass

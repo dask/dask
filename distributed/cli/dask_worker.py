@@ -78,6 +78,13 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     help="Launch the Dashboard",
 )
 @click.option(
+    "--bokeh/--no-bokeh",
+    "bokeh",
+    default=None,
+    help="Deprecated.  See --dashboard/--no-dashboard.",
+    required=False,
+)
+@click.option(
     "--listen-address",
     type=str,
     default=None,
@@ -197,6 +204,7 @@ def main(
     reconnect,
     resources,
     dashboard,
+    bokeh,
     bokeh_port,
     local_directory,
     scheduler_file,
@@ -223,6 +231,11 @@ def main(
             "Consider adding ``--dashboard-address :%d`` " % bokeh_port
         )
         dashboard_address = bokeh_port
+    if bokeh is not None:
+        warnings.warn(
+            "The --bokeh/--no-bokeh flag has been renamed to --dashboard/--no-dashboard. "
+        )
+        dashboard = bokeh
 
     sec = Security(
         tls_ca_file=tls_ca_file, tls_worker_cert=tls_cert, tls_worker_key=tls_key
