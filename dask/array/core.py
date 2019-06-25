@@ -4022,9 +4022,9 @@ def stack(seq, axis=0):
     if axis < 0:
         axis = ndim + axis + 1
     shape = tuple(
-        len(seq) if i == axis else (
-            seq[0].shape[i] if i < axis else seq[0].shape[i - 1]
-        )
+        len(seq)
+        if i == axis
+        else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
         for i in range(meta.ndim)
     )
 
@@ -4033,8 +4033,7 @@ def stack(seq, axis=0):
     n = len(seq)
     if n == 0:
         try:
-            return wrap.empty_like(meta, shape=shape, chunks=shape,
-                                   dtype=meta.dtype)
+            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
 
