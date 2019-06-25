@@ -855,3 +855,25 @@ def valid_divisions(divisions):
         return False
 
     return True
+
+
+def list_eq(aa, bb):
+    import dask.dataframe as dd
+    if isinstance(aa, dd.DataFrame):
+        a = aa.compute(scheduler='sync')
+    else:
+        a = aa
+    if isinstance(bb, dd.DataFrame):
+        b = bb.compute(scheduler='sync')
+    else:
+        b = bb
+    tm.assert_index_equal(a.columns, b.columns)
+
+    if isinstance(a, pd.DataFrame):
+        av = a.sort_values(list(a.columns)).values
+        bv = b.sort_values(list(b.columns)).values
+    else:
+        av = a.sort_values().values
+        bv = b.sort_values().values
+    tm.assert_numpy_array_equal(av, bv)
+

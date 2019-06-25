@@ -6,7 +6,7 @@ import pytest
 import dask.dataframe as dd
 
 from dask.dataframe.utils import (
-    assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
+    assert_eq, list_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
 )
 
 
@@ -274,3 +274,28 @@ def test_pivot_table_errors():
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index='A', columns='C', values='B')
     assert msg in str(err.value)
+
+
+def test_melt():
+    pdf = pd.DataFrame({'A': list('abcd') * 5,
+                        'B': list('XY') * 10,
+                        'C': np.random.randn(20)})
+    ddf = dd.from_pandas(pdf, 4)
+
+    # test as function
+    list_eq(dd.melt(ddf), pd.melt(pdf))
+    list_eq(dd.melt(ddf, id_vars='C'), pd.melt(pdf, id_vars='C'))
+    list_eq(dd.melt(ddf, value_vars='C'), pd.melt(pdf, value_vars='C'))
+    list_eq(dd.melt(ddf, value_vars=['A', 'C'], var_name='myvar'),
+            pd.melt(pdf, value_vars=['A', 'C'], var_name='myvar'))
+    list_eq(dd.melt(ddf, id_vars='B', value_vars=['A', 'C'], value_name='myval'),
+            pd.melt(pdf, id_vars='B', value_vars=['A', 'C'], value_name='myval'))
+
+    # test again as DataFrame method
+    list_eq(ddf.melt(), pdf.melt())
+    list_eq(ddf.melt(id_vars='C'), pdf.melt(id_vars='C'))
+    list_eq(ddf.melt(value_vars='C'), pdf.melt(value_vars='C'))
+    list_eq(ddf.melt(value_vars=['A', 'C'], var_name='myvar'),
+            pdf.melt(value_vars=['A', 'C'], var_name='myvar'))
+    list_eq(ddf.melt(id_vars='B', value_vars=['A', 'C'], value_name='myval'),
+            pdf.melt(id_vars='B', value_vars=['A', 'C'], value_name='myval'))

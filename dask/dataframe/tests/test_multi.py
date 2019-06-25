@@ -4,7 +4,6 @@ import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
@@ -12,7 +11,7 @@ from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions)
-from dask.dataframe.utils import (assert_eq, assert_divisions, make_meta,
+from dask.dataframe.utils import (assert_eq, list_eq, assert_divisions, make_meta,
                                   has_known_categories, clear_known_categories, PANDAS_GT_0230)
 
 import pytest
@@ -188,26 +187,6 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
             sorted(merge_indexed_dataframes(a, b, how='inner').dask))
     assert (sorted(merge_indexed_dataframes(a, b, how='inner').dask) !=
             sorted(merge_indexed_dataframes(a, b, how='outer').dask))
-
-
-def list_eq(aa, bb):
-    if isinstance(aa, dd.DataFrame):
-        a = aa.compute(scheduler='sync')
-    else:
-        a = aa
-    if isinstance(bb, dd.DataFrame):
-        b = bb.compute(scheduler='sync')
-    else:
-        b = bb
-    tm.assert_index_equal(a.columns, b.columns)
-
-    if isinstance(a, pd.DataFrame):
-        av = a.sort_values(list(a.columns)).values
-        bv = b.sort_values(list(b.columns)).values
-    else:
-        av = a.sort_values().values
-        bv = b.sort_values().values
-    tm.assert_numpy_array_equal(av, bv)
 
 
 @pytest.mark.parametrize('how', ['inner', 'left', 'right', 'outer'])
@@ -915,25 +894,6 @@ def test_merge_by_multiple_columns(how, shuffle):
             list_eq(dd.merge(ddl, ddr, how=how, left_on=['a', 'b'],
                              right_on=['d', 'e'], shuffle=shuffle),
                     pd.merge(pdl, pdr, how=how, left_on=['a', 'b'], right_on=['d', 'e']))
-
-
-def test_melt():
-    pdf = pd.DataFrame({'A': list('abcd') * 5,
-                        'B': list('XY') * 10,
-                        'C': np.random.randn(20)})
-    ddf = dd.from_pandas(pdf, 4)
-
-    list_eq(dd.melt(ddf),
-            pd.melt(pdf))
-
-    list_eq(dd.melt(ddf, id_vars='C'),
-            pd.melt(pdf, id_vars='C'))
-    list_eq(dd.melt(ddf, value_vars='C'),
-            pd.melt(pdf, value_vars='C'))
-    list_eq(dd.melt(ddf, value_vars=['A', 'C'], var_name='myvar'),
-            pd.melt(pdf, value_vars=['A', 'C'], var_name='myvar'))
-    list_eq(dd.melt(ddf, id_vars='B', value_vars=['A', 'C'], value_name='myval'),
-            pd.melt(pdf, id_vars='B', value_vars=['A', 'C'], value_name='myval'))
 
 
 def test_cheap_inner_merge_with_pandas_object():
