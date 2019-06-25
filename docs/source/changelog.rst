@@ -37,6 +37,8 @@ Array
 -  Make map_blocks work with drop_axis + block_info (:pr:`4831`) `Bruce Merry`_
 -  Add SVG image and table in Array._repr_html_ (:pr:`4794`) `Matthew Rocklin`_
 -  ufunc: avoid __array_wrap__ in favor of __array_function__ (:pr:`4708`) `Peter Andreas Entschev`_
+-  Ensure trivial padding returns the original array (:pr:`4990`) `John A Kirkham`_
+-  Test ``da.block`` with 0-size arrays (:pr:`4991`) `John A Kirkham`_
 
 
 Core
@@ -56,6 +58,8 @@ Core
 -  catch IOError in ensure_file (:pr:`4806`) `Justin Poehnelt`_
 -  Cleanup CI warnings (:pr:`4798`) `Tom Augspurger`_
 -  Move distributed's parse and format functions to dask.utils (:pr:`4793`) `Matthew Rocklin`_
+-  Apply black formatting (:pr:`4983`) `James Bourbeau`_
+-  Package license file in wheels (:pr:`4988`) `John A Kirkham`_
 
 
 DataFrame
@@ -90,6 +94,8 @@ DataFrame
 -  Add document for how Dask works with GPUs (:pr:`4792`) `Matthew Rocklin`_
 -  Add cli API docs (:pr:`4788`) `James Bourbeau`_
 -  Ensure concat output has coherent dtypes (:pr:`4692`) `Guillaume Lemaitre`_
+-  Fixes pandas_datareader dependencies installation (:pr:`4989`) `James Bourbeau`_
+-  Accept pathlib.Path as pattern in read_hdf (:pr:`3335`) `Jörg Dietrich`_
 
 
 Documentation
