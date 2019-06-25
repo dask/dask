@@ -2456,7 +2456,9 @@ class Worker(ServerNode):
                     "Process memory: %s -- Worker memory limit: %s",
                     int(frac * 100),
                     format_bytes(proc.memory_info().rss),
-                    format_bytes(self.memory_limit),
+                    format_bytes(self.memory_limit)
+                    if self.memory_limit is not None
+                    else "None",
                 )
                 self.paused = True
         elif self.paused:
@@ -2465,7 +2467,9 @@ class Worker(ServerNode):
                 "Process memory: %s -- Worker memory limit: %s",
                 int(frac * 100),
                 format_bytes(proc.memory_info().rss),
-                format_bytes(self.memory_limit),
+                format_bytes(self.memory_limit)
+                if self.memory_limit is not None
+                else "None",
             )
             self.paused = False
             self.ensure_computing()
@@ -2483,7 +2487,9 @@ class Worker(ServerNode):
                         "is leaking memory?  Process memory: %s -- "
                         "Worker memory limit: %s",
                         format_bytes(proc.memory_info().rss),
-                        format_bytes(self.memory_limit),
+                        format_bytes(self.memory_limit)
+                        if self.memory_limit is not None
+                        else "None",
                     )
                     break
                 k, v, weight = self.data.fast.evict()

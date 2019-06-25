@@ -16,7 +16,7 @@
         <td><a href="../worker/{{ url_escape(ws.address) }}.html">{{ws.address}}</a></td>
         <td> {{ ws.name if ws.name is not None else "" }} </td>
         <td> {{ ws.nthreads }} </td>
-        <td> {{ format_bytes(ws.memory_limit) }} </td>
+        <td> {{ format_bytes(ws.memory_limit) if ws.memory_limit is not None else "" }} </td>
         <td> <progress class="progress" value="{{ ws.metrics['memory'] }}" max="{{ ws.memory_limit }}"></progress> </td>
         <td> {{ format_time(ws.occupancy) }} </td>
         <td> {{ len(ws.processing) }} </td>
