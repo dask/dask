@@ -38,33 +38,37 @@ def reshape_rechunk(inshape, outshape, inchunks):
             oi -= 1
         elif din < dout:  # (4, 4, 4) -> (64,)
             ileft = ii - 1
-            while ileft >= 0 and reduce(mul, inshape[ileft:ii + 1]) < dout: # 4 < 64, 4*4 < 64, 4*4*4 == 64
+            while (
+                ileft >= 0 and reduce(mul, inshape[ileft : ii + 1]) < dout
+            ):  # 4 < 64, 4*4 < 64, 4*4*4 == 64
                 ileft -= 1
-            if reduce(mul, inshape[ileft:ii + 1]) != dout:
+            if reduce(mul, inshape[ileft : ii + 1]) != dout:
                 raise ValueError("Shapes not compatible")
 
             for i in range(ileft + 1, ii + 1):  # need single-shape dimensions
                 result_inchunks[i] = (inshape[i],)  # chunks[i] = (4,)
 
-            chunk_reduction = reduce(mul, map(len, inchunks[ileft + 1:ii + 1]))
+            chunk_reduction = reduce(mul, map(len, inchunks[ileft + 1 : ii + 1]))
             result_inchunks[ileft] = expand_tuple(inchunks[ileft], chunk_reduction)
 
-            prod = reduce(mul, inshape[ileft + 1: ii + 1])  # 16
-            result_outchunks[oi] = tuple(prod * c for c in result_inchunks[ileft]) # (1, 1, 1, 1) .* 16
+            prod = reduce(mul, inshape[ileft + 1 : ii + 1])  # 16
+            result_outchunks[oi] = tuple(
+                prod * c for c in result_inchunks[ileft]
+            )  # (1, 1, 1, 1) .* 16
 
             oi -= 1
             ii = ileft - 1
         elif din > dout:  # (64,) -> (4, 4, 4)
             oleft = oi - 1
-            while oleft >= 0 and reduce(mul, outshape[oleft:oi + 1]) < din:
+            while oleft >= 0 and reduce(mul, outshape[oleft : oi + 1]) < din:
                 oleft -= 1
-            if reduce(mul, outshape[oleft:oi + 1]) != din:
+            if reduce(mul, outshape[oleft : oi + 1]) != din:
                 raise ValueError("Shapes not compatible")
 
             # TODO: don't coalesce shapes unnecessarily
-            cs = reduce(mul, outshape[oleft + 1: oi + 1])
+            cs = reduce(mul, outshape[oleft + 1 : oi + 1])
 
-            result_inchunks[ii] = contract_tuple(inchunks[ii], cs) # (16, 16, 16, 16)
+            result_inchunks[ii] = contract_tuple(inchunks[ii], cs)  # (16, 16, 16, 16)
 
             for i in range(oleft + 1, oi + 1):
                 result_outchunks[i] = (outshape[i],)
@@ -154,11 +158,12 @@ def reshape(x, shape):
     """
     # Sanitize inputs, look for -1 in shape
     from .slicing import sanitize_index
+
     shape = tuple(map(sanitize_index, shape))
     known_sizes = [s for s in shape if s != -1]
     if len(known_sizes) < len(shape):
         if len(known_sizes) - len(shape) > 1:
-            raise ValueError('can only specify one unknown dimension')
+            raise ValueError("can only specify one unknown dimension")
         # Fastpath for x.reshape(-1) on 1D arrays, allows unknown shape in x
         # for this case only.
         if len(shape) == 1 and x.ndim == 1:
@@ -170,14 +175,14 @@ def reshape(x, shape):
         raise ValueError("Array chunk size or shape is unknown. shape: %s", x.shape)
 
     if reduce(mul, shape, 1) != x.size:
-        raise ValueError('total size of new array must be unchanged')
+        raise ValueError("total size of new array must be unchanged")
 
     if x.shape == shape:
         return x
 
     meta = meta_from_array(x, len(shape))
 
-    name = 'reshape-' + tokenize(x, shape)
+    name = "reshape-" + tokenize(x, shape)
 
     if x.npartitions == 1:
         key = next(flatten(x.__dask_keys__()))

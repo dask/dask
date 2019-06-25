@@ -4,6 +4,7 @@ import warnings
 # Ported from pandas
 # https://github.com/pandas-dev/pandas/blob/master/pandas/core/accessor.py
 
+
 class CachedAccessor(object):
     """
     Custom property-like object (descriptor) for caching accessors.
@@ -17,6 +18,7 @@ class CachedAccessor(object):
         should expect one of a ``Series``, ``DataFrame`` or ``Index`` as
         the single argument ``data``
     """
+
     def __init__(self, name, accessor):
         self._name = name
         self._accessor = accessor
@@ -38,14 +40,16 @@ def _register_accessor(name, cls):
     def decorator(accessor):
         if hasattr(cls, name):
             warnings.warn(
-                'registration of accessor {!r} under name {!r} for type '
-                '{!r} is overriding a preexisting attribute with the same '
-                'name.'.format(accessor, name, cls),
+                "registration of accessor {!r} under name {!r} for type "
+                "{!r} is overriding a preexisting attribute with the same "
+                "name.".format(accessor, name, cls),
                 UserWarning,
-                stacklevel=2)
+                stacklevel=2,
+            )
         setattr(cls, name, CachedAccessor(name, accessor))
         cls._accessors.add(name)
         return accessor
+
     return decorator
 
 
@@ -56,6 +60,7 @@ def register_dataframe_accessor(name):
     See :func:`pandas.api.extensions.register_dataframe_accessor` for more.
     """
     from dask.dataframe import DataFrame
+
     return _register_accessor(name, DataFrame)
 
 
@@ -66,6 +71,7 @@ def register_series_accessor(name):
     See :func:`pandas.api.extensions.register_series_accessor` for more.
     """
     from dask.dataframe import Series
+
     return _register_accessor(name, Series)
 
 
@@ -76,4 +82,5 @@ def register_index_accessor(name):
     See :func:`pandas.api.extensions.register_index_accessor` for more.
     """
     from dask.dataframe import Index
+
     return _register_accessor(name, Index)

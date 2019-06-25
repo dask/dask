@@ -14,6 +14,7 @@ class LocalFileSystem(object):
     a backend for dask.
 
     Implementation for local disc"""
+
     sep = os.sep
 
     def __init__(self, **storage_options):
@@ -46,7 +47,7 @@ class LocalFileSystem(object):
         except OSError:
             assert os.path.isdir(path)
 
-    def open(self, path, mode='rb', **kwargs):
+    def open(self, path, mode="rb", **kwargs):
         """Make a file-like object
 
         Parameters
@@ -72,7 +73,8 @@ class LocalFileSystem(object):
     def _get_pyarrow_filesystem(self):
         """Get an equivalent pyarrow filesystem"""
         import pyarrow as pa
+
         return pa.filesystem.LocalFileSystem.get_instance()
 
 
-core._filesystems['file'] = LocalFileSystem
+core._filesystems["file"] = LocalFileSystem
