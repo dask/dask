@@ -110,7 +110,8 @@ class LocalCluster(SpecCluster):
         **worker_kwargs
     ):
         if ip is not None:
-            warnings.warn("The ip keyword has been moved to host")
+            # In the future we should warn users about this move
+            # warnings.warn("The ip keyword has been moved to host")
             host = ip
 
         if diagnostics_port is not None:
@@ -205,6 +206,12 @@ class LocalCluster(SpecCluster):
             self.scheduler_address,
             len(self.workers),
             sum(w.nthreads for w in self.workers.values()),
+        )
+
+    def start_worker(self, *args, **kwargs):
+        raise NotImplementedError(
+            "The `cluster.start_worker` function has been removed. "
+            "Please see the `cluster.scale` method instead."
         )
 
 
