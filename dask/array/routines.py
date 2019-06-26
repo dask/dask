@@ -371,12 +371,12 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     axis = len(arr.shape[:axis])
 
     try:
-        shape = kwargs.pop('shape')
+        shape = kwargs.pop("shape")
     except KeyError:
         shape = None
 
     try:
-        dtype = kwargs.pop('dtype')
+        dtype = kwargs.pop("dtype")
     except KeyError:
         dtype = None
 
@@ -400,7 +400,7 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
         _inner_apply_along_axis,
         name=funcname(func1d) + "-along-axis",
         dtype=dtype,
-        chunks=(arr.chunks[:axis] + shape + arr.chunks[axis + 1:]),
+        chunks=(arr.chunks[:axis] + shape + arr.chunks[axis + 1 :]),
         drop_axis=axis,
         new_axis=list(range(axis, axis + len(shape), 1)),
         func1d=func1d,

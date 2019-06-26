@@ -306,19 +306,20 @@ def test_inner(shape1, shape2):
     assert_eq(np.outer(y, x), da.outer(b, a))
 
 
-@pytest.mark.parametrize('func1d_name, func1d, specify_output_props', [
-    ["ndim", lambda x: x.ndim, False],
-    ["sum", lambda x: x.sum(), False],
-    ["range", lambda x: [x.min(), x.max()], False],
-    ["range2", lambda x: [[x.min(), x.max()], [x.max(), x.min()]], False],
-    ["cumsum", lambda x: np.cumsum(x), True]
-])
-@pytest.mark.parametrize('input_shape, axis', [
-    [(10, 15, 20), 0],
-    [(10, 15, 20), 1],
-    [(10, 15, 20), 2],
-    [(10, 15, 20), -1],
-])
+@pytest.mark.parametrize(
+    "func1d_name, func1d, specify_output_props",
+    [
+        ["ndim", lambda x: x.ndim, False],
+        ["sum", lambda x: x.sum(), False],
+        ["range", lambda x: [x.min(), x.max()], False],
+        ["range2", lambda x: [[x.min(), x.max()], [x.max(), x.min()]], False],
+        ["cumsum", lambda x: np.cumsum(x), True],
+    ],
+)
+@pytest.mark.parametrize(
+    "input_shape, axis",
+    [[(10, 15, 20), 0], [(10, 15, 20), 1], [(10, 15, 20), 2], [(10, 15, 20), -1]],
+)
 def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape, axis):
     a = np.random.randint(0, 10, input_shape)
     d = da.from_array(a, chunks=(len(input_shape) * (5,)))
@@ -334,14 +335,17 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
         output_shape = sample.shape
         output_dtype = sample.dtype
 
-    if (func1d_name == "range2" and
-            LooseVersion(np.__version__) < LooseVersion("1.13.0")):
+    if func1d_name == "range2" and LooseVersion(np.__version__) < LooseVersion(
+        "1.13.0"
+    ):
         with pytest.raises(ValueError):
             da.apply_along_axis(func1d, axis, d)
     else:
         assert_eq(
-            da.apply_along_axis(func1d, axis, d, dtype=output_dtype, shape=output_shape),
-            np.apply_along_axis(func1d, axis, a)
+            da.apply_along_axis(
+                func1d, axis, d, dtype=output_dtype, shape=output_shape
+            ),
+            np.apply_along_axis(func1d, axis, a),
         )
 
 
