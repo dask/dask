@@ -46,7 +46,7 @@ class Accessor(object):
         meta = self._series._meta
         if hasattr(meta, "to_series"):  # is index-like
             meta = meta.to_series()
-        return getattr(type(meta), self._accessor_name)
+        return getattr(meta, self._accessor_name)
 
     @staticmethod
     def _delegate_property(obj, accessor, attr):
@@ -95,10 +95,10 @@ class Accessor(object):
 
     def __getattr__(self, key):
         if key in self._delegates:
-            if isinstance(getattr(self._accessor, key), property):
-                return self._property_map(key)
-            else:
+            if callable(getattr(self._accessor, key)):
                 return partial(self._function_map, key)
+            else:
+                return self._property_map(key)
         else:
             raise AttributeError(key)
 
