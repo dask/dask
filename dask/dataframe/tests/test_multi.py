@@ -1159,6 +1159,19 @@ def test_melt():
         pd.melt(pdf, id_vars="B", value_vars=["A", "C"], value_name="myval"),
     )
 
+    # test again as DataFrame method
+    list_eq(ddf.melt(), pdf.melt())
+    list_eq(ddf.melt(id_vars="C"), pdf.melt(id_vars="C"))
+    list_eq(ddf.melt(value_vars="C"), pdf.melt(value_vars="C"))
+    list_eq(
+        ddf.melt(value_vars=["A", "C"], var_name="myvar"),
+        pdf.melt(value_vars=["A", "C"], var_name="myvar"),
+    )
+    list_eq(
+        ddf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
+        pdf.melt(id_vars="B", value_vars=["A", "C"], value_name="myval"),
+    )
+
 
 def test_cheap_inner_merge_with_pandas_object():
     a = pd.DataFrame(
