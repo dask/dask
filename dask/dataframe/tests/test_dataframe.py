@@ -1,7 +1,8 @@
+import collections
 import textwrap
 import warnings
 from itertools import product
-from operator import add
+from operator import add, methodcaller
 
 import pytest
 import numpy as np
@@ -27,6 +28,12 @@ from dask.dataframe.core import (
 )
 from dask.dataframe import methods
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps, PANDAS_VERSION
+
+try:
+    import distributed
+    from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
+except ImportError:
+    distributed = None
 
 
 dsk = {
@@ -1008,6 +1015,27 @@ def test_isin():
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
             d.isin(obj)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not distributed, reason="Skipped as distributed is not installed.")
+@pytest.mark.parametrize(
+    "factory",
+    [
+        dict,
+        list,
+        tuple,
+        set,
+        collections.OrderedDict,
+        collections.deque,
+        methodcaller("keys"),
+        methodcaller("values"),
+    ],
+)
+def test_isin_distributed(factory, client):
+    collection = factory({1: "foo", 2: "bar"})
+    dfs = [d.isin(collection), d["b"].isin(collection), d[d["b"].isin(collection)]]
+    distributed.client.wait(client.compute(dfs), timeout=1)
 
 
 def test_len():
