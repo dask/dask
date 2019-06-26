@@ -329,6 +329,7 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
     if specify_output_props:
         slices = [0] * a.ndim
         slices[axis] = slice(None)
+        slices = tuple(slices)
         sample = np.array(func1d(a[slices]))
         output_shape = sample.shape
         output_dtype = sample.dtype
