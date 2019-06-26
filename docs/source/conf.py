@@ -27,7 +27,8 @@ from shutil import copyfile
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax', 'sphinx.ext.intersphinx',
-              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc']
+              'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc',
+              'sphinx_click.ext']
 
 numpydoc_show_class_members = False
 
@@ -41,7 +42,7 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'docs'
+master_doc = 'index'
 html_extra_path = ['index.html']
 
 # General information about the project.
@@ -96,7 +97,7 @@ pygments_style = 'default'
 
 # -- Options for HTML output ---------------------------------------------------
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'dask_sphinx_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -117,7 +118,7 @@ html_theme_options = {
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "images/dask_horizontal_white_no_pad.svg"
+# html_logo = "images/dask_horizontal_white_no_pad.svg"
 
 
 # The name of an image file (within the static path) to use as favicon of the
@@ -191,7 +192,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('docs', 'dask.tex', u'dask Documentation',
+  (master_doc, 'dask.tex', u'dask Documentation',
    u'Dask Development Team', 'manual'),
 ]
 
@@ -221,7 +222,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('docs', 'dask', u'dask Documentation',
+    (master_doc, 'dask', u'dask Documentation',
      [u'Dask Development Team'], 1)
 ]
 
@@ -235,7 +236,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('docs', 'Dask', u'dask Documentation',
+  (master_doc, 'Dask', u'dask Documentation',
    u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
@@ -299,8 +300,8 @@ extlinks = {
 
 #  --Options for sphinx extensions -----------------------------------------------
 
-intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
-                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
+intersphinx_mapping = {'pandas': ('https://pandas.pydata.org/pandas-docs/stable/',
+                                  'https://pandas.pydata.org/pandas-docs/stable/objects.inv'),
                        'numpy': ('https://docs.scipy.org/doc/numpy/',
                                  'https://docs.scipy.org/doc/numpy/objects.inv')}
 
@@ -309,13 +310,28 @@ intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/'
 redirect_files = [
     # old html, new html
     ('array-overview.html', 'array.html'),
+    ('array-ghost.html', 'array-overlap.html'),
     ('dataframe-overview.html', 'dataframe.html'),
+    ('dataframe-performance.html', 'dataframe-best-practices.html'),
     ('delayed-overview.html', 'delayed.html'),
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
     ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
+    ('examples-tutorials.html', 'https://examples.dask.org'),
+    ('examples/array-extend.html', 'https://examples.dask.org'),
+    ('examples/array-hdf5.html', 'https://examples.dask.org'),
+    ('examples/array-numpy.html', 'https://examples.dask.org'),
+    ('examples/array-random.html', 'https://examples.dask.org'),
+    ('examples/bag-json.html', 'https://examples.dask.org'),
+    ('examples/bag-word-count-hdfs.html', 'https://examples.dask.org'),
+    ('examples/dataframe-csv.html', 'https://examples.dask.org'),
+    ('examples/dataframe-hdf5.html', 'https://examples.dask.org'),
+    ('examples/delayed-array.html', 'https://examples.dask.org'),
+    ('examples/delayed-custom.html', 'https://examples.dask.org'),
+    ('docs.html', 'index.html'),
 ]
+
 
 
 redirect_template = """\
@@ -335,6 +351,7 @@ def copy_legacy_redirects(app, docname):
         for html_src_path, new in redirect_files:
             page = redirect_template.format(new=new)
             target_path = app.outdir + '/' + html_src_path
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
             with open(target_path, 'w') as f:
                 f.write(page)
 

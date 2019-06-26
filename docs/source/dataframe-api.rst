@@ -35,6 +35,7 @@ Dataframe
     DataFrame.get_partition
     DataFrame.groupby
     DataFrame.head
+    DataFrame.iloc
     DataFrame.index
     DataFrame.isna
     DataFrame.isnull
@@ -54,7 +55,9 @@ Dataframe
     DataFrame.ndim
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.partitions
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
@@ -62,6 +65,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -71,15 +75,18 @@ Dataframe
     DataFrame.rtruediv
     DataFrame.sample
     DataFrame.set_index
+    DataFrame.shape
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
     DataFrame.tail
     DataFrame.to_bag
     DataFrame.to_csv
+    DataFrame.to_dask_array
     DataFrame.to_delayed
     DataFrame.to_hdf
     DataFrame.to_json
+    DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -173,6 +180,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index
@@ -180,6 +188,7 @@ Series
    Series.round
    Series.sample
    Series.sem
+   Series.shape
    Series.shift
    Series.size
    Series.std
@@ -188,10 +197,10 @@ Series
    Series.sum
    Series.to_bag
    Series.to_csv
+   Series.to_dask_array
    Series.to_delayed
    Series.to_frame
    Series.to_hdf
-   Series.to_parquet
    Series.to_string
    Series.to_timestamp
    Series.truediv
@@ -223,6 +232,7 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.cov
    DataFrameGroupBy.first
    DataFrameGroupBy.last
 
@@ -244,6 +254,9 @@ Groupby Operations
    SeriesGroupBy.var
    SeriesGroupBy.first
    SeriesGroupBy.last
+
+.. autosummary::
+   Aggregation
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
@@ -280,6 +293,7 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
    read_json
@@ -303,6 +317,25 @@ Store DataFrames
    to_records
    to_bag
    to_json
+
+Convert DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+
+   to_dask_array
+   to_delayed
+
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -336,6 +369,11 @@ SeriesGroupBy
    :members:
    :inherited-members:
 
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
+
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -343,6 +381,7 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
 .. autofunction:: read_orc
 .. autofunction:: read_hdf
@@ -375,8 +414,16 @@ Other functions
 
 .. autofunction:: compute
 .. autofunction:: map_partitions
+.. autofunction:: to_datetime
 
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
 .. autofunction:: merge
+.. autofunction:: merge_asof
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
+.. autofunction:: pivot_table
+.. autofunction:: melt

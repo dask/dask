@@ -7,7 +7,7 @@ Some differences
 
 """
 # This is lightly adapted from scipy.stats 0.19
-# http://github.com/scipy/scipy/blob/v0.19.0/scipy/stats/stats.py
+# https://github.com/scipy/scipy/blob/v0.19.0/scipy/stats/stats.py
 # The original copyright notice follows:
 
 # Copyright 2002 Gary Strangman.  All rights reserved
@@ -34,24 +34,39 @@ import dask.array as da
 from dask.array.random import doc_wraps
 from dask.array.ufunc import wrap_elemwise
 from dask import delayed
+
 try:
     import scipy.stats
 except ImportError:
     raise ImportError("`dask.array.stats` requires `scipy` to be installed.")
 from scipy.stats import distributions
 from scipy import special
-from scipy.stats.stats import (Ttest_indResult, Ttest_1sampResult,
-                               Ttest_relResult,
-                               Power_divergenceResult,
-                               NormaltestResult,
-                               SkewtestResult,
-                               KurtosistestResult,
-                               F_onewayResult)
+from scipy.stats.stats import (
+    Ttest_indResult,
+    Ttest_1sampResult,
+    Ttest_relResult,
+    Power_divergenceResult,
+    NormaltestResult,
+    SkewtestResult,
+    KurtosistestResult,
+    F_onewayResult,
+)
 
 
-__all__ = ['ttest_ind', 'ttest_1samp', 'ttest_rel', 'chisquare',
-           'power_divergence', 'skew', 'skewtest', 'kurtosis',
-           'kurtosistest', 'normaltest', 'f_oneway', 'moment']
+__all__ = [
+    "ttest_ind",
+    "ttest_1samp",
+    "ttest_rel",
+    "chisquare",
+    "power_divergence",
+    "skew",
+    "skewtest",
+    "kurtosis",
+    "kurtosistest",
+    "normaltest",
+    "f_oneway",
+    "moment",
+]
 
 # -----------------
 # Statistical Tests
@@ -76,10 +91,11 @@ def ttest_ind(a, b, axis=0, equal_var=True):
 
 
 @doc_wraps(scipy.stats.ttest_1samp)
-def ttest_1samp(a, popmean, axis=0, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def ttest_1samp(a, popmean, axis=0, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
     n = a.shape[axis]
     df = n - 1
 
@@ -87,17 +103,18 @@ def ttest_1samp(a, popmean, axis=0, nan_policy='propagate'):
     v = da.var(a, axis, ddof=1)
     denom = da.sqrt(v / float(n))
 
-    with np.errstate(divide='ignore', invalid='ignore'):
+    with np.errstate(divide="ignore", invalid="ignore"):
         t = da.divide(d, denom)
     t, prob = _ttest_finish(df, t)
     return delayed(Ttest_1sampResult, nout=2)(t, prob)
 
 
 @doc_wraps(scipy.stats.ttest_rel)
-def ttest_rel(a, b, axis=0, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def ttest_rel(a, b, axis=0, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
 
     n = a.shape[axis]
     df = float(n - 1)
@@ -107,7 +124,7 @@ def ttest_rel(a, b, axis=0, nan_policy='propagate'):
     dm = da.mean(d, axis)
     denom = da.sqrt(v / float(n))
 
-    with np.errstate(divide='ignore', invalid='ignore'):
+    with np.errstate(divide="ignore", invalid="ignore"):
         t = da.divide(dm, denom)
     t, prob = _ttest_finish(df, t)
 
@@ -116,8 +133,7 @@ def ttest_rel(a, b, axis=0, nan_policy='propagate'):
 
 @doc_wraps(scipy.stats.chisquare)
 def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
-    return power_divergence(f_obs, f_exp=f_exp, ddof=ddof, axis=axis,
-                            lambda_="pearson")
+    return power_divergence(f_obs, f_exp=f_exp, ddof=ddof, axis=axis, lambda_="pearson")
 
 
 @doc_wraps(scipy.stats.power_divergence)
@@ -127,8 +143,10 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
         # TODO: public api
         if lambda_ not in scipy.stats.stats._power_div_lambda_names:
             names = repr(list(scipy.stats.stats._power_div_lambda_names.keys()))[1:-1]
-            raise ValueError("invalid string for lambda_: {0!r}.  Valid strings "
-                             "are {1}".format(lambda_, names))
+            raise ValueError(
+                "invalid string for lambda_: {0!r}.  Valid strings "
+                "are {1}".format(lambda_, names)
+            )
         lambda_ = scipy.stats.stats._power_div_lambda_names[lambda_]
     elif lambda_ is None:
         lambda_ = 1
@@ -144,7 +162,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
     # cases of lambda_.
     if lambda_ == 1:
         # Pearson's chi-squared statistic
-        terms = (f_obs - f_exp)**2 / f_exp
+        terms = (f_obs - f_exp) ** 2 / f_exp
     elif lambda_ == 0:
         # Log-likelihood ratio (i.e. G-test)
         terms = 2.0 * _xlogy(f_obs, f_obs / f_exp)
@@ -153,7 +171,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
         terms = 2.0 * _xlogy(f_exp, f_exp / f_obs)
     else:
         # General Cressie-Read power divergence.
-        terms = f_obs * ((f_obs / f_exp)**lambda_ - 1)
+        terms = f_obs * ((f_obs / f_exp) ** lambda_ - 1)
         terms /= 0.5 * lambda_ * (lambda_ + 1)
 
     stat = terms.sum(axis=axis)
@@ -166,16 +184,17 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 
 
 @doc_wraps(scipy.stats.skew)
-def skew(a, axis=0, bias=True, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def skew(a, axis=0, bias=True, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
 
     n = a.shape[axis]  # noqa; for bias
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
-    zero = (m2 == 0)
-    vals = da.where(~zero, m3 / m2**1.5, 0.)
+    zero = m2 == 0
+    vals = da.where(~zero, m3 / m2 ** 1.5, 0.0)
     # vals = da.where(~zero, (m2, m3),
     #                 lambda m2, m3: m3 / m2**1.5,
     #                 0.)
@@ -192,41 +211,49 @@ def skew(a, axis=0, bias=True, nan_policy='propagate'):
 
 
 @doc_wraps(scipy.stats.skewtest)
-def skewtest(a, axis=0, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def skewtest(a, axis=0, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
 
     b2 = skew(a, axis)
     n = float(a.shape[axis])
     if n < 8:
         raise ValueError(
             "skewtest is not valid with less than 8 samples; %i samples"
-            " were given." % int(n))
+            " were given." % int(n)
+        )
     y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
-    beta2 = (3.0 * (n**2 + 27 * n - 70) * (n + 1) * (n + 3) /
-             ((n - 2.0) * (n + 5) * (n + 7) * (n + 9)))
+    beta2 = (
+        3.0
+        * (n ** 2 + 27 * n - 70)
+        * (n + 1)
+        * (n + 3)
+        / ((n - 2.0) * (n + 5) * (n + 7) * (n + 9))
+    )
     W2 = -1 + math.sqrt(2 * (beta2 - 1))
     delta = 1 / math.sqrt(0.5 * math.log(W2))
     alpha = math.sqrt(2.0 / (W2 - 1))
     y = np.where(y == 0, 1, y)
-    Z = delta * np.log(y / alpha + np.sqrt((y / alpha)**2 + 1))
+    Z = delta * np.log(y / alpha + np.sqrt((y / alpha) ** 2 + 1))
 
     return delayed(SkewtestResult, nout=2)(Z, 2 * distributions.norm.sf(np.abs(Z)))
 
 
 @doc_wraps(scipy.stats.kurtosis)
-def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
     n = a.shape[axis]  # noqa; for bias
     m2 = moment(a, 2, axis)
     m4 = moment(a, 4, axis)
-    zero = (m2 == 0)
-    olderr = np.seterr(all='ignore')
+    zero = m2 == 0
+    olderr = np.seterr(all="ignore")
     try:
-        vals = da.where(zero, 0, m4 / m2**2.0)
+        vals = da.where(zero, 0, m4 / m2 ** 2.0)
     finally:
         np.seterr(**olderr)
 
@@ -246,22 +273,29 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy='propagate'):
 
 
 @doc_wraps(scipy.stats.kurtosistest)
-def kurtosistest(a, axis=0, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def kurtosistest(a, axis=0, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
 
     n = float(a.shape[axis])
     b2 = kurtosis(a, axis, fisher=False)
 
     E = 3.0 * (n - 1) / (n + 1)
-    varb2 = 24.0 * n * (n - 2) * (n - 3) / ((n + 1) * (n + 1.) * (n + 3) * (n + 5))  # [1]_ Eq. 1
+    varb2 = (
+        24.0 * n * (n - 2) * (n - 3) / ((n + 1) * (n + 1.0) * (n + 3) * (n + 5))
+    )  # [1]_ Eq. 1
     x = (b2 - E) / np.sqrt(varb2)  # [1]_ Eq. 4
     # [1]_ Eq. 2:
-    sqrtbeta1 = 6.0 * (n * n - 5 * n + 2) / ((n + 7) * (n + 9)) * np.sqrt((6.0 * (n + 3) * (n + 5)) /
-                                                                          (n * (n - 2) * (n - 3)))
+    sqrtbeta1 = (
+        6.0
+        * (n * n - 5 * n + 2)
+        / ((n + 7) * (n + 9))
+        * np.sqrt((6.0 * (n + 3) * (n + 5)) / (n * (n - 2) * (n - 3)))
+    )
     # [1]_ Eq. 3:
-    A = 6.0 + 8.0 / sqrtbeta1 * (2.0 / sqrtbeta1 + np.sqrt(1 + 4.0 / (sqrtbeta1**2)))
+    A = 6.0 + 8.0 / sqrtbeta1 * (2.0 / sqrtbeta1 + np.sqrt(1 + 4.0 / (sqrtbeta1 ** 2)))
     term1 = 1 - 2 / (9.0 * A)
     denom = 1 + x * np.sqrt(2 / (A - 4.0))
     denom = np.where(denom < 0, 99, denom)
@@ -276,10 +310,11 @@ def kurtosistest(a, axis=0, nan_policy='propagate'):
 
 
 @doc_wraps(scipy.stats.normaltest)
-def normaltest(a, axis=0, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def normaltest(a, axis=0, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
 
     s, _ = skewtest(a, axis)
     k, _ = kurtosistest(a, axis)
@@ -309,7 +344,7 @@ def f_oneway(*args):
 
     # Naming: variables ending in bn/b are for "between treatments", wn/w are
     # for "within treatments"
-    ssbn -= (_square_of_sums(alldata) / float(bign))
+    ssbn -= _square_of_sums(alldata) / float(bign)
     sswn = sstot - ssbn
     dfbn = num_groups - 1
     dfwn = bign - num_groups
@@ -317,17 +352,19 @@ def f_oneway(*args):
     msw = sswn / float(dfwn)
     f = msb / msw
 
-    prob = _fdtrc(dfbn, dfwn, f)   # equivalent to stats.f.sf
+    prob = _fdtrc(dfbn, dfwn, f)  # equivalent to stats.f.sf
 
     return delayed(F_onewayResult, nout=2)(f, prob)
 
 
 @doc_wraps(scipy.stats.moment)
-def moment(a, moment=1, axis=0, nan_policy='propagate'):
-    if nan_policy != 'propagate':
-        raise NotImplementedError("`nan_policy` other than 'propagate' "
-                                  "have not been implemented.")
+def moment(a, moment=1, axis=0, nan_policy="propagate"):
+    if nan_policy != "propagate":
+        raise NotImplementedError(
+            "`nan_policy` other than 'propagate' " "have not been implemented."
+        )
     return da.moment(a, moment, axis=axis)
+
 
 # -------
 # Helpers
@@ -349,8 +386,8 @@ def _equal_var_ttest_denom(v1, n1, v2, n2):
 def _unequal_var_ttest_denom(v1, n1, v2, n2):
     vn1 = v1 / n1
     vn2 = v2 / n2
-    with np.errstate(divide='ignore', invalid='ignore'):
-        df = (vn1 + vn2)**2 / (vn1**2 / (n1 - 1) + vn2**2 / (n2 - 1))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        df = (vn1 + vn2) ** 2 / (vn1 ** 2 / (n1 - 1) + vn2 ** 2 / (n2 - 1))
 
     # If df is undefined, variances are zero (assumes n1 > 0 & n2 > 0).
     # Hence it doesn't matter what df is as long as it's not NaN.
@@ -362,7 +399,7 @@ def _unequal_var_ttest_denom(v1, n1, v2, n2):
 def _ttest_ind_from_stats(mean1, mean2, denom, df):
 
     d = mean1 - mean2
-    with np.errstate(divide='ignore', invalid='ignore'):
+    with np.errstate(divide="ignore", invalid="ignore"):
         t = da.divide(d, denom)
     t, prob = _ttest_finish(df, t)
 
@@ -373,8 +410,9 @@ def _ttest_finish(df, t):
     """Common code between all 3 t-test functions."""
     # XXX: np.abs -> da.absolute
     # XXX: delayed(distributions.t.sf)
-    prob = delayed(distributions.t.sf)(da.absolute(t),
-                                       df) * 2  # use np.abs to get upper tail
+    prob = (
+        delayed(distributions.t.sf)(da.absolute(t), df) * 2
+    )  # use np.abs to get upper tail
     if t.ndim == 0:
         t = t[()]
 

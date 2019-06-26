@@ -6,6 +6,7 @@ include setup.py
 include README.rst
 include LICENSE.txt
 include MANIFEST.in
+include dask/dask.yaml
 
 include versioneer.py
 include dask/_version.py

@@ -1,3 +1,4 @@
+import datetime
 import functools
 import operator
 import pickle
@@ -5,14 +6,30 @@ import pickle
 import numpy as np
 import pytest
 
-import dask
-from dask.sharedict import ShareDict
-from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
-                        memory_repr, methodcaller, M, skip_doctest,
-                        SerializableLock, funcname, ndeepmap, ensure_dict,
-                        extra_titles, asciitable, itemgetter, partial_by_order,
-                        effective_get)
+from dask.compatibility import PY2
+from dask.utils import (
+    takes_multiple_arguments,
+    Dispatch,
+    random_state_data,
+    memory_repr,
+    methodcaller,
+    M,
+    skip_doctest,
+    SerializableLock,
+    funcname,
+    ndeepmap,
+    ensure_dict,
+    extra_titles,
+    asciitable,
+    itemgetter,
+    partial_by_order,
+    has_keyword,
+    derived_from,
+    parse_timedelta,
+    parse_bytes,
+)
 from dask.utils_test import inc
+from dask.highlevelgraph import HighLevelGraph
 
 
 def test_takes_multiple_arguments():
@@ -51,16 +68,40 @@ def test_dispatch():
     foo.register(int, lambda a: a + 1)
     foo.register(float, lambda a: a - 1)
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
-    foo.register(object, lambda a: a)
+
+    def f(a):
+        """ My Docstring """
+        return a
+
+    foo.register(object, f)
 
     class Bar(object):
         pass
+
     b = Bar()
     assert foo(1) == 2
     assert foo.dispatch(int)(1) == 2
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
+
+    assert foo.__doc__ == f.__doc__
+
+
+def test_dispatch_kwargs():
+    foo = Dispatch()
+    foo.register(int, lambda a, b=10: a + b)
+
+    assert foo(1, b=20) == 21
+
+
+def test_dispatch_variadic_on_first_argument():
+    foo = Dispatch()
+    foo.register(int, lambda a, b: a + b)
+    foo.register(float, lambda a, b: a - b)
+
+    assert foo(1, 2) == 3
+    assert foo(1.0, 2.0) == -1
 
 
 def test_dispatch_lazy():
@@ -77,6 +118,7 @@ def test_dispatch_lazy():
     @foo.register_lazy("decimal")
     def register_decimal():
         import decimal
+
         foo.register(decimal.Decimal, foo_dec)
 
     # This test needs to be *before* any other calls
@@ -109,21 +151,21 @@ def test_random_state_data():
 
 
 def test_memory_repr():
-    for power, mem_repr in enumerate(['1.0 bytes', '1.0 KB', '1.0 MB', '1.0 GB']):
+    for power, mem_repr in enumerate(["1.0 bytes", "1.0 KB", "1.0 MB", "1.0 GB"]):
         assert memory_repr(1024 ** power) == mem_repr
 
 
 def test_method_caller():
     a = [1, 2, 3, 3, 3]
-    f = methodcaller('count')
+    f = methodcaller("count")
     assert f(a, 3) == a.count(3)
-    assert methodcaller('count') is f
+    assert methodcaller("count") is f
     assert M.count is f
     assert pickle.loads(pickle.dumps(f)) is f
-    assert 'count' in dir(M)
+    assert "count" in dir(M)
 
-    assert 'count' in str(methodcaller('count'))
-    assert 'count' in repr(methodcaller('count'))
+    assert "count" in str(methodcaller("count"))
+    assert "count" in repr(methodcaller("count"))
 
 
 def test_skip_doctest():
@@ -133,12 +175,25 @@ def test_skip_doctest():
 >>> xxx"""
 
     res = skip_doctest(example)
-    assert res == """>>> xxx  # doctest: +SKIP
+    assert (
+        res
+        == """>>> xxx  # doctest: +SKIP
 >>>
 >>> # comment
 >>> xxx  # doctest: +SKIP"""
+    )
 
-    assert skip_doctest(None) == ''
+    assert skip_doctest(None) == ""
+
+    example = """
+>>> 1 + 2  # doctest: +ELLIPSES
+3"""
+
+    expected = """
+>>> 1 + 2  # doctest: +ELLIPSES, +SKIP
+3"""
+    res = skip_doctest(example)
+    assert res == expected
 
 
 def test_extra_titles():
@@ -174,19 +229,20 @@ def test_extra_titles():
 
 
 def test_asciitable():
-    res = asciitable(['fruit', 'color'],
-                     [('apple', 'red'),
-                      ('banana', 'yellow'),
-                      ('tomato', 'red'),
-                      ('pear', 'green')])
-    assert res == ('+--------+--------+\n'
-                   '| fruit  | color  |\n'
-                   '+--------+--------+\n'
-                   '| apple  | red    |\n'
-                   '| banana | yellow |\n'
-                   '| tomato | red    |\n'
-                   '| pear   | green  |\n'
-                   '+--------+--------+')
+    res = asciitable(
+        ["fruit", "color"],
+        [("apple", "red"), ("banana", "yellow"), ("tomato", "red"), ("pear", "green")],
+    )
+    assert res == (
+        "+--------+--------+\n"
+        "| fruit  | color  |\n"
+        "+--------+--------+\n"
+        "| apple  | red    |\n"
+        "| banana | yellow |\n"
+        "| tomato | red    |\n"
+        "| pear   | green  |\n"
+        "+--------+--------+"
+    )
 
 
 def test_SerializableLock():
@@ -225,9 +281,9 @@ def test_SerializableLock():
 
 
 def test_SerializableLock_name_collision():
-    a = SerializableLock('a')
-    b = SerializableLock('b')
-    c = SerializableLock('a')
+    a = SerializableLock("a")
+    b = SerializableLock("b")
+    c = SerializableLock("a")
     d = SerializableLock()
 
     assert a.lock is not b.lock
@@ -235,42 +291,58 @@ def test_SerializableLock_name_collision():
     assert d.lock not in (a.lock, b.lock, c.lock)
 
 
+def test_SerializableLock_locked():
+    a = SerializableLock("a")
+    assert not a.locked()
+    with a:
+        assert a.locked()
+    assert not a.locked()
+
+
+@pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
+def test_SerializableLock_acquire_blocking():
+    a = SerializableLock("a")
+    assert a.acquire(blocking=True)
+    assert not a.acquire(blocking=False)
+    a.release()
+
+
 def test_funcname():
     def foo(a, b, c):
         pass
 
-    assert funcname(foo) == 'foo'
-    assert funcname(functools.partial(foo, a=1)) == 'foo'
-    assert funcname(M.sum) == 'sum'
-    assert funcname(lambda: 1) == 'lambda'
+    assert funcname(foo) == "foo"
+    assert funcname(functools.partial(foo, a=1)) == "foo"
+    assert funcname(M.sum) == "sum"
+    assert funcname(lambda: 1) == "lambda"
 
     class Foo(object):
         pass
 
-    assert funcname(Foo) == 'Foo'
-    assert 'Foo' in funcname(Foo())
+    assert funcname(Foo) == "Foo"
+    assert "Foo" in funcname(Foo())
 
 
 def test_funcname_toolz():
-    toolz = pytest.importorskip('toolz')
+    toolz = pytest.importorskip("toolz")
 
     @toolz.curry
     def foo(a, b, c):
         pass
 
-    assert funcname(foo) == 'foo'
-    assert funcname(foo(1)) == 'foo'
+    assert funcname(foo) == "foo"
+    assert funcname(foo(1)) == "foo"
 
 
 def test_funcname_multipledispatch():
-    md = pytest.importorskip('multipledispatch')
+    md = pytest.importorskip("multipledispatch")
 
     @md.dispatch(int, int, int)
     def foo(a, b, c):
         pass
 
-    assert funcname(foo) == 'foo'
-    assert funcname(functools.partial(foo, a=1)) == 'foo'
+    assert funcname(foo) == "foo"
+    assert funcname(functools.partial(foo, a=1)) == "foo"
 
 
 def test_ndeepmap():
@@ -291,18 +363,17 @@ def test_ndeepmap():
 
 
 def test_ensure_dict():
-    d = {'x': 1}
+    d = {"x": 1}
     assert ensure_dict(d) is d
-    sd = ShareDict()
-    sd.update(d)
-    assert type(ensure_dict(sd)) is dict
-    assert ensure_dict(sd) == d
+    hlg = HighLevelGraph.from_collections("x", d)
+    assert type(ensure_dict(hlg)) is dict
+    assert ensure_dict(hlg) == d
 
     class mydict(dict):
         pass
 
     md = mydict()
-    md['x'] = 1
+    md["x"] = 1
     assert type(ensure_dict(md)) is dict
     assert ensure_dict(md) == d
 
@@ -320,13 +391,118 @@ def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
 
 
-def test_effective_get():
-    da = pytest.importorskip('dask.array')
-    x = da.arange(10, chunks=(5,))
+def test_has_keyword():
+    def foo(a, b, c=None):
+        pass
 
-    with pytest.warns(Warning) as record:
-        assert effective_get(collection=x) is dask.threaded.get
-        assert effective_get(get=dask.threaded.get) is dask.threaded.get
+    assert has_keyword(foo, "a")
+    assert has_keyword(foo, "b")
+    assert has_keyword(foo, "c")
 
-    assert any('dask.base.get_scheduler' in str(warning)
-               for warning in record.list)
+    bar = functools.partial(foo, a=1)
+    assert has_keyword(bar, "b")
+    assert has_keyword(bar, "c")
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from():
+    class Foo:
+        def f(a, b):
+            """ A super docstring
+
+            An explanation
+
+            Parameters
+            ----------
+            a: int
+                an explanation of a
+            b: float
+                an explanation of b
+            """
+
+    class Bar:
+        @derived_from(Foo)
+        def f(a, c):
+            pass
+
+    class Zap:
+        @derived_from(Foo)
+        def f(a, c):
+            "extra docstring"
+            pass
+
+    assert Bar.f.__doc__.strip().startswith("A super docstring")
+    assert "Foo.f" in Bar.f.__doc__
+    assert any("inconsistencies" in line for line in Bar.f.__doc__.split("\n")[:7])
+
+    [b_arg] = [line for line in Bar.f.__doc__.split("\n") if "b:" in line]
+    assert "not supported" in b_arg.lower()
+    assert "dask" in b_arg.lower()
+
+    assert "  extra docstring\n\n" in Zap.f.__doc__
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from_func():
+    import builtins
+
+    @derived_from(builtins)
+    def sum():
+        "extra docstring"
+        pass
+
+    assert "extra docstring\n\n" in sum.__doc__
+    assert "Return the sum of" in sum.__doc__
+    assert "This docstring was copied from builtins.sum" in sum.__doc__
+
+
+@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
+def test_derived_from_dask_dataframe():
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert "inconsistencies" in dd.DataFrame.dropna.__doc__
+
+    [axis_arg] = [
+        line for line in dd.DataFrame.dropna.__doc__.split("\n") if "axis :" in line
+    ]
+    assert "not supported" in axis_arg.lower()
+    assert "dask" in axis_arg.lower()
+
+
+def test_parse_bytes():
+    assert parse_bytes("100") == 100
+    assert parse_bytes("100 MB") == 100000000
+    assert parse_bytes("100M") == 100000000
+    assert parse_bytes("5kB") == 5000
+    assert parse_bytes("5.4 kB") == 5400
+    assert parse_bytes("1kiB") == 1024
+    assert parse_bytes("1Mi") == 2 ** 20
+    assert parse_bytes("1e6") == 1000000
+    assert parse_bytes("1e6 kB") == 1000000000
+    assert parse_bytes("MB") == 1000000
+
+
+def test_parse_timedelta():
+    for text, value in [
+        ("1s", 1),
+        ("100ms", 0.1),
+        ("5S", 5),
+        ("5.5s", 5.5),
+        ("5.5 s", 5.5),
+        ("1 second", 1),
+        ("3.3 seconds", 3.3),
+        ("3.3 milliseconds", 0.0033),
+        ("3500 us", 0.0035),
+        ("1 ns", 1e-9),
+        ("2m", 120),
+        ("2 minutes", 120),
+        (datetime.timedelta(seconds=2), 2),
+        (datetime.timedelta(milliseconds=100), 0.1),
+    ]:
+        result = parse_timedelta(text)
+        assert abs(result - value) < 1e-14
+
+    assert parse_timedelta("1ms", default="seconds") == 0.001
+    assert parse_timedelta("1", default="seconds") == 1
+    assert parse_timedelta("1", default="ms") == 0.001
+    assert parse_timedelta(1, default="ms") == 0.001

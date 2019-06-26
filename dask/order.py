@@ -1,4 +1,4 @@
-""" Static order of nodes in dask graph
+r""" Static order of nodes in dask graph
 
 Dask makes decisions on what tasks to prioritize both
 
@@ -112,7 +112,9 @@ def order(dsk, dependencies=None):
     dependents = reverse_dict(dependencies)
 
     total_dependencies = ndependencies(dependencies, dependents)
-    total_dependents, min_dependencies = ndependents(dependencies, dependents, total_dependencies)
+    total_dependents, min_dependencies = ndependents(
+        dependencies, dependents, total_dependencies
+    )
 
     waiting = {k: set(v) for k, v in dependencies.items()}
 
@@ -120,9 +122,7 @@ def order(dsk, dependencies=None):
         return total_dependencies.get(x, 0), ReverseStrComparable(x)
 
     def dependents_key(x):
-        return (min_dependencies[x],
-                -total_dependents.get(x, 0),
-                StrComparable(x))
+        return (min_dependencies[x], -total_dependents.get(x, 0), StrComparable(x))
 
     result = dict()
     seen = set()  # tasks that should not be added again to the stack
@@ -156,8 +156,11 @@ def order(dsk, dependencies=None):
         for dep in dependents[item]:
             waiting[dep].discard(item)
 
-        deps = [d for d in dependents[item]
-                if d not in result and not (d in seen and len(waiting[d]) > 1)]
+        deps = [
+            d
+            for d in dependents[item]
+            if d not in result and not (d in seen and len(waiting[d]) > 1)
+        ]
         if len(deps) < 1000:
             deps = sorted(deps, key=dependents_key, reverse=True)
 
@@ -253,7 +256,8 @@ class StrComparable(object):
     >>> StrComparable('a') < StrComparable(1)
     False
     """
-    __slots__ = ('obj',)
+
+    __slots__ = ("obj",)
 
     def __init__(self, obj):
         self.obj = obj
@@ -271,7 +275,8 @@ class ReverseStrComparable(object):
     Used when sorting in reverse direction.  See StrComparable for normal
     documentation.
     """
-    __slots__ = ('obj',)
+
+    __slots__ = ("obj",)
 
     def __init__(self, obj):
         self.obj = obj

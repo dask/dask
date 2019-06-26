@@ -4,18 +4,14 @@ import multiprocessing
 import traceback
 import pickle
 import sys
-
-from . import config
-from .local import get_async  # TODO: get better get
-from .optimization import fuse, cull
+from warnings import warn
 
 import cloudpickle
 
-
-if sys.version_info.major < 3:
-    import copy_reg as copyreg
-else:
-    import copyreg
+from . import config
+from .compatibility import copyreg
+from .local import get_async  # TODO: get better get
+from .optimization import fuse, cull
 
 
 def _reduce_method_descriptor(m):
@@ -55,20 +51,16 @@ class RemoteException(Exception):
 
     Contains the exception and traceback from a remotely run task
     """
+
     def __init__(self, exception, traceback):
         self.exception = exception
         self.traceback = traceback
 
     def __str__(self):
-        return (str(self.exception) + "\n\n"
-                "Traceback\n"
-                "---------\n" +
-                self.traceback)
+        return str(self.exception) + "\n\n" "Traceback\n" "---------\n" + self.traceback
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) +
-                      list(self.__dict__) +
-                      dir(self.exception)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) + dir(self.exception)))
 
     def __getattr__(self, key):
         try:
@@ -87,9 +79,11 @@ def remote_exception(exc, tb):
         return typ(exc, tb)
     else:
         try:
-            typ = type(exc.__class__.__name__,
-                       (RemoteException, type(exc)),
-                       {'exception_type': type(exc)})
+            typ = type(
+                exc.__class__.__name__,
+                (RemoteException, type(exc)),
+                {"exception_type": type(exc)},
+            )
             exceptions[type(exc)] = typ
             return typ(exc, tb)
         except TypeError:
@@ -98,15 +92,18 @@ def remote_exception(exc, tb):
 
 try:
     import tblib.pickling_support
+
     tblib.pickling_support.install()
     from dask.compatibility import reraise
 
     def _pack_traceback(tb):
         return tb
 
+
 except ImportError:
+
     def _pack_traceback(tb):
-        return ''.join(traceback.format_tb(tb))
+        return "".join(traceback.format_tb(tb))
 
     def reraise(exc, tb):
         exc = remote_exception(exc, tb)
@@ -125,8 +122,33 @@ def pack_exception(e, dumps):
     return result
 
 
-def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
-        optimize_graph=True, **kwargs):
+_CONTEXT_UNSUPPORTED = """\
+The 'multiprocessing.context' configuration option will be ignored on Python 2
+and on Windows, because they each only support a single context.
+"""
+
+
+def get_context():
+    """ Return the current multiprocessing context."""
+    if sys.platform == "win32" or sys.version_info.major == 2:
+        # Just do the default, since we can't change it:
+        if config.get("multiprocessing.context", None) is not None:
+            warn(_CONTEXT_UNSUPPORTED, UserWarning)
+        return multiprocessing
+    context_name = config.get("multiprocessing.context", None)
+    return multiprocessing.get_context(context_name)
+
+
+def get(
+    dsk,
+    keys,
+    num_workers=None,
+    func_loads=None,
+    func_dumps=None,
+    optimize_graph=True,
+    pool=None,
+    **kwargs
+):
     """ Multiprocessed get function appropriate for Bags
 
     Parameters
@@ -146,10 +168,11 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """
-    pool = config.get('pool', None)
+    pool = pool or config.get("pool", None)
+    num_workers = num_workers or config.get("num_workers", None)
     if pool is None:
-        pool = multiprocessing.Pool(num_workers,
-                                    initializer=initialize_worker_process)
+        context = get_context()
+        pool = context.Pool(num_workers, initializer=initialize_worker_process)
         cleanup = True
     else:
         cleanup = False
@@ -163,18 +186,26 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
 
     # We specify marshalling functions in order to catch serialization
     # errors and report them to the user.
-    loads = func_loads or config.get('func_loads', None) or _loads
-    dumps = func_dumps or config.get('func_dumps', None) or _dumps
+    loads = func_loads or config.get("func_loads", None) or _loads
+    dumps = func_dumps or config.get("func_dumps", None) or _dumps
 
     # Note former versions used a multiprocessing Manager to share
     # a Queue between parent and workers, but this is fragile on Windows
     # (issue #1652).
     try:
         # Run
-        result = get_async(pool.apply_async, len(pool._pool), dsk3, keys,
-                           get_id=_process_get_id, dumps=dumps, loads=loads,
-                           pack_exception=pack_exception,
-                           raise_exception=reraise, **kwargs)
+        result = get_async(
+            pool.apply_async,
+            len(pool._pool),
+            dsk3,
+            keys,
+            get_id=_process_get_id,
+            dumps=dumps,
+            loads=loads,
+            pack_exception=pack_exception,
+            raise_exception=reraise,
+            **kwargs
+        )
     finally:
         if cleanup:
             pool.close()
@@ -187,6 +218,6 @@ def initialize_worker_process():
     """
     # If Numpy is already imported, presumably its random state was
     # inherited from the parent => re-seed it.
-    np = sys.modules.get('numpy')
+    np = sys.modules.get("numpy")
     if np is not None:
         np.random.seed()

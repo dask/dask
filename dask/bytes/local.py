@@ -7,13 +7,14 @@ from . import core
 from ..base import tokenize
 
 
-class LocalFileSystem(core.FileSystem):
+class LocalFileSystem(object):
     """API spec for the methods a filesystem
 
     A filesystem must provide these methods, if it is to be registered as
     a backend for dask.
 
     Implementation for local disc"""
+
     sep = os.sep
 
     def __init__(self, **storage_options):
@@ -33,7 +34,10 @@ class LocalFileSystem(core.FileSystem):
 
     def glob(self, path):
         """For a template path, return matching files"""
-        return sorted(glob(self._normalize_path(path)))
+        try:
+            return sorted(glob(self._normalize_path(path), recursive=True))
+        except TypeError:  # recursive kwarg is new in Python 3.5
+            return sorted(glob(self._normalize_path(path)))
 
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""
@@ -43,7 +47,7 @@ class LocalFileSystem(core.FileSystem):
         except OSError:
             assert os.path.isdir(path)
 
-    def open(self, path, mode='rb', **kwargs):
+    def open(self, path, mode="rb", **kwargs):
         """Make a file-like object
 
         Parameters
@@ -69,7 +73,8 @@ class LocalFileSystem(core.FileSystem):
     def _get_pyarrow_filesystem(self):
         """Get an equivalent pyarrow filesystem"""
         import pyarrow as pa
+
         return pa.filesystem.LocalFileSystem.get_instance()
 
 
-core._filesystems['file'] = LocalFileSystem
+core._filesystems["file"] = LocalFileSystem

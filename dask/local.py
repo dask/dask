@@ -61,26 +61,18 @@ Changing state
 Examples
 --------
 
->>> import pprint
->>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
->>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
+>>> import pprint  # doctest: +SKIP
+>>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+>>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
- 'dependencies': {'w': set(['y', 'z']),
-                  'x': set([]),
-                  'y': set([]),
-                  'z': set(['x'])},
- 'dependents': {'w': set([]),
-                'x': set(['z']),
-                'y': set(['w']),
-                'z': set(['w'])},
- 'finished': set([]),
+ 'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
+ 'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+ 'finished': set(),
  'ready': ['z'],
- 'released': set([]),
- 'running': set([]),
- 'waiting': {'w': set(['z'])},
- 'waiting_data': {'x': set(['z']),
-                  'y': set(['w']),
-                  'z': set(['w'])}}
+ 'released': set(),
+ 'running': set(),
+ 'waiting': {'w': {'z'}},
+ 'waiting_data': {'x': {'z'}, 'y': {'w'}, 'z': {'w'}}}
 
 Optimizations
 =============
@@ -115,19 +107,16 @@ See the function ``inline_functions`` for more information.
 from __future__ import absolute_import, division, print_function
 
 import os
-import sys
 
-from .compatibility import Queue, Empty, reraise
-from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
-                   has_tasks)
+from .compatibility import Queue, Empty, reraise, PY2
+from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
 from . import config
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
-from .optimization import cull
 from .utils_test import add, inc  # noqa: F401
 
 
-if sys.version_info.major < 3:
+if PY2:
     # Due to a bug in python 2.7 Queue.get, if a timeout isn't specified then
     # `Queue.get` can't be interrupted. A workaround is to specify an extremely
     # long timeout, which then allows it to be interrupted.
@@ -135,7 +124,8 @@ if sys.version_info.major < 3:
     def queue_get(q):
         return q.get(block=True, timeout=(365 * 24 * 60 * 60))
 
-elif os.name == 'nt':
+
+elif os.name == "nt":
     # Python 3 windows Queue.get also doesn't handle interrupts properly. To
     # workaround this we poll at a sufficiently large interval that it
     # shouldn't affect performance, but small enough that users trying to kill
@@ -146,7 +136,10 @@ elif os.name == 'nt':
                 return q.get(block=True, timeout=0.1)
             except Empty:
                 pass
+
+
 else:
+
     def queue_get(q):
         return q.get()
 
@@ -160,31 +153,23 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     Examples
     --------
 
-    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
-    >>> from pprint import pprint
-    >>> pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
+    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+    >>> from pprint import pprint  # doctest: +SKIP
+    >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
     {'cache': {'x': 1, 'y': 2},
-     'dependencies': {'w': set(['y', 'z']),
-                      'x': set([]),
-                      'y': set([]),
-                      'z': set(['x'])},
-     'dependents': {'w': set([]),
-                    'x': set(['z']),
-                    'y': set(['w']),
-                    'z': set(['w'])},
-     'finished': set([]),
+     'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
+     'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+     'finished': set(),
      'ready': ['z'],
-     'released': set([]),
-     'running': set([]),
-     'waiting': {'w': set(['z'])},
-     'waiting_data': {'x': set(['z']),
-                      'y': set(['w']),
-                      'z': set(['w'])}}
+     'released': set(),
+     'running': set(),
+     'waiting': {'w': {'z'}},
+     'waiting_data': {'x': {'z'}, 'y': {'w'}, 'z': {'w'}}}
     """
     if sortkey is None:
         sortkey = order(dsk).get
     if cache is None:
-        cache = config.get('cache', None)
+        cache = config.get("cache", None)
     if cache is None:
         cache = dict()
     data_keys = set()
@@ -197,9 +182,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     dsk2.update(cache)
 
     dependencies = {k: get_dependencies(dsk2, k) for k in dsk}
-    waiting = {k: v.copy()
-               for k, v in dependencies.items()
-               if k not in data_keys}
+    waiting = {k: v.copy() for k, v in dependencies.items() if k not in data_keys}
 
     dependents = reverse_dict(dependencies)
     for a in cache:
@@ -211,20 +194,22 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     ready = sorted(ready_set, key=sortkey, reverse=True)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
-    state = {'dependencies': dependencies,
-             'dependents': dependents,
-             'waiting': waiting,
-             'waiting_data': waiting_data,
-             'cache': cache,
-             'ready': ready,
-             'running': set(),
-             'finished': set(),
-             'released': set()}
+    state = {
+        "dependencies": dependencies,
+        "dependents": dependents,
+        "waiting": waiting,
+        "waiting_data": waiting_data,
+        "cache": cache,
+        "ready": ready,
+        "running": set(),
+        "finished": set(),
+        "released": set(),
+    }
 
     return state
 
 
-'''
+"""
 Running tasks
 -------------
 
@@ -232,49 +217,7 @@ When we execute tasks we both
 
 1.  Perform the actual work of collecting the appropriate data and calling the function
 2.  Manage administrative state to coordinate with the scheduler
-'''
-
-
-def _execute_task(arg, cache, dsk=None):
-    """ Do the actual work of collecting data and executing a function
-
-    Examples
-    --------
-
-    >>> cache = {'x': 1, 'y': 2}
-
-    Compute tasks against a cache
-    >>> _execute_task((add, 'x', 1), cache)  # Compute task in naive manner
-    2
-    >>> _execute_task((add, (inc, 'x'), 1), cache)  # Support nested computation
-    3
-
-    Also grab data from cache
-    >>> _execute_task('x', cache)
-    1
-
-    Support nested lists
-    >>> list(_execute_task(['x', 'y'], cache))
-    [1, 2]
-
-    >>> list(map(list, _execute_task([['x', 'y'], ['y', 'x']], cache)))
-    [[1, 2], [2, 1]]
-
-    >>> _execute_task('foo', cache)  # Passes through on non-keys
-    'foo'
-    """
-    if isinstance(arg, list):
-        return [_execute_task(a, cache) for a in arg]
-    elif istask(arg):
-        func, args = arg[0], arg[1:]
-        args2 = [_execute_task(a, cache) for a in args]
-        return func(*args2)
-    elif not ishashable(arg):
-        return arg
-    elif arg in cache:
-        return cache[arg]
-    else:
-        return arg
+"""
 
 
 def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
@@ -303,45 +246,49 @@ def release_data(key, state, delete=True):
     See Also
         finish_task
     """
-    if key in state['waiting_data']:
-        assert not state['waiting_data'][key]
-        del state['waiting_data'][key]
+    if key in state["waiting_data"]:
+        assert not state["waiting_data"][key]
+        del state["waiting_data"][key]
 
-    state['released'].add(key)
+    state["released"].add(key)
 
     if delete:
-        del state['cache'][key]
+        del state["cache"][key]
 
 
-def finish_task(dsk, key, state, results, sortkey, delete=True,
-                release_data=release_data):
+def finish_task(
+    dsk, key, state, results, sortkey, delete=True, release_data=release_data
+):
     """
     Update execution state after a task finishes
 
     Mutates.  This should run atomically (with a lock).
     """
-    for dep in sorted(state['dependents'][key], key=sortkey, reverse=True):
-        s = state['waiting'][dep]
+    for dep in sorted(state["dependents"][key], key=sortkey, reverse=True):
+        s = state["waiting"][dep]
         s.remove(key)
         if not s:
-            del state['waiting'][dep]
-            state['ready'].append(dep)
+            del state["waiting"][dep]
+            state["ready"].append(dep)
 
-    for dep in state['dependencies'][key]:
-        if dep in state['waiting_data']:
-            s = state['waiting_data'][dep]
+    for dep in state["dependencies"][key]:
+        if dep in state["waiting_data"]:
+            s = state["waiting_data"][dep]
             s.remove(key)
             if not s and dep not in results:
                 if DEBUG:
                     from chest.core import nbytes
-                    print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
-                          sum(map(nbytes, state['cache'].values()) / 1e6)))
+
+                    print(
+                        "Key: %s\tDep: %s\t NBytes: %.2f\t Release"
+                        % (key, dep, sum(map(nbytes, state["cache"].values()) / 1e6))
+                    )
                 release_data(dep, state, delete=delete)
         elif delete and dep not in results:
             release_data(dep, state, delete=delete)
 
-    state['finished'].add(key)
-    state['running'].remove(key)
+    state["finished"].add(key)
+    state["running"].remove(key)
 
     return state
 
@@ -383,7 +330,7 @@ def identity(x):
     return x
 
 
-'''
+"""
 Task Selection
 --------------
 
@@ -392,20 +339,31 @@ cheap and can significantly impact performance.
 
 We currently select tasks that have recently been made ready.  We hope that
 this first-in-first-out policy reduces memory footprint
-'''
+"""
 
-'''
+"""
 `get`
 -----
 
 The main function of the scheduler.  Get is the main entry point.
-'''
+"""
 
 
-def get_async(apply_async, num_workers, dsk, result, cache=None,
-              get_id=default_get_id, rerun_exceptions_locally=None,
-              pack_exception=default_pack_exception, raise_exception=reraise,
-              callbacks=None, dumps=identity, loads=identity, **kwargs):
+def get_async(
+    apply_async,
+    num_workers,
+    dsk,
+    result,
+    cache=None,
+    get_id=default_get_id,
+    rerun_exceptions_locally=None,
+    pack_exception=default_pack_exception,
+    raise_exception=reraise,
+    callbacks=None,
+    dumps=identity,
+    loads=identity,
+    **kwargs
+):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -464,13 +422,14 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []
         succeeded = False
+        # if start_state_from_dask fails, we will have something
+        # to pass to the final block.
+        state = {}
         try:
             for cb in callbacks:
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
-
-            dsk, dependencies = cull(dsk, list(results))
 
             keyorder = order(dsk)
 
@@ -481,51 +440,62 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                     start_state(dsk, state)
 
             if rerun_exceptions_locally is None:
-                rerun_exceptions_locally = config.get('rerun_exceptions_locally', False)
+                rerun_exceptions_locally = config.get("rerun_exceptions_locally", False)
 
-            if state['waiting'] and not state['ready']:
+            if state["waiting"] and not state["ready"]:
                 raise ValueError("Found no accessible jobs in dask")
 
             def fire_task():
                 """ Fire off a task to the thread pool """
                 # Choose a good task to compute
-                key = state['ready'].pop()
-                state['running'].add(key)
+                key = state["ready"].pop()
+                state["running"].add(key)
                 for f in pretask_cbs:
                     f(key, dsk, state)
 
                 # Prep data to send
-                data = dict((dep, state['cache'][dep])
-                            for dep in get_dependencies(dsk, key))
+                data = dict(
+                    (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
+                )
                 # Submit
-                apply_async(execute_task,
-                            args=(key, dumps((dsk[key], data)),
-                                  dumps, loads, get_id, pack_exception),
-                            callback=queue.put)
+                apply_async(
+                    execute_task,
+                    args=(
+                        key,
+                        dumps((dsk[key], data)),
+                        dumps,
+                        loads,
+                        get_id,
+                        pack_exception,
+                    ),
+                    callback=queue.put,
+                )
 
             # Seed initial tasks into the thread pool
-            while state['ready'] and len(state['running']) < num_workers:
+            while state["ready"] and len(state["running"]) < num_workers:
                 fire_task()
 
             # Main loop, wait on tasks to finish, insert new ones
-            while state['waiting'] or state['ready'] or state['running']:
+            while state["waiting"] or state["ready"] or state["running"]:
                 key, res_info, failed = queue_get(queue)
                 if failed:
                     exc, tb = loads(res_info)
                     if rerun_exceptions_locally:
-                        data = dict((dep, state['cache'][dep])
-                                    for dep in get_dependencies(dsk, key))
+                        data = dict(
+                            (dep, state["cache"][dep])
+                            for dep in get_dependencies(dsk, key)
+                        )
                         task = dsk[key]
                         _execute_task(task, data)  # Re-execute locally
                     else:
                         raise_exception(exc, tb)
                 res, worker_id = loads(res_info)
-                state['cache'][key] = res
+                state["cache"][key] = res
                 finish_task(dsk, key, state, results, keyorder.get)
                 for f in posttask_cbs:
                     f(key, res, dsk, state, worker_id)
 
-                while state['ready'] and len(state['running']) < num_workers:
+                while state["ready"] and len(state["running"]) < num_workers:
                     fire_task()
 
             succeeded = True
@@ -535,7 +505,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 if finish:
                     finish(dsk, state, not succeeded)
 
-    return nested_get(result, state['cache'])
+    return nested_get(result, state["cache"])
 
 
 """ Synchronous concrete version of get_async
@@ -558,7 +528,7 @@ def get_sync(dsk, keys, **kwargs):
 
     Can be useful for debugging.
     """
-    kwargs.pop('num_workers', None)    # if num_workers present, remove it
+    kwargs.pop("num_workers", None)  # if num_workers present, remove it
     return get_async(apply_sync, 1, dsk, keys, **kwargs)
 
 

@@ -1,6 +1,7 @@
 numpydoc==0.8
 sphinx
-sphinx_rtd_theme>=0.3.1
+dask_sphinx_theme>=1.1.0
+sphinx-click
 toolz
 cloudpickle
 pandas>=0.19.0

@@ -79,22 +79,27 @@ def generic_glob(fs, path_impl, pathname):
     if not dirname:
         raise ValueError("glob pattern must be an absolute path")
     if not _has_magic(pathname):
-        if (not basename and _safe_isdir(fs, dirname) or
-                basename and fs.exists(pathname)):
+        if (
+            not basename
+            and _safe_isdir(fs, dirname)
+            or basename
+            and fs.exists(pathname)
+        ):
             return [pathname]
         return []
     if basename and _has_magic(dirname):
         # Directory is a pattern, collect all matching directories
-        dirs = [d for d in generic_glob(fs, path_impl, dirname)
-                if _safe_isdir(fs, d)]
+        dirs = [d for d in generic_glob(fs, path_impl, dirname) if _safe_isdir(fs, d)]
     else:
         # No basename (pattern ends in `/`, must match directories only)
         # or no magic in dirname (use dirname directly)
         dirs = [dirname] if _safe_isdir(fs, dirname) else []
     glob_in_dir = _glob_pattern if _has_magic(basename) else _glob_path
-    return [path_impl.join(dirname2, name)
-            for dirname2 in dirs
-            for name in glob_in_dir(fs, path_impl, dirname2, basename)]
+    return [
+        path_impl.join(dirname2, name)
+        for dirname2 in dirs
+        for name in glob_in_dir(fs, path_impl, dirname2, basename)
+    ]
 
 
 def _safe_isdir(fs, dirname):
@@ -108,18 +113,22 @@ def _safe_isdir(fs, dirname):
 def _glob_pattern(fs, path_impl, dirname, pattern):
     names = [path_impl.split(f)[1] for f in fs.ls(dirname)]
     if not _ishidden(pattern):
-        names = [x for x in names if not _ishidden(x)]
+        names = [x for x in names if x and not _ishidden(x)]
     return fnmatch.filter(names, pattern)
 
 
 def _glob_path(fs, path_impl, dirname, basename):
-    if (not basename and _safe_isdir(fs, dirname) or
-            basename and fs.exists(path_impl.join(dirname, basename))):
+    if (
+        not basename
+        and _safe_isdir(fs, dirname)
+        or basename
+        and fs.exists(path_impl.join(dirname, basename))
+    ):
         return [basename]
     return []
 
 
-_magic_check = re.compile('([*?[])')
+_magic_check = re.compile("([*?[])")
 
 
 def _has_magic(s):
@@ -127,4 +136,4 @@ def _has_magic(s):
 
 
 def _ishidden(path):
-    return path[0] == '.'
+    return path[0] == "."

@@ -27,17 +27,26 @@ class Accessor(object):
     * _accessor
     * _accessor_name
     """
+
     _not_implemented = set()
 
     def __init__(self, series):
         from .core import Series
+
         if not isinstance(series, Series):
-            raise ValueError('Accessor cannot be initialized')
+            raise ValueError("Accessor cannot be initialized")
         self._validate(series)
         self._series = series
 
     def _validate(self, series):
         pass
+
+    @property
+    def _accessor(self):
+        meta = self._series._meta
+        if hasattr(meta, "to_series"):  # is index-like
+            meta = meta.to_series()
+        return getattr(meta, self._accessor_name)
 
     @staticmethod
     def _delegate_property(obj, accessor, attr):
@@ -50,20 +59,29 @@ class Accessor(object):
         return maybe_wrap_pandas(obj, out)
 
     def _property_map(self, attr):
-        meta = self._delegate_property(self._series._meta,
-                                       self._accessor_name, attr)
-        token = '%s-%s' % (self._accessor_name, attr)
-        return self._series.map_partitions(self._delegate_property,
-                                           self._accessor_name, attr,
-                                           token=token, meta=meta)
+        meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
+        token = "%s-%s" % (self._accessor_name, attr)
+        return self._series.map_partitions(
+            self._delegate_property, self._accessor_name, attr, token=token, meta=meta
+        )
 
     def _function_map(self, attr, *args, **kwargs):
-        meta = self._delegate_method(self._series._meta_nonempty,
-                                     self._accessor_name, attr, args, kwargs)
-        token = '%s-%s' % (self._accessor_name, attr)
-        return self._series.map_partitions(self._delegate_method,
-                                           self._accessor_name, attr, args,
-                                           kwargs, meta=meta, token=token)
+        if "meta" in kwargs:
+            meta = kwargs.pop("meta")
+        else:
+            meta = self._delegate_method(
+                self._series._meta_nonempty, self._accessor_name, attr, args, kwargs
+            )
+        token = "%s-%s" % (self._accessor_name, attr)
+        return self._series.map_partitions(
+            self._delegate_method,
+            self._accessor_name,
+            attr,
+            args,
+            kwargs,
+            meta=meta,
+            token=token,
+        )
 
     @property
     def _delegates(self):
@@ -77,10 +95,10 @@ class Accessor(object):
 
     def __getattr__(self, key):
         if key in self._delegates:
-            if isinstance(getattr(self._accessor, key), property):
-                return self._property_map(key)
-            else:
+            if callable(getattr(self._accessor, key)):
                 return partial(self._function_map, key)
+            else:
+                return self._property_map(key)
         else:
             raise AttributeError(key)
 
@@ -93,8 +111,8 @@ class DatetimeAccessor(Accessor):
 
     >>> s.dt.microsecond  # doctest: +SKIP
     """
-    _accessor = pd.Series.dt
-    _accessor_name = 'dt'
+
+    _accessor_name = "dt"
 
 
 class StringAccessor(Accessor):
@@ -105,23 +123,36 @@ class StringAccessor(Accessor):
 
     >>> s.str.lower()  # doctest: +SKIP
     """
-    _accessor = pd.Series.str
-    _accessor_name = 'str'
-    _not_implemented = {'get_dummies'}
+
+    _accessor_name = "str"
+    _not_implemented = {"get_dummies"}
 
     def _validate(self, series):
-        if not (series.dtype == 'object' or (
-                is_categorical_dtype(series) and
-                series.cat.categories.dtype == 'object')):
+        if not (
+            series.dtype == "object"
+            or (
+                is_categorical_dtype(series) and series.cat.categories.dtype == "object"
+            )
+        ):
             raise AttributeError("Can only use .str accessor with object dtype")
 
     @derived_from(pd.core.strings.StringMethods)
-    def split(self, pat=None, n=-1):
-        return self._function_map('split', pat=pat, n=n)
+    def split(self, pat=None, n=-1, expand=False):
+        if expand:
+            if n == -1:
+                raise NotImplementedError(
+                    "To use the expand parameter you must specify the number of "
+                    "expected output columns with the n= parameter"
+                )
+            else:
+                meta = type(self._series._meta)([" ".join(["a"] * 2 * n)])
+                meta = meta.str.split(n=n, expand=expand, pat=pat)
+        return self._function_map("split", pat=pat, n=n, expand=expand, meta=meta)
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
         from .core import Series, Index
+
         if others is None:
             raise NotImplementedError("x.str.cat() with `others == None`")
 
@@ -131,24 +162,25 @@ class StringAccessor(Accessor):
         elif not all(isinstance(a, valid_types) for a in others):
             raise TypeError("others must be Series/Index")
 
-        return self._series.map_partitions(str_cat, *others, sep=sep,
-                                           na_rep=na_rep, meta=self._series._meta)
+        return self._series.map_partitions(
+            str_cat, *others, sep=sep, na_rep=na_rep, meta=self._series._meta
+        )
 
     @derived_from(pd.core.strings.StringMethods)
     def extractall(self, pat, flags=0):
         # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
         meta = self._series._meta.str.extractall(pat, flags=flags)
-        if PANDAS_VERSION < '0.23.0':
+        if PANDAS_VERSION < "0.23.0":
             index_name = self._series.index.name
-            meta.index = pd.MultiIndex(levels=[[], []],
-                                       labels=[[], []],
-                                       names=[index_name, 'match'])
-        return self._series.map_partitions(str_extractall, pat, flags,
-                                           meta=meta, token='str-extractall')
+            meta.index = pd.MultiIndex(
+                levels=[[], []], labels=[[], []], names=[index_name, "match"]
+            )
+        return self._series.map_partitions(
+            str_extractall, pat, flags, meta=meta, token="str-extractall"
+        )
 
     def __getitem__(self, index):
-        return self._series.map_partitions(str_get, index,
-                                           meta=self._series._meta)
+        return self._series.map_partitions(str_get, index, meta=self._series._meta)
 
 
 def str_extractall(series, pat, flags):

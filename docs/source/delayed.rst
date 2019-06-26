@@ -7,11 +7,12 @@ Delayed
 
    delayed-api.rst
    delayed-collections.rst
+   delayed-best-practices.rst
 
 Sometimes problems don't fit into one of the collections like ``dask.array`` or
 ``dask.dataframe``. In these cases, users can parallelize custom algorithms
 using the simpler ``dask.delayed`` interface. This allows one to create graphs
-directly with a light annotation of normal python code.
+directly with a light annotation of normal python code:
 
 .. code-block:: python
 
@@ -28,8 +29,8 @@ directly with a light annotation of normal python code.
 Example
 -------
 
-Sometimes we face problems that are parallelizable, but don't fit high-level
-abstractions Dask array or Dask dataframe.  Consider the following example:
+Sometimes we face problems that are parallelizable, but don't fit into high-level
+abstractions like Dask Array or Dask DataFrame.  Consider the following example:
 
 .. code-block:: python
 
@@ -53,15 +54,15 @@ abstractions Dask array or Dask dataframe.  Consider the following example:
 
     total = sum(output)
 
-There is clearly parallelism in this problem (many of the ``inc`` and
-``double`` and ``add`` functions can evaluate independently), but it's not
-clear how to convert this to a big array or big dataframe computation.
+There is clearly parallelism in this problem (many of the ``inc``,
+``double``, and ``add`` functions can evaluate independently), but it's not
+clear how to convert this to a big array or big DataFrame computation.
 
-As written this code runs sequentially in a single thread.  However we see that
+As written, this code runs sequentially in a single thread.  However, we see that
 a lot of this could be executed in parallel.
 
 The Dask ``delayed`` function decorates your functions so that they operate
-*lazily*.  Rather than executing your function immediately it will defer
+*lazily*.  Rather than executing your function immediately, it will defer
 execution, placing the function and its arguments into a task graph.
 
 .. currentmodule:: dask.delayed
@@ -70,7 +71,7 @@ execution, placing the function and its arguments into a task graph.
     delayed
 
 We slightly modify our code by wrapping functions in ``delayed``.
-This delays the execution of the function and generates a dask graph instead.
+This delays the execution of the function and generates a Dask graph instead:
 
 .. code-block:: python
 
@@ -86,11 +87,11 @@ This delays the execution of the function and generates a dask graph instead.
     total = dask.delayed(sum)(output)
 
 We used the ``dask.delayed`` function to wrap the function calls that we want
-to turn into tasks.  None of the ``inc``, ``double``, ``add`` or ``sum`` calls
-have happened yet, instead the object ``total`` is a ``Delayed`` result that
+to turn into tasks.  None of the ``inc``, ``double``, ``add``, or ``sum`` calls
+have happened yet. Instead, the object ``total`` is a ``Delayed`` result that
 contains a task graph of the entire computation.  Looking at the graph we see
-clear opportunities for parallel execution.  The dask schedulers will exploit
-this parallelism, generally improving performance.  (although not in this
+clear opportunities for parallel execution.  The Dask schedulers will exploit
+this parallelism, generally improving performance (although not in this
 example, because these functions are already very small and fast.)
 
 .. code-block:: python
@@ -112,7 +113,7 @@ Decorator
 ---------
 
 It is also common to see the delayed function used as a decorator.  Here is a
-reproduction of our original problem as a parallel code.
+reproduction of our original problem as a parallel code:
 
 .. code-block:: python
 
@@ -146,4 +147,11 @@ Real time
 ---------
 
 Sometimes you want to create and destroy work during execution, launch tasks
-from other tasks, etc..  For this, see the :doc:`Futures <futures>` interface.
+from other tasks, etc.  For this, see the :doc:`Futures <futures>` interface.
+
+
+Best Practices
+--------------
+
+For a list of common problems and recommendations see :doc:`Delayed Best
+Practices <delayed-best-practices>`.

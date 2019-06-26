@@ -1,5 +1,6 @@
 import pytest
-pytest.importorskip('numpy')
+
+pytest.importorskip("numpy")
 
 import numpy as np
 
@@ -28,11 +29,11 @@ def test_concurrency():
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=2)
-    assert (x.compute(scheduler='processes') == y.compute(scheduler='processes')).all()
+    assert (x.compute(scheduler="processes") == y.compute(scheduler="processes")).all()
 
 
 def test_doc_randomstate():
-    assert 'mean' in da.random.RandomState(5).normal.__doc__
+    assert "mean" in da.random.RandomState(5).normal.__doc__
 
 
 def test_serializability():
@@ -55,10 +56,12 @@ def test_determinisim_through_dask_values():
 def test_randomstate_consistent_names():
     state1 = da.random.RandomState(42)
     state2 = da.random.RandomState(42)
-    assert (sorted(state1.normal(size=(100, 100), chunks=(10, 10)).dask) ==
-            sorted(state2.normal(size=(100, 100), chunks=(10, 10)).dask))
-    assert (sorted(state1.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask) ==
-            sorted(state2.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask))
+    assert sorted(state1.normal(size=(100, 100), chunks=(10, 10)).dask) == sorted(
+        state2.normal(size=(100, 100), chunks=(10, 10)).dask
+    )
+    assert sorted(
+        state1.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask
+    ) == sorted(state2.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask)
 
 
 def test_random():
@@ -102,8 +105,8 @@ def test_unique_names():
 
 
 def test_docs():
-    assert 'exponential' in exponential.__doc__
-    assert 'exponential' in exponential.__name__
+    assert "exponential" in exponential.__doc__
+    assert "exponential" in exponential.__name__
     assert "# doctest: +SKIP" in normal.__doc__
 
 
@@ -146,7 +149,7 @@ def test_random_all():
     da.random.logistic(size=5, chunks=3).compute()
     da.random.lognormal(size=5, chunks=3).compute()
     da.random.logseries(0.5, size=5, chunks=3).compute()
-    da.random.multinomial(20, [1 / 6.] * 6, size=5, chunks=3).compute()
+    da.random.multinomial(20, [1 / 6.0] * 6, size=5, chunks=3).compute()
     da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
 
@@ -174,8 +177,9 @@ def test_random_all():
     da.random.standard_t(2, size=5, chunks=3).compute()
 
 
-@pytest.mark.skipif(not hasattr(np,'broadcast_to'),
-                    reason='requires numpy 1.10 method "broadcast_to"')
+@pytest.mark.skipif(
+    not hasattr(np, "broadcast_to"), reason='requires numpy 1.10 method "broadcast_to"'
+)
 def test_array_broadcasting():
     arr = np.arange(6).reshape((2, 3))
     daones = da.ones((2, 3, 4), chunks=3)
@@ -189,13 +193,15 @@ def test_array_broadcasting():
     y = da.random.normal(daones, 2, chunks=3)
     assert set(daones.dask).issubset(set(y.dask))
 
-    assert da.random.normal(np.ones((1, 4)),
-                            da.ones((2, 3, 4), chunks=(2, 3, 4)),
-                            chunks=(2, 3, 4)).compute().shape == (2, 3, 4)
-    assert da.random.normal(scale=np.ones((1, 4)),
-                            loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
-                            size=(2, 2, 3, 4),
-                            chunks=(2, 2, 3, 4)).compute().shape == (2, 2, 3, 4)
+    assert da.random.normal(
+        np.ones((1, 4)), da.ones((2, 3, 4), chunks=(2, 3, 4)), chunks=(2, 3, 4)
+    ).compute().shape == (2, 3, 4)
+    assert da.random.normal(
+        scale=np.ones((1, 4)),
+        loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
+        size=(2, 2, 3, 4),
+        chunks=(2, 2, 3, 4),
+    ).compute().shape == (2, 2, 3, 4)
 
     with pytest.raises(ValueError):
         da.random.normal(arr, np.ones((3, 1)), size=(2, 3, 4), chunks=3)
@@ -205,7 +211,7 @@ def test_array_broadcasting():
         assert 800 < a.mean().compute() < 1200
 
     # ensure that mis-matched chunks align well
-    x = np.arange(10)**3
+    x = np.arange(10) ** 3
     y = da.from_array(x, chunks=(1,))
     z = da.random.normal(y, 0.01, chunks=(10,))
 
@@ -214,8 +220,8 @@ def test_array_broadcasting():
 
 def test_multinomial():
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
-        x = da.random.multinomial(20, [1 / 6.] * 6, size=size, chunks=chunks)
-        y = np.random.multinomial(20, [1 / 6.] * 6, size=size)
+        x = da.random.multinomial(20, [1 / 6.0] * 6, size=size, chunks=chunks)
+        y = np.random.multinomial(20, [1 / 6.0] * 6, size=size)
 
         assert x.shape == y.shape == x.compute().shape
 
@@ -231,7 +237,7 @@ def test_choice():
     assert res.dtype == np_dtype
     assert res.shape == size
 
-    np_a = np.array([1, 3, 5, 7, 9], dtype='f8')
+    np_a = np.array([1, 3, 5, 7, 9], dtype="f8")
     da_a = da.from_array(np_a, chunks=2)
 
     for a in [np_a, da_a]:
@@ -257,20 +263,30 @@ def test_choice():
     assert x.dtype == np_dtype
     assert res.dtype == np_dtype
 
-    errs = [(-1, None),             # negative a
-            (np_a[:, None], None),  # a must be 1D
-            (np_a, np_p[:, None]),  # p must be 1D
-            (np_a, np_p[:-2]),      # a and p must match
-            (3, np_p),              # a and p must match
-            (4, [0.2, 0.2, 0.3])]   # p must sum to 1
+    errs = [
+        (-1, None),  # negative a
+        (np_a[:, None], None),  # a must be 1D
+        (np_a, np_p[:, None]),  # p must be 1D
+        (np_a, np_p[:-2]),  # a and p must match
+        (3, np_p),  # a and p must match
+        (4, [0.2, 0.2, 0.3]),
+    ]  # p must sum to 1
 
     for (a, p) in errs:
         with pytest.raises(ValueError):
             da.random.choice(a, size=size, chunks=chunks, p=p)
 
+    with pytest.raises(NotImplementedError):
+        da.random.choice(da_a, size=size, chunks=chunks, replace=False)
+
+    # Want to make sure replace=False works for a single-partition output array
+    x = da.random.choice(da_a, size=da_a.shape[0], chunks=-1, replace=False)
+    res = x.compute()
+    assert len(res) == len(np.unique(res))
+
 
 def test_create_with_auto_dimensions():
-    with dask.config.set({'array.chunk-size': '128MiB'}):
+    with dask.config.set({"array.chunk-size": "128MiB"}):
         x = da.random.random((10000, 10000), chunks=(-1, "auto"))
         assert x.chunks == ((10000,), (1250,) * 8)
 
@@ -281,5 +297,41 @@ def test_create_with_auto_dimensions():
 def test_names():
     name = da.random.normal(0, 1, size=(1000,), chunks=(500,)).name
 
-    assert name.startswith('normal')
+    assert name.startswith("normal")
     assert len(key_split(name)) < 10
+
+
+def test_external_randomstate_class():
+    randomgen = pytest.importorskip("randomgen")
+
+    rs = da.random.RandomState(
+        RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed))
+    )
+    x = rs.normal(0, 1, size=(10), chunks=(5,))
+    assert_eq(x, x)
+
+    rs = da.random.RandomState(
+        RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
+        seed=123,
+    )
+    a = rs.normal(0, 1, size=(10), chunks=(5,))
+    rs = da.random.RandomState(
+        RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
+        seed=123,
+    )
+    b = rs.normal(0, 1, size=(10), chunks=(5,))
+    assert a.name == b.name
+    assert_eq(a, b)
+
+
+def test_auto_chunks():
+    with dask.config.set({"array.chunk-size": "50 MiB"}):
+        x = da.random.random((10000, 10000))
+        assert 4 < x.npartitions < 32
+
+
+def test_randint_dtype():
+    x = da.random.randint(0, 255, size=10, dtype="uint8")
+    assert_eq(x, x)
+    assert x.dtype == "uint8"
+    assert x.compute().dtype == "uint8"

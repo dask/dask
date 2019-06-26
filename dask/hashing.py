@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import binascii
 import hashlib
-import sys
+
+from .compatibility import PY2
 
 
 hashers = []  # In decreasing performance order
@@ -22,16 +23,17 @@ else:
     # CityHash disabled unless the reference leak in
     # https://github.com/escherba/python-cityhash/pull/16
     # is fixed.
-    if cityhash.__version__ >= '0.2.2':
+    if cityhash.__version__ >= "0.2.2":
+
         def _hash_cityhash(buf):
             """
             Produce a 16-bytes hash of *buf* using CityHash.
             """
             h = cityhash.CityHash128(buf)
-            if sys.version_info >= (3,):
-                return h.to_bytes(16, 'little')
+            if not PY2:
+                return h.to_bytes(16, "little")
             else:
-                return binascii.a2b_hex('%032x' % h)
+                return binascii.a2b_hex("%032x" % h)
 
         hashers.append(_hash_cityhash)
 
@@ -40,6 +42,7 @@ try:
 except ImportError:
     pass
 else:
+
     def _hash_xxhash(buf):
         """
         Produce a 8-bytes hash of *buf* using xxHash.
@@ -53,6 +56,7 @@ try:
 except ImportError:
     pass
 else:
+
     def _hash_murmurhash(buf):
         """
         Produce a 16-bytes hash of *buf* using MurmurHash.
@@ -99,4 +103,4 @@ def hash_buffer_hex(buf, hasher=None):
     """
     h = hash_buffer(buf, hasher)
     s = binascii.b2a_hex(h)
-    return s.decode() if sys.version_info >= (3,) else s
+    return s.decode() if not PY2 else s

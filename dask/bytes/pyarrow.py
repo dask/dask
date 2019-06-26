@@ -11,6 +11,7 @@ import pyarrow as pa
 class HDFS3Wrapper(pa.filesystem.DaskFileSystem):
     """Wrapper around `hdfs3.HDFileSystem` that allows it to be passed to
     pyarrow methods"""
+
     def isdir(self, path):
         return self.fs.isdir(path)
 
@@ -18,14 +19,21 @@ class HDFS3Wrapper(pa.filesystem.DaskFileSystem):
         return self.fs.isfile(path)
 
 
-_MIN_PYARROW_VERSION_SUPPORTED = '0.8.1.dev81'
+_MIN_PYARROW_VERSION_SUPPORTED = "0.8.1.dev81"
+
+
+def update_hdfs_options(options):
+    username = options.pop("username", None)
+    if username is not None:
+        options["user"] = username
+    return options
 
 
 class PyArrowHadoopFileSystem(object):
     sep = "/"
 
     def __init__(self, **kwargs):
-        self.fs = pa.hdfs.HadoopFileSystem(**kwargs)
+        self.fs = pa.hdfs.HadoopFileSystem(**update_hdfs_options(kwargs))
 
     @classmethod
     def from_pyarrow(cls, fs):
@@ -33,7 +41,7 @@ class PyArrowHadoopFileSystem(object):
         out.fs = fs
         return out
 
-    def open(self, path, mode='rb', **kwargs):
+    def open(self, path, mode="rb", **kwargs):
         return self.fs.open(path, mode=mode, **kwargs)
 
     def glob(self, path):
@@ -43,10 +51,10 @@ class PyArrowHadoopFileSystem(object):
         return self.fs.mkdir(path, create_parents=True)
 
     def ukey(self, path):
-        return tokenize(path, self.fs.info(path)['last_modified'])
+        return tokenize(path, self.fs.info(path)["last_modified"])
 
     def size(self, path):
-        return self.fs.info(path)['size']
+        return self.fs.info(path)["size"]
 
     def _get_pyarrow_filesystem(self):
         return self.fs

@@ -7,11 +7,20 @@ def _get_pyarrow_dtypes(schema, categories):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
 
     # Check for pandas metadata
-    has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
+    has_pandas_metadata = schema.metadata is not None and b"pandas" in schema.metadata
     if has_pandas_metadata:
-        pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
-        pandas_metadata_dtypes = {c.get('field_name', c.get('name', None)): c['numpy_type']
-                                  for c in pandas_metadata.get('columns', [])}
+        pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
+        pandas_metadata_dtypes = {
+            c.get("field_name", c.get("name", None)): c["numpy_type"]
+            for c in pandas_metadata.get("columns", [])
+        }
+        tz = {
+            c.get("field_name", c.get("name", None)): c["metadata"].get(
+                "timezone", None
+            )
+            for c in pandas_metadata.get("columns", [])
+            if c["metadata"]
+        }
     else:
         pandas_metadata_dtypes = {}
 
@@ -21,7 +30,12 @@ def _get_pyarrow_dtypes(schema, categories):
 
         # Get numpy_dtype from pandas metadata if available
         if field.name in pandas_metadata_dtypes:
-            numpy_dtype = pandas_metadata_dtypes[field.name]
+            if field.name in tz:
+                numpy_dtype = (
+                    pd.Series([], dtype="M8[ns]").dt.tz_localize(tz[field.name]).dtype
+                )
+            else:
+                numpy_dtype = pandas_metadata_dtypes[field.name]
         else:
             numpy_dtype = field.type.to_pandas_dtype()
 
@@ -34,8 +48,7 @@ def _get_pyarrow_dtypes(schema, categories):
     return dtypes
 
 
-def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
-                      column_index_names):
+def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_names):
     """Get the final metadata for the dask.dataframe
 
     Parameters
@@ -56,9 +69,10 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
     -------
     meta : DataFrame
     """
-    meta = pd.DataFrame({c: pd.Series([], dtype=d)
-                         for (c, d) in file_dtypes.items()},
-                        columns=to_read_columns)
+    meta = pd.DataFrame(
+        {c: pd.Series([], dtype=d) for (c, d) in file_dtypes.items()},
+        columns=to_read_columns,
+    )
     df = meta[list(to_read_columns)]
 
     if not index_cols:
@@ -68,7 +82,7 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
     df = df.set_index(index_cols)
     # XXX: this means we can't roundtrip dataframes where the index names
     # is actually __index_level_0__
-    if len(index_cols) == 1 and index_cols[0] == '__index_level_0__':
+    if len(index_cols) == 1 and index_cols[0] == "__index_level_0__":
         df.index.name = None
 
     if len(column_index_names) == 1:

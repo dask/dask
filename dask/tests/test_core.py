@@ -5,8 +5,17 @@ import pickle
 
 from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
-from dask.core import (istask, get_dependencies, get_deps, flatten, subs,
-                       preorder_traversal, literal, quote, has_tasks)
+from dask.core import (
+    istask,
+    get_dependencies,
+    get_deps,
+    flatten,
+    subs,
+    preorder_traversal,
+    literal,
+    quote,
+    has_tasks,
+)
 
 
 def contains(a, b):
@@ -24,23 +33,25 @@ def test_istask():
     assert istask((inc, 1))
     assert not istask(1)
     assert not istask((1, 2))
-    f = namedtuple('f', ['x', 'y'])
+    f = namedtuple("f", ["x", "y"])
     assert not istask(f(sum, 2))
 
 
 def test_has_tasks():
-    dsk = {'a': [1, 2, 3],
-           'b': 'a',
-           'c': [1, (inc, 1)],
-           'd': [(sum, 'a')],
-           'e': ['a', 'b'],
-           'f': [['a', 'b'], 2, 3]}
-    assert not has_tasks(dsk, dsk['a'])
-    assert has_tasks(dsk, dsk['b'])
-    assert has_tasks(dsk, dsk['c'])
-    assert has_tasks(dsk, dsk['d'])
-    assert has_tasks(dsk, dsk['e'])
-    assert has_tasks(dsk, dsk['f'])
+    dsk = {
+        "a": [1, 2, 3],
+        "b": "a",
+        "c": [1, (inc, 1)],
+        "d": [(sum, "a")],
+        "e": ["a", "b"],
+        "f": [["a", "b"], 2, 3],
+    }
+    assert not has_tasks(dsk, dsk["a"])
+    assert has_tasks(dsk, dsk["b"])
+    assert has_tasks(dsk, dsk["c"])
+    assert has_tasks(dsk, dsk["d"])
+    assert has_tasks(dsk, dsk["e"])
+    assert has_tasks(dsk, dsk["f"])
 
 
 def test_preorder_traversal():
@@ -54,14 +65,6 @@ def test_preorder_traversal():
 
 class TestGet(GetFunctionTestMixin):
     get = staticmethod(core.get)
-
-
-class TestRecursiveGet(GetFunctionTestMixin):
-    get = staticmethod(lambda d, k: core.get(d, k, recursive=True))
-
-    def test_get_stack_limit(self):
-        # will blow stack in recursive mode
-        pass
 
 
 def test_GetFunctionTestMixin_class():
@@ -79,29 +82,28 @@ def test_GetFunctionTestMixin_class():
 
 
 def test_get_dependencies_nested():
-    dsk = {'x': 1, 'y': 2,
-           'z': (add, (inc, [['x']]), 'y')}
+    dsk = {"x": 1, "y": 2, "z": (add, (inc, [["x"]]), "y")}
 
-    assert get_dependencies(dsk, 'z') == set(['x', 'y'])
-    assert sorted(get_dependencies(dsk, 'z', as_list=True)) == ['x', 'y']
+    assert get_dependencies(dsk, "z") == set(["x", "y"])
+    assert sorted(get_dependencies(dsk, "z", as_list=True)) == ["x", "y"]
 
 
 def test_get_dependencies_empty():
-    dsk = {'x': (inc,)}
-    assert get_dependencies(dsk, 'x') == set()
-    assert get_dependencies(dsk, 'x', as_list=True) == []
+    dsk = {"x": (inc,)}
+    assert get_dependencies(dsk, "x") == set()
+    assert get_dependencies(dsk, "x", as_list=True) == []
 
 
 def test_get_dependencies_list():
-    dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
-    assert get_dependencies(dsk, 'z') == set(['x', 'y'])
-    assert sorted(get_dependencies(dsk, 'z', as_list=True)) == ['x', 'y']
+    dsk = {"x": 1, "y": 2, "z": ["x", [(inc, "y")]]}
+    assert get_dependencies(dsk, "z") == set(["x", "y"])
+    assert sorted(get_dependencies(dsk, "z", as_list=True)) == ["x", "y"]
 
 
 def test_get_dependencies_task():
-    dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
-    assert get_dependencies(dsk, task=(inc, 'x')) == set(['x'])
-    assert get_dependencies(dsk, task=(inc, 'x'), as_list=True) == ['x']
+    dsk = {"x": 1, "y": 2, "z": ["x", [(inc, "y")]]}
+    assert get_dependencies(dsk, task=(inc, "x")) == set(["x"])
+    assert get_dependencies(dsk, task=(inc, "x"), as_list=True) == ["x"]
 
 
 def test_get_dependencies_nothing():
@@ -110,18 +112,20 @@ def test_get_dependencies_nothing():
 
 
 def test_get_dependencies_many():
-    dsk = {'a': [1, 2, 3],
-           'b': 'a',
-           'c': [1, (inc, 1)],
-           'd': [(sum, 'c')],
-           'e': ['a', 'b', 'zzz'],
-           'f': [['a', 'b'], 2, 3]}
+    dsk = {
+        "a": [1, 2, 3],
+        "b": "a",
+        "c": [1, (inc, 1)],
+        "d": [(sum, "c")],
+        "e": ["a", "b", "zzz"],
+        "f": [["a", "b"], 2, 3],
+    }
 
-    tasks = [dsk[k] for k in ('d', 'f')]
+    tasks = [dsk[k] for k in ("d", "f")]
     s = get_dependencies(dsk, task=tasks)
-    assert s == {'a', 'b', 'c'}
+    assert s == {"a", "b", "c"}
     s = get_dependencies(dsk, task=tasks, as_list=True)
-    assert sorted(s) == ['a', 'b', 'c']
+    assert sorted(s) == ["a", "b", "c"]
 
     s = get_dependencies(dsk, task=[])
     assert s == set()
@@ -134,41 +138,45 @@ def test_get_deps():
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
-    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    {'a': set(), 'b': {'a'}, 'c': {'b'}}
     >>> dependents
-    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
-    dsk = {'a': [1, 2, 3],
-           'b': 'a',
-           'c': [1, (inc, 1)],
-           'd': [(sum, 'c')],
-           'e': ['b', 'zzz', 'b'],
-           'f': [['a', 'b'], 2, 3]}
+    dsk = {
+        "a": [1, 2, 3],
+        "b": "a",
+        "c": [1, (inc, 1)],
+        "d": [(sum, "c")],
+        "e": ["b", "zzz", "b"],
+        "f": [["a", "b"], 2, 3],
+    }
     dependencies, dependents = get_deps(dsk)
-    assert dependencies == {'a': set(),
-                            'b': {'a'},
-                            'c': set(),
-                            'd': {'c'},
-                            'e': {'b'},
-                            'f': {'a', 'b'},
-                            }
-    assert dependents == {'a': {'b', 'f'},
-                          'b': {'e', 'f'},
-                          'c': {'d'},
-                          'd': set(),
-                          'e': set(),
-                          'f': set(),
-                          }
+    assert dependencies == {
+        "a": set(),
+        "b": {"a"},
+        "c": set(),
+        "d": {"c"},
+        "e": {"b"},
+        "f": {"a", "b"},
+    }
+    assert dependents == {
+        "a": {"b", "f"},
+        "b": {"e", "f"},
+        "c": {"d"},
+        "d": set(),
+        "e": set(),
+        "f": set(),
+    }
 
 
 def test_flatten():
     assert list(flatten(())) == []
-    assert list(flatten('foo')) == ['foo']
+    assert list(flatten("foo")) == ["foo"]
 
 
 def test_subs():
-    assert subs((sum, [1, 'x']), 'x', 2) == (sum, [1, 2])
-    assert subs((sum, [1, ['x']]), 'x', 2) == (sum, [1, [2]])
+    assert subs((sum, [1, "x"]), "x", 2) == (sum, [1, 2])
+    assert subs((sum, [1, ["x"]]), "x", 2) == (sum, [1, [2]])
 
 
 class MutateOnEq(object):
@@ -185,9 +193,9 @@ def test_subs_no_key_data_eq():
     # compare keys (scalars) with values (which could be arrays)`subs` never
     # tries to compare keys (scalars) with values (which could be arrays).
     a = MutateOnEq()
-    subs(a, 'x', 1)
+    subs(a, "x", 1)
     assert a.hit_eq == 0
-    subs((add, a, 'x'), 'x', 1)
+    subs((add, a, "x"), "x", 1)
     assert a.hit_eq == 0
 
 
@@ -203,7 +211,7 @@ def test_subs_with_unfriendly_eq():
     class MyException(Exception):
         pass
 
-    class F():
+    class F:
         def __eq__(self, other):
             raise MyException()
 
@@ -218,7 +226,7 @@ def test_subs_with_surprisingly_friendly_eq():
         return
     else:
         df = pd.DataFrame()
-        assert subs(df, 'x', 1) is df
+        assert subs(df, "x", 1) is df
 
 
 def test_subs_unexpected_hashable_key():
@@ -236,11 +244,10 @@ def test_subs_unexpected_hashable_key():
 
 
 def test_quote():
-    literals = [[1, 2, 3], (add, 1, 2),
-                [1, [2, 3]], (add, 1, (add, 2, 3))]
+    literals = [[1, 2, 3], (add, 1, 2), [1, [2, 3]], (add, 1, (add, 2, 3))]
 
     for l in literals:
-        assert core.get({'x': quote(l)}, 'x') == l
+        assert core.get({"x": quote(l)}, "x") == l
 
 
 def test_literal_serializable():

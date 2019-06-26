@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import math
 import os
 import re
+import pathlib
 
 from toolz import identity
 
@@ -37,55 +38,51 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     "url_query": "q=1", "extra": "value"}
     """
     # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
-        return {'protocol': 'file',
-                'path': urlpath}
+    if re.match(r"^[a-zA-Z]:[\\/]", urlpath):
+        return {"protocol": "file", "path": urlpath}
 
     parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or 'file'
+    protocol = parsed_path.scheme or "file"
     path = parsed_path.path
-    if protocol == 'file':
+    if protocol == "file":
         # Special case parsing file protocol URL on Windows according to:
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        windows_path = re.match(r"^/([a-zA-Z])[:|]([\\/].*)$", path)
         if windows_path:
-            path = '%s:%s' % windows_path.groups()
+            path = "%s:%s" % windows_path.groups()
 
-    if protocol in ['http', 'https']:
+    if protocol in ["http", "https"]:
         # for HTTP, we don't want to parse, as requests will anyway
-        return {'protocol': protocol, 'path': urlpath}
+        return {"protocol": protocol, "path": urlpath}
 
-    options = {
-        'protocol': protocol,
-        'path': path,
-    }
+    options = {"protocol": protocol, "path": path}
 
     if parsed_path.netloc:
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        host = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        host = parsed_path.netloc.rsplit("@", 1)[-1].rsplit(":", 1)[0]
 
         # For gcs and s3 the netloc is actually the bucket name, so we want to
         # include it in the path. It feels a bit wrong to hardcode this, but
         # the number of filesystems where this matters is small, so this should
         # be fine to include:
-        if protocol in ('s3', 'gcs', 'gs'):
-            options['path'] = host + options['path']
+        if protocol in ("s3", "gcs", "gs"):
+            options["path"] = host + options["path"]
         else:
-            options['host'] = host
+            options["host"] = host
 
         if parsed_path.port:
-            options['port'] = parsed_path.port
+            options["port"] = parsed_path.port
         if parsed_path.username:
-            options['username'] = parsed_path.username
+            options["username"] = parsed_path.username
         if parsed_path.password:
-            options['password'] = parsed_path.password
+            options["password"] = parsed_path.password
 
     if parsed_path.query:
-        options['url_query'] = parsed_path.query
+        options["url_query"] = parsed_path.query
     if parsed_path.fragment:
-        options['url_fragment'] = parsed_path.fragment
+        options["url_fragment"] = parsed_path.fragment
 
     if inherit_storage_options:
         update_storage_options(options, inherit_storage_options)
@@ -98,13 +95,16 @@ def update_storage_options(options, inherited=None):
         inherited = {}
     collisions = set(options) & set(inherited)
     if collisions:
-        collisions = '\n'.join('- %r' % k for k in collisions)
-        raise KeyError("Collision between inferred and specified storage "
-                       "options:\n%s")
+        collisions = "\n".join("- %r" % k for k in collisions)
+        raise KeyError(
+            "Collision between inferred and specified storage "
+            "options:\n%s" % collisions
+        )
     options.update(inherited)
 
 
 if PY2:
+
     class SeekableFile(object):
         def __init__(self, file):
             if isinstance(file, SeekableFile):  # idempotent
@@ -118,13 +118,13 @@ if PY2:
             try:
                 return self.file.readable()
             except AttributeError:
-                return 'r' in self.file.mode
+                return "r" in self.file.mode
 
         def writable(self):
             try:
                 return self.file.writable()
             except AttributeError:
-                return 'w' in self.file.mode
+                return "w" in self.file.mode
 
         def read1(self, *args, **kwargs):  # https://bugs.python.org/issue12591
             return self.file.read(*args, **kwargs)
@@ -134,15 +134,17 @@ if PY2:
 
         def __getattr__(self, key):
             return getattr(self.file, key)
+
+
 else:
     SeekableFile = identity
 
 
-compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
+compressions = {"gz": "gzip", "bz2": "bz2", "xz": "xz"}
 
 
 def infer_compression(filename):
-    extension = os.path.splitext(filename)[-1].strip('.')
+    extension = os.path.splitext(filename)[-1].strip(".")
     return compressions.get(extension, None)
 
 
@@ -164,7 +166,7 @@ def seek_delimiter(file, delimiter, blocksize):
     if file.tell() == 0:
         return
 
-    last = b''
+    last = b""
     while True:
         current = file.read(blocksize)
         if not current:
@@ -176,7 +178,7 @@ def seek_delimiter(file, delimiter, blocksize):
             return
         except (OSError, ValueError):
             pass
-        last = full[-len(delimiter):]
+        last = full[-len(delimiter) :]
 
 
 def read_block(f, offset, length, delimiter=None):
@@ -219,13 +221,13 @@ def read_block(f, offset, length, delimiter=None):
         return f.read()
 
     if delimiter:
-        seek_delimiter(f, delimiter, 2**16)
+        seek_delimiter(f, delimiter, 2 ** 16)
         start = f.tell()
         length -= start - offset
 
         try:
             f.seek(start + length)
-            seek_delimiter(f, delimiter, 2**16)
+            seek_delimiter(f, delimiter, 2 ** 16)
         except (OSError, ValueError):
             f.seek(0, 2)
         end = f.tell()
@@ -265,3 +267,32 @@ def build_name_function(max_int):
         return str(i).zfill(pad_length)
 
     return name_function
+
+
+def stringify_path(filepath):
+    """ Attempt to convert a path-like object to a string.
+
+    Parameters
+    ----------
+    filepath : object to be converted
+
+    Returns
+    -------
+    filepath_str : maybe a string version of the object
+
+    Notes
+    -----
+    Objects supporting the fspath protocol (Python 3.6+) are coerced
+    according to its __fspath__ method.
+
+    For backwards compatibility with older Python version, pathlib.Path
+    objects are specially coerced.
+
+    Any other object is passed through unchanged, which includes bytes,
+    strings, buffers, or anything else that's not even path-like.
+    """
+    if hasattr(filepath, "__fspath__"):
+        return filepath.__fspath__()
+    elif isinstance(filepath, pathlib.Path):
+        return str(filepath)
+    return filepath

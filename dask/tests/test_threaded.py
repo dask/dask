@@ -7,26 +7,43 @@ from time import time, sleep
 
 import pytest
 
-from dask.context import set_options
+import dask
 from dask.compatibility import PY2
 from dask.threaded import get
 from dask.utils_test import inc, add
 
 
 def test_get():
-    dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
-    assert get(dsk, 'w') == 4
-    assert get(dsk, ['w', 'z']) == (4, 2)
+    dsk = {"x": 1, "y": 2, "z": (inc, "x"), "w": (add, "z", "y")}
+    assert get(dsk, "w") == 4
+    assert get(dsk, ["w", "z"]) == (4, 2)
 
 
 def test_nested_get():
-    dsk = {'x': 1, 'y': 2, 'a': (add, 'x', 'y'), 'b': (sum, ['x', 'y'])}
-    assert get(dsk, ['a', 'b']) == (3, 3)
+    dsk = {"x": 1, "y": 2, "a": (add, "x", "y"), "b": (sum, ["x", "y"])}
+    assert get(dsk, ["a", "b"]) == (3, 3)
 
 
 def test_get_without_computation():
-    dsk = {'x': 1}
-    assert get(dsk, 'x') == 1
+    dsk = {"x": 1}
+    assert get(dsk, "x") == 1
+
+
+def test_broken_callback():
+    from dask.callbacks import Callback
+
+    def _f_ok(*args, **kwargs):
+        pass
+
+    def _f_broken(*args, **kwargs):
+        raise ValueError("my_exception")
+
+    dsk = {"x": 1}
+
+    with Callback(start=_f_broken, finish=_f_ok):
+        with Callback(start=_f_ok, finish=_f_ok):
+            with pytest.raises(ValueError, match="my_exception"):
+                get(dsk, "x")
 
 
 def bad(x):
@@ -34,22 +51,35 @@ def bad(x):
 
 
 def test_exceptions_rise_to_top():
-    dsk = {'x': 1, 'y': (bad, 'x')}
-    pytest.raises(ValueError, lambda: get(dsk, 'y'))
+    dsk = {"x": 1, "y": (bad, "x")}
+    pytest.raises(ValueError, lambda: get(dsk, "y"))
 
 
 def test_reuse_pool():
     pool = ThreadPool()
-    with set_options(pool=pool):
-        assert get({'x': (inc, 1)}, 'x') == 2
-        assert get({'x': (inc, 1)}, 'x') == 2
+    with dask.config.set(pool=pool):
+        assert get({"x": (inc, 1)}, "x") == 2
+        assert get({"x": (inc, 1)}, "x") == 2
+
+
+@pytest.mark.skipif(PY2, reason="threading API changed")
+def test_pool_kwarg():
+    def f():
+        sleep(0.01)
+        return threading.get_ident()
+
+    dsk = {("x", i): (f,) for i in range(30)}
+    dsk["x"] = (len, (set, [("x", i) for i in range(len(dsk))]))
+
+    with ThreadPool(3) as pool:
+        assert get(dsk, "x", pool=pool) == 3
 
 
 def test_threaded_within_thread():
     L = []
 
     def f(i):
-        result = get({'x': (lambda: i,)}, 'x', num_workers=2)
+        result = get({"x": (lambda: i,)}, "x", num_workers=2)
         L.append(result)
 
     before = threading.active_count()
@@ -71,10 +101,10 @@ def test_threaded_within_thread():
 def test_dont_spawn_too_many_threads():
     before = threading.active_count()
 
-    dsk = {('x', i): (lambda: i,) for i in range(10)}
-    dsk['x'] = (sum, list(dsk))
+    dsk = {("x", i): (lambda: i,) for i in range(10)}
+    dsk["x"] = (sum, list(dsk))
     for i in range(20):
-        get(dsk, 'x', num_workers=4)
+        get(dsk, "x", num_workers=4)
 
     after = threading.active_count()
 
@@ -85,12 +115,12 @@ def test_thread_safety():
     def f(x):
         return 1
 
-    dsk = {'x': (sleep, 0.05), 'y': (f, 'x')}
+    dsk = {"x": (sleep, 0.05), "y": (f, "x")}
 
     L = []
 
     def test_f():
-        L.append(get(dsk, 'y'))
+        L.append(get(dsk, "y"))
 
     threads = []
     for i in range(20):
@@ -105,16 +135,17 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.xfail('xdist' in sys.modules,
-                   reason=("This test fails intermittently when using "
-                           "pytest-xdist (maybe)"))
+@pytest.mark.xfail(
+    "xdist" in sys.modules,
+    reason=("This test fails intermittently when using " "pytest-xdist (maybe)"),
+)
 def test_interrupt():
     # Python 2 and windows 2 & 3 both implement `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
     # Python 3 on other platforms requires sending SIGINT to the main thread.
     if PY2:
         from thread import interrupt_main
-    elif os.name == 'nt':
+    elif os.name == "nt":
         from _thread import interrupt_main
     else:
         main_thread = threading.get_ident()
@@ -125,13 +156,13 @@ def test_interrupt():
     def long_task():
         sleep(5)
 
-    dsk = {('x', i): (long_task,) for i in range(20)}
-    dsk['x'] = (len, list(dsk.keys()))
+    dsk = {("x", i): (long_task,) for i in range(20)}
+    dsk["x"] = (len, list(dsk.keys()))
     try:
         interrupter = threading.Timer(0.5, interrupt_main)
         interrupter.start()
         start = time()
-        get(dsk, 'x')
+        get(dsk, "x")
     except KeyboardInterrupt:
         pass
     except Exception:

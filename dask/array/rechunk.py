@@ -18,10 +18,12 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
+from .utils import validate_axis
 from .wrap import empty
-from .. import config, sharedict
+from .. import config
 
 
 def cumdims_label(chunks, const):
@@ -31,9 +33,10 @@ def cumdims_label(chunks, const):
     [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
      (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
     """
-    return [tuple(zip((const,) * (1 + len(bds)),
-                      accumulate(add, (0,) + bds)))
-            for bds in chunks]
+    return [
+        tuple(zip((const,) * (1 + len(bds)), accumulate(add, (0,) + bds)))
+        for bds in chunks
+    ]
 
 
 def _breakpoints(cumold, cumnew):
@@ -84,11 +87,11 @@ def _intersect_1d(breaks):
     for idx in range(1, len(breaks)):
         label, br = breaks[idx]
         last_label, last_br = breaks[idx - 1]
-        if last_label == 'n':
+        if last_label == "n":
             if ret_next:
                 ret.append(ret_next)
                 ret_next = []
-        if last_label == 'o':
+        if last_label == "o":
             start = 0
         else:
             start = last_end
@@ -97,7 +100,7 @@ def _intersect_1d(breaks):
         if br == last_br:
             continue
         ret_next.append((old_idx, slice(start, end)))
-        if label == 'o':
+        if label == "o":
             old_idx += 1
             start = 0
 
@@ -128,16 +131,16 @@ def _old_to_new(old_chunks, new_chunks):
     n_missing = [sum(math.isnan(y) for y in x) for x in old_chunks]
     n_missing2 = [sum(math.isnan(y) for y in x) for x in new_chunks]
 
-    cmo = cumdims_label(old_known, 'o')
-    cmn = cumdims_label(new_known, 'n')
+    cmo = cumdims_label(old_known, "o")
+    cmn = cumdims_label(new_known, "n")
 
     sums = [sum(o) for o in old_known]
     sums2 = [sum(n) for n in new_known]
 
     if not sums == sums2:
-        raise ValueError('Cannot change dimensions from %r to %r' % (sums, sums2))
+        raise ValueError("Cannot change dimensions from %r to %r" % (sums, sums2))
     if not n_missing == n_missing2:
-        raise ValueError('Chunks must be unchanging along unknown dimensions')
+        raise ValueError("Chunks must be unchanging along unknown dimensions")
 
     old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
     for idx, missing in enumerate(n_missing):
@@ -175,8 +178,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks, threshold=None,
-            block_size_limit=None):
+def rechunk(x, chunks, threshold=None, block_size_limit=None):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -214,15 +216,15 @@ def rechunk(x, chunks, threshold=None,
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
     if isinstance(chunks, dict):
-        chunks = dict(chunks)
+        chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
             if i not in chunks:
                 chunks[i] = x.chunks[i]
     if isinstance(chunks, (tuple, list)):
-        chunks = tuple(lc if lc is not None else rc
-                       for lc, rc in zip(chunks, x.chunks))
-    chunks = normalize_chunks(chunks, x.shape, limit=block_size_limit,
-                              dtype=x.dtype, previous_chunks=x.chunks)
+        chunks = tuple(lc if lc is not None else rc for lc, rc in zip(chunks, x.chunks))
+    chunks = normalize_chunks(
+        chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
+    )
 
     if chunks == x.chunks:
         return x
@@ -235,8 +237,9 @@ def rechunk(x, chunks, threshold=None,
         if new != old and not math.isnan(old) and not math.isnan(new):
             raise ValueError("Provided chunks are not consistent with shape")
 
-    steps = plan_rechunk(x.chunks, chunks, x.dtype.itemsize,
-                         threshold, block_size_limit)
+    steps = plan_rechunk(
+        x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
+    )
     for c in steps:
         x = _compute_rechunk(x, c)
 
@@ -256,8 +259,9 @@ def estimate_graph_size(old_chunks, new_chunks):
     """
     # Estimate the number of intermediate blocks that will be produced
     # (we don't use intersect_chunks() which is much more expensive)
-    crossed_size = reduce(mul, (len(oc) + len(nc)
-                                for oc, nc in zip(old_chunks, new_chunks)))
+    crossed_size = reduce(
+        mul, (len(oc) + len(nc) for oc, nc in zip(old_chunks, new_chunks))
+    )
     return crossed_size
 
 
@@ -299,8 +303,10 @@ def merge_to_number(desired_chunks, max_number):
     desired_width = sum(desired_chunks) // max_number
     nmerges = len(desired_chunks) - max_number
 
-    heap = [(desired_chunks[i] + desired_chunks[i + 1], i, i + 1)
-            for i in range(len(desired_chunks) - 1)]
+    heap = [
+        (desired_chunks[i] + desired_chunks[i + 1], i, i + 1)
+        for i in range(len(desired_chunks) - 1)
+    ]
     heapq.heapify(heap)
 
     chunks = list(desired_chunks)
@@ -321,7 +327,7 @@ def merge_to_number(desired_chunks, max_number):
             continue
         # Merge
         assert chunks[i] != 0
-        chunks[i] = 0   # mark deleted
+        chunks[i] = 0  # mark deleted
         chunks[j] = width
         nmerges -= 1
 
@@ -352,8 +358,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     # Our goal is to reduce the number of nodes in the rechunk graph
     # by merging some adjacent chunks, so consider dimensions where we can
     # reduce the # of chunks
-    merge_candidates = [dim for dim in range(ndim)
-                        if graph_size_effect[dim] <= 1.0]
+    merge_candidates = [dim for dim in range(ndim) if graph_size_effect[dim] <= 1.0]
 
     # Merging along each dimension reduces the graph size by a certain factor
     # and increases memory largest block size by a certain factor.
@@ -378,7 +383,8 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     for dim in sorted_candidates:
         # Examine this dimension for possible graph reduction
         new_largest_block_size = (
-            largest_block_size * new_largest_width[dim] // (old_largest_width[dim] or 1))
+            largest_block_size * new_largest_width[dim] // (old_largest_width[dim] or 1)
+        )
         if new_largest_block_size <= block_size_limit:
             # Full replacement by new chunks is possible
             chunks[dim] = new_chunks[dim]
@@ -429,9 +435,9 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
     return tuple(chunks)
 
 
-def plan_rechunk(old_chunks, new_chunks, itemsize,
-                 threshold=None,
-                 block_size_limit=None):
+def plan_rechunk(
+    old_chunks, new_chunks, itemsize, threshold=None, block_size_limit=None
+):
     """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 
@@ -451,8 +457,8 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     No intermediate steps will be planned if any dimension of ``old_chunks``
     is unknown.
     """
-    threshold = threshold or config.get('array.rechunk-threshold')
-    block_size_limit = block_size_limit or config.get('array.chunk-size')
+    threshold = threshold or config.get("array.rechunk-threshold")
+    block_size_limit = block_size_limit or config.get("array.chunk-size")
     if isinstance(block_size_limit, str):
         block_size_limit = parse_bytes(block_size_limit)
 
@@ -470,14 +476,12 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     # Fix block_size_limit if too small for either old_chunks or new_chunks
     largest_old_block = _largest_block_size(old_chunks)
     largest_new_block = _largest_block_size(new_chunks)
-    block_size_limit = max([block_size_limit,
-                            largest_old_block,
-                            largest_new_block,
-                            ])
+    block_size_limit = max([block_size_limit, largest_old_block, largest_new_block])
 
     # The graph size above which to optimize
-    graph_size_threshold = threshold * (_number_of_blocks(old_chunks) +
-                                        _number_of_blocks(new_chunks))
+    graph_size_threshold = threshold * (
+        _number_of_blocks(old_chunks) + _number_of_blocks(new_chunks)
+    )
 
     current_chunks = old_chunks
     first_pass = True
@@ -495,10 +499,12 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
             # 1) getting nearer the goal 2) reducing the largest block size
             # to make place for the following merge.
             # To see this pass in action, make the block_size_limit very small.
-            chunks = find_split_rechunk(current_chunks, new_chunks,
-                                        graph_size * threshold)
-        chunks, memory_limit_hit = find_merge_rechunk(chunks, new_chunks,
-                                                      block_size_limit)
+            chunks = find_split_rechunk(
+                current_chunks, new_chunks, graph_size * threshold
+            )
+        chunks, memory_limit_hit = find_merge_rechunk(
+            chunks, new_chunks, block_size_limit
+        )
         if (chunks == current_chunks and not first_pass) or chunks == new_chunks:
             break
         steps.append(chunks)
@@ -522,13 +528,13 @@ def _compute_rechunk(x, chunks):
     x2 = dict()
     intermediates = dict()
     token = tokenize(x, chunks)
-    merge_temp_name = 'rechunk-merge-' + token
-    split_temp_name = 'rechunk-split-' + token
+    merge_name = "rechunk-merge-" + token
+    split_name = "rechunk-split-" + token
     split_name_suffixes = count()
 
     # Pre-allocate old block references, to allow re-use and reduce the
     # graph's memory footprint a bit.
-    old_blocks = np.empty([len(c) for c in x.chunks], dtype='O')
+    old_blocks = np.empty([len(c) for c in x.chunks], dtype="O")
     for index in np.ndindex(old_blocks.shape):
         old_blocks[index] = (x.name,) + index
 
@@ -536,21 +542,22 @@ def _compute_rechunk(x, chunks):
     new_index = product(*(range(len(c)) for c in chunks))
 
     for new_idx, cross1 in zip(new_index, crossed):
-        key = (merge_temp_name,) + new_idx
+        key = (merge_name,) + new_idx
         old_block_indices = [[cr[i][0] for cr in cross1] for i in range(ndim)]
-        subdims1 = [len(set(old_block_indices[i]))
-                    for i in range(ndim)]
+        subdims1 = [len(set(old_block_indices[i])) for i in range(ndim)]
 
-        rec_cat_arg = np.empty(subdims1, dtype='O')
+        rec_cat_arg = np.empty(subdims1, dtype="O")
         rec_cat_arg_flat = rec_cat_arg.flat
 
         # Iterate over the old blocks required to build the new block
         for rec_cat_index, ind_slices in enumerate(cross1):
             old_block_index, slices = zip(*ind_slices)
-            name = (split_temp_name, next(split_name_suffixes))
+            name = (split_name, next(split_name_suffixes))
             old_index = old_blocks[old_block_index][1:]
-            if all(slc.start == 0 and slc.stop == x.chunks[i][ind]
-                   for i, (slc, ind) in enumerate(zip(slices, old_index))):
+            if all(
+                slc.start == 0 and slc.stop == x.chunks[i][ind]
+                for i, (slc, ind) in enumerate(zip(slices, old_index))
+            ):
                 rec_cat_arg_flat[rec_cat_index] = old_blocks[old_block_index]
             else:
                 intermediates[name] = (getitem, old_blocks[old_block_index], slices)
@@ -566,12 +573,12 @@ def _compute_rechunk(x, chunks):
 
     del old_blocks, new_index
 
-    x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
-    return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
+    layer = toolz.merge(x2, intermediates)
+    graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
+    return Array(graph, merge_name, chunks, meta=x)
 
 
 class _PrettyBlocks(object):
-
     def __init__(self, blocks):
         self.blocks = blocks
 
@@ -621,9 +628,9 @@ def format_blocks(blocks):
     >>> format_blocks((10, 10, 5, 6, 2, 2, 2, 7))
     2*[10] | [5, 6] | 3*[2] | [7]
     """
-    assert (isinstance(blocks, tuple) and
-            all(isinstance(x, int) or math.isnan(x)
-                for x in blocks))
+    assert isinstance(blocks, tuple) and all(
+        isinstance(x, int) or math.isnan(x) for x in blocks
+    )
     return _PrettyBlocks(blocks)
 
 

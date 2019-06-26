@@ -7,6 +7,7 @@ import pytest
 import dask.array as da
 from dask.base import tokenize
 from dask.array.utils import assert_eq
+from copy import deepcopy
 
 pytest.importorskip("dask.array.ma")
 
@@ -28,12 +29,29 @@ def test_from_array_masked_array():
     assert_eq(dm, m)
 
 
+def test_copy_deepcopy():
+    t = np.ma.masked_array([1, 2], mask=[0, 1])
+    x = da.from_array(t, chunks=t.shape, asarray=False)
+    # x = da.arange(5, chunks=(2,))
+    y = x.copy()
+    memo = {}
+    y2 = deepcopy(x, memo=memo)
+
+    xx = da.ma.masked_where([False, True], [1, 2])
+    assert_eq(x, xx)
+
+    assert_eq(y, t)
+    assert isinstance(y.compute(), np.ma.masked_array)
+    assert_eq(y2, t)
+    assert isinstance(y2.compute(), np.ma.masked_array)
+
+
 functions = [
     lambda x: x,
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x**2,
+    lambda x: x ** 2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],
@@ -59,7 +77,7 @@ functions = [
 ]
 
 
-@pytest.mark.parametrize('func', functions)
+@pytest.mark.parametrize("func", functions)
 def test_basic(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.4] = 0
@@ -85,15 +103,22 @@ def test_tensordot():
     xx = da.ma.masked_equal(x, 0)
     yy = da.ma.masked_equal(y, 0)
 
-    assert_eq(da.tensordot(x, y, axes=(2, 0)),
-              da.ma.filled(da.tensordot(xx, yy, axes=(2, 0)), 0))
-    assert_eq(da.tensordot(x, y, axes=(1, 1)),
-              da.ma.filled(da.tensordot(xx, yy, axes=(1, 1)), 0))
-    assert_eq(da.tensordot(x, y, axes=((1, 2), (1, 0))),
-              da.ma.filled(da.tensordot(xx, yy, axes=((1, 2), (1, 0))), 0))
+    assert_eq(
+        da.tensordot(x, y, axes=(2, 0)),
+        da.ma.filled(da.tensordot(xx, yy, axes=(2, 0)), 0),
+    )
+    assert_eq(
+        da.tensordot(x, y, axes=(1, 1)),
+        da.ma.filled(da.tensordot(xx, yy, axes=(1, 1)), 0),
+    )
+    assert_eq(
+        da.tensordot(x, y, axes=((1, 2), (1, 0))),
+        da.ma.filled(da.tensordot(xx, yy, axes=((1, 2), (1, 0))), 0),
+    )
 
 
-@pytest.mark.parametrize('func', functions)
+@pytest.mark.parametrize("func", functions)
+@pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
 def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     y = da.random.random((2, 3, 4), chunks=(1, 2, 2))
@@ -106,10 +131,11 @@ def test_mixed_concatenate(func):
 
     dd = func(d)
     ss = func(s)
-    assert_eq(dd, ss)
+    assert_eq(dd, ss, check_meta=False)
 
 
-@pytest.mark.parametrize('func', functions)
+@pytest.mark.parametrize("func", functions)
+@pytest.mark.filterwarnings("ignore::numpy.ComplexWarning")  # abs() in assert_eq
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
     d[d < 0.4] = 0
@@ -120,7 +146,7 @@ def test_mixed_random(func):
     dd = func(d)
     ss = func(s)
 
-    assert_eq(dd, ss)
+    assert_eq(dd, ss, check_meta=False)
 
 
 def test_mixed_output_type():
@@ -174,7 +200,7 @@ def test_creation_functions():
     with pytest.raises(ValueError):
         da.ma.masked_values(dx, dy)
 
-    y = x.astype('f8')
+    y = x.astype("f8")
     y[0, 0] = y[7, 5] = np.nan
     dy = da.from_array(y, chunks=5)
 
@@ -183,8 +209,7 @@ def test_creation_functions():
     my = np.ma.masked_greater(y, 0)
     dmy = da.ma.masked_greater(dy, 0)
 
-    assert_eq(da.ma.fix_invalid(dmy, fill_value=0),
-              np.ma.fix_invalid(my, fill_value=0))
+    assert_eq(da.ma.fix_invalid(dmy, fill_value=0), np.ma.fix_invalid(my, fill_value=0))
 
 
 def test_filled():
@@ -201,16 +226,17 @@ def test_filled():
 def assert_eq_ma(a, b):
     res = a.compute()
     assert type(res) == type(b)
-    if hasattr(res, 'mask'):
+    if hasattr(res, "mask"):
         np.testing.assert_equal(res.mask, b.mask)
         a = da.ma.filled(a)
         b = np.ma.filled(b)
     assert_eq(a, b, equal_nan=True)
 
 
-@pytest.mark.parametrize('dtype', ('i8', 'f8'))
-@pytest.mark.parametrize('reduction', ['sum', 'prod', 'mean', 'var', 'std',
-                                       'min', 'max', 'any', 'all'])
+@pytest.mark.parametrize("dtype", ("i8", "f8"))
+@pytest.mark.parametrize(
+    "reduction", ["sum", "prod", "mean", "var", "std", "min", "max", "any", "all"]
+)
 def test_reductions(dtype, reduction):
     x = (np.random.RandomState(42).rand(11, 11) * 10).astype(dtype)
     dx = da.from_array(x, chunks=(4, 4))
@@ -222,17 +248,20 @@ def test_reductions(dtype, reduction):
 
     assert_eq_ma(dfunc(mdx), func(mx))
     assert_eq_ma(dfunc(mdx, axis=0), func(mx, axis=0))
-    assert_eq_ma(dfunc(mdx, keepdims=True, split_every=4),
-                 func(mx, keepdims=True))
+    assert_eq_ma(dfunc(mdx, keepdims=True, split_every=4), func(mx, keepdims=True))
     assert_eq_ma(dfunc(mdx, axis=0, split_every=2), func(mx, axis=0))
-    assert_eq_ma(dfunc(mdx, axis=0, keepdims=True, split_every=2),
-                 func(mx, axis=0, keepdims=True))
+    assert_eq_ma(
+        dfunc(mdx, axis=0, keepdims=True, split_every=2),
+        func(mx, axis=0, keepdims=True),
+    )
     assert_eq_ma(dfunc(mdx, axis=1, split_every=2), func(mx, axis=1))
-    assert_eq_ma(dfunc(mdx, axis=1, keepdims=True, split_every=2),
-                 func(mx, axis=1, keepdims=True))
+    assert_eq_ma(
+        dfunc(mdx, axis=1, keepdims=True, split_every=2),
+        func(mx, axis=1, keepdims=True),
+    )
 
 
-@pytest.mark.parametrize('reduction', ['argmin', 'argmax'])
+@pytest.mark.parametrize("reduction", ["argmin", "argmax"])
 def test_arg_reductions(reduction):
     x = np.random.random((10, 10, 10))
     dx = da.from_array(x, chunks=(3, 4, 5))
@@ -272,20 +301,27 @@ def test_accessors():
 
 
 def test_masked_array():
-    x = np.random.random((10, 10)).astype('f4')
+    x = np.random.random((10, 10)).astype("f4")
     dx = da.from_array(x, chunks=(3, 4))
     f1 = da.from_array(np.array(1), chunks=())
 
     fill_values = [(None, None), (0.5, 0.5), (1, f1)]
     for data, (df, f) in product([x, dx], fill_values):
-        assert_eq(da.ma.masked_array(data, fill_value=df),
-                  np.ma.masked_array(x, fill_value=f))
-        assert_eq(da.ma.masked_array(data, mask=data > 0.4, fill_value=df),
-                  np.ma.masked_array(x, mask=x > 0.4, fill_value=f))
-        assert_eq(da.ma.masked_array(data, mask=data > 0.4, fill_value=df),
-                  np.ma.masked_array(x, mask=x > 0.4, fill_value=f))
-        assert_eq(da.ma.masked_array(data, fill_value=df, dtype='f8'),
-                  np.ma.masked_array(x, fill_value=f, dtype='f8'))
+        assert_eq(
+            da.ma.masked_array(data, fill_value=df), np.ma.masked_array(x, fill_value=f)
+        )
+        assert_eq(
+            da.ma.masked_array(data, mask=data > 0.4, fill_value=df),
+            np.ma.masked_array(x, mask=x > 0.4, fill_value=f),
+        )
+        assert_eq(
+            da.ma.masked_array(data, mask=data > 0.4, fill_value=df),
+            np.ma.masked_array(x, mask=x > 0.4, fill_value=f),
+        )
+        assert_eq(
+            da.ma.masked_array(data, fill_value=df, dtype="f8"),
+            np.ma.masked_array(x, fill_value=f, dtype="f8"),
+        )
 
     with pytest.raises(ValueError):
         da.ma.masked_array(dx, fill_value=dx)
@@ -313,3 +349,30 @@ def test_set_fill_value():
 
     with pytest.raises(ValueError):
         da.ma.set_fill_value(dmx, dx)
+
+
+def test_average_weights_with_masked_array():
+    mask = np.array([[True, False], [True, True], [False, True]])
+    data = np.arange(6).reshape((3, 2))
+    a = np.ma.array(data, mask=mask)
+    d_a = da.ma.masked_array(data=data, mask=mask, chunks=2)
+
+    weights = np.array([0.25, 0.75])
+    d_weights = da.from_array(weights, chunks=2)
+
+    np_avg = np.ma.average(a, weights=weights, axis=1)
+    da_avg = da.ma.average(d_a, weights=d_weights, axis=1)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_arithmetic_results_in_masked():
+    mask = np.array([[True, False], [True, True], [False, True]])
+    x = np.arange(6).reshape((3, 2))
+    masked = np.ma.array(x, mask=mask)
+    dx = da.from_array(x, chunks=(2, 2))
+
+    res = dx + masked
+    sol = x + masked
+    assert_eq(res, sol)
+    assert isinstance(res.compute(), np.ma.masked_array)

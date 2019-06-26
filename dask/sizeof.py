@@ -8,11 +8,12 @@ try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
+
     def getsizeof(x):
         return 100
 
 
-sizeof = Dispatch(name='sizeof')
+sizeof = Dispatch(name="sizeof")
 
 
 @sizeof.register(object)
@@ -26,6 +27,15 @@ def sizeof_default(o):
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
     return getsizeof(seq) + sum(map(sizeof, seq))
+
+
+@sizeof.register_lazy("cupy")
+def register_cupy():
+    import cupy
+
+    @sizeof.register(cupy.ndarray)
+    def sizeof_cupy_ndarray(x):
+        return int(x.nbytes)
 
 
 @sizeof.register_lazy("numpy")
@@ -85,6 +95,4 @@ def register_spmatrix():
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
-        return sum(
-            sizeof(v) for v in s.__dict__.values()
-        )
+        return sum(sizeof(v) for v in s.__dict__.values())

@@ -27,9 +27,10 @@ test_import () {
 conda create -n test-imports python=$PYTHON
 source activate test-imports
 
-(test_import "Core" "" "import dask, dask.threaded, dask.optimize") && \
+(test_import "Core" "" "import dask, dask.threaded, dask.optimization") && \
 (test_import "Delayed" "toolz" "import dask.delayed") && \
 (test_import "Bag" "toolz partd cloudpickle" "import dask.bag") && \
 (test_import "Array" "toolz numpy" "import dask.array") && \
 (test_import "Dataframe" "numpy pandas toolz partd cloudpickle" "import dask.dataframe") && \
+(test_import "Diagnostics" "bokeh" "import dask.diagnostics") && \
 (test_import "Distributed" "distributed s3fs" "import dask.distributed")

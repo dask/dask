@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps
-from collections import Iterator
 from numbers import Number
 
 import numpy as np
@@ -9,59 +8,150 @@ from toolz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
+from ..compatibility import Iterator
 
 
 @wraps(np.percentile)
-def _percentile(a, q, interpolation='linear'):
+def _percentile(a, q, interpolation="linear"):
     n = len(a)
     if not len(a):
         return None, n
     if isinstance(q, Iterator):
         q = list(q)
-    if a.dtype.name == 'category':
+    if a.dtype.name == "category":
         result = np.percentile(a.codes, q, interpolation=interpolation)
         import pandas as pd
+
         return pd.Categorical.from_codes(result, a.categories, a.ordered), n
     if np.issubdtype(a.dtype, np.datetime64):
-        a2 = a.astype('i8')
+        a2 = a.astype("i8")
         result = np.percentile(a2, q, interpolation=interpolation)
         return result.astype(a.dtype), n
     if not np.issubdtype(a.dtype, np.number):
-        interpolation = 'nearest'
+        interpolation = "nearest"
     return np.percentile(a, q, interpolation=interpolation), n
 
 
-def percentile(a, q, interpolation='linear'):
+def _tdigest_chunk(a):
+
+    from crick import TDigest
+
+    t = TDigest()
+    t.update(a)
+
+    return t
+
+
+def _percentiles_from_tdigest(qs, digests):
+
+    from crick import TDigest
+
+    t = TDigest()
+    t.merge(*digests)
+
+    return np.array(t.quantile(qs / 100.0))
+
+
+def percentile(a, q, interpolation="linear", method="default"):
     """ Approximate percentile of 1-D array
 
-    See :func:`numpy.percentile` for more information
+    Parameters
+    ----------
+    a : Array
+    q : array_like of float
+        Percentile or sequence of percentiles to compute, which must be between
+        0 and 100 inclusive.
+    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}, optional
+        The interpolation method to use when the desired percentile lies
+        between two data points ``i < j``. Only valid for ``method='dask'``.
+
+        * 'linear': ``i + (j - i) * fraction``, where ``fraction``
+        is the fractional part of the index surrounded by ``i``
+        and ``j``.
+        * 'lower': ``i``.
+        * 'higher': ``j``.
+        * 'nearest': ``i`` or ``j``, whichever is nearest.
+        * 'midpoint': ``(i + j) / 2``.
+
+    method : {'default', 'dask', 'tdigest'}, optional
+        What method to use. By default will use dask's internal custom
+        algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
+        floats and ints and fallback to the ``'dask'`` otherwise.
+
+    See Also
+    --------
+    numpy.percentile : Numpy's equivalent Percentile function
     """
     if not a.ndim == 1:
-        raise NotImplementedError(
-            "Percentiles only implemented for 1-d arrays")
+        raise NotImplementedError("Percentiles only implemented for 1-d arrays")
     if isinstance(q, Number):
         q = [q]
     q = np.array(q)
-    token = tokenize(a, list(q), interpolation)
-    name = 'percentile_chunk-' + token
-    dsk = dict(((name, i), (_percentile, (key), q, interpolation))
-               for i, key in enumerate(a.__dask_keys__()))
-
-    name2 = 'percentile-' + token
-    dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
-                         sorted(dsk), interpolation)}
+    token = tokenize(a, q, interpolation)
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
 
+    allowed_methods = ["default", "dask", "tdigest"]
+    if method not in allowed_methods:
+        raise ValueError("method can only be 'default', 'dask' or 'tdigest'")
+
+    if method == "default":
+        internal_method = "dask"
+    else:
+        internal_method = method
+
+    # Allow using t-digest if interpolation is allowed and dtype is of floating or integer type
+    if (
+        internal_method == "tdigest"
+        and interpolation == "linear"
+        and (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))
+    ):
+
+        from dask.utils import import_required
+
+        import_required(
+            "crick", "crick is a required dependency for using the t-digest " "method."
+        )
+
+        name = "percentile_tdigest_chunk-" + token
+        dsk = dict(
+            ((name, i), (_tdigest_chunk, (key)))
+            for i, key in enumerate(a.__dask_keys__())
+        )
+
+        name2 = "percentile_tdigest-" + token
+
+        dsk2 = {(name2, 0): (_percentiles_from_tdigest, q, sorted(dsk))}
+
+    # Otherwise use the custom percentile algorithm
+    else:
+
+        name = "percentile_chunk-" + token
+        dsk = dict(
+            ((name, i), (_percentile, (key), q, interpolation))
+            for i, key in enumerate(a.__dask_keys__())
+        )
+
+        name2 = "percentile-" + token
+        dsk2 = {
+            (name2, 0): (
+                merge_percentiles,
+                q,
+                [q] * len(a.chunks[0]),
+                sorted(dsk),
+                interpolation,
+            )
+        }
+
     dsk = merge(dsk, dsk2)
-    dsk = sharedict.merge(a.dask, (name2, dsk))
-    return Array(dsk, name2, chunks=((len(q),),), dtype=dtype)
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
+    return Array(graph, name2, chunks=((len(q),),), dtype=dtype)
 
 
-def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
+def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     """ Combine several percentile calculations of different data.
 
     Parameters
@@ -106,15 +196,18 @@ def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
 
     # TODO: Perform this check above in percentile once dtype checking is easy
     #       Here we silently change meaning
-    if vals[0].dtype.name == 'category':
-        result = merge_percentiles(finalq, qs, [v.codes for v in vals], interpolation, Ns)
+    if vals[0].dtype.name == "category":
+        result = merge_percentiles(
+            finalq, qs, [v.codes for v in vals], interpolation, Ns
+        )
         import pandas as pd
+
         return pd.Categorical.from_codes(result, vals[0].categories, vals[0].ordered)
     if not np.issubdtype(vals[0].dtype, np.number):
-        interpolation = 'nearest'
+        interpolation = "nearest"
 
     if len(vals) != len(qs) or len(Ns) != len(qs):
-        raise ValueError('qs, vals, and Ns parameters must be the same length')
+        raise ValueError("qs, vals, and Ns parameters must be the same length")
 
     # transform qs and Ns into number of observations between percentiles
     counts = []
@@ -147,21 +240,21 @@ def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
 
     # the behavior of different interpolation methods should be
     # investigated further.
-    if interpolation == 'linear':
+    if interpolation == "linear":
         rv = np.interp(desired_q, combined_q, combined_vals)
     else:
-        left = np.searchsorted(combined_q, desired_q, side='left')
-        right = np.searchsorted(combined_q, desired_q, side='right') - 1
-        np.minimum(left, len(combined_vals) - 1, left) # don't exceed max index
+        left = np.searchsorted(combined_q, desired_q, side="left")
+        right = np.searchsorted(combined_q, desired_q, side="right") - 1
+        np.minimum(left, len(combined_vals) - 1, left)  # don't exceed max index
         lower = np.minimum(left, right)
         upper = np.maximum(left, right)
-        if interpolation == 'lower':
+        if interpolation == "lower":
             rv = combined_vals[lower]
-        elif interpolation == 'higher':
+        elif interpolation == "higher":
             rv = combined_vals[upper]
-        elif interpolation == 'midpoint':
+        elif interpolation == "midpoint":
             rv = 0.5 * (combined_vals[lower] + combined_vals[upper])
-        elif interpolation == 'nearest':
+        elif interpolation == "nearest":
             lower_residual = np.abs(combined_q[lower] - desired_q)
             upper_residual = np.abs(combined_q[upper] - desired_q)
             mask = lower_residual > upper_residual
@@ -169,6 +262,8 @@ def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
             index[mask] = upper[mask]
             rv = combined_vals[index]
         else:
-            raise ValueError("interpolation can only be 'linear', 'lower', "
-                             "'higher', 'midpoint', or 'nearest'")
+            raise ValueError(
+                "interpolation can only be 'linear', 'lower', "
+                "'higher', 'midpoint', or 'nearest'"
+            )
     return rv
