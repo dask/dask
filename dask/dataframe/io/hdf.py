@@ -66,8 +66,10 @@ def to_hdf(
 
     Parameters
     ----------
-    path : string
-        Path to a target filename.  May contain a ``*`` to denote many filenames
+    path : string, pathlib.Path
+        Path to a target filename. Supports strings, ``pathlib.Path``, or any
+        object implementing the ``__fspath__`` protocol. May contain a ``*`` to
+        denote many filenames.
     key : string
         Datapath within the files.  May contain a ``*`` to denote many locations
     name_function : function
@@ -138,11 +140,13 @@ def to_hdf(
     single_file = True
     single_node = True
 
+    path = stringify_path(path)
+
     # if path is string, format using i_name
     if isinstance(path, str):
         if path.count("*") + key.count("*") > 1:
             raise ValueError(
-                "A maximum of one asterisk is accepted in file " "path and dataset key"
+                "A maximum of one asterisk is accepted in file path and dataset key"
             )
 
         fmt_obj = lambda path, i_name: path.replace("*", i_name)
@@ -151,7 +155,7 @@ def to_hdf(
             single_file = False
     else:
         if key.count("*") > 1:
-            raise ValueError("A maximum of one asterisk is accepted in " "dataset key")
+            raise ValueError("A maximum of one asterisk is accepted in dataset key")
 
         fmt_obj = lambda path, _: path
 
