@@ -1,6 +1,18 @@
 Changelog
 =========
 
+2.0.1 - 2019-06-26
+------------------
+
+We neglected to include ``python_requires=`` in our setup.py file, resulting in
+confusion for Python 2 users who erroneously get packages for 2.0.0.
+This is fixed in 2.0.1 and we have removed the 2.0.0 files from PyPI.
+
+-  Add python_requires entry to setup.py (:pr:`2807`) `Matthew Rocklin`_
+-  Correctly manage tasks beyond deque limit in TaskStream plot (:pr:`2797`) `Matthew Rocklin`_
+-  Fix diagnostics page for memory_limit=None (:pr:`2770`) `Brett Naul`_
+
+
 2.0.0 - 2019-06-25
 ------------------
 
