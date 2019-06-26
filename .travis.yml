@@ -4,6 +4,7 @@ dist: trusty
 os: linux
 
 _base_envs:
+  - &test TEST='true'
   - &test_and_lint TEST='true' LINT='true'
   - &coverage COVERAGE='true' PARALLEL='false'
   - &no_coverage COVERAGE='false' PARALLEL='true'
@@ -17,19 +18,10 @@ jobs:
   fast_finish: true
   include:
     - env:
-      - PYTHON=2.7
+      - PYTHON=3.5
       - NUMPY=1.13.0
       - PANDAS=0.21.1
-      - *test_and_lint
-      - *no_coverage
-      - *optimize
-      - *no_imports
-
-    - env:
-      - PYTHON=3.5
-      - NUMPY=1.14.1
-      - PANDAS=0.22.0
-      - *test_and_lint
+      - *test
       - *no_coverage
       - *no_optimize
       - *no_imports
@@ -89,7 +81,8 @@ install:
 script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
-  - if [[ $LINT == 'true' ]]; then flake8 dask; fi
+  - if [[ $LINT == 'true' ]]; then pip install flake8 ; flake8 dask; fi
+  - if [[ $LINT == 'true' ]]; then pip install black ; black dask --check; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 
 after_success:

@@ -3,10 +3,11 @@ import random
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
-sparse = pytest.importorskip('sparse')
+sparse = pytest.importorskip("sparse")
 if sparse:
     # Test failures on older versions of Numba.
     # Conda-Forge provides 0.35.0 on windows right now, causing failures like
@@ -19,7 +20,7 @@ functions = [
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x**2,
+    lambda x: x ** 2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],
@@ -30,10 +31,18 @@ functions = [
     lambda x: x.sum(),
     lambda x: x.mean(),
     lambda x: x.moment(order=0),
-    pytest.param(lambda x: x.std(),
-                 marks=pytest.mark.xfail(reason="fixed in https://github.com/pydata/sparse/pull/243")),
-    pytest.param(lambda x: x.var(),
-                 marks=pytest.mark.xfail(reason="fixed in https://github.com/pydata/sparse/pull/243")),
+    pytest.param(
+        lambda x: x.std(),
+        marks=pytest.mark.xfail(
+            reason="fixed in https://github.com/pydata/sparse/pull/243"
+        ),
+    ),
+    pytest.param(
+        lambda x: x.var(),
+        marks=pytest.mark.xfail(
+            reason="fixed in https://github.com/pydata/sparse/pull/243"
+        ),
+    ),
     lambda x: x.dot(np.arange(x.shape[-1])),
     lambda x: x.dot(np.eye(x.shape[-1])),
     lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
@@ -53,7 +62,7 @@ functions = [
 ]
 
 
-@pytest.mark.parametrize('func', functions)
+@pytest.mark.parametrize("func", functions)
 def test_basic(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
@@ -71,6 +80,10 @@ def test_basic(func):
             assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
+@pytest.mark.skipif(
+    sparse.__version__ < "0.7.0+10",
+    reason="fixed in https://github.com/pydata/sparse/pull/256",
+)
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
@@ -80,16 +93,16 @@ def test_tensordot():
     xx = x.map_blocks(sparse.COO.from_numpy)
     yy = y.map_blocks(sparse.COO.from_numpy)
 
-    assert_eq(da.tensordot(x, y, axes=(2, 0)),
-              da.tensordot(xx, yy, axes=(2, 0)))
-    assert_eq(da.tensordot(x, y, axes=(1, 1)),
-              da.tensordot(xx, yy, axes=(1, 1)))
-    assert_eq(da.tensordot(x, y, axes=((1, 2), (1, 0))),
-              da.tensordot(xx, yy, axes=((1, 2), (1, 0))))
+    assert_eq(da.tensordot(x, y, axes=(2, 0)), da.tensordot(xx, yy, axes=(2, 0)))
+    assert_eq(da.tensordot(x, y, axes=(1, 1)), da.tensordot(xx, yy, axes=(1, 1)))
+    assert_eq(
+        da.tensordot(x, y, axes=((1, 2), (1, 0))),
+        da.tensordot(xx, yy, axes=((1, 2), (1, 0))),
+    )
 
 
 @pytest.mark.xfail(reason="upstream change", strict=False)
-@pytest.mark.parametrize('func', functions)
+@pytest.mark.parametrize("func", functions)
 def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
 
@@ -107,7 +120,7 @@ def test_mixed_concatenate(func):
 
 
 @pytest.mark.xfail(reason="upstream change", strict=False)
-@pytest.mark.parametrize('func', functions)
+@pytest.mark.parametrize("func", functions)
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
     d[d < 0.7] = 0
@@ -136,3 +149,43 @@ def test_mixed_output_type():
     zz = z.compute()
     assert isinstance(zz, sparse.COO)
     assert zz.nnz == y.compute().nnz
+
+
+def test_metadata():
+    y = da.random.random((10, 10), chunks=(5, 5))
+    y[y < 0.8] = 0
+    z = sparse.COO.from_numpy(y.compute())
+    y = y.map_blocks(sparse.COO.from_numpy)
+
+    assert isinstance(y._meta, sparse.COO)
+    assert isinstance((y + 1)._meta, sparse.COO)
+    assert isinstance(y.sum(axis=0)._meta, sparse.COO)
+    assert isinstance(y.var(axis=0)._meta, sparse.COO)
+    assert isinstance(y[:5, ::2]._meta, sparse.COO)
+    assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
+    assert isinstance((y - z)._meta, sparse.COO)
+    if IS_NEP18_ACTIVE:
+        assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+        assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
+        assert isinstance(np.stack([y, y])._meta, sparse.COO)
+
+
+def test_html_repr():
+    y = da.random.random((10, 10), chunks=(5, 5))
+    y[y < 0.8] = 0
+    y = y.map_blocks(sparse.COO.from_numpy)
+
+    text = y._repr_html_()
+
+    assert "COO" in text
+    assert "sparse" in text
+
+
+def test_from_delayed_meta():
+    def f():
+        return sparse.COO.from_numpy(np.eye(3))
+
+    d = dask.delayed(f)()
+    x = da.from_delayed(d, shape=(3, 3), meta=sparse.COO.from_numpy(np.eye(1)))
+    assert isinstance(x._meta, sparse.COO)
+    assert_eq(x, x)

@@ -8,11 +8,12 @@ try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
+
     def getsizeof(x):
         return 100
 
 
-sizeof = Dispatch(name='sizeof')
+sizeof = Dispatch(name="sizeof")
 
 
 @sizeof.register(object)
@@ -94,6 +95,4 @@ def register_spmatrix():
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
-        return sum(
-            sizeof(v) for v in s.__dict__.values()
-        )
+        return sum(sizeof(v) for v in s.__dict__.values())

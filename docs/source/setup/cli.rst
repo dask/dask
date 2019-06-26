@@ -67,11 +67,8 @@ generally useful to users.  The diagnostic server on the scheduler is
 particularly valuable, and is served on port ``8787`` by default (configurable
 with the ``--bokeh-port`` keyword).
 
-.. note::
-
-    For more information about relevant ports, please take a look at the help
-    pages with ``dask-scheduler --help`` and ``dask-worker --help``
-
+For more information about relevant ports, please take a look at the available
+:ref:`command line options <worker-scheduler-cli-options>`.
 
 Automated Tools
 ---------------
@@ -83,13 +80,16 @@ the same commands to many machines.  We recommend searching online for "cluster
 ssh" or "cssh".
 
 
-API
----
+.. _worker-scheduler-cli-options:
 
-.. warning::
+CLI Options
+-----------
+
+.. note::
 
    The command line documentation here may differ depending on your installed
-   version. We recommend referring to the output of ``<command> --help``.
+   version. We recommend referring to the output of ``dask-scheduler --help``
+   and ``dask-worker --help``.
 
 .. click:: distributed.cli.dask_scheduler:main
    :prog: dask-scheduler
@@ -97,16 +97,4 @@ API
 
 .. click:: distributed.cli.dask_worker:main
    :prog: dask-worker
-   :show-nested:
-
-.. click:: distributed.cli.dask_ssh:main
-   :prog: dask-ssh
-   :show-nested:
-
-.. click:: distributed.cli.dask_submit:main
-   :prog: dask-submit
-   :show-nested:
-
-.. click:: distributed.cli.dask_remote:main
-   :prog: dask-remote
    :show-nested:

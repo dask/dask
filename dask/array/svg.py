@@ -44,9 +44,9 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
 
     lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, offset=offset, skew=skew)
 
-    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
-        max_x + 50,
-        max_y + 50,
+    header = (
+        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
+        % (max_x + 50, max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -73,14 +73,18 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     x, y, z = grid_points(chunks, sizes)
     ox, oy = offset
 
-    xy, (mnx, mxx, mny, mxy) = svg_grid( x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0))
+    xy, (mnx, mxx, mny, mxy) = svg_grid(
+        x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0)
+    )
 
     zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, offset=(ox + 10, oy + 0), skew=(0, 1))
-    zy, (min_z, max_z, min_y, max_y) = svg_grid(z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0))
+    zy, (min_z, max_z, min_y, max_y) = svg_grid(
+        z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0)
+    )
 
-    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
-        max_z + 50,
-        max_y + 50,
+    header = (
+        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
+        % (max_z + 50, max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -135,22 +139,22 @@ def svg_nd(chunks, size=200):
         chunks2 = chunks2[n:]
         sizes2 = sizes2[n:]
 
-        lines = o.split('\n')
+        lines = o.split("\n")
         header = lines[0]
         height = float(re.search(r'height="(\d*\.?\d*)"', header).groups()[0])
         total_height = max(total_height, height)
         width = float(re.search(r'width="(\d*\.?\d*)"', header).groups()[0])
         left += width + 10
-        o = '\n'.join(lines[1:-1])  # remove header and footer
+        o = "\n".join(lines[1:-1])  # remove header and footer
 
         out.append(o)
 
-    header = '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n' % (
-        left,
-        total_height,
+    header = (
+        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
+        % (left, total_height)
     )
     footer = "\n</svg>"
-    return header + '\n\n'.join(out) + footer
+    return header + "\n\n".join(out) + footer
 
 
 def svg_lines(x1, y1, x2, y2):
@@ -221,7 +225,7 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
         "",
         "  <!-- Colored Rectangle -->",
         '  <polygon points="%f,%f %f,%f %f,%f %f,%f" style="fill:#ECB172A0;stroke-width:0"/>'
-        % (x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0])
+        % (x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0]),
     ]
 
     return h_lines + v_lines + rect, (min_x, max_x, min_y, max_y)

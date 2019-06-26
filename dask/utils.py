@@ -16,15 +16,21 @@ from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import (get_named_args, getargspec, PY3, unicode,
-                            bind_method, Iterator)
+from .compatibility import (
+    get_named_args,
+    getargspec,
+    PY3,
+    unicode,
+    bind_method,
+    Iterator,
+)
 from .core import get_deps
-from .optimization import key_split    # noqa: F401
+from .optimization import key_split  # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()
-if system_encoding == 'ascii':
-    system_encoding = 'utf-8'
+if system_encoding == "ascii":
+    system_encoding = "utf-8"
 
 
 def deepmap(func, *seqs):
@@ -95,8 +101,8 @@ def import_required(mod_name, error_msg):
 
 
 @contextmanager
-def tmpfile(extension='', dir=None):
-    extension = '.' + extension.lstrip('.')
+def tmpfile(extension="", dir=None):
+    extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
@@ -129,7 +135,7 @@ def tmpdir(dir=None):
 
 
 @contextmanager
-def filetext(text, extension='', open=open, mode='w'):
+def filetext(text, extension="", open=open, mode="w"):
     with tmpfile(extension=extension) as filename:
         f = open(filename, mode=mode)
         try:
@@ -175,7 +181,8 @@ class IndexCallable(object):
     >>> I[3]
     4
     """
-    __slots__ = 'fn',
+
+    __slots__ = ("fn",)
 
     def __init__(self, fn):
         self.fn = fn
@@ -185,7 +192,7 @@ class IndexCallable(object):
 
 
 @contextmanager
-def filetexts(d, open=open, mode='t', use_tmpdir=True):
+def filetexts(d, open=open, mode="t", use_tmpdir=True):
     """ Dumps a number of textfiles to disk
 
     d - dict
@@ -201,7 +208,7 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
                 os.makedirs(os.path.dirname(filename))
             except OSError:
                 pass
-            f = open(filename, 'w' + mode)
+            f = open(filename, "w" + mode)
             try:
                 f.write(text)
             finally:
@@ -243,6 +250,7 @@ def pseudorandom(n, p, random_state=None):
     array([0, 2, 0, 3, 0, 1, 2, 1, 0, 0], dtype=int8)
     """
     import numpy as np
+
     p = list(p)
     cp = np.cumsum([0] + p)
     assert np.allclose(1, cp[-1])
@@ -252,7 +260,7 @@ def pseudorandom(n, p, random_state=None):
         random_state = np.random.RandomState(random_state)
 
     x = random_state.random_sample(n)
-    out = np.empty(n, dtype='i1')
+    out = np.empty(n, dtype="i1")
 
     for i, (low, high) in enumerate(zip(cp[:-1], cp[1:])):
         out[(x >= low) & (x < high)] = i
@@ -272,7 +280,9 @@ def random_state_data(n, random_state=None):
     """
     import numpy as np
 
-    if not all(hasattr(random_state, attr) for attr in ['normal', 'beta', 'bytes', 'uniform']):
+    if not all(
+        hasattr(random_state, attr) for attr in ["normal", "beta", "bytes", "uniform"]
+    ):
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
@@ -293,17 +303,72 @@ def is_integer(i):
     return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
-ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
-                          classmethod, complex, dict, dir, enumerate, eval,
-                          float, format, frozenset, hash, hex, id, int, iter,
-                          len, list, max, min, next, oct, open, ord, range,
-                          repr, reversed, round, set, slice, sorted,
-                          staticmethod, str, sum, tuple,
-                          type, vars, zip, memoryview])
+ONE_ARITY_BUILTINS = set(
+    [
+        abs,
+        all,
+        any,
+        bool,
+        bytearray,
+        bytes,
+        callable,
+        chr,
+        classmethod,
+        complex,
+        dict,
+        dir,
+        enumerate,
+        eval,
+        float,
+        format,
+        frozenset,
+        hash,
+        hex,
+        id,
+        int,
+        iter,
+        len,
+        list,
+        max,
+        min,
+        next,
+        oct,
+        open,
+        ord,
+        range,
+        repr,
+        reversed,
+        round,
+        set,
+        slice,
+        sorted,
+        staticmethod,
+        str,
+        sum,
+        tuple,
+        type,
+        vars,
+        zip,
+        memoryview,
+    ]
+)
 if PY3:
     ONE_ARITY_BUILTINS.add(ascii)  # noqa: F821
-MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
-                            isinstance, issubclass, map, pow, setattr])
+MULTI_ARITY_BUILTINS = set(
+    [
+        compile,
+        delattr,
+        divmod,
+        filter,
+        getattr,
+        hasattr,
+        isinstance,
+        issubclass,
+        map,
+        pow,
+        setattr,
+    ]
+)
 
 
 def takes_multiple_arguments(func, varargs=True):
@@ -342,7 +407,7 @@ def takes_multiple_arguments(func, varargs=True):
         return False
 
     try:
-        is_constructor = spec.args[0] == 'self' and isinstance(func, type)
+        is_constructor = spec.args[0] == "self" and isinstance(func, type)
     except Exception:
         is_constructor = False
 
@@ -355,6 +420,7 @@ def takes_multiple_arguments(func, varargs=True):
 
 class Dispatch(object):
     """Simple single dispatch."""
+
     def __init__(self, name=None):
         self._lookup = {}
         self._lazy = {}
@@ -363,6 +429,7 @@ class Dispatch(object):
 
     def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""
+
         def wrapper(func):
             if isinstance(type, tuple):
                 for t in type:
@@ -378,6 +445,7 @@ class Dispatch(object):
         Register a registration function which will be called if the
         *toplevel* module (e.g. 'pandas') is ever loaded.
         """
+
         def wrapper(func):
             self._lazy[toplevel] = func
             return func
@@ -395,14 +463,14 @@ class Dispatch(object):
         else:
             return impl
         # Is a lazy registration function present?
-        toplevel, _, _ = cls.__module__.partition('.')
+        toplevel, _, _ = cls.__module__.partition(".")
         try:
             register = self._lazy.pop(toplevel)
         except KeyError:
             pass
         else:
             register()
-            return self.dispatch(cls) # recurse
+            return self.dispatch(cls)  # recurse
         # Walk the MRO and cache the lookup result
         for cls2 in inspect.getmro(cls)[1:]:
             if cls2 in lk:
@@ -440,84 +508,88 @@ def ensure_not_exists(filename):
 def _skip_doctest(line):
     # NumPy docstring contains cursor and comment only example
     stripped = line.strip()
-    if stripped == '>>>' or stripped.startswith('>>> #'):
+    if stripped == ">>>" or stripped.startswith(">>> #"):
         return line
-    elif '>>>' in stripped and '+SKIP' not in stripped:
-        if '# doctest:' in line:
-            return line + ', +SKIP'
+    elif ">>>" in stripped and "+SKIP" not in stripped:
+        if "# doctest:" in line:
+            return line + ", +SKIP"
         else:
-            return line + '  # doctest: +SKIP'
+            return line + "  # doctest: +SKIP"
     else:
         return line
 
 
 def skip_doctest(doc):
     if doc is None:
-        return ''
-    return '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
+        return ""
+    return "\n".join([_skip_doctest(line) for line in doc.split("\n")])
 
 
 def extra_titles(doc):
-    lines = doc.split('\n')
-    titles = {i: lines[i].strip() for i in range(len(lines) - 1)
-              if lines[i + 1] and all(c == '-' for c in lines[i + 1].strip())}
+    lines = doc.split("\n")
+    titles = {
+        i: lines[i].strip()
+        for i in range(len(lines) - 1)
+        if lines[i + 1] and all(c == "-" for c in lines[i + 1].strip())
+    }
 
     seen = set()
     for i, title in sorted(titles.items()):
         if title in seen:
-            new_title = 'Extra ' + title
+            new_title = "Extra " + title
             lines[i] = lines[i].replace(title, new_title)
-            lines[i + 1] = lines[i + 1].replace('-' * len(title),
-                                                '-' * len(new_title))
+            lines[i + 1] = lines[i + 1].replace("-" * len(title), "-" * len(new_title))
         else:
             seen.add(title)
 
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def ignore_warning(doc, cls, name, extra=""):
     """Expand docstring by adding disclaimer and extra text"""
     import inspect
+
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s. \n\n" \
-             "" % (cls.__module__, cls.__name__, name)
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" "" % (
+            cls.__module__,
+            cls.__name__,
+            name,
+        )
     else:
-        l1 = "This docstring was copied from %s.%s. \n\n" \
-             "" % (cls.__name__, name)
+        l1 = "This docstring was copied from %s.%s. \n\n" "" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
-    i = doc.find('\n\n')
+    i = doc.find("\n\n")
     if i != -1:
         # Insert our warning
-        head = doc[:i + 2]
-        tail = doc[i + 2:]
+        head = doc[: i + 2]
+        tail = doc[i + 2 :]
         # Indentation of next line
-        indent = re.match(r'\s*', tail).group(0)
+        indent = re.match(r"\s*", tail).group(0)
         # Insert the warning, indented, with a blank line before and after
         if extra:
-            more = [indent, extra.rstrip('\n') + '\n\n']
+            more = [indent, extra.rstrip("\n") + "\n\n"]
         else:
             more = []
-        bits = [
-            head,
-            indent, l1,
-            indent, l2, '\n\n'
-        ] + more + [tail]
-        doc = ''.join(bits)
+        bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
+        doc = "".join(bits)
 
     return doc
 
 
 def unsupported_arguments(doc, args):
     """ Mark unsupported arguments with a disclaimer """
-    lines = doc.split('\n')
+    lines = doc.split("\n")
     for arg in args:
-        subset = [(i, line) for i, line in enumerate(lines)
-                  if re.match(r'^\s*' + arg + ' ?:', line)]
+        subset = [
+            (i, line)
+            for i, line in enumerate(lines)
+            if re.match(r"^\s*" + arg + " ?:", line)
+        ]
         if len(subset) == 1:
             [(i, line)] = subset
             lines[i] = line + "  (Not supported in Dask)"
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def _derived_from(cls, method, ua_args=[], extra=""):
@@ -527,13 +599,13 @@ def _derived_from(cls, method, ua_args=[], extra=""):
     original_method = getattr(cls, method.__name__)
     doc = original_method.__doc__
     if doc is None:
-        doc = ''
+        doc = ""
 
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(doc, cls, method.__name__, extra=extra)
     elif extra:
-        doc += extra.rstrip('\n') + '\n\n'
+        doc += extra.rstrip("\n") + "\n\n"
 
     # Mark unsupported arguments
     try:
@@ -571,16 +643,17 @@ def derived_from(original_klass, version=None, ua_args=[]):
         List of keywords which Dask doesn't support. Keywords existing in
         original but not in Dask will automatically be added.
     """
+
     def wrapper(method):
         try:
-            extra = (getattr(method, '__doc__', None) or "")
+            extra = getattr(method, "__doc__", None) or ""
             method.__doc__ = _derived_from(
                 original_klass, method, ua_args=ua_args, extra=extra
             )
             return method
 
         except AttributeError:
-            module_name = original_klass.__module__.split('.')[0]
+            module_name = original_klass.__module__.split(".")[0]
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
@@ -589,7 +662,9 @@ def derived_from(original_klass, version=None, ua_args=[]):
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
                 raise NotImplementedError(msg)
+
             return wrapped
+
     return wrapper
 
 
@@ -602,21 +677,21 @@ def funcname(func):
     if isinstance(func, methodcaller):
         return func.method
 
-    module_name = getattr(func, '__module__', None) or ''
-    type_name = getattr(type(func), '__name__', None) or ''
+    module_name = getattr(func, "__module__", None) or ""
+    type_name = getattr(type(func), "__name__", None) or ""
 
     # toolz.curry
-    if 'toolz' in module_name and 'curry' == type_name:
+    if "toolz" in module_name and "curry" == type_name:
         return func.func_name
     # multipledispatch objects
-    if 'multipledispatch' in module_name and 'Dispatcher' == type_name:
+    if "multipledispatch" in module_name and "Dispatcher" == type_name:
         return func.name
 
     # All other callables
     try:
         name = func.__name__
-        if name == '<lambda>':
-            return 'lambda'
+        if name == "<lambda>":
+            return "lambda"
         return name
     except AttributeError:
         return str(func)
@@ -635,10 +710,10 @@ def typename(typ):
     >>> typename(literal)
     'dask.core.literal'
     """
-    if not typ.__module__ or typ.__module__ == 'builtins':
+    if not typ.__module__ or typ.__module__ == "builtins":
         return typ.__name__
     else:
-        return typ.__module__ + '.' + typ.__name__
+        return typ.__module__ + "." + typ.__name__
 
 
 def ensure_bytes(s):
@@ -653,7 +728,7 @@ def ensure_bytes(s):
     """
     if isinstance(s, bytes):
         return s
-    if hasattr(s, 'encode'):
+    if hasattr(s, "encode"):
         return s.encode()
     msg = "Object %s is neither a bytes object nor has an encode method"
     raise TypeError(msg % s)
@@ -671,7 +746,7 @@ def ensure_unicode(s):
     """
     if isinstance(s, unicode):
         return s
-    if hasattr(s, 'decode'):
+    if hasattr(s, "decode"):
         return s.decode()
     msg = "Object %s is neither a bytes object nor has an encode method"
     raise TypeError(msg % s)
@@ -689,7 +764,7 @@ def digit(n, k, base):
     >>> digit(1234, 3, 10)
     1
     """
-    return n // base**k % base
+    return n // base ** k % base
 
 
 def insert(tup, loc, val):
@@ -720,7 +795,7 @@ def dependency_depth(dsk):
 
 
 def memory_repr(num):
-    for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
+    for x in ["bytes", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
             return "%3.1f %s" % (num, x)
         num /= 1024.0
@@ -739,19 +814,18 @@ def asciitable(columns, rows):
     """
     rows = [tuple(str(i) for i in r) for r in rows]
     columns = tuple(str(i) for i in columns)
-    widths = tuple(max(max(map(len, x)), len(c))
-                   for x, c in zip(zip(*rows), columns))
-    row_template = ('|' + (' %%-%ds |' * len(columns))) % widths
+    widths = tuple(max(max(map(len, x)), len(c)) for x, c in zip(zip(*rows), columns))
+    row_template = ("|" + (" %%-%ds |" * len(columns))) % widths
     header = row_template % tuple(columns)
-    bar = '+%s+' % '+'.join('-' * (w + 2) for w in widths)
-    data = '\n'.join(row_template % r for r in rows)
-    return '\n'.join([bar, header, bar, data, bar])
+    bar = "+%s+" % "+".join("-" * (w + 2) for w in widths)
+    data = "\n".join(row_template % r for r in rows)
+    return "\n".join([bar, header, bar, data, bar])
 
 
 def put_lines(buf, lines):
     if any(not isinstance(x, unicode) for x in lines):
         lines = [unicode(x) for x in lines]
-    buf.write('\n'.join(lines))
+    buf.write("\n".join(lines))
 
 
 _method_cache = {}
@@ -765,7 +839,7 @@ class methodcaller(object):
     serializable
     """
 
-    __slots__ = ('method',)
+    __slots__ = ("method",)
     func = property(lambda self: self.method)  # For `funcname` to work
 
     def __new__(cls, method):
@@ -795,7 +869,8 @@ class itemgetter(object):
     Unlike the builtin `operator.itemgetter`, instances of this class are
     serializable
     """
-    __slots__ = ('index',)
+
+    __slots__ = ("index",)
 
     def __init__(self, index):
         self.index = index
@@ -820,6 +895,7 @@ class MethodCache(object):
     >>> M.count(a, 3) == a.count(3)
     True
     """
+
     __getattr__ = staticmethod(methodcaller)
     __dir__ = lambda self: list(_method_cache)
 
@@ -855,6 +931,7 @@ class SerializableLock(object):
 
     The creation of locks is itself not threadsafe.
     """
+
     def __init__(self, token=None):
         self.token = token or str(uuid.uuid4())
         if self.token in SerializableLock._locks:
@@ -895,8 +972,8 @@ def get_scheduler_lock(collection=None, scheduler=None):
        scheduler used."""
     from . import multiprocessing
     from .base import get_scheduler
-    actual_get = get_scheduler(collections=[collection],
-                               scheduler=scheduler)
+
+    actual_get = get_scheduler(collections=[collection], scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
         return multiprocessing.get_context().Manager().Lock()
@@ -907,7 +984,7 @@ def get_scheduler_lock(collection=None, scheduler=None):
 def ensure_dict(d):
     if type(d) is dict:
         return d
-    elif hasattr(d, 'dicts'):
+    elif hasattr(d, "dicts"):
         result = {}
         for dd in d.dicts.values():
             result.update(dd)
@@ -923,23 +1000,23 @@ class OperatorMethodMixin(object):
         """ bind operator to this class """
         name = op.__name__
 
-        if name.endswith('_'):
+        if name.endswith("_"):
             # for and_ and or_
             name = name[:-1]
-        elif name == 'inv':
-            name = 'invert'
+        elif name == "inv":
+            name = "invert"
 
-        meth = '__{0}__'.format(name)
+        meth = "__{0}__".format(name)
 
-        if name in ('abs', 'invert', 'neg', 'pos'):
+        if name in ("abs", "invert", "neg", "pos"):
             bind_method(cls, meth, cls._get_unary_operator(op))
         else:
             bind_method(cls, meth, cls._get_binary_operator(op))
 
-            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne', 'getitem'):
+            if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
-            rmeth = '__r{0}__'.format(name)
+            rmeth = "__r{0}__".format(name)
             bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
@@ -960,8 +1037,8 @@ def partial_by_order(*args, **kwargs):
     >>> partial_by_order(5, function=add, other=[(1, 10)])
     15
     """
-    function = kwargs.pop('function')
-    other = kwargs.pop('other')
+    function = kwargs.pop("function")
+    other = kwargs.pop("other")
     args2 = list(args)
     for i, arg in other:
         args2.insert(i, arg)
@@ -985,35 +1062,41 @@ def is_arraylike(x):
     from .base import is_dask_collection
 
     return (
-        hasattr(x, 'shape') and x.shape and
-        hasattr(x, 'dtype') and
-        not any(is_dask_collection(n) for n in x.shape)
+        hasattr(x, "shape")
+        and isinstance(x.shape, tuple)
+        and x.shape
+        and hasattr(x, "dtype")
+        and not any(is_dask_collection(n) for n in x.shape)
     )
 
 
 def is_dataframe_like(df):
     """ Looks like a Pandas DataFrame """
     typ = type(df)
-    return (all(hasattr(typ, name)
-                for name in ('groupby', 'head', 'merge', 'mean')) and
-            all(hasattr(df, name) for name in ('dtypes',)) and not
-            any(hasattr(typ, name)
-                for name in ('value_counts', 'dtype')))
+    return (
+        all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
+        and all(hasattr(df, name) for name in ("dtypes",))
+        and not any(hasattr(typ, name) for name in ("value_counts", "dtype"))
+    )
 
 
 def is_series_like(s):
     """ Looks like a Pandas Series """
     typ = type(s)
-    return (all(hasattr(typ, name) for name in ('groupby', 'head', 'mean')) and
-            all(hasattr(s, name) for name in ('dtype', 'name')) and
-            'index' not in typ.__name__.lower())
+    return (
+        all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
+        and all(hasattr(s, name) for name in ("dtype", "name"))
+        and "index" not in typ.__name__.lower()
+    )
 
 
 def is_index_like(s):
     """ Looks like a Pandas Index """
     typ = type(s)
-    return (all(hasattr(s, name) for name in ('name', 'dtype'))
-            and 'index' in typ.__name__.lower())
+    return (
+        all(hasattr(s, name) for name in ("name", "dtype"))
+        and "index" in typ.__name__.lower()
+    )
 
 
 def natural_sort_key(s):
@@ -1042,8 +1125,7 @@ def natural_sort_key(s):
     >>> sorted(a, key=natural_sort_key)
     ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     """
-    return [int(part) if part.isdigit() else part
-            for part in re.split(r'(\d+)', s)]
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
 
 
 def factors(n):
@@ -1079,9 +1161,9 @@ def parse_bytes(s):
     >>> parse_bytes('5 foos')  # doctest: +SKIP
     ValueError: Could not interpret 'foos' as a byte unit
     """
-    s = s.replace(' ', '')
+    s = s.replace(" ", "")
     if not s[0].isdigit():
-        s = '1' + s
+        s = "1" + s
 
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
@@ -1106,22 +1188,22 @@ def parse_bytes(s):
 
 
 byte_sizes = {
-    'kB': 10**3,
-    'MB': 10**6,
-    'GB': 10**9,
-    'TB': 10**12,
-    'PB': 10**15,
-    'KiB': 2**10,
-    'MiB': 2**20,
-    'GiB': 2**30,
-    'TiB': 2**40,
-    'PiB': 2**50,
-    'B': 1,
-    '': 1,
+    "kB": 10 ** 3,
+    "MB": 10 ** 6,
+    "GB": 10 ** 9,
+    "TB": 10 ** 12,
+    "PB": 10 ** 15,
+    "KiB": 2 ** 10,
+    "MiB": 2 ** 20,
+    "GiB": 2 ** 30,
+    "TiB": 2 ** 40,
+    "PiB": 2 ** 50,
+    "B": 1,
+    "": 1,
 }
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
-byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
-byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and "i" not in k})
+byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 
 
 def format_time(n):
