@@ -22,6 +22,11 @@ distributed:
     worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this
     preload: []
     preload-argv: []
+    dashboard:
+      status:
+        task-stream-length: 1000
+      tasks:
+        task-stream-length: 100000
 
   worker:
     blocked-handlers: []

@@ -627,3 +627,31 @@ def test_proxy_to_workers(c, s, a, b):
             assert b"pip install jupyter-server-proxy" in response_proxy.body
         assert response_direct.code == 200
         assert b"Crossfilter" in response_direct.body
+
+
+@gen_cluster(
+    client=True,
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    config={
+        "distributed.scheduler.dashboard.tasks.task-stream-length": 10,
+        "distributed.scheduler.dashboard.status.task-stream-length": 10,
+    },
+)
+async def test_lots_of_tasks(c, s, a, b):
+    import toolz
+
+    ts = TaskStream(s)
+    ts.update()
+    futures = c.map(toolz.identity, range(100))
+    await wait(futures)
+
+    tsp = [p for p in s.plugins if "taskstream" in type(p).__name__.lower()][0]
+    assert len(tsp.buffer) == 10
+    ts.update()
+    assert len(ts.source.data["start"]) == 10
+    assert "identity" in str(ts.source.data)
+
+    futures = c.map(lambda x: x, range(100), pure=False)
+    await wait(futures)
+    ts.update()
+    assert "lambda" in str(ts.source.data)

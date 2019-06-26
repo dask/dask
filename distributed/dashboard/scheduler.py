@@ -35,6 +35,7 @@ from bokeh.palettes import Viridis11
 from bokeh.themes import Theme
 from bokeh.transform import factor_cmap
 from bokeh.io import curdoc
+import dask
 from toolz import pipe, merge
 from tornado import escape
 
@@ -1417,7 +1418,9 @@ def tasks_doc(scheduler, extra, doc):
     with log_errors():
         ts = TaskStream(
             scheduler,
-            n_rectangles=100000,
+            n_rectangles=dask.config.get(
+                "distributed.scheduler.dashboard.tasks.task-stream-length"
+            ),
             clear_interval="60s",
             sizing_mode="stretch_both",
         )
@@ -1447,7 +1450,9 @@ def status_doc(scheduler, extra, doc):
     with log_errors():
         task_stream = TaskStream(
             scheduler,
-            n_rectangles=1000,
+            n_rectangles=dask.config.get(
+                "distributed.scheduler.dashboard.status.task-stream-length"
+            ),
             clear_interval="10s",
             sizing_mode="stretch_both",
         )

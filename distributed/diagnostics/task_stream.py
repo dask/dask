@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import deque
 import logging
 
+import dask
 from .progress_stream import color_of
 from .plugin import SchedulerPlugin
 from ..utils import key_split, format_time, parse_timedelta
@@ -13,7 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class TaskStreamPlugin(SchedulerPlugin):
-    def __init__(self, scheduler, maxlen=100000):
+    def __init__(self, scheduler, maxlen=None):
+        if maxlen is None:
+            maxlen = max(
+                dask.config.get(
+                    "distributed.scheduler.dashboard.status.task-stream-length"
+                ),
+                dask.config.get(
+                    "distributed.scheduler.dashboard.tasks.task-stream-length"
+                ),
+            )
         self.buffer = deque(maxlen=maxlen)
         self.scheduler = scheduler
         scheduler.add_plugin(self)
@@ -74,8 +84,8 @@ class TaskStreamPlugin(SchedulerPlugin):
         msgs = []
         diff = self.index - len(self.buffer)
         if istop is None:
-            istop = len(self.buffer)
-        for i in range((istart or 0) - diff, istop - diff if istop else istop):
+            istop = self.index
+        for i in range(max(0, (istart or 0) - diff), istop - diff if istop else istop):
             msg = self.buffer[i]
             msgs.append(msg)
 
