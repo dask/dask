@@ -279,13 +279,13 @@ Random
    random.noncentral_f
    random.normal
    random.pareto
+   random.permutation
    random.poisson
    random.power
    random.randint
    random.random
    random.random_sample
    random.rayleigh
-   random.shuffle
    random.standard_cauchy
    random.standard_exponential
    random.standard_gamma

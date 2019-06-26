@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from itertools import product
 from numbers import Integral
 from operator import getitem
@@ -14,6 +15,7 @@ from .core import (
     broadcast_shapes,
     broadcast_to,
 )
+from .creation import arange
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, skip_doctest
@@ -354,6 +356,17 @@ class RandomState(object):
     def pareto(self, a, size=None, chunks="auto"):
         return self._wrap("pareto", a, size=size, chunks=chunks)
 
+    @doc_wraps(np.random.RandomState.permutation)
+    def permutation(self, x):
+        from .slicing import shuffle_slice
+
+        if isinstance(x, numbers.Number):
+            x = arange(x, chunks="auto")
+
+        index = np.arange(len(x))
+        self._numpy_state.shuffle(index)
+        return shuffle_slice(x, index)
+
     @doc_wraps(np.random.RandomState.poisson)
     def poisson(self, lam=1.0, size=None, chunks="auto"):
         return self._wrap("poisson", lam, size=size, chunks=chunks)
@@ -379,48 +392,6 @@ class RandomState(object):
     @doc_wraps(np.random.RandomState.rayleigh)
     def rayleigh(self, scale=1.0, size=None, chunks="auto"):
         return self._wrap("rayleigh", scale, size=size, chunks=chunks)
-
-    def shuffle(self, x):
-        """Shuffle an Array.
-
-        .. warning::
-
-           Unlike :meth:`numpy.random.shuffle`, this does
-           not modify `x` inplace.
-
-        Parameters
-        ----------
-        x : Array
-
-        Returns
-        -------
-        shuffled : Array
-
-        Examples
-        --------
-        >>> import dask.array as da
-        >>> arr = da.arange(10, chunks=3)
-        >>> da.random.shuffle(arr).compute()  # doctest: +SKIP
-        array([4, 3, 7, 9, 2, 1, 0, 6, 5, 8])
-
-        Unlike NumPy, the original array is unmodified
-
-        >>> arr.compute()  # doctest: +SKIP
-        array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-        Multi-dimensional arrays are only shuffled along the first axis:
-
-        >>> arr = da.arange(9, chunks=3).reshape((3, 3))
-        >>> da.random.shuffle(arr).compute()  # doctest: +SKIP
-        array([[0, 1, 2],
-               [6, 7, 8],
-               [3, 4, 5]])
-        """
-        from .slicing import shuffle_slice
-
-        index = np.arange(len(x))
-        self._numpy_state.shuffle(index)
-        return shuffle_slice(x, index)
 
     @doc_wraps(np.random.RandomState.standard_cauchy)
     def standard_cauchy(self, size=None, chunks="auto"):
@@ -512,6 +483,7 @@ noncentral_chisquare = _state.noncentral_chisquare
 noncentral_f = _state.noncentral_f
 normal = _state.normal
 pareto = _state.pareto
+permutation = _state.permutation
 poisson = _state.poisson
 power = _state.power
 rayleigh = _state.rayleigh
@@ -520,7 +492,6 @@ random = random_sample
 randint = _state.randint
 random_integers = _state.random_integers
 triangular = _state.triangular
-shuffle = _state.shuffle
 uniform = _state.uniform
 vonmises = _state.vonmises
 wald = _state.wald

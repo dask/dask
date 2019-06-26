@@ -301,15 +301,23 @@ def test_names():
     assert len(key_split(name)) < 10
 
 
-def test_shuffle():
+def test_permutation():
     x = da.arange(12, chunks=3)
-    da.random.shuffle(x)
+    y = da.random.permutation(x)
+
+    assert y.shape == x.shape
+    assert y.dtype == x.dtype
+
+    y.compute()  # smoke test
 
     a = da.random.RandomState(0)
     b = da.random.RandomState(0)
-    r1 = a.shuffle(x)
-    r2 = b.shuffle(x)
+    r1 = a.permutation(x)
+    r2 = b.permutation(x)
     assert_eq(r1, r2)
+
+    x = da.random.permutation(100)
+    assert x.shape == (100,)
 
 
 def test_external_randomstate_class():
