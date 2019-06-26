@@ -23,9 +23,10 @@ setup(
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description="Distributed scheduler for Dask",
-    url="https://distributed.readthedocs.io/en/latest/",
+    url="https://distributed.dask.org",
     maintainer="Matthew Rocklin",
     maintainer_email="mrocklin@gmail.com",
+    python_requires=">=3.5",
     license="BSD",
     package_data={
         "": ["templates/index.html", "template.html"],
