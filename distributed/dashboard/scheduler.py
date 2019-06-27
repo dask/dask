@@ -36,6 +36,7 @@ from bokeh.themes import Theme
 from bokeh.transform import factor_cmap
 from bokeh.io import curdoc
 import dask
+from dask.utils import format_bytes
 from toolz import pipe, merge
 from tornado import escape
 
@@ -55,7 +56,7 @@ from .core import BokehServer
 from .worker import SystemMonitor, counters_doc
 from .utils import transpose, BOKEH_VERSION, without_property_validation
 from ..metrics import time
-from ..utils import log_errors, format_bytes, format_time
+from ..utils import log_errors, format_time
 from ..diagnostics.progress_stream import color_of, progress_quads, nbytes_bar
 from ..diagnostics.progress import AllProgress
 from ..diagnostics.graph_layout import GraphLayout

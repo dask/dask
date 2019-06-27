@@ -15,6 +15,7 @@ import traceback
 
 import dask
 from dask import delayed
+from dask.utils import format_bytes
 import pytest
 from toolz import pluck, sliding_window, first
 import tornado
@@ -28,7 +29,7 @@ from distributed.client import wait
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, parse_memory_limit
-from distributed.utils import tmpfile, format_bytes
+from distributed.utils import tmpfile
 from distributed.utils_test import (
     inc,
     mul,

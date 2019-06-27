@@ -1,10 +1,11 @@
 from datetime import datetime
 
+from dask.utils import format_bytes
 import toolz
 from tornado import escape
 from tornado import gen
 
-from ..utils import log_errors, format_bytes, format_time
+from ..utils import log_errors, format_time
 from .proxy import GlobalProxyHandler
 from .utils import RequestHandler, redirect
 

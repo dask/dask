@@ -543,3 +543,8 @@ def test_warn_on_duration():
 
     assert record
     assert any("foo" in str(rec.message) for rec in record)
+
+
+def test_format_bytes_compat():
+    # moved to dask, but exported here for compatibility
+    from distributed.utils import format_bytes  # noqa

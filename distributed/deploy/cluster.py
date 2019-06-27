@@ -4,19 +4,13 @@ import os
 from weakref import ref
 
 import dask
+from dask.utils import format_bytes
 from tornado import gen
 
 from .adaptive import Adaptive
 
 from ..compatibility import get_thread_identity
-from ..utils import (
-    format_bytes,
-    PeriodicCallback,
-    log_errors,
-    ignoring,
-    sync,
-    thread_state,
-)
+from ..utils import PeriodicCallback, log_errors, ignoring, sync, thread_state
 
 
 logger = logging.getLogger(__name__)

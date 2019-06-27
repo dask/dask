@@ -19,6 +19,7 @@ import psutil
 import dask
 from dask.core import istask
 from dask.compatibility import apply
+from dask.utils import format_bytes
 
 try:
     from cytoolz import pluck, partial, merge, first
@@ -59,7 +60,6 @@ from .utils import (
     thread_state,
     json_load_robust,
     key_split,
-    format_bytes,
     PeriodicCallback,
     parse_bytes,
     parse_timedelta,

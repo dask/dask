@@ -5,9 +5,10 @@ import gc
 import logging
 import threading
 
+from dask.utils import format_bytes
+
 from .compatibility import PY2, PYPY
 from .metrics import thread_time
-from .utils import format_bytes
 
 
 logger = _logger = logging.getLogger(__name__)

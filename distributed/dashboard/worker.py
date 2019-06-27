@@ -22,6 +22,7 @@ from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import RdBu
 from bokeh.themes import Theme
+from dask.utils import format_bytes
 from toolz import merge, partition_all
 
 from .components import (
@@ -35,7 +36,7 @@ from .utils import transpose, without_property_validation
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..metrics import time
-from ..utils import log_errors, key_split, format_bytes, format_time
+from ..utils import log_errors, key_split, format_time
 
 
 logger = logging.getLogger(__name__)
