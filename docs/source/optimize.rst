@@ -79,7 +79,7 @@ output keys to a scheduler ``get`` function:
     >>> outputs = ['print1', 'print2']
     >>> dsk2, _ = cull(dsk, outputs)  # remove unnecessary tasks from the graph
 
-    >>> results = get(dsk, outputs)
+    >>> results = get(dsk2, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
