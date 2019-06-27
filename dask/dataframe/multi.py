@@ -492,16 +492,12 @@ def fix_overlap(ddf):
 
 
 def most_recent_tail(left, right):
-    if left is None or right is None:
-        raise ValueError('dafuq did u do')
     if right.empty:
         return left
     return right.tail(1)
 
 
 def most_recent_tail_summary(left, right, by=None):
-    if left is None or right is None:
-        raise ValueError('dafuq did u do')
     return pd.concat([left, right]).drop_duplicates(subset=by, keep='last')
 
 
@@ -519,16 +515,12 @@ def compute_tails(ddf, by=None):
 
 
 def most_recent_head(left, right):
-    if left is None or right is None:
-        raise ValueError('dafuq did u do')
     if left.empty:
         return right
     return left.head(1)
 
 
 def most_recent_head_summary(left, right, by=None):
-    if left is None or right is None:
-        raise ValueError('dafuq did u do')
     return pd.concat([left, right]).drop_duplicates(subset=by, keep='first')
 
 
