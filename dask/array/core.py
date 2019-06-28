@@ -3999,18 +3999,12 @@ def stack(seq, axis=0):
     --------
     concatenate
     """
+    from . import wrap
+
     seq = [asarray(a) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to stack")
-
-    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
-    seq = [x.astype(meta.dtype) for x in seq]
-
-    n = len(seq)
-    ndim = meta.ndim - 1
-    if axis < 0:
-        axis = ndim + axis + 1
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError(
@@ -4020,6 +4014,28 @@ def stack(seq, axis=0):
                 idx[0], seq[0].shape, idx[0] + 1, seq[idx[0]].shape
             )
         )
+
+    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
+    seq = [x.astype(meta.dtype) for x in seq]
+
+    ndim = meta.ndim - 1
+    if axis < 0:
+        axis = ndim + axis + 1
+    shape = tuple(
+        len(seq)
+        if i == axis
+        else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
+        for i in range(meta.ndim)
+    )
+
+    seq = [a for a in seq if a.size]
+
+    n = len(seq)
+    if n == 0:
+        try:
+            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
+        except TypeError:
+            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
