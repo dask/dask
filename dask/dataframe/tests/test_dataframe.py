@@ -4062,6 +4062,16 @@ def test_map_partitions_delays_lists():
     assert any(str(L) == str(v) for v in out.__dask_graph__().values())
 
 
+def test_str_noexpand():
+    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], name="foo")
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(s.str.split(n=n, expand=False), ds.str.split(n=n, expand=False))
+
+    assert ds.str.split(n=1, expand=False).name == "foo"
+
+
 def test_str_expand():
     s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"])
     ds = dd.from_pandas(s, npartitions=2)
