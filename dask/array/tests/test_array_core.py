@@ -313,6 +313,16 @@ def test_stack():
     assert stack([a, b, c], axis=-1).chunks == stack([a, b, c], axis=2).chunks
 
 
+def test_stack_zero_size():
+    x = np.empty((2, 0, 3))
+    y = da.from_array(x, chunks=1)
+
+    result_np = np.concatenate([x, x])
+    result_da = da.concatenate([y, y])
+
+    assert_eq(result_np, result_da)
+
+
 def test_short_stack():
     x = np.array([1])
     d = da.from_array(x, chunks=(1,))
