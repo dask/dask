@@ -147,6 +147,8 @@ class StringAccessor(Accessor):
             else:
                 meta = type(self._series._meta)([" ".join(["a"] * 2 * n)])
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
+        else:
+            meta = (self._series.name, object)
         return self._function_map("split", pat=pat, n=n, expand=expand, meta=meta)
 
     @derived_from(pd.core.strings.StringMethods)
