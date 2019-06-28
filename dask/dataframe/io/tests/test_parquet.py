@@ -615,10 +615,11 @@ def test_optimize(tmpdir, c):
 @write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join("test.parquet"))
-    df.index.name = "index"
-    df.to_parquet(fn, index=True, engine=write_engine)
+    dfp = df.copy()
+    dfp.index.name = "index"
+    dfp.to_parquet(fn, index=True, engine=write_engine)
     ddf = dd.read_parquet(fn, index="index", engine=read_engine)
-    assert_eq(df, ddf)
+    assert_eq(dfp, ddf)
 
 
 @write_read_engines_xfail
