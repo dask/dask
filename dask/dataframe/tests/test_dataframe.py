@@ -1725,7 +1725,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
 
 @pytest.mark.parametrize("use_index", [True, False])
 @pytest.mark.parametrize("n", [2, 5])
-@pytest.mark.parametrize("partition_size", ["1kiB"])
+@pytest.mark.parametrize("partition_size", ["1kiB", 379])
 @pytest.mark.parametrize("transform", [lambda df: df, lambda df: df.x])
 def test_repartition_partition_size(use_index, n, partition_size, transform):
     df = pd.DataFrame(
@@ -4060,6 +4060,16 @@ def test_map_partitions_delays_lists():
 
     out = ddf.map_partitions(lambda x, y: x + sum(y), L)
     assert any(str(L) == str(v) for v in out.__dask_graph__().values())
+
+
+def test_str_noexpand():
+    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], name="foo")
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(s.str.split(n=n, expand=False), ds.str.split(n=n, expand=False))
+
+    assert ds.str.split(n=1, expand=False).name == "foo"
 
 
 def test_str_expand():
