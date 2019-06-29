@@ -91,6 +91,7 @@ from .utils import (
     shutting_down,
     Any,
     has_keyword,
+    format_dashboard_link,
 )
 from .versions import get_versions
 
@@ -818,8 +819,7 @@ class Client(Node):
                 host = "localhost"
             else:
                 host = rest.split(":")[0]
-            template = dask.config.get("distributed.dashboard.link")
-            address = template.format(host=host, port=port, **os.environ)
+            address = format_dashboard_link(host, port)
             text += (
                 "  <li><b>Dashboard: </b><a href='%(web)s' target='_blank'>%(web)s</a>\n"
                 % {"web": address}

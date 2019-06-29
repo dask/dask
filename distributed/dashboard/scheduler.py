@@ -1597,6 +1597,25 @@ class BokehScheduler(BokehServer):
 
         self.server_kwargs = kwargs
 
+        # TLS configuration
+        http_server_kwargs = kwargs.setdefault("http_server_kwargs", {})
+        tls_key = dask.config.get("distributed.scheduler.dashboard.tls.key")
+        tls_cert = dask.config.get("distributed.scheduler.dashboard.tls.cert")
+        tls_ca_file = dask.config.get("distributed.scheduler.dashboard.tls.ca-file")
+        if tls_cert and "ssl_options" not in http_server_kwargs:
+            import ssl
+
+            ctx = ssl.create_default_context(
+                cafile=tls_ca_file, purpose=ssl.Purpose.SERVER_AUTH
+            )
+            ctx.load_cert_chain(tls_cert, keyfile=tls_key)
+            # Unlike the client/scheduler/worker TLS handling, we don't care
+            # about authenticating the user's webclient, TLS here is just for
+            # encryption. Disable these checks.
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            http_server_kwargs["ssl_options"] = ctx
+
         self.server_kwargs["prefix"] = prefix or None
 
         self.apps = {

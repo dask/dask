@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import json
 import re
+import ssl
 import sys
 from time import sleep
 
@@ -10,13 +11,13 @@ import pytest
 pytest.importorskip("bokeh")
 from toolz import first
 from tornado import gen
-from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
 from dask.core import flatten
-from distributed.utils import tokey
+from distributed.utils import tokey, format_dashboard_link
 from distributed.client import wait
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, dec, slowinc, div
+from distributed.utils_test import gen_cluster, inc, dec, slowinc, div, get_cert
 from distributed.dashboard.worker import Counters, BokehWorker
 from distributed.dashboard.scheduler import (
     BokehScheduler,
@@ -655,3 +656,48 @@ async def test_lots_of_tasks(c, s, a, b):
     await wait(futures)
     ts.update()
     assert "lambda" in str(ts.source.data)
+
+
+@gen_cluster(
+    client=True,
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    config={
+        "distributed.scheduler.dashboard.tls.key": get_cert("tls-key.pem"),
+        "distributed.scheduler.dashboard.tls.cert": get_cert("tls-cert.pem"),
+        "distributed.scheduler.dashboard.tls.ca-file": get_cert("tls-ca-cert.pem"),
+    },
+)
+def test_https_support(c, s, a, b):
+    assert isinstance(s.services["dashboard"], BokehScheduler)
+    port = s.services["dashboard"].port
+
+    assert (
+        format_dashboard_link("localhost", port) == "https://localhost:%d/status" % port
+    )
+
+    ctx = ssl.create_default_context()
+    ctx.load_verify_locations(get_cert("tls-ca-cert.pem"))
+
+    http_client = AsyncHTTPClient()
+    for suffix in [
+        "system",
+        "counters",
+        "workers",
+        "status",
+        "tasks",
+        "stealing",
+        "graph",
+        "individual-task-stream",
+        "individual-progress",
+        "individual-graph",
+        "individual-nbytes",
+        "individual-nprocessing",
+        "individual-profile",
+    ]:
+        req = HTTPRequest(
+            url="https://localhost:%d/%s" % (port, suffix), ssl_options=ctx
+        )
+        response = yield http_client.fetch(req)
+        body = response.body.decode()
+        assert "bokeh" in body.lower()
+        assert not re.search("href=./", body)  # no absolute links

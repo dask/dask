@@ -1483,3 +1483,12 @@ def typename(typ):
         return typ.__module__ + "." + typ.__name__
     except AttributeError:
         return str(typ)
+
+
+def format_dashboard_link(host, port):
+    template = dask.config.get("distributed.dashboard.link")
+    if dask.config.get("distributed.scheduler.dashboard.tls.cert"):
+        scheme = "https"
+    else:
+        scheme = "http"
+    return template.format(scheme=scheme, host=host, port=port, **os.environ)

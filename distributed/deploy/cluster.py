@@ -1,16 +1,21 @@
 from datetime import timedelta
 import logging
-import os
 from weakref import ref
 
-import dask
 from dask.utils import format_bytes
 from tornado import gen
 
 from .adaptive import Adaptive
 
 from ..compatibility import get_thread_identity
-from ..utils import PeriodicCallback, log_errors, ignoring, sync, thread_state
+from ..utils import (
+    PeriodicCallback,
+    log_errors,
+    ignoring,
+    sync,
+    thread_state,
+    format_dashboard_link,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -80,10 +85,9 @@ class Cluster(object):
 
     @property
     def dashboard_link(self):
-        template = dask.config.get("distributed.dashboard.link")
         host = self.scheduler.address.split("://")[1].split(":")[0]
         port = self.scheduler.services["dashboard"].port
-        return template.format(host=host, port=port, **os.environ)
+        return format_dashboard_link(host, port)
 
     def scale(self, n):
         """ Scale cluster to n workers

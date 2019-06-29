@@ -5224,20 +5224,21 @@ def test_quiet_scheduler_loss(c, s):
     assert "BrokenPipeError" not in text
 
 
-@pytest.mark.skipif("USER" not in os.environ, reason="no USER env variable")
-def test_diagnostics_link_env_variable(loop):
+def test_dashboard_link(loop, monkeypatch):
     pytest.importorskip("bokeh")
     from distributed.dashboard import BokehScheduler
+
+    monkeypatch.setenv("USER", "myusername")
 
     with cluster(
         scheduler_kwargs={"services": {("dashboard", 12355): BokehScheduler}}
     ) as (s, [a, b]):
         with Client(s["address"], loop=loop) as c:
             with dask.config.set(
-                {"distributed.dashboard.link": "http://foo-{USER}:{port}/status"}
+                {"distributed.dashboard.link": "{scheme}://foo-{USER}:{port}/status"}
             ):
                 text = c._repr_html_()
-                link = "http://foo-" + os.environ["USER"] + ":12355/status"
+                link = "http://foo-myusername:12355/status"
                 assert link in text
 
 

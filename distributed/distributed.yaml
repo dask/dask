@@ -27,6 +27,11 @@ distributed:
         task-stream-length: 1000
       tasks:
         task-stream-length: 100000
+      tls:
+        ca-file: null
+        key: null
+        cert: null
+
 
   worker:
     blocked-handlers: []
@@ -88,7 +93,7 @@ distributed:
   ###################
 
   dashboard:
-    link: "http://{host}:{port}/status"
+    link: "{scheme}://{host}:{port}/status"
     export-tool: False
 
   ##################
