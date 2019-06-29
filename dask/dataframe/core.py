@@ -5447,7 +5447,7 @@ def repartition_size(df, size):
         split_mem_usages = []
         for n, usage in zip(nsplits, mem_usages):
             split_mem_usages.extend([usage / n] * n)
-        mem_usages = pd.Series(split_mem_usages, dtype=mem_usages.dtype)
+        mem_usages = pd.Series(split_mem_usages)
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
