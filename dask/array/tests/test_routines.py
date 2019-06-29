@@ -335,18 +335,10 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
         output_shape = sample.shape
         output_dtype = sample.dtype
 
-    if func1d_name == "range2" and LooseVersion(np.__version__) < LooseVersion(
-        "1.13.0"
-    ):
-        with pytest.raises(ValueError):
-            da.apply_along_axis(func1d, axis, d)
-    else:
-        assert_eq(
-            da.apply_along_axis(
-                func1d, axis, d, dtype=output_dtype, shape=output_shape
-            ),
-            np.apply_along_axis(func1d, axis, a),
-        )
+    assert_eq(
+        da.apply_along_axis(func1d, axis, d, dtype=output_dtype, shape=output_shape),
+        np.apply_along_axis(func1d, axis, a),
+    )
 
 
 @pytest.mark.parametrize(

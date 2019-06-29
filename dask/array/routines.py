@@ -342,7 +342,7 @@ def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs
 
 
 @derived_from(np)
-def apply_along_axis(func1d, axis, arr, *args, **kwargs):
+def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs):
     """
     Apply a function to 1-D slices along the given axis. This is
     a blocked variant of :func:`numpy.apply_along_axis` implemented via
@@ -359,29 +359,26 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
         Dask array to which ``func1d`` will be applied
     args : any
         Additional arguments to ``func1d``.
+    dtype : str or dtype, optional
+        The dtype of the output of ``func1d``.
+    shape : tuple, optional
+        The shape of the output of ``func1d``.
     kwargs : any
-        Additional named arguments to ``func1d``, with the exception of named arguments ``dtype`` and
-        ``shape``. These two kwargs specify the dtype and shape of the output of ``func1d``.
-        If ``shape`` and ``dtype`` are not supplied, these properties of the output of ``func1d``
-        will be estimated on a test array which may not be representative of the data in ``arr``.
+        Additional keyword arguments for ``func1d``.
+
+    Notes
+    -----
+    If either of `dtype` or `shape` are not provided, Dask attempts to
+    determine them by calling `func1d` on a dummy array. This may produce
+    incorrect values for `dtype` or `shape`, so we recommend providing them.
     """
     arr = asarray(arr)
 
     # Verify that axis is valid and throw an error otherwise
     axis = len(arr.shape[:axis])
 
-    try:
-        shape = kwargs.pop("shape")
-    except KeyError:
-        shape = None
-
-    try:
-        dtype = kwargs.pop("dtype")
-    except KeyError:
-        dtype = None
-
     # If necessary, infer dtype and shape of the output of func1d by calling it on test data.
-    if (shape is None) or (dtype is None):
+    if shape is None or dtype is None:
         test_data = np.ones((1,), dtype=arr.dtype)
         test_result = np.array(func1d(test_data, *args, **kwargs))
         if shape is None:
