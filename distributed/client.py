@@ -3278,9 +3278,10 @@ class Client(Node):
             if plot == "save" and not filename:
                 filename = "dask-profile.html"
 
-            from bokeh.plotting import save
+            if filename:
+                from bokeh.plotting import save
 
-            save(figure, title="Dask Profile", filename=filename)
+                save(figure, title="Dask Profile", filename=filename)
             raise gen.Return((state, figure))
 
         else:

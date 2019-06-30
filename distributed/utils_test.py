@@ -732,9 +732,10 @@ def cluster(
             client.close()
 
     start = time()
-    while len(ws):
-        sleep(0.1)
-        assert time() < start + 3, ("Workers still around after two seconds", list(ws))
+    while any(proc.is_alive() for proc in ws):
+        text = str(list(ws))
+        sleep(0.2)
+        assert time() < start + 5, ("Workers still around after five seconds", text)
 
 
 @gen.coroutine
