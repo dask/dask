@@ -132,9 +132,8 @@ def test_arange():
     assert_eq(darr, nparr)
 
     # Unexpected or missing kwargs
-    with pytest.raises(TypeError) as exc:
+    with pytest.raises(TypeError, match="whatsthis"):
         da.arange(10, chunks=-1, whatsthis=1)
-    assert "whatsthis" in str(exc)
 
     assert da.arange(10).chunks == ((10,),)
 

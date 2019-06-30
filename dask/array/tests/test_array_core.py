@@ -3323,7 +3323,7 @@ def test_raise_informative_errors_no_chunks():
     ]:
         with pytest.raises(ValueError) as e:
             op()
-        if "chunk" not in str(e) or "unknown" not in str(e):
+        if "chunk" not in str(e.value) or "unknown" not in str(e.value):
             op()
 
 
@@ -3335,9 +3335,8 @@ def test_no_chunks_slicing_2d():
     assert_eq(x[0], X[0])
 
     for op in [lambda: x[:, 4], lambda: x[:, ::2], lambda: x[0, 2:4]]:
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="chunk sizes are unknown"):
             op()
-        assert "chunk" in str(e) and "unknown" in str(e)
 
 
 def test_index_array_with_array_1d():
@@ -3477,13 +3476,10 @@ def test_from_array_name():
 
 
 def test_concatenate_errs():
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match=r"Shapes.*\(2, 1\)"):
         da.concatenate(
             [da.zeros((2, 1), chunks=(2, 1)), da.zeros((2, 3), chunks=(2, 3))]
         )
-
-    assert "shape" in str(e).lower()
-    assert "(2, 1)" in str(e)
 
     with pytest.raises(ValueError):
         da.concatenate(

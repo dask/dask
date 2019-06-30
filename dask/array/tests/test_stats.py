@@ -133,7 +133,5 @@ def test_power_divergence_invalid():
 
 def test_skew_raises():
     a = da.ones((7,), chunks=(7,))
-    with pytest.raises(ValueError) as rec:
+    with pytest.raises(ValueError, match="7 samples"):
         dask.array.stats.skewtest(a)
-
-    assert "7 samples" in str(rec)

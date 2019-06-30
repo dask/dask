@@ -718,17 +718,14 @@ def test_read_hdf_start_stop_values():
     with tmpfile("h5") as fn:
         df.to_hdf(fn, "/data", format="table")
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="number of rows"):
             dd.read_hdf(fn, "/data", stop=10)
-        assert "number of rows" in str(e)
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="is above or equal to"):
             dd.read_hdf(fn, "/data", start=10)
-        assert "is above or equal to" in str(e)
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="positive integer"):
             dd.read_hdf(fn, "/data", chunksize=-1)
-        assert "positive integer" in str(e)
 
 
 def test_hdf_globbing():
