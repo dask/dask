@@ -308,6 +308,8 @@ class Worker(ServerNode):
         nanny=None,
         plugins=(),
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
+        validate=False,
+        profile_cycle_interval=None,
         **kwargs
     ):
         self.tasks = dict()
@@ -369,7 +371,7 @@ class Worker(ServerNode):
         self.target_message_size = 50e6  # 50 MB
 
         self.log = deque(maxlen=100000)
-        self.validate = kwargs.pop("validate", False)
+        self.validate = validate
 
         self._transitions = {
             ("waiting", "ready"): self.transition_waiting_ready,
@@ -404,10 +406,8 @@ class Worker(ServerNode):
         self.latency = 0.001
         self._client = None
 
-        profile_cycle_interval = kwargs.pop(
-            "profile_cycle_interval",
-            dask.config.get("distributed.worker.profile.cycle"),
-        )
+        if profile_cycle_interval is None:
+            profile_cycle_interval = dask.config.get("distributed.worker.profile.cycle")
         profile_cycle_interval = parse_timedelta(profile_cycle_interval, default="ms")
 
         self._setup_logging(logger)

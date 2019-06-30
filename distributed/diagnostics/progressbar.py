@@ -405,7 +405,7 @@ class MultiProgressWidget(MultiProgressBar):
             )
 
 
-def progress(*futures, **kwargs):
+def progress(*futures, notebook=None, multi=True, complete=True, **kwargs):
     """ Track progress of futures
 
     This operates differently in the notebook and the console
@@ -436,10 +436,6 @@ def progress(*futures, **kwargs):
     >>> progress(futures)  # doctest: +SKIP
     [########################################] | 100% Completed |  1.7s
     """
-    notebook = kwargs.pop("notebook", None)
-    multi = kwargs.pop("multi", True)
-    complete = kwargs.pop("complete", True)
-
     futures = futures_of(futures)
     if not isinstance(futures, (set, list)):
         futures = [futures]

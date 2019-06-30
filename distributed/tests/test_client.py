@@ -197,18 +197,15 @@ def test_map_retries(c, s, a, b):
     x, y, z = c.map(*map_varying(args), retries=1, pure=False)
     assert (yield x) == 2
     assert (yield y) == 4
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="eight"):
         yield z
-    exc_info.match("eight")
 
     x, y, z = c.map(*map_varying(args), retries=0, pure=False)
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="one"):
         yield x
-    exc_info.match("one")
     assert (yield y) == 4
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="seven"):
         yield z
-    exc_info.match("seven")
 
 
 @gen_cluster(client=True)
@@ -217,15 +214,13 @@ def test_compute_retries(c, s, a, b):
 
     # Sanity check for varying() use
     x = c.compute(delayed(varying(args))())
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="one"):
         yield x
-    exc_info.match("one")
 
     # Same retries for all
     x = c.compute(delayed(varying(args))(), retries=1)
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="two"):
         yield x
-    exc_info.match("two")
 
     x = c.compute(delayed(varying(args))(), retries=2)
     assert (yield x) == 3
@@ -244,16 +239,14 @@ def test_compute_retries(c, s, a, b):
     gc.collect()
 
     assert (yield x) == 30
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="five"):
         yield y
-    exc_info.match("five")
 
     x, y, z = [delayed(varying(args))() for args in (xargs, yargs, zargs)]
     x, y, z = c.compute([x, y, z], retries={(y, z): 2})
 
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="one"):
         yield x
-    exc_info.match("one")
     assert (yield y) == 70
     assert (yield z) == 80
 
@@ -276,15 +269,13 @@ def test_compute_persisted_retries(c, s, a, b):
     # Sanity check
     x = c.persist(delayed(varying(args))())
     fut = c.compute(x)
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="one"):
         yield fut
-    exc_info.match("one")
 
     x = c.persist(delayed(varying(args))())
     fut = c.compute(x, retries=1)
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="two"):
         yield fut
-    exc_info.match("two")
 
     x = c.persist(delayed(varying(args))())
     fut = c.compute(x, retries=2)
@@ -303,9 +294,8 @@ def test_persist_retries(c, s, a, b):
 
     x = c.persist(delayed(varying(args))(), retries=1)
     x = c.compute(x)
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="two"):
         yield x
-    exc_info.match("two")
 
     x = c.persist(delayed(varying(args))(), retries=2)
     x = c.compute(x)
@@ -320,9 +310,8 @@ def test_persist_retries(c, s, a, b):
     x, y, z = c.persist([x, y, z], retries={(y, z): 2})
     x, y, z = c.compute([x, y, z])
 
-    with pytest.raises(ZeroDivisionError) as exc_info:
+    with pytest.raises(ZeroDivisionError, match="one"):
         yield x
-    exc_info.match("one")
     assert (yield y) == 70
     assert (yield z) == 80
 
@@ -2575,9 +2564,8 @@ def test_run_coroutine(c, s, a, b):
     results = yield c.run(geninc, 1, workers=[])
     assert results == {}
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(RuntimeError, match="hello"):
         yield c.run(throws, 1)
-    assert "hello" in str(exc_info)
 
     if sys.version_info >= (3, 5):
         results = yield c.run(asyncinc, 2, delay=0.01)
@@ -2603,9 +2591,8 @@ def test_run_exception(c):
         raise exc_type(exc_msg)
 
     for exc_type in [ValueError, RuntimeError]:
-        with pytest.raises(exc_type) as excinfo:
+        with pytest.raises(exc_type, match="informative message"):
             c.run(raise_exception, exc_type, "informative message")
-        assert "informative message" in str(excinfo.value)
 
 
 def test_diagnostic_ui(loop):
@@ -4420,16 +4407,15 @@ def test_recreate_error_sync(c):
     tot = c.submit(sum, x, y)
     f = c.compute(tot)
 
-    with pytest.raises(ZeroDivisionError) as e:
+    with pytest.raises(ZeroDivisionError):
         c.recreate_error_locally(f)
     assert f.status == "error"
 
 
 def test_recreate_error_not_error(c):
     f = c.submit(dec, 2)
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match="No errored futures passed"):
         c.recreate_error_locally(f)
-    assert "No errored futures passed" in str(e)
 
 
 @gen_cluster(client=True)
@@ -4497,7 +4483,7 @@ def test_robust_undeserializable_function(c, s, a, b):
             return 1
 
     future = c.submit(Foo(), 1)
-    with pytest.raises(MyException) as e:
+    with pytest.raises(MyException):
         yield future
 
     futures = c.map(inc, range(10))

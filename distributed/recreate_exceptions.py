@@ -23,7 +23,7 @@ class ReplayExceptionScheduler(object):
         self.scheduler.handlers["cause_of_failure"] = self.cause_of_failure
         self.scheduler.extensions["exceptions"] = self
 
-    def cause_of_failure(self, *args, **kwargs):
+    def cause_of_failure(self, *args, keys=(), **kwargs):
         """
         Return details of first failed task required by set of keys
 
@@ -38,8 +38,6 @@ class ReplayExceptionScheduler(object):
         task: the definition of that key
         deps: keys that the task depends on
         """
-
-        keys = kwargs.pop("keys", [])
         for key in keys:
             if isinstance(key, list):
                 key = tuple(key)  # ensure not a list from msgpack

@@ -234,9 +234,9 @@ class Cluster(object):
             and self.loop._thread_identity == get_thread_identity()
         )
 
-    def sync(self, func, *args, **kwargs):
-        if kwargs.pop("asynchronous", None) or self.asynchronous:
-            callback_timeout = kwargs.pop("callback_timeout", None)
+    def sync(self, func, *args, asynchronous=None, callback_timeout=None, **kwargs):
+        asynchronous = asynchronous or self.asynchronous
+        if asynchronous:
             future = func(*args, **kwargs)
             if callback_timeout is not None:
                 future = gen.with_timeout(timedelta(seconds=callback_timeout), future)

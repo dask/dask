@@ -748,20 +748,20 @@ class Client(Node):
         """
         return self._asynchronous and self.loop is IOLoop.current()
 
-    def sync(self, func, *args, **kwargs):
-        asynchronous = kwargs.pop("asynchronous", None)
+    def sync(self, func, *args, asynchronous=None, callback_timeout=None, **kwargs):
         if (
             asynchronous
             or self.asynchronous
             or getattr(thread_state, "asynchronous", False)
         ):
-            callback_timeout = kwargs.pop("callback_timeout", None)
             future = func(*args, **kwargs)
             if callback_timeout is not None:
                 future = gen.with_timeout(timedelta(seconds=callback_timeout), future)
             return future
         else:
-            return sync(self.loop, func, *args, **kwargs)
+            return sync(
+                self.loop, func, *args, callback_timeout=callback_timeout, **kwargs
+            )
 
     def __repr__(self):
         # Note: avoid doing I/O here...
@@ -1351,7 +1351,23 @@ class Client(Node):
         """
         return ClientExecutor(self, **kwargs)
 
-    def submit(self, func, *args, **kwargs):
+    def submit(
+        self,
+        func,
+        *args,
+        key=None,
+        workers=None,
+        resources=None,
+        retries=None,
+        priority=0,
+        fifo_timeout="100 ms",
+        allow_other_workers=False,
+        actor=False,
+        actors=False,
+        pure=None,
+        **kwargs
+    ):
+
         """ Submit a function application to the scheduler
 
         Parameters
@@ -1393,15 +1409,9 @@ class Client(Node):
         if not callable(func):
             raise TypeError("First input to submit must be a callable function")
 
-        key = kwargs.pop("key", None)
-        workers = kwargs.pop("workers", None)
-        resources = kwargs.pop("resources", None)
-        retries = kwargs.pop("retries", None)
-        priority = kwargs.pop("priority", 0)
-        fifo_timeout = kwargs.pop("fifo_timeout", "100ms")
-        allow_other_workers = kwargs.pop("allow_other_workers", False)
-        actor = kwargs.pop("actor", kwargs.pop("actors", False))
-        pure = kwargs.pop("pure", not actor)
+        actor = actor or actors
+        if pure is None:
+            pure = not actor
 
         if allow_other_workers not in (True, False, None):
             raise TypeError("allow_other_workers= must be True or False")
@@ -1452,7 +1462,22 @@ class Client(Node):
 
         return futures[skey]
 
-    def map(self, func, *iterables, **kwargs):
+    def map(
+        self,
+        func,
+        *iterables,
+        key=None,
+        workers=None,
+        retries=None,
+        resources=None,
+        priority=0,
+        allow_other_workers=False,
+        fifo_timeout="100 ms",
+        actor=False,
+        actors=False,
+        pure=None,
+        **kwargs
+    ):
         """ Map a function on a sequence of arguments
 
         Arguments can be normal objects or Futures
@@ -1494,6 +1519,11 @@ class Client(Node):
         --------
         Client.submit: Submit a single function
         """
+        key = key or funcname(func)
+        actor = actor or actors
+        if pure is None:
+            pure = not actor
+
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
 
@@ -1504,17 +1534,6 @@ class Client(Node):
                 "Dask no longer supports mapping over Iterators or Queues."
                 "Consider using a normal for loop and Client.submit"
             )
-
-        key = kwargs.pop("key", None)
-        key = key or funcname(func)
-        workers = kwargs.pop("workers", None)
-        retries = kwargs.pop("retries", None)
-        resources = kwargs.pop("resources", None)
-        user_priority = kwargs.pop("priority", 0)
-        allow_other_workers = kwargs.pop("allow_other_workers", False)
-        fifo_timeout = kwargs.pop("fifo_timeout", "100ms")
-        actor = kwargs.pop("actor", kwargs.pop("actors", False))
-        pure = kwargs.pop("pure", not actor)
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
@@ -1581,7 +1600,7 @@ class Client(Node):
         else:
             loose_restrictions = set()
 
-        priority = dict(zip(keys, range(len(keys))))
+        internal_priority = dict(zip(keys, range(len(keys))))
 
         if resources:
             resources = {k: resources for k in keys}
@@ -1593,10 +1612,10 @@ class Client(Node):
             keys,
             restrictions,
             loose_restrictions,
-            priority=priority,
+            priority=internal_priority,
             resources=resources,
             retries=retries,
-            user_priority=user_priority,
+            user_priority=priority,
             fifo_timeout=fifo_timeout,
             actors=actor,
         )
@@ -2051,7 +2070,7 @@ class Client(Node):
         return self.sync(self._retry, futures, asynchronous=asynchronous)
 
     @gen.coroutine
-    def _publish_dataset(self, *args, **kwargs):
+    def _publish_dataset(self, *args, name=None, **kwargs):
         with log_errors():
             coroutines = []
 
@@ -2063,7 +2082,6 @@ class Client(Node):
                     )
                 )
 
-            name = kwargs.pop("name", None)
             if name:
                 if len(args) == 0:
                     raise ValueError(
@@ -2179,8 +2197,7 @@ class Client(Node):
         return self.sync(self._get_dataset, name, **kwargs)
 
     @gen.coroutine
-    def _run_on_scheduler(self, function, *args, **kwargs):
-        wait = kwargs.pop("wait", True)
+    def _run_on_scheduler(self, function, *args, wait=True, **kwargs):
         response = yield self.scheduler.run_function(
             function=dumps(function), args=dumps(args), kwargs=dumps(kwargs), wait=wait
         )
@@ -2222,10 +2239,7 @@ class Client(Node):
         return self.sync(self._run_on_scheduler, function, *args, **kwargs)
 
     @gen.coroutine
-    def _run(self, function, *args, **kwargs):
-        nanny = kwargs.pop("nanny", False)
-        workers = kwargs.pop("workers", None)
-        wait = kwargs.pop("wait", True)
+    def _run(self, function, *args, nanny=False, workers=None, wait=True, **kwargs):
         responses = yield self.scheduler.broadcast(
             msg=dict(
                 op="run",
@@ -2582,6 +2596,7 @@ class Client(Node):
         priority=0,
         fifo_timeout="60s",
         actors=None,
+        traverse=True,
         **kwargs
     ):
         """ Compute dask collections on cluster
@@ -2645,7 +2660,6 @@ class Client(Node):
             collections = [collections]
             singleton = True
 
-        traverse = kwargs.pop("traverse", True)
         if traverse:
             collections = tuple(
                 dask.delayed(a)
