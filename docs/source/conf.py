@@ -49,6 +49,14 @@ html_extra_path = ['index.html']
 project = u'Dask'
 copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
+rst_prolog = """
+
+.. note::
+
+    Help inform future development and improve the Dask community experience -
+    take the `2019 Dask User Survey <https://t.co/OGrIjTLC2G>`_
+"""
+
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
