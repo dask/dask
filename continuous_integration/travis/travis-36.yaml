@@ -13,7 +13,9 @@ dependencies:
   - moto
   - coverage
   - codecov
-  - fastparquet
+  # Issue with conda package for NumPy 1.15?
+  # See fastparquet-444
+  # - fastparquet
   - h5py
   - pytables
   - zarr
