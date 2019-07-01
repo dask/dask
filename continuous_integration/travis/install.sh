@@ -75,6 +75,8 @@ pip install --quiet --upgrade --no-deps git+https://github.com/dask/distributed
 if [[ $PYTHON != '3.5' ]]; then
     # s3fs supports 3.6+
     pip install --quiet --upgrade --no-deps git+https://github.com/dask/s3fs
+else
+    pip install --quite --upgrade s3fs
 fi
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then
