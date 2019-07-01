@@ -21,7 +21,7 @@ export BOTO_CONFIG=/dev/null
 conda config --set always_yes yes --set changeps1 no --set remote_max_retries 10
 
 # Create conda environment
-conda env create -q -n test-environment -f $ENV_FILE python=$PYTHON
+conda env create -q -n test-environment -f $ENV_FILE
 source activate test-environment
 
 # We don't have a conda-forge package for cityhash
@@ -38,6 +38,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         pandas
     pip install \
         --no-deps
+        --upgrade \
         locket \
         git+https://github.com/pydata/sparse \
         git+https://github.com/dask/s3fs \
