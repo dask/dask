@@ -342,16 +342,49 @@ def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs
 
 
 @derived_from(np)
-def apply_along_axis(func1d, axis, arr, *args, **kwargs):
+def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs):
+    """
+    Apply a function to 1-D slices along the given axis. This is
+    a blocked variant of :func:`numpy.apply_along_axis` implemented via
+    :func:`dask.array.map_blocks`
+
+    Parameters
+    __________
+
+    func1d : callable
+        Function to apply to 1-D slices of the array along the given axis
+    axis : int
+        Axis along which func1d will be applied
+    arr : dask array
+        Dask array to which ``func1d`` will be applied
+    args : any
+        Additional arguments to ``func1d``.
+    dtype : str or dtype, optional
+        The dtype of the output of ``func1d``.
+    shape : tuple, optional
+        The shape of the output of ``func1d``.
+    kwargs : any
+        Additional keyword arguments for ``func1d``.
+
+    Notes
+    -----
+    If either of `dtype` or `shape` are not provided, Dask attempts to
+    determine them by calling `func1d` on a dummy array. This may produce
+    incorrect values for `dtype` or `shape`, so we recommend providing them.
+    """
     arr = asarray(arr)
 
-    # Validate and normalize axis.
-    arr.shape[axis]
+    # Verify that axis is valid and throw an error otherwise
     axis = len(arr.shape[:axis])
 
-    # Test out some data with the function.
-    test_data = np.ones((1,), dtype=arr.dtype)
-    test_result = np.array(func1d(test_data, *args, **kwargs))
+    # If necessary, infer dtype and shape of the output of func1d by calling it on test data.
+    if shape is None or dtype is None:
+        test_data = np.ones((1,), dtype=arr.dtype)
+        test_result = np.array(func1d(test_data, *args, **kwargs))
+        if shape is None:
+            shape = test_result.shape
+        if dtype is None:
+            dtype = test_result.dtype
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
@@ -363,10 +396,10 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     result = arr.map_blocks(
         _inner_apply_along_axis,
         name=funcname(func1d) + "-along-axis",
-        dtype=test_result.dtype,
-        chunks=(arr.chunks[:axis] + test_result.shape + arr.chunks[axis + 1 :]),
+        dtype=dtype,
+        chunks=(arr.chunks[:axis] + shape + arr.chunks[axis + 1 :]),
         drop_axis=axis,
-        new_axis=list(range(axis, axis + test_result.ndim, 1)),
+        new_axis=list(range(axis, axis + len(shape), 1)),
         func1d=func1d,
         func1d_axis=axis,
         func1d_args=args,
