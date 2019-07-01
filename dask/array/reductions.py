@@ -164,7 +164,7 @@ def reduction(
     if meta is None and hasattr(x, "_meta"):
         try:
             reduced_meta = compute_meta(
-                chunk, x.dtype, x._meta, axis=axis, keepdims=True, meta=True
+                chunk, x.dtype, x._meta, axis=axis, keepdims=True, computing_meta=True
             )
         except TypeError:
             reduced_meta = compute_meta(
@@ -301,7 +301,7 @@ def partial_reduce(
     meta = x._meta
     if reduced_meta is not None:
         try:
-            meta = func(reduced_meta, meta=True)
+            meta = func(reduced_meta, computing_meta=True)
         # no meta keyword argument exists for func, and it isn't required
         except TypeError:
             meta = func(reduced_meta)
@@ -530,8 +530,10 @@ def nannumel(x, **kwargs):
     return chunk.sum(~np.isnan(x), **kwargs)
 
 
-def mean_chunk(x, sum=chunk.sum, numel=numel, dtype="f8", meta=False, **kwargs):
-    if meta:
+def mean_chunk(
+    x, sum=chunk.sum, numel=numel, dtype="f8", computing_meta=False, **kwargs
+):
+    if computing_meta:
         return x
     n = numel(x, dtype=dtype, **kwargs)
 
@@ -541,15 +543,21 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype="f8", meta=False, **kwargs):
 
 
 def mean_combine(
-    pairs, sum=chunk.sum, numel=numel, dtype="f8", axis=None, meta=False, **kwargs
+    pairs,
+    sum=chunk.sum,
+    numel=numel,
+    dtype="f8",
+    axis=None,
+    computing_meta=False,
+    **kwargs
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
 
-    ns = deepmap(lambda pair: pair["n"], pairs) if not meta else pairs
+    ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     n = _concatenate2(ns, axes=axis).sum(axis=axis, **kwargs)
 
-    if meta:
+    if computing_meta:
         return n
 
     totals = deepmap(lambda pair: pair["total"], pairs)
@@ -558,12 +566,12 @@ def mean_combine(
     return {"n": n, "total": total}
 
 
-def mean_agg(pairs, dtype="f8", axis=None, meta=False, **kwargs):
-    ns = deepmap(lambda pair: pair["n"], pairs) if not meta else pairs
+def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
+    ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     n = _concatenate2(ns, axes=axis)
     n = np.sum(n, axis=axis, dtype=dtype, **kwargs)
 
-    if meta:
+    if computing_meta:
         return n
 
     totals = deepmap(lambda pair: pair["total"], pairs)
@@ -616,9 +624,9 @@ with ignoring(AttributeError):
 
 
 def moment_chunk(
-    A, order=2, sum=chunk.sum, numel=numel, dtype="f8", meta=False, **kwargs
+    A, order=2, sum=chunk.sum, numel=numel, dtype="f8", computing_meta=False, **kwargs
 ):
-    if meta:
+    if computing_meta:
         return A
     n = numel(A, **kwargs)
 
@@ -642,7 +650,14 @@ def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
 
 
 def moment_combine(
-    pairs, order=2, ddof=0, dtype="f8", sum=np.sum, axis=None, meta=False, **kwargs
+    pairs,
+    order=2,
+    ddof=0,
+    dtype="f8",
+    sum=np.sum,
+    axis=None,
+    computing_meta=False,
+    **kwargs
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -650,11 +665,11 @@ def moment_combine(
     kwargs["dtype"] = dtype
     kwargs["keepdims"] = True
 
-    ns = deepmap(lambda pair: pair["n"], pairs) if not meta else pairs
+    ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     ns = _concatenate2(ns, axes=axis)
     n = ns.sum(axis=axis, **kwargs)
 
-    if meta:
+    if computing_meta:
         return n
 
     totals = _concatenate2(deepmap(lambda pair: pair["total"], pairs), axes=axis)
@@ -673,7 +688,14 @@ def moment_combine(
 
 
 def moment_agg(
-    pairs, order=2, ddof=0, dtype="f8", sum=np.sum, axis=None, meta=False, **kwargs
+    pairs,
+    order=2,
+    ddof=0,
+    dtype="f8",
+    sum=np.sum,
+    axis=None,
+    computing_meta=False,
+    **kwargs
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -684,11 +706,11 @@ def moment_agg(
     keepdim_kw = kwargs.copy()
     keepdim_kw["keepdims"] = True
 
-    ns = deepmap(lambda pair: pair["n"], pairs) if not meta else pairs
+    ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     ns = _concatenate2(ns, axes=axis)
     n = ns.sum(axis=axis, **keepdim_kw)
 
-    if meta:
+    if computing_meta:
         return n
 
     totals = _concatenate2(deepmap(lambda pair: pair["total"], pairs), axes=axis)
