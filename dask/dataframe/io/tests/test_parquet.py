@@ -1076,7 +1076,7 @@ def test_filters(tmpdir, write_engine, read_engine):
 
 
 def test_divisions_read_with_filters(tmpdir):
-    check_fastparquet()
+    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     size = 100
@@ -1101,7 +1101,7 @@ def test_divisions_read_with_filters(tmpdir):
 
 
 def test_divisions_are_known_read_with_filters(tmpdir):
-    check_fastparquet()
+    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     df = pd.DataFrame(
