@@ -71,7 +71,6 @@ pip install --quiet --upgrade codecov
 pip install --quiet --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --quiet --upgrade --no-deps git+https://github.com/dask/zict
 pip install --quiet --upgrade --no-deps git+https://github.com/dask/distributed
-pip install --quiet --upgrade --no-deps git+https://github.com/dask/s3fs
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then
     conda install -q -c conda-forge fastparquet python-snappy cython
@@ -96,7 +95,6 @@ pip install --quiet --upgrade \
     mmh3 \
     pytest-xdist \
     xxhash \
-    moto \
     pandas_datareader
 
 if [[ ${UPSTREAM_DEV} ]]; then
