@@ -6,7 +6,7 @@ from numbers import Number
 import numpy as np
 import toolz
 
-from ..base import tokenize
+from ..base import tokenize, wait
 from ..blockwise import blockwise
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
@@ -77,7 +77,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     Notes
     -----
     With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
-    scales as ``k * m * n``.
+    scales as ``k * n * n``.
 
     The implementation here is the recursive variant due to the ultimate
     need for one "single core" QR decomposition. In the non-recursive version
@@ -93,8 +93,9 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     Where blocks are irregular, the above logic is applied with the "height" of
     the "tallest" block used in place of ``m``.
 
-    Consider use of the ``rechunk`` method to control this behavior. Blocks
-    that are as tall as possible are recommended.
+    Consider use of the ``rechunk`` method to control this behavior.
+    Taller blocks will reduce overall memory use (assuming that many of them
+    still fit in memory at once).
 
     See Also
     --------
@@ -230,7 +231,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         dependencies = toolz.merge(q_inner.dask.dependencies, r_inner.dask.dependencies)
 
         # Q_inner: "unstack"
-        name_q_st2 = "getitem-" + token + "-q2"
+        name_q_st2 = "getitem" + token + "-q2"
         dsk_q_st2 = dict(
             (
                 (name_q_st2, j, 0),
@@ -250,13 +251,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         dependencies[name_q_st2] = q_inner.__dask_layers__()
 
         # R: R_inner
-        name_r_st2 = "r-inner-" + token
+        name_r_st2 = "r-inner" + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
         layers[name_r_st2] = dsk_r_st2
         dependencies[name_r_st2] = r_inner.__dask_layers__()
 
         # Q: Block qr[0] (*) Q_inner
-        name_q_st3 = "dot-" + token + "-q3"
+        name_q_st3 = "dot" + token + "-q3"
         dsk_q_st3 = blockwise(
             np.dot,
             name_q_st3,
@@ -268,7 +269,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             numblocks={name_q_st1: numblocks, name_q_st2: numblocks},
         )
         layers[name_q_st3] = dsk_q_st3
-        dependencies[name_q_st3] = {name_q_st1, name_q_st2, name_q_st3}
+        dependencies[name_q_st3] = {name_q_st1, name_q_st2}
     else:
         # Do single core computation
 
@@ -625,7 +626,7 @@ def compression_level(n, q, oversampling=10, min_subspace_size=20):
     return min(max(min_subspace_size, q + oversampling), n)
 
 
-def compression_matrix(data, q, n_power_iter=0, seed=None):
+def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
     """ Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
@@ -641,6 +642,10 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
     n_power_iter: int
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
+    recompute : bool
+        Should we compute data at each stage during computation?
+        Recomputing reduces memory pressure, but means that we have to
+        recompute the input multiple times.
 
     References
     ----------
@@ -660,11 +665,17 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
     mat_h = data.dot(omega)
     for j in range(n_power_iter):
         mat_h = data.dot(data.T.dot(mat_h))
+        if recompute:
+            mat_h = mat_h.persist()
+            wait(mat_h)
     q, _ = tsqr(mat_h)
+    if recompute:
+        q = q.persist()
+        wait(q)
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None):
+def svd_compressed(a, k, n_power_iter=0, seed=None, recompute=False):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -682,10 +693,13 @@ def svd_compressed(a, k, n_power_iter=0, seed=None):
         Number of power iterations, useful when the singular values
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
+    recompute : bool
+        Should we compute data at each stage during computation?
+        Recomputing reduces memory pressure, but means that we have to
+        recompute the input multiple times.
 
     Examples
     --------
-
     >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
 
     Returns
@@ -703,7 +717,9 @@ def svd_compressed(a, k, n_power_iter=0, seed=None):
     pp. 217-288, June 2011
     https://arxiv.org/abs/0909.4061
     """
-    comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
+    comp = compression_matrix(
+        a, k, n_power_iter=n_power_iter, seed=seed, recompute=recompute
+    )
     a_compressed = comp.dot(a)
     v, s, u = tsqr(a_compressed.T, compute_svd=True)
     u = comp.T.dot(u)
