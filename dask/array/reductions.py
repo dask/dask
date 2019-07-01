@@ -1229,3 +1229,7 @@ def argtopk(a, k, axis=-1, split_every=None):
 @wraps(np.trace)
 def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
     return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)
+
+
+amin = min
+amax = max

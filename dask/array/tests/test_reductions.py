@@ -77,6 +77,8 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.std, a, np.std, x)
     reduction_1d_test(da.min, a, np.min, x, False)
     reduction_1d_test(da.max, a, np.max, x, False)
+    reduction_1d_test(da.amin, a, np.amin, x, False)
+    reduction_1d_test(da.amax, a, np.amax, x, False)
     reduction_1d_test(da.any, a, np.any, x, False)
     reduction_1d_test(da.all, a, np.all, x, False)
 
@@ -156,6 +158,8 @@ def test_reductions_2D(dtype):
     reduction_2d_test(da.std, a, np.std, x, False)  # Difference in dtype algo
     reduction_2d_test(da.min, a, np.min, x, False)
     reduction_2d_test(da.max, a, np.max, x, False)
+    reduction_2d_test(da.amin, a, np.amin, x, False)
+    reduction_2d_test(da.amax, a, np.amax, x, False)
     reduction_2d_test(da.any, a, np.any, x, False)
     reduction_2d_test(da.all, a, np.all, x, False)
 
@@ -272,6 +276,8 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.std, a, np.std, x, False, False)
     reduction_2d_test(da.min, a, np.min, x, False, False)
     reduction_2d_test(da.max, a, np.max, x, False, False)
+    reduction_2d_test(da.amin, a, np.amin, x, False, False)
+    reduction_2d_test(da.amax, a, np.amax, x, False, False)
     reduction_2d_test(da.any, a, np.any, x, False, False)
     reduction_2d_test(da.all, a, np.all, x, False, False)
 

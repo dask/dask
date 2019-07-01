@@ -188,6 +188,8 @@ try:
         all,
         min,
         max,
+        amin,
+        amax,
         moment,
         trace,
         argmin,
