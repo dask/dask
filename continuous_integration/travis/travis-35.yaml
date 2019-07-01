@@ -1,6 +1,6 @@
 # This file intends to test the oldest supported versions
 # of dependencies
-name: pandas-dev
+name: test-environment
 channels:
   - conda-forge
 dependencies:
@@ -12,13 +12,13 @@ dependencies:
   - pytest
   - pytest-xdist
   - moto
-  - coverage
   - fastparquet
   - h5py
   - pytables
   - zarr
   - tiledb-py
   - sqlalchemy
+  - pyarrow
   # other -- IO
   - bcolz
   - blosc
@@ -47,6 +47,7 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
+  - pandas-datareader
   - pip
   - pip:
       - cityhash

@@ -31,6 +31,7 @@ jobs:
       - PYTHON=3.6
       - NUMPY=1.15.1
       - PANDAS=0.23.4
+      - ENV_FILE=continuous_integration/travis/travis-36.yaml
       - *test_and_lint
       - *coverage
       - *no_optimize
@@ -40,6 +41,7 @@ jobs:
       - PYTHON=3.7
       - NUMPY=1.16.2
       - PANDAS>=0.24.1
+      - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -48,8 +50,8 @@ jobs:
 
     - env: &py37_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - NUMPY=1.16.2    # these are overridden later
-      - PANDAS>=0.24.2
+      - ENV_FILE=continuous_integration/travis/travis-37-dev.yaml
+      - *test_and_lint
       - *test_and_lint
       - *no_coverage
       - *no_optimize
