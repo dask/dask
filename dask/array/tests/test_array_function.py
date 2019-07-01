@@ -25,6 +25,9 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
         lambda x: np.var(x),
         lambda x: np.vstack(x),
         lambda x: np.linalg.norm(x),
+        lambda x: np.min(x),
+        lambda x: np.amin(x),
+        lambda x: np.round(x),
     ],
 )
 def test_array_function_dask(func):
