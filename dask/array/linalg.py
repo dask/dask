@@ -643,9 +643,11 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
     recompute : bool
-        Should we compute data at each stage during computation?
-        Recomputing reduces memory pressure, but means that we have to
-        recompute the input multiple times.
+        Whether or not to compute data at each stage during computation.
+        Recomputing the input while performing several passes reduces memory
+        pressure, but means that we have to recompute the input multiple times.
+        This is a good choice if the data is larger than memory and cheap to
+        recreate.
 
     References
     ----------
@@ -664,10 +666,14 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
     )
     mat_h = data.dot(omega)
     for j in range(n_power_iter):
-        mat_h = data.dot(data.T.dot(mat_h))
         if recompute:
             mat_h = mat_h.persist()
             wait(mat_h)
+        tmp = data.T.dot(mat_h)
+        if recompute:
+            tmp = tmp.persist()
+            wait(tmp)
+        mat_h = data.dot(tmp)
     q, _ = tsqr(mat_h)
     if recompute:
         q = q.persist()
