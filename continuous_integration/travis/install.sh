@@ -20,7 +20,7 @@ export BOTO_CONFIG=/dev/null
 conda config --set always_yes yes --set changeps1 no --set remote_max_retries 10
 
 # Create conda environment
-conda create -q -n test-environment python=$PYTHON
+conda env create -q -n test-environment -f $ENV_FILE python=$PYTHON
 source activate test-environment
 
 # Pin matrix items
@@ -76,7 +76,7 @@ if [[ $PYTHON != '3.5' ]]; then
     # s3fs supports 3.6+
     pip install --quiet --upgrade --no-deps git+https://github.com/dask/s3fs
 else
-    pip install --quite --upgrade s3fs
+    pip install --quiet --upgrade s3fs
 fi
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then

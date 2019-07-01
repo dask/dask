@@ -1,0 +1,54 @@
+# This file intends to test the oldest supported versions
+# of dependencies
+name: pandas-dev
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.5.*
+  - numpy=1.13.*
+  - pandas=0.21.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  - coverage
+  - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  - tiledb-py
+  - sqlalchemy
+  # other -- IO
+  - bcolz
+  - blosc
+  - s3fs
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed==2.0.1
+  - graphviz
+  - ipython
+  - lz4
+  - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - pip
+  - pip:
+      - cityhash
+      - mmh3
+      - xxhash

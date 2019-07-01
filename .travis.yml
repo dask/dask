@@ -21,6 +21,7 @@ jobs:
       - PYTHON=3.5
       - NUMPY=1.13.0
       - PANDAS=0.21.1
+      - ENV_FILE=continuous_integration/travis/travis-35.yaml
       - *test
       - *no_coverage
       - *no_optimize
