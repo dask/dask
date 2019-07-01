@@ -1,3 +1,8 @@
+.. note::
+
+    Help inform future development and improve the Dask community experience -
+    take the `2019 Dask User Survey <https://t.co/OGrIjTLC2G>`_
+
 ====
 Dask
 ====
