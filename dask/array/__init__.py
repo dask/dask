@@ -160,6 +160,7 @@ try:
         degrees,
         radians,
         rint,
+        round_,
         fix,
         angle,
         real,

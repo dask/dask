@@ -304,6 +304,7 @@ fix = wrap_elemwise(np.fix, array_wrap=True)
 i0 = wrap_elemwise(np.i0, array_wrap=True)
 sinc = wrap_elemwise(np.sinc, array_wrap=True)
 nan_to_num = wrap_elemwise(np.nan_to_num, array_wrap=True)
+round_ = wrap_elemwise(np.round_, array_wrap=True)
 
 
 @copy_docstring(source=np.angle)

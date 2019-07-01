@@ -110,6 +110,7 @@ unary_ufuncs = [
     "radians",
     "reciprocal",
     "rint",
+    "round_",
     "sign",
     "signbit",
     "sin",
