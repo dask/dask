@@ -1,4 +1,3 @@
-# This job includes coverage
 name: testenv
 channels:
   - conda-forge
