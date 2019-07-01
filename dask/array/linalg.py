@@ -675,9 +675,6 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
             wait(tmp)
         mat_h = data.dot(tmp)
     q, _ = tsqr(mat_h)
-    if recompute:
-        q = q.persist()
-        wait(q)
     return q.T
 
 
@@ -726,6 +723,9 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, recompute=False):
     comp = compression_matrix(
         a, k, n_power_iter=n_power_iter, seed=seed, recompute=recompute
     )
+    if recompute:
+        comp = comp.persist()
+        wait(comp)
     a_compressed = comp.dot(a)
     v, s, u = tsqr(a_compressed.T, compute_svd=True)
     u = comp.T.dot(u)
