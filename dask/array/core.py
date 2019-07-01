@@ -224,6 +224,8 @@ def _concatenate2(arrays, axes=[]):
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
+    If axes is an empty list or tuple, return arrays, or arrays[0] if
+    arrays is a list.
 
     >>> x = np.array([[1, 2], [3, 4]])
     >>> _concatenate2([x, x], axes=[0])
@@ -246,7 +248,18 @@ def _concatenate2(arrays, axes=[]):
     >>> _concatenate2(iter([x, x]), axes=[1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4]])
+
+    Special Case
+    >>> _concatenate2([x, x], axes=())
+    array([[1, 2],
+           [3, 4]])
     """
+    if axes == ():
+        if isinstance(arrays, list):
+            return arrays[0]
+        else:
+            return arrays
+
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
     if not isinstance(arrays, (list, tuple)):
