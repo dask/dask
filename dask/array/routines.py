@@ -31,6 +31,7 @@ from .core import (
     concatenate,
     stack,
     blockwise,
+    broadcast_chunks,
     broadcast_shapes,
     is_scalar_for_elemwise,
     broadcast_to,
@@ -1181,9 +1182,11 @@ def where(condition, x=None, y=None):
         y = asarray(y)
 
         shape = broadcast_shapes(x.shape, y.shape)
+        chunks = broadcast_chunks(x.chunks, y.chunks)
+
         out = x if condition else y
 
-        return broadcast_to(out, shape).astype(dtype)
+        return broadcast_to(out, shape, chunks=chunks).astype(dtype)
     else:
         return elemwise(np.where, condition, x, y)
 
