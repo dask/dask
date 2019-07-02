@@ -8,8 +8,12 @@ import pathlib
 from toolz import identity
 
 from ..compatibility import PY2, urlsplit
+from fsspec.core import infer_compression, expand_paths_if_needed
+from fsspec.utils import (seek_delimiter, stringify_path, build_name_function,
+                          infer_storage_options, update_storage_options, read_block)
 
 
+<<<<<<< Updated upstream
 def infer_storage_options(urlpath, inherit_storage_options=None):
     """ Infer storage options from URL path and merge it with existing storage
     options.
@@ -296,3 +300,7 @@ def stringify_path(filepath):
     elif isinstance(filepath, pathlib.Path):
         return str(filepath)
     return filepath
+=======
+def SeekableFile(x):
+    return x
+>>>>>>> Stashed changes
