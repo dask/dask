@@ -138,6 +138,32 @@ def getter_inline(a, b, asarray=True, lock=None):
 from .optimization import optimize, fuse_slice
 
 
+_HANDLED_FUNCTIONS = {}
+
+
+def implements(*numpy_functions):
+    """Register an __array_function__ implementation for dask.array.Array
+
+    Register that a function implements the API of a NumPy function (or several
+    NumPy functions in case of aliases) which is handled with
+    ``__array_function__``.
+
+    Parameters
+    ----------
+    \\*numpy_functions : callables
+        One or more NumPy functions that are handled by ``__array_function__``
+        and will be mapped by `implements` to a `dask.array` function.
+    """
+
+    def decorator(dask_func):
+        for numpy_function in numpy_functions:
+            _HANDLED_FUNCTIONS[numpy_function] = dask_func
+
+        return dask_func
+
+    return decorator
+
+
 def slices_from_chunks(chunks):
     """ Translate chunks tuple to a set of slices in product order
 
@@ -3029,6 +3055,7 @@ def unpack_singleton(x):
     return x
 
 
+@implements(np.block)
 def block(arrays, allow_unknown_chunksizes=False):
     """
     Assemble an nd-array from nested lists of blocks.
@@ -3196,6 +3223,7 @@ def block(arrays, allow_unknown_chunksizes=False):
     )
 
 
+@implements(np.concatenate)
 def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     Concatenate arrays along an existing axis
@@ -3776,6 +3804,7 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
+@implements(np.broadcast_to)
 def broadcast_to(x, shape, chunks=None):
     """Broadcast an array to a new shape.
 
@@ -3845,6 +3874,7 @@ def broadcast_to(x, shape, chunks=None):
     return Array(graph, name, chunks, dtype=x.dtype)
 
 
+@implements(np.broadcast_arrays)
 @derived_from(np)
 def broadcast_arrays(*args, **kwargs):
     subok = bool(kwargs.pop("subok", False))
@@ -3979,6 +4009,7 @@ def transposelist(arrays, axes, extradims=0):
     return reshapelist(newshape, result)
 
 
+@implements(np.stack)
 def stack(seq, axis=0):
     """
     Stack arrays along a new axis
@@ -4552,32 +4583,6 @@ def from_npy_stack(dirname, mmap_mode="r"):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
-
-
-_HANDLED_FUNCTIONS = {}
-
-
-def implements(*numpy_functions):
-    """Register an __array_function__ implementation for dask.array.Array
-
-    Register that a function implements the API of a NumPy function (or several
-    NumPy functions in case of aliases) which is handled with
-    ``__array_function__``.
-
-    Parameters
-    ----------
-    \\*numpy_functions : callables
-        One or more NumPy functions that are handled by ``__array_function__``
-        and will be mapped by `implements` to a `dask.array` function.
-    """
-
-    def decorator(dask_func):
-        for numpy_function in numpy_functions:
-            _HANDLED_FUNCTIONS[numpy_function] = dask_func
-
-        return dask_func
-
-    return decorator
 
 
 from .utils import meta_from_array

@@ -21,6 +21,7 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
         lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
+        lambda x: np.block([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
         lambda x: np.vstack(x),
