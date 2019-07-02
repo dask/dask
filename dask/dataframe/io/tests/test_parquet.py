@@ -1042,6 +1042,8 @@ def test_partition_on(tmpdir, write_engine, read_engine):
 
 @write_read_engines_xfail
 def test_filters(tmpdir, write_engine, read_engine):
+    if write_engine == "fastparquet" or read_engine == "fastparquet":
+        pytest.importorskip("fastparquet", minversion="0.3.1")
     fn = str(tmpdir)
 
     df = pd.DataFrame({"at": ["ab", "aa", "ba", "da", "bb"]})
@@ -1074,7 +1076,7 @@ def test_filters(tmpdir, write_engine, read_engine):
 
 
 def test_divisions_read_with_filters(tmpdir):
-    check_fastparquet()
+    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     size = 100
@@ -1099,7 +1101,7 @@ def test_divisions_read_with_filters(tmpdir):
 
 
 def test_divisions_are_known_read_with_filters(tmpdir):
-    check_fastparquet()
+    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     df = pd.DataFrame(
