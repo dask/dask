@@ -1274,19 +1274,20 @@ def test_assign_callable():
 
 
 def test_assign_dtypes():
-    ddf = dd.from_pandas(pd.DataFrame(data={'col1': ['a', 'b'],
-                                            'col2': [1, 2]},
-                                      columns=['col1', 'col2']),
-                         npartitions=2)
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            data={"col1": ["a", "b"], "col2": [1, 2]}, columns=["col1", "col2"]
+        ),
+        npartitions=2,
+    )
 
-    assert_eq(ddf.dtypes, pd.Series(data=["object", "int64"],
-                                    index=["col1", "col2"]))
-
-    new_col = {"col3": pd.Series(['0', '1'])}
+    new_col = {"col3": pd.Series(["0", "1"])}
     res = ddf.assign(**new_col)
 
-    assert_eq(res.dtypes, pd.Series(data=["object", "int64", "object"],
-                                    index=["col1", "col2", "col3"]))
+    assert_eq(
+        res.dtypes,
+        pd.Series(data=["object", "int64", "object"], index=["col1", "col2", "col3"]),
+    )
 
 
 def test_map():
