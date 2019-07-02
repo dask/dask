@@ -468,8 +468,9 @@ def test_describe_for_possibly_unsorted_q():
 
 
 def test_cumulative():
-    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
-    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
+    index = ["row{:03d}".format(i) for i in range(100)]
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
+    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
 
     ddf = dd.from_pandas(df, 5)
     ddf_out = dd.from_pandas(df_out, 5)
