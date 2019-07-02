@@ -1064,7 +1064,6 @@ def is_arraylike(x):
     return (
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
-        and x.shape
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
     )
