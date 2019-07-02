@@ -28,6 +28,7 @@ from dask.utils import (
     parse_timedelta,
     parse_bytes,
     is_arraylike,
+    is_array_meta_like,
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
@@ -516,6 +517,18 @@ def test_is_arraylike():
     assert is_arraylike([]) is False
     assert is_arraylike([0]) is False
 
-    assert is_arraylike(np.empty(())) is True
-    assert is_arraylike(np.empty((0, ))) is True
+    assert is_arraylike(np.empty(())) is False
+    assert is_arraylike(np.empty((0,))) is True
     assert is_arraylike(np.empty((0, 0))) is True
+
+
+def test_is_array_meta_like():
+    assert is_array_meta_like(0) is False
+    assert is_array_meta_like(()) is False
+    assert is_array_meta_like((0)) is False
+    assert is_array_meta_like([]) is False
+    assert is_array_meta_like([0]) is False
+
+    assert is_array_meta_like(np.empty(())) is True
+    assert is_array_meta_like(np.empty((0,))) is True
+    assert is_array_meta_like(np.empty((0, 0))) is True
