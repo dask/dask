@@ -363,7 +363,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     )
 
 
-@implements((np.min, np.amin))
+@implements(np.min, np.amin)
 @wraps(chunk.min)
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
@@ -378,7 +378,7 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
-@implements((np.max, np.amax))
+@implements(np.max, np.amax)
 @wraps(chunk.max)
 def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(

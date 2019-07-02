@@ -1225,7 +1225,10 @@ class Array(DaskMethodsMixin):
                 "coerce your array (e.g. with numpy.asarray) "
                 "to silence this warning".format(func.__name__)
             )
-            return func._implementation(*args, **kwargs)
+            # Need to convert to ndarray as needed, so we can access the
+            # NumPy implementation of the function.
+            args, kwargs = _compute_dask_args(args, kwargs)
+            return func(*args, **kwargs)
 
         return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
@@ -4552,7 +4555,7 @@ def from_npy_stack(dirname, mmap_mode="r"):
 _HANDLED_FUNCTIONS = {}
 
 
-def implements(numpy_function):
+def implements(*numpy_functions):
     """Register an __array_function__ implementation for dask.array.Array
 
     Register that a function implements the API of a NumPy function (or several
@@ -4561,22 +4564,37 @@ def implements(numpy_function):
 
     Parameters
     ----------
-    numpy_function : callable or sequence of callables
+    \\*numpy_functions : callables
         One or more NumPy functions that are handled by ``__array_function__``
         and will be mapped by `implements` to a `dask.array` function.
-
     """
 
     def decorator(dask_func):
-        if callable(numpy_function):
+        for numpy_function in numpy_functions:
             _HANDLED_FUNCTIONS[numpy_function] = dask_func
-        else:
-            for npfunc in numpy_function:
-                _HANDLED_FUNCTIONS[npfunc] = dask_func
 
         return dask_func
 
     return decorator
+
+
+def _maybe_compute(obj):
+    """Convert Array to numpy.ndarray if needed"""
+    if isinstance(obj, Array):
+        return np.array(obj)
+    elif isinstance(obj, tuple):
+        return tuple(_maybe_compute(x) for x in obj)
+    elif isinstance(obj, list):
+        return list(_maybe_compute(x) for x in obj)
+    else:
+        return obj
+
+
+def _compute_dask_args(args, kwargs):
+    """Deal with converting args/kwargs, see __array_function__"""
+    args = _maybe_compute(args)
+    kwargs = {k: _maybe_compute(v) for k, v in kwargs.items()}
+    return args, kwargs
 
 
 from .utils import meta_from_array

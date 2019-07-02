@@ -808,7 +808,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
-@implements((np.round, np.round_))
+@implements(np.round, np.round_)
 @derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
