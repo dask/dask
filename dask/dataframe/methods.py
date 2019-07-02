@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like
+from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250
 from ..utils import Dispatch
 
 if PANDAS_VERSION >= "0.23":
@@ -191,7 +191,15 @@ def describe_nonnumeric_aggregate(stats, name):
 
     # input was empty dataframe/series
     if len(top_freq) == 0:
-        return pd.Series([0, 0], index=["count", "unique"], name=name)
+        data = [0, 0]
+        index = ["count", "unique"]
+        dtype = None
+        if PANDAS_GT_0250:
+            data.extend([None, None])
+            index.extend(["top", "freq"])
+            dtype = object
+        result = pd.Series(data, index=index, dtype=dtype, name=name)
+        return result
 
     top = top_freq.index[0]
     freq = top_freq.iloc[0]

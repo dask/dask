@@ -928,7 +928,7 @@ def stack_partitions(dfs, divisions, join="outer"):
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
         if is_dataframe_like(df):
-            shared = df.columns.intersection(meta)
+            shared = df.columns.intersection(meta.columns)
             if not df._meta[shared].dtypes.equals(meta[shared].dtypes):
                 df = df.astype(meta[shared].dtypes)
         elif is_series_like(df) and is_series_like(meta):

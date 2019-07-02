@@ -1621,7 +1621,8 @@ def test_with_tz(tmpdir, engine):
     with warnings.catch_warnings():
         if engine == "fastparquet":
             # fastparquet-442
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", DeprecationWarning)  # pandas 0.23
+            warnings.simplefilter("ignore", FutureWarning)  # pandas 0.25
             fn = str(tmpdir)
             df = pd.DataFrame([[0]], columns=["a"], dtype="datetime64[ns, UTC]")
             df = dd.from_pandas(df, 1)
