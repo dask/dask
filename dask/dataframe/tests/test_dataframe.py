@@ -468,8 +468,9 @@ def test_describe_for_possibly_unsorted_q():
 
 
 def test_cumulative():
-    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
-    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
+    index = ["row{:03d}".format(i) for i in range(100)]
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
+    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
 
     ddf = dd.from_pandas(df, 5)
     ddf_out = dd.from_pandas(df_out, 5)
@@ -1272,6 +1273,23 @@ def test_assign_callable():
     assert_eq(a, b)
 
 
+def test_assign_dtypes():
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            data={"col1": ["a", "b"], "col2": [1, 2]}, columns=["col1", "col2"]
+        ),
+        npartitions=2,
+    )
+
+    new_col = {"col3": pd.Series(["0", "1"])}
+    res = ddf.assign(**new_col)
+
+    assert_eq(
+        res.dtypes,
+        pd.Series(data=["object", "int64", "object"], index=["col1", "col2", "col3"]),
+    )
+
+
 def test_map():
     df = pd.DataFrame(
         {"a": range(9), "b": [4, 5, 6, 1, 2, 3, 0, 0, 0]},
@@ -1725,7 +1743,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
 
 @pytest.mark.parametrize("use_index", [True, False])
 @pytest.mark.parametrize("n", [2, 5])
-@pytest.mark.parametrize("partition_size", ["1kiB"])
+@pytest.mark.parametrize("partition_size", ["1kiB", 379])
 @pytest.mark.parametrize("transform", [lambda df: df, lambda df: df.x])
 def test_repartition_partition_size(use_index, n, partition_size, transform):
     df = pd.DataFrame(
@@ -4060,6 +4078,16 @@ def test_map_partitions_delays_lists():
 
     out = ddf.map_partitions(lambda x, y: x + sum(y), L)
     assert any(str(L) == str(v) for v in out.__dask_graph__().values())
+
+
+def test_str_noexpand():
+    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], name="foo")
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(s.str.split(n=n, expand=False), ds.str.split(n=n, expand=False))
+
+    assert ds.str.split(n=1, expand=False).name == "foo"
 
 
 def test_str_expand():

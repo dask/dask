@@ -718,17 +718,14 @@ def test_read_hdf_start_stop_values():
     with tmpfile("h5") as fn:
         df.to_hdf(fn, "/data", format="table")
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="number of rows"):
             dd.read_hdf(fn, "/data", stop=10)
-        assert "number of rows" in str(e)
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="is above or equal to"):
             dd.read_hdf(fn, "/data", start=10)
-        assert "is above or equal to" in str(e)
 
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="positive integer"):
             dd.read_hdf(fn, "/data", chunksize=-1)
-        assert "positive integer" in str(e)
 
 
 def test_hdf_globbing():
@@ -784,17 +781,31 @@ def test_hdf_file_list():
             tm.assert_frame_equal(res.compute(), df)
 
 
-def test_hdf_pattern_pathlike():
+def test_read_hdf_pattern_pathlike():
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
 
-    with tmpdir() as tdir:
-        df.to_hdf(os.path.join(tdir, "test.h5"), "dataframe", format="table")
-        path = pathlib.Path(tdir) / "test.h5"
+    with tmpfile("h5") as fn:
+        path = pathlib.Path(fn)
+        df.to_hdf(path, "dataframe", format="table")
         res = dd.read_hdf(path, "dataframe")
         assert_eq(res, df)
+
+
+def test_to_hdf_path_pathlike():
+    pytest.importorskip("tables")
+    df = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    with tmpfile("h5") as fn:
+        path = pathlib.Path(fn)
+        ddf.to_hdf(path, "/data")
+        res = pd.read_hdf(path, "/data")
+        assert_eq(res, ddf)
 
 
 def test_read_hdf_doesnt_segfault():

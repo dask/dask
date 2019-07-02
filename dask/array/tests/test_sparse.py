@@ -5,6 +5,7 @@ import pytest
 
 import dask
 import dask.array as da
+from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
 sparse = pytest.importorskip("sparse")
@@ -168,6 +169,8 @@ def test_metadata():
         assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
         assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
         assert isinstance(np.stack([y, y])._meta, sparse.COO)
+        if _numpy_117:
+            assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
 
 
 def test_html_repr():

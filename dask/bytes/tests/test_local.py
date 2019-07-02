@@ -82,24 +82,21 @@ def test_urlpath_inference_strips_protocol(tmpdir):
 
 def test_urlpath_inference_errors():
     # Empty list
-    with pytest.raises(ValueError) as err:
+    with pytest.raises(ValueError, match="empty"):
         get_fs_token_paths([])
-    assert "empty" in str(err)
 
     # Protocols differ
-    with pytest.raises(ValueError) as err:
+    with pytest.raises(ValueError, match="same protocol and options"):
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
-    assert "same protocol and options" in str(err)
 
     # Options differ
-    with pytest.raises(ValueError) as err:
+    with pytest.raises(ValueError, match="same protocol and options"):
         get_fs_token_paths(
             [
                 "hdfs://myuser@node.com/test/path.csv",
                 "hdfs://otheruser@node.com/other/path.csv",
             ]
         )
-    assert "same protocol and options" in str(err)
 
     # Unknown type
     with pytest.raises(TypeError):
@@ -354,9 +351,8 @@ def test_bad_compression():
 
 def test_not_found():
     fn = "not-a-file"
-    with pytest.raises((FileNotFoundError, OSError)) as e:
+    with pytest.raises((FileNotFoundError, OSError), match=fn):
         read_bytes(fn)
-    assert fn in str(e)
 
 
 @pytest.mark.slow
