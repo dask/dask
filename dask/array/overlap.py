@@ -8,6 +8,7 @@ from toolz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
+from .creation import pad
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
@@ -274,22 +275,7 @@ def periodic(x, axis, depth):
     Useful to create periodic boundary conditions for overlap
     """
 
-    left = (
-        (slice(None, None, None),) * axis
-        + (slice(0, depth),)
-        + (slice(None, None, None),) * (x.ndim - axis - 1)
-    )
-    right = (
-        (slice(None, None, None),) * axis
-        + (slice(-depth, None),)
-        + (slice(None, None, None),) * (x.ndim - axis - 1)
-    )
-    l = x[left]
-    r = x[right]
-
-    l, r = _remove_overlap_boundaries(l, r, axis, depth)
-
-    return concatenate([r, x, l], axis=axis)
+    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis) * (0,), "wrap")
 
 
 def reflect(x, axis, depth):
@@ -297,29 +283,8 @@ def reflect(x, axis, depth):
 
     This is the converse of ``periodic``
     """
-    if depth == 1:
-        left = (
-            (slice(None, None, None),) * axis
-            + (slice(0, 1),)
-            + (slice(None, None, None),) * (x.ndim - axis - 1)
-        )
-    else:
-        left = (
-            (slice(None, None, None),) * axis
-            + (slice(depth - 1, None, -1),)
-            + (slice(None, None, None),) * (x.ndim - axis - 1)
-        )
-    right = (
-        (slice(None, None, None),) * axis
-        + (slice(-1, -depth - 1, -1),)
-        + (slice(None, None, None),) * (x.ndim - axis - 1)
-    )
-    l = x[left]
-    r = x[right]
 
-    l, r = _remove_overlap_boundaries(l, r, axis, depth)
-
-    return concatenate([l, x, r], axis=axis)
+    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis) * (0,), "reflect")
 
 
 def nearest(x, axis, depth):
@@ -328,55 +293,19 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
-    left = (
-        (slice(None, None, None),) * axis
-        + (slice(0, 1),)
-        + (slice(None, None, None),) * (x.ndim - axis - 1)
-    )
-    right = (
-        (slice(None, None, None),) * axis
-        + (slice(-1, -2, -1),)
-        + (slice(None, None, None),) * (x.ndim - axis - 1)
-    )
 
-    l = concatenate([x[left]] * depth, axis=axis)
-    r = concatenate([x[right]] * depth, axis=axis)
-
-    l, r = _remove_overlap_boundaries(l, r, axis, depth)
-
-    return concatenate([l, x, r], axis=axis)
+    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis) * (0,), "symmetric")
 
 
 def constant(x, axis, depth, value):
     """ Add constant slice to either side of array """
-    chunks = list(x.chunks)
-    chunks[axis] = (depth,)
 
-    try:
-        c = wrap.full_like(
-            getattr(x, "_meta", x),
-            value,
-            shape=tuple(map(sum, chunks)),
-            chunks=tuple(chunks),
-            dtype=x.dtype,
-        )
-    except TypeError:
-        c = wrap.full(
-            tuple(map(sum, chunks)), value, chunks=tuple(chunks), dtype=x.dtype
-        )
-
-    return concatenate([c, x, c], axis=axis)
-
-
-def _remove_overlap_boundaries(l, r, axis, depth):
-    lchunks = list(l.chunks)
-    lchunks[axis] = (depth,)
-    rchunks = list(r.chunks)
-    rchunks[axis] = (depth,)
-
-    l = l.rechunk(tuple(lchunks))
-    r = r.rechunk(tuple(rchunks))
-    return l, r
+    return pad(
+        x,
+        axis * (0,) + (depth,) + (x.ndim - axis) * (0,),
+        "constant",
+        constant_values=value,
+    )
 
 
 def boundaries(x, depth=None, kind=None):
