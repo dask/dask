@@ -3559,7 +3559,7 @@ class Scheduler(ServerNode):
             for dts in ts.dependencies:
                 dep = dts.key
                 if not dts.who_has:
-                    ts.waiting_on.add(dep)
+                    ts.waiting_on.add(dts)
                 if dts.state == "released":
                     recommendations[dep] = "waiting"
                 else:
