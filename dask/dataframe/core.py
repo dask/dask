@@ -5237,7 +5237,7 @@ def _take_last(a, skipna=True):
         # in each column
         if is_dataframe_like(a):
             # create Series from appropriate backend dataframe library
-            series_typ = type(a.loc[0:1, a.columns[0]])
+            series_typ = type(a.iloc[0:1, 0])
             if a.empty:
                 return series_typ([])
             return series_typ(
