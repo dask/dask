@@ -11,7 +11,7 @@ from numbers import Integral, Number
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, handle_out, implements
+from .core import _concatenate2, Array, handle_out, implements, _HANDLED_FUNCTIONS
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
@@ -464,6 +464,7 @@ with ignoring(AttributeError):
             split_every=split_every,
             out=out,
         )
+
     @implements(np.nancumsum)
     @wraps(chunk.nancumsum)
     def nancumsum(x, axis, dtype=None, out=None):
@@ -1018,6 +1019,12 @@ argmin = make_arg_reduction(chunk.min, chunk.argmin)
 argmax = make_arg_reduction(chunk.max, chunk.argmax)
 nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
 nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
+# The above four functions need to be handled by __array_function__
+for npfunc, dafunc in zip(
+    (np.argmin, np.argmax, np.nanargmin, np.nanargmax),
+    (argmin, argmax, nanargmin, nanargmax),
+):
+    _HANDLED_FUNCTIONS[npfunc] = dafunc
 
 
 def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):

@@ -507,6 +507,7 @@ def test_reduction_names():
     assert x.mean().name.startswith("mean")
 
 
+@pytest.mark.filterwarnings("ignore:`argmax` is not implemented by dask")
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))
