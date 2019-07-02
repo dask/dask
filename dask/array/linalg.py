@@ -660,7 +660,10 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
-    state = RandomState(seed)
+    if isinstance(seed, RandomState):
+        state = seed
+    else:
+        state = RandomState(seed)
     omega = state.standard_normal(
         size=(n, comp_level), chunks=(data.chunks[1], (comp_level,))
     )
