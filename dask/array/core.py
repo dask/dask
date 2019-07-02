@@ -27,7 +27,7 @@ from toolz import map, reduce, frequencies
 import numpy as np
 
 from . import chunk
-from .. import config
+from .. import config, compute
 from ..base import (
     DaskMethodsMixin,
     tokenize,
@@ -1225,9 +1225,11 @@ class Array(DaskMethodsMixin):
                 "coerce your array (e.g. with numpy.asarray) "
                 "to silence this warning".format(func.__name__)
             )
-            # Need to convert to ndarray as needed, so we can access the
-            # NumPy implementation of the function.
-            args, kwargs = _compute_dask_args(args, kwargs)
+            # Need to convert to array object (e.g. numpy.ndarray or
+            # cupy.ndarray) as needed, so we can call the NumPy function
+            # again and it gets the chance to dispatch to the right
+            # implementation.
+            args, kwargs = compute(args, kwargs)
             return func(*args, **kwargs)
 
         return _HANDLED_FUNCTIONS[func](*args, **kwargs)
@@ -4576,25 +4578,6 @@ def implements(*numpy_functions):
         return dask_func
 
     return decorator
-
-
-def _maybe_compute(obj):
-    """Convert Array to numpy.ndarray if needed"""
-    if isinstance(obj, Array):
-        return np.array(obj)
-    elif isinstance(obj, tuple):
-        return tuple(_maybe_compute(x) for x in obj)
-    elif isinstance(obj, list):
-        return list(_maybe_compute(x) for x in obj)
-    else:
-        return obj
-
-
-def _compute_dask_args(args, kwargs):
-    """Deal with converting args/kwargs, see __array_function__"""
-    args = _maybe_compute(args)
-    kwargs = {k: _maybe_compute(v) for k, v in kwargs.items()}
-    return args, kwargs
 
 
 from .utils import meta_from_array
