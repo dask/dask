@@ -27,6 +27,7 @@ from dask.utils import (
     derived_from,
     parse_timedelta,
     parse_bytes,
+    is_arraylike,
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
@@ -506,3 +507,15 @@ def test_parse_timedelta():
     assert parse_timedelta("1", default="seconds") == 1
     assert parse_timedelta("1", default="ms") == 0.001
     assert parse_timedelta(1, default="ms") == 0.001
+
+
+def test_is_arraylike():
+    assert is_arraylike(0) is False
+    assert is_arraylike(()) is False
+    assert is_arraylike((0)) is False
+    assert is_arraylike([]) is False
+    assert is_arraylike([0]) is False
+
+    assert is_arraylike(np.empty(())) is True
+    assert is_arraylike(np.empty((0, ))) is True
+    assert is_arraylike(np.empty((0, 0))) is True
