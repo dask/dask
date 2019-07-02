@@ -34,6 +34,7 @@ divide_lookup.register((object, np.ndarray), np_divide)
 divide_lookup.register(np.ma.masked_array, ma_divide)
 
 
+@implements(np.divide)
 def divide(a, b, dtype=None):
     key = lambda x: getattr(x, "__array_priority__", float("-inf"))
     f = divide_lookup.dispatch(type(builtins.max(a, b, key=key)))
@@ -326,6 +327,7 @@ def partial_reduce(
         return Array(graph, name, out_chunks, meta=meta)
 
 
+@implements(np.sum)
 @wraps(chunk.sum)
 def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
@@ -345,6 +347,7 @@ def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     return result
 
 
+@implements(np.prod)
 @wraps(chunk.prod)
 def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
@@ -393,6 +396,7 @@ def max(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.any)
 @wraps(chunk.any)
 def any(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
@@ -407,6 +411,7 @@ def any(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.all)
 @wraps(chunk.all)
 def all(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
@@ -421,6 +426,7 @@ def all(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.nansum)
 @wraps(chunk.nansum)
 def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
@@ -441,6 +447,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
 
 with ignoring(AttributeError):
 
+    @implements(np.nanprod)
     @wraps(chunk.nanprod)
     def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         if dtype is not None:
@@ -457,16 +464,18 @@ with ignoring(AttributeError):
             split_every=split_every,
             out=out,
         )
-
+    @implements(np.nancumsum)
     @wraps(chunk.nancumsum)
     def nancumsum(x, axis, dtype=None, out=None):
         return cumreduction(chunk.nancumsum, operator.add, 0, x, axis, dtype, out=out)
 
+    @implements(np.nancumprod)
     @wraps(chunk.nancumprod)
     def nancumprod(x, axis, dtype=None, out=None):
         return cumreduction(chunk.nancumprod, operator.mul, 1, x, axis, dtype, out=out)
 
 
+@implements(np.nanmin)
 @wraps(chunk.nanmin)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
@@ -481,6 +490,7 @@ def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.nanmax)
 @wraps(chunk.nanmax)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
@@ -574,6 +584,7 @@ def mean_agg(pairs, dtype="f8", axis=None, meta=False, **kwargs):
     return divide(total, n, dtype=dtype)
 
 
+@implements(np.mean)
 @wraps(chunk.mean)
 def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
@@ -594,6 +605,7 @@ def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.nanmean)
 def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
@@ -745,6 +757,7 @@ def moment(
     )
 
 
+@implements(np.var)
 @wraps(chunk.var)
 def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None):
     if dtype is not None:
@@ -766,6 +779,7 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
     )
 
 
+@implements(np.nanvar)
 def nanvar(
     a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
 ):
@@ -791,6 +805,7 @@ with ignoring(AttributeError):
     nanvar = wraps(chunk.nanvar)(nanvar)
 
 
+@implements(np.std)
 @wraps(chunk.std)
 def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None):
     result = sqrt(
@@ -808,6 +823,7 @@ def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
     return result
 
 
+@implements(np.nanstd)
 def nanstd(
     a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
 ):
@@ -1087,11 +1103,13 @@ def _cumprod_merge(a, b):
     return a * b
 
 
+@implements(np.cumsum)
 @wraps(np.cumsum)
 def cumsum(x, axis=None, dtype=None, out=None):
     return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
 
 
+@implements(np.cumprod)
 @wraps(np.cumprod)
 def cumprod(x, axis=None, dtype=None, out=None):
     return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
@@ -1228,6 +1246,7 @@ def argtopk(a, k, axis=-1, split_every=None):
     )
 
 
+@implements(np.trace)
 @wraps(np.trace)
 def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
     return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)
