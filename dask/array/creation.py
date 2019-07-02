@@ -23,6 +23,7 @@ from .core import (
     broadcast_to,
     broadcast_arrays,
     cached_cumsum,
+    implements,
 )
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
@@ -497,6 +498,7 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
     return Array(eye, name_eye, shape=(N, M), chunks=(chunks, chunks), dtype=dtype)
 
 
+@implements(np.diag)
 @derived_from(np)
 def diag(v):
     name = "diag-" + tokenize(v)
@@ -546,6 +548,7 @@ def diag(v):
     return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
 
 
+@implements(np.diagonal)
 @derived_from(np)
 def diagonal(a, offset=0, axis1=0, axis2=1):
     name = "diagonal-" + tokenize(a, offset, axis1, axis2)
@@ -748,6 +751,7 @@ def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
+@implements(np.repeat)
 @derived_from(np)
 def repeat(a, repeats, axis=None):
     if axis is None:
@@ -796,6 +800,7 @@ def repeat(a, repeats, axis=None):
     return concatenate(out, axis=axis)
 
 
+@implements(np.tile)
 @derived_from(np)
 def tile(A, reps):
     if not isinstance(reps, Integral):
@@ -1095,6 +1100,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     return result
 
 
+@implements(np.pad)
 @derived_from(np)
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
