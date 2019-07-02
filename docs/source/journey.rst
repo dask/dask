@@ -41,15 +41,15 @@ Step 2: Arrive in the Scheduler
 A few milliseconds later, the scheduler receives this message on an open socket.
 
 The scheduler updates its state with this little graph that shows how to compute
-``z``.::
+``z``::
 
-    scheduler.tasks.update(msg['tasks'])
+    scheduler.update_graph(tasks=msg['tasks'], keys=msg['keys'])
 
 The scheduler also updates *a lot* of other state.  Notably, it has to identify
 that ``x`` and ``y`` are themselves variables, and connect all of those
 dependencies.  This is a long and detail oriented process that involves
 updating roughly 10 sets and dictionaries.  Interested readers should
-investigate ``distributed/scheduler.py::update_state()``.  While this is fairly
+investigate ``distributed/scheduler.py::update_graph()``.  While this is fairly
 complex and tedious to describe rest assured that it all happens in constant
 time and in about a millisecond.
 
