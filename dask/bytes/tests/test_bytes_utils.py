@@ -80,7 +80,7 @@ def test_infer_storage_options():
     assert infer_storage_options("test.csv")["path"] == "test.csv"
 
     so = infer_storage_options(
-        "hdfs://username:pwd@Node:123/mnt/datasets/test.csv?q=1#fragm",
+        "hdfs://username:pwd@Node:123/mnt/datasets/test.csv?q=1",
         inherit_storage_options={"extra": "value"},
     )
     assert so.pop("protocol") == "hdfs"
@@ -90,7 +90,6 @@ def test_infer_storage_options():
     assert so.pop("port") == 123
     assert so.pop("path") == "/mnt/datasets/test.csv"
     assert so.pop("url_query") == "q=1"
-    assert so.pop("url_fragment") == "fragm"
     assert so.pop("extra") == "value"
     assert not so
 
