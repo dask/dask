@@ -61,13 +61,14 @@ def test_array_function_fft(func):
         lambda x: np.min_scalar_type(x),
         lambda x: np.linalg.det(x),
         lambda x: np.linalg.eigvals(x),
+        lambda x: np.median(x),
     ],
 )
 def test_array_notimpl_function_dask(func):
     x = np.random.random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
-    with pytest.raises(TypeError):
+    with pytest.warns(UserWarning, match="`.*` is not implemented by dask"):
         func(y)
 
 
