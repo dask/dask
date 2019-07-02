@@ -801,7 +801,7 @@ class Client(Node):
             info = sync(self.loop, self.scheduler.identity)
             scheduler = self.scheduler
         else:
-            info = False
+            info = self._scheduler_identity
             scheduler = self.scheduler
 
         if scheduler is not None:
@@ -828,10 +828,14 @@ class Client(Node):
         text += "</ul>\n"
 
         if info:
-            workers = len(info["workers"])
-            cores = sum(w["nthreads"] for w in info["workers"].values())
-            memory = sum(w["memory_limit"] for w in info["workers"].values())
-            memory = format_bytes(memory)
+            workers = list(info["workers"].values())
+            cores = sum(w["nthreads"] for w in workers)
+            if all(isinstance(w["memory_limit"], Number) for w in workers):
+                memory = sum(w["memory_limit"] for w in workers)
+                memory = format_bytes(memory)
+            else:
+                memory = ""
+
             text2 = (
                 "<h3>Cluster</h3>\n"
                 "<ul>\n"
@@ -839,7 +843,7 @@ class Client(Node):
                 "  <li><b>Cores: </b>%d</li>\n"
                 "  <li><b>Memory: </b>%s</li>\n"
                 "</ul>\n"
-            ) % (workers, cores, memory)
+            ) % (len(workers), cores, memory)
 
             return (
                 '<table style="border: 2px solid white;">\n'

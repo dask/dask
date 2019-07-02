@@ -1892,6 +1892,11 @@ def test_repr_async(c, s, a, b):
     c._repr_html_()
 
 
+@gen_cluster(client=True, worker_kwargs={"memory_limit": None})
+def test_repr_no_memory_limit(c, s, a, b):
+    c._repr_html_()
+
+
 @gen_test()
 def test_repr_localcluster():
     cluster = yield LocalCluster(
