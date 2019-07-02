@@ -11,7 +11,7 @@ try:
 except ImportError:
     scipy = None
 
-from .core import concatenate as _concatenate
+from .core import concatenate as _concatenate, implements, _HANDLED_FUNCTIONS
 from .creation import arange as _arange
 from ..utils import derived_from
 
@@ -213,6 +213,8 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         func.__doc__ = fft_preamble % (2 * (func_fullname,))
         func.__doc__ += fft_func.__doc__
     func.__name__ = func_name
+    # Add to dict that contains __array_function__ mapping
+    _HANDLED_FUNCTIONS[fft_func] = func
     return func
 
 
@@ -239,6 +241,7 @@ def _fftfreq_block(i, n, d):
     return r
 
 
+@implements(np.fft.fftfreq)
 @derived_from(np.fft)
 def fftfreq(n, d=1.0, chunks="auto"):
     n = int(n)
@@ -249,6 +252,7 @@ def fftfreq(n, d=1.0, chunks="auto"):
     return r.map_blocks(_fftfreq_block, dtype=float, n=n, d=d)
 
 
+@implements(np.fft.rfftfreq)
 @derived_from(np.fft)
 def rfftfreq(n, d=1.0, chunks="auto"):
     n = int(n)
@@ -287,11 +291,13 @@ def _fftshift_helper(x, axes=None, inverse=False):
     return y
 
 
+@implements(np.fft.fftshift)
 @derived_from(np.fft)
 def fftshift(x, axes=None):
     return _fftshift_helper(x, axes=axes, inverse=False)
 
 
+@implements(np.fft.ifftshift)
 @derived_from(np.fft)
 def ifftshift(x, axes=None):
     return _fftshift_helper(x, axes=axes, inverse=True)
