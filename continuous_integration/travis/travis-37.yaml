@@ -1,0 +1,53 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.7.*
+  - numpy=1.16.*
+  - pandas=0.24.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  - tiledb-py
+  - sqlalchemy
+  - pyarrow
+  # other -- IO
+  - bcolz
+  - blosc
+  - s3fs
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed==2.0.1
+  - graphviz
+  - ipython
+  - lz4
+  - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - pandas-datareader
+  - pip
+  - pip:
+      - cityhash
+      - mmh3
+      - xxhash
