@@ -118,6 +118,14 @@ def test_urlpath_expand_read():
         assert len(paths) == 2
 
 
+def test_hash_in_path():
+    # https://github.com/dask/dask/issues/5036
+    fn = 'file#.ext'
+    with filetexts({fn: b"data"}, mode="b"):
+        _, _, paths = get_fs_token_paths(fn)
+        assert fn in paths[0]
+
+
 @pytest.mark.skipif(
     sys.version_info < (3, 5), reason="Recursive glob is new in Python 3.5"
 )

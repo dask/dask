@@ -44,6 +44,8 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     parsed_path = urlsplit(urlpath)
     protocol = parsed_path.scheme or "file"
     path = parsed_path.path
+    if parsed_path.fragment:
+        path = "#".join([path, parsed_path.fragment])
     if protocol == "file":
         # Special case parsing file protocol URL on Windows according to:
         # https://msdn.microsoft.com/en-us/library/jj710207.aspx
