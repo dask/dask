@@ -12,7 +12,7 @@ from dask import compute
 from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
-from dask.bytes.local import LocalFileSystem
+from fsspec.implementations.local import LocalFileSystem
 from dask.bytes.core import (
     read_bytes,
     open_files,
@@ -86,15 +86,15 @@ def test_urlpath_inference_errors():
         get_fs_token_paths([])
 
     # Protocols differ
-    with pytest.raises(ValueError, match="same protocol and options"):
+    with pytest.raises(ValueError, match="the same protocol"):
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
 
     # Options differ
-    with pytest.raises(ValueError, match="same protocol and options"):
+    with pytest.raises(ValueError, match="the same file-system options"):
         get_fs_token_paths(
             [
-                "hdfs://myuser@node.com/test/path.csv",
-                "hdfs://otheruser@node.com/other/path.csv",
+                "sftp://myuser@node.com/test/path.csv",
+                "sftp://otheruser@node.com/other/path.csv",
             ]
         )
 
@@ -120,8 +120,9 @@ def test_urlpath_expand_read():
 )
 def test_recursive_glob_expand():
     """Make sure * is expanded in file paths when reading."""
-    with filetexts(csv_files, mode="b"):
-        _, _, paths = get_fs_token_paths("**/.*.csv")
+    with filetexts({'sub1/afile.csv': b'', 'sub1/sub2/another.csv': b'',
+                    'sub1/twofile.csv': b''}, mode="b"):
+        _, _, paths = get_fs_token_paths("**/*.csv")
         assert len(paths) == 3
 
 
@@ -424,20 +425,14 @@ def test_abs_paths(tmpdir):
 
     fs = LocalFileSystem()
     os.chdir(here)
-    with fs.open("tmp", "r") as f:
+    with fs.open(out[0], "r") as f:
         res = f.read()
     assert res == "hi"
 
 
-class UnknownFileSystem(object):
-    pass
-
-
 def test_get_pyarrow_filesystem():
+    from fsspec.implementations.local import LocalFileSystem
     pa = pytest.importorskip("pyarrow")
 
     fs = LocalFileSystem()
-    assert isinstance(get_pyarrow_filesystem(fs), pa.filesystem.LocalFileSystem)
-
-    with pytest.raises(NotImplementedError):
-        get_pyarrow_filesystem(UnknownFileSystem())
+    assert isinstance(fs, pa.filesystem.FileSystem)

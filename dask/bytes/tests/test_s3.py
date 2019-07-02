@@ -370,20 +370,6 @@ def test_modification_time_read_bytes():
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-def test_read_csv_passes_through_options():
-    dd = pytest.importorskip("dask.dataframe")
-    with s3_context("csv", {"a.csv": b"a,b\n1,2\n3,4"}) as s3:
-        df = dd.read_csv("s3://csv/*.csv", storage_options={"s3": s3})
-        assert df.a.sum().compute() == 1 + 3
-
-
-def test_read_text_passes_through_options():
-    db = pytest.importorskip("dask.bag")
-    with s3_context("csv", {"a.csv": b"a,b\n1,2\n3,4"}) as s3:
-        df = db.read_text("s3://csv/*.csv", storage_options={"s3": s3})
-        assert df.count().compute(scheduler="sync") == 3
-
-
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
@@ -443,15 +429,7 @@ def test_parquet_wstoragepars(s3):
         assert f.blocksize == 2 ** 20
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="pathlib and moto clash on windows")
-def test_pathlib_s3(s3):
-    pathlib = pytest.importorskip("pathlib")
-    with pytest.raises(ValueError):
-        url = pathlib.Path("s3://bucket/test.accounts.*")
-        sample, values = read_bytes(url, blocksize=None)
-
-
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
     fs = DaskS3FileSystem(anon=True)
-    assert isinstance(get_pyarrow_filesystem(fs), pa.filesystem.S3FSWrapper)
+    assert isinstance(fs, pa.filesystem.FileSystem)
