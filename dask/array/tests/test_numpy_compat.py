@@ -46,10 +46,8 @@ def test_min_max_round_funcs():
     assert int(np.max(image)) == 2
     assert np.round(image)[1, 1] == 2
 
-    # dask has no median function, so this calls the numpy median function
-    assert int(np.median(image)) == 1
 
-
+@pytest.mark.filterwarnings("ignore:`median` is not implemented by dask")
 def test_median_func():
     # Regression test for __array_function__ becoming default in numpy 1.17
     # dask has no median function, so ensure that this still calls np.median

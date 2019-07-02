@@ -1219,19 +1219,15 @@ class Array(DaskMethodsMixin):
         return x
 
     def __array_function__(self, func, types, args, kwargs):
-        import dask.array as module
+        if func not in _HANDLED_FUNCTIONS:
+            warnings.warn(
+                "`{}` is not implemented by dask, explicitly "
+                "coerce your array (e.g. with numpy.asarray) "
+                "to silence this warning".format(func.__name__)
+            )
+            return func._implementation(*args, **kwargs)
 
-        for submodule in func.__module__.split(".")[1:]:
-            try:
-                module = getattr(module, submodule)
-            except AttributeError:
-                return NotImplemented
-        if not hasattr(module, func.__name__):
-            return NotImplemented
-        da_func = getattr(module, func.__name__)
-        if da_func is func:
-            return NotImplemented
-        return da_func(*args, **kwargs)
+        return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
     @property
     def _elemwise(self):
@@ -4551,6 +4547,36 @@ def from_npy_stack(dirname, mmap_mode="r"):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+
+_HANDLED_FUNCTIONS = {}
+
+
+def implements(numpy_function):
+    """Register an __array_function__ implementation for dask.array.Array
+
+    Register that a function implements the API of a NumPy function (or several
+    NumPy functions in case of aliases) which is handled with
+    ``__array_function__``.
+
+    Parameters
+    ----------
+    numpy_function : callable or sequence of callables
+        One or more NumPy functions that are handled by ``__array_function__``
+        and will be mapped by `implements` to a `dask.array` function.
+
+    """
+
+    def decorator(dask_func):
+        if callable(numpy_function):
+            _HANDLED_FUNCTIONS[numpy_function] = dask_func
+        else:
+            for npfunc in numpy_function:
+                _HANDLED_FUNCTIONS[npfunc] = dask_func
+
+        return dask_func
+
+    return decorator
 
 
 from .utils import meta_from_array

@@ -35,12 +35,14 @@ from .core import (
     is_scalar_for_elemwise,
     broadcast_to,
     tensordot_lookup,
+    implements,
 )
 
 from .einsumfuncs import einsum  # noqa
 from .numpy_compat import _unravel_index_keyword
 
 
+@implements(np.array)
 @derived_from(np)
 def array(x, dtype=None, ndmin=None):
     while ndmin is not None and x.ndim < ndmin:
@@ -50,12 +52,14 @@ def array(x, dtype=None, ndmin=None):
     return x
 
 
+@implements(np.result_type)
 @derived_from(np)
 def result_type(*args):
     args = [a if is_scalar_for_elemwise(a) else a.dtype for a in args]
     return np.result_type(*args)
 
 
+@implements(np.atleast_3d)
 @derived_from(np)
 def atleast_3d(*arys):
     new_arys = []
@@ -804,6 +808,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
+@implements((np.round, np.round_))
 @derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
