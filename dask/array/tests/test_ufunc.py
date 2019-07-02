@@ -237,6 +237,7 @@ def test_ufunc_outer():
 def test_complex(ufunc):
 
     dafunc = getattr(da, ufunc)
+    # Note that these functions are not NumPy ufuncs ...
     npfunc = getattr(np, ufunc)
 
     real = np.random.randint(1, 100, size=(20, 20))
@@ -256,7 +257,8 @@ def test_complex(ufunc):
         assert isinstance(dafunc(darr), da.Array)
         assert_eq(dafunc(darr), npfunc(arr))
 
-        assert_eq(npfunc(darr), npfunc(arr))
+        with pytest.warns(UserWarning, match="`.*` is not implemented by dask"):
+            assert_eq(npfunc(darr), npfunc(arr))
 
         # applying Dask ufunc to normal ndarray triggers computation
         assert isinstance(dafunc(arr), np.ndarray)
@@ -394,7 +396,7 @@ def test_array_ufunc():
     x = np.arange(24).reshape((4, 6))
     d = da.from_array(x, chunks=(2, 3))
 
-    for func in [np.sin, np.isreal, np.sum, np.negative, partial(np.prod, axis=0)]:
+    for func in [np.sin, np.sum, np.negative, partial(np.prod, axis=0)]:
         assert isinstance(func(d), da.Array)
         assert_eq(func(d), func(x))
 
