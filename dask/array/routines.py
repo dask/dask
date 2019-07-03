@@ -42,7 +42,6 @@ from .einsumfuncs import einsum  # noqa
 from .numpy_compat import _unravel_index_keyword
 
 
-@implements(np.array)
 @derived_from(np)
 def array(x, dtype=None, ndmin=None):
     while ndmin is not None and x.ndim < ndmin:
@@ -52,14 +51,12 @@ def array(x, dtype=None, ndmin=None):
     return x
 
 
-@implements(np.result_type)
 @derived_from(np)
 def result_type(*args):
     args = [a if is_scalar_for_elemwise(a) else a.dtype for a in args]
     return np.result_type(*args)
 
 
-@implements(np.atleast_3d)
 @derived_from(np)
 def atleast_3d(*arys):
     new_arys = []
@@ -80,7 +77,6 @@ def atleast_3d(*arys):
         return new_arys
 
 
-@implements(np.atleast_2d)
 @derived_from(np)
 def atleast_2d(*arys):
     new_arys = []
@@ -99,7 +95,6 @@ def atleast_2d(*arys):
         return new_arys
 
 
-@implements(np.atleast_1d)
 @derived_from(np)
 def atleast_1d(*arys):
     new_arys = []
@@ -116,14 +111,12 @@ def atleast_1d(*arys):
         return new_arys
 
 
-@implements(np.vstack)
 @derived_from(np)
 def vstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_2d(x) for x in tup)
     return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
-@implements(np.hstack)
 @derived_from(np)
 def hstack(tup, allow_unknown_chunksizes=False):
     if all(x.ndim == 1 for x in tup):
@@ -136,14 +129,12 @@ def hstack(tup, allow_unknown_chunksizes=False):
         )
 
 
-@implements(np.dstack)
 @derived_from(np)
 def dstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_3d(x) for x in tup)
     return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
-@implements(np.swapaxes)
 @derived_from(np)
 def swapaxes(a, axis1, axis2):
     if axis1 == axis2:
@@ -159,7 +150,6 @@ def swapaxes(a, axis1, axis2):
     return blockwise(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2, dtype=a.dtype)
 
 
-@implements(np.transpose)
 @derived_from(np)
 def transpose(a, axes=None):
     if axes:
@@ -173,7 +163,6 @@ def transpose(a, axes=None):
     )
 
 
-@implements(np.flip)
 def flip(m, axis):
     """
     Reverse element order along axis.
@@ -202,13 +191,11 @@ def flip(m, axis):
     return m[sl]
 
 
-@implements(np.flipud)
 @derived_from(np)
 def flipud(m):
     return flip(m, 0)
 
 
-@implements(np.fliplr)
 @derived_from(np)
 def fliplr(m):
     return flip(m, 1)
@@ -247,7 +234,6 @@ def _tensordot(a, b, axes):
     return x
 
 
-@implements(np.tensordot)
 @derived_from(np)
 def tensordot(lhs, rhs, axes=2):
     if isinstance(axes, Iterable):
@@ -290,19 +276,16 @@ def tensordot(lhs, rhs, axes=2):
     return result
 
 
-@implements(np.dot)
 @derived_from(np)
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-@implements(np.vdot)
 @derived_from(np)
 def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-@implements(np.matmul)
 @derived_from(np)
 def matmul(a, b):
     a = asanyarray(a)
@@ -345,7 +328,6 @@ def matmul(a, b):
     return out
 
 
-@implements(np.outer)
 @derived_from(np)
 def outer(a, b):
     a = a.flatten()
@@ -360,7 +342,6 @@ def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs
     return np.apply_along_axis(func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs)
 
 
-@implements(np.apply_along_axis)
 @derived_from(np)
 def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs):
     """
@@ -429,7 +410,6 @@ def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs)
     return result
 
 
-@implements(np.apply_over_axes)
 @derived_from(np)
 def apply_over_axes(func, a, axes):
     # Validate arguments
@@ -458,13 +438,11 @@ def apply_over_axes(func, a, axes):
     return result
 
 
-@implements(np.ptp)
 @derived_from(np)
 def ptp(a, axis=None):
     return a.max(axis=axis) - a.min(axis=axis)
 
 
-@implements(np.diff)
 @derived_from(np)
 def diff(a, n=1, axis=-1):
     a = asarray(a)
@@ -487,7 +465,6 @@ def diff(a, n=1, axis=-1):
     return r
 
 
-@implements(np.ediff1d)
 @derived_from(np)
 def ediff1d(ary, to_end=None, to_begin=None):
     ary = asarray(ary)
@@ -525,7 +502,6 @@ def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
     return grad
 
 
-@implements(np.gradient)
 @derived_from(np)
 def gradient(f, *varargs, **kwargs):
     f = asarray(f)
@@ -613,7 +589,6 @@ def _bincount_sum(bincounts, dtype=int):
     return out
 
 
-@implements(np.bincount)
 @derived_from(np)
 def bincount(x, weights=None, minlength=0):
     if x.ndim != 1:
@@ -654,7 +629,6 @@ def bincount(x, weights=None, minlength=0):
     return Array(graph, final_name, chunks, meta=meta)
 
 
-@implements(np.digitize)
 @derived_from(np)
 def digitize(a, bins, right=False):
     bins = np.asarray(bins)
@@ -662,7 +636,6 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
-@implements(np.histogram)
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
     Blocked variant of :func:`numpy.histogram`.
@@ -773,7 +746,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
-@implements(np.cov)
 @derived_from(np)
 def cov(m, y=None, rowvar=1, bias=0, ddof=None):
     # This was copied almost verbatim from np.cov
@@ -822,7 +794,6 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
         return (dot(X, X.T.conj()) / fact).squeeze()
 
 
-@implements(np.corrcoef)
 @derived_from(np)
 def corrcoef(x, y=None, rowvar=1):
     c = cov(x, y, rowvar)
@@ -901,7 +872,6 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     return r
 
 
-@implements(np.unique)
 @derived_from(np)
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     ar = ar.ravel()
@@ -1000,7 +970,6 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
-@implements(np.isin)
 @safe_wraps(getattr(np, "isin", None))
 def isin(element, test_elements, assume_unique=False, invert=False):
     element = asarray(element)
@@ -1025,7 +994,6 @@ def isin(element, test_elements, assume_unique=False, invert=False):
     return result
 
 
-@implements(np.roll)
 @derived_from(np)
 def roll(array, shift, axis=None):
     result = array
@@ -1073,13 +1041,11 @@ def roll(array, shift, axis=None):
     return result
 
 
-@implements(np.ravel)
 @derived_from(np)
 def ravel(array):
     return array.reshape((-1,))
 
 
-@implements(np.squeeze)
 @derived_from(np)
 def squeeze(a, axis=None):
     if axis is None:
@@ -1099,7 +1065,6 @@ def squeeze(a, axis=None):
     return a
 
 
-@implements(np.compress)
 @derived_from(np)
 def compress(condition, a, axis=None):
 
@@ -1132,7 +1097,6 @@ def compress(condition, a, axis=None):
     return a
 
 
-@implements(np.extract)
 @derived_from(np)
 def extract(condition, arr):
     condition = asarray(condition).astype(bool)
@@ -1140,7 +1104,6 @@ def extract(condition, arr):
     return compress(condition.ravel(), arr.ravel())
 
 
-@implements(np.take)
 @derived_from(np)
 def take(a, indices, axis=0):
     axis = validate_axis(axis, a.ndim)
@@ -1160,7 +1123,6 @@ def _take_dask_array_from_numpy(a, indices, axis):
     )
 
 
-@implements(np.around)
 @derived_from(np)
 def around(x, decimals=0):
     return map_blocks(partial(np.around, decimals=decimals), x, dtype=x.dtype)
@@ -1185,14 +1147,12 @@ def notnull(values):
     return ~isnull(values)
 
 
-@implements(np.isclose)
 @derived_from(np)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
     func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype="bool")
 
 
-@implements(np.allclose)
 @derived_from(np)
 def allclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
     return isclose(arr1, arr2, rtol=rtol, atol=atol, equal_nan=equal_nan).all()
@@ -1202,7 +1162,6 @@ def variadic_choose(a, *choices):
     return np.choose(a, choices)
 
 
-@implements(np.choose)
 @derived_from(np)
 def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
@@ -1230,7 +1189,6 @@ def isnonzero(a):
         return a.astype(bool)
 
 
-@implements(np.argwhere)
 @derived_from(np)
 def argwhere(a):
     a = asarray(a)
@@ -1245,7 +1203,6 @@ def argwhere(a):
     return ind
 
 
-@implements(np.where)
 @derived_from(np)
 def where(condition, x=None, y=None):
     if (x is None) != (y is None):
@@ -1266,19 +1223,16 @@ def where(condition, x=None, y=None):
         return elemwise(np.where, condition, x, y)
 
 
-@implements(np.count_nonzero)
 @derived_from(np)
 def count_nonzero(a, axis=None):
     return isnonzero(asarray(a)).astype(np.intp).sum(axis=axis)
 
 
-@implements(np.flatnonzero)
 @derived_from(np)
 def flatnonzero(a):
     return argwhere(asarray(a).ravel())[:, 0]
 
 
-@implements(np.nonzero)
 @derived_from(np)
 def nonzero(a):
     ind = argwhere(a)
@@ -1317,7 +1271,6 @@ def unravel_index(indices, dims, order="C"):
     return unraveled_indices
 
 
-@implements(np.piecewise)
 @derived_from(np)
 def piecewise(x, condlist, funclist, *args, **kw):
     return map_blocks(
@@ -1370,7 +1323,6 @@ def split_at_breaks(array, breaks, axis=0):
     return split_array
 
 
-@implements(np.insert)
 @derived_from(np)
 def insert(arr, obj, values, axis):
     # axis is a required argument here to avoid needing to deal with the numpy
@@ -1471,7 +1423,6 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
         return avg
 
 
-@implements(np.average)
 @derived_from(np)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=False)

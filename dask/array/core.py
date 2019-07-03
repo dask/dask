@@ -138,6 +138,7 @@ def getter_inline(a, b, asarray=True, lock=None):
 from .optimization import optimize, fuse_slice
 
 
+# __array_function__ dict for mapping aliases and mismatching names
 _HANDLED_FUNCTIONS = {}
 
 
@@ -1245,22 +1246,43 @@ class Array(DaskMethodsMixin):
         return x
 
     def __array_function__(self, func, types, args, kwargs):
-        if func not in _HANDLED_FUNCTIONS:
-            warnings.warn(
-                "`{}` is not implemented by dask, explicitly "
-                "coerce your array (e.g. with numpy.asarray) "
-                "to silence this warning.  Your code may stop working "
-                "in a future release.".format(func.__module__ + "." + func.__name__),
-                FutureWarning,
-            )
-            # Need to convert to array object (e.g. numpy.ndarray or
-            # cupy.ndarray) as needed, so we can call the NumPy function
-            # again and it gets the chance to dispatch to the right
-            # implementation.
-            args, kwargs = compute(args, kwargs)
-            return func(*args, **kwargs)
+        import dask.array as module
 
-        return _HANDLED_FUNCTIONS[func](*args, **kwargs)
+        def handle_nonmatching_names(func, args, kwargs):
+            if func not in _HANDLED_FUNCTIONS:
+                warnings.warn(
+                    "`{}` is not implemented by dask, explicitly "
+                    "coerce your array (e.g. with numpy.asarray) "
+                    "to silence this warning.  Your code may stop working "
+                    "in a future release.".format(func.__module__ + "." + func.__name__),
+                    FutureWarning,
+                )
+                # Need to convert to array object (e.g. numpy.ndarray or
+                # cupy.ndarray) as needed, so we can call the NumPy function
+                # again and it gets the chance to dispatch to the right
+                # implementation.
+                args, kwargs = compute(args, kwargs)
+                return func(*args, **kwargs)
+
+            return _HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+        # First try to find a matching function name.  If that doesn't work, we may
+        # be dealing with an alias or a function that's simply not in the Dask API.
+        # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
+        for submodule in func.__module__.split(".")[1:]:
+            try:
+                module = getattr(module, submodule)
+            except AttributeError:
+                return handle_nonmatching_names(func, args, kwargs)
+
+        if not hasattr(module, func.__name__):
+            return handle_nonmatching_names(func, args, kwargs)
+
+        da_func = getattr(module, func.__name__)
+        if da_func is func:
+            return handle_nonmatching_names(func, args, kwargs)
+        return da_func(*args, **kwargs)
+
 
     @property
     def _elemwise(self):
@@ -3057,7 +3079,6 @@ def unpack_singleton(x):
     return x
 
 
-@implements(np.block)
 def block(arrays, allow_unknown_chunksizes=False):
     """
     Assemble an nd-array from nested lists of blocks.
@@ -3225,7 +3246,6 @@ def block(arrays, allow_unknown_chunksizes=False):
     )
 
 
-@implements(np.concatenate)
 def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     Concatenate arrays along an existing axis
@@ -3806,7 +3826,6 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-@implements(np.broadcast_to)
 def broadcast_to(x, shape, chunks=None):
     """Broadcast an array to a new shape.
 
@@ -3876,7 +3895,6 @@ def broadcast_to(x, shape, chunks=None):
     return Array(graph, name, chunks, dtype=x.dtype)
 
 
-@implements(np.broadcast_arrays)
 @derived_from(np)
 def broadcast_arrays(*args, **kwargs):
     subok = bool(kwargs.pop("subok", False))
@@ -4011,7 +4029,6 @@ def transposelist(arrays, axes, extradims=0):
     return reshapelist(newshape, result)
 
 
-@implements(np.stack)
 def stack(seq, axis=0):
     """
     Stack arrays along a new axis

@@ -4,7 +4,7 @@ from functools import partial
 import numpy as np
 from toolz import curry
 
-from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray, implements
+from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
 from .utils import empty_like_safe, IS_NEP18_ACTIVE
 from ..base import is_dask_collection, normalize_function
 from .. import core
@@ -251,8 +251,8 @@ less = ufunc(np.less)
 less_equal = ufunc(np.less_equal)
 not_equal = ufunc(np.not_equal)
 equal = ufunc(np.equal)
-isneginf = implements(np.isneginf)(partial(equal, -np.inf))
-isposinf = implements(np.isposinf)(partial(equal, np.inf))
+isneginf = partial(equal, -np.inf)
+isposinf = partial(equal, np.inf)
 logical_and = ufunc(np.logical_and)
 logical_or = ufunc(np.logical_or)
 logical_xor = ufunc(np.logical_xor)
@@ -295,15 +295,15 @@ sign = ufunc(np.sign)
 absolute = ufunc(np.absolute)
 
 # non-ufunc elementwise functions
-clip = implements(np.clip)(wrap_elemwise(np.clip))
-isreal = implements(np.isreal)(wrap_elemwise(np.isreal, array_wrap=True))
-iscomplex = implements(np.iscomplex)(wrap_elemwise(np.iscomplex, array_wrap=True))
-real = implements(np.real)(wrap_elemwise(np.real, array_wrap=True))
-imag = implements(np.imag)(wrap_elemwise(np.imag, array_wrap=True))
-fix = implements(np.fix)(wrap_elemwise(np.fix, array_wrap=True))
-i0 = implements(np.i0)(wrap_elemwise(np.i0, array_wrap=True))
-sinc = implements(np.sinc)(wrap_elemwise(np.sinc, array_wrap=True))
-nan_to_num = implements(np.nan_to_num)(wrap_elemwise(np.nan_to_num, array_wrap=True))
+clip = wrap_elemwise(np.clip)
+isreal = wrap_elemwise(np.isreal, array_wrap=True)
+iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
+real = wrap_elemwise(np.real, array_wrap=True)
+imag = wrap_elemwise(np.imag, array_wrap=True)
+fix = wrap_elemwise(np.fix, array_wrap=True)
+i0 = wrap_elemwise(np.i0, array_wrap=True)
+sinc = wrap_elemwise(np.sinc, array_wrap=True)
+nan_to_num = wrap_elemwise(np.nan_to_num, array_wrap=True)
 
 
 @copy_docstring(source=np.angle)

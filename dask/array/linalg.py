@@ -11,7 +11,7 @@ from ..blockwise import blockwise
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from ..utils import derived_from
-from .core import dotmany, Array, concatenate, implements
+from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
 from .utils import meta_from_array
@@ -714,7 +714,6 @@ def svd_compressed(a, k, n_power_iter=0, seed=None):
     return u, s, v
 
 
-@implements(np.linalg.qr)
 def qr(a):
     """
     Compute the qr factorization of a matrix.
@@ -753,7 +752,6 @@ def qr(a):
         )
 
 
-@implements(np.linalg.svd)
 def svd(a):
     """
     Compute the singular value decomposition of a matrix.
@@ -1017,7 +1015,6 @@ def solve_triangular(a, b, lower=False):
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
-@implements(np.linalg.solve)
 def solve(a, b, sym_pos=False):
     """
     Solve the equation ``a x = b`` for ``x``. By default, use LU
@@ -1049,7 +1046,6 @@ def solve(a, b, sym_pos=False):
     return solve_triangular(u, uy)
 
 
-@implements(np.linalg.inv)
 def inv(a):
     """
     Compute the inverse of a matrix with LU decomposition and
@@ -1074,7 +1070,6 @@ def _cholesky_lower(a):
     return scipy.linalg.cholesky(a, lower=True)
 
 
-@implements(np.linalg.cholesky)
 def cholesky(a, lower=False):
     """
     Returns the Cholesky decomposition, :math:`A = L L^*` or
@@ -1184,7 +1179,6 @@ def _sort_decreasing(x):
     return x
 
 
-@implements(np.linalg.lstsq)
 def lstsq(a, b):
     """
     Return the least-squares solution to a linear matrix equation using
@@ -1255,7 +1249,6 @@ def lstsq(a, b):
     return x, residuals, rank, s
 
 
-@implements(np.linalg.norm)
 @derived_from(np.linalg)
 def norm(x, ord=None, axis=None, keepdims=False):
     if axis is None:
