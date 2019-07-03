@@ -7,7 +7,7 @@ from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
 from .utils import is_categorical_dtype, is_scalar, has_known_categories, PANDAS_VERSION
 from ..utils import M
-
+import sys
 
 ###############################################################
 # Dummies
@@ -163,33 +163,21 @@ def get_dummies(
 
     # We explicitly create `meta` on `data._meta` (the empty version) to
     # work around https://github.com/pandas-dev/pandas/issues/21993
-    if isinstance(data._meta, (pd.Series, pd.Index, pd.DataFrame)):
-        meta = pd.get_dummies(
-            data._meta,
-            prefix=prefix,
-            prefix_sep=prefix_sep,
-            dummy_na=dummy_na,
-            columns=columns,
-            sparse=sparse,
-            drop_first=drop_first,
-            **kwargs
-        )
-        method_cache = pd
-    else:
-        meta = M.get_dummies(
-            data._meta,
-            prefix=prefix,
-            prefix_sep=prefix_sep,
-            dummy_na=dummy_na,
-            columns=columns,
-            sparse=sparse,
-            drop_first=drop_first,
-            **kwargs
-        )
-        method_cache = M
+    package_name = data._meta.__class__.__module__.split(".")[0]
+    dummies = sys.modules[package_name].get_dummies
+    meta = dummies(
+        data._meta,
+        prefix=prefix,
+        prefix_sep=prefix_sep,
+        dummy_na=dummy_na,
+        columns=columns,
+        sparse=sparse,
+        drop_first=drop_first,
+        **kwargs
+    )
 
     return map_partitions(
-        method_cache.get_dummies,
+        dummies,
         data,
         prefix=prefix,
         prefix_sep=prefix_sep,
