@@ -10,7 +10,6 @@ def parses(text):
 
 
 def test_basic():
-    parses(da.ones([]).to_svg())
     parses(da.ones(10).to_svg())
     parses(da.ones((10, 10)).to_svg())
     parses(da.ones((10, 10, 10)).to_svg())
@@ -21,6 +20,7 @@ def test_basic():
 
 
 def test_repr_html():
+    assert da.ones([])._repr_html_()
     assert da.ones(10)[:0]._repr_html_()
     assert da.ones(10)._repr_html_()
     assert da.ones((10, 10))._repr_html_()
