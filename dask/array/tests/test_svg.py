@@ -10,6 +10,7 @@ def parses(text):
 
 
 def test_basic():
+    parses(da.ones([]).to_svg())
     parses(da.ones(10).to_svg())
     parses(da.ones((10, 10)).to_svg())
     parses(da.ones((10, 10, 10)).to_svg())
