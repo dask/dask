@@ -29,9 +29,15 @@ def test_repr_html():
 
 
 def test_errors():
+    # scalars
     with pytest.raises(NotImplementedError):
-        assert da.ones(10)[:0].to_svg()
+        da.ones([]).to_svg()
 
+    # empty one-dim arrays
+    with pytest.raises(NotImplementedError):
+        da.ones(10)[:0].to_svg()
+
+    # unknown shape
     with pytest.raises(NotImplementedError):
         x = da.ones(10)
         x = x[x > 5]
