@@ -68,7 +68,7 @@ def test_array_notimpl_function_dask(func):
     x = np.random.random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
-    with pytest.warns(UserWarning, match="`.*` is not implemented by dask"):
+    with pytest.warns(FutureWarning, match="`.*` is not implemented by dask"):
         func(y)
 
 

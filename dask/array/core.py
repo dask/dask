@@ -1249,7 +1249,9 @@ class Array(DaskMethodsMixin):
             warnings.warn(
                 "`{}` is not implemented by dask, explicitly "
                 "coerce your array (e.g. with numpy.asarray) "
-                "to silence this warning".format(func.__name__)
+                "to silence this warning.  Your code may stop working "
+                "in a future release.".format(func.__module__ + "." + func.__name__),
+                FutureWarning,
             )
             # Need to convert to array object (e.g. numpy.ndarray or
             # cupy.ndarray) as needed, so we can call the NumPy function
