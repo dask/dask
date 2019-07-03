@@ -17,7 +17,7 @@ from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_token_paths
-from ...bytes.utils import infer_storage_options
+from ...bytes.utils import infer_storage_options, stringify_path
 from ...utils import import_required, natural_sort_key
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
@@ -1420,7 +1420,7 @@ def to_parquet(
     Parameters
     ----------
     df : dask.dataframe.DataFrame
-    path : string
+    path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
@@ -1463,6 +1463,7 @@ def to_parquet(
     read_parquet: Read parquet data to dask.dataframe
     """
     partition_on = partition_on or []
+    path = stringify_path(path)
 
     if set(partition_on) - set(df.columns):
         raise ValueError("Partitioning on non-existent column")
