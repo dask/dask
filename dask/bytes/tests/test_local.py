@@ -11,8 +11,8 @@ from toolz import concat, valmap, partial
 from dask import compute
 from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
-from dask.bytes import compression
 from fsspec.implementations.local import LocalFileSystem
+from fsspec.compression import compr
 from dask.bytes.core import (
     read_bytes,
     open_files,
@@ -20,6 +20,7 @@ from dask.bytes.core import (
     logical_size,
     get_fs_token_paths,
 )
+from dask.bytes.utils import compress
 
 compute = partial(compute, scheduler="sync")
 
@@ -266,15 +267,12 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-fmt_bs = [(fmt, None) for fmt in compression.files] + [
-    (fmt, 10) for fmt in compression.seekable_files
-]
+fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_compression(fmt, blocksize):
-    compress = compression.compress[fmt]
-    files2 = valmap(compress, files)
+    files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode="b"):
         sample, values = read_bytes(
             ".test.accounts.*.json",
@@ -312,9 +310,9 @@ def test_open_files_text_mode(encoding):
 
 
 @pytest.mark.parametrize("mode", ["rt", "rb"])
-@pytest.mark.parametrize("fmt", list(compression.files))
+@pytest.mark.parametrize("fmt", list(compr))
 def test_open_files_compression(mode, fmt):
-    files2 = valmap(compression.compress[fmt], files)
+    files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode="b"):
         myfiles = open_files(".test.accounts.*", mode=mode, compression=fmt)
         data = []
@@ -327,10 +325,10 @@ def test_open_files_compression(mode, fmt):
         assert list(data) == sol
 
 
-@pytest.mark.parametrize("fmt", list(compression.seekable_files))
+@pytest.mark.parametrize("fmt", list(compr))
 def test_getsize(fmt):
-    compress = compression.compress[fmt]
-    with filetexts({".tmp.getsize": compress(b"1234567890")}, mode="b"):
+    comp = compress[fmt]
+    with filetexts({".tmp.getsize": comp(b"1234567890")}, mode="b"):
         fs = LocalFileSystem()
         assert logical_size(fs, ".tmp.getsize", fmt) == 10
 

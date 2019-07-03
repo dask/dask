@@ -19,7 +19,8 @@ from toolz import concat, valmap, partial
 from dask import compute
 from dask.bytes.s3 import DaskS3FileSystem
 from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
-from dask.bytes.compression import compress, files as compress_files, seekable_files
+from dask.bytes.utils import compress
+from fsspec.compression import compr
 
 
 compute = partial(compute, scheduler="sync")
@@ -73,7 +74,9 @@ def s3():
             client.create_bucket(Bucket=test_bucket_name, ACL="public-read-write")
             for f, data in files.items():
                 client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-            yield s3fs.S3FileSystem(anon=True)
+            fs = s3fs.S3FileSystem(anon=True)
+            fs.invalidate_cache
+            yield fs
 
             httpretty.HTTPretty.disable()
             httpretty.HTTPretty.reset()
@@ -93,7 +96,9 @@ def s3_context(bucket, files):
             for f, data in files.items():
                 client.put_object(Bucket=bucket, Key=f, Body=data)
 
-            yield DaskS3FileSystem(anon=True)
+            fs = DaskS3FileSystem(anon=True)
+            fs.invalidate_cache()
+            yield fs
 
             for f, data in files.items():
                 try:
@@ -214,7 +219,8 @@ def test_open_files_write(s3):
     for fil, data in zip(fils, files.values()):
         with fil as f:
             f.write(data)
-    sample, values = read_bytes("s3://" + test_bucket_name + "/more/test/accounts.*")
+    sample, values = read_bytes("s3://" + test_bucket_name +
+                                "/more/test/accounts.*")
     results = compute(*concat(values))
     assert set(list(files.values())) == set(results)
 
@@ -329,12 +335,14 @@ def test_read_bytes_delimited(s3, blocksize):
 
 @pytest.mark.parametrize(
     "fmt,blocksize",
-    [(fmt, None) for fmt in compress_files] + [(fmt, 10) for fmt in seekable_files],
+    [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr],
 )
 def test_compression(s3, fmt, blocksize):
+    s3._cache.clear()
     with s3_context("compress", valmap(compress[fmt], files)):
         sample, values = read_bytes(
-            "s3://compress/test/accounts.*", compression=fmt, blocksize=blocksize
+            "s3://compress/test/accounts.*", compression=fmt,
+            blocksize=blocksize
         )
         assert sample.startswith(files[sorted(files)[0]][:10])
         assert sample.endswith(b"\n")
@@ -359,13 +367,16 @@ double = lambda x: x * 2
 
 def test_modification_time_read_bytes():
     with s3_context("compress", files):
-        _, a = read_bytes("s3://compress/test/accounts.*")
-        _, b = read_bytes("s3://compress/test/accounts.*")
+        _, a = read_bytes("s3://compress/test/accounts.*",
+                          anon=True)
+        _, b = read_bytes("s3://compress/test/accounts.*",
+                          anon=True)
 
         assert [aa._key for aa in concat(a)] == [bb._key for bb in concat(b)]
 
-    with s3_context("compress", valmap(double, files)):
-        _, c = read_bytes("s3://compress/test/accounts.*")
+    with s3_context("compress", valmap(double, files)) as s3:
+        _, c = read_bytes("s3://compress/test/accounts.*",
+                          anon=True)
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 

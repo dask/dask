@@ -88,7 +88,7 @@ def test_infer_storage_options():
     assert so.pop("password") == "pwd"
     assert so.pop("host") == "Node"
     assert so.pop("port") == 123
-    assert so.pop("path") == "/mnt/datasets/test.csv"
+    assert so.pop("path") == "/mnt/datasets/test.csv#fragm"
     assert so.pop("url_query") == "q=1"
     assert so.pop("url_fragment") == "fragm"
     assert so.pop("extra") == "value"

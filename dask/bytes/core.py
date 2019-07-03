@@ -8,7 +8,6 @@ from warnings import warn
 
 from toolz import merge
 
-from .compression import seekable_files, files as compress_files
 from .utils import (
     SeekableFile,
     read_block,
@@ -25,6 +24,7 @@ from ..utils import import_required, is_integer, parse_bytes
 
 from fsspec.core import OpenFile, open_files, get_fs_token_paths, expand_paths_if_needed, _expand_paths, get_compression
 from fsspec import get_mapper
+from fsspec.compression import compr
 
 
 def read_bytes(
@@ -172,7 +172,7 @@ def logical_size(fs, path, compression="infer"):
 
     if compression is None:
         return fs.size(path)
-    elif compression in seekable_files:
+    elif compression in compr:
         with OpenFile(fs, path, compression=compression) as f:
             f.seek(0, 2)
             return f.tell()

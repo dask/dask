@@ -12,7 +12,6 @@ import pandas as pd
 
 from ..core import DataFrame, Series
 from ..utils import clear_known_categories, strip_unknown_categories, UNKNOWN_CATEGORIES
-from ...bytes.compression import compress
 from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
@@ -1398,6 +1397,13 @@ def read_parquet(
     )
 
 
+try:
+    import snappy
+    snappy.compress
+except (ImportError, AttributeError):
+    snappy = None
+
+
 def to_parquet(
     df,
     path,
@@ -1469,7 +1475,7 @@ def to_parquet(
 
     if compression != "default":
         kwargs["compression"] = compression
-    elif "snappy" in compress:
+    elif snappy is not None:
         kwargs["compression"] = "snappy"
 
     write = get_engine(engine)["write"]
