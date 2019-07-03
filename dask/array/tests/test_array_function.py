@@ -68,7 +68,9 @@ def test_array_notimpl_function_dask(func):
     x = np.random.random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
-    with pytest.warns(FutureWarning, match="`.*` is not implemented by dask"):
+    with pytest.warns(
+        FutureWarning, match="The `.*` function is not implemented by Dask"
+    ):
         func(y)
 
 
@@ -233,7 +235,8 @@ def test_median_func():
     image = da.from_array(np.array([[0, 1], [1, 2]]), chunks=(1, 2))
     if IS_NEP18_ACTIVE:
         with pytest.warns(
-            FutureWarning, match="`numpy.median` is not implemented by dask"
+            FutureWarning,
+            match="The `numpy.median` function is not implemented by Dask",
         ):
             assert int(np.median(image)) == 1
     else:

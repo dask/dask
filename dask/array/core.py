@@ -1251,10 +1251,12 @@ class Array(DaskMethodsMixin):
         def handle_nonmatching_names(func, args, kwargs):
             if func not in _HANDLED_FUNCTIONS:
                 warnings.warn(
-                    "`{}` is not implemented by dask, explicitly "
-                    "coerce your array (e.g. with numpy.asarray) "
-                    "to silence this warning.  Your code may stop working "
-                    "in a future release.".format(func.__module__ + "." + func.__name__),
+                    "The `{}` function is not implemented by Dask array. "
+                    "You may want to use the da.map_blocks function "
+                    "or something similar to silence this warning. "
+                    "Your code may stop working in a future release.".format(
+                        func.__module__ + "." + func.__name__
+                    ),
                     FutureWarning,
                 )
                 # Need to convert to array object (e.g. numpy.ndarray or
@@ -1282,7 +1284,6 @@ class Array(DaskMethodsMixin):
         if da_func is func:
             return handle_nonmatching_names(func, args, kwargs)
         return da_func(*args, **kwargs)
-
 
     @property
     def _elemwise(self):
