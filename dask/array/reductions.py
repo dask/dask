@@ -11,7 +11,7 @@ from numbers import Integral, Number
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, handle_out, implements, _HANDLED_FUNCTIONS
+from .core import _concatenate2, Array, handle_out, implements
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
@@ -1015,16 +1015,10 @@ def _nanargmax(x, axis, **kwargs):
         return chunk.nanargmax(np.where(np.isnan(x), -np.inf, x), axis, **kwargs)
 
 
-argmin = make_arg_reduction(chunk.min, chunk.argmin)
-argmax = make_arg_reduction(chunk.max, chunk.argmax)
-nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
-nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
-# The above four functions need to be handled by __array_function__
-for npfunc, dafunc in zip(
-    (np.argmin, np.argmax, np.nanargmin, np.nanargmax),
-    (argmin, argmax, nanargmin, nanargmax),
-):
-    _HANDLED_FUNCTIONS[npfunc] = dafunc
+argmin = implements(np.argmin)(make_arg_reduction(chunk.min, chunk.argmin))
+argmax = implements(np.argmax)(make_arg_reduction(chunk.max, chunk.argmax))
+nanargmin = implements(np.nanargmin)(make_arg_reduction(chunk.nanmin, _nanargmin, True))
+nanargmax = implements(np.nanargmax)(make_arg_reduction(chunk.nanmax, _nanargmax, True))
 
 
 def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):

@@ -11,7 +11,7 @@ try:
 except ImportError:
     scipy = None
 
-from .core import concatenate as _concatenate, implements, _HANDLED_FUNCTIONS
+from .core import concatenate as _concatenate, implements
 from .creation import arange as _arange
 from ..utils import derived_from
 
@@ -214,7 +214,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         func.__doc__ += fft_func.__doc__
     func.__name__ = func_name
     # Add to dict that contains __array_function__ mapping
-    _HANDLED_FUNCTIONS[fft_func] = func
+    implements(fft_func)(func)
     return func
 
 
