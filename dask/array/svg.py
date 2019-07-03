@@ -24,6 +24,8 @@ def svg(chunks, size=200, **kwargs):
         raise NotImplementedError("Can't generate SVG with unknown chunk sizes")
     if not all(shape):
         raise NotImplementedError("Can't generate SVG with 0 dimensions")
+    if len(chunks) == 0:
+        raise NotImplementedError("Can't generate SVG with 0 dimensions")
     if len(chunks) == 1:
         return svg_1d(chunks, size=size, **kwargs)
     elif len(chunks) == 2:
