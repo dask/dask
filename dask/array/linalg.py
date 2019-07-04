@@ -643,7 +643,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
     compute : bool
-        Whether or not to compute data at each stage during computation.
+        Whether or not to compute data at each use.
         Recomputing the input while performing several passes reduces memory
         pressure, but means that we have to compute the input multiple times.
         This is a good choice if the data is larger than memory and cheap to
@@ -700,9 +700,11 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
     compute : bool
-        Should we compute data at each stage during computation?
-        Recomputing reduces memory pressure, but means that we have to
-        compute the input multiple times.
+        Whether or not to compute data at each use.
+        Recomputing the input while performing several passes reduces memory
+        pressure, but means that we have to compute the input multiple times.
+        This is a good choice if the data is larger than memory and cheap to
+        recreate.
 
     Examples
     --------
