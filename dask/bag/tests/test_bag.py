@@ -643,12 +643,14 @@ def test_read_text_encoding():
 
 def test_read_text_large_gzip():
     with tmpfile("gz") as fn:
+        data = b"Hello, world!\n" * 100
         f = GzipFile(fn, "wb")
-        f.write(b"Hello, world!\n" * 100)
+        f.write(data)
         f.close()
 
-        with pytest.raises(ValueError):
-            db.read_text(fn, blocksize=50, linedelimiter="\n")
+        # This was not previously possible; it may still not be advisable
+        b = db.read_text(fn, blocksize=50, linedelimiter="\n")
+        assert "".join(b.compute()) == data.decode()
 
         c = db.read_text(fn)
         assert c.npartitions == 1

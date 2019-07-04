@@ -18,7 +18,7 @@ from toolz import concat, valmap, partial
 
 from dask import compute
 from dask.bytes.s3 import DaskS3FileSystem
-from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
+from dask.bytes.core import read_bytes, open_files
 from dask.bytes.utils import compress
 from fsspec.compression import compr
 

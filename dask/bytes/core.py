@@ -174,6 +174,9 @@ def logical_size(fs, path, compression="infer"):
         return fs.size(path)
     elif compression in compr:
         with OpenFile(fs, path, compression=compression) as f:
+            # TODO: this may require a complete scan of the file, depending on
+            #  the codec; may be better to ValueError here even if technically
+            #  a seek is possible.
             f.seek(0, 2)
             return f.tell()
     else:
@@ -186,6 +189,6 @@ def logical_size(fs, path, compression="infer"):
 def get_pyarrow_filesystem(fs):
     """Get an equivalent pyarrow filesystem.
 
-    Not for public use, will be removed once a consistent filesystem api
-    is defined."""
+    This is here purely for compatibility with pre-fsspec
+    """
     return fs

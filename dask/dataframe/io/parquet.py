@@ -805,7 +805,6 @@ def _read_pyarrow(
     index=None,
     infer_divisions=None,
 ):
-    from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
 
     # In pyarrow, the physical storage field names may differ from
@@ -825,7 +824,7 @@ def _read_pyarrow(
         columns = list(columns)
 
     dataset = pq.ParquetDataset(
-        paths, filesystem=get_pyarrow_filesystem(fs), filters=filters
+        paths, filesystem=fs, filters=filters
     )
     if dataset.partitions is not None:
         partitions = [n for n in dataset.partitions.partition_names if n is not None]
