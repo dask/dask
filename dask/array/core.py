@@ -2664,11 +2664,7 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
         mapper = url
@@ -2736,11 +2732,7 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
         mapper = url
