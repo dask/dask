@@ -24,7 +24,7 @@ dependencies:
   - zarr
   - crick
   - pip
-  - partd
+  - partd<1
   - cachey
   - sparse
   - blosc
