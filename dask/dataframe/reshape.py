@@ -107,10 +107,7 @@ def get_dummies(
     """
     if PANDAS_VERSION >= "0.23.0":
         # dtype added to pandas
-        if len(kwargs) == 0:
-            kwargs = {"dtype": dtype}
-        else:
-            kwargs["dtype"] = dtype
+        kwargs["dtype"] = dtype
     elif dtype != np.uint8:
         # User specified something other than the default.
         raise ValueError(
