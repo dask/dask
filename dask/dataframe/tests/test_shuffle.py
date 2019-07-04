@@ -764,6 +764,7 @@ def test_temporary_directory(tmpdir):
     with dask.config.set(temporary_directory=str(tmpdir), scheduler="processes"):
         ddf2 = ddf.set_index("x", shuffle="disk")
         ddf2.compute()
+
         assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
 
 
