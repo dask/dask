@@ -912,9 +912,9 @@ def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
             da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
 
-def test_svd_compressed_recompute():
+def test_svd_compressed_compute():
     x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, recompute=True, seed=123)
+    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
     uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
 
     assert len(v.dask) < len(vv.dask)

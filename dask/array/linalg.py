@@ -626,7 +626,7 @@ def compression_level(n, q, oversampling=10, min_subspace_size=20):
     return min(max(min_subspace_size, q + oversampling), n)
 
 
-def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
+def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     """ Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
@@ -642,10 +642,10 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
     n_power_iter: int
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
-    recompute : bool
+    compute : bool
         Whether or not to compute data at each stage during computation.
         Recomputing the input while performing several passes reduces memory
-        pressure, but means that we have to recompute the input multiple times.
+        pressure, but means that we have to compute the input multiple times.
         This is a good choice if the data is larger than memory and cheap to
         recreate.
 
@@ -669,11 +669,11 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
     )
     mat_h = data.dot(omega)
     for j in range(n_power_iter):
-        if recompute:
+        if compute:
             mat_h = mat_h.persist()
             wait(mat_h)
         tmp = data.T.dot(mat_h)
-        if recompute:
+        if compute:
             tmp = tmp.persist()
             wait(tmp)
         mat_h = data.dot(tmp)
@@ -681,7 +681,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, recompute=False):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, recompute=False):
+def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -699,10 +699,10 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, recompute=False):
         Number of power iterations, useful when the singular values
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
-    recompute : bool
+    compute : bool
         Should we compute data at each stage during computation?
         Recomputing reduces memory pressure, but means that we have to
-        recompute the input multiple times.
+        compute the input multiple times.
 
     Examples
     --------
@@ -724,9 +724,9 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, recompute=False):
     https://arxiv.org/abs/0909.4061
     """
     comp = compression_matrix(
-        a, k, n_power_iter=n_power_iter, seed=seed, recompute=recompute
+        a, k, n_power_iter=n_power_iter, seed=seed, compute=compute
     )
-    if recompute:
+    if compute:
         comp = comp.persist()
         wait(comp)
     a_compressed = comp.dot(a)
