@@ -389,16 +389,3 @@ def test_double_dependencies():
     X = da.dot(X, X.T)
 
     assert_eq(X.compute(optimize_graph=False), X)
-
-
-def test_dot_fuses():
-    from dask.blockwise import optimize_blockwise
-
-    x = da.ones((200, 10), chunks=(100, 10))
-    y = da.ones((10, 10), chunks=(10, 10))
-
-    z = x.dot(y)
-
-    optimize_blockwise(z.dask)
-    breakpoint()
-    1 + 1
