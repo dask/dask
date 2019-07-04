@@ -765,7 +765,9 @@ def test_temporary_directory(tmpdir):
         ddf2 = ddf.set_index("x", shuffle="disk")
         ddf2.compute()
 
-        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
+        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir))), os.listdir(
+            str(tmpdir)
+        )
 
 
 def test_empty_partitions():
