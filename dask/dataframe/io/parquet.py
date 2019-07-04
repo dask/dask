@@ -643,9 +643,10 @@ def _write_partition_fastparquet(
         # Write nothing for empty partitions
         rgs = None
     elif partition_on:
+        mkdirs = lambda x: fs.mkdirs(x, exist_ok=True)
         if LooseVersion(fastparquet.__version__) >= "0.1.4":
             rgs = partition_on_columns(
-                df, partition_on, path, filename, fmd, compression, fs.open, fs.mkdirs
+                df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
             )
         else:
             rgs = partition_on_columns(
@@ -657,7 +658,7 @@ def _write_partition_fastparquet(
                 fs.sep,
                 compression,
                 fs.open,
-                fs.mkdirs,
+                mkdirs,
             )
     else:
         # Fastparquet current doesn't properly set `num_rows` in the output
@@ -682,7 +683,7 @@ def _write_fastparquet(
 ):
     import fastparquet
 
-    fs.mkdirs(path)
+    fs.mkdirs(path, exist_ok=True)
     sep = fs.sep
 
     object_encoding = kwargs.pop("object_encoding", "utf8")
@@ -1160,7 +1161,7 @@ def _write_pyarrow(
     if write_index is None and df.known_divisions:
         write_index = True
 
-    fs.mkdirs(path)
+    fs.mkdirs(path, exist_ok=True)
 
     template = fs.sep.join([path, "part.%i.parquet"])
 

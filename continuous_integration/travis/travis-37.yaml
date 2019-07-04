@@ -15,6 +15,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - fsspec
   - sqlalchemy
   - pyarrow
   # other -- IO

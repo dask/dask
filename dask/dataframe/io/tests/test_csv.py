@@ -24,10 +24,11 @@ from dask.dataframe.io.csv import (
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
+from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
-from dask.bytes.compression import compress, files as cfiles, seekable_files
+from fsspec.compression import compr
 
-fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
+fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
 def normalize_text(s):
