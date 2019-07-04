@@ -37,12 +37,18 @@ def test_pandas():
     assert sizeof(df.x) >= sizeof(df.index)
     assert sizeof(df.y) >= 100 * 3
     assert sizeof(df.index) >= 20
-    assert sizeof(df.set_index(["x", "y"].index)) < 1800
 
     assert isinstance(sizeof(df), int)
     assert isinstance(sizeof(df.x), int)
     assert isinstance(sizeof(df.index), int)
-    assert isinstance(sizeof(df.set_index(["x", "y"]).index), int)
+
+
+def test_pandas_multiindex():
+    pd = pytest.importorskip("pandas")
+    index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+
+    assert 0.5 * sys.getsizeof(index) < sizeof(index) < 2 * sys.getsizeof(index)
+    assert isinstance(sizeof(index), int)
 
 
 def test_pandas_repeated_column():
