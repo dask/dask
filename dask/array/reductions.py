@@ -11,7 +11,7 @@ from numbers import Integral, Number
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, handle_out
+from .core import _concatenate2, Array, handle_out, implements
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
@@ -363,6 +363,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.min, np.amin)
 @wraps(chunk.min)
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
@@ -377,6 +378,7 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@implements(np.max, np.amax)
 @wraps(chunk.max)
 def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(

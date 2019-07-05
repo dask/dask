@@ -27,7 +27,7 @@ from toolz import map, reduce, frequencies
 import numpy as np
 
 from . import chunk
-from .. import config
+from .. import config, compute
 from ..base import (
     DaskMethodsMixin,
     tokenize,
@@ -136,6 +136,33 @@ def getter_inline(a, b, asarray=True, lock=None):
 
 
 from .optimization import optimize, fuse_slice
+
+
+# __array_function__ dict for mapping aliases and mismatching names
+_HANDLED_FUNCTIONS = {}
+
+
+def implements(*numpy_functions):
+    """Register an __array_function__ implementation for dask.array.Array
+
+    Register that a function implements the API of a NumPy function (or several
+    NumPy functions in case of aliases) which is handled with
+    ``__array_function__``.
+
+    Parameters
+    ----------
+    \\*numpy_functions : callables
+        One or more NumPy functions that are handled by ``__array_function__``
+        and will be mapped by `implements` to a `dask.array` function.
+    """
+
+    def decorator(dask_func):
+        for numpy_function in numpy_functions:
+            _HANDLED_FUNCTIONS[numpy_function] = dask_func
+
+        return dask_func
+
+    return decorator
 
 
 def slices_from_chunks(chunks):
@@ -1221,16 +1248,41 @@ class Array(DaskMethodsMixin):
     def __array_function__(self, func, types, args, kwargs):
         import dask.array as module
 
+        def handle_nonmatching_names(func, args, kwargs):
+            if func not in _HANDLED_FUNCTIONS:
+                warnings.warn(
+                    "The `{}` function is not implemented by Dask array. "
+                    "You may want to use the da.map_blocks function "
+                    "or something similar to silence this warning. "
+                    "Your code may stop working in a future release.".format(
+                        func.__module__ + "." + func.__name__
+                    ),
+                    FutureWarning,
+                )
+                # Need to convert to array object (e.g. numpy.ndarray or
+                # cupy.ndarray) as needed, so we can call the NumPy function
+                # again and it gets the chance to dispatch to the right
+                # implementation.
+                args, kwargs = compute(args, kwargs)
+                return func(*args, **kwargs)
+
+            return _HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+        # First try to find a matching function name.  If that doesn't work, we may
+        # be dealing with an alias or a function that's simply not in the Dask API.
+        # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
         for submodule in func.__module__.split(".")[1:]:
             try:
                 module = getattr(module, submodule)
             except AttributeError:
-                return NotImplemented
+                return handle_nonmatching_names(func, args, kwargs)
+
         if not hasattr(module, func.__name__):
-            return NotImplemented
+            return handle_nonmatching_names(func, args, kwargs)
+
         da_func = getattr(module, func.__name__)
         if da_func is func:
-            return NotImplemented
+            return handle_nonmatching_names(func, args, kwargs)
         return da_func(*args, **kwargs)
 
     @property

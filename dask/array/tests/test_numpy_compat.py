@@ -35,3 +35,13 @@ def test_slice_dtype(dtype, index):
     result = _make_sliced_dtype(dtype, index)
     expected = np.ones((5, len(dtype)), dtype=dtype)[index].dtype
     assert result == expected
+
+
+def test_min_max_round_funcs():
+    # Regression test for gh-5031
+    image = da.from_array(np.array([[0, 1], [1, 2]]), chunks=(1, 2))
+    # These use __array_function__ (and min/max/round are aliased,
+    # to amin/amax/round_ in numpy)
+    assert int(np.min(image)) == 0
+    assert int(np.max(image)) == 2
+    assert np.round(image)[1, 1] == 2
