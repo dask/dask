@@ -1045,19 +1045,19 @@ def partial_by_order(*args, **kwargs):
     return function(*args2, **kwargs)
 
 
-def is_array_meta_like(x):
-    """Is this object a numpy array or Dask.array._meta compatible?
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
 
     Examples
     --------
     >>> import numpy as np
-    >>> is_array_meta_like(np.ones(5))
+    >>> is_arraylike(np.ones(5))
     True
-    >>> is_array_meta_like(np.ones(()))
+    >>> is_arraylike(np.ones(()))
     True
-    >>> is_array_meta_like(5)
+    >>> is_arraylike(5)
     False
-    >>> is_array_meta_like('cat')
+    >>> is_arraylike('cat')
     False
     """
     from .base import is_dask_collection
@@ -1068,25 +1068,6 @@ def is_array_meta_like(x):
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
     )
-
-
-def is_arraylike(x):
-    """ Is this object a numpy array or something similar?
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> is_arraylike(np.ones(5))
-    True
-    >>> is_arraylike(np.ones(()))
-    False
-    >>> is_arraylike(5)
-    False
-    >>> is_arraylike('cat')
-    False
-    """
-
-    return bool(is_array_meta_like(x) and x.shape)
 
 
 def is_dataframe_like(df):
