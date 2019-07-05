@@ -2688,8 +2688,8 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.Series)
     def __iter__(self):
         for i in range(self.npartitions):
-            df = self.get_partition(i).compute()
-            for row in df.__iter__():
+            s = self.get_partition(i).compute()
+            for row in s.__iter__():
                 yield row
 
     @classmethod
