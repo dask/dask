@@ -20,6 +20,7 @@ def test_basic():
 
 
 def test_repr_html():
+    assert da.ones([])._repr_html_()
     assert da.ones(10)[:0]._repr_html_()
     assert da.ones(10)._repr_html_()
     assert da.ones((10, 10))._repr_html_()
@@ -28,13 +29,27 @@ def test_repr_html():
 
 
 def test_errors():
-    with pytest.raises(NotImplementedError):
-        assert da.ones(10)[:0].to_svg()
+    # empty arrays
+    with pytest.raises(NotImplementedError) as excpt:
+        da.ones([]).to_svg()
+    assert "0 dimensions" in str(excpt.value)
 
-    with pytest.raises(NotImplementedError):
+    # Scalars
+    with pytest.raises(NotImplementedError) as excpt:
+        da.asarray(1).to_svg()
+    assert "0 dimensions" in str(excpt.value)
+
+    # 0-length dims arrays
+    with pytest.raises(NotImplementedError) as excpt:
+        da.ones(10)[:0].to_svg()
+    assert "0-length dimensions" in str(excpt.value)
+
+    # unknown chunk sizes
+    with pytest.raises(NotImplementedError) as excpt:
         x = da.ones(10)
         x = x[x > 5]
         x.to_svg()
+    assert "unknown chunk sizes" in str(excpt.value)
 
 
 def test_repr_html():
