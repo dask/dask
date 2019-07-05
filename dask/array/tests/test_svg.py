@@ -30,18 +30,21 @@ def test_repr_html():
 
 def test_errors():
     # scalars
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError) as excpt:
         da.ones([]).to_svg()
+    assert "0 dimenstions" in str(excpt.value)
 
     # empty one-dim arrays
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError) as excpt:
         da.ones(10)[:0].to_svg()
+    assert "0-length dimensions" in str(excpt.value)
 
-    # unknown shape
-    with pytest.raises(NotImplementedError):
+    # unknown chunk sizes
+    with pytest.raises(NotImplementedError) as excpt:
         x = da.ones(10)
         x = x[x > 5]
         x.to_svg()
+    assert "unknown chunk sizes" in str(excpt.value)
 
 
 def test_repr_html():
