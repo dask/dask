@@ -32,13 +32,12 @@ def test_errors():
     # empty arrays
     with pytest.raises(NotImplementedError) as excpt:
         da.ones([]).to_svg()
-    assert "0 dimenstions" in str(excpt.value)
+    assert "0 dimensions" in str(excpt.value)
 
     # Scalars
     with pytest.raises(NotImplementedError) as excpt:
         da.asarray(1).to_svg()
-    assert "0 dimenstions" in str(excpt.value)
-
+    assert "0 dimensions" in str(excpt.value)
 
     # 0-length dims arrays
     with pytest.raises(NotImplementedError) as excpt:
