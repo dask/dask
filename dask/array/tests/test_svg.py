@@ -29,12 +29,18 @@ def test_repr_html():
 
 
 def test_errors():
-    # scalars
+    # empty arrays
     with pytest.raises(NotImplementedError) as excpt:
         da.ones([]).to_svg()
     assert "0 dimenstions" in str(excpt.value)
 
-    # empty one-dim arrays
+    # Scalars
+    with pytest.raises(NotImplementedError) as excpt:
+        da.asarray(1).to_svg()
+    assert "0 dimenstions" in str(excpt.value)
+
+
+    # 0-length dims arrays
     with pytest.raises(NotImplementedError) as excpt:
         da.ones(10)[:0].to_svg()
     assert "0-length dimensions" in str(excpt.value)
