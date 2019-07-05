@@ -89,7 +89,7 @@ def register_pandas():
         p = int(sum(object_size(l) for l in i.levels))
         for c in i.codes if hasattr(i, "codes") else i.labels:
             p += c.nbytes
-        return int(p) + 1000
+        return int(p)
 
 
 @sizeof.register_lazy("scipy")
