@@ -11,7 +11,7 @@ from toolz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, is_array_meta_like
+from ..utils import ignoring, is_arraylike
 
 try:
     AxisError = np.AxisError
@@ -108,9 +108,9 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 
 def compute_meta(func, _dtype, *args, **kwargs):
-    args_meta = [meta_from_array(x) if is_array_meta_like(x) else x for x in args]
+    args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
     kwargs_meta = {
-        k: meta_from_array(v) if is_array_meta_like(v) else v for k, v in kwargs.items()
+        k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()
     }
 
     # todo: look for alternative to this, causes issues when using map_blocks()

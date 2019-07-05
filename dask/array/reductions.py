@@ -16,7 +16,7 @@ from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
 from .ufunc import sqrt
-from .utils import full_like_safe, validate_axis, compute_meta, is_array_meta_like
+from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -312,7 +312,7 @@ def partial_reduce(
     # some functions can't compute empty arrays (those for which reduced_meta
     # fall into the ValueError exception) and we have to rely on reshaping
     # the array according to len(out_chunks)
-    if is_array_meta_like(meta) and meta.ndim != len(out_chunks):
+    if is_arraylike(meta) and meta.ndim != len(out_chunks):
         if len(out_chunks) == 0:
             meta = meta.sum()
         else:
