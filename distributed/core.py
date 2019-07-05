@@ -369,7 +369,7 @@ class Server(object):
                     op = msg.pop("op")
                 except KeyError:
                     raise ValueError(
-                        "Received unexpected message without 'op' key: " % str(msg)
+                        "Received unexpected message without 'op' key: " + str(msg)
                     )
                 if self.counters is not None:
                     self.counters["op"].add(op)
