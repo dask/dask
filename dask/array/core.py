@@ -2599,8 +2599,9 @@ def from_array(
         pass in True to have dask.array create one for you.
     asarray : bool, optional
         If True then call np.asarray on chunks to convert them to numpy arrays.
-        Set to False to pass passed chunks through unchanged.  This defaults to
-        True, unless the input has the ``__array_function__`` method defined.
+        If False then chunks are passed through unchanged.
+        If None (default) then we use True if the ``__array_function__`` method
+        is undefined.
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
