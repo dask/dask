@@ -215,7 +215,11 @@ def getem(
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if getitem is not operator.getitem and (not asarray or lock):
+    if (
+        has_keyword(getitem, "asarray")
+        and has_keyword(getitem, "lock")
+        and (not asarray or lock)
+    ):
         values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
         # Common case, drop extra parameters
@@ -2559,7 +2563,7 @@ def from_array(
     chunks="auto",
     name=None,
     lock=False,
-    asarray=True,
+    asarray=None,
     fancy=True,
     getitem=None,
     meta=None,
@@ -2594,8 +2598,9 @@ def from_array(
         If ``x`` doesn't support concurrent reads then provide a lock here, or
         pass in True to have dask.array create one for you.
     asarray : bool, optional
-        If True (default), then chunks will be converted to instances of
-        ``ndarray``. Set to False to pass passed chunks through unchanged.
+        If True then call np.asarray on chunks to convert them to numpy arrays.
+        Set to False to pass passed chunks through unchanged.  This defaults to
+        True, unless the input has the ``__array_function__`` method defined.
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
@@ -2626,6 +2631,9 @@ def from_array(
     """
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
+
+    if asarray is None:
+        asarray = not hasattr(x, "__array_function__")
 
     previous_chunks = getattr(x, "chunks", None)
 
