@@ -1037,18 +1037,20 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
             # We have min/max pairs
             divisions = [mn for mn, mx in min_maxs] + [min_maxs[-1][1]]
 
-            # Handle conversion to pandas timestamp divisions
-            index_field = pa_schema.field_by_name(divisions_name)
-            if pa.types.is_timestamp(index_field.type):
-                time_unit = index_field.type.unit
-                divisions_ns = [_to_ns(d, time_unit) for d in divisions]
-                divisions = [pd.Timestamp(ns) for ns in divisions_ns]
+            if pa.__version__ < LooseVersion("0.13.1"):
 
-            # Handle encoding of bytes string
-            if index_field.type == pa.string():
-                # Parquet strings are always encoded as utf-8
-                encoding = "utf-8"
-                divisions = [d.decode(encoding).strip() for d in divisions]
+                # Handle conversion to pandas timestamp divisions
+                index_field = pa_schema.field_by_name(divisions_name)
+                if pa.types.is_timestamp(index_field.type):
+                    time_unit = index_field.type.unit
+                    divisions_ns = [_to_ns(d, time_unit) for d in divisions]
+                    divisions = [pd.Timestamp(ns) for ns in divisions_ns]
+
+                # Handle encoding of bytes string
+                if index_field.type == pa.string():
+                    # Parquet strings are always encoded as utf-8
+                    encoding = "utf-8"
+                    divisions = [d.decode(encoding).strip() for d in divisions]
 
         else:  # pragma: no cover
             if infer_divisions is True:

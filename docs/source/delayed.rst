@@ -21,7 +21,7 @@ directly with a light annotation of normal python code:
    >>> z = dask.delayed(add)(x, y)
    >>> z.compute()
    5
-   >>> z.vizualize()
+   >>> z.visualize()
 
 .. image:: images/inc-add.svg
    :alt: simple task graph created with dask.delayed

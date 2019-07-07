@@ -4759,7 +4759,7 @@ def map_partitions(func, *args, **kwargs):
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta)):
+    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = make_meta(_concat([meta]), index=meta_index)
@@ -5237,7 +5237,7 @@ def _take_last(a, skipna=True):
         # in each column
         if is_dataframe_like(a):
             # create Series from appropriate backend dataframe library
-            series_typ = type(a.loc[0:1, a.columns[0]])
+            series_typ = type(a.iloc[0:1, 0])
             if a.empty:
                 return series_typ([])
             return series_typ(
@@ -5447,7 +5447,7 @@ def repartition_size(df, size):
         split_mem_usages = []
         for n, usage in zip(nsplits, mem_usages):
             split_mem_usages.extend([usage / n] * n)
-        mem_usages = pd.Series(split_mem_usages, dtype=mem_usages.dtype)
+        mem_usages = pd.Series(split_mem_usages)
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
@@ -5841,7 +5841,7 @@ def new_dd_object(dsk, name, meta, divisions):
     """
     if has_parallel_type(meta):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
-    elif is_arraylike(meta):
+    elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
         chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
