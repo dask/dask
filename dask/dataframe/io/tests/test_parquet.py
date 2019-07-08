@@ -617,7 +617,7 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join("test.parquet"))
     dfp = df.copy()
     dfp.index.name = "index"
-    dfp.to_parquet(fn, index=True, engine=write_engine)
+    dfp.to_parquet(fn, engine=write_engine)
     ddf = dd.read_parquet(fn, index="index", engine=read_engine)
     assert_eq(dfp, ddf)
 
