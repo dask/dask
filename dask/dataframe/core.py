@@ -5965,8 +5965,6 @@ def prefix_reduction(f, ddf, identity, **kwargs):
     ddf : dd.DataFrame
     identity : pd.DataFrame
         an identity element of f, that is f(identity, df) = f(df, identity) = df
-    kwargs : ??
-        keyword arguments of f ??
     """
     dsk = dict()
     name = "prefix_reduction-" + tokenize(f, ddf, identity, **kwargs)

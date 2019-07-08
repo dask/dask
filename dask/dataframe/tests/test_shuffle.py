@@ -858,3 +858,11 @@ def test_set_index_errors_with_inplace_kwarg():
 
     with pytest.raises(NotImplementedError):
         ddf.set_index("a", inplace=True)
+
+
+def test_set_index_overlap():
+    A = pd.DataFrame({"key": [1, 2, 3, 4, 4, 5, 6, 7], "value": list("abcd" * 2)})
+    a = dd.from_pandas(A, npartitions=2)
+    a = a.set_index("key", sorted=True)
+    b = a.repartition(divisions=a.divisions)
+    assert_eq(a, b)
