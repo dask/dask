@@ -331,6 +331,8 @@ class ArrowEngine(Engine):
                 df = df[names + partition_on]
             i_offset = len(dataset.pieces)
 
+            if division_info["name"] not in names:
+                ignore_divisions = True
             if not ignore_divisions:
                 old_end = None
                 row_groups = [

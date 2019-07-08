@@ -687,7 +687,7 @@ def test_partition_on_cats_2(tmpdir, engine):
     assert set(df.cat.categories) == {"x", "y", "z"}
 
 
-def test_append_wo_index(tmpdir):
+def test_append_wo_index(tmpdir, engine):
     """Test append with write_index=False."""
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
@@ -703,17 +703,17 @@ def test_append_wo_index(tmpdir):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-    ddf1.to_parquet(tmp)
+    ddf1.to_parquet(tmp, engine=engine)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf2.to_parquet(tmp, write_index=False, append=True)
+        ddf2.to_parquet(tmp, write_index=False, append=True, engine=engine)
     assert "Appended columns" in str(excinfo.value)
 
     tmp = str(tmpdir.join("tmp2.parquet"))
-    ddf1.to_parquet(tmp, write_index=False)
-    ddf2.to_parquet(tmp, write_index=False, append=True)
+    ddf1.to_parquet(tmp, write_index=False, engine=engine)
+    ddf2.to_parquet(tmp, write_index=False, append=True, engine=engine)
 
-    ddf3 = dd.read_parquet(tmp, index="f")
+    ddf3 = dd.read_parquet(tmp, index="f", engine=engine)
     assert_eq(df.set_index("f"), ddf3)
 
 
@@ -1044,8 +1044,8 @@ def test_divisions_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
-def test_divisions_are_known_read_with_filters(tmpdir):
-    pytest.importorskip("fastparquet", minversion="0.3.1")
+def test_divisions_are_known_read_with_filters(tmpdir, engine):
+    #pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     df = pd.DataFrame(
@@ -1057,10 +1057,11 @@ def test_divisions_are_known_read_with_filters(tmpdir):
     )
     d = dd.from_pandas(df, npartitions=2)
     # save it
-    d.to_parquet(tmpdir, partition_on=["id"], engine="fastparquet")
+    d.to_parquet(tmpdir, partition_on=["id"], engine=engine)
     # read it
-    out = dd.read_parquet(tmpdir, engine="fastparquet", filters=[("id", "==", "id1")])
+    out = dd.read_parquet(tmpdir, engine=engine, filters=[("id", "==", "id1")])
     # test it
+    import pdb; pdb.set_trace()
     assert out.known_divisions
     expected_divisions = (0, 2, 3)
     assert out.divisions == expected_divisions
