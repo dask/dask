@@ -46,8 +46,9 @@ def test_pandas():
 def test_pandas_multiindex():
     pd = pytest.importorskip("pandas")
     index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+    actual_size = sys.getsizeof(index) + 1000  # adjust for serialization overhead
 
-    assert 0.5 * sys.getsizeof(index) < sizeof(index) < 2 * sys.getsizeof(index)
+    assert 0.5 * actual_size < sizeof(index) < 2 * actual_size
     assert isinstance(sizeof(index), int)
 
 
