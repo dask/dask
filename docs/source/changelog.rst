@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2.1.0 - 2019-07-08
+------------------
+
+- Fix typo that prevented error message (:pr:`2825`) `Russ Bubley`_
+- Remove ``dask-mpi`` (:pr:`2824`) `Matthew Rocklin`_
+- Updates to use ``update_graph`` in task journey docs (:pr:`2821`) `James Bourbeau`_
+- Fix Client repr with ``memory_info=None`` (:pr:`2816`) `Matthew Rocklin`_
+- Fix case where key, rather than ``TaskState``, could end up in ``ts.waiting_on`` (:pr:`2819`) `tjb900`_
+- Use Keyword-only arguments (:pr:`2814`) `Matthew Rocklin`_
+- Relax check for worker references in cluster context manager (:pr:`2813`) `Matthew Rocklin`_
+- Add HTTPS support for the dashboard (:pr:`2812`) `Jim Crist`_
+- Use ``dask.utils.format_bytes`` (:pr:`2810`) `Tom Augspurger`_
+
+
 2.0.1 - 2019-06-26
 ------------------
 
@@ -1084,7 +1098,6 @@ significantly without many new features.
 .. _`Diane Trout`: https://github.com/detrout
 .. _`tjb900`: https://github.com/tjb900
 .. _`Stephan Hoyer`: https://github.com/shoyer
-.. _`tjb900`: https://github.com/tjb900
 .. _`Dirk Petersen`: https://github.com/dirkpetersen
 .. _`Daniel Farrell`: https://github.com/danpf
 .. _`George Sakkis`: https://github.com/gsakkis
