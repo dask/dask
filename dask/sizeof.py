@@ -84,6 +84,13 @@ def register_pandas():
             p += object_size(i)
         return int(p) + 1000
 
+    @sizeof.register(pd.MultiIndex)
+    def sizeof_pandas_multiindex(i):
+        p = int(sum(object_size(l) for l in i.levels))
+        for c in i.codes if hasattr(i, "codes") else i.labels:
+            p += c.nbytes
+        return int(p) + 1000
+
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
