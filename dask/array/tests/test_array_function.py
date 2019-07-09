@@ -177,8 +177,8 @@ def test_unregistered_func(func):
         def __init__(self, arr):
             self.arr = arr
 
-        def __array__(self, **kwargs):
-            return np.asarray(self.arr, **kwargs)
+        def __array__(self, *args, **kwargs):
+            return np.asarray(self.arr, *args, **kwargs)
 
         def __array_function__(self, f, t, arrs, kw):
             arrs = tuple(
