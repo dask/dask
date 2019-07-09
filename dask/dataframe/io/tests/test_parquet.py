@@ -195,7 +195,8 @@ def test_simple(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
-def test_read_glob(tmp_path, write_engine, read_engine):
+def test_read_glob(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
     if os.path.exists(os.path.join(tmp_path, "_metadata")):
         os.unlink(os.path.join(tmp_path, "_metadata"))
@@ -582,9 +583,9 @@ def test_append(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
-def test_append_create(tmp_path, engine):
+def test_append_create(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
-    check_fastparquet()
+    tmp_path = str(tmpdir)
     df = pd.DataFrame(
         {
             "i32": np.arange(1000, dtype=np.int32),
@@ -911,7 +912,6 @@ def test_timestamp_index(tmpdir, engine):
 
 def test_to_parquet_default_writes_nulls(tmpdir):
     check_fastparquet()
-    check_pyarrow()
     fn = str(tmpdir.join("test.parquet"))
 
     df = pd.DataFrame({"c1": [1.0, np.nan, 2, np.nan, 3]})
@@ -945,6 +945,7 @@ def test_partition_on(tmpdir, write_engine, read_engine):
 
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
 def test_partition_on_string(tmpdir, partition_on):
+    check_pyarrow()
     with dask.config.set(scheduler="single-threaded"):
         tmpdir = str(tmpdir)
         df = pd.DataFrame(
@@ -959,7 +960,8 @@ def test_partition_on_string(tmpdir, partition_on):
         out = dd.read_parquet(tmpdir, engine="pyarrow")
 
 
-def test_filters(tmp_path):
+def test_filters(tmpdir):
+    tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
     assert ddf.npartitions == 5
@@ -1172,7 +1174,10 @@ def test_parquet_select_cats(tmpdir, engine):
     assert list(rddf.columns) == list(df)
 
 
-def test_columns_name(tmp_path, engine):
+def test_columns_name(tmpdir, engine):
+    if engine == "fastparquet":
+        pytest.skip("Old fastparquet versions do not write column_indexes")
+    tmp_path = str(tmpdir)
     df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(["a", "b"], name="idx"))
     df.columns.name = "cols"
     ddf = dd.from_pandas(df, 2)
@@ -1626,8 +1631,9 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({" ": [3.0, 2.0, None]}),
     ],
 )
-def test_roundtrip_arrow(tmp_path, df):
+def test_roundtrip_arrow(tmpdir, df):
     # Index will be given a name when preserved as index
+    tmp_path = str(tmpdir)
     if not df.index.name:
         df.index.name = "index"
     ddf = dd.from_pandas(df, npartitions=2)
@@ -1636,7 +1642,8 @@ def test_roundtrip_arrow(tmp_path, df):
     assert_eq(ddf, ddf2)
 
 
-def test_datasets_timeseries(tmp_path, engine):
+def test_datasets_timeseries(tmpdir, engine):
+    tmp_path = str(tmpdir)
     df = dask.datasets.timeseries(
         start="2000-01-01", end="2000-01-10", freq="1d"
     ).persist()
@@ -1652,7 +1659,7 @@ def test_pathlib_path(tmpdir, engine):
     df = pd.DataFrame({"x": [4, 5, 6, 1, 2, 3]})
     df.index.name = "index"
     ddf = dd.from_pandas(df, npartitions=2)
-    path = pathlib.Path(tmpdir)
+    path = pathlib.Path(str(tmpdir))
     ddf.to_parquet(path, engine=engine)
     ddf2 = dd.read_parquet(path, engine=engine)
     assert_eq(ddf, ddf2)
