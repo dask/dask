@@ -1,6 +1,54 @@
 Changelog
 =========
 
+2.1.0 / 2019-07-08
+------------------
+
+Array
++++++
+
+- Add ``recompute=`` keyword to ``svd_compressed`` for lower-memory use (:pr:`5041`) `Matthew Rocklin`_
+- Change ``__array_function__`` implementation for backwards compatibility (:pr:`5043`) `Ralf Gommers`_
+- Added ``dtype`` and ``shape`` kwargs to ``apply_along_axis`` (:pr:`3742`) `Davis Bennett`_
+- Fix reduction with empty tuple axis (:pr:`5025`) `Peter Andreas Entschev`_
+- Drop size 0 arrays in ``stack`` (:pr:`4978`) `John A Kirkham`_
+
+Core
+++++
+
+- Removes index keyword from pandas ``to_parquet`` call (:pr:`5075`) `James Bourbeau`_
+- Fixes upstream dev CI build installation (:pr:`5072`) `James Bourbeau`_
+- Ensure scalar arrays are not rendered to SVG (:pr:`5058`) `Willi Rath`_
+- Environment creation overhaul (:pr:`5038`) `Tom Augspurger`_
+- s3fs, moto compatibility (:pr:`5033`) `Tom Augspurger`_
+- pytest 5.0 compat (:pr:`5027`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Fix ``compute_meta`` recursion in blockwise (:pr:`5048`) `Peter Andreas Entschev`_
+- Remove hard dependency on pandas in ``get_dummies`` (:pr:`5057`) `GALI PREM SAGAR`_
+- Check dtypes unchanged when using ``DataFrame.assign`` (:pr:`5047`) `asmith26`_
+- Fix cumulative functions on tables with more than 1 partition (:pr:`5034`) `tshatrov`_
+- Handle non-divisible sizes in repartition (:pr:`5013`) `George Sakkis`_
+- Handles timestamp and ``preserve_index`` changes in pyarrow (:pr:`5018`) `Richard J Zamora`_
+- Fix undefined ``meta`` for ``str.split(expand=False)`` (:pr:`5022`) `Brett Naul`_
+- Removed checks used for debugging ``merge_asof`` (:pr:`5011`) `Cody Johnson`_
+- Don't use type when getting accessor in dataframes (:pr:`4992`) `Matthew Rocklin`_
+- Add ``melt`` as a method of Dask DataFrame (:pr:`4984`) `Dustin Tindall`_
+- Adds path-like support to ``to_hdf`` (:pr:`5003`) `James Bourbeau`_
+
+Documentation
++++++++++++++
+
+- Point to latest K8s setup article in JupyterHub docs (:pr:`5065`) `Sean McKenna`_
+- Changes vizualize to visualize (:pr:`5061`) `David Brochart`_
+- Fix ``from_sequence`` typo in delayed best practices (:pr:`5045`) `James Bourbeau`_
+- Add user survey link to docs (:pr:`5026`) `James Bourbeau`_
+- Fixes typo in optimization docs (:pr:`5015`) `James Bourbeau`_
+- Update community meeting information (:pr:`5006`) `Tom Augspurger`_
+
+
 2.0.0 / 2019-06-25
 ------------------
 
@@ -2239,3 +2287,11 @@ Other
 .. _`mbarkhau`: https://github.com/mbarkhau
 .. _`Hugo`: https://github.com/hugovk
 .. _`Paweł Kordek`: https://github.com/kordek
+.. _`Ralf Gommers`: https://github.com/rgommers
+.. _`Davis Bennett`: https://github.com/d-v-b
+.. _`Willi Rath`: https://github.com/willirath
+.. _`David Brochart`: https://github.com/davidbrochart
+.. _`GALI PREM SAGAR`: https://github.com/galipremsagar
+.. _`tshatrov`: https://github.com/tshatrov
+.. _`Dustin Tindall`: https://github.com/dustindall
+.. _`Sean McKenna`: https://github.com/seanmck

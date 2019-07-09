@@ -37,7 +37,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         numpy \
         pandas
     pip install \
-        --no-deps
+        --no-deps \
         --upgrade \
         locket \
         git+https://github.com/pydata/sparse \

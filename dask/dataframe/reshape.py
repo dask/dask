@@ -7,7 +7,7 @@ from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
 from .utils import is_categorical_dtype, is_scalar, has_known_categories, PANDAS_VERSION
 from ..utils import M
-
+import sys
 
 ###############################################################
 # Dummies
@@ -23,6 +23,7 @@ def get_dummies(
     sparse=False,
     drop_first=False,
     dtype=np.uint8,
+    **kwargs
 ):
     """
     Convert categorical variable into dummy/indicator variables.
@@ -106,7 +107,7 @@ def get_dummies(
     """
     if PANDAS_VERSION >= "0.23.0":
         # dtype added to pandas
-        kwargs = {"dtype": dtype}
+        kwargs["dtype"] = dtype
     elif dtype != np.uint8:
         # User specified something other than the default.
         raise ValueError(
@@ -114,8 +115,6 @@ def get_dummies(
             "The 'dtype' keyword was added in pandas "
             "0.23.0.".format(PANDAS_VERSION)
         )
-    else:
-        kwargs = {}
 
     if isinstance(data, (pd.Series, pd.DataFrame)):
         return pd.get_dummies(
@@ -161,7 +160,9 @@ def get_dummies(
 
     # We explicitly create `meta` on `data._meta` (the empty version) to
     # work around https://github.com/pandas-dev/pandas/issues/21993
-    meta = pd.get_dummies(
+    package_name = data._meta.__class__.__module__.split(".")[0]
+    dummies = sys.modules[package_name].get_dummies
+    meta = dummies(
         data._meta,
         prefix=prefix,
         prefix_sep=prefix_sep,
@@ -173,7 +174,7 @@ def get_dummies(
     )
 
     return map_partitions(
-        pd.get_dummies,
+        dummies,
         data,
         prefix=prefix,
         prefix_sep=prefix_sep,

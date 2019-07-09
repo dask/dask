@@ -1011,3 +1011,18 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         return get
 
     return None
+
+
+def wait(x, timeout=None, return_when="ALL_COMPLETED"):
+    """ Wait until computation has finished
+
+    This is a compatibility alias for ``dask.distributed.wait``.
+    If it is applied onto Dask collections without Dask Futures or if Dask
+    distributed is not installed then it is a no-op
+    """
+    try:
+        from distributed import wait
+
+        return wait(x, timeout=timeout, return_when=return_when)
+    except (ImportError, ValueError):
+        return x
