@@ -712,6 +712,7 @@ def test_read_csv_compression(fmt, blocksize):
         )
 
 
+@pytest.mark.skip
 def test_warn_non_seekable_files():
     files2 = valmap(compress["gzip"], csv_files)
     with filetexts(files2, mode="b"):

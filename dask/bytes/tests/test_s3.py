@@ -17,8 +17,8 @@ httpretty = pytest.importorskip("httpretty")
 from toolz import concat, valmap, partial
 
 from dask import compute
-from dask.bytes.s3 import DaskS3FileSystem
 from dask.bytes.core import read_bytes, open_files
+from s3fs import S3FileSystem as DaskS3FileSystem
 from dask.bytes.utils import compress
 from fsspec.compression import compr
 

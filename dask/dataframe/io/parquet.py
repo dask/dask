@@ -9,14 +9,14 @@ from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_storage_options
 
 from ..core import DataFrame, Series
 from ..utils import clear_known_categories, strip_unknown_categories, UNKNOWN_CATEGORIES
 from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
-from ...bytes.core import get_fs_token_paths
-from ...bytes.utils import infer_storage_options
 from ...utils import import_required, natural_sort_key
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
@@ -1483,6 +1483,7 @@ def to_parquet(
     fs, fs_token, _ = get_fs_token_paths(
         path, mode="wb", storage_options=storage_options
     )
+    fs.mkdirs(path, exist_ok=True)
     # Trim any protocol information from the path before forwarding
     path = infer_storage_options(path)["path"]
 

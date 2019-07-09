@@ -7,24 +7,18 @@ from distutils.version import LooseVersion
 from warnings import warn
 
 from toolz import merge
+from fsspec.core import (OpenFile, open_files, get_fs_token_paths,
+                         expand_paths_if_needed, _expand_paths, get_compression)
+from fsspec.utils import (read_block, seek_delimiter, infer_storage_options,
+                          stringify_path, infer_compression)
+from fsspec import get_mapper
+from fsspec.compression import compr
 
-from .utils import (
-    SeekableFile,
-    read_block,
-    infer_compression,
-    infer_storage_options,
-    build_name_function,
-    update_storage_options,
-)
 from .. import config
 from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
 from ..utils import import_required, is_integer, parse_bytes
-
-from fsspec.core import OpenFile, open_files, get_fs_token_paths, expand_paths_if_needed, _expand_paths, get_compression
-from fsspec import get_mapper
-from fsspec.compression import compr
 
 
 def read_bytes(

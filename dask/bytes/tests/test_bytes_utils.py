@@ -4,7 +4,7 @@ import pathlib
 
 import pytest
 
-from dask.bytes.utils import (
+from dask.bytes.core import (
     read_block,
     seek_delimiter,
     infer_storage_options,
