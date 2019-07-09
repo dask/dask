@@ -255,7 +255,7 @@ def to_parquet(
     Parameters
     ----------
     df : dask.dataframe.DataFrame
-    path : string
+    path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'

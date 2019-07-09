@@ -522,7 +522,7 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join("test.parquet"))
     dfp = df.copy()
     dfp.index.name = "index"
-    dfp.to_parquet(fn, index=True, engine=write_engine)
+    dfp.to_parquet(fn, engine=write_engine)
     ddf = dd.read_parquet(fn, index="index", engine=read_engine)
     assert_eq(dfp, ddf)
 
@@ -1044,8 +1044,8 @@ def test_divisions_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
-def test_divisions_are_known_read_with_filters(tmpdir, engine):
-    #pytest.importorskip("fastparquet", minversion="0.3.1")
+def test_divisions_are_known_read_with_filters(tmpdir):
+    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     df = pd.DataFrame(
@@ -1057,11 +1057,12 @@ def test_divisions_are_known_read_with_filters(tmpdir, engine):
     )
     d = dd.from_pandas(df, npartitions=2)
     # save it
-    d.to_parquet(tmpdir, partition_on=["id"], engine=engine)
+    d.to_parquet(tmpdir, partition_on=["id"], engine="fastparquet")
     # read it
-    out = dd.read_parquet(tmpdir, engine=engine, filters=[("id", "==", "id1")])
+    out = dd.read_parquet(
+        tmpdir, engine="fastparquet", filters=[("id", "==", "id1")]
+    )
     # test it
-    import pdb; pdb.set_trace()
     assert out.known_divisions
     expected_divisions = (0, 2, 3)
     assert out.divisions == expected_divisions
