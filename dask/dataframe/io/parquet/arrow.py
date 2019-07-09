@@ -3,7 +3,6 @@ import json
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from ....delayed import delayed
 from ....bytes.core import get_pyarrow_filesystem
 from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes

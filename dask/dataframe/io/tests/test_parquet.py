@@ -346,9 +346,6 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     # No Index
     # --------
     # All columns, none as index
-    ddf_read = dd.read_parquet(
-        fn, index=False, engine=read_engine, gather_statistics=True
-    )
     assert_eq(
         dd.read_parquet(fn, index=False, engine=read_engine, gather_statistics=True),
         ddf2,
@@ -945,6 +942,7 @@ def test_partition_on(tmpdir, write_engine, read_engine):
 
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
 def test_partition_on_string(tmpdir, partition_on):
+    tmpdir = str(tmpdir)
     check_pyarrow()
     with dask.config.set(scheduler="single-threaded"):
         tmpdir = str(tmpdir)
@@ -956,11 +954,17 @@ def test_partition_on_string(tmpdir, partition_on):
             }
         )
         d = dd.from_pandas(df, npartitions=2)
-        d.to_parquet(tmpdir, partition_on=partition_on, engine="pyarrow")
-        out = dd.read_parquet(tmpdir, engine="pyarrow")
+        d.to_parquet(tmpdir, partition_on=partition_on, write_index=False, engine="pyarrow")
+        out = dd.read_parquet(
+            tmpdir, index=False, gather_statistics=False, engine="pyarrow"
+        )
+    out = out.compute()
+    for val in df.aa.unique():
+        assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
 def test_filters(tmpdir):
+    check_pyarrow()
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
@@ -1632,6 +1636,7 @@ def test_append_cat_fp(tmpdir, engine):
     ],
 )
 def test_roundtrip_arrow(tmpdir, df):
+    check_pyarrow()
     # Index will be given a name when preserved as index
     tmp_path = str(tmpdir)
     if not df.index.name:

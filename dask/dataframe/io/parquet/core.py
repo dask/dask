@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from distutils.version import LooseVersion
-import warnings
 
 import toolz
 

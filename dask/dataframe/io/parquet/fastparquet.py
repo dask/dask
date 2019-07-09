@@ -1,25 +1,17 @@
 from collections import OrderedDict
 import copy
-from distutils.version import LooseVersion
 import json
-import os
 import warnings
 
 import numpy as np
 import pandas as pd
 
 from ....compatibility import string_types
-from ....base import tokenize
-from ....delayed import delayed
-from ...core import new_dd_object
 
 import fastparquet
-from fastparquet.util import check_column_names
 from fastparquet import ParquetFile
-from fastparquet.util import analyse_paths, get_file_scheme, join_path
+from fastparquet.util import analyse_paths, get_file_scheme
 from fastparquet.util import ex_from_sep, val_to_num, groupby_types
-from fastparquet.api import _pre_allocate
-from fastparquet.core import read_row_group_file
 from fastparquet.writer import partition_on_columns, make_part_file
 
 from .utils import _parse_pandas_metadata, _normalize_index_columns
