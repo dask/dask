@@ -1051,8 +1051,9 @@ def is_arraylike(x):
     Examples
     --------
     >>> import numpy as np
-    >>> x = np.ones(5)
-    >>> is_arraylike(x)
+    >>> is_arraylike(np.ones(5))
+    True
+    >>> is_arraylike(np.ones(()))
     True
     >>> is_arraylike(5)
     False
@@ -1061,10 +1062,9 @@ def is_arraylike(x):
     """
     from .base import is_dask_collection
 
-    return (
+    return bool(
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
-        and x.shape
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
     )
