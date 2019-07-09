@@ -954,7 +954,9 @@ def test_partition_on_string(tmpdir, partition_on):
             }
         )
         d = dd.from_pandas(df, npartitions=2)
-        d.to_parquet(tmpdir, partition_on=partition_on, write_index=False, engine="pyarrow")
+        d.to_parquet(
+            tmpdir, partition_on=partition_on, write_index=False, engine="pyarrow"
+        )
         out = dd.read_parquet(
             tmpdir, index=False, gather_statistics=False, engine="pyarrow"
         )
@@ -1065,9 +1067,7 @@ def test_divisions_are_known_read_with_filters(tmpdir):
     # save it
     d.to_parquet(tmpdir, partition_on=["id"], engine="fastparquet")
     # read it
-    out = dd.read_parquet(
-        tmpdir, engine="fastparquet", filters=[("id", "==", "id1")]
-    )
+    out = dd.read_parquet(tmpdir, engine="fastparquet", filters=[("id", "==", "id1")])
     # test it
     assert out.known_divisions
     expected_divisions = (0, 2, 3)
