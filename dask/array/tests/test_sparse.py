@@ -199,5 +199,5 @@ def test_from_array():
     d = da.from_array(x, chunks=(5, 5))
 
     assert isinstance(d._meta, sparse.COO)
-    assert_eq(d, d)
+    assert_eq(x, d)
     assert isinstance(d.compute(), sparse.COO)
