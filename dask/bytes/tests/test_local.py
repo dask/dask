@@ -94,8 +94,8 @@ def test_urlpath_inference_errors():
     with pytest.raises(ValueError, match="the same file-system options"):
         get_fs_token_paths(
             [
-                "sftp://myuser@node.com/test/path.csv",
-                "sftp://otheruser@node.com/other/path.csv",
+                "ftp://myuser@node.com/test/path.csv",
+                "ftp://otheruser@node.com/other/path.csv",
             ]
         )
 

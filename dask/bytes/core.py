@@ -171,7 +171,13 @@ def logical_size(fs, path, compression="infer"):
             # TODO: this may require a complete scan of the file, depending on
             #  the codec; may be better to ValueError here even if technically
             #  a seek is possible.
-            f.seek(0, 2)
+            try:
+                f.seek(0, 2)
+            except IOError:
+                raise ValueError(
+                    "Failed to infer logical size of file because codec %s does"
+                    "not support seek." % compression
+                )
             return f.tell()
     else:
         raise ValueError(
