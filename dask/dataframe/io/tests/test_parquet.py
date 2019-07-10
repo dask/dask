@@ -909,6 +909,7 @@ def test_timestamp_index(tmpdir, engine):
 
 def test_to_parquet_default_writes_nulls(tmpdir):
     check_fastparquet()
+    check_pyarrow()
     fn = str(tmpdir.join("test.parquet"))
 
     df = pd.DataFrame({"c1": [1.0, np.nan, 2, np.nan, 3]})
