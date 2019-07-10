@@ -12,6 +12,7 @@ from dask.utils import factors
 from .spec import SpecCluster
 from ..nanny import Nanny
 from ..scheduler import Scheduler
+from ..security import Security
 from ..worker import Worker, parse_memory_limit
 
 logger = logging.getLogger(__name__)
@@ -123,11 +124,12 @@ class LocalCluster(SpecCluster):
 
         self.status = None
         self.processes = processes
+        security = security or Security()
 
         if protocol is None:
             if host and "://" in host:
                 protocol = host.split("://")[0]
-            elif security:
+            elif security and security.require_encryption:
                 protocol = "tls://"
             elif not self.processes and not scheduler_port:
                 protocol = "inproc://"
