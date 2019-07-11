@@ -4,7 +4,7 @@ Dask
 |Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|
 
 Dask is a flexible parallel computing library for analytics.  See
-documentation_ for more information.
+documentation_ for more information!
 
 
 LICENSE
