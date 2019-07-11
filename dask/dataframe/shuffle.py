@@ -641,56 +641,19 @@ def get_overlap(df, index):
     return df.loc[[index]] if df.index.contains(index) else None
 
 
-def fix_overlap(ddf, divisions):
+def fix_overlap(ddf, overlap):
     """ Ensures that the upper bound on each partition of ddf is exclusive """
-    dsk = dict()
-    name = "fix-overlap-" + tokenize(ddf, divisions)
-
+    name = "fix-overlap-" + tokenize(ddf, overlap)
     n = len(ddf.divisions) - 1
-    for i in range(n):
-        frames = []
-        if i > 0:
-            frames.append((get_overlap, (ddf._name, i - 1), divisions[i]))
-        if i < n - 1:
-            frames.append((drop_overlap, (ddf._name, i), divisions[i + 1]))
-        else:
-            frames.append((ddf._name, i))
+    dsk = {(name, i): (ddf._name, i) for i in range(n)}
+
+    for i in overlap:
+        frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
         dsk[(name, i)] = (pd.concat, frames)
+        dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    return new_dd_object(graph, name, ddf._meta, divisions)
-
-
-def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
-        meta = df._meta.set_index(index._meta, drop=drop)
-
-    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
-
-    if not divisions:
-        divisions, flag = compute_divisions(result, **kwargs)
-
-        if flag:  # need to repartition due to overlap
-            result = fix_overlap(result, divisions)
-            # print (result.compute())
-            # map_partitions(lambda d: print(str(d) + "\n---"), result).compute()
-            result.compute()
-    elif len(divisions) != len(df.divisions):
-        msg = (
-            "When doing `df.set_index(col, sorted=True, divisions=...)`, "
-            "divisions indicates known splits in the index column. In this "
-            "case divisions must be the same length as the existing "
-            "divisions in `df`\n\n"
-            "If the intent is to repartition into new divisions after "
-            "setting the index, you probably want:\n\n"
-            "`df.set_index(col, sorted=True).repartition(divisions=divisions)`"
-        )
-        raise ValueError(msg)
-
-    result.divisions = tuple(divisions)
-    return result
+    return new_dd_object(graph, name, ddf._meta, ddf.divisions)
 
 
 def compute_divisions(df, **kwargs):
@@ -707,9 +670,33 @@ def compute_divisions(df, **kwargs):
             "Partitions must be sorted ascending with the index", mins, maxes
         )
 
-    flag = False
-    if any(a >= b for a, b in zip(maxes[:1], mins[1:])):
-        flag = True
+    df.divisions = tuple(mins) + (list(maxes)[-1],)
 
-    divisions = tuple(mins) + (list(maxes)[-1],)
-    return divisions, flag
+    overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
+    return fix_overlap(df, overlap) if overlap else df
+
+
+def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
+    if not isinstance(index, Series):
+        meta = df._meta.set_index(index, drop=drop)
+    else:
+        meta = df._meta.set_index(index._meta, drop=drop)
+
+    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
+
+    if not divisions:
+        return compute_divisions(result, **kwargs)
+    elif len(divisions) != len(df.divisions):
+        msg = (
+            "When doing `df.set_index(col, sorted=True, divisions=...)`, "
+            "divisions indicates known splits in the index column. In this "
+            "case divisions must be the same length as the existing "
+            "divisions in `df`\n\n"
+            "If the intent is to repartition into new divisions after "
+            "setting the index, you probably want:\n\n"
+            "`df.set_index(col, sorted=True).repartition(divisions=divisions)`"
+        )
+        raise ValueError(msg)
+
+    result.divisions = tuple(divisions)
+    return result

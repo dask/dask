@@ -667,9 +667,6 @@ def test_set_index_sorted_true():
     with pytest.raises(ValueError):
         a.set_index(a.z, sorted=True)
 
-    with pytest.warns(UserWarning):
-        a.set_index(a.y, sorted=True)
-
 
 def test_set_index_sorted_single_partition():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
@@ -738,17 +735,10 @@ def test_compute_divisions():
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
 
-    divisions = compute_divisions(a)
-    b = copy(a)
-    b.divisions = divisions
+    b = compute_divisions(copy(a))
 
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
-
-    c = dd.from_pandas(df.set_index("y"), 2, sort=False)
-    # Partitions overlap warning
-    with pytest.warns(UserWarning):
-        compute_divisions(c)
 
 
 def test_temporary_directory(tmpdir):
