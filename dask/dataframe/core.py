@@ -279,6 +279,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """
 
     def __init__(self, dsk, name, meta, divisions):
+        if len(divisions) < 2:  # no partitions
+            dsk = {(name, 0): meta}
+            divisions = [None, None]
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
