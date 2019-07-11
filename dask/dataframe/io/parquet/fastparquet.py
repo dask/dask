@@ -8,11 +8,14 @@ import pandas as pd
 
 from ....compatibility import string_types
 
-import fastparquet
-from fastparquet import ParquetFile
-from fastparquet.util import analyse_paths, get_file_scheme
-from fastparquet.util import ex_from_sep, val_to_num, groupby_types
-from fastparquet.writer import partition_on_columns, make_part_file
+try:
+    import fastparquet
+    from fastparquet import ParquetFile
+    from fastparquet.util import analyse_paths, get_file_scheme
+    from fastparquet.util import ex_from_sep, val_to_num, groupby_types
+    from fastparquet.writer import partition_on_columns, make_part_file
+except ModuleNotFoundError:
+    pass
 
 from .utils import _parse_pandas_metadata, _normalize_index_columns
 from ..utils import _meta_from_dtypes
