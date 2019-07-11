@@ -16,7 +16,6 @@ from .utils import (
     infer_storage_options,
     build_name_function,
     update_storage_options,
-    stringify_path,
 )
 from .. import config
 from ..compatibility import unicode
@@ -328,7 +327,7 @@ def get_compression(urlpath, compression):
 def infer_options(urlpath):
     if hasattr(urlpath, "name"):
         # deal with pathlib.Path objects - must be local
-        urlpath = stringify_path(urlpath)
+        urlpath = str(urlpath)
         ispath = True
     else:
         ispath = False
