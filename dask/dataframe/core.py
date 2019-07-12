@@ -2689,7 +2689,7 @@ Dask Name: {name}, {task} tasks""".format(
     def __iter__(self):
         for i in range(self.npartitions):
             s = self.get_partition(i).compute()
-            for row in s.__iter__():
+            for row in s:
                 yield row
 
     @classmethod
