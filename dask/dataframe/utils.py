@@ -203,7 +203,7 @@ def has_known_categories(x):
     x = getattr(x, "_meta", x)
     if is_series_like(x):
         return UNKNOWN_CATEGORIES not in x.cat.categories
-    elif is_index_like(x) and hasattr(x, "cat"):
+    elif is_index_like(x) and hasattr(x, "categories"):
         return UNKNOWN_CATEGORIES not in x.categories
     raise TypeError("Expected Series or CategoricalIndex")
 
