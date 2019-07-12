@@ -21,7 +21,6 @@ dependencies:
   # other -- IO
   - bcolz
   - blosc
-  - s3fs
   - boto3
   - botocore
   - bokeh
@@ -52,3 +51,4 @@ dependencies:
       - cityhash
       - mmh3
       - xxhash
+      - git+https://github.com/dask/s3fs

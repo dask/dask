@@ -17,7 +17,7 @@ dependencies:
   - lz4
   - psutil
   - pytables
-  - s3fs
+  - fsspec
   - scipy
   - fastparquet
   - python-snappy
@@ -29,3 +29,5 @@ dependencies:
   - sparse
   - blosc
   - moto
+  - pip:
+    - git+https://github.com/dask/s3fs
