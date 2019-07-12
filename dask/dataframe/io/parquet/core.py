@@ -214,6 +214,11 @@ def read_parquet(
     if index:
         meta = meta.set_index(index)
 
+    if len(divisions) < 2:
+        # empty dataframe
+        subgraph = {(name, 0): meta}
+        divisions = (None, None)
+
     return new_dd_object(subgraph, name, meta, divisions)
 
 

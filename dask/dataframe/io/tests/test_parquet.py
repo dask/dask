@@ -176,10 +176,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine)
-    if index:
-        read_df = dd.read_parquet(fn, index="a", engine=read_engine)
-    else:
-        read_df = dd.read_parquet(fn, engine=read_engine)
+    read_df = dd.read_parquet(fn, engine=read_engine)
     assert_eq(ddf, read_df)
 
 
