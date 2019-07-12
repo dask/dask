@@ -43,6 +43,15 @@ def test_pandas():
     assert isinstance(sizeof(df.index), int)
 
 
+def test_pandas_multiindex():
+    pd = pytest.importorskip("pandas")
+    index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+    actual_size = sys.getsizeof(index) + 1000  # adjust for serialization overhead
+
+    assert 0.5 * actual_size < sizeof(index) < 2 * actual_size
+    assert isinstance(sizeof(index), int)
+
+
 def test_pandas_repeated_column():
     pd = pytest.importorskip("pandas")
     df = pd.DataFrame({"x": [1, 2, 3]})
