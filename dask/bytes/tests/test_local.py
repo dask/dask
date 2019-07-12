@@ -16,8 +16,6 @@ from fsspec.compression import compr
 from dask.bytes.core import (
     read_bytes,
     open_files,
-    get_pyarrow_filesystem,
-    logical_size,
     get_fs_token_paths,
 )
 from dask.bytes.utils import compress
@@ -274,6 +272,15 @@ fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 def test_compression(fmt, blocksize):
     files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode="b"):
+        if fmt and blocksize:
+            with pytest.raises(ValueError):
+                read_bytes(
+                    ".test.accounts.*.json",
+                    blocksize=blocksize,
+                    delimiter=b"\n",
+                    compression=fmt,
+                )
+            return
         sample, values = read_bytes(
             ".test.accounts.*.json",
             blocksize=blocksize,
@@ -323,14 +330,6 @@ def test_open_files_compression(mode, fmt):
         if mode == "rt":
             sol = [b.decode() for b in sol]
         assert list(data) == sol
-
-
-@pytest.mark.parametrize("fmt", list(compr))
-def test_getsize(fmt):
-    comp = compress[fmt]
-    with filetexts({".tmp.getsize": comp(b"1234567890")}, mode="b"):
-        fs = LocalFileSystem()
-        assert logical_size(fs, ".tmp.getsize", fmt) == 10
 
 
 def test_bad_compression():

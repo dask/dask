@@ -704,7 +704,13 @@ def test_read_csv_sensitive_to_enforce():
 def test_read_csv_compression(fmt, blocksize):
     files2 = valmap(compress[fmt], csv_files)
     with filetexts(files2, mode="b"):
-        df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+        if fmt and blocksize:
+            with pytest.warns(UserWarning):
+                df = dd.read_csv(
+                    "2014-01-*.csv", compression=fmt, blocksize=blocksize)
+        else:
+            df = dd.read_csv("2014-01-*.csv", compression=fmt,
+                             blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),

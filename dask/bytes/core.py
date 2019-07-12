@@ -106,14 +106,16 @@ def read_bytes(
         offsets = []
         lengths = []
         for path in paths:
-            try:
-                size = logical_size(fs, path, compression)
-            except ValueError:
+            if compression == 'infer':
+                comp = infer_compression(path)
+            else:
+                comp = compression
+            if comp is not None:
                 raise ValueError(
-                    "Cannot do chunked reads on files compressed "
-                    "with compression=%r. To read, set "
-                    "blocksize=None" % get_compression(path, compression)
+                    "Cannot do chunked reads on compressed files."
+                    "To read, set blocksize=None"
                 )
+            size = fs.info(path)['size']
             off = list(range(0, size, blocksize))
             length = [blocksize] * len(off)
             if not_zero:
@@ -155,40 +157,3 @@ def read_bytes(
 def read_block_from_file(lazy_file, off, bs, delimiter):
     with copy.copy(lazy_file) as f:
         return read_block(f, off, bs, delimiter)
-
-
-_filesystems = dict()
-
-
-def logical_size(fs, path, compression="infer"):
-    if compression == "infer":
-        compression = infer_compression(path)
-
-    if compression is None:
-        return fs.size(path)
-    elif compression in compr:
-        with OpenFile(fs, path, compression=compression) as f:
-            # TODO: this may require a complete scan of the file, depending on
-            #  the codec; may be better to ValueError here even if technically
-            #  a seek is possible.
-            try:
-                f.seek(0, 2)
-            except IOError:
-                raise ValueError(
-                    "Failed to infer logical size of file because codec %s does"
-                    "not support seek." % compression
-                )
-            return f.tell()
-    else:
-        raise ValueError(
-            "Cannot infer logical size from file compressed with "
-            "compression=%r" % compression
-        )
-
-
-def get_pyarrow_filesystem(fs):
-    """Get an equivalent pyarrow filesystem.
-
-    This is here purely for compatibility with pre-fsspec
-    """
-    return fs

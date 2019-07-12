@@ -378,7 +378,8 @@ def read_pandas(
 
     if isinstance(blocksize, (str, unicode)):
         blocksize = parse_bytes(blocksize)
-    if blocksize and compression not in compr:
+    if blocksize and compression:
+        # NONE of the compressions should use chunking
         warn(
             "Warning %s compression does not support breaking apart files\n"
             "Please ensure that each individual file can fit in memory and\n"

@@ -340,6 +340,13 @@ def test_read_bytes_delimited(s3, blocksize):
 def test_compression(s3, fmt, blocksize):
     s3._cache.clear()
     with s3_context("compress", valmap(compress[fmt], files)):
+        if fmt and blocksize:
+            with pytest.raises(ValueError):
+                read_bytes(
+                    "s3://compress/test/accounts.*", compression=fmt,
+                    blocksize=blocksize
+                )
+            return
         sample, values = read_bytes(
             "s3://compress/test/accounts.*", compression=fmt,
             blocksize=blocksize

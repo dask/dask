@@ -31,3 +31,4 @@ dependencies:
   - moto
   - pip:
     - git+https://github.com/dask/s3fs
+    - git+https://github.com/intake/fsspec

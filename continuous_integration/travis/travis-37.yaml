@@ -52,3 +52,4 @@ dependencies:
       - mmh3
       - xxhash
       - git+https://github.com/dask/s3fs
+      - git+https://github.com/intake/fsspec

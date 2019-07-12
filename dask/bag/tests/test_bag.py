@@ -648,12 +648,13 @@ def test_read_text_large_gzip():
         f.write(data)
         f.close()
 
-        # This was not previously possible; it may still not be advisable
-        b = db.read_text(fn, blocksize=50, linedelimiter="\n")
-        assert "".join(b.compute()) == data.decode()
+        with pytest.raises(ValueError):
+            # not allowed blocks when compressed
+            db.read_text(fn, blocksize=50, linedelimiter="\n")
 
-        c = db.read_text(fn)
+        c = db.read_text(fn, blocksize=None)
         assert c.npartitions == 1
+        assert "".join(c.compute()) == data.decode()
 
 
 @pytest.mark.slow
