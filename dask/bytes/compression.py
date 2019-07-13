@@ -37,6 +37,19 @@ with ignoring(ImportError, AttributeError):
     compress["snappy"] = snappy.compress
     decompress["snappy"] = snappy.decompress
 
+with ignoring(ImportError, AttributeError):
+    import zstandard
+
+    def zstd_compress(data):
+        c = zstandard.ZstdCompressor()
+        return c.compress(data)
+
+    def zstd_decompress(data):
+        c = zstandard.ZstdDecompressor()
+        return c.decompress(data)
+
+    compress["zstd"] = zstd_compress
+    decompress["zstd"] = zstd_decompress
 
 try:
     import lz4.block
