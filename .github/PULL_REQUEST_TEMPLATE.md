@@ -1,2 +1,2 @@
 - [ ] Tests added / passed
-- [ ] Passes `flake8 dask`
+- [ ] Passes `black dask` / `flake8 dask`

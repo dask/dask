@@ -8,11 +8,12 @@ try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
+
     def getsizeof(x):
         return 100
 
 
-sizeof = Dispatch(name='sizeof')
+sizeof = Dispatch(name="sizeof")
 
 
 @sizeof.register(object)
@@ -83,6 +84,13 @@ def register_pandas():
             p += object_size(i)
         return int(p) + 1000
 
+    @sizeof.register(pd.MultiIndex)
+    def sizeof_pandas_multiindex(i):
+        p = int(sum(object_size(l) for l in i.levels))
+        for c in i.codes if hasattr(i, "codes") else i.labels:
+            p += c.nbytes
+        return int(p) + 1000
+
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
@@ -94,6 +102,4 @@ def register_spmatrix():
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
-        return sum(
-            sizeof(v) for v in s.__dict__.values()
-        )
+        return sum(sizeof(v) for v in s.__dict__.values())

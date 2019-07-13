@@ -60,6 +60,7 @@ Top level user functions:
    diag
    diagonal
    diff
+   divmod
    digitize
    dot
    dstack
@@ -236,6 +237,7 @@ Masked Arrays
 ~~~~~~~~~~~~~
 
 .. autosummary::
+   ma.average
    ma.filled
    ma.fix_invalid
    ma.getdata
@@ -573,6 +575,7 @@ Other functions
 .. autofunction:: tsqr
 
 .. currentmodule:: dask.array.ma
+.. autofunction:: average
 .. autofunction:: filled
 .. autofunction:: fix_invalid
 .. autofunction:: getdata
