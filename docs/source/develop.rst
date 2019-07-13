@@ -84,7 +84,7 @@ binary package manager like conda_.  You can skip this step if you already
 have these libraries, don't care to use them, or have sufficient build
 environment on your computer to compile them when installing with ``pip``::
 
-   conda install -y numpy pandas scipy bokeh
+   conda install -y numpy pandas scipy bokeh psutil
 
 .. _conda: https://conda.io/
 
@@ -95,7 +95,7 @@ Install Dask and dependencies::
 
 For development, Dask uses the following additional dependencies::
 
-   pip install pytest moto mock
+   pip install pytest moto
 
 
 Run Tests
