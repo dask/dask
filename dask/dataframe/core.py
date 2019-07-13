@@ -3415,7 +3415,7 @@ class DataFrame(_Frame):
             Defaults to False.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
-            Note, that even if you set ``compute=False``, the immediate computation
+            Note, that even if you set ``compute=False``, an immediate computation
             is triggered if ``divisions`` is ``None``.
 
         Examples
