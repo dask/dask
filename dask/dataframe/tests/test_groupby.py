@@ -1565,6 +1565,19 @@ def test_std_object_dtype(func):
     assert_eq(func(df), func(ddf))
 
 
+def test_std_columns_int():
+    # Make sure std() works when index_by is a df with integer column names
+    # Non regression test for issue #3560
+
+    df = pd.DataFrame({
+        0: [5],
+        1: [5]
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+    by = dask.array.from_array([0, 1]).to_dask_dataframe()
+    ddf.groupby(by).std()
+
+
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby('name').std(),
