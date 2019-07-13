@@ -3366,7 +3366,7 @@ class DataFrame(_Frame):
         inplace=False,
         **kwargs
     ):
-    """Set the DataFrame index (row labels) using an existing column.
+        """Set the DataFrame index (row labels) using an existing column.
 
         This realigns the dataset to be sorted by a new column.  This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
@@ -3376,8 +3376,8 @@ class DataFrame(_Frame):
         then perform many cheap computations off of the sorted dataset.
 
         This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (dask dataframe ``set_index`` is much more expensive).  
-        Under normal operation this function does an initial pass over the index column to
+        different performance costs (dask dataframe ``set_index`` is much more expensive).  Under normal
+        operation this function does an initial pass over the index column to
         compute approximate qunatiles to serve as future divisions.  It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
