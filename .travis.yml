@@ -4,6 +4,7 @@ dist: trusty
 os: linux
 
 _base_envs:
+  - &test TEST='true'
   - &test_and_lint TEST='true' LINT='true'
   - &coverage COVERAGE='true' PARALLEL='false'
   - &no_coverage COVERAGE='false' PARALLEL='true'
@@ -17,36 +18,21 @@ jobs:
   fast_finish: true
   include:
     - env:
-      - PYTHON=2.7
-      - NUMPY=1.13.0
-      - PANDAS=0.21.1
-      - *test_and_lint
-      - *no_coverage
-      - *optimize
-      - *no_imports
-
-    - env:
-      - PYTHON=3.5
-      - NUMPY=1.14.1
-      - PANDAS=0.22.0
-      - *test_and_lint
+      - ENV_FILE=continuous_integration/travis/travis-35.yaml
+      - *test
       - *no_coverage
       - *no_optimize
       - *no_imports
 
     - env: &py36_env
-      - PYTHON=3.6
-      - NUMPY=1.15.1
-      - PANDAS=0.23.4
+      - ENV_FILE=continuous_integration/travis/travis-36.yaml
       - *test_and_lint
       - *coverage
       - *no_optimize
       - *imports
 
     - env: &py37_env
-      - PYTHON=3.7
-      - NUMPY=1.16.2
-      - PANDAS>=0.24.1
+      - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -55,8 +41,7 @@ jobs:
 
     - env: &py37_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - NUMPY=1.16.2    # these are overridden later
-      - PANDAS>=0.24.2
+      - ENV_FILE=continuous_integration/travis/travis-37-dev.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -89,7 +74,8 @@ install:
 script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
-  - if [[ $LINT == 'true' ]]; then flake8 dask; fi
+  - if [[ $LINT == 'true' ]]; then pip install flake8 ; flake8 dask; fi
+  - if [[ $LINT == 'true' ]]; then pip install black ; black dask --check; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 
 after_success:

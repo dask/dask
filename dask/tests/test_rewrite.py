@@ -51,14 +51,14 @@ rule5 = RewriteRule((sum, ["c", "b", "a"]), (add, (add, "a", "b"), "c"), vars)
 
 
 def repl_list(sd):
-    x = sd['x']
+    x = sd["x"]
     if isinstance(x, list):
         return x
     else:
         return (list, x)
 
 
-rule6 = RewriteRule((list, 'x'), repl_list, ('x',))
+rule6 = RewriteRule((list, "x"), repl_list, ("x",))
 
 
 def test_RewriteRule():
@@ -77,8 +77,8 @@ def test_RewriteRule():
 
 def test_RewriteRuleSubs():
     # Test both rhs substitution and callable rhs
-    assert rule1.subs({'a': 1}) == (inc, 1)
-    assert rule6.subs({'x': [1, 2, 3]}) == [1, 2, 3]
+    assert rule1.subs({"a": 1}) == (inc, 1)
+    assert rule6.subs({"x": [1, 2, 3]}) == [1, 2, 3]
 
 
 rules = [rule1, rule2, rule3, rule4, rule5, rule6]
@@ -86,10 +86,20 @@ rs = RuleSet(*rules)
 
 
 def test_RuleSet():
-    net = ({add: ({VAR: ({VAR: ({}, [1]), 1: ({}, [0])}, []),
-            inc: ({VAR: ({inc: ({VAR: ({}, [2, 3])}, [])}, [])}, [])}, []),
+    net = (
+        {
+            add: (
+                {
+                    VAR: ({VAR: ({}, [1]), 1: ({}, [0])}, []),
+                    inc: ({VAR: ({inc: ({VAR: ({}, [2, 3])}, [])}, [])}, []),
+                },
+                [],
+            ),
             list: ({VAR: ({}, [5])}, []),
-            sum: ({list: ({VAR: ({VAR: ({VAR: ({}, [4])}, [])}, [])}, [])}, [])}, [])
+            sum: ({list: ({VAR: ({VAR: ({VAR: ({}, [4])}, [])}, [])}, [])}, []),
+        },
+        [],
+    )
     assert rs._net == net
     assert rs.rules == rules
 
@@ -98,26 +108,26 @@ def test_matches():
     term = (add, 2, 1)
     matches = list(rs.iter_matches(term))
     assert len(matches) == 1
-    assert matches[0] == (rule1, {'a': 2})
+    assert matches[0] == (rule1, {"a": 2})
     # Test matches specific before general
     term = (add, 1, 1)
     matches = list(rs.iter_matches(term))
     assert len(matches) == 2
-    assert matches[0] == (rule1, {'a': 1})
-    assert matches[1] == (rule2, {'a': 1})
+    assert matches[0] == (rule1, {"a": 1})
+    assert matches[1] == (rule2, {"a": 1})
     # Test matches unhashable. What it's getting rewritten to doesn't make
     # sense, this is just to test that it works. :)
     term = (add, [1], [1])
     matches = list(rs.iter_matches(term))
     assert len(matches) == 1
-    assert matches[0] == (rule2, {'a': [1]})
+    assert matches[0] == (rule2, {"a": [1]})
     # Test match at depth
     term = (add, (inc, 1), (inc, 1))
     matches = list(rs.iter_matches(term))
     assert len(matches) == 3
-    assert matches[0] == (rule3, {'a': 1})
-    assert matches[1] == (rule4, {'a': 1, 'b': 1})
-    assert matches[2] == (rule2, {'a': (inc, 1)})
+    assert matches[0] == (rule3, {"a": 1})
+    assert matches[1] == (rule4, {"a": 1, "b": 1})
+    assert matches[2] == (rule2, {"a": (inc, 1)})
     # Test non-linear pattern checking
     term = (add, 2, 3)
     matches = list(rs.iter_matches(term))
@@ -132,7 +142,11 @@ def test_rewrite():
     # Rules aren't applied to exhaustion, this can be further simplified
     new_term = rs.rewrite(new_term)
     assert new_term == (add, (add, (double, 1), 2), (inc, 1))
-    term = (add, (add, (add, (add, 1, 2), (add, 1, 2)), (add, (add, 1, 2), (add, 1, 2))), 1)
+    term = (
+        add,
+        (add, (add, (add, 1, 2), (add, 1, 2)), (add, (add, 1, 2), (add, 1, 2))),
+        1,
+    )
     assert rs.rewrite(term) == (inc, (double, (double, (add, 1, 2))))
     # Callable RewriteRule rhs
     term = (list, [1, 2, 3])

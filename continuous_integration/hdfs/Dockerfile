@@ -26,7 +26,7 @@ ENV LIBHDFS3_CONF /etc/hadoop/conf/hdfs-site.xml
 RUN curl https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/miniconda.sh && \
     /bin/bash /tmp/miniconda.sh -b -p /opt/conda && \
     rm /tmp/miniconda.sh && \
-    /opt/conda/bin/conda install -y -q libhdfs3 pytest flake8 -c conda-forge && \
+    /opt/conda/bin/conda install -y -q libhdfs3 pytest flake8 black -c conda-forge && \
     /opt/conda/bin/conda create -y -n py27 python=2.7 && \
     /opt/conda/bin/conda install -y -q -n py27 libhdfs3 pytest -c conda-forge
 
