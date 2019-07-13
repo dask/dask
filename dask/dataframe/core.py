@@ -3366,7 +3366,7 @@ class DataFrame(_Frame):
         inplace=False,
         **kwargs
     ):
-        """Set the DataFrame index (row labels) using an existing column
+    """Set the DataFrame index (row labels) using an existing column.
 
         This realigns the dataset to be sorted by a new column.  This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
@@ -3376,8 +3376,8 @@ class DataFrame(_Frame):
         then perform many cheap computations off of the sorted dataset.
 
         This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (it is much more expensive).  Under normal
-        operation this function does an initial pass over the index column to
+        different performance costs (dask dataframe ``set_index`` is much more expensive).  
+        Under normal operation this function does an initial pass over the index column to
         compute approximate qunatiles to serve as future divisions.  It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
@@ -3408,13 +3408,15 @@ class DataFrame(_Frame):
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If this is untrue, you should
+            the existing partitions in the data. If ``sorted=False``, you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace : bool, optional
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
+            Note, that even if you set ``compute=False``, the immediate computation
+            is triggered if ``divisions`` is ``None``.
 
         Examples
         --------
