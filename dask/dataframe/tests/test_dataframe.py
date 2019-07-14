@@ -2953,7 +2953,7 @@ def test_series_iteritems():
 def test_series_iter():
     s = pd.DataFrame({"x": [1, 2, 3, 4]})
     ds = dd.from_pandas(s, npartitions=2)
-    for (a, b) in zip(iter(s["x"]), ds["x"].__iter__()):
+    for (a, b) in zip(s["x"], ds["x"]):
         assert a == b
 
 def test_dataframe_iterrows():
