@@ -131,8 +131,8 @@ Conversely, "saturated" workers may see their workload lightened through
 Client State
 ------------
 
-Information about each individual client is kept in a :class:`ClientState`
-object:
+Information about each individual client of the scheduler is kept
+in a :class:`ClientState` object:
 
 .. autoclass:: ClientState
 
