@@ -62,7 +62,7 @@ from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
-from ..bytes.core import get_mapper, get_fs_token_paths
+from ..bytes.core import get_mapper
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise

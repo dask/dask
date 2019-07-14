@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import io
-import sys
 import os
 from contextlib import contextmanager
 from distutils.version import LooseVersion
@@ -377,7 +376,7 @@ def test_modification_time_read_bytes():
 
         assert [aa._key for aa in concat(a)] == [bb._key for bb in concat(b)]
 
-    with s3_context("compress", valmap(double, files)) as s3:
+    with s3_context("compress", valmap(double, files)):
         _, c = read_bytes("s3://compress/test/accounts.*", anon=True)
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]

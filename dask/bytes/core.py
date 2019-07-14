@@ -1,35 +1,29 @@
 from __future__ import print_function, division, absolute_import
 
 import copy
-import io
-import os
-from distutils.version import LooseVersion
-from warnings import warn
 
-from toolz import merge
 from fsspec.core import (
-    OpenFile,
-    open_files,
-    get_fs_token_paths,
-    expand_paths_if_needed,
-    _expand_paths,
-    get_compression,
+    OpenFile,  # noqa: E401
+    open_files,  # noqa: E401
+    get_fs_token_paths,  # noqa: E401
+    expand_paths_if_needed,  # noqa: E401
+    _expand_paths,  # noqa: E401
+    get_compression,  # noqa: E401
 )
 from fsspec.utils import (
-    read_block,
-    seek_delimiter,
-    infer_storage_options,
-    stringify_path,
-    infer_compression,
+    read_block,  # noqa: E401
+    seek_delimiter,  # noqa: E401
+    infer_storage_options,  # noqa: E401
+    stringify_path,  # noqa: E401
+    infer_compression,  # noqa: E401
 )
-from fsspec import get_mapper
-from fsspec.compression import compr
+from fsspec import get_mapper  # noqa: E401
+from fsspec.compression import compr  # noqa: E401
 
-from .. import config
 from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
-from ..utils import import_required, is_integer, parse_bytes
+from ..utils import is_integer, parse_bytes
 
 
 def read_bytes(
