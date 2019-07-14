@@ -149,15 +149,18 @@ def read_bytes(
             sample = parse_bytes(sample)
         with OpenFile(fs, paths[0], compression=compression) as f:
             sample_buff = b''
-            while True:
-                new = f.read(sample)
-                if new:
-                    sample_buff  = sample_buff + new
-                else:
-                    break
-                if delimiter in sample_buff:
-                    sample = sample_buff.rsplit(delimiter, 1)[0] + delimiter
-                    break
+            if delimiter is None:
+                sample = f.read(sample)
+            else:
+                while True:
+                    new = f.read(sample)
+                    if new:
+                        sample_buff  = sample_buff + new
+                    else:
+                        break
+                    if delimiter in sample_buff:
+                        sample = sample_buff.rsplit(delimiter, 1)[0] + delimiter
+                        break
     if include_path:
         return sample, out, paths
     return sample, out
