@@ -73,7 +73,7 @@ def test_urlpath_inference_strips_protocol(tmpdir):
     urlpath = protocol + os.path.join(tmpdir, "test.*.csv")
     _, _, paths2 = get_fs_token_paths(urlpath)
     assert 'file:' not in paths2[0]
-    assert paths2[0].endswith('/test.01.csv')
+    assert paths2[0].endswith('/test.00.csv')
 
     # list of paths
     _, _, paths3 = get_fs_token_paths([protocol + p for p in paths])
@@ -122,7 +122,7 @@ def test_recursive_glob_expand():
     """Make sure * is expanded in file paths when reading."""
     with filetexts({'sub1/afile.csv': b'', 'sub1/sub2/another.csv': b'',
                     'sub1/twofile.csv': b''}, mode="b"):
-        _, _, paths = get_fs_token_paths("**/*.csv")
+        _, _, paths = get_fs_token_paths(os.path.abspath("**/*.csv"))
         assert len(paths) == 3
 
 
