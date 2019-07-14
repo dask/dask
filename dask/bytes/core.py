@@ -148,10 +148,11 @@ def read_bytes(
         if isinstance(sample, str):
             sample = parse_bytes(sample)
         with OpenFile(fs, paths[0], compression=compression) as f:
-            sample_buff = f.read(sample)
+            # read block without seek (because we start at zero)
             if delimiter is None:
                 sample = f.read(sample)
             else:
+                sample_buff = f.read(sample)
                 while True:
                     new = f.read(sample)
                     if not new:
