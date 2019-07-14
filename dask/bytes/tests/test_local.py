@@ -72,11 +72,12 @@ def test_urlpath_inference_strips_protocol(tmpdir):
     protocol = "file:///" if sys.platform == "win32" else "file://"
     urlpath = protocol + os.path.join(tmpdir, "test.*.csv")
     _, _, paths2 = get_fs_token_paths(urlpath)
-    assert paths2 == paths
+    assert 'file:' not in paths2[0]
+    assert paths2[0].endswith('/test.01.csv')
 
     # list of paths
-    _, _, paths2 = get_fs_token_paths([protocol + p for p in paths])
-    assert paths2 == paths
+    _, _, paths3 = get_fs_token_paths([protocol + p for p in paths])
+    assert paths2 == paths3
 
 
 def test_urlpath_inference_errors():
@@ -417,8 +418,8 @@ def test_abs_paths(tmpdir):
         f.write("hi")
     out = LocalFileSystem().glob("*")
     assert len(out) == 1
-    assert os.sep in out[0]
-    assert tmpdir in out[0] and "tmp" in out[0]
+    assert '/' in out[0]
+    assert "tmp" in out[0]
 
     fs = LocalFileSystem()
     os.chdir(here)

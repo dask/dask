@@ -148,7 +148,11 @@ def read_bytes(
         if isinstance(sample, str):
             sample = parse_bytes(sample)
         with OpenFile(fs, paths[0], compression=compression) as f:
-            sample = read_block(f, 0, sample, delimiter)
+            sample_buff = b''
+            while True:
+                sample_buff += f.read(sample)
+                if delimiter in sample_buff:
+                    sample = sample.rsplit(delimiter, 1)[0] + delimiter
     if include_path:
         return sample, out, paths
     return sample, out
