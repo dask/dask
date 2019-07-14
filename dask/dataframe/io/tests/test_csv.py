@@ -1346,12 +1346,10 @@ def test_to_csv_with_get():
 def test_to_csv_paths():
     df = pd.DataFrame({"A": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert all(
-        [
-            p.endswith(pa)
-            for p, pa in zip(ddf.to_csv("foo*.csv"), ["/foo0.csv", "/foo1.csv"])
-        ]
-    )
+    paths = ddf.to_csv("foo*.csv")
+    assert paths[0].endswith('foo0.csv')
+    assert paths[1].endswith('foo1.csv')
+
     os.remove("foo0.csv")
     os.remove("foo1.csv")
 

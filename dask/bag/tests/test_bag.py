@@ -1385,9 +1385,10 @@ def test_empty_bag():
 
 def test_bag_paths():
     b = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    assert all(
-        [p.endswith(pa) for p, pa in zip(b.to_textfiles("foo*"), ["/foo0", "/foo1"])]
-    )
+    paths = b.to_textfiles("foo*")
+    assert paths[0].endswith('foo0')
+    assert paths[1].endswith('foo1')
+
     os.remove("foo0")
     os.remove("foo1")
 

@@ -30,5 +30,5 @@ dependencies:
   - blosc
   - moto
   - pip:
-    - git+https://github.com/dask/s3fs
     - git+https://github.com/intake/filesystem_spec
+    - git+https://github.com/dask/s3fs
