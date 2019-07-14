@@ -168,4 +168,6 @@ def read_bytes(
 
 def read_block_from_file(lazy_file, off, bs, delimiter):
     with copy.copy(lazy_file) as f:
+        if off == 0 and bs is None:
+            return f.read()
         return read_block(f, off, bs, delimiter)
