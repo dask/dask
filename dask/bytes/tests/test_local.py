@@ -129,9 +129,11 @@ def test_recursive_glob_expand():
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
-    assert paths == ["prefix-0.csv", "prefix-1.csv"]
+    assert [p.endswith(pa) for p, pa
+            in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
     _, _, paths = get_fs_token_paths(["prefix-*.csv"], mode="wb", num=2)
-    assert paths == ["prefix-0.csv", "prefix-1.csv"]
+    assert [p.endswith(pa) for p, pa
+            in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
     # we can read with multiple masks, but not write
     with pytest.raises(ValueError):
         _, _, paths = get_fs_token_paths(
