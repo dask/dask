@@ -62,7 +62,7 @@ def open_head(fs, path, compression):
 
     with OpenFile(fs, path, compression=compression) as f:
         head = read_header(f)
-    size = fs.info(path)['size']
+    size = fs.info(path)["size"]
     return head, size
 
 

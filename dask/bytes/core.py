@@ -7,10 +7,21 @@ from distutils.version import LooseVersion
 from warnings import warn
 
 from toolz import merge
-from fsspec.core import (OpenFile, open_files, get_fs_token_paths,
-                         expand_paths_if_needed, _expand_paths, get_compression)
-from fsspec.utils import (read_block, seek_delimiter, infer_storage_options,
-                          stringify_path, infer_compression)
+from fsspec.core import (
+    OpenFile,
+    open_files,
+    get_fs_token_paths,
+    expand_paths_if_needed,
+    _expand_paths,
+    get_compression,
+)
+from fsspec.utils import (
+    read_block,
+    seek_delimiter,
+    infer_storage_options,
+    stringify_path,
+    infer_compression,
+)
 from fsspec import get_mapper
 from fsspec.compression import compr
 
@@ -106,7 +117,7 @@ def read_bytes(
         offsets = []
         lengths = []
         for path in paths:
-            if compression == 'infer':
+            if compression == "infer":
                 comp = infer_compression(path)
             else:
                 comp = compression
@@ -115,7 +126,7 @@ def read_bytes(
                     "Cannot do chunked reads on compressed files."
                     "To read, set blocksize=None"
                 )
-            size = fs.info(path)['size']
+            size = fs.info(path)["size"]
             off = list(range(0, size, blocksize))
             length = [blocksize] * len(off)
             if not_zero:
@@ -158,8 +169,9 @@ def read_bytes(
                     if not new:
                         break
                     if delimiter in new:
-                        sample_buff = (sample_buff + new.split(delimiter, 1)[0]
-                                       + delimiter)
+                        sample_buff = (
+                            sample_buff + new.split(delimiter, 1)[0] + delimiter
+                        )
                         break
                     sample_buff = sample_buff + new
                 sample = sample_buff

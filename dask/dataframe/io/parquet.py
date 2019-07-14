@@ -823,9 +823,7 @@ def _read_pyarrow(
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    dataset = pq.ParquetDataset(
-        paths, filesystem=fs, filters=filters
-    )
+    dataset = pq.ParquetDataset(paths, filesystem=fs, filters=filters)
     if dataset.partitions is not None:
         partitions = [n for n in dataset.partitions.partition_names if n is not None]
     else:
@@ -1399,6 +1397,7 @@ def read_parquet(
 
 try:
     import snappy
+
     snappy.compress
 except (ImportError, AttributeError):
     snappy = None

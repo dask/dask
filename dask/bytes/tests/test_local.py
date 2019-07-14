@@ -13,11 +13,7 @@ from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
-from dask.bytes.core import (
-    read_bytes,
-    open_files,
-    get_fs_token_paths,
-)
+from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
 from dask.bytes.utils import compress
 
 compute = partial(compute, scheduler="sync")
@@ -72,8 +68,8 @@ def test_urlpath_inference_strips_protocol(tmpdir):
     protocol = "file:///" if sys.platform == "win32" else "file://"
     urlpath = protocol + os.path.join(tmpdir, "test.*.csv")
     _, _, paths2 = get_fs_token_paths(urlpath)
-    assert 'file:' not in paths2[0]
-    assert paths2[0].endswith('/test.00.csv')
+    assert "file:" not in paths2[0]
+    assert paths2[0].endswith("/test.00.csv")
 
     # list of paths
     _, _, paths3 = get_fs_token_paths([protocol + p for p in paths])
@@ -120,8 +116,10 @@ def test_urlpath_expand_read():
 )
 def test_recursive_glob_expand():
     """Make sure * is expanded in file paths when reading."""
-    with filetexts({'sub1/afile.csv': b'', 'sub1/sub2/another.csv': b'',
-                    'sub1/twofile.csv': b''}, mode="b"):
+    with filetexts(
+        {"sub1/afile.csv": b"", "sub1/sub2/another.csv": b"", "sub1/twofile.csv": b""},
+        mode="b",
+    ):
         _, _, paths = get_fs_token_paths(os.path.abspath("**/*.csv"))
         assert len(paths) == 3
 
@@ -129,11 +127,9 @@ def test_recursive_glob_expand():
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
-    assert [p.endswith(pa) for p, pa
-            in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
+    assert [p.endswith(pa) for p, pa in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
     _, _, paths = get_fs_token_paths(["prefix-*.csv"], mode="wb", num=2)
-    assert [p.endswith(pa) for p, pa
-            in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
+    assert [p.endswith(pa) for p, pa in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
     # we can read with multiple masks, but not write
     with pytest.raises(ValueError):
         _, _, paths = get_fs_token_paths(
@@ -420,7 +416,7 @@ def test_abs_paths(tmpdir):
         f.write("hi")
     out = LocalFileSystem().glob("*")
     assert len(out) == 1
-    assert '/' in out[0]
+    assert "/" in out[0]
     assert "tmp" in out[0]
 
     fs = LocalFileSystem()
@@ -432,6 +428,7 @@ def test_abs_paths(tmpdir):
 
 def test_get_pyarrow_filesystem():
     from fsspec.implementations.local import LocalFileSystem
+
     pa = pytest.importorskip("pyarrow")
 
     fs = LocalFileSystem()

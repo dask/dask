@@ -706,11 +706,9 @@ def test_read_csv_compression(fmt, blocksize):
     with filetexts(files2, mode="b"):
         if fmt and blocksize:
             with pytest.warns(UserWarning):
-                df = dd.read_csv(
-                    "2014-01-*.csv", compression=fmt, blocksize=blocksize)
+                df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
         else:
-            df = dd.read_csv("2014-01-*.csv", compression=fmt,
-                             blocksize=blocksize)
+            df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),
@@ -1348,8 +1346,12 @@ def test_to_csv_with_get():
 def test_to_csv_paths():
     df = pd.DataFrame({"A": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert all([p.endswith(pa) for p, pa
-                in zip(ddf.to_csv("foo*.csv"), ["/foo0.csv", "/foo1.csv"])])
+    assert all(
+        [
+            p.endswith(pa)
+            for p, pa in zip(ddf.to_csv("foo*.csv"), ["/foo0.csv", "/foo1.csv"])
+        ]
+    )
     os.remove("foo0.csv")
     os.remove("foo1.csv")
 

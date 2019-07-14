@@ -219,8 +219,7 @@ def test_open_files_write(s3):
     for fil, data in zip(fils, files.values()):
         with fil as f:
             f.write(data)
-    sample, values = read_bytes("s3://" + test_bucket_name +
-                                "/more/test/accounts.*")
+    sample, values = read_bytes("s3://" + test_bucket_name + "/more/test/accounts.*")
     results = compute(*concat(values))
     assert set(list(files.values())) == set(results)
 
@@ -334,8 +333,7 @@ def test_read_bytes_delimited(s3, blocksize):
 
 
 @pytest.mark.parametrize(
-    "fmt,blocksize",
-    [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr],
+    "fmt,blocksize", [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 )
 def test_compression(s3, fmt, blocksize):
     s3._cache.clear()
@@ -343,13 +341,13 @@ def test_compression(s3, fmt, blocksize):
         if fmt and blocksize:
             with pytest.raises(ValueError):
                 read_bytes(
-                    "s3://compress/test/accounts.*", compression=fmt,
-                    blocksize=blocksize
+                    "s3://compress/test/accounts.*",
+                    compression=fmt,
+                    blocksize=blocksize,
                 )
             return
         sample, values = read_bytes(
-            "s3://compress/test/accounts.*", compression=fmt,
-            blocksize=blocksize
+            "s3://compress/test/accounts.*", compression=fmt, blocksize=blocksize
         )
         assert sample.startswith(files[sorted(files)[0]][:10])
         assert sample.endswith(b"\n")
@@ -374,16 +372,13 @@ double = lambda x: x * 2
 
 def test_modification_time_read_bytes():
     with s3_context("compress", files):
-        _, a = read_bytes("s3://compress/test/accounts.*",
-                          anon=True)
-        _, b = read_bytes("s3://compress/test/accounts.*",
-                          anon=True)
+        _, a = read_bytes("s3://compress/test/accounts.*", anon=True)
+        _, b = read_bytes("s3://compress/test/accounts.*", anon=True)
 
         assert [aa._key for aa in concat(a)] == [bb._key for bb in concat(b)]
 
     with s3_context("compress", valmap(double, files)) as s3:
-        _, c = read_bytes("s3://compress/test/accounts.*",
-                          anon=True)
+        _, c = read_bytes("s3://compress/test/accounts.*", anon=True)
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 

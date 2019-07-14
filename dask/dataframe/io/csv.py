@@ -19,6 +19,7 @@ from pandas.api.types import (
 )
 
 from ...bytes import read_bytes, open_files
+
 # from ...bytes.compression import seekable_files, files as cfiles
 from fsspec.compression import compr
 from ...compatibility import PY2, PY3, Mapping, unicode
