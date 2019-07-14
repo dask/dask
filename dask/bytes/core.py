@@ -152,7 +152,7 @@ def read_bytes(
             while True:
                 sample_buff += f.read(sample)
                 if delimiter in sample_buff:
-                    sample = sample.rsplit(delimiter, 1)[0] + delimiter
+                    sample = sample_buff.rsplit(delimiter, 1)[0] + delimiter
     if include_path:
         return sample, out, paths
     return sample, out
