@@ -4766,7 +4766,7 @@ def map_partitions(func, *args, **kwargs):
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta)):
+    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = make_meta(_concat([meta]), index=meta_index)
@@ -5848,7 +5848,7 @@ def new_dd_object(dsk, name, meta, divisions):
     """
     if has_parallel_type(meta):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
-    elif is_arraylike(meta):
+    elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
         chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
