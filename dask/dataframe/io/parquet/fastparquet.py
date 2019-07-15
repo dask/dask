@@ -103,8 +103,6 @@ class FastParquetEngine(Engine):
 
         Returns
         -------
-        index: str, List[str], or False
-            The column name(s) to be used as the index.
         meta: pandas.DataFrame
             An empty DataFrame object to use for metadata.
             Should have appropriate column names and dtypes but need not have
@@ -210,8 +208,9 @@ class FastParquetEngine(Engine):
         dtypes = pf._dtypes(categories)
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
+        index_cols = index or ()
         meta = _meta_from_dtypes(
-            all_columns, dtypes, index_cols=(), column_index_names=column_index_names
+            all_columns, dtypes, index_cols=index_cols, column_index_names=column_index_names
         )
 
         # fastparquet doesn't handle multiindex
@@ -270,7 +269,7 @@ class FastParquetEngine(Engine):
             for rg in pf.row_groups
         ]
 
-        return (index, meta, stats, parts)
+        return (meta, stats, parts)
 
     @staticmethod
     def read_partition(fs, piece, columns, **kwargs):

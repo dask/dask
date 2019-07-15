@@ -96,8 +96,6 @@ class ArrowEngine(Engine):
 
         Returns
         -------
-        index: str, List[str], or False
-            The column name(s) to be used as the index.
         meta: pandas.DataFrame
             An empty DataFrame object to use for metadata.
             Should have appropriate column names and dtypes but need not have
@@ -175,8 +173,9 @@ class ArrowEngine(Engine):
         dtypes = _get_pyarrow_dtypes(schema, categories)
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
+        index_cols = index or ()
         meta = _meta_from_dtypes(
-            all_columns, dtypes, index_cols=(), column_index_names=column_index_names
+            all_columns, dtypes, index_cols=index_cols, column_index_names=column_index_names
         )
 
         meta = clear_known_categories(meta, cols=categories)
@@ -231,7 +230,17 @@ class ArrowEngine(Engine):
 
         if dataset.partitions:
             for partition in dataset.partitions:
-                if partition.name in meta.columns:
+                if isinstance(index, list) and partition.name == index[0]:
+                    meta.index = pd.CategoricalIndex(
+                        categories=partition.keys,
+                        name=index[0]
+                    )
+                elif partition.name == meta.index.name:
+                    meta.index = pd.CategoricalIndex(
+                        categories=partition.keys,
+                        name=meta.index.name
+                    )
+                elif partition.name in meta.columns:
                     meta[partition.name] = pd.Categorical(
                         categories=partition.keys, values=[]
                     )
@@ -245,7 +254,7 @@ class ArrowEngine(Engine):
             for piece in pieces
         ]
 
-        return (index, meta, stats, parts)
+        return (meta, stats, parts)
 
     @staticmethod
     def initialize_write(

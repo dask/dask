@@ -30,8 +30,6 @@ class Engine:
 
         Returns
         -------
-        index: str, List[str], or False
-            The column name(s) to be used as the index.
         meta: pandas.DataFrame
             An empty DataFrame object to use for metadata.
             Should have appropriate column names and dtypes but need not have

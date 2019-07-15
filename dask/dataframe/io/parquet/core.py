@@ -122,8 +122,10 @@ def read_parquet(
     if index is None:
         # User is allowing auto-detected index
         auto_index_allowed = True
+    if index and isinstance(index, str):
+        index = [index]
 
-    index, meta, statistics, parts = engine.read_metadata(
+    meta, statistics, parts = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -131,6 +133,8 @@ def read_parquet(
         gather_statistics=gather_statistics,
         filters=filters,
     )
+    if meta.index.name is not None:
+        index = meta.index.name
 
     ignore_index_column_intersection = False
     if columns is None:
@@ -140,13 +144,14 @@ def read_parquet(
         columns = meta.columns
 
     if not set(columns).issubset(set(meta.columns)):
-        raise KeyError(
+        raise ValueError(
             "The following columns were not found in the dataset %s\n"
             "The following columns were found %s"
             % (set(columns) - set(meta.columns), meta.columns)
         )
 
     # Parse dataset statistics from metadata (if available)
+    index_in_columns = False
     if statistics:
         result = list(
             zip(
@@ -171,13 +176,27 @@ def read_parquet(
         if index is not False and len(out) == 1:
             # Use only sorted column with statistics as the index
             divisions = out[0]["divisions"]
-            index = [out[0]["name"]]
+            if index is None:
+                index_in_columns = True
+                index = [out[0]["name"]]
+            elif index != [out[0]["name"]]:
+                raise ValueError(
+                    "Specified index is invalid.\n"
+                    "index: {}".format(index)
+                )
         elif index is not False and len(out) > 1:
             if any(o["name"] == "index" for o in out):
                 # Use sorted column named "index" as the index
                 [o] = [o for o in out if o["name"] == "index"]
                 divisions = o["divisions"]
-                index = [o["name"]]
+                if index is None:
+                    index = [o["name"]]
+                    index_in_columns = True
+                elif index != [o["name"]]:
+                    raise ValueError(
+                        "Specified index is invalid.\n"
+                        "index: {}".format(index)
+                    )
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
@@ -215,7 +234,10 @@ def read_parquet(
         # Leaving index as a column in `meta`, because the index
         # will be reset below (in case the index was detected after
         # meta was created)
-        meta = meta[columns + index]
+        if index_in_columns:
+            meta = meta[columns + index]
+        else:
+            meta = meta[columns]
 
     else:
         meta = meta[list(columns)]
@@ -235,7 +257,7 @@ def read_parquet(
     }
 
     # Set the index that was previously treated as a column
-    if index:
+    if index_in_columns:
         meta = meta.set_index(index)
 
     if len(divisions) < 2:
