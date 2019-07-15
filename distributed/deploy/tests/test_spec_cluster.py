@@ -82,6 +82,19 @@ def test_loop_started():
 
 
 @pytest.mark.asyncio
+async def test_repr():
+    worker = {"cls": Worker, "options": {"nthreads": 1}}
+
+    class MyCluster(SpecCluster):
+        pass
+
+    async with MyCluster(
+        asynchronous=True, scheduler=scheduler, worker=worker
+    ) as cluster:
+        assert "MyCluster" in str(cluster)
+
+
+@pytest.mark.asyncio
 async def test_scale():
     worker = {"cls": Worker, "options": {"nthreads": 1}}
     async with SpecCluster(

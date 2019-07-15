@@ -315,7 +315,8 @@ class SpecCluster(Cluster):
     scale_up = scale  # backwards compatibility
 
     def __repr__(self):
-        return "SpecCluster(%r, workers=%d)" % (
+        return "%s(%r, workers=%d)" % (
+            type(self).__name__,
             self.scheduler_address,
             len(self.workers),
         )
