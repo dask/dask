@@ -213,7 +213,7 @@ def _parse_pandas_metadata(pandas_metadata):
 
     # column_indexes represents df.columns.name
     # It was added to the spec after pandas 0.21.0+, and implemented
-    # in PyArrow 0.8. It's not currently impelmented in fastparquet.
+    # in PyArrow 0.8. It was added to fastparquet in 0.3.1.
     column_index_names = pandas_metadata.get("column_indexes", [{"name": None}])
     column_index_names = [x["name"] for x in column_index_names]
 

@@ -7,11 +7,6 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
 from ..blockwise import optimize_blockwise
 
-try:
-    import fastparquet  # noqa: F401
-except ImportError:
-    fastparquet = False
-
 
 def optimize(dsk, keys, **kwargs):
 
@@ -26,10 +21,10 @@ def optimize(dsk, keys, **kwargs):
     else:
         dsk, dependencies = cull(dsk, [keys])
     dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
-    if fastparquet:
-        # from .io.parquet.fastparquet import _read_parquet_row_group
-        # dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
-        pass  # TODO: in abeyance
+
+    from .io.parquet import read_parquet_part
+
+    dsk = fuse_getitem(dsk, read_parquet_part, 4)
 
     dsk, dependencies = fuse(
         dsk,
