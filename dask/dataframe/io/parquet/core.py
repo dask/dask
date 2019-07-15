@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from distutils.version import LooseVersion
 
 import toolz
+import warnings
 
 from ...core import DataFrame, new_dd_object
 from ....bytes.compression import compress
@@ -117,6 +118,11 @@ def read_parquet(
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
+    auto_index = False
+    if index is None:
+        # User is allowing auto-detected index
+        auto_index = True
+
     index, meta, statistics, parts = engine.read_metadata(
         fs,
         paths,
@@ -126,11 +132,11 @@ def read_parquet(
         filters=filters,
     )
 
-    sanitize_cols = False
+    ignore_index_column_intersection = False
     if columns is None:
-        # User didn't specify columns, so remove intersection with
-        # user-specified index values (if necessary)
-        sanitize_cols = True
+        # User didn't specify columns, so ignore any intersection
+        # of auto-detected values with the index (if necessary)
+        ignore_index_column_intersection = True
         columns = meta.columns
 
     if not set(columns).issubset(set(meta.columns)):
@@ -151,10 +157,7 @@ def read_parquet(
                 ]
             )
         )
-        if result:
-            parts, statistics = result
-        else:
-            parts, statistics = [], []
+        parts, statistics = result or [[], []]
         if filters:
             parts, statistics = apply_filters(parts, statistics, filters)
 
@@ -163,17 +166,24 @@ def read_parquet(
         if index and isinstance(index, str):
             index = [index]
         if index and out:
-            out = [o for o in out if o["name"] in index]  # only one valid column
+            # Only one valid column
+            out = [o for o in out if o["name"] in index]
         if index is not False and len(out) == 1:
+            # Use only sorted column with statistics as the index
             divisions = out[0]["divisions"]
             index = [out[0]["name"]]
         elif index is not False and len(out) > 1:
             if any(o["name"] == "index" for o in out):
+                # Use sorted column named "index" as the index
                 [o] = [o for o in out if o["name"] == "index"]
                 divisions = o["divisions"]
                 index = [o["name"]]
             else:
-                # Multiple sorted columns found, cannot autodetect
+                # Multiple sorted columns found, cannot autodetect the index
+                warnings.warn(
+                    "Multiple sorted columns found, cannot autodetect index",
+                    RuntimeWarning,
+                )
                 index = False
                 divisions = [None] * (len(parts) + 1)
         else:
@@ -187,10 +197,21 @@ def read_parquet(
         if isinstance(columns, str):
             columns = [columns]
 
-        if sanitize_cols:
+        if ignore_index_column_intersection:
             columns = [col for col in columns if col not in index]
         if set(index).intersection(columns):
-            raise ValueError("Specified index and column names must not intersect")
+            if auto_index:
+                raise ValueError(
+                    "Specified index and column arguments must not intersect"
+                    " (set index=False or remove the detected index from columns).\n"
+                    "index: {} | column: {}".format(index, columns)
+                )
+            else:
+                raise ValueError(
+                    "Specified index and column arguments must not intersect.\n"
+                    "index: {} | column: {}".format(index, columns)
+                )
+
         for ind in index:
             if ind not in columns:
                 columns = columns + [ind]

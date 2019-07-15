@@ -146,9 +146,14 @@ class ArrowEngine(Engine):
         if index is None and index_names:
             index = index_names
 
-        column_names += [p for p in partitions if p not in column_names]
+        if set(column_names).intersection(partitions):
+            raise ValueError(
+                "partition(s) should not exist in columns.\n"
+                "categories: {} | partitions: {}".format(column_names, partitions)
+            )
+
         column_names, index_names = _normalize_index_columns(
-            columns, column_names, index, index_names
+            columns, column_names + partitions, index, index_names
         )
 
         all_columns = index_names + column_names
@@ -288,6 +293,7 @@ class ArrowEngine(Engine):
                 # ignore_divisions is False (to check divisions)
                 dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
                 if not dataset.metadata and not ignore_divisions:
+                    # TODO: Be more flexible about existing metadata.
                     raise NotImplementedError(
                         "_metadata file needed to `append` "
                         "with `engine='pyarrow'` "
@@ -321,13 +327,12 @@ class ArrowEngine(Engine):
                     "Previous: {} | New: {}".format(names, list(df.columns))
                 )
             elif (pd.Series(dtypes).loc[names] != df[names].dtypes).any():
+                # TODO Coerce values for compatible but different dtypes
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
                         set(dtypes.items()) ^ set(df.dtypes.iteritems())
                     )
                 )
-            else:
-                df = df[names + partition_on]
             i_offset = len(dataset.pieces)
 
             if division_info["name"] not in names:

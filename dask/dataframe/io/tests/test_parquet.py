@@ -1177,8 +1177,8 @@ def test_parquet_select_cats(tmpdir, engine):
 
 
 def test_columns_name(tmpdir, engine):
-    if engine == "fastparquet" and fastparquet.__version__ < LooseVersion("0.3.1"):
-        pytest.skip("Fastparquet does not write column_indexes before 0.3.1")
+    if engine == "fastparquet" and fastparquet.__version__ <= LooseVersion("0.3.1"):
+        pytest.skip("Fastparquet does not write column_indexes up to 0.3.1")
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(["a", "b"], name="idx"))
     df.columns.name = "cols"
