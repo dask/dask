@@ -4046,7 +4046,7 @@ def test_no_warnings_from_blockwise():
     assert not record
 
     with pytest.warns(None) as record:
-        x = da.ones((1, ), chunks=(1, ))
+        x = da.ones((1,), chunks=(1,))
         1 / x[0]
     assert not record
 

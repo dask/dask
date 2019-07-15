@@ -109,7 +109,8 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 def compute_meta(func, _dtype, *args, **kwargs):
     np_err = np.geterr()
-    np.seterr(all='ignore')
+    np.seterr(all="ignore")
+
     args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
     kwargs_meta = {
         k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()
