@@ -1884,11 +1884,6 @@ class Worker(ServerNode):
                 self.incoming_count += 1
 
                 self.log.append(("receive-dep", worker, list(response["data"])))
-
-                if response["data"]:
-                    self.batched_stream.send(
-                        {"op": "add-keys", "keys": list(response["data"])}
-                    )
             except EnvironmentError as e:
                 logger.exception("Worker stream died during communication: %s", worker)
                 self.log.append(("receive-dep-failed", worker))
