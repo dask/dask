@@ -108,6 +108,8 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 
 def compute_meta(func, _dtype, *args, **kwargs):
+    np_err = np.geterr()
+    np.seterr(all='ignore')
     args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
     kwargs_meta = {
         k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()
@@ -128,8 +130,10 @@ def compute_meta(func, _dtype, *args, **kwargs):
             ):
                 raise
             else:
+                np.seterr(**np_err)
                 return None
         except Exception:
+            np.seterr(**np_err)
             return None
 
     if _dtype and getattr(meta, "dtype", None) != _dtype:
@@ -139,6 +143,7 @@ def compute_meta(func, _dtype, *args, **kwargs):
     if np.isscalar(meta):
         meta = np.array(meta)
 
+    np.seterr(**np_err)
     return meta
 
 
