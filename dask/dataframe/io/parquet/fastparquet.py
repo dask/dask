@@ -302,7 +302,13 @@ class FastParquetEngine(Engine):
             ind = False
         else:
             ind = None
-        return pf.read_row_group_file(piece, columns, categories, index=ind)
+            if isinstance(index, list):
+                columns += index
+
+        df = pf.read_row_group_file(piece, columns, categories, index=ind)
+        if index:
+            df = df.set_index(index)
+        return df
 
     @staticmethod
     def initialize_write(

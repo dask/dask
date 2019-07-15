@@ -118,10 +118,10 @@ def read_parquet(
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
-    auto_index = False
+    auto_index_allowed = False
     if index is None:
         # User is allowing auto-detected index
-        auto_index = True
+        auto_index_allowed = True
 
     index, meta, statistics, parts = engine.read_metadata(
         fs,
@@ -200,7 +200,7 @@ def read_parquet(
         if ignore_index_column_intersection:
             columns = [col for col in columns if col not in index]
         if set(index).intersection(columns):
-            if auto_index:
+            if auto_index_allowed:
                 raise ValueError(
                     "Specified index and column arguments must not intersect"
                     " (set index=False or remove the detected index from columns).\n"
@@ -212,11 +212,13 @@ def read_parquet(
                     "index: {} | column: {}".format(index, columns)
                 )
 
-        for ind in index:
-            if ind not in columns:
-                columns = columns + [ind]
+        # Leaving index as a column in `meta`, because the index
+        # will be reset below (in case the index was detected after
+        # meta was created)
+        meta = meta[columns + index]
 
-    meta = meta[list(columns)]
+    else:
+        meta = meta[list(columns)]
 
     subgraph = {
         (name, i): (
@@ -232,11 +234,12 @@ def read_parquet(
         for i, part in enumerate(parts)
     }
 
+    # Set the index that was previously treated as a column
     if index:
         meta = meta.set_index(index)
 
     if len(divisions) < 2:
-        # empty dataframe
+        # empty dataframe - just use meta
         subgraph = {(name, 0): meta}
         divisions = (None, None)
 
@@ -247,11 +250,6 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset """
     kwargs["index"] = index
     df = func(fs, part, columns, **kwargs)
-    if not len(df):
-        df = meta
-    # Check if preserved index needs to be set
-    if index:
-        df = df.set_index(index)
     if meta.columns.name:
         df.columns.name = meta.columns.name
     return df

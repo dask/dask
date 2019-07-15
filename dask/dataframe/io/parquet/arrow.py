@@ -53,6 +53,9 @@ class ArrowEngine(Engine):
         """
         partitions = kwargs["partitions"]
         categories = kwargs["categories"]
+        index = kwargs["index"]
+        if isinstance(index, list):
+            columns += index
         with fs.open(piece.path, mode="rb") as f:
             table = piece.read(
                 columns=columns,
@@ -63,9 +66,11 @@ class ArrowEngine(Engine):
             )
         df = table.to_pandas(
             categories=categories, use_threads=False, ignore_metadata=True
-        )
+        )[list(columns)]
 
-        return df[list(columns)]
+        if index:
+            df = df.set_index(index)
+        return df
 
     @staticmethod
     def read_metadata(
