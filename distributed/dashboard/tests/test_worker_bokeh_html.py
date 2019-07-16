@@ -25,7 +25,7 @@ def test_prometheus(c, s, a, b):
 
         txt = response.body.decode("utf8")
         families = {familiy.name for familiy in text_string_to_metric_families(txt)}
-        assert len(families) > 0
+        assert "dask_worker_latency_seconds" in families
 
 
 @gen_cluster(client=True, worker_kwargs={"services": {("dashboard", 0): BokehWorker}})
