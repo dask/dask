@@ -181,8 +181,7 @@ def read_parquet(
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
                 raise ValueError(
-                    "Specified index is invalid.\n"
-                    "index: {}".format(index)
+                    "Specified index is invalid.\n" "index: {}".format(index)
                 )
         elif index is not False and len(out) > 1:
             if any(o["name"] == "index" for o in out):
@@ -194,8 +193,7 @@ def read_parquet(
                     index_in_columns = True
                 elif index != [o["name"]]:
                     raise ValueError(
-                        "Specified index is invalid.\n"
-                        "index: {}".format(index)
+                        "Specified index is invalid.\n" "index: {}".format(index)
                     )
             else:
                 # Multiple sorted columns found, cannot autodetect the index
@@ -270,8 +268,7 @@ def read_parquet(
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset """
-    kwargs["index"] = index
-    df = func(fs, part, columns, **kwargs)
+    df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
     return df

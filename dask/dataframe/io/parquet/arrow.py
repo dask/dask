@@ -30,7 +30,7 @@ def _get_md_row_groups(pieces):
 
 class ArrowEngine(Engine):
     @staticmethod
-    def read_partition(fs, piece, columns, **kwargs):
+    def read_partition(fs, piece, columns, index, **kwargs):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -43,9 +43,11 @@ class ArrowEngine(Engine):
             Typically it represents a row group in a Parquet dataset
         columns: List[str]
             List of column names to pull out of that row group
+        index: str, List[str], or False
+            The index name(s).
         **kwargs:
-            Includes `"kwargs"` values stored within the `parts` output of
-            `pyarrow.read_metadata`: `partitions` and `categories`.
+            Includes `"kwargs"` values stored within the `parts` output
+            of `pyarrow.read_metadata`: `partitions` and `categories`.
 
         Returns
         -------
@@ -53,7 +55,6 @@ class ArrowEngine(Engine):
         """
         partitions = kwargs["partitions"]
         categories = kwargs["categories"]
-        index = kwargs["index"]
         if isinstance(index, list):
             columns += index
         with fs.open(piece.path, mode="rb") as f:
@@ -175,7 +176,10 @@ class ArrowEngine(Engine):
 
         index_cols = index or ()
         meta = _meta_from_dtypes(
-            all_columns, dtypes, index_cols=index_cols, column_index_names=column_index_names
+            all_columns,
+            dtypes,
+            index_cols=index_cols,
+            column_index_names=column_index_names,
         )
 
         meta = clear_known_categories(meta, cols=categories)
@@ -232,13 +236,11 @@ class ArrowEngine(Engine):
             for partition in dataset.partitions:
                 if isinstance(index, list) and partition.name == index[0]:
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys,
-                        name=index[0]
+                        categories=partition.keys, name=index[0]
                     )
                 elif partition.name == meta.index.name:
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys,
-                        name=meta.index.name
+                        categories=partition.keys, name=meta.index.name
                     )
                 elif partition.name in meta.columns:
                     meta[partition.name] = pd.Categorical(

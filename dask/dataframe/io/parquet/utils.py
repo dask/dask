@@ -55,7 +55,7 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def read_partition(fs, piece, columns, **kwargs):
+    def read_partition(fs, piece, columns, index, **kwargs):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -68,10 +68,11 @@ class Engine:
             Typically it represents a row group in a Parquet dataset
         columns: List[str]
             List of column names to pull out of that row group
+        index: str, List[str], or False
+            The index name(s).
         **kwargs:
-            Includes the index (`kwargs["index"]`), as well as any other
-            `"kwargs"` values stored within the `parts` output of
-            `engine.read_metadata`
+            Includes `"kwargs"` values stored within the `parts` output
+            of `engine.read_metadata`
 
         Returns
         -------

@@ -210,7 +210,10 @@ class FastParquetEngine(Engine):
 
         index_cols = index or ()
         meta = _meta_from_dtypes(
-            all_columns, dtypes, index_cols=index_cols, column_index_names=column_index_names
+            all_columns,
+            dtypes,
+            index_cols=index_cols,
+            column_index_names=column_index_names,
         )
 
         # fastparquet doesn't handle multiindex
@@ -272,7 +275,7 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def read_partition(fs, piece, columns, **kwargs):
+    def read_partition(fs, piece, columns, index, **kwargs):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -285,10 +288,11 @@ class FastParquetEngine(Engine):
             Typically it represents a row group in a Parquet dataset
         columns: List[str]
             List of column names to pull out of that row group
+        index: str, List[str], or False
+            The index name(s).
         **kwargs:
-            Includes the index (`kwargs["index"]`), and other
-            `"kwargs"` values stored within the `parts` output of
-            `fastparquet.read_metadata`: `pf` and `categories`
+            Includes `"kwargs"` values stored within the `parts` output
+            of `fastparquet.read_metadata`: `pf` and `categories`
 
         Returns
         -------
@@ -296,7 +300,6 @@ class FastParquetEngine(Engine):
         """
         pf = kwargs["pf"]
         categories = kwargs["categories"]
-        index = kwargs["index"]
         if index is False:
             ind = False
         else:
