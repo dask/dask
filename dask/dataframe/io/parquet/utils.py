@@ -142,14 +142,14 @@ class Engine:
         ----------
         df
         path
-        fs
+        fs: FileSystem
         filename
         partition_on
-        kwargs
         return_metadata : bool
             Whether to return list of instances from this write, one for each
             output file. These will be passed to write_metadata if an output
             metadata file is requested.
+        kwargs
 
         Returns
         -------
