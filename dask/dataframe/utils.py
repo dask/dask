@@ -318,7 +318,7 @@ def make_meta_object(x, index=None):
     """
     if hasattr(x, "_meta"):
         return x._meta
-    elif is_arraylike(x):
+    elif is_arraylike(x) and x.shape:
         return x[:0]
 
     if index is not None:

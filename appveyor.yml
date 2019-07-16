@@ -13,6 +13,7 @@ environment:
     - PYTHON: "3.6"
       ARCH: "64"
       CONDA_ENV: testenv
+      ENV_FILE: continuous_integration/appveyor/environment.yaml
 
 init:
   # Use AppVeyor's provided Miniconda: https://www.appveyor.com/docs/installed-software#python

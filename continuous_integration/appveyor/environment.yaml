@@ -1,0 +1,31 @@
+name: testenv
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.6.*
+  - numpy>=1.13.0
+  - pandas>=0.21.0
+  - pytest
+  - cloudpickle
+  - distributed
+  - toolz
+  - bcolz
+  - bokeh
+  - h5py
+  - ipython
+  - lz4
+  - psutil
+  - pytables
+  - s3fs
+  - scipy
+  - fastparquet
+  - python-snappy
+  - zarr
+  - crick
+  - pip
+  - partd
+  - cachey
+  - sparse
+  - blosc
+  - moto

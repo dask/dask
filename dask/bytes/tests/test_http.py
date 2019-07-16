@@ -148,11 +148,9 @@ def test_open_glob(dir_server):
 
 
 @pytest.mark.network
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/5042", strict=False)
 def test_parquet():
-    from distutils.version import LooseVersion
-
-    if LooseVersion(requests.__version__) < LooseVersion("2.21.0"):
-        pytest.skip()
+    pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")  # no pyarrow compatability FS yet
     df = dd.read_parquet(

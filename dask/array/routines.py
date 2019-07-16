@@ -35,6 +35,7 @@ from .core import (
     is_scalar_for_elemwise,
     broadcast_to,
     tensordot_lookup,
+    implements,
 )
 
 from .einsumfuncs import einsum  # noqa
@@ -804,6 +805,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
+@implements(np.round, np.round_)
 @derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
