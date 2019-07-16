@@ -198,10 +198,7 @@ def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(
-        fn,
-        engine=write_engine,
-        compute=False,
-        write_metadata_file=False,
+        fn, engine=write_engine, compute=False, write_metadata_file=False
     ).compute()
     files = os.listdir(fn)
     assert "_metadata" not in files
@@ -1693,13 +1690,13 @@ def test_pathlib_path(tmpdir, engine):
     assert_eq(ddf, ddf2)
 
 
-def test_metadata_nthreads(tmpdir):
+def test_pyarrow_metadata_nthreads(tmpdir):
     check_pyarrow()
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": [4, 5, 6, 1, 2, 3]})
     df.index.name = "index"
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmp_path, engine='pyarrow')
-    kwargs = {'ParquetDataset': {'metadata_nthreads': 1}}
-    ddf2 = dd.read_parquet(tmp_path, engine='pyarrow', **kwargs)
+    ddf.to_parquet(tmp_path, engine="pyarrow")
+    ops = {"dataset": {"metadata_nthreads": 1}}
+    ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", engine_options=ops)
     assert_eq(ddf, ddf2)

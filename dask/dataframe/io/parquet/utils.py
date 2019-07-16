@@ -6,7 +6,44 @@ class Engine:
     """ The API necessary to provide a new Parquet reader/writer """
 
     @staticmethod
-    def read_metadata(fs, paths, categories=None, index=None, gather_statistics=None):
+    def read_partition(fs, piece, columns, index, categories, **kwargs):
+        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
+
+        This function is called many times in individual tasks
+
+        Parameters
+        ----------
+        fs: FileSystem
+        piece: object
+            This is some token that is returned by Engine.read_metadata.
+            Typically it represents a row group in a Parquet dataset
+        columns: List[str]
+            List of column names to pull out of that row group
+        index: str, List[str], or False
+            The index name(s).
+        categories: list, dict or None
+            Column(s) containing categorical data.
+        **kwargs:
+            Includes `"kwargs"` values stored within the `parts` output
+            of `engine.read_metadata`.  May also include kwargs to pass
+            through to the underlying engine's "read" function.
+
+        Returns
+        -------
+        A Pandas DataFrame
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def read_metadata(
+        fs,
+        paths,
+        engine_options=None,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=None,
+    ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
         This function is called once in the user's Python session to gather
@@ -17,6 +54,8 @@ class Engine:
         fs: FileSystem
         paths: List[str]
             A list of paths to files (or their equivalents)
+        engine_options : dict
+            Passthrough key-word arguments stored as a dict of dicts.
         categories: list, dict or None
             Column(s) containing categorical data.
         index: str, List[str], or False
@@ -55,32 +94,6 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def read_partition(fs, piece, columns, index, **kwargs):
-        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
-
-        This function is called many times in individual tasks
-
-        Parameters
-        ----------
-        fs: FileSystem
-        piece: object
-            This is some token that is returned by Engine.read_metadata.
-            Typically it represents a row group in a Parquet dataset
-        columns: List[str]
-            List of column names to pull out of that row group
-        index: str, List[str], or False
-            The index name(s).
-        **kwargs:
-            Includes `"kwargs"` values stored within the `parts` output
-            of `engine.read_metadata`
-
-        Returns
-        -------
-        A Pandas DataFrame
-        """
-        raise NotImplementedError()
-
-    @staticmethod
     def initialize_write(df, fs, path, append=False, **kwargs):
         """Perform engine-specific initialization steps for this dataset
 
@@ -106,12 +119,12 @@ class Engine:
     @staticmethod
     def write_metadata(parts, meta, fs, path, append=False, **kwargs):
         """
-        Write a Dask DataFrame to Parquet
+        Write a shared Parquet metadata file.
 
         Parameters
         ----------
         parts: List
-            Containes metadata objects to write, of the type undrestood by the
+            Contains metadata objects to write, of the type undrestood by the
             specific implementation
         meta: non-chunk metadata
             Details that do not depend on the specifics of each chunk write,
