@@ -191,6 +191,27 @@ def test_simple(tmpdir, write_engine, read_engine):
     assert_eq(ddf, read_df)
 
 
+@write_read_engines_xfail
+def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
+    df.set_index("a", inplace=True, drop=True)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(
+        fn, engine=write_engine, compute=False, write_metadata_file=False
+    ).compute()
+    files = os.listdir(fn)
+    assert "_metadata" not in files
+    # Fastparquet doesn't currently handle a directory without "_metadata"
+    read_df = dd.read_parquet(
+        os.path.join(fn, "*.parquet"),
+        index=["a"],
+        engine=read_engine,
+        gather_statistics=True,
+    )
+    assert_eq(ddf, read_df)
+
+
 @write_read_engines()
 def test_read_glob(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)

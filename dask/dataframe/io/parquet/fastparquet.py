@@ -448,9 +448,9 @@ class FastParquetEngine(Engine):
         fs,
         filename,
         partition_on,
+        return_metadata,
         fmd=None,
         compression=None,
-        return_metadata=True,
         index_cols=[],
         **kwargs
     ):

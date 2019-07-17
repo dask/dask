@@ -106,12 +106,12 @@ class Engine:
     @staticmethod
     def write_metadata(parts, meta, fs, path, append=False, **kwargs):
         """
-        Write a Dask DataFrame to Parquet
+        Write the shared metadata file for a parquet dataset.
 
         Parameters
         ----------
         parts: List
-            Containes metadata objects to write, of the type undrestood by the
+            Contains metadata objects to write, of the type undrestood by the
             specific implementation
         meta: non-chunk metadata
             Details that do not depend on the specifics of each chunk write,

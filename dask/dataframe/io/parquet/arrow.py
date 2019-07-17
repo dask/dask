@@ -14,7 +14,7 @@ from .utils import _parse_pandas_metadata, _normalize_index_columns, Engine
 def _get_md_row_groups(pieces):
     """ Read file-footer metadata from each individual piece.
 
-    Since this operation can be p[ainfully slow in some cases, abort
+    Since this operation can be painfully slow in some cases, abort
     if any metadata or statistics are missing
     """
     row_groups = []
@@ -412,10 +412,9 @@ class ArrowEngine(Engine):
         fs,
         filename,
         partition_on,
+        return_metadata,
         fmd=None,
         compression=None,
-        return_metadata=True,
-        with_metadata=True,
         index_cols=[],
         **kwargs
     ):
