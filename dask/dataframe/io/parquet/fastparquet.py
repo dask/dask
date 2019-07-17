@@ -72,58 +72,11 @@ def _paths_to_cats(paths, scheme):
 
 
 class FastParquetEngine(Engine):
-    @staticmethod
-    def read_partition(fs, piece, columns, index, categories, **kwargs):
-        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
-
-        This function is called many times in individual tasks
-
-        Parameters
-        ----------
-        fs: FileSystem
-        piece: object
-            This is some token that is returned by Engine.read_metadata.
-            Typically it represents a row group in a Parquet dataset
-        columns: List[str]
-            List of column names to pull out of that row group
-        index: str, List[str], or False
-            The index name(s).
-        categories: list, dict or None
-            Column(s) containing categorical data.
-        **kwargs:
-            Includes `"kwargs"` values stored within the `parts` output
-            of `fastparquet.read_metadata`: `pf`.
-            May also include user-defined arguments for
-            `pf.read_row_group_file()` (if stored under 'read' key)
-
-        Returns
-        -------
-        A Pandas DataFrame
-        """
-        pf = kwargs["pf"]
-        if index is False:
-            ind = False
-        else:
-            ind = None
-            if isinstance(index, list):
-                columns += index
-
-        df = pf.read_row_group_file(
-            piece, columns, categories, index=ind, **kwargs.get("read", {})
-        )
-        if index:
-            df = df.set_index(index)
-        return df
+    """ The API necessary to provide a new Parquet reader/writer """
 
     @staticmethod
     def read_metadata(
-        fs,
-        paths,
-        engine_options=None,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=[],
+        fs, paths, categories=None, index=None, gather_statistics=None, filters=[], **kwargs
     ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -132,9 +85,6 @@ class FastParquetEngine(Engine):
         fs: FileSystem
         paths: List[str]
             A list of paths to files (or their equivalents)
-        engine_options : dict (of dicts)
-            Passthrough key-word arguments stored as a dict of dicts.
-            Arguments for top-level key 'file' are passed to `ParquetFile`
         categories: list, dict or None
             Column(s) containing categorical data.
         index: str, List[str], or False
@@ -173,20 +123,15 @@ class FastParquetEngine(Engine):
             A list of row-group-describing dictionary objects to be passed to
             ``fastparquet.read_partition``.
         """
-        if engine_options is None:
-            engine_options = {}
-        engine_options = engine_options.get("file", {})
         if len(paths) > 1:
             if gather_statistics is not False:
                 # this scans all the files, allowing index/divisions
                 # and filtering
-                pf = fastparquet.ParquetFile(
-                    paths, open_with=fs.open, sep=fs.sep, **engine_options
-                )
+                pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
             else:
                 base, fns = analyse_paths(paths)
                 scheme = get_file_scheme(fns)
-                pf = ParquetFile(paths[0], open_with=fs.open, **engine_options)
+                pf = ParquetFile(paths[0], open_with=fs.open)
                 pf.file_scheme = scheme
                 pf.cats = _paths_to_cats(fns, scheme)
                 relpath = paths.replace(base, "").lstrip("/")
@@ -198,17 +143,12 @@ class FastParquetEngine(Engine):
         else:
             try:
                 pf = fastparquet.ParquetFile(
-                    paths[0] + fs.sep + "_metadata",
-                    open_with=fs.open,
-                    sep=fs.sep,
-                    **engine_options,
+                    paths[0] + fs.sep + "_metadata", open_with=fs.open, sep=fs.sep
                 )
                 if gather_statistics is None:
                     gather_statistics = True
             except Exception:
-                pf = fastparquet.ParquetFile(
-                    paths[0], open_with=fs.open, sep=fs.sep, **engine_options
-                )
+                pf = fastparquet.ParquetFile(paths[0], open_with=fs.open, sep=fs.sep)
 
         columns = None
         if pf.fmd.key_value_metadata:
@@ -327,9 +267,50 @@ class FastParquetEngine(Engine):
         pf.fmd.row_groups = None
 
         # Create `parts` (list of row-group-descriptor dicts)
-        parts = [{"piece": rg, "kwargs": {"pf": pf}} for rg in pf.row_groups]
+        parts = [
+            {"piece": rg, "kwargs": {"pf": pf, "categories": categories}}
+            for rg in pf.row_groups
+        ]
 
         return (meta, stats, parts)
+
+    @staticmethod
+    def read_partition(fs, piece, columns, index, **kwargs):
+        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
+
+        This function is called many times in individual tasks
+
+        Parameters
+        ----------
+        fs: FileSystem
+        piece: object
+            This is some token that is returned by Engine.read_metadata.
+            Typically it represents a row group in a Parquet dataset
+        columns: List[str]
+            List of column names to pull out of that row group
+        index: str, List[str], or False
+            The index name(s).
+        **kwargs:
+            Includes `"kwargs"` values stored within the `parts` output
+            of `fastparquet.read_metadata`: `pf` and `categories`
+
+        Returns
+        -------
+        A Pandas DataFrame
+        """
+        pf = kwargs["pf"]
+        categories = kwargs["categories"]
+        if index is False:
+            ind = False
+        else:
+            ind = None
+            if isinstance(index, list):
+                columns += index
+
+        df = pf.read_row_group_file(piece, columns, categories, index=ind)
+        if index:
+            df = df.set_index(index)
+        return df
 
     @staticmethod
     def initialize_write(
@@ -340,7 +321,7 @@ class FastParquetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs,
+        **kwargs
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -434,7 +415,7 @@ class FastParquetEngine(Engine):
                 object_encoding=object_encoding,
                 index_cols=index_cols,
                 ignore_columns=partition_on,
-                **kwargs,
+                **kwargs
             )
             i_offset = 0
 
@@ -471,7 +452,7 @@ class FastParquetEngine(Engine):
         fmd=None,
         compression=None,
         index_cols=[],
-        **kwargs,
+        **kwargs
     ):
         fmd = copy.copy(fmd)
         if not len(df):

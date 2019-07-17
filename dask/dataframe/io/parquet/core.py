@@ -28,7 +28,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
-    engine_options=None,
+    **kwargs
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -75,13 +75,6 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
-    engine_options : dict (of dicts)
-        Passthrough key-word arguments stored as a dictionary of dictionaries.
-        The top-level keys correspond to the appropriate operation type, and
-        the second level corresponds to the kwargs that will be passed on to
-        the underlying `pyarrow` or `fastparquet` function.
-        Supported operation types: 'dataset', 'file', 'read', `write`
-
 
     Examples
     --------
@@ -133,16 +126,14 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    # if engine_options is None:
-    #    engine_options = {}
     meta, statistics, parts = engine.read_metadata(
         fs,
         paths,
-        engine_options=engine_options or {},
         categories=categories,
         index=index,
         gather_statistics=gather_statistics,
         filters=filters,
+        **kwargs
     )
     if meta.index.name is not None:
         index = meta.index.name
@@ -265,8 +256,7 @@ def read_parquet(
             part["piece"],
             columns,
             index,
-            categories,
-            _merge_kwargs(part["kwargs"], engine_options or {}),
+            _merge_kwargs(part["kwargs"], kwargs),
         )
         for i, part in enumerate(parts)
     }
@@ -283,11 +273,9 @@ def read_parquet(
     return new_dd_object(subgraph, name, meta, divisions)
 
 
-def read_parquet_part(func, fs, meta, part, columns, index, categories, kwargs):
-    """ Read a part of a parquet dataset 
-    
-    This function is used by read_parquet."""
-    df = func(fs, part, columns, index, categories, **kwargs)
+def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
+    """ Read a part of a parquet dataset """
+    df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
     return df
@@ -305,7 +293,7 @@ def to_parquet(
     storage_options=None,
     write_metadata_file=True,
     compute=True,
-    **kwargs,
+    **kwargs
 ):
     """Store Dask.dataframe to Parquet files
 
@@ -347,10 +335,8 @@ def to_parquet(
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
-    **kwargs : dict (of dicts)
-        Passthrough key-word arguments stored as a dictionary of dictionaries.
-        The top-level keys correspond to the appropriate `pyarrow`/`fastparquet`
-        function names, and the second level corresponds to the actual kwargs.
+    **kwargs
+        Extra options to be passed on to the specific backend.
 
     Examples
     --------
@@ -374,8 +360,10 @@ def to_parquet(
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
 
-    if compression == "default" and "snappy" in compress:
-        compression = "snappy"
+    if compression != "default":
+        kwargs["compression"] = compression
+    elif "snappy" in compress:
+        kwargs["compression"] = "snappy"
 
     if isinstance(engine, str):
         engine = get_engine(engine)
@@ -435,7 +423,7 @@ def to_parquet(
         partition_on=partition_on,
         division_info=division_info,
         index_cols=index_cols,
-        **kwargs_pass,
+        **kwargs_pass
     )
 
     # Use i_offset and df.npartitions to define file-name list
@@ -453,7 +441,7 @@ def to_parquet(
             return_metadata=write_metadata_file,
             fmd=meta,
             index_cols=index_cols,
-            **kwargs_pass,
+            **kwargs_pass
         )
         for d, filename in zip(df.to_delayed(), filenames)
     ]
@@ -462,7 +450,7 @@ def to_parquet(
     out = delayed(lambda x: len(x))(parts)
     if write_metadata_file:
         out = delayed(engine.write_metadata)(
-            parts, meta, fs, path, append=append, compression=compression
+            parts, meta, fs, path, append=append, **kwargs_pass
         )
 
     if compute:

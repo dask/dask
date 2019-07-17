@@ -14,7 +14,7 @@ from .utils import _parse_pandas_metadata, _normalize_index_columns, Engine
 def _get_md_row_groups(pieces):
     """ Read file-footer metadata from each individual piece.
 
-    Since this operation can be painfully slow in some cases, abort
+    Since this operation can be p[ainfully slow in some cases, abort
     if any metadata or statistics are missing
     """
     row_groups = []
@@ -30,7 +30,7 @@ def _get_md_row_groups(pieces):
 
 class ArrowEngine(Engine):
     @staticmethod
-    def read_partition(fs, piece, columns, index, categories, **kwargs):
+    def read_partition(fs, piece, columns, index, **kwargs):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -45,19 +45,17 @@ class ArrowEngine(Engine):
             List of column names to pull out of that row group
         index: str, List[str], or False
             The index name(s).
-        categories: list, dict or None
-            Column(s) containing categorical data.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
-            of `pyarrow.read_metadata`: `partitions`.
-            May also include key-word arguments for `piece.read()`
-            (stored under `read` key).
+            of `pyarrow.read_metadata`: `partitions` and `categories`.
 
         Returns
         -------
         A Pandas DataFrame
         """
-        partitions = kwargs.get("partitions", [])
+        partitions = kwargs["partitions"]
+        categories = kwargs["categories"]
+        read_kwargs = kwargs.get("read", {})
         if isinstance(index, list):
             columns += index
         with fs.open(piece.path, mode="rb") as f:
@@ -67,7 +65,7 @@ class ArrowEngine(Engine):
                 use_pandas_metadata=True,
                 file=f,
                 use_threads=False,
-                **kwargs.get("read", {}),
+                **read_kwargs,
             )
         df = table.to_pandas(
             categories=categories, use_threads=False, ignore_metadata=True
@@ -79,13 +77,7 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def read_metadata(
-        fs,
-        paths,
-        engine_options=None,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        **kwargs,
+        fs, paths, categories=None, index=None, gather_statistics=None, **kwargs
     ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -96,9 +88,6 @@ class ArrowEngine(Engine):
             A list of paths to files (or their equivalents)
         categories: list, dict or None
             Column(s) containing categorical data.
-        engine_options : dict (of dicts)
-            Passthrough key-word arguments stored as a dict of dicts.
-            Arguments for top-level key 'dataset' are passed to `ParquetDataset`
         index: str, List[str], or False
             The column name(s) to be used as the index.
             If set to ``None``, pandas metadata (if available) can be used
@@ -107,7 +96,6 @@ class ArrowEngine(Engine):
             Whether or not to gather statistics data.  If ``None``, we only
             gather statistics data if there is a _metadata file available to
             query (cheaply)
-        **kwargs: Ignored
 
         Returns
         -------
@@ -131,12 +119,8 @@ class ArrowEngine(Engine):
             A list of row-group-describing dictionary objects to be passed to
             ``pyarrow.read_partition``.
         """
-        if engine_options is None:
-            engine_options = {}
-        engine_options = engine_options.get("dataset", {})
-        dataset = pq.ParquetDataset(
-            paths, filesystem=get_pyarrow_filesystem(fs), **engine_options
-        )
+        kwargs = kwargs.get('ParquetDataset', {})
+        dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs), **kwargs)
 
         if dataset.partitions is not None:
             partitions = [
@@ -268,7 +252,10 @@ class ArrowEngine(Engine):
 
         # Create `parts` (list of row-group-descriptor dicts)
         parts = [
-            {"piece": piece, "kwargs": {"partitions": dataset.partitions}}
+            {
+                "piece": piece,
+                "kwargs": {"partitions": dataset.partitions, "categories": categories},
+            }
             for piece in pieces
         ]
 
@@ -283,7 +270,7 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs,
+        **kwargs
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -304,8 +291,7 @@ class ArrowEngine(Engine):
             overlapping divisions will lead to an error being raised.
         division_info: dict
             Dictionary containing the divisions and corresponding column name.
-        **kwargs:
-            May includes user-defined arguments for `pq.ParquetDataset()`
+        **kwargs: Ignored
 
         Returns
         -------
@@ -324,11 +310,7 @@ class ArrowEngine(Engine):
                 # Allow append if the dataset exists.
                 # Also need dataset.metadata object if
                 # ignore_divisions is False (to check divisions)
-                dataset = pq.ParquetDataset(
-                    path,
-                    filesystem=get_pyarrow_filesystem(fs),
-                    **kwargs.get("ParquetDataset", {}),
-                )
+                dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
                 if not dataset.metadata and not ignore_divisions:
                     # TODO: Be more flexible about existing metadata.
                     raise NotImplementedError(
@@ -437,7 +419,7 @@ class ArrowEngine(Engine):
         fmd=None,
         compression=None,
         index_cols=[],
-        **kwargs,
+        **kwargs
     ):
         md_list = []
         preserve_index = False
@@ -452,7 +434,7 @@ class ArrowEngine(Engine):
                 partition_cols=partition_on,
                 filesystem=fs,
                 metadata_collector=md_list,
-                **kwargs,
+                **kwargs
             )
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
@@ -461,7 +443,7 @@ class ArrowEngine(Engine):
                     fil,
                     compression=compression,
                     metadata_collector=md_list,
-                    **kwargs,
+                    **kwargs
                 )
         # Return the schema needed to write the metadata
         if return_metadata:
