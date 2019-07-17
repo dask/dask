@@ -280,8 +280,8 @@ def read_parquet(
 
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
-    """ Read a part of a parquet dataset 
-    
+    """ Read a part of a parquet dataset
+
     This function is used by `read_parquet`."""
     df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
