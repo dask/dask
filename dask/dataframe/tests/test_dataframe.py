@@ -468,8 +468,9 @@ def test_describe_for_possibly_unsorted_q():
 
 
 def test_cumulative():
-    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
-    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
+    index = ["row{:03d}".format(i) for i in range(100)]
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
+    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
 
     ddf = dd.from_pandas(df, 5)
     ddf_out = dd.from_pandas(df_out, 5)
@@ -1270,6 +1271,23 @@ def test_assign_callable():
     a = df.assign(B=df.A.shift())
     b = df.assign(B=lambda x: x.A.shift())
     assert_eq(a, b)
+
+
+def test_assign_dtypes():
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            data={"col1": ["a", "b"], "col2": [1, 2]}, columns=["col1", "col2"]
+        ),
+        npartitions=2,
+    )
+
+    new_col = {"col3": pd.Series(["0", "1"])}
+    res = ddf.assign(**new_col)
+
+    assert_eq(
+        res.dtypes,
+        pd.Series(data=["object", "int64", "object"], index=["col1", "col2", "col3"]),
+    )
 
 
 def test_map():

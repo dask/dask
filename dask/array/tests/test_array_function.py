@@ -21,10 +21,14 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
         lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
+        lambda x: np.block([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
         lambda x: np.vstack(x),
         lambda x: np.linalg.norm(x),
+        lambda x: np.min(x),
+        lambda x: np.amin(x),
+        lambda x: np.round(x),
     ],
 )
 def test_array_function_dask(func):
@@ -57,13 +61,16 @@ def test_array_function_fft(func):
         lambda x: np.min_scalar_type(x),
         lambda x: np.linalg.det(x),
         lambda x: np.linalg.eigvals(x),
+        lambda x: np.median(x),
     ],
 )
 def test_array_notimpl_function_dask(func):
     x = np.random.random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
-    with pytest.raises(TypeError):
+    with pytest.warns(
+        FutureWarning, match="The `.*` function is not implemented by Dask"
+    ):
         func(y)
 
 
@@ -170,8 +177,8 @@ def test_unregistered_func(func):
         def __init__(self, arr):
             self.arr = arr
 
-        def __array__(self, **kwargs):
-            return np.asarray(self.arr, **kwargs)
+        def __array__(self, *args, **kwargs):
+            return np.asarray(self.arr, *args, **kwargs)
 
         def __array_function__(self, f, t, arrs, kw):
             arrs = tuple(
@@ -220,3 +227,17 @@ def test_unregistered_func(func):
 
     # Check that they are equivalent arrays.
     assert_eq(xx, yy, check_meta=False)
+
+
+def test_median_func():
+    # Regression test for __array_function__ becoming default in numpy 1.17
+    # dask has no median function, so ensure that this still calls np.median
+    image = da.from_array(np.array([[0, 1], [1, 2]]), chunks=(1, 2))
+    if IS_NEP18_ACTIVE:
+        with pytest.warns(
+            FutureWarning,
+            match="The `numpy.median` function is not implemented by Dask",
+        ):
+            assert int(np.median(image)) == 1
+    else:
+        assert int(np.median(image)) == 1

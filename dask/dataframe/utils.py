@@ -201,9 +201,9 @@ def has_known_categories(x):
     x : Series or CategoricalIndex
     """
     x = getattr(x, "_meta", x)
-    if isinstance(x, pd.Series):
+    if is_series_like(x):
         return UNKNOWN_CATEGORIES not in x.cat.categories
-    elif isinstance(x, pd.CategoricalIndex):
+    elif is_index_like(x) and hasattr(x, "categories"):
         return UNKNOWN_CATEGORIES not in x.categories
     raise TypeError("Expected Series or CategoricalIndex")
 
@@ -317,7 +317,7 @@ def make_meta_object(x, index=None):
     """
     if hasattr(x, "_meta"):
         return x._meta
-    elif is_arraylike(x):
+    elif is_arraylike(x) and x.shape:
         return x[:0]
 
     if index is not None:
