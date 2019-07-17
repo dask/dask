@@ -2570,7 +2570,7 @@ def from_array(
 ):
     """ Create dask array from something that looks like an array
 
-    Input must have a ``.shape`` and support numpy-style slicing.
+    Input must have a ``.shape``, ``.ndim`` and support numpy-style slicing.
 
     Parameters
     ----------
