@@ -76,7 +76,13 @@ class FastParquetEngine(Engine):
 
     @staticmethod
     def read_metadata(
-        fs, paths, categories=None, index=None, gather_statistics=None, filters=[]
+        fs,
+        paths,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=[],
+        **kwargs
     ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -96,10 +102,12 @@ class FastParquetEngine(Engine):
             gather statistics data if there is a _metadata file available to
             query (cheaply)
         filters: list
-            List of filters to apply, like ``[('x', '>', 0), ...]``. This
-            implements row-group (partition) -level filtering only, i.e., to
-            prevent the loading of some chunks of the data, and only if
-            relevant statistics have been included in the metadata.
+            List of filters to apply, like ``[('x', '>', 0), ...]``.  Only
+            used to filter out categoricals here (full filtering applied in
+            ``core``)
+        **kwargs : dict (of dicts)
+            User-specified arguments to pass on to 'fastparquet' backend.
+            Arguments for top-level key 'file' are passed to `ParquetFile`
 
         Returns
         -------
@@ -127,11 +135,13 @@ class FastParquetEngine(Engine):
             if gather_statistics is not False:
                 # this scans all the files, allowing index/divisions
                 # and filtering
-                pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
+                pf = fastparquet.ParquetFile(
+                    paths, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
+                )
             else:
                 base, fns = analyse_paths(paths)
                 scheme = get_file_scheme(fns)
-                pf = ParquetFile(paths[0], open_with=fs.open)
+                pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
                 pf.file_scheme = scheme
                 pf.cats = _paths_to_cats(fns, scheme)
                 relpath = paths.replace(base, "").lstrip("/")
@@ -143,12 +153,17 @@ class FastParquetEngine(Engine):
         else:
             try:
                 pf = fastparquet.ParquetFile(
-                    paths[0] + fs.sep + "_metadata", open_with=fs.open, sep=fs.sep
+                    paths[0] + fs.sep + "_metadata",
+                    open_with=fs.open,
+                    sep=fs.sep,
+                    **kwargs.get("file", {})
                 )
                 if gather_statistics is None:
                     gather_statistics = True
             except Exception:
-                pf = fastparquet.ParquetFile(paths[0], open_with=fs.open, sep=fs.sep)
+                pf = fastparquet.ParquetFile(
+                    paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
+                )
 
         columns = None
         if pf.fmd.key_value_metadata:
@@ -292,7 +307,9 @@ class FastParquetEngine(Engine):
             The index name(s).
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
-            of `fastparquet.read_metadata`: `pf` and `categories`
+            of `fastparquet.read_metadata`: `pf`.
+            May also include user-defined arguments for
+            `pf.read_row_group_file()` (if stored under 'read' key)
 
         Returns
         -------
@@ -307,7 +324,9 @@ class FastParquetEngine(Engine):
             if isinstance(index, list):
                 columns += index
 
-        df = pf.read_row_group_file(piece, columns, categories, index=ind)
+        df = pf.read_row_group_file(
+            piece, columns, categories, index=ind, **kwargs.get("read", {})
+        )
         if index:
             df = df.set_index(index)
         return df
@@ -422,26 +441,6 @@ class FastParquetEngine(Engine):
         return (fmd, i_offset)
 
     @staticmethod
-    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
-        _meta = copy.copy(fmd)
-        if parts:
-            for rg in parts:
-                if rg is not None:
-                    if isinstance(rg, list):
-                        for r in rg:
-                            _meta.row_groups.append(r)
-                    else:
-                        _meta.row_groups.append(rg)
-            fn = fs.sep.join([path, "_metadata"])
-            fastparquet.writer.write_common_metadata(
-                fn, _meta, open_with=fs.open, no_row_groups=False
-            )
-
-        # if appending, could skip this, but would need to check existence
-        fn = fs.sep.join([path, "_common_metadata"])
-        fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
-
-    @staticmethod
     def write_partition(
         df,
         path,
@@ -454,6 +453,37 @@ class FastParquetEngine(Engine):
         index_cols=[],
         **kwargs
     ):
+        """
+        Output a partition of a dask.DataFrame. This will correspond to
+        one output file, unless partition_on is set, in which case, it will
+        correspond to up to one file in each sub-directory.
+
+        Parameters
+        ----------
+        df: dask.dataframe.DataFrame
+        path: str
+            Destination directory for data.  Prepend with protocol like ``s3://``
+            or ``hdfs://`` for remote data.
+        fs: FileSystem
+        filename: str
+        partition_on: List(str)
+            Column(s) to use for dataset partitioning in parquet.
+        return_metadata : bool
+            Whether to return list of instances from this write, one for each
+            output file. These will be passed to write_metadata if an output
+            metadata file is requested.
+        fmd: Parquet-file metadata object
+        compression: str
+            Compression library to use.
+        index_cols: List(str)
+            Column name(s) to set as index.
+        **kwargs: Ignored
+
+        Returns
+        -------
+        List of metadata-containing instances (if `return_metadata` is `True`)
+        or empty list
+        """
         fmd = copy.copy(fmd)
         if not len(df):
             # Write nothing for empty partitions
@@ -475,3 +505,44 @@ class FastParquetEngine(Engine):
             return rgs
         else:
             return []
+
+    @staticmethod
+    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        """
+        Write the shared metadata file for a parquet dataset.
+
+        Parameters
+        ----------
+        parts: List
+            Contains metadata objects to write, of the type undrestood by the
+            specific implementation
+        meta: non-chunk metadata
+            Details that do not depend on the specifics of each chunk write,
+            typically the schema and pandas metadata, in a format the writer
+            can use.
+        fs: FileSystem
+        path: str
+            Output file to write to, usually ``"_metadata"`` in the root of
+            the output dataset
+        append: boolean
+            Whether or not to consolidate new metadata with existing (True)
+            or start from scratch (False)
+        **kwargs: Ignored
+        """
+        _meta = copy.copy(fmd)
+        if parts:
+            for rg in parts:
+                if rg is not None:
+                    if isinstance(rg, list):
+                        for r in rg:
+                            _meta.row_groups.append(r)
+                    else:
+                        _meta.row_groups.append(rg)
+            fn = fs.sep.join([path, "_metadata"])
+            fastparquet.writer.write_common_metadata(
+                fn, _meta, open_with=fs.open, no_row_groups=False
+            )
+
+        # if appending, could skip this, but would need to check existence
+        fn = fs.sep.join([path, "_common_metadata"])
+        fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)

@@ -6,7 +6,15 @@ class Engine:
     """ The API necessary to provide a new Parquet reader/writer """
 
     @staticmethod
-    def read_metadata(fs, paths, categories=None, index=None, gather_statistics=None):
+    def read_metadata(
+        fs,
+        paths,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=None,
+        **kwargs
+    ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
         This function is called once in the user's Python session to gather
@@ -27,6 +35,11 @@ class Engine:
             Whether or not to gather statistics data.  If ``None``, we only
             gather statistics data if there is a _metadata file available to
             query (cheaply)
+        filters: list
+            List of filters to apply, like ``[('x', '>', 0), ...]``.
+        **kwargs: dict (of dicts)
+            User-specified arguments to pass on to backend.
+            Top level key can be used by engine to select appropriate dict.
 
         Returns
         -------
@@ -72,7 +85,8 @@ class Engine:
             The index name(s).
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
-            of `engine.read_metadata`
+            of `engine.read_metadata`. May also include arguments to be
+            passed to the backend (if stored under a top-level `"read"` key).
 
         Returns
         -------
@@ -81,7 +95,16 @@ class Engine:
         raise NotImplementedError()
 
     @staticmethod
-    def initialize_write(df, fs, path, append=False, **kwargs):
+    def initialize_write(
+        df,
+        fs,
+        path,
+        append=False,
+        partition_on=None,
+        ignore_divisions=False,
+        division_info=None,
+        **kwargs
+    ):
         """Perform engine-specific initialization steps for this dataset
 
         Parameters
@@ -89,17 +112,59 @@ class Engine:
         df: dask.dataframe.DataFrame
         fs: FileSystem
         path: str
-            Output file to write to, usually ``"_metadata"`` in the root of
-            the output dataset; only required if appending.
+            Destination directory for data.  Prepend with protocol like ``s3://``
+            or ``hdfs://`` for remote data.
         append: bool
             If True, may use existing metadata (if any) and perform checks
             against the new data being stored.
+        partition_on: List(str)
+            Column(s) to use for dataset partitioning in parquet.
+        ignore_divisions: bool
+            Whether or not to ignore old divisions when appending.  Otherwise,
+            overlapping divisions will lead to an error being raised.
+        division_info: dict
+            Dictionary containing the divisions and corresponding column name.
+        **kwargs: dict
+            Other keyword arguments (including `index_cols`)
 
         Returns
         -------
         tuple:
             engine-specific instance
             list of filenames, one per partition
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def write_partition(
+        df, path, fs, filename, partition_on, return_metadata, **kwargs
+    ):
+        """
+        Output a partition of a dask.DataFrame. This will correspond to
+        one output file, unless partition_on is set, in which case, it will
+        correspond to up to one file in each sub-directory.
+
+        Parameters
+        ----------
+        df: dask.dataframe.DataFrame
+        path: str
+            Destination directory for data.  Prepend with protocol like ``s3://``
+            or ``hdfs://`` for remote data.
+        fs: FileSystem
+        filename: str
+        partition_on: List(str)
+            Column(s) to use for dataset partitioning in parquet.
+        return_metadata : bool
+            Whether to return list of instances from this write, one for each
+            output file. These will be passed to write_metadata if an output
+            metadata file is requested.
+        **kwargs: dict
+            Other keyword arguments (including `fmd` and `index_cols`)
+
+        Returns
+        -------
+        List of metadata-containing instances (if `return_metadata` is `True`)
+        or empty list
         """
         raise NotImplementedError
 
@@ -124,39 +189,10 @@ class Engine:
         append: boolean
             Whether or not to consolidate new metadata with existing (True)
             or start from scratch (False)
-        **kwargs:
-            Other keywords as needed by the engine
+        **kwargs: dict
+            Other keyword arguments (including `compression`)
         """
         raise NotImplementedError()
-
-    @staticmethod
-    def write_partition(
-        df, path, fs, filename, partition_on, return_metadata, **kwargs
-    ):
-        """
-        Output a partition of a dask.DataFrame. This will correspond to
-        one output file, unless partition_on is set, in which case, it will
-        correspond to up to one file in each sub-directory.
-
-        Parameters
-        ----------
-        df
-        path
-        fs
-        filename
-        partition_on
-        kwargs
-        return_metadata : bool
-            Whether to return list of instances from this write, one for each
-            output file. These will be passed to write_metadata if an output
-            metadata file is requested.
-
-        Returns
-        -------
-        List of metadata-containing instances (if return_metadata is True)
-        or empty list
-        """
-        raise NotImplementedError
 
 
 def _parse_pandas_metadata(pandas_metadata):
@@ -296,7 +332,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         column_names = user_columns
         index_names = user_index
         if set(column_names).intersection(index_names):
-            raise ValueError("Specified index and column names must not " "intersect")
+            raise ValueError("Specified index and column names must not intersect")
     else:
         # Use default columns and index from the metadata
         column_names = data_columns

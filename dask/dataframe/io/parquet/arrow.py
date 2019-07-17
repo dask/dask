@@ -30,52 +30,14 @@ def _get_md_row_groups(pieces):
 
 class ArrowEngine(Engine):
     @staticmethod
-    def read_partition(fs, piece, columns, index, **kwargs):
-        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
-
-        This function is called many times in individual tasks
-
-        Parameters
-        ----------
-        fs: FileSystem
-        piece: object
-            This is some token that is returned by Engine.read_metadata.
-            Typically it represents a row group in a Parquet dataset
-        columns: List[str]
-            List of column names to pull out of that row group
-        index: str, List[str], or False
-            The index name(s).
-        **kwargs:
-            Includes `"kwargs"` values stored within the `parts` output
-            of `pyarrow.read_metadata`: `partitions` and `categories`.
-
-        Returns
-        -------
-        A Pandas DataFrame
-        """
-        partitions = kwargs["partitions"]
-        categories = kwargs["categories"]
-        if isinstance(index, list):
-            columns += index
-        with fs.open(piece.path, mode="rb") as f:
-            table = piece.read(
-                columns=columns,
-                partitions=partitions,
-                use_pandas_metadata=True,
-                file=f,
-                use_threads=False,
-            )
-        df = table.to_pandas(
-            categories=categories, use_threads=False, ignore_metadata=True
-        )[list(columns)]
-
-        if index:
-            df = df.set_index(index)
-        return df
-
-    @staticmethod
     def read_metadata(
-        fs, paths, categories=None, index=None, gather_statistics=None, **kwargs
+        fs,
+        paths,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=None,
+        **kwargs,
     ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -94,6 +56,10 @@ class ArrowEngine(Engine):
             Whether or not to gather statistics data.  If ``None``, we only
             gather statistics data if there is a _metadata file available to
             query (cheaply)
+        filters: Ignored
+        **kwargs: dict (of dicts)
+            User-specified arguments to pass on to 'pyarrow' backend.
+            Arguments for top-level key 'dataset' are passed to `ParquetDataset`
 
         Returns
         -------
@@ -117,7 +83,9 @@ class ArrowEngine(Engine):
             A list of row-group-describing dictionary objects to be passed to
             ``pyarrow.read_partition``.
         """
-        dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
+        dataset = pq.ParquetDataset(
+            paths, filesystem=get_pyarrow_filesystem(fs), **kwargs.get("dataset", {})
+        )
 
         if dataset.partitions is not None:
             partitions = [
@@ -259,6 +227,53 @@ class ArrowEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
+    def read_partition(fs, piece, columns, index, **kwargs):
+        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
+
+        This function is called many times in individual tasks
+
+        Parameters
+        ----------
+        fs: FileSystem
+        piece: object
+            This is some token that is returned by Engine.read_metadata.
+            Typically it represents a row group in a Parquet dataset
+        columns: List[str]
+            List of column names to pull out of that row group
+        index: str, List[str], or False
+            The index name(s).
+        **kwargs:
+            Includes `"kwargs"` values stored within the `parts` output
+            of `pyarrow.read_metadata`: `partitions`.
+            May also include key-word arguments for `piece.read()`
+            (if stored under a top-level `"read"` key).
+
+        Returns
+        -------
+        A Pandas DataFrame
+        """
+        partitions = kwargs["partitions"]
+        categories = kwargs["categories"]
+        if isinstance(index, list):
+            columns += index
+        with fs.open(piece.path, mode="rb") as f:
+            table = piece.read(
+                columns=columns,
+                partitions=partitions,
+                use_pandas_metadata=True,
+                file=f,
+                use_threads=False,
+                **kwargs.get("read", {}),
+            )
+        df = table.to_pandas(
+            categories=categories, use_threads=False, ignore_metadata=True
+        )[list(columns)]
+
+        if index:
+            df = df.set_index(index)
+        return df
+
+    @staticmethod
     def initialize_write(
         df,
         fs,
@@ -267,7 +282,7 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs
+        **kwargs,
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -292,7 +307,7 @@ class ArrowEngine(Engine):
 
         Returns
         -------
-        fmd: Parquet-file metadata object
+        fmd: None
         i_offset: int
             Initial offset to user for new-file labeling
         """
@@ -382,7 +397,104 @@ class ArrowEngine(Engine):
         return fmd, i_offset
 
     @staticmethod
+    def write_partition(
+        df,
+        path,
+        fs,
+        filename,
+        partition_on,
+        return_metadata,
+        fmd=None,
+        compression=None,
+        index_cols=[],
+        **kwargs,
+    ):
+        """
+        Output a partition of a dask.DataFrame. This will correspond to
+        one output file, unless partition_on is set, in which case, it will
+        correspond to up to one file in each sub-directory.
+
+        Parameters
+        ----------
+        df: dask.dataframe.DataFrame
+        path: str
+            Destination directory for data.  Prepend with protocol like ``s3://``
+            or ``hdfs://`` for remote data.
+        fs: FileSystem
+        filename: str
+        partition_on: List(str)
+            Column(s) to use for dataset partitioning in parquet.
+        return_metadata : bool
+            Whether to return list of instances from this write, one for each
+            output file. These will be passed to write_metadata if an output
+            metadata file is requested.
+        fmd: Ignored
+        compression: str
+            Compression library to use.
+        index_cols: List(str)
+            Column name(s) to set as index.
+        **kwargs: dict
+            Keyword arguments to pass to `pyarrow` backend.
+
+        Returns
+        -------
+        List of metadata-containing instances (if `return_metadata` is `True`)
+        or empty list
+        """
+        md_list = []
+        preserve_index = False
+        if index_cols:
+            df = df.set_index(index_cols)
+            preserve_index = True
+        t = pa.Table.from_pandas(df, preserve_index=preserve_index)
+        if partition_on:
+            pq.write_to_dataset(
+                t,
+                path,
+                partition_cols=partition_on,
+                filesystem=fs,
+                metadata_collector=md_list,
+                **kwargs,
+            )
+        else:
+            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
+                pq.write_table(
+                    t,
+                    fil,
+                    compression=compression,
+                    metadata_collector=md_list,
+                    **kwargs,
+                )
+        # Return the schema needed to write the metadata
+        if return_metadata:
+            return [{"schema": t.schema, "meta": md_list[0]}]
+        else:
+            return []
+
+    @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        """
+        Write the shared metadata file for a parquet dataset.
+
+        Parameters
+        ----------
+        parts: List
+            Contains metadata objects to write, of the type undrestood by the
+            specific implementation
+        meta: non-chunk metadata
+            Details that do not depend on the specifics of each chunk write,
+            typically the schema and pandas metadata, in a format the writer
+            can use.
+        fs: FileSystem
+        path: str
+            Output file to write to, usually ``"_metadata"`` in the root of
+            the output dataset
+        append: boolean
+            Whether or not to consolidate new metadata with existing (True)
+            or start from scratch (False)
+        **kwargs: dict
+            Artguments (selectively) passed on to `pyarrow` backend.
+        """
         if parts:
             if not append:
                 # Get only arguments specified in the function
@@ -404,46 +516,3 @@ class ArrowEngine(Engine):
                 _meta.append_row_groups(parts[i][0]["meta"])
             with fs.open(metadata_path, "wb") as fil:
                 _meta.write_metadata_file(fil)
-
-    @staticmethod
-    def write_partition(
-        df,
-        path,
-        fs,
-        filename,
-        partition_on,
-        return_metadata,
-        fmd=None,
-        compression=None,
-        index_cols=[],
-        **kwargs
-    ):
-        md_list = []
-        preserve_index = False
-        if index_cols:
-            df = df.set_index(index_cols)
-            preserve_index = True
-        t = pa.Table.from_pandas(df, preserve_index=preserve_index)
-        if partition_on:
-            pq.write_to_dataset(
-                t,
-                path,
-                partition_cols=partition_on,
-                filesystem=fs,
-                metadata_collector=md_list,
-                **kwargs
-            )
-        else:
-            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                pq.write_table(
-                    t,
-                    fil,
-                    compression=compression,
-                    metadata_collector=md_list,
-                    **kwargs
-                )
-        # Return the schema needed to write the metadata
-        if return_metadata:
-            return [{"schema": t.schema, "meta": md_list[0]}]
-        else:
-            return []

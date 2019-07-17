@@ -28,6 +28,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
+    **kwargs
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -74,6 +75,12 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
+    **kwargs: dict (of dicts)
+        Passthrough key-word arguments for read backend.
+        The top-level keys correspond to the appropriate operation type, and
+        the second level corresponds to the kwargs that will be passed on to
+        the underlying `pyarrow` or `fastparquet` function.
+        Supported operation types: 'dataset', 'file', and 'read'
 
     Examples
     --------
@@ -132,6 +139,7 @@ def read_parquet(
         index=index,
         gather_statistics=gather_statistics,
         filters=filters,
+        **kwargs
     )
     if meta.index.name is not None:
         index = meta.index.name
@@ -240,6 +248,11 @@ def read_parquet(
     else:
         meta = meta[list(columns)]
 
+    def _merge_kwargs(x, y):
+        z = x.copy()
+        z.update(y)
+        return z
+
     subgraph = {
         (name, i): (
             read_parquet_part,
@@ -249,7 +262,7 @@ def read_parquet(
             part["piece"],
             columns,
             index,
-            part["kwargs"],
+            _merge_kwargs(part["kwargs"], kwargs or {}),
         )
         for i, part in enumerate(parts)
     }
@@ -267,7 +280,9 @@ def read_parquet(
 
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
-    """ Read a part of a parquet dataset """
+    """ Read a part of a parquet dataset 
+    
+    This function is used by `read_parquet`."""
     df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
@@ -324,11 +339,11 @@ def to_parquet(
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
     write_metadata_file : bool, optional
-        Whether to create the special "_metadata" file.
+        Whether to write the special "_metadata" file.
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
-    **kwargs
+    **kwargs :
         Extra options to be passed on to the specific backend.
 
     Examples
