@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import io
 import os
+import sys
 from contextlib import contextmanager
 from distutils.version import LooseVersion
 
@@ -335,6 +336,8 @@ def test_read_bytes_delimited(s3, blocksize):
     "fmt,blocksize", [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 )
 def test_compression(s3, fmt, blocksize):
+    if fmt == 'zip' and sys.version_info.minor == 5:
+        pytest.skip("zipfile is read-only on py35")
     s3._cache.clear()
     with s3_context("compress", valmap(compress[fmt], files)):
         if fmt and blocksize:
