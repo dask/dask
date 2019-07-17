@@ -76,7 +76,7 @@ class FastParquetEngine(Engine):
 
     @staticmethod
     def read_metadata(
-        fs, paths, categories=None, index=None, gather_statistics=None, filters=[], **kwargs
+        fs, paths, categories=None, index=None, gather_statistics=None, filters=[]
     ):
         """ Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -448,9 +448,9 @@ class FastParquetEngine(Engine):
         fs,
         filename,
         partition_on,
-        return_metadata,
         fmd=None,
         compression=None,
+        return_metadata=True,
         index_cols=[],
         **kwargs
     ):

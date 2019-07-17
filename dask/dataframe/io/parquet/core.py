@@ -28,7 +28,6 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
-    **kwargs
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -133,7 +132,6 @@ def read_parquet(
         index=index,
         gather_statistics=gather_statistics,
         filters=filters,
-        **kwargs
     )
     if meta.index.name is not None:
         index = meta.index.name
@@ -242,11 +240,6 @@ def read_parquet(
     else:
         meta = meta[list(columns)]
 
-    def _merge_kwargs(x, y):
-        z = x.copy()
-        z.update(y)
-        return z
-
     subgraph = {
         (name, i): (
             read_parquet_part,
@@ -256,7 +249,7 @@ def read_parquet(
             part["piece"],
             columns,
             index,
-            _merge_kwargs(part["kwargs"], kwargs),
+            part["kwargs"],
         )
         for i, part in enumerate(parts)
     }
@@ -331,7 +324,7 @@ def to_parquet(
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
     write_metadata_file : bool, optional
-        Whether to write the special "_metadata" file.
+        Whether to create the special "_metadata" file.
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
@@ -377,14 +370,10 @@ def to_parquet(
     # because we may be resetting the index to write the file
     division_info = {"divisions": df.divisions, "name": df.index.name}
     if division_info["name"] is None:
-        # As of 0.24.2, pandas will rename an index with name=None
-        # when df.reset_index() is called.  The default name is "index",
-        # (or "level_0" if "index" is already a column name)
-        division_info["name"] = "index" if "index" not in df.columns else "level_0"
+        division_info["name"] = "index"
 
     # If write_index==True (default), reset the index and record the
-    # name of the original index in `index_cols` (will be `index` if None,
-    # or `level_0` if `index` is already a column name).
+    # name of the original index in `index_cols` (will be `index` if None).
     # `fastparquet` will use `index_cols` to specify the index column(s)
     # in the metadata.  `pyarrow` will revert the `reset_index` call
     # below if `index_cols` is populated (because pyarrow will want to handle
@@ -395,9 +384,6 @@ def to_parquet(
         real_cols = set(df.columns)
         df = df.reset_index()
         index_cols = [c for c in set(df.columns).difference(real_cols)]
-    else:
-        # Not writing index - might as well drop it
-        df = df.reset_index(drop=True)
 
     _to_parquet_kwargs = {
         "engine",
@@ -438,7 +424,7 @@ def to_parquet(
             fs,
             filename,
             partition_on,
-            return_metadata=write_metadata_file,
+            with_metadata=write_metadata_file,
             fmd=meta,
             index_cols=index_cols,
             **kwargs_pass
@@ -447,11 +433,9 @@ def to_parquet(
     ]
 
     # single task to complete
-    out = delayed(lambda x: len(x))(parts)
-    if write_metadata_file:
-        out = delayed(engine.write_metadata)(
-            parts, meta, fs, path, append=append, **kwargs_pass
-        )
+    out = delayed(engine.write_metadata)(
+        parts, meta, fs, path, append=append, **kwargs_pass
+    )
 
     if compute:
         out = out.compute()

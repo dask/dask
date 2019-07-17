@@ -55,7 +55,6 @@ class ArrowEngine(Engine):
         """
         partitions = kwargs["partitions"]
         categories = kwargs["categories"]
-        read_kwargs = kwargs.get("read", {})
         if isinstance(index, list):
             columns += index
         with fs.open(piece.path, mode="rb") as f:
@@ -65,7 +64,6 @@ class ArrowEngine(Engine):
                 use_pandas_metadata=True,
                 file=f,
                 use_threads=False,
-                **read_kwargs,
             )
         df = table.to_pandas(
             categories=categories, use_threads=False, ignore_metadata=True
@@ -119,8 +117,7 @@ class ArrowEngine(Engine):
             A list of row-group-describing dictionary objects to be passed to
             ``pyarrow.read_partition``.
         """
-        kwargs = kwargs.get('ParquetDataset', {})
-        dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs), **kwargs)
+        dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
 
         if dataset.partitions is not None:
             partitions = [
@@ -415,9 +412,10 @@ class ArrowEngine(Engine):
         fs,
         filename,
         partition_on,
-        return_metadata,
         fmd=None,
         compression=None,
+        return_metadata=True,
+        with_metadata=True,
         index_cols=[],
         **kwargs
     ):
