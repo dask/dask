@@ -175,12 +175,7 @@ class FastParquetEngine(Engine):
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
         index_cols = index or ()
-        meta = _meta_from_dtypes(
-            all_columns,
-            dtypes,
-            index_cols=index_cols,
-            column_index_names=column_index_names,
-        )
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
         # fastparquet doesn't handle multiindex
         if len(index_names) > 1:

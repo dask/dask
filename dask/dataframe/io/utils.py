@@ -48,9 +48,7 @@ def _get_pyarrow_dtypes(schema, categories):
     return dtypes
 
 
-def _meta_from_dtypes(
-    to_read_columns, file_dtypes, index_cols=(), column_index_names=()
-):
+def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_names):
     """Get the final metadata for the dask.dataframe
 
     Parameters
