@@ -227,7 +227,9 @@ class ArrowEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def read_partition(fs, piece, columns, index, **kwargs):
+    def read_partition(
+        fs, piece, columns, index, categories=[], partitions=[], **kwargs
+    ):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -242,18 +244,20 @@ class ArrowEngine(Engine):
             List of column names to pull out of that row group
         index: str, List[str], or False
             The index name(s).
+        categories: list
+            Column(s) containing categorical data.
+        partitions: list
+            Construct directory-based partitioning by splitting on these fields'
+            values. Each dask partition will result in one or more datafiles,
+            there will be no global groupby.
         **kwargs:
-            Includes `"kwargs"` values stored within the `parts` output
-            of `pyarrow.read_metadata`: `partitions`.
-            May also include key-word arguments for `piece.read()`
+            May include key-word arguments for `piece.read()`
             (if stored under a top-level `"read"` key).
 
         Returns
         -------
         A Pandas DataFrame
         """
-        partitions = kwargs["partitions"]
-        categories = kwargs["categories"]
         if isinstance(index, list):
             columns += index
         with fs.open(piece.path, mode="rb") as f:
