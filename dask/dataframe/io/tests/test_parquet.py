@@ -1687,3 +1687,15 @@ def test_pathlib_path(tmpdir, engine):
     ddf.to_parquet(path, engine=engine)
     ddf2 = dd.read_parquet(path, engine=engine)
     assert_eq(ddf, ddf2)
+
+
+def test_pyarrow_metadata_nthreads(tmpdir):
+    check_pyarrow()
+    tmp_path = str(tmpdir)
+    df = pd.DataFrame({"x": [4, 5, 6, 1, 2, 3]})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmp_path, engine="pyarrow")
+    ops = {"dataset": {"metadata_nthreads": 2}}
+    ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", **ops)
+    assert_eq(ddf, ddf2)
