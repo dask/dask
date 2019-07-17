@@ -8,7 +8,7 @@ from ..utils import compress
 
 @pytest.mark.parametrize("fmt,File", compr.items())
 def test_files(fmt, File):
-    if fmt == 'zip' and sys.version_info.minor == 5:
+    if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
     if fmt is None:
         return

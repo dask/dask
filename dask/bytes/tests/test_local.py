@@ -269,7 +269,7 @@ fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_compression(fmt, blocksize):
-    if fmt == 'zip' and sys.version_info.minor == 5:
+    if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
     files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode="b"):
@@ -320,7 +320,7 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize("mode", ["rt", "rb"])
 @pytest.mark.parametrize("fmt", list(compr))
 def test_open_files_compression(mode, fmt):
-    if fmt == 'zip' and sys.version_info.minor == 5:
+    if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
     files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode="b"):
