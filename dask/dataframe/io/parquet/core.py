@@ -80,7 +80,9 @@ def read_parquet(
         The top-level keys correspond to the appropriate operation type, and
         the second level corresponds to the kwargs that will be passed on to
         the underlying `pyarrow` or `fastparquet` function.
-        Supported operation types: 'dataset', 'file', and 'read'
+        Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
+        'file' (for opening a `fastparquet` `ParquetFile`), and 'read' (for the
+        backend read function)
 
     Examples
     --------

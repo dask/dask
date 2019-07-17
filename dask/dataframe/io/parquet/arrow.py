@@ -39,50 +39,6 @@ class ArrowEngine(Engine):
         filters=None,
         **kwargs,
     ):
-        """ Gather metadata about a Parquet Dataset to prepare for a read
-
-        Parameters
-        ----------
-        fs: FileSystem
-        paths: List[str]
-            A list of paths to files (or their equivalents)
-        categories: list, dict or None
-            Column(s) containing categorical data.
-        index: str, List[str], or False
-            The column name(s) to be used as the index.
-            If set to ``None``, pandas metadata (if available) can be used
-            to reset the value in this function
-        gather_statistics: bool
-            Whether or not to gather statistics data.  If ``None``, we only
-            gather statistics data if there is a _metadata file available to
-            query (cheaply)
-        filters: Ignored
-        **kwargs: dict (of dicts)
-            User-specified arguments to pass on to 'pyarrow' backend.
-            Arguments for top-level key 'dataset' are passed to `ParquetDataset`
-
-        Returns
-        -------
-        meta: pandas.DataFrame
-            An empty DataFrame object to use for metadata.
-            Should have appropriate column names and dtypes but need not have
-            any actual data
-        statistics: Optional[List[Dict]]
-            Either none, if no statistics were found, or a list of dictionaries
-            of statistics data, one dict for every partition (see the next
-            return value).  The statistics should look like the following:
-
-            [
-                {'num-rows': 1000, 'columns': [
-                    {'name': 'id', 'min': 0, 'max': 100, 'null-count': 0},
-                    {'name': 'x', 'min': 0.0, 'max': 1.0, 'null-count': 5},
-                    ]},
-                ...
-            ]
-        parts: List[object]
-            A list of row-group-describing dictionary objects to be passed to
-            ``pyarrow.read_partition``.
-        """
         dataset = pq.ParquetDataset(
             paths, filesystem=get_pyarrow_filesystem(fs), **kwargs.get("dataset", {})
         )
@@ -228,36 +184,8 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def read_partition(
-        fs, piece, columns, index, categories=[], partitions=[], **kwargs
+        fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
-        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
-
-        This function is called many times in individual tasks
-
-        Parameters
-        ----------
-        fs: FileSystem
-        piece: object
-            This is some token that is returned by Engine.read_metadata.
-            Typically it represents a row group in a Parquet dataset
-        columns: List[str]
-            List of column names to pull out of that row group
-        index: str, List[str], or False
-            The index name(s).
-        categories: list
-            Column(s) containing categorical data.
-        partitions: list
-            Construct directory-based partitioning by splitting on these fields'
-            values. Each dask partition will result in one or more datafiles,
-            there will be no global groupby.
-        **kwargs:
-            May include key-word arguments for `piece.read()`
-            (if stored under a top-level `"read"` key).
-
-        Returns
-        -------
-        A Pandas DataFrame
-        """
         if isinstance(index, list):
             columns += index
         with fs.open(piece.path, mode="rb") as f:
@@ -288,33 +216,6 @@ class ArrowEngine(Engine):
         division_info=None,
         **kwargs,
     ):
-        """Perform engine-specific initialization steps for this dataset
-
-        Parameters
-        ----------
-        df: dask.dataframe.DataFrame
-        fs: FileSystem
-        path : string
-            Destination directory for data.  Prepend with protocol like ``s3://``
-            or ``hdfs://`` for remote data.
-        append: bool
-            If True, may use existing metadata (if any) and perform checks
-            against the new data being stored.
-        partition_on: List(str)
-            Column(s) to use for dataset partitioning in parquet.
-        ignore_divisions: bool
-            Whether or not to ignore old divisions when appending.  Otherwise,
-            overlapping divisions will lead to an error being raised.
-        division_info: dict
-            Dictionary containing the divisions and corresponding column name.
-        **kwargs: Ignored
-
-        Returns
-        -------
-        fmd: None
-        i_offset: int
-            Initial offset to user for new-file labeling
-        """
         dataset = fmd = None
         i_offset = 0
         if append and division_info is None:
@@ -410,41 +311,9 @@ class ArrowEngine(Engine):
         return_metadata,
         fmd=None,
         compression=None,
-        index_cols=[],
+        index_cols=None,
         **kwargs,
     ):
-        """
-        Output a partition of a dask.DataFrame. This will correspond to
-        one output file, unless partition_on is set, in which case, it will
-        correspond to up to one file in each sub-directory.
-
-        Parameters
-        ----------
-        df: dask.dataframe.DataFrame
-        path: str
-            Destination directory for data.  Prepend with protocol like ``s3://``
-            or ``hdfs://`` for remote data.
-        fs: FileSystem
-        filename: str
-        partition_on: List(str)
-            Column(s) to use for dataset partitioning in parquet.
-        return_metadata : bool
-            Whether to return list of instances from this write, one for each
-            output file. These will be passed to write_metadata if an output
-            metadata file is requested.
-        fmd: Ignored
-        compression: str
-            Compression library to use.
-        index_cols: List(str)
-            Column name(s) to set as index.
-        **kwargs: dict
-            Keyword arguments to pass to `pyarrow` backend.
-
-        Returns
-        -------
-        List of metadata-containing instances (if `return_metadata` is `True`)
-        or empty list
-        """
         md_list = []
         preserve_index = False
         if index_cols:
@@ -477,28 +346,6 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
-        """
-        Write the shared metadata file for a parquet dataset.
-
-        Parameters
-        ----------
-        parts: List
-            Contains metadata objects to write, of the type undrestood by the
-            specific implementation
-        meta: non-chunk metadata
-            Details that do not depend on the specifics of each chunk write,
-            typically the schema and pandas metadata, in a format the writer
-            can use.
-        fs: FileSystem
-        path: str
-            Output file to write to, usually ``"_metadata"`` in the root of
-            the output dataset
-        append: boolean
-            Whether or not to consolidate new metadata with existing (True)
-            or start from scratch (False)
-        **kwargs: dict
-            Artguments (selectively) passed on to `pyarrow` backend.
-        """
         if parts:
             if not append:
                 # Get only arguments specified in the function
