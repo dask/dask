@@ -4,14 +4,22 @@ from distutils.version import LooseVersion
 
 import toolz
 import warnings
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_storage_options, stringify_path
 
 from ...core import DataFrame, new_dd_object
-from ....bytes.compression import compress
 from ....base import tokenize
 from ....compatibility import PY3, string_types
-from ....bytes.core import get_fs_token_paths
-from ....bytes.utils import infer_storage_options
 from ....utils import import_required, natural_sort_key
+
+
+try:
+    import snappy
+
+    snappy.compress
+except (ImportError, AttributeError):
+    snappy = None
+
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -123,6 +131,8 @@ def read_parquet(
     if isinstance(engine, str):
         engine = get_engine(engine)
 
+    if hasattr(path, "name"):
+        path = stringify_path(path)
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
@@ -372,12 +382,14 @@ def to_parquet(
 
     if compression != "default":
         kwargs["compression"] = compression
-    elif "snappy" in compress:
+    elif snappy is not None:
         kwargs["compression"] = "snappy"
 
     if isinstance(engine, str):
         engine = get_engine(engine)
 
+    if hasattr(path, "name"):
+        path = stringify_path(path)
     fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
     # Trim any protocol information from the path before forwarding
     # ideally, this should be done as a method of the file-system

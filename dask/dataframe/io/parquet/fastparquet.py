@@ -1,3 +1,5 @@
+from distutils.version import LooseVersion
+
 from collections import OrderedDict
 import copy
 import json
@@ -264,7 +266,7 @@ class FastParquetEngine(Engine):
     ):
         if append and division_info is None:
             ignore_divisions = True
-        fs.mkdirs(path)
+        fs.mkdirs(path, exist_ok=True)
         object_encoding = kwargs.pop("object_encoding", "utf8")
         index_cols = kwargs.pop("index_cols", [])
         if object_encoding == "infer" or (
@@ -348,9 +350,23 @@ class FastParquetEngine(Engine):
             # Write nothing for empty partitions
             rgs = []
         elif partition_on:
-            rgs = partition_on_columns(
-                df, partition_on, path, filename, fmd, compression, fs.open, fs.mkdirs
-            )
+            mkdirs = lambda x: fs.mkdirs(x, exist_ok=True)
+            if LooseVersion(fastparquet.__version__) >= "0.1.4":
+                rgs = partition_on_columns(
+                    df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
+                )
+            else:
+                rgs = partition_on_columns(
+                    df,
+                    partition_on,
+                    path,
+                    filename,
+                    fmd,
+                    fs.sep,
+                    compression,
+                    fs.open,
+                    mkdirs,
+                )
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                 fmd.num_rows = len(df)

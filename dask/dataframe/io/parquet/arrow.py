@@ -3,7 +3,6 @@ import json
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from ....bytes.core import get_pyarrow_filesystem
 from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
@@ -39,9 +38,7 @@ class ArrowEngine(Engine):
         filters=None,
         **kwargs,
     ):
-        dataset = pq.ParquetDataset(
-            paths, filesystem=get_pyarrow_filesystem(fs), **kwargs.get("dataset", {})
-        )
+        dataset = pq.ParquetDataset(paths, filesystem=fs, **kwargs.get("dataset", {}))
 
         if dataset.partitions is not None:
             partitions = [
@@ -215,14 +212,14 @@ class ArrowEngine(Engine):
         i_offset = 0
         if append and division_info is None:
             ignore_divisions = True
-        fs.mkdirs(path)
+        fs.mkdirs(path, exist_ok=True)
 
         if append:
             try:
                 # Allow append if the dataset exists.
                 # Also need dataset.metadata object if
                 # ignore_divisions is False (to check divisions)
-                dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
+                dataset = pq.ParquetDataset(path, filesystem=fs)
                 if not dataset.metadata and not ignore_divisions:
                     # TODO: Be more flexible about existing metadata.
                     raise NotImplementedError(
