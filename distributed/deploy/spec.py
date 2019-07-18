@@ -5,7 +5,7 @@ import weakref
 from tornado import gen
 
 from .cluster import Cluster
-from ..core import rpc
+from ..core import rpc, CommClosedError
 from ..utils import LoopRunner, silence_logging, ignoring
 from ..scheduler import Scheduler
 from ..security import Security
@@ -113,14 +113,6 @@ class SpecCluster(Cluster):
         silence_logs=False,
     ):
         self._created = weakref.WeakSet()
-        if scheduler is None:
-            try:
-                from distributed.dashboard import BokehScheduler
-            except ImportError:
-                services = {}
-            else:
-                services = {("dashboard", 8787): BokehScheduler}
-            scheduler = {"cls": Scheduler, "options": {"services": services}}
 
         self.scheduler_spec = scheduler
         self.worker_spec = workers or {}
@@ -137,9 +129,6 @@ class SpecCluster(Cluster):
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
-        self.scheduler = self.scheduler_spec["cls"](
-            loop=self.loop, **self.scheduler_spec["options"]
-        )
         self.status = "created"
         self._instances.add(self)
         self._correct_state_waiting = None
@@ -157,6 +146,18 @@ class SpecCluster(Cluster):
             return
         if self.status == "closed":
             raise ValueError("Cluster is closed")
+
+        if self.scheduler_spec is None:
+            try:
+                from distributed.dashboard import BokehScheduler
+            except ImportError:
+                services = {}
+            else:
+                services = {("dashboard", 8787): BokehScheduler}
+            self.scheduler_spec = {"cls": Scheduler, "options": {"services": services}}
+        self.scheduler = self.scheduler_spec["cls"](
+            loop=self.loop, **self.scheduler_spec["options"]
+        )
 
         self._lock = asyncio.Lock()
         self.status = "starting"
@@ -253,7 +254,8 @@ class SpecCluster(Cluster):
         self.scale(0)
         await self._correct_state()
         async with self._lock:
-            await self.scheduler_comm.close(close_workers=True)
+            with ignoring(CommClosedError):
+                await self.scheduler_comm.close(close_workers=True)
         await self.scheduler.close()
         for w in self._created:
             assert w.status == "closed"
