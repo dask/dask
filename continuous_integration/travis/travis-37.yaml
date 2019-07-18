@@ -26,6 +26,7 @@ dependencies:
   - bokeh
   - httpretty
   - chest
+  - s3fs
   - cloudpickle
   - crick
   - cytoolz
@@ -51,5 +52,3 @@ dependencies:
       - cityhash
       - mmh3
       - xxhash
-      - git+https://github.com/dask/s3fs
-      - git+https://github.com/intake/filesystem_spec

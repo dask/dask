@@ -18,6 +18,7 @@ dependencies:
   - psutil
   - pytables
   - fsspec
+  - s3fs
   - scipy
   - fastparquet
   - python-snappy
@@ -29,6 +30,3 @@ dependencies:
   - sparse
   - blosc
   - moto
-  - pip:
-    - git+https://github.com/intake/filesystem_spec
-    - git+https://github.com/dask/s3fs
