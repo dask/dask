@@ -643,15 +643,18 @@ def test_read_text_encoding():
 
 def test_read_text_large_gzip():
     with tmpfile("gz") as fn:
+        data = b"Hello, world!\n" * 100
         f = GzipFile(fn, "wb")
-        f.write(b"Hello, world!\n" * 100)
+        f.write(data)
         f.close()
 
         with pytest.raises(ValueError):
+            # not allowed blocks when compressed
             db.read_text(fn, blocksize=50, linedelimiter="\n")
 
-        c = db.read_text(fn)
+        c = db.read_text(fn, blocksize=None)
         assert c.npartitions == 1
+        assert "".join(c.compute()) == data.decode()
 
 
 @pytest.mark.slow
@@ -1382,7 +1385,10 @@ def test_empty_bag():
 
 def test_bag_paths():
     b = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    assert b.to_textfiles("foo*") == ["foo0", "foo1"]
+    paths = b.to_textfiles("foo*")
+    assert paths[0].endswith("foo0")
+    assert paths[1].endswith("foo1")
+
     os.remove("foo0")
     os.remove("foo1")
 

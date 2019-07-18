@@ -16,6 +16,7 @@ dependencies:
   - h5py
   - pytables
   - zarr
+  - fsspec
   - tiledb-py
   - sqlalchemy
   - pyarrow

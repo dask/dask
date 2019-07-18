@@ -9,15 +9,14 @@ from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_storage_options
 
 from ..core import DataFrame, Series
 from ..utils import clear_known_categories, strip_unknown_categories, UNKNOWN_CATEGORIES
-from ...bytes.compression import compress
 from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
-from ...bytes.core import get_fs_token_paths
-from ...bytes.utils import infer_storage_options
 from ...utils import import_required, natural_sort_key
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
@@ -644,9 +643,10 @@ def _write_partition_fastparquet(
         # Write nothing for empty partitions
         rgs = None
     elif partition_on:
+        mkdirs = lambda x: fs.mkdirs(x, exist_ok=True)
         if LooseVersion(fastparquet.__version__) >= "0.1.4":
             rgs = partition_on_columns(
-                df, partition_on, path, filename, fmd, compression, fs.open, fs.mkdirs
+                df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
             )
         else:
             rgs = partition_on_columns(
@@ -658,7 +658,7 @@ def _write_partition_fastparquet(
                 fs.sep,
                 compression,
                 fs.open,
-                fs.mkdirs,
+                mkdirs,
             )
     else:
         # Fastparquet current doesn't properly set `num_rows` in the output
@@ -683,7 +683,7 @@ def _write_fastparquet(
 ):
     import fastparquet
 
-    fs.mkdirs(path)
+    fs.mkdirs(path, exist_ok=True)
     sep = fs.sep
 
     object_encoding = kwargs.pop("object_encoding", "utf8")
@@ -805,7 +805,6 @@ def _read_pyarrow(
     index=None,
     infer_divisions=None,
 ):
-    from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
 
     # In pyarrow, the physical storage field names may differ from
@@ -824,9 +823,7 @@ def _read_pyarrow(
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    dataset = pq.ParquetDataset(
-        paths, filesystem=get_pyarrow_filesystem(fs), filters=filters
-    )
+    dataset = pq.ParquetDataset(paths, filesystem=fs, filters=filters)
     if dataset.partitions is not None:
         partitions = [n for n in dataset.partitions.partition_names if n is not None]
     else:
@@ -1161,7 +1158,7 @@ def _write_pyarrow(
     if write_index is None and df.known_divisions:
         write_index = True
 
-    fs.mkdirs(path)
+    fs.mkdirs(path, exist_ok=True)
 
     template = fs.sep.join([path, "part.%i.parquet"])
 
@@ -1398,6 +1395,14 @@ def read_parquet(
     )
 
 
+try:
+    import snappy
+
+    snappy.compress
+except (ImportError, AttributeError):
+    snappy = None
+
+
 def to_parquet(
     df,
     path,
@@ -1469,7 +1474,7 @@ def to_parquet(
 
     if compression != "default":
         kwargs["compression"] = compression
-    elif "snappy" in compress:
+    elif snappy is not None:
         kwargs["compression"] = "snappy"
 
     write = get_engine(engine)["write"]
@@ -1477,6 +1482,7 @@ def to_parquet(
     fs, fs_token, _ = get_fs_token_paths(
         path, mode="wb", storage_options=storage_options
     )
+    fs.mkdirs(path, exist_ok=True)
     # Trim any protocol information from the path before forwarding
     path = infer_storage_options(path)["path"]
 

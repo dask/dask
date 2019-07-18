@@ -23,6 +23,7 @@ dependencies:
   - bcolz
   - blosc
   - s3fs
+  - fsspec
   - boto3
   - botocore
   - bokeh

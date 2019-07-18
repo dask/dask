@@ -19,7 +19,9 @@ from pandas.api.types import (
 )
 
 from ...bytes import read_bytes, open_files
-from ...bytes.compression import seekable_files, files as cfiles
+
+# from ...bytes.compression import seekable_files, files as cfiles
+from fsspec.compression import compr
 from ...compatibility import PY2, PY3, Mapping, unicode
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
@@ -377,7 +379,8 @@ def read_pandas(
 
     if isinstance(blocksize, (str, unicode)):
         blocksize = parse_bytes(blocksize)
-    if blocksize and compression not in seekable_files:
+    if blocksize and compression:
+        # NONE of the compressions should use chunking
         warn(
             "Warning %s compression does not support breaking apart files\n"
             "Please ensure that each individual file can fit in memory and\n"
@@ -385,7 +388,7 @@ def read_pandas(
             "Setting ``blocksize=None``" % compression
         )
         blocksize = None
-    if compression not in seekable_files and compression not in cfiles:
+    if compression not in compr:
         raise NotImplementedError("Compression format %s not installed" % compression)
     if blocksize and sample and blocksize < sample and lastskiprow != 0:
         warn(
