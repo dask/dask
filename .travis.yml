@@ -19,6 +19,7 @@ matrix:
 
 install:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/install.sh ; fi
+  - if [[ $TESTS == true ]]; then source continuous_integration/travis/setup-ssh.sh ; fi
 
 script:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/run_tests.sh ; fi

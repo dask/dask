@@ -200,6 +200,7 @@ class LocalCluster(SpecCluster):
             loop=loop,
             asynchronous=asynchronous,
             silence_logs=silence_logs,
+            security=security,
         )
 
     def __repr__(self):

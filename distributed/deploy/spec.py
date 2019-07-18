@@ -5,8 +5,10 @@ import weakref
 from tornado import gen
 
 from .cluster import Cluster
+from ..core import rpc
 from ..utils import LoopRunner, silence_logging, ignoring
 from ..scheduler import Scheduler
+from ..security import Security
 
 
 class SpecCluster(Cluster):
@@ -107,6 +109,7 @@ class SpecCluster(Cluster):
         worker=None,
         asynchronous=False,
         loop=None,
+        security=None,
         silence_logs=False,
     ):
         self._created = weakref.WeakSet()
@@ -125,6 +128,8 @@ class SpecCluster(Cluster):
         self.workers = {}
         self._i = 0
         self._asynchronous = asynchronous
+        self.security = security or Security()
+        self.scheduler_comm = None
 
         if silence_logs:
             self._old_logging_level = silence_logging(level=silence_logs)
@@ -156,6 +161,10 @@ class SpecCluster(Cluster):
         self._lock = asyncio.Lock()
         self.status = "starting"
         self.scheduler = await self.scheduler
+        self.scheduler_comm = rpc(
+            self.scheduler.address,
+            connection_args=self.security.get_connection_args("client"),
+        )
         self.status = "running"
 
     def _correct_state(self):
@@ -174,11 +183,13 @@ class SpecCluster(Cluster):
             pre = list(set(self.workers))
             to_close = set(self.workers) - set(self.worker_spec)
             if to_close:
-                await self.scheduler.retire_workers(workers=list(to_close))
+                if self.scheduler.status == "running":
+                    await self.scheduler_comm.retire_workers(workers=list(to_close))
                 tasks = [self.workers[w].close() for w in to_close]
                 await asyncio.wait(tasks)
                 for task in tasks:  # for tornado gen.coroutine support
-                    await task
+                    with ignoring(RuntimeError):
+                        await task
             for name in to_close:
                 del self.workers[name]
 
@@ -214,11 +225,10 @@ class SpecCluster(Cluster):
         return _().__await__()
 
     async def _wait_for_workers(self):
-        # TODO: this function needs to query scheduler and worker state
-        # remotely without assuming that they are local
-        while {d["name"] for d in self.scheduler.identity()["workers"].values()} != set(
-            self.workers
-        ):
+        while {
+            str(d["name"])
+            for d in (await self.scheduler_comm.identity())["workers"].values()
+        } != set(map(str, self.workers)):
             if (
                 any(w.status == "closed" for w in self.workers.values())
                 and self.scheduler.status == "running"
@@ -240,12 +250,14 @@ class SpecCluster(Cluster):
             return
         self.status = "closing"
 
-        async with self._lock:
-            await self.scheduler.close(close_workers=True)
         self.scale(0)
         await self._correct_state()
+        async with self._lock:
+            await self.scheduler_comm.close(close_workers=True)
+        await self.scheduler.close()
         for w in self._created:
             assert w.status == "closed"
+        self.scheduler_comm.close_rpc()
 
         if hasattr(self, "_old_logging_level"):
             silence_logging(self._old_logging_level)
