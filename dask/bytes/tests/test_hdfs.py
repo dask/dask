@@ -8,7 +8,7 @@ import pytest
 from toolz import concat
 
 import dask
-from dask.bytes.core import read_bytes, open_files, get_fs
+from dask.bytes.core import read_bytes, open_files
 from dask.compatibility import unicode, PY2
 
 
@@ -75,26 +75,6 @@ def hdfs(request):
 # This mark doesn't check the minimum pyarrow version.
 require_pyarrow = pytest.mark.skipif(not pyarrow, reason="pyarrow not installed")
 require_hdfs3 = pytest.mark.skipif(not hdfs3, reason="hdfs3 not installed")
-
-
-@require_pyarrow
-@require_hdfs3
-def test_fs_driver_backends():
-    from dask.bytes.hdfs3 import HDFS3HadoopFileSystem
-    from dask.bytes.pyarrow import PyArrowHadoopFileSystem
-
-    fs1, token1 = get_fs("hdfs")
-    assert isinstance(fs1, PyArrowHadoopFileSystem)
-
-    with dask.config.set(hdfs_driver="hdfs3"):
-        fs2, token2 = get_fs("hdfs")
-    assert isinstance(fs2, HDFS3HadoopFileSystem)
-
-    assert token1 != token2
-
-    with pytest.raises(ValueError):
-        with dask.config.set(hdfs_driver="not-a-valid-driver"):
-            get_fs("hdfs")
 
 
 def test_read_bytes(hdfs):
