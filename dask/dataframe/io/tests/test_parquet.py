@@ -1699,3 +1699,17 @@ def test_pyarrow_metadata_nthreads(tmpdir):
     ops = {"dataset": {"metadata_nthreads": 2}}
     ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", **ops)
     assert_eq(ddf, ddf2)
+
+
+def test_categories_large(tmpdir, engine):
+    # Issue #5112
+    check_fastparquet()
+    fn = str(tmpdir.join("parquet_int16.parq"))
+    numbers = np.random.randint(0, 800000, size=1000000)
+    df = pd.DataFrame(numbers.T, columns=["name"])
+    df.name = df.name.astype("category")
+
+    df.to_parquet(fn, engine="fastparquet", compression="uncompressed")
+    ddf = dd.read_parquet(fn, engine=engine, categories={"name": 80000})
+
+    assert_eq(sorted(df.name.cat.categories), sorted(ddf.compute().name.cat.categories))

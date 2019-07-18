@@ -159,6 +159,10 @@ class FastParquetEngine(Engine):
 
         all_columns = index_names + column_names
 
+        categories_dict = None
+        if isinstance(categories, dict):
+            categories_dict = categories
+
         if categories is None:
             categories = pf.categories
         elif isinstance(categories, string_types):
@@ -231,7 +235,10 @@ class FastParquetEngine(Engine):
 
         # Create `parts` (list of row-group-descriptor dicts)
         parts = [
-            {"piece": rg, "kwargs": {"pf": pf, "categories": categories}}
+            {
+                "piece": rg,
+                "kwargs": {"pf": pf, "categories": categories_dict or categories},
+            }
             for rg in pf.row_groups
         ]
 
