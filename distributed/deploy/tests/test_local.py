@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 import pytest
 
-from distributed import Client, Worker, Nanny
+from distributed import Client, Worker, Nanny, get_client
 from distributed.deploy.local import LocalCluster, nprocesses_nthreads
 from distributed.metrics import time
 from distributed.utils_test import (
@@ -831,3 +831,26 @@ def test_starts_up_sync(loop):
         assert len(cluster.scheduler.workers) == 2
     finally:
         cluster.close()
+
+
+def test_dont_select_closed_worker():
+    # Make sure distributed does not try to reuse a client from a
+    # closed cluster (https://github.com/dask/distributed/issues/2840).
+    with clean(threads=False):
+        cluster = LocalCluster(n_workers=0)
+        c = Client(cluster)
+        cluster.scale(2)
+        assert c == get_client()
+
+        c.close()
+        cluster.close()
+
+        cluster2 = LocalCluster(n_workers=0)
+        c2 = Client(cluster2)
+        cluster2.scale(2)
+
+        current_client = get_client()
+        assert c2 == current_client
+
+        cluster2.close()
+        c2.close()
