@@ -4,9 +4,16 @@ import warnings
 import pytest
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64_ns_dtype
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, make_meta, HAS_INT_NA
+from dask.dataframe.utils import (
+    assert_eq,
+    assert_dask_graph,
+    make_meta,
+    HAS_INT_NA,
+    PANDAS_GT_0250,
+)
 
 
 @pytest.mark.slow
@@ -603,7 +610,9 @@ def test_frame_series_arithmetic_methods():
 
             assert_eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
             assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
-            assert_eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
+            if not PANDAS_GT_0250:
+                # https://github.com/pandas-dev/pandas/issues/27464
+                assert_eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
             assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
             assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
 
@@ -628,7 +637,9 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.rmul(r, axis=0), el.rmul(er, axis=0))
         assert_eq(l.rdiv(r, axis=0), el.rdiv(er, axis=0))
         assert_eq(l.rtruediv(r, axis=0), el.rtruediv(er, axis=0))
-        assert_eq(l.rfloordiv(r, axis=0), el.rfloordiv(er, axis=0))
+        if not PANDAS_GT_0250:
+            # https://github.com/pandas-dev/pandas/issues/27464
+            assert_eq(l.rfloordiv(r, axis=0), el.rfloordiv(er, axis=0))
         assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
         assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
 
@@ -653,7 +664,9 @@ def test_frame_series_arithmetic_methods():
                 assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
                 assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
                 assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
-                assert_eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
+                if not PANDAS_GT_0250:
+                    # https://github.com/pandas-dev/pandas/issues/27464
+                    assert_eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
                 assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
                 assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
 
@@ -789,7 +802,11 @@ def test_reductions_timedelta(split_every):
     with pytest.warns(None):
         # runtime warnings; https://github.com/dask/dask/issues/2381
         assert_eq(dds.var(split_every=split_every), ds.var())
-        assert_eq(dds.var(split_every=split_every, skipna=False), ds.var(skipna=False))
+        if not PANDAS_GT_0250:
+            # https://github.com/pandas-dev/pandas/issues/18880
+            assert_eq(
+                dds.var(split_every=split_every, skipna=False), ds.var(skipna=False)
+            )
 
     assert_eq(dds.var(ddof=0, split_every=split_every), ds.var(ddof=0))
 
@@ -977,7 +994,9 @@ def test_reductions_non_numeric_dtypes():
     check_raises(dds, pds, "std")
     check_raises(dds, pds, "var")
     check_raises(dds, pds, "sem")
-    check_raises(dds, pds, "mean")
+    if not PANDAS_GT_0250:
+        # pandas 0.25 added DatetimeIndex.mean. We need to follow.
+        check_raises(dds, pds, "mean")
     assert_eq(dds.nunique(), pds.nunique())
 
     for pds in [
@@ -995,7 +1014,9 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, "std")
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
-        check_raises(dds, pds, "mean")
+        if not (PANDAS_GT_0250 and is_datetime64_ns_dtype(pds.dtype)):
+            # pandas 0.25 added DatetimeIndex.mean. We need to follow
+            check_raises(dds, pds, "mean")
         assert_eq(dds.nunique(), pds.nunique())
 
     pds = pd.Series(pd.timedelta_range("1 days", freq="D", periods=5))
@@ -1115,7 +1136,10 @@ def test_reductions_frame_dtypes():
     )
 
     if HAS_INT_NA:
-        df["intna"] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
+        if not PANDAS_GT_0250:
+            # Pandas master is returning NA for IntegerNA.sum() when mixed with other dtypes.
+            # https://github.com/pandas-dev/pandas/issues/27185
+            df["intna"] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
 
     ddf = dd.from_pandas(df, 3)
 
@@ -1130,12 +1154,26 @@ def test_reductions_frame_dtypes():
     assert_eq(df.count(), ddf.count())
     assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
     assert_eq(df.var(), ddf.var())
-    assert_eq(df.var(skipna=False), ddf.var(skipna=False))
+    if PANDAS_GT_0250:
+        # https://github.com/pandas-dev/pandas/issues/18880
+        assert_eq(
+            df.drop("timedelta", axis=1).var(skipna=False),
+            ddf.drop("timedelta", axis=1).var(skipna=False),
+        )
+    else:
+        assert_eq(df.var(skipna=False), ddf.var(skipna=False))
 
     assert_eq(df.sem(), ddf.sem())
     assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    assert_eq(df.var(ddof=0), ddf.var(ddof=0))
-    assert_eq(df.var(ddof=0, skipna=False), ddf.var(ddof=0, skipna=False))
+    if PANDAS_GT_0250:
+        # https://github.com/pandas-dev/pandas/issues/18880
+        df2 = df.drop("timedelta", axis=1)
+        ddf2 = ddf.drop("timedelta", axis=1)
+        assert_eq(df2.var(ddof=0), ddf2.var(ddof=0))
+        assert_eq(df2.var(ddof=0, skipna=False), ddf2.var(ddof=0, skipna=False))
+    else:
+        assert_eq(df.var(ddof=0), ddf.var(ddof=0))
+        assert_eq(df.var(ddof=0, skipna=False), ddf.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
 
     assert_eq(df_no_timedelta.mean(), ddf_no_timedelta.mean())

@@ -1,8 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
 import io
-import sys
 import os
+import sys
 from contextlib import contextmanager
 from distutils.version import LooseVersion
 
@@ -17,9 +17,10 @@ httpretty = pytest.importorskip("httpretty")
 from toolz import concat, valmap, partial
 
 from dask import compute
-from dask.bytes.s3 import DaskS3FileSystem
-from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
-from dask.bytes.compression import compress, files as compress_files, seekable_files
+from dask.bytes.core import read_bytes, open_files
+from s3fs import S3FileSystem as DaskS3FileSystem
+from dask.bytes.utils import compress
+from fsspec.compression import compr
 
 
 compute = partial(compute, scheduler="sync")
@@ -73,7 +74,9 @@ def s3():
             client.create_bucket(Bucket=test_bucket_name, ACL="public-read-write")
             for f, data in files.items():
                 client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-            yield s3fs.S3FileSystem(anon=True)
+            fs = s3fs.S3FileSystem(anon=True)
+            fs.invalidate_cache
+            yield fs
 
             httpretty.HTTPretty.disable()
             httpretty.HTTPretty.reset()
@@ -93,7 +96,9 @@ def s3_context(bucket, files):
             for f, data in files.items():
                 client.put_object(Bucket=bucket, Key=f, Body=data)
 
-            yield DaskS3FileSystem(anon=True)
+            fs = DaskS3FileSystem(anon=True)
+            fs.invalidate_cache()
+            yield fs
 
             for f, data in files.items():
                 try:
@@ -328,11 +333,21 @@ def test_read_bytes_delimited(s3, blocksize):
 
 
 @pytest.mark.parametrize(
-    "fmt,blocksize",
-    [(fmt, None) for fmt in compress_files] + [(fmt, 10) for fmt in seekable_files],
+    "fmt,blocksize", [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 )
 def test_compression(s3, fmt, blocksize):
+    if fmt == "zip" and sys.version_info.minor == 5:
+        pytest.skip("zipfile is read-only on py35")
+    s3._cache.clear()
     with s3_context("compress", valmap(compress[fmt], files)):
+        if fmt and blocksize:
+            with pytest.raises(ValueError):
+                read_bytes(
+                    "s3://compress/test/accounts.*",
+                    compression=fmt,
+                    blocksize=blocksize,
+                )
+            return
         sample, values = read_bytes(
             "s3://compress/test/accounts.*", compression=fmt, blocksize=blocksize
         )
@@ -359,37 +374,23 @@ double = lambda x: x * 2
 
 def test_modification_time_read_bytes():
     with s3_context("compress", files):
-        _, a = read_bytes("s3://compress/test/accounts.*")
-        _, b = read_bytes("s3://compress/test/accounts.*")
+        _, a = read_bytes("s3://compress/test/accounts.*", anon=True)
+        _, b = read_bytes("s3://compress/test/accounts.*", anon=True)
 
         assert [aa._key for aa in concat(a)] == [bb._key for bb in concat(b)]
 
     with s3_context("compress", valmap(double, files)):
-        _, c = read_bytes("s3://compress/test/accounts.*")
+        _, c = read_bytes("s3://compress/test/accounts.*", anon=True)
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
-
-
-def test_read_csv_passes_through_options():
-    dd = pytest.importorskip("dask.dataframe")
-    with s3_context("csv", {"a.csv": b"a,b\n1,2\n3,4"}) as s3:
-        df = dd.read_csv("s3://csv/*.csv", storage_options={"s3": s3})
-        assert df.a.sum().compute() == 1 + 3
-
-
-def test_read_text_passes_through_options():
-    db = pytest.importorskip("dask.bag")
-    with s3_context("csv", {"a.csv": b"a,b\n1,2\n3,4"}) as s3:
-        df = db.read_text("s3://csv/*.csv", storage_options={"s3": s3})
-        assert df.count().compute(scheduler="sync") == 3
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     lib = pytest.importorskip(engine)
-    if engine == "pyarrow" and LooseVersion(lib.__version__) == "0.13.0":
-        pytest.skip("pyarrow 0.13.0 not supported for parquet")
+    if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
+        pytest.skip("pyarrow < 0.13.1 not supported for parquet")
     import pandas as pd
     import numpy as np
 
@@ -443,15 +444,7 @@ def test_parquet_wstoragepars(s3):
         assert f.blocksize == 2 ** 20
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="pathlib and moto clash on windows")
-def test_pathlib_s3(s3):
-    pathlib = pytest.importorskip("pathlib")
-    with pytest.raises(ValueError):
-        url = pathlib.Path("s3://bucket/test.accounts.*")
-        sample, values = read_bytes(url, blocksize=None)
-
-
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
     fs = DaskS3FileSystem(anon=True)
-    assert isinstance(get_pyarrow_filesystem(fs), pa.filesystem.S3FSWrapper)
+    assert isinstance(fs, pa.filesystem.FileSystem)
