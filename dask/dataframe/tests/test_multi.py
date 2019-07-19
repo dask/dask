@@ -1714,6 +1714,17 @@ def test_concat_categorical(known, cat_index, divisions):
         assert has_known_categories(res.y) == known
 
 
+def test_concat_categorical_mixed_simple():
+    a = pd.Series(["a", "b", "c"], dtype="category")
+    b = pd.Series(["a", "b"], dtype="category")
+    da = dd.from_pandas(a, 2).cat.as_unknown().to_frame("A")
+    db = dd.from_pandas(b, 2).to_frame("A")
+
+    expected = concat([a.to_frame("A"), b.to_frame("A")])
+    result = dd.concat([da, db])
+    assert_eq(result, expected)
+
+
 def test_concat_datetimeindex():
     # https://github.com/dask/dask/issues/2932
     b2 = pd.DataFrame(

@@ -10,6 +10,7 @@ import numpy as np
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
+from dask.array.numpy_compat import _numpy_117
 
 
 _BASE_UFUNCS = [
@@ -145,7 +146,20 @@ def test_ufunc(pandas_input, ufunc):
 
 @pytest.mark.parametrize(
     "ufunc",
-    ["isreal", "iscomplex", "real", "imag", "angle", "fix", "i0", "sinc", "nan_to_num"],
+    [
+        pytest.param(
+            "isreal", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
+        ),
+        "iscomplex",
+        pytest.param("real", marks=pytest.mark.filterwarnings("ignore::FutureWarning")),
+        pytest.param("imag", marks=pytest.mark.filterwarnings("ignore::FutureWarning")),
+        "angle",
+        "fix",
+        # Possible NumPy / pandas bug: https://github.com/numpy/numpy/issues/13894
+        pytest.param("i0", marks=pytest.mark.xfail(_numpy_117, reason="NumPy-13894")),
+        "sinc",
+        "nan_to_num",
+    ],
 )
 def test_ufunc_array_wrap(ufunc):
     """
