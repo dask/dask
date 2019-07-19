@@ -8,10 +8,11 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-  'array': ['numpy >= 1.13.0', 'toolz >= 0.7.3'],
-  'bag': ['cloudpickle >= 0.2.1', 'toolz >= 0.7.3', 'partd >= 0.3.10'],
+  'array': ['fsspec >= 0.3.3', 'numpy >= 1.13.0', 'toolz >= 0.7.3'],
+  'bag': ['fsspec >= 0.3.3', 'cloudpickle >= 0.2.1', 'toolz >= 0.7.3',
+          'partd >= 0.3.10'],
   'dataframe': ['numpy >= 1.13.0', 'pandas >= 0.21.0', 'toolz >= 0.7.3',
-                'partd >= 0.3.10', 'cloudpickle >= 0.2.1'],
+                'partd >= 0.3.10', 'cloudpickle >= 0.2.1', 'fsspec >= 0.3.3'],
   'distributed': ['distributed >= 2.0'],
   'diagnostics': ['bokeh >= 1.0.0'],
   'delayed': ['toolz >= 0.7.3'],
@@ -48,7 +49,7 @@ setup(name='dask',
       packages=packages + tests,
       long_description=open('README.rst').read() if exists('README.rst') else '',
       python_requires=">=3.5",
-      install_requires=['fsspec'],
+      install_requires=[],
       setup_requires=setup_requires,
       tests_require=['pytest'],
       extras_require=extras_require,
