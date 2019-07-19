@@ -22,3 +22,13 @@ try:
     from .parquet import read_parquet, to_parquet
 except ImportError:
     pass
+
+try:
+    from .parquet import ArrowEngine
+except ImportError:
+    pass
+
+try:
+    from .parquet import FastParquetEngine
+except ImportError:
+    pass
