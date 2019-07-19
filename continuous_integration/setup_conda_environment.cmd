@@ -40,6 +40,7 @@ call deactivate
     tblib ^
     tornado=5 ^
     zict ^
+    fsspec ^
     -c conda-forge
 
 call activate %CONDA_ENV%
