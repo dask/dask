@@ -595,6 +595,7 @@ def test_frame_series_arithmetic_methods():
             # pandas-26793
             warnings.simplefilter("ignore", RuntimeWarning)
             assert_eq(l.div(r, fill_value=0), el.div(er, fill_value=0))
+            assert_eq(l.divide(r, fill_value=0), el.divide(er, fill_value=0))
             assert_eq(l.truediv(r, fill_value=0), el.truediv(er, fill_value=0))
             assert_eq(l.floordiv(r, fill_value=1), el.floordiv(er, fill_value=1))
             assert_eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0))
@@ -625,6 +626,7 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.sub(r, axis=0), el.sub(er, axis=0))
         assert_eq(l.mul(r, axis=0), el.mul(er, axis=0))
         assert_eq(l.div(r, axis=0), el.div(er, axis=0))
+        assert_eq(l.divide(r, axis=0), el.divide(er, axis=0))
         assert_eq(l.truediv(r, axis=0), el.truediv(er, axis=0))
         assert_eq(l.floordiv(r, axis=0), el.floordiv(er, axis=0))
         assert_eq(l.mod(r, axis=0), el.mod(er, axis=0))
@@ -652,6 +654,7 @@ def test_frame_series_arithmetic_methods():
             assert_eq(l.sub(r, axis=axis), el.sub(er, axis=axis))
             assert_eq(l.mul(r, axis=axis), el.mul(er, axis=axis))
             assert_eq(l.div(r, axis=axis), el.div(er, axis=axis))
+            assert_eq(l.divide(r, axis=axis), el.divide(er, axis=axis))
             assert_eq(l.truediv(r, axis=axis), el.truediv(er, axis=axis))
             with warnings.catch_warnings():
                 # https://github.com/pandas-dev/pandas/issues/26793

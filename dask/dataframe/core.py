@@ -4252,6 +4252,7 @@ for name in [
     "sub",
     "mul",
     "div",
+    "divide",
     "truediv",
     "floordiv",
     "mod",
