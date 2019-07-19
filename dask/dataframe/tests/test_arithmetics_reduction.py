@@ -609,7 +609,9 @@ def test_frame_series_arithmetic_methods():
 
             assert_eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
             assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
-            assert_eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
+            if not PANDAS_GT_0250:
+                # https://github.com/pandas-dev/pandas/issues/27464
+                assert_eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
             assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
             assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
 
@@ -633,7 +635,9 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.rmul(r, axis=0), el.rmul(er, axis=0))
         assert_eq(l.rdiv(r, axis=0), el.rdiv(er, axis=0))
         assert_eq(l.rtruediv(r, axis=0), el.rtruediv(er, axis=0))
-        assert_eq(l.rfloordiv(r, axis=0), el.rfloordiv(er, axis=0))
+        if not PANDAS_GT_0250:
+            # https://github.com/pandas-dev/pandas/issues/27464
+            assert_eq(l.rfloordiv(r, axis=0), el.rfloordiv(er, axis=0))
         assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
         assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
 
@@ -657,7 +661,9 @@ def test_frame_series_arithmetic_methods():
                 assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
                 assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
                 assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
-                assert_eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
+                if not PANDAS_GT_0250:
+                    # https://github.com/pandas-dev/pandas/issues/27464
+                    assert_eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
                 assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
                 assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
 
