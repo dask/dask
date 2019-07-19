@@ -1012,6 +1012,7 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
         if not (PANDAS_GT_0250 and is_datetime64_ns_dtype(pds.dtype)):
+            # pandas 0.25 added DatetimeIndex.mean. We need to follow
             check_raises(dds, pds, "mean")
         assert_eq(dds.nunique(), pds.nunique())
 
