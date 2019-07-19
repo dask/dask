@@ -5121,7 +5121,8 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
+            # Use .values to get the ndarray for the ufunc.
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx].values, mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
