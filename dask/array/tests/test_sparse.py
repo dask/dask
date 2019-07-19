@@ -15,6 +15,8 @@ if sparse:
     # searchsorted() got an unexpected keyword argument 'side'
     pytest.importorskip("numba", minversion="0.40.0")
 
+xfail_sparse_np117 = pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
+
 
 functions = [
     lambda x: x,
@@ -24,14 +26,14 @@ functions = [
     lambda x: x ** 2,
     lambda x: x + x,
     lambda x: x * x,
-    lambda x: x[0],
-    lambda x: x[:, 1],
-    lambda x: x[:1, None, 1:3],
+    pytest.param(lambda x: x[0], marks=xfail_sparse_np117),
+    pytest.param(lambda x: x[:, 1], marks=xfail_sparse_np117),
+    pytest.param(lambda x: x[:1, None, 1:3], marks=xfail_sparse_np117),
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
-    lambda x: x.sum(),
-    lambda x: x.mean(),
-    lambda x: x.moment(order=0),
+    pytest.param(lambda x: x.sum(), marks=xfail_sparse_np117),
+    pytest.param(lambda x: x.mean(), marks=xfail_sparse_np117),
+    pytest.param(lambda x: x.moment(order=0), marks=xfail_sparse_np117),
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.xfail(
@@ -57,7 +59,7 @@ functions = [
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
-    lambda x: x.rechunk((2, 2, 1)),
+    pytest.param(lambda x: x.rechunk((2, 2, 1)), marks=xfail_sparse_np117),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
 ]
@@ -85,6 +87,7 @@ def test_basic(func):
     sparse.__version__ < "0.7.0+10",
     reason="fixed in https://github.com/pydata/sparse/pull/256",
 )
+@xfail_sparse_np117
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0
@@ -152,6 +155,7 @@ def test_mixed_output_type():
     assert zz.nnz == y.compute().nnz
 
 
+@xfail_sparse_np117
 def test_metadata():
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
@@ -184,6 +188,7 @@ def test_html_repr():
     assert "sparse" in text
 
 
+@xfail_sparse_np117
 def test_from_delayed_meta():
     def f():
         return sparse.COO.from_numpy(np.eye(3))
@@ -194,6 +199,7 @@ def test_from_delayed_meta():
     assert_eq(x, x)
 
 
+@xfail_sparse_np117
 def test_from_array():
     x = sparse.COO.from_numpy(np.eye(10))
     d = da.from_array(x, chunks=(5, 5))
