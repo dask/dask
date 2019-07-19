@@ -146,7 +146,7 @@ def describe_aggregate(values):
             if name not in names:
                 names.append(name)
 
-    return pd.concat(values, join_axes=[pd.Index(names)], axis=1)
+    return pd.concat(values, axis=1, **concat_kwargs).reindex(names)
 
 
 def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):

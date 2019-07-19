@@ -2183,9 +2183,9 @@ def test_select_dtypes(include, exclude):
     assert_eq(result, expected)
 
     # count dtypes
-    tm.assert_series_equal(a.get_dtype_counts(), df.get_dtype_counts())
+    tm.assert_series_equal(a.dtypes.value_counts(), df.dtypes.value_counts())
 
-    tm.assert_series_equal(result.get_dtype_counts(), expected.get_dtype_counts())
+    tm.assert_series_equal(result.dtypes.value_counts(), expected.dtypes.value_counts())
 
     if PANDAS_VERSION >= "0.23.0":
         ctx = pytest.warns(FutureWarning)
