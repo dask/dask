@@ -112,9 +112,6 @@ def test_read_chunked(block):
 
 @pytest.mark.parametrize("compression", [None, "gzip", "xz"])
 def test_json_compressed(compression):
-    if compression == "xz" and lzma is None:
-        pytest.skip("LZMA not available. Please install backports.lzma on Python 2.")
-
     with tmpdir() as path:
         dd.to_json(ddf, path, compression=compression)
         actual = dd.read_json(os.path.join(path, "*"), compression=compression)
