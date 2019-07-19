@@ -8,6 +8,7 @@ from warnings import warn
 
 import pandas as pd
 from toolz import merge
+from ...bytes import read_bytes  # noqa
 from fsspec.utils import build_name_function, stringify_path
 
 from .io import _link

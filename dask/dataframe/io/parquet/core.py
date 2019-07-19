@@ -4,6 +4,7 @@ from distutils.version import LooseVersion
 
 import toolz
 import warnings
+from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
