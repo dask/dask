@@ -390,7 +390,7 @@ def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     lib = pytest.importorskip(engine)
     if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
-        pytest.skip("pyarrow < 0.13.01 not supported for parquet")
+        pytest.skip("pyarrow < 0.13.1 not supported for parquet")
     import pandas as pd
     import numpy as np
 

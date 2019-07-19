@@ -5,7 +5,7 @@ from distutils.version import LooseVersion
 import toolz
 import warnings
 from fsspec.core import get_fs_token_paths
-from fsspec.utils import infer_storage_options, stringify_path
+from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
@@ -392,8 +392,7 @@ def to_parquet(
         path = stringify_path(path)
     fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
     # Trim any protocol information from the path before forwarding
-    # ideally, this should be done as a method of the file-system
-    path = infer_storage_options(path)["path"]
+    path = fs._strip_protocol(path)
 
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
