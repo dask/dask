@@ -10,6 +10,7 @@ import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
+from dask.array.numpy_compat import _numpy_117
 
 
 @pytest.mark.parametrize(
@@ -599,6 +600,9 @@ def test_tile_array_reps(shape, chunks, reps):
         da.tile(d, reps)
 
 
+skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061", strict=True)
+
+
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -608,9 +612,15 @@ def test_tile_array_reps(shape, chunks, reps):
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
-        ((10, 11), (4, 5), 0, "maximum", {"stat_length": 0}),
-        ((10, 11), (4, 5), 0, "mean", {"stat_length": 0}),
-        ((10, 11), (4, 5), 0, "minimum", {"stat_length": 0}),
+        pytest.param(
+            (10, 11), (4, 5), 0, "maximum", {"stat_length": 0}, marks=skip_stat_length
+        ),
+        pytest.param(
+            (10, 11), (4, 5), 0, "mean", {"stat_length": 0}, marks=skip_stat_length
+        ),
+        pytest.param(
+            (10, 11), (4, 5), 0, "minimum", {"stat_length": 0}, marks=skip_stat_length
+        ),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
