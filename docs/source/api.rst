@@ -167,6 +167,7 @@ Other
 .. autofunction:: distributed.get_client
 .. autofunction:: distributed.secede
 .. autofunction:: distributed.rejoin
+.. autoclass:: distributed.Reschedule
 .. autoclass:: get_task_stream
 
 .. autoclass:: Lock
