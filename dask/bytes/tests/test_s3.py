@@ -389,8 +389,8 @@ def test_modification_time_read_bytes():
 def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     lib = pytest.importorskip(engine)
-    if engine == "pyarrow" and LooseVersion(lib.__version__) == "0.13.0":
-        pytest.skip("pyarrow 0.13.0 not supported for parquet")
+    if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
+        pytest.skip("pyarrow < 0.13.1 not supported for parquet")
     import pandas as pd
     import numpy as np
 
