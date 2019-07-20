@@ -38,7 +38,8 @@ from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, parse_memory_limit
 from distributed.utils import tmpfile
-from distributed.utils_test import (
+from distributed.utils_test import (  # noqa: F401
+    cleanup,
     inc,
     mul,
     gen_cluster,
@@ -370,12 +371,10 @@ def test_gather(s, a, b):
 
 
 @pytest.mark.asyncio
-async def test_io_loop():
-    s = await Scheduler(port=0)
-    w = await Worker(s.address, loop=s.loop)
-    assert w.io_loop is s.loop
-    await s.close()
-    await w.close()
+async def test_io_loop(cleanup):
+    async with Scheduler(port=0) as s:
+        async with Worker(s.address, loop=s.loop) as w:
+            assert w.io_loop is s.loop
 
 
 @gen_cluster(client=True, nthreads=[])

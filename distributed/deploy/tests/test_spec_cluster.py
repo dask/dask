@@ -1,6 +1,6 @@
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
 from distributed.deploy.spec import close_clusters
-from distributed.utils_test import loop  # noqa: F401
+from distributed.utils_test import loop, cleanup  # noqa: F401
 import pytest
 
 
@@ -25,7 +25,7 @@ scheduler = {"cls": Scheduler, "options": {"port": 0}}
 
 
 @pytest.mark.asyncio
-async def test_specification():
+async def test_specification(cleanup):
     async with SpecCluster(
         workers=worker_spec, scheduler=scheduler, asynchronous=True
     ) as cluster:
@@ -82,7 +82,7 @@ def test_loop_started():
 
 
 @pytest.mark.asyncio
-async def test_repr():
+async def test_repr(cleanup):
     worker = {"cls": Worker, "options": {"nthreads": 1}}
 
     class MyCluster(SpecCluster):
@@ -95,7 +95,7 @@ async def test_repr():
 
 
 @pytest.mark.asyncio
-async def test_scale():
+async def test_scale(cleanup):
     worker = {"cls": Worker, "options": {"nthreads": 1}}
     async with SpecCluster(
         asynchronous=True, scheduler=scheduler, worker=worker
@@ -143,7 +143,7 @@ def test_spec_close_clusters(loop):
 
 
 @pytest.mark.asyncio
-async def test_new_worker_spec():
+async def test_new_worker_spec(cleanup):
     class MyCluster(SpecCluster):
         def new_worker_spec(self):
             i = len(self.worker_spec)

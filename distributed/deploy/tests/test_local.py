@@ -17,8 +17,9 @@ import pytest
 from distributed import Client, Worker, Nanny, get_client
 from distributed.deploy.local import LocalCluster, nprocesses_nthreads
 from distributed.metrics import time
-from distributed.utils_test import (
+from distributed.utils_test import (  # noqa: F401
     clean,
+    cleanup,
     inc,
     gen_test,
     slowinc,
@@ -801,7 +802,7 @@ def test_worker_class_nanny(loop):
 
 
 @pytest.mark.asyncio
-async def test_worker_class_nanny_async():
+async def test_worker_class_nanny_async(cleanup):
     class MyNanny(Nanny):
         pass
 

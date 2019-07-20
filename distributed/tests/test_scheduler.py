@@ -24,7 +24,8 @@ from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils import tmpfile
-from distributed.utils_test import (
+from distributed.utils_test import (  # noqa: F401
+    cleanup,
     inc,
     dec,
     gen_cluster,
@@ -1590,7 +1591,7 @@ async def test_adaptive_target(c, s, a, b):
 
 
 @pytest.mark.asyncio
-async def test_async_context_manager():
+async def test_async_context_manager(cleanup):
     async with Scheduler(port=0) as s:
         assert s.status == "running"
         async with Worker(s.address) as w:
@@ -1600,7 +1601,7 @@ async def test_async_context_manager():
 
 
 @pytest.mark.asyncio
-async def test_allowed_failures_config():
+async def test_allowed_failures_config(cleanup):
     async with Scheduler(port=0, allowed_failures=10) as s:
         assert s.allowed_failures == 10
 
