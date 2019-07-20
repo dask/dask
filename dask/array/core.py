@@ -2725,6 +2725,7 @@ def from_zarr(
         z = url
     elif isinstance(url, str):
         from ..bytes.core import get_mapper
+
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
@@ -2794,6 +2795,7 @@ def to_zarr(
 
     if isinstance(url, str):
         from ..bytes.core import get_mapper
+
         mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
