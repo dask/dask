@@ -1508,9 +1508,10 @@ def check_instances():
     _global_clients.clear()
 
     for w in Worker._instances:
-        w.close(report=False, executor_wait=False)
-        if w.status == "running":
-            w.close()
+        with ignoring(RuntimeError):  # closed IOLoop
+            w.close(report=False, executor_wait=False)
+            if w.status == "running":
+                w.close()
     Worker._instances.clear()
 
     for i in range(5):

@@ -954,6 +954,7 @@ class Worker(ServerNode):
     def close(self, report=True, timeout=10, nanny=True, executor_wait=True):
         with log_errors():
             if self.status in ("closed", "closing"):
+                yield self.finished()
                 return
 
             disable_gc_diagnosis()

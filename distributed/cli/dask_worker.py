@@ -380,8 +380,7 @@ def main(
     @gen.coroutine
     def run():
         yield nannies
-        while all(n.status != "closed" for n in nannies):
-            yield gen.sleep(0.2)
+        yield [n.finished() for n in nannies]
 
     install_signal_handlers(loop, cleanup=on_signal)
 

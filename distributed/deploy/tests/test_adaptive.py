@@ -9,12 +9,12 @@ from tornado.ioloop import IOLoop
 
 from distributed import Client, wait, Adaptive, LocalCluster, SpecCluster, Worker
 from distributed.utils_test import gen_test, slowinc, clean
-from distributed.utils_test import loop, nodebug  # noqa: F401
+from distributed.utils_test import loop, nodebug, cleanup  # noqa: F401
 from distributed.metrics import time
 
 
 @pytest.mark.asyncio
-async def test_simultaneous_scale_up_and_down():
+async def test_simultaneous_scale_up_and_down(cleanup):
     class TestAdaptive(Adaptive):
         def get_scale_up_kwargs(self):
             assert False
@@ -116,7 +116,7 @@ def test_adaptive_local_cluster_multi_workers():
 
 
 @pytest.mark.asyncio
-async def test_adaptive_scale_down_override():
+async def test_adaptive_scale_down_override(cleanup):
     class TestAdaptive(Adaptive):
         def __init__(self, *args, **kwargs):
             self.min_size = kwargs.pop("min_size", 0)

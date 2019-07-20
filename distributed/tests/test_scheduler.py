@@ -1082,6 +1082,7 @@ def test_close_nanny(c, s, a, b):
         yield gen.sleep(0.1)
         assert time() < start + 5
 
+    assert not a.is_alive()
     assert a.pid is None
 
     for i in range(10):
@@ -1612,3 +1613,13 @@ async def test_allowed_failures_config(cleanup):
     with dask.config.set({"distributed.scheduler.allowed_failures": 0}):
         async with Scheduler(port=0) as s:
             assert s.allowed_failures == 0
+
+
+@pytest.mark.asyncio
+async def test_finished():
+    async with Scheduler(port=0) as s:
+        async with Worker(s.address) as w:
+            pass
+
+    await s.finished()
+    await w.finished()

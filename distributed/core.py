@@ -73,7 +73,7 @@ LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
 
 
 class Server(object):
-    """ Distributed TCP Server
+    """ Dask Distributed Server
 
     Superclass for endpoints in a distributed cluster, such as Worker
     and Scheduler objects.
@@ -146,6 +146,7 @@ class Server(object):
         self.events = None
         self.event_counts = None
         self._ongoing_coroutines = weakref.WeakSet()
+        self._event_finished = Event()
 
         self.listener = None
         self.io_loop = io_loop or IOLoop.current()
@@ -210,6 +211,10 @@ class Server(object):
         self.io_loop.add_callback(set_thread_ident)
 
         self.__stopped = False
+
+    async def finished(self):
+        """ Wait until the server has finished """
+        await self._event_finished.wait()
 
     def start_periodic_callbacks(self):
         """ Start Periodic Callbacks consistently
@@ -506,6 +511,8 @@ class Server(object):
                 break
             else:
                 yield gen.sleep(0.01)
+
+        self._event_finished.set()
 
 
 def pingpong(comm):
