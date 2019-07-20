@@ -43,6 +43,8 @@ fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs for encoding in encoding
 def test_read_text(fmt, bs, encoding):
     if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
+    if fmt not in utils.compress:
+        pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
     files2 = dict((k, compress(v.encode(encoding))) for k, v in files.items())
     with filetexts(files2, mode="b"):
