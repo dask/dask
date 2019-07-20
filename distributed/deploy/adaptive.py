@@ -2,12 +2,12 @@ from __future__ import print_function, division, absolute_import
 
 from collections import deque
 import logging
-import math
 
 from tornado import gen
 
 from ..metrics import time
 from ..utils import log_errors, PeriodicCallback, parse_timedelta
+from ..protocol import pickle
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +80,10 @@ class Adaptive(object):
     resized. The default implementation checks if there are too many tasks
     per worker or too little memory available (see :meth:`Adaptive.needs_cpu`
     and :meth:`Adaptive.needs_memory`).
-
-    :meth:`Adaptive.get_scale_up_kwargs` method controls the arguments passed to
-    the cluster's ``scale_up`` method.
     '''
 
     def __init__(
         self,
-        scheduler,
         cluster=None,
         interval="1s",
         startup_cost="1s",
@@ -96,20 +92,19 @@ class Adaptive(object):
         maximum=None,
         wait_count=3,
         target_duration="5s",
-        worker_key=lambda x: x,
+        worker_key=None,
         **kwargs
     ):
         interval = parse_timedelta(interval, default="ms")
         self.worker_key = worker_key
-        self.scheduler = scheduler
         self.cluster = cluster
         self.startup_cost = parse_timedelta(startup_cost, default="s")
         self.scale_factor = scale_factor
         if self.cluster:
             self._adapt_callback = PeriodicCallback(
-                self._adapt, interval * 1000, io_loop=scheduler.loop
+                self._adapt, interval * 1000, io_loop=self.loop
             )
-            self.scheduler.loop.add_callback(self._adapt_callback.start)
+            self.loop.add_callback(self._adapt_callback.start)
         self._adapting = False
         self._workers_to_close_kwargs = kwargs
         self.minimum = minimum
@@ -119,7 +114,9 @@ class Adaptive(object):
         self.wait_count = wait_count
         self.target_duration = parse_timedelta(target_duration)
 
-        self.scheduler.handlers["adaptive_recommendations"] = self.recommendations
+    @property
+    def scheduler(self):
+        return self.cluster.scheduler_comm
 
     def stop(self):
         if self.cluster:
@@ -127,7 +124,7 @@ class Adaptive(object):
             self._adapt_callback = None
             del self._adapt_callback
 
-    def workers_to_close(self, **kwargs):
+    async def workers_to_close(self, **kwargs):
         """
         Determine which, if any, workers should potentially be removed from
         the cluster.
@@ -145,73 +142,53 @@ class Adaptive(object):
         --------
         Scheduler.workers_to_close
         """
-        if len(self.scheduler.workers) <= self.minimum:
+        if len(self.cluster.workers) <= self.minimum:
             return []
 
         kw = dict(self._workers_to_close_kwargs)
         kw.update(kwargs)
 
-        if self.maximum is not None and len(self.scheduler.workers) > self.maximum:
-            kw["n"] = len(self.scheduler.workers) - self.maximum
+        if self.maximum is not None and len(self.cluster.workers) > self.maximum:
+            kw["n"] = len(self.cluster.workers) - self.maximum
 
-        L = self.scheduler.workers_to_close(**kw)
-        if len(self.scheduler.workers) - len(L) < self.minimum:
-            L = L[: len(self.scheduler.workers) - self.minimum]
+        L = await self.scheduler.workers_to_close(**kw)
+        if len(self.cluster.workers) - len(L) < self.minimum:
+            L = L[: len(self.cluster.workers) - self.minimum]
 
         return L
 
-    @gen.coroutine
-    def _retire_workers(self, workers=None):
+    async def _retire_workers(self, workers=None):
         if workers is None:
-            workers = self.workers_to_close(key=self.worker_key, minimum=self.minimum)
+            workers = await self.workers_to_close(
+                key=pickle.dumps(self.worker_key) if self.worker_key else None,
+                minimum=self.minimum,
+            )
         if not workers:
             raise gen.Return(workers)
         with log_errors():
-            yield self.scheduler.retire_workers(
+            await self.scheduler.retire_workers(
                 workers=workers, remove=True, close_workers=True
             )
 
             logger.info("Retiring workers %s", workers)
             f = self.cluster.scale_down(workers)
             if hasattr(f, "__await__"):
-                yield f
+                await f
 
-            raise gen.Return(workers)
+            return workers
 
-    def get_scale_up_kwargs(self):
-        """
-        Get the arguments to be passed to ``self.cluster.scale_up``.
-
-        Notes
-        -----
-        By default the desired number of total workers is returned (``n``).
-        Subclasses should ensure that the return dictionary includes a key-
-        value pair for ``n``, either by implementing it or by calling the
-        parent's ``get_scale_up_kwargs``.
-
-        See Also
-        --------
-        LocalCluster.scale_up
-        """
-        target = math.ceil(self.scheduler.total_occupancy / self.target_duration)
-        instances = max(
-            1, len(self.scheduler.workers) * self.scale_factor, target, self.minimum
-        )
-
-        if self.maximum:
-            instances = min(self.maximum, instances)
-
-        instances = int(instances)
-        logger.info("Scaling up to %d workers", instances)
-        return {"n": instances}
-
-    def recommendations(self, comm=None):
-        n = self.scheduler.adaptive_target(target_duration=self.target_duration)
+    async def recommendations(self, comm=None):
+        n = await self.scheduler.adaptive_target(target_duration=self.target_duration)
         if self.maximum is not None:
             n = min(self.maximum, n)
         if self.minimum is not None:
             n = max(self.minimum, n)
-        workers = set(self.workers_to_close(key=self.worker_key, minimum=self.minimum))
+        workers = set(
+            await self.workers_to_close(
+                key=pickle.dumps(self.worker_key) if self.worker_key else None,
+                minimum=self.minimum,
+            )
+        )
         try:
             current = len(self.cluster.worker_spec)
         except AttributeError:
@@ -249,14 +226,13 @@ class Adaptive(object):
             self.close_counts.clear()
             return None
 
-    @gen.coroutine
-    def _adapt(self):
+    async def _adapt(self):
         if self._adapting:  # Semaphore to avoid overlapping adapt calls
             return
 
         self._adapting = True
         try:
-            recommendations = self.recommendations()
+            recommendations = await self.recommendations()
             if not recommendations:
                 return
             status = recommendations.pop("status")
@@ -264,13 +240,17 @@ class Adaptive(object):
                 f = self.cluster.scale(**recommendations)
                 self.log.append((time(), "up", recommendations))
                 if hasattr(f, "__await__"):
-                    yield f
+                    await f
 
             elif status == "down":
                 self.log.append((time(), "down", recommendations["workers"]))
-                workers = yield self._retire_workers(workers=recommendations["workers"])
+                workers = await self._retire_workers(workers=recommendations["workers"])
         finally:
             self._adapting = False
 
     def adapt(self):
-        self.scheduler.loop.add_callback(self._adapt)
+        self.loop.add_callback(self._adapt)
+
+    @property
+    def loop(self):
+        return self.cluster.loop

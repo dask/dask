@@ -62,7 +62,7 @@ class Cluster(object):
     LocalCluster: a simple implementation with local workers
     """
 
-    def adapt(self, **kwargs):
+    def adapt(self, Adaptive=Adaptive, **kwargs):
         """ Turn on adaptivity
 
         For keyword arguments see dask.distributed.Adaptive
@@ -76,7 +76,7 @@ class Cluster(object):
         if not hasattr(self, "_adaptive_options"):
             self._adaptive_options = {}
         self._adaptive_options.update(kwargs)
-        self._adaptive = Adaptive(self.scheduler, self, **self._adaptive_options)
+        self._adaptive = Adaptive(self, **self._adaptive_options)
         return self._adaptive
 
     @property

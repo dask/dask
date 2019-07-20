@@ -1069,6 +1069,7 @@ class Scheduler(ServerNode):
             "get_task_stream": self.get_task_stream,
             "register_worker_plugin": self.register_worker_plugin,
             "adaptive_target": self.adaptive_target,
+            "workers_to_close": self.workers_to_close,
         }
 
         self._transitions = {
@@ -2919,7 +2920,9 @@ class Scheduler(ServerNode):
             },
         )
 
-    def workers_to_close(self, memory_ratio=None, n=None, key=None, minimum=None):
+    def workers_to_close(
+        self, comm=None, memory_ratio=None, n=None, key=None, minimum=None
+    ):
         """
         Find workers that we can close with low cost
 
@@ -2981,6 +2984,10 @@ class Scheduler(ServerNode):
 
             if key is None:
                 key = lambda ws: ws.address
+            if isinstance(key, bytes) and dask.config.get(
+                "distributed.scheduler.pickle"
+            ):
+                key = pickle.loads(key)
 
             groups = groupby(key, self.workers.values())
 
@@ -3209,6 +3216,14 @@ class Scheduler(ServerNode):
         Caution: this runs arbitrary Python code on the scheduler.  This should
         eventually be phased out.  It is mostly used by diagnostics.
         """
+        if not dask.config.get("distributed.scheduler.pickle"):
+            logger.warn(
+                "Tried to call 'feed' route with custom fucntions, but "
+                "pickle is disallowed.  Set the 'distributed.scheduler.pickle'"
+                "config value to True to use the 'feed' route (this is mostly "
+                "commonly used with progress bars)"
+            )
+            return
         import pickle
 
         interval = parse_timedelta(interval)
@@ -4714,7 +4729,7 @@ class Scheduler(ServerNode):
         if close:
             self.loop.add_callback(self.close)
 
-    def adaptive_target(self, target_duration="5s"):
+    def adaptive_target(self, comm=None, target_duration="5s"):
         """ Desired number of workers based on the current workload
 
         This looks at the current running tasks and memory use, and returns a

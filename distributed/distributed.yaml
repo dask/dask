@@ -20,6 +20,7 @@ distributed:
     transition-log-length: 100000
     work-stealing: True     # workers should steal tasks from each other
     worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this
+    pickle: True            # Is the scheduler allowed to deserialize arbitrary bytestrings
     preload: []
     preload-argv: []
     dashboard:
