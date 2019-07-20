@@ -256,7 +256,6 @@ def test_add_worker(s, a, b):
     w = Worker(s.address, nthreads=3)
     w.data["x-5"] = 6
     w.data["y"] = 1
-    yield w
 
     dsk = {("x-%d" % i): (inc, i) for i in range(10)}
     s.update_graph(
@@ -265,11 +264,8 @@ def test_add_worker(s, a, b):
         client="client",
         dependencies={k: set() for k in dsk},
     )
-
-    s.add_worker(
-        address=w.address, keys=list(w.data), nthreads=w.nthreads, services=s.services
-    )
-
+    s.validate_state()
+    yield w
     s.validate_state()
 
     assert w.ip in s.host_info
@@ -665,7 +661,7 @@ def test_scatter_no_workers(c, s):
     assert time() < start + 1.5
 
     w = Worker(s.address, nthreads=3)
-    yield [c.scatter(data={"y": 2}, timeout=5), w._start()]
+    yield [c.scatter(data={"y": 2}, timeout=5), w]
 
     assert w.data["y"] == 2
     yield w.close()
@@ -1172,7 +1168,7 @@ def test_correct_bad_time_estimate(c, s, *workers):
 
 
 @gen_test()
-def test_service_hosts():
+async def test_service_hosts():
     pytest.importorskip("bokeh")
     from distributed.dashboard import BokehScheduler
 
@@ -1184,26 +1180,20 @@ def test_service_hosts():
     ]:
         services = {("dashboard", port): BokehScheduler}
 
-        s = Scheduler(services=services)
-        yield s.start(url)
-
-        sock = first(s.services["dashboard"].server._http._sockets.values())
-        if isinstance(expected, tuple):
-            assert sock.getsockname()[0] in expected
-        else:
-            assert sock.getsockname()[0] == expected
-        yield s.close()
+        async with Scheduler(host=url, services=services) as s:
+            sock = first(s.services["dashboard"].server._http._sockets.values())
+            if isinstance(expected, tuple):
+                assert sock.getsockname()[0] in expected
+            else:
+                assert sock.getsockname()[0] == expected
 
     port = ("127.0.0.1", 0)
     for url in ["tcp://0.0.0.0", "tcp://127.0.0.1", "tcp://127.0.0.1:38275"]:
         services = {("dashboard", port): BokehScheduler}
 
-        s = Scheduler(services=services)
-        yield s.start(url)
-
-        sock = first(s.services["dashboard"].server._http._sockets.values())
-        assert sock.getsockname()[0] == "127.0.0.1"
-        yield s.close()
+        async with Scheduler(services=services, host=url) as s:
+            sock = first(s.services["dashboard"].server._http._sockets.values())
+            assert sock.getsockname()[0] == "127.0.0.1"
 
 
 @gen_cluster(client=True, worker_kwargs={"profile_cycle_interval": 100})

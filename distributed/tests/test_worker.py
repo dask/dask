@@ -22,10 +22,18 @@ import tornado
 from tornado import gen
 from tornado.ioloop import TimeoutError
 
-from distributed import Nanny, get_client, wait, default_client, get_worker, Reschedule
+from distributed import (
+    Client,
+    Nanny,
+    get_client,
+    wait,
+    default_client,
+    get_worker,
+    Reschedule,
+    wait,
+)
 from distributed.compatibility import WINDOWS, cache_from_source
 from distributed.core import rpc
-from distributed.client import wait
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, parse_memory_limit
@@ -978,20 +986,23 @@ def test_service_hosts_match_worker(s):
 
     services = {("dashboard", ":0"): BokehWorker}
 
-    w = Worker(s.address, services={("dashboard", ":0"): BokehWorker})
-    yield w._start("tcp://0.0.0.0")
+    w = yield Worker(
+        s.address, services={("dashboard", ":0"): BokehWorker}, host="tcp://0.0.0.0"
+    )
     sock = first(w.services["dashboard"].server._http._sockets.values())
     assert sock.getsockname()[0] in ("::", "0.0.0.0")
     yield w.close()
 
-    w = Worker(s.address, services={("dashboard", ":0"): BokehWorker})
-    yield w._start("tcp://127.0.0.1")
+    w = yield Worker(
+        s.address, services={("dashboard", ":0"): BokehWorker}, host="tcp://127.0.0.1"
+    )
     sock = first(w.services["dashboard"].server._http._sockets.values())
     assert sock.getsockname()[0] in ("::", "0.0.0.0")
     yield w.close()
 
-    w = Worker(s.address, services={("dashboard", 0): BokehWorker})
-    yield w._start("tcp://127.0.0.1")
+    w = yield Worker(
+        s.address, services={("dashboard", 0): BokehWorker}, host="tcp://127.0.0.1"
+    )
     sock = first(w.services["dashboard"].server._http._sockets.values())
     assert sock.getsockname()[0] == "127.0.0.1"
     yield w.close()
@@ -1004,8 +1015,7 @@ def test_start_services(s):
 
     services = {("dashboard", ":1234"): BokehWorker}
 
-    w = Worker(s.address, services=services)
-    yield w._start()
+    w = yield Worker(s.address, services=services)
 
     assert w.services["dashboard"].server.port == 1234
     yield w.close()
@@ -1440,3 +1450,44 @@ def test_resource_limit():
         assert parse_memory_limit(hard_limit, 1, total_cores=1) == new_limit
     except OSError:
         pytest.skip("resource could not set the RSS limit")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("Worker", [Worker, Nanny])
+async def test_interface_async(loop, Worker):
+    from distributed.utils import get_ip_interface
+
+    psutil = pytest.importorskip("psutil")
+    if_names = sorted(psutil.net_if_addrs())
+    for if_name in if_names:
+        try:
+            ipv4_addr = get_ip_interface(if_name)
+        except ValueError:
+            pass
+        else:
+            if ipv4_addr == "127.0.0.1":
+                break
+    else:
+        pytest.skip(
+            "Could not find loopback interface. "
+            "Available interfaces are: %s." % (if_names,)
+        )
+
+    async with Scheduler(interface=if_name) as s:
+        assert s.address.startswith("tcp://127.0.0.1")
+        async with Worker(s.address, interface=if_name) as w:
+            assert w.address.startswith("tcp://127.0.0.1")
+            assert w.ip == "127.0.0.1"
+            async with Client(s.address, asynchronous=True) as c:
+                info = c.scheduler_info()
+                assert "tcp://127.0.0.1" in info["address"]
+                assert all("127.0.0.1" == d["host"] for d in info["workers"].values())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("Worker", [Worker, Nanny])
+async def test_worker_listens_on_same_interface_by_default(Worker):
+    async with Scheduler(host="localhost") as s:
+        assert s.ip in {"127.0.0.1", "localhost"}
+        async with Worker(s.address) as w:
+            assert s.ip == w.ip

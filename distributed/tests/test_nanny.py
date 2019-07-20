@@ -216,8 +216,7 @@ def test_num_fds(s):
 @gen_cluster(client=True, nthreads=[])
 def test_worker_uses_same_host_as_nanny(c, s):
     for host in ["tcp://0.0.0.0", "tcp://127.0.0.2"]:
-        n = Nanny(s.address)
-        yield n._start(host)
+        n = yield Nanny(s.address, host=host)
 
         def func(dask_worker):
             return dask_worker.listener.listen_address
@@ -230,8 +229,7 @@ def test_worker_uses_same_host_as_nanny(c, s):
 @gen_test()
 def test_scheduler_file():
     with tmpfile() as fn:
-        s = Scheduler(scheduler_file=fn)
-        s.start(8008)
+        s = yield Scheduler(scheduler_file=fn, port=8008)
         w = yield Nanny(scheduler_file=fn)
         assert set(s.workers) == {w.worker_address}
         yield w.close()

@@ -1,4 +1,4 @@
-from dask.distributed import SpecCluster, Worker, Client, Scheduler
+from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
 from distributed.deploy.spec import close_clusters
 from distributed.utils_test import loop  # noqa: F401
 import pytest
@@ -153,3 +153,14 @@ async def test_new_worker_spec():
         cluster.scale(3)
         for i in range(3):
             assert cluster.worker_spec[i]["options"]["nthreads"] == i + 1
+
+
+@pytest.mark.asyncio
+async def test_nanny_port():
+    scheduler = {"cls": Scheduler}
+    workers = {0: {"cls": Nanny, "options": {"port": 9200}}}
+
+    async with SpecCluster(
+        scheduler=scheduler, workers=workers, asynchronous=True
+    ) as cluster:
+        pass

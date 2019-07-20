@@ -4,6 +4,7 @@ import warnings
 import logging
 
 from tornado.ioloop import IOLoop
+from tornado import gen
 import dask
 
 from .compatibility import unicode, finalize
@@ -159,3 +160,12 @@ class ServerNode(Node, Server):
 
     async def __aexit__(self, typ, value, traceback):
         await self.close()
+
+    def __await__(self):
+        if self.status == "running":
+            return gen.sleep(0).__await__()
+        else:
+            return self.start().__await__()
+
+    async def start(self):  # subclasses should implement this
+        return self

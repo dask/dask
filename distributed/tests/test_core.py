@@ -373,13 +373,13 @@ def check_rpc_with_many_connections(listen_arg):
     server = Server({"ping": pingpong})
     server.listen(listen_arg)
 
-    remote = rpc(server.address)
-    yield [g() for i in range(10)]
+    with rpc(server.address) as remote:
+        yield [g() for i in range(10)]
 
-    server.stop()
+        server.stop()
 
-    remote.close_comms()
-    assert all(comm.closed() for comm in remote.comms)
+        remote.close_comms()
+        assert all(comm.closed() for comm in remote.comms)
 
 
 @gen_test()

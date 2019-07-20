@@ -108,11 +108,8 @@ def test_stress_creation_and_deletion(c, s):
     def create_and_destroy_worker(delay):
         start = time()
         while time() < start + 5:
-            n = Nanny(s.address, nthreads=2, loop=s.loop)
-            n.start(0)
-
+            n = yield Nanny(s.address, nthreads=2, loop=s.loop)
             yield gen.sleep(delay)
-
             yield n.close()
             print("Killed nanny")
 

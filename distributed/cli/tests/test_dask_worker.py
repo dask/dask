@@ -268,29 +268,30 @@ def test_dashboard_non_standard_ports(loop):
     except ImportError:
         proxy_exists = False
 
-    with popen(["dask-scheduler", "--port", "3449"]):
+    with popen(["dask-scheduler", "--port", "3449"]) as s:
         with popen(
-            ["dask-worker", "tcp://127.0.0.1:3449", "--dashboard-address", ":4833"]
+            [
+                "dask-worker",
+                "tcp://127.0.0.1:3449",
+                "--dashboard-address",
+                ":4833",
+                "--host",
+                "127.0.0.1",
+            ]
         ) as proc:
             with Client("127.0.0.1:3449", loop=loop) as c:
+                c.wait_for_workers(1)
                 pass
 
-            start = time()
-            while True:
-                try:
-                    response = requests.get("http://127.0.0.1:4833/status")
+                response = requests.get("http://127.0.0.1:4833/status")
+                assert response.ok
+                redirect_resp = requests.get("http://127.0.0.1:4833/main")
+                redirect_resp.ok
+                # TEST PROXYING WORKS
+                if proxy_exists:
+                    url = "http://127.0.0.1:8787/proxy/4833/127.0.0.1/status"
+                    response = requests.get(url)
                     assert response.ok
-                    redirect_resp = requests.get("http://127.0.0.1:4833/main")
-                    redirect_resp.ok
-                    # TEST PROXYING WORKS
-                    if proxy_exists:
-                        url = "http://127.0.0.1:8787/proxy/4833/127.0.0.1/status"
-                        response = requests.get(url)
-                        assert response.ok
-                    break
-                except Exception:
-                    sleep(0.5)
-                    assert time() < start + 20
 
         with pytest.raises(Exception):
             requests.get("http://localhost:4833/status/")

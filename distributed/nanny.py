@@ -17,7 +17,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.locks import Event
 
-from .comm import get_address_host, get_local_address_for, unparse_host_port
+from .comm import get_address_host, unparse_host_port
 from .comm.addressing import address_from_user_args
 from .core import RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
@@ -120,6 +120,14 @@ class Nanny(ServerNode):
         self.preload_argv = preload_argv
         self.Worker = Worker if worker_class is None else worker_class
         self.env = env or {}
+        worker_kwargs.update(
+            {
+                "port": worker_port,
+                "interface": interface,
+                "protocol": protocol,
+                "host": host,
+            }
+        )
         self.worker_kwargs = worker_kwargs
 
         self.contact_address = contact_address
@@ -160,6 +168,13 @@ class Nanny(ServerNode):
         if self.memory_limit:
             pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
             self.periodic_callbacks["memory"] = pc
+
+        if (
+            not host
+            and not interface
+            and not self.scheduler_addr.startswith("inproc://")
+        ):
+            host = get_ip(get_address_host(self.scheduler.address))
 
         self._start_address = address_from_user_args(
             host=host,
@@ -208,25 +223,10 @@ class Nanny(ServerNode):
         return None if self.process is None else self.process.worker_dir
 
     @gen.coroutine
-    def _start(self, addr_or_port=0):
+    def start(self):
         """ Start nanny, start local process, start watching """
-        addr_or_port = addr_or_port or self._start_address
-
-        # XXX Factor this out
-        if not addr_or_port:
-            # Default address is the required one to reach the scheduler
-            self.listen(
-                get_local_address_for(self.scheduler.address),
-                listen_args=self.listen_args,
-            )
-            self.ip = get_address_host(self.address)
-        elif isinstance(addr_or_port, int):
-            # addr_or_port is an integer => assume TCP
-            self.ip = get_ip(get_address_host(self.scheduler.address))
-            self.listen((self.ip, addr_or_port), listen_args=self.listen_args)
-        else:
-            self.listen(addr_or_port, listen_args=self.listen_args)
-            self.ip = get_address_host(self.address)
+        self.listen(self._start_address, listen_args=self.listen_args)
+        self.ip = get_address_host(self.address)
 
         logger.info("        Start Nanny at: %r", self.address)
         response = yield self.instantiate()
@@ -238,13 +238,7 @@ class Nanny(ServerNode):
 
         self.start_periodic_callbacks()
 
-        raise gen.Return(self)
-
-    def __await__(self):
-        return self._start().__await__()
-
-    def start(self, addr_or_port=0):
-        self.loop.add_callback(self._start, addr_or_port)
+        return self
 
     @gen.coroutine
     def kill(self, comm=None, timeout=2):
@@ -295,7 +289,6 @@ class Nanny(ServerNode):
             )
             worker_kwargs.update(self.worker_kwargs)
             self.process = WorkerProcess(
-                worker_args=tuple(),
                 worker_kwargs=worker_kwargs,
                 worker_start_args=(start_arg,),
                 silence_logs=self.silence_logs,
@@ -432,18 +425,10 @@ class Nanny(ServerNode):
 
 class WorkerProcess(object):
     def __init__(
-        self,
-        worker_args,
-        worker_kwargs,
-        worker_start_args,
-        silence_logs,
-        on_exit,
-        worker,
-        env,
+        self, worker_kwargs, worker_start_args, silence_logs, on_exit, worker, env
     ):
         self.status = "init"
         self.silence_logs = silence_logs
-        self.worker_args = worker_args
         self.worker_kwargs = worker_kwargs
         self.worker_start_args = worker_start_args
         self.on_exit = on_exit
@@ -475,7 +460,6 @@ class WorkerProcess(object):
             target=self._run,
             name="Dask Worker process (from Nanny)",
             kwargs=dict(
-                worker_args=self.worker_args,
                 worker_kwargs=self.worker_kwargs,
                 worker_start_args=self.worker_start_args,
                 silence_logs=self.silence_logs,
@@ -615,7 +599,6 @@ class WorkerProcess(object):
     @classmethod
     def _run(
         cls,
-        worker_args,
         worker_kwargs,
         worker_start_args,
         silence_logs,
@@ -639,7 +622,7 @@ class WorkerProcess(object):
         IOLoop.clear_instance()
         loop = IOLoop()
         loop.make_current()
-        worker = Worker(*worker_args, **worker_kwargs)
+        worker = Worker(**worker_kwargs)
 
         @gen.coroutine
         def do_stop(timeout=5, executor_wait=True):
@@ -679,7 +662,7 @@ class WorkerProcess(object):
             Try to start worker and inform parent of outcome.
             """
             try:
-                yield worker._start(*worker_start_args)
+                yield worker
             except Exception as e:
                 logger.exception("Failed to start worker")
                 init_result_q.put({"uid": uid, "exception": e})

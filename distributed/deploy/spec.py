@@ -156,7 +156,7 @@ class SpecCluster(Cluster):
                 services = {("dashboard", 8787): BokehScheduler}
             self.scheduler_spec = {"cls": Scheduler, "options": {"services": services}}
         self.scheduler = self.scheduler_spec["cls"](
-            loop=self.loop, **self.scheduler_spec["options"]
+            loop=self.loop, **self.scheduler_spec.get("options", {})
         )
 
         self._lock = asyncio.Lock()

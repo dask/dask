@@ -176,10 +176,9 @@ def test_tls_cluster(tls_client):
 
 
 def test_tls_scheduler(security, loop):
-    s = Scheduler(security=security, loop=loop)
-    s.start("localhost")
+    s = yield Scheduler(security=security, loop=loop, host="localhost")
     assert s.address.startswith("tls")
-    s.close()
+    yield s.close()
 
 
 if sys.version_info >= (3, 5):

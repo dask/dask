@@ -23,8 +23,7 @@ class MyPlugin:
 def test_create_with_client(c, s):
     yield c.register_worker_plugin(MyPlugin(123))
 
-    worker = Worker(s.address, loop=s.loop)
-    yield worker._start()
+    worker = yield Worker(s.address, loop=s.loop)
     assert worker._my_plugin_status == "setup"
     assert worker._my_plugin_data == 123
 
