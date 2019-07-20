@@ -705,6 +705,8 @@ def test_read_csv_sensitive_to_enforce():
 def test_read_csv_compression(fmt, blocksize):
     if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
+    if fmt not in compress:
+        pytest.skip("compress function not provided for %s" % fmt)
     files2 = valmap(compress[fmt], csv_files)
     with filetexts(files2, mode="b"):
         if fmt and blocksize:

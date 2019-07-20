@@ -18,6 +18,7 @@ from pandas.api.types import (
     CategoricalDtype,
 )
 
+# this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_files
 
 # from ...bytes.compression import seekable_files, files as cfiles
