@@ -62,7 +62,6 @@ from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
-from ..bytes.core import get_mapper
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
@@ -2725,6 +2724,7 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
+        from ..bytes.core import get_mapper
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
@@ -2793,6 +2793,7 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
+        from ..bytes.core import get_mapper
         mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
