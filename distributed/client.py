@@ -804,14 +804,15 @@ class Client(Node):
             info = self._scheduler_identity
             scheduler = self.scheduler
 
+        text = (
+            '<h3 style="text-align: left;">Client</h3>\n'
+            '<ul style="text-align: left; list-style: none; margin: 0; padding: 0;">\n'
+        )
         if scheduler is not None:
-            text = (
-                "<h3>Client</h3>\n" "<ul>\n" "  <li><b>Scheduler: </b>%s\n"
-            ) % scheduler.address
+            text += "  <li><b>Scheduler: </b>%s\n" % scheduler.address
         else:
-            text = (
-                "<h3>Client</h3>\n" "<ul>\n" "  <li><b>Scheduler: not connected</b>\n"
-            )
+            text += "  <li><b>Scheduler: not connected</b>\n"
+
         if info and "dashboard" in info["services"]:
             protocol, rest = scheduler.address.split("://")
             port = info["services"]["dashboard"]
@@ -837,8 +838,8 @@ class Client(Node):
                 memory = ""
 
             text2 = (
-                "<h3>Cluster</h3>\n"
-                "<ul>\n"
+                '<h3 style="text-align: left;">Cluster</h3>\n'
+                '<ul style="text-align: left; list-style:none; margin: 0; padding: 0;">\n'
                 "  <li><b>Workers: </b>%d</li>\n"
                 "  <li><b>Cores: </b>%d</li>\n"
                 "  <li><b>Memory: </b>%s</li>\n"
