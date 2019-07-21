@@ -120,6 +120,12 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.argument(
     "preload_argv", nargs=-1, type=click.UNPROCESSED, callback=validate_preload_argv
 )
+@click.option(
+    "--idle-timeout",
+    default=None,
+    type=str,
+    help="Time of inactivity after which to kill the scheduler",
+)
 @click.version_option()
 def main(
     host,
@@ -141,6 +147,7 @@ def main(
     tls_cert,
     tls_key,
     dashboard_address,
+    idle_timeout,
 ):
     g0, g1, g2 = gc.get_threshold()  # https://github.com/dask/distributed/issues/1653
     gc.set_threshold(g0 * 3, g1 * 3, g2 * 3)
@@ -211,6 +218,7 @@ def main(
         protocol=protocol,
         dashboard_address=dashboard_address if dashboard else None,
         service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
+        idle_timeout=idle_timeout,
     )
     scheduler.start()
     if not preload:
@@ -226,9 +234,12 @@ def main(
 
     install_signal_handlers(loop)
 
+    async def run():
+        await scheduler
+        await scheduler.finished()
+
     try:
-        loop.start()
-        loop.close()
+        loop.run_sync(run)
     finally:
         scheduler.stop()
         if local_directory_created:

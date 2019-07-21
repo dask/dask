@@ -383,3 +383,14 @@ def test_version_option():
     runner = CliRunner()
     result = runner.invoke(distributed.cli.dask_scheduler.main, ["--version"])
     assert result.exit_code == 0
+
+
+@pytest.mark.slow
+def test_idle_timeout(loop):
+    start = time()
+    runner = CliRunner()
+    result = runner.invoke(
+        distributed.cli.dask_scheduler.main, ["--idle-timeout", "1s"]
+    )
+    stop = time()
+    assert 1 < stop - start < 10
