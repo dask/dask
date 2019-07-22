@@ -222,7 +222,7 @@ def test_glob(hdfs):
         basedir + "/c/d": ([], ["x3"]),
     }
 
-    hdfs, _, _ = get_fs_token_paths('hdfs:///')
+    hdfs, _, _ = get_fs_token_paths("hdfs:///")
     hdfs.makedirs(basedir + "/c/d")
     hdfs.makedirs(basedir + "/c2/d/")
     for fn in (
@@ -237,9 +237,7 @@ def test_glob(hdfs):
         basedir + p for p in ["/a", "/a1", "/a2", "/a3"]
     }
 
-    assert set(hdfs.glob(basedir + "/c/*")) == {
-        basedir + p for p in ["/c/x1", "/c/x2"]
-    }
+    assert set(hdfs.glob(basedir + "/c/*")) == {basedir + p for p in ["/c/x1", "/c/x2"]}
 
     assert set(hdfs.glob(basedir + "/*/x*")) == {
         basedir + p for p in ["/c/x1", "/c/x2", "/c2/x1", "/c2/x2"]
