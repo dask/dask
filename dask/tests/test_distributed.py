@@ -2,6 +2,7 @@ import pytest
 
 distributed = pytest.importorskip("distributed")
 
+import sys
 from functools import partial
 from operator import add
 from tornado import gen
@@ -194,3 +195,7 @@ def test_scheduler_equals_client(loop):
             assert client.run_on_scheduler(
                 lambda dask_scheduler: dask_scheduler.story(x.key)
             )
+
+
+if sys.version_info >= (3, 5):
+    from dask.tests.py3_test_await import *  # noqa F401
