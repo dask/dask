@@ -1338,3 +1338,14 @@ def test_divmod():
     expected = divmod(df1, df2)
     assert_eq(result[0], expected[0])
     assert_eq(result[1], expected[1])
+
+
+def test_moment():
+    scipy = pytest.importorskip("scipy")
+    from dask.array import stats
+    from dask.array.utils import assert_eq
+
+    df = pd.Series(list(range(10)))
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(stats.moment(ddf, 2, 0), scipy.stats.moment(df, 2, 0))
