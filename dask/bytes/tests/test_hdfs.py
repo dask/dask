@@ -2,14 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 import os
 import posixpath
-from distutils.version import LooseVersion
 
 import pytest
 from toolz import concat
 
 import dask
 from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
-from dask.compatibility import unicode, PY2
+from dask.compatibility import unicode
 
 
 try:
@@ -18,8 +17,6 @@ try:
     from distributed.utils_test import cluster, loop  # noqa: F401
 except (ImportError, SyntaxError):
     distributed = None
-
-hdfs3 = None
 
 try:
     import pyarrow
