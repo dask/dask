@@ -338,6 +338,8 @@ def test_read_bytes_delimited(s3, blocksize):
 def test_compression(s3, fmt, blocksize):
     if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
+    if fmt not in compr:
+        pytest.skip('compression function not provided')
     s3._cache.clear()
     with s3_context("compress", valmap(compress[fmt], files)):
         if fmt and blocksize:

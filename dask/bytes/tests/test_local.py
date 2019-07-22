@@ -322,6 +322,8 @@ def test_open_files_text_mode(encoding):
 def test_open_files_compression(mode, fmt):
     if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
+    if fmt not in compr:
+        pytest.skip('compression function not provided')
     files2 = valmap(compress[fmt], files)
     with filetexts(files2, mode="b"):
         myfiles = open_files(".test.accounts.*", mode=mode, compression=fmt)
