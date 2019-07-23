@@ -376,9 +376,14 @@ def test_check_meta_typename():
     assert "pandas" in str(info.value)
 
 
-def test_is_dataframe_like():
+def test_is_dataframe_like(monkeypatch):
     df = pd.DataFrame({"x": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
+
+    if not hasattr(pd.DataFrame, "value_counts"):
+        # TODO: Set the pandas version this shows up in (likely 1.0)
+        monkeypatch.setattr(pd.DataFrame, "value_counts", lambda x: None, raising=False)
+
     assert is_dataframe_like(df)
     assert is_dataframe_like(ddf)
     assert not is_dataframe_like(df.x)
