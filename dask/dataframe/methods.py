@@ -152,8 +152,11 @@ def describe_aggregate(values):
 def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
+    import sys
 
-    typ = pd.DataFrame if isinstance(count, pd.Series) else pd.Series
+    package_name = count.__class__.__module__.split(".")[0]
+    DD = sys.modules[package_name]
+    typ = DD.DataFrame if is_series_like(count) else DD.Series
 
     if is_timedelta_col:
         mean = pd.to_timedelta(mean)
@@ -162,15 +165,18 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         max = pd.to_timedelta(max)
         q = q.apply(lambda x: pd.to_timedelta(x))
 
-    part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+    part1 = typ(
+        [count.astype("float64"), mean, std, min], index=["count", "mean", "std", "min"]
+    )
+
     q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]
-    if isinstance(q, pd.Series) and typ == pd.DataFrame:
+    if is_series_like(q) and is_dataframe_like(typ):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
 
-    result = pd.concat([part1, q, part3], **concat_kwargs)
+    result = DD.concat([part1, q, part3], **concat_kwargs)
 
-    if isinstance(result, pd.Series):
+    if is_series_like(result):
         result.name = name
 
     return result

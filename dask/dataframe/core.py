@@ -2003,7 +2003,7 @@ Dask Name: {name}, {task} tasks""".format(
         ]
         stats_names = [(s._name, 0) for s in stats]
 
-        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+        colname = data._meta.name if is_series_like(data._meta) else None
 
         name = "describe-numeric--" + tokenize(num, split_every)
         layer = {
