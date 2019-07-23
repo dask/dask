@@ -330,7 +330,7 @@ def pivot_count(df, index, columns, values):
 concat_dispatch = Dispatch("concat")
 
 
-def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **concat_kwargs):
+def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **kwargs):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
@@ -351,7 +351,7 @@ def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **conc
     else:
         func = concat_dispatch.dispatch(type(dfs[0]))
         return func(
-            dfs, axis=axis, join=join, uniform=uniform, filter_warning=filter_warning, **concat_kwargs
+            dfs, axis=axis, join=join, uniform=uniform, filter_warning=filter_warning, **kwargs
         )
 
 
