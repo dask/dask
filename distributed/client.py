@@ -9,7 +9,6 @@ import copy
 from datetime import timedelta
 import errno
 from functools import partial
-from glob import glob
 import itertools
 import json
 import logging
@@ -2822,38 +2821,6 @@ class Client(Node):
             return first(result)
         else:
             return result
-
-    @gen.coroutine
-    def _upload_environment(self, zipfile):
-        name = os.path.split(zipfile)[1]
-        yield self._upload_large_file(zipfile, name)
-
-        def unzip(dask_worker=None):
-            from distributed.utils import log_errors
-            import zipfile
-            import shutil
-
-            with log_errors():
-                a = os.path.join(dask_worker.worker_dir, name)
-                b = os.path.join(dask_worker.local_dir, name)
-                c = os.path.dirname(b)
-                shutil.move(a, b)
-
-                with zipfile.ZipFile(b) as f:
-                    f.extractall(path=c)
-
-                for fn in glob(os.path.join(c, name[:-4], "bin", "*")):
-                    st = os.stat(fn)
-                    os.chmod(fn, st.st_mode | 64)  # chmod u+x fn
-
-                assert os.path.exists(os.path.join(c, name[:-4]))
-                return c
-
-        yield self._run(unzip, nanny=True)
-        raise gen.Return(name[:-4])
-
-    def upload_environment(self, name, zipfile):
-        return self.sync(self._upload_environment, name, zipfile)
 
     @gen.coroutine
     def _restart(self, timeout=no_default):
