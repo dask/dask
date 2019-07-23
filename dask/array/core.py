@@ -2780,8 +2780,10 @@ def to_zarr(
     import zarr
 
     if np.isnan(arr.shape).any():
-        raise ValueError("Saving a dask array with unknown chunk sizes is not "
-                         "currently supported by Zarr")
+        raise ValueError(
+            "Saving a dask array with unknown chunk sizes is not "
+            "currently supported by Zarr"
+        )
 
     if isinstance(url, zarr.Array):
         z = url

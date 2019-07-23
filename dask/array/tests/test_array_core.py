@@ -3707,7 +3707,7 @@ def test_to_zarr_unknown_chunks_raises():
     pytest.importorskip("zarr")
     a = da.random.random((10,), chunks=(3,))
     a = a[a > 0.5]
-    with pytest.raises(ValueError, match='unknown chunk sizes'):
+    with pytest.raises(ValueError, match="unknown chunk sizes"):
         a.to_zarr({})
 
 
