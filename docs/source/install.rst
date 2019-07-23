@@ -60,14 +60,19 @@ To install Dask from source, clone the repository from `github
 
     git clone https://github.com/dask/dask.git
     cd dask
-    python setup.py install
+    pip install .
 
-or use ``pip`` locally if you want to install all dependencies as well::
+You can also install all dependencies as well::
 
-    pip install -e ".[complete]"
+    pip install ".[complete]"
 
 You can view the list of all dependencies within the ``extras_require`` field
 of ``setup.py``.
+
+
+Or do a developer install by using the ``-e`` flag::
+
+    pip install -e .
 
 Anaconda
 --------
