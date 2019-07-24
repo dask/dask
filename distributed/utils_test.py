@@ -1456,12 +1456,13 @@ def check_thread_leak():
 
 @contextmanager
 def check_process_leak():
-    start_children = set(mp_context.active_children())
+    for proc in mp_context.active_children():
+        proc.terminate()
 
     yield
 
-    for i in range(50):
-        if not set(mp_context.active_children()) - start_children:
+    for i in range(100):
+        if not set(mp_context.active_children()):
             break
         else:
             sleep(0.2)
@@ -1524,14 +1525,14 @@ def check_instances():
 
 
 @contextmanager
-def clean(threads=not WINDOWS, processes=True, instances=True, timeout=1):
+def clean(threads=not WINDOWS, instances=True, timeout=1):
     @contextmanager
     def null():
         yield
 
     with check_thread_leak() if threads else null():
         with pristine_loop() as loop:
-            with check_process_leak() if processes else null():
+            with check_process_leak():
                 with check_instances() if instances else null():
                     with check_active_rpc(loop, timeout):
                         reset_config()
