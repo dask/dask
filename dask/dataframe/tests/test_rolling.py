@@ -118,6 +118,7 @@ def mad(x):
 
 rolling_method_args_check_less_precise = [
     ("count", (), False),
+    ("cov", (), False),
     ("sum", (), False),
     ("mean", (), False),
     ("median", (), False),
