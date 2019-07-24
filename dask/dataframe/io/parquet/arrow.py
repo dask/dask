@@ -311,7 +311,13 @@ class ArrowEngine(Engine):
         if index_cols:
             df = df.set_index(index_cols)
             preserve_index = True
-        t = pa.Table.from_pandas(df, preserve_index=preserve_index)
+
+        if 'schema' in kwargs:
+            schema = kwargs.pop('schema')
+            t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
+        else:
+            t = pa.Table.from_pandas(df, preserve_index=preserve_index)
+
         if partition_on:
             pq.write_to_dataset(
                 t,
