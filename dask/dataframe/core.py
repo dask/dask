@@ -1881,7 +1881,7 @@ Dask Name: {name}, {task} tasks""".format(
 
             if isinstance(quantiles[0], Scalar):
                 layer = {
-                    (keyname, 0): (pd.Series, qnames, num.columns, None, meta.name)
+                    (keyname, 0): (type(meta), qnames, num.columns, None, meta.name)
                 }
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
@@ -4949,16 +4949,21 @@ def quantile(df, q, method="default"):
     else:
         internal_method = method
 
+    import sys
+
+    package_name = df.__class__.__module__.split(".")[0]
+    DD = sys.modules[package_name]
+
     # currently, only Series has quantile method
     if isinstance(df, Index):
-        meta = pd.Series(df._meta_nonempty).quantile(q)
+        meta = DD.Series(df._meta_nonempty).quantile(q)
     else:
         meta = df._meta_nonempty.quantile(q)
 
     if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
-        finalize_tsk = lambda tsk: (pd.Series, tsk, q, None, df_name)
+        finalize_tsk = lambda tsk: (DD.Series, tsk, q, None, df_name)
         return_type = Series
     else:
         finalize_tsk = lambda tsk: (getitem, tsk, 0)
@@ -4972,9 +4977,10 @@ def quantile(df, q, method="default"):
 
     if len(qs) == 0:
         name = "quantiles-" + token
-        empty_index = pd.Index([], dtype=float)
+        empty_index = DD.Index([], dtype=float)
+
         return Series(
-            {(name, 0): pd.Series([], name=df.name, index=empty_index)},
+            {(name, 0): DD.Series([], name=df.name, index=empty_index)},
             name,
             df._meta,
             [None, None],
