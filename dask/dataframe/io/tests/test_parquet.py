@@ -939,7 +939,6 @@ def test_to_parquet_default_writes_nulls(tmpdir):
 
 
 def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
-    check_fastparquet()
     check_pyarrow()
     fn = str(tmpdir.join("dask.pa"))
 
