@@ -4949,21 +4949,21 @@ def quantile(df, q, method="default"):
     else:
         internal_method = method
 
-    import sys
-
-    package_name = df.__class__.__module__.split(".")[0]
-    DD = sys.modules[package_name]
-
     # currently, only Series has quantile method
     if isinstance(df, Index):
-        meta = DD.Series(df._meta_nonempty).quantile(q)
+        series_typ = type(df.to_series())
+        meta = series_typ(df._meta_nonempty).quantile(q)
     else:
+        if is_series_like(df):
+            series_typ = type(df)
+        else:
+            series_typ = type(df[df.columns[0]])
         meta = df._meta_nonempty.quantile(q)
 
     if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
-        finalize_tsk = lambda tsk: (DD.Series, tsk, q, None, df_name)
+        finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
         return_type = Series
     else:
         finalize_tsk = lambda tsk: (getitem, tsk, 0)
@@ -4977,10 +4977,10 @@ def quantile(df, q, method="default"):
 
     if len(qs) == 0:
         name = "quantiles-" + token
-        empty_index = DD.Index([], dtype=float)
+        empty_index = pd.Index([], dtype=float)
 
         return Series(
-            {(name, 0): DD.Series([], name=df.name, index=empty_index)},
+            {(name, 0): series_typ([], name=df.name, index=empty_index)},
             name,
             df._meta,
             [None, None],
