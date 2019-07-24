@@ -356,9 +356,9 @@ def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **kwar
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
+def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **kwargs):
     if axis == 1:
-        return pd.concat(dfs, axis=axis, join=join, **concat_kwargs)
+        return pd.concat(dfs, axis=axis, join=join, **kwargs)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
@@ -426,7 +426,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
                 cat_mask = pd.concat(
                     [(df.dtypes == "category").to_frame().T for df in dfs3],
                     join=join,
-                    **concat_kwargs
+                    **kwargs
                 ).any()
 
         if cat_mask.any():
@@ -435,7 +435,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
             out = pd.concat(
                 [df[df.columns.intersection(not_cat)] for df in dfs3],
                 join=join,
-                **concat_kwargs
+                **kwargs
             )
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
@@ -476,7 +476,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter("ignore", FutureWarning)
-            out = pd.concat(dfs2, join=join, **concat_kwargs)
+            out = pd.concat(dfs2, join=join, **kwargs)
     # Re-add the index if needed
     if ind is not None:
         out.index = ind
