@@ -312,8 +312,8 @@ class ArrowEngine(Engine):
             df = df.set_index(index_cols)
             preserve_index = True
 
-        if 'schema' in kwargs:
-            schema = kwargs.pop('schema')
+        if "schema" in kwargs:
+            schema = kwargs.pop("schema")
             t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         else:
             t = pa.Table.from_pandas(df, preserve_index=preserve_index)
