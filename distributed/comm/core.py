@@ -178,8 +178,7 @@ class Connector(with_metaclass(ABCMeta)):
         """
 
 
-@gen.coroutine
-def connect(addr, timeout=None, deserialize=True, connection_args=None):
+async def connect(addr, timeout=None, deserialize=True, connection_args=None):
     """
     Connect to the given address (a URI such as ``tcp://127.0.0.1:1234``)
     and yield a ``Comm`` object.  If the connection attempt fails, it is
@@ -212,7 +211,7 @@ def connect(addr, timeout=None, deserialize=True, connection_args=None):
             future = connector.connect(
                 loc, deserialize=deserialize, **(connection_args or {})
             )
-            comm = yield gen.with_timeout(
+            comm = await gen.with_timeout(
                 timedelta(seconds=deadline - time()),
                 future,
                 quiet_exceptions=EnvironmentError,
@@ -222,7 +221,7 @@ def connect(addr, timeout=None, deserialize=True, connection_args=None):
         except EnvironmentError as e:
             error = str(e)
             if time() < deadline:
-                yield gen.sleep(0.01)
+                await gen.sleep(0.01)
                 logger.debug("sleeping on connect")
             else:
                 _raise(error)
@@ -231,7 +230,7 @@ def connect(addr, timeout=None, deserialize=True, connection_args=None):
         else:
             break
 
-    raise gen.Return(comm)
+    return comm
 
 
 def listen(addr, handle_comm, deserialize=True, connection_args=None):

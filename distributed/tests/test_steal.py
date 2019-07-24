@@ -234,7 +234,7 @@ def test_dont_steal_host_restrictions(c, s, a, b):
     yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, workers="127.0.0.1")
-    while len(a.task_state) < 10:
+    while len(a.task_state) + len(b.task_state) < 100:
         yield gen.sleep(0.01)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
@@ -254,7 +254,7 @@ def test_dont_steal_resource_restrictions(c, s, a, b):
     yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, resources={"A": 1})
-    while len(a.task_state) < 10:
+    while len(a.task_state) + len(b.task_state) < 100:
         yield gen.sleep(0.01)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0

@@ -25,7 +25,7 @@ def test_basic(Component):
     assert isinstance(c.root, Model)
 
 
-@gen_cluster(client=True, check_new_threads=False)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 def test_profile_plot(c, s, a, b):
     p = ProfilePlot()
     assert not p.source.data["left"]
@@ -34,7 +34,7 @@ def test_profile_plot(c, s, a, b):
     assert len(p.source.data["left"]) >= 1
 
 
-@gen_cluster(client=True, check_new_threads=False)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 def test_profile_time_plot(c, s, a, b):
     from bokeh.io import curdoc
 

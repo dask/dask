@@ -169,7 +169,7 @@ def test_CommunicatingStream(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    check_new_threads=False,
+    clean_kwargs={"threads": False},
     worker_kwargs={"services": {("dashboard", 0): BokehWorker}},
 )
 def test_prometheus(c, s, a, b):

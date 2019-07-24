@@ -13,6 +13,7 @@ from distributed import Scheduler, Worker, Client, config, default_client
 from distributed.core import rpc
 from distributed.metrics import time
 from distributed.utils_test import (  # noqa: F401
+    cleanup,
     cluster,
     gen_cluster,
     inc,
@@ -175,10 +176,10 @@ def test_tls_cluster(tls_client):
     assert tls_client.security
 
 
-def test_tls_scheduler(security, loop):
-    s = yield Scheduler(security=security, loop=loop, host="localhost")
-    assert s.address.startswith("tls")
-    yield s.close()
+@pytest.mark.asyncio
+async def test_tls_scheduler(security, cleanup):
+    async with Scheduler(security=security, host="localhost") as s:
+        assert s.address.startswith("tls")
 
 
 if sys.version_info >= (3, 5):

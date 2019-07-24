@@ -35,8 +35,7 @@ class LockExtension(object):
 
         self.scheduler.extensions["locks"] = self
 
-    @gen.coroutine
-    def acquire(self, stream=None, name=None, id=None, timeout=None):
+    async def acquire(self, stream=None, name=None, id=None, timeout=None):
         with log_errors():
             if isinstance(name, list):
                 name = tuple(name)
@@ -50,7 +49,7 @@ class LockExtension(object):
                     if timeout is not None:
                         future = gen.with_timeout(timedelta(seconds=timeout), future)
                     try:
-                        yield future
+                        await future
                     except gen.TimeoutError:
                         result = False
                         break
@@ -62,7 +61,7 @@ class LockExtension(object):
             if result:
                 assert name not in self.ids
                 self.ids[name] = id
-            raise gen.Return(result)
+            return result
 
     def release(self, stream=None, name=None, id=None):
         with log_errors():
@@ -155,14 +154,12 @@ class Lock(object):
     def __exit__(self, *args, **kwargs):
         self.release()
 
-    @gen.coroutine
-    def __aenter__(self):
-        yield self.acquire()
-        raise gen.Return(self)
+    async def __aenter__(self):
+        await self.acquire()
+        return self
 
-    @gen.coroutine
-    def __aexit__(self, *args, **kwargs):
-        yield self.release()
+    async def __aexit__(self, *args, **kwargs):
+        await self.release()
 
     def __reduce__(self):
         return (Lock, (self.name,))

@@ -308,10 +308,9 @@ class Pub(object):
             self.loop.add_callback(pubsub.publishers[name].add, self)
             finalize(self, pubsub.trigger_cleanup)
 
-    @gen.coroutine
-    def _start(self):
+    async def _start(self):
         if self.worker:
-            result = yield self.scheduler.pubsub_add_publisher(
+            result = await self.scheduler.pubsub_add_publisher(
                 name=self.name, worker=self.worker.address
             )
             pubsub = self.worker.extensions["pubsub"]
@@ -388,8 +387,7 @@ class Sub(object):
 
         finalize(self, pubsub.trigger_cleanup)
 
-    @gen.coroutine
-    def _get(self, timeout=None):
+    async def _get(self, timeout=None):
         if timeout is not None:
             timeout = datetime.timedelta(seconds=timeout)
         start = datetime.datetime.now()
@@ -400,9 +398,9 @@ class Sub(object):
                     raise gen.TimeoutError()
             else:
                 timeout2 = None
-            yield self.condition.wait(timeout=timeout2)
+            await self.condition.wait(timeout=timeout2)
 
-        raise gen.Return(self.buffer.popleft())
+        return self.buffer.popleft()
 
     __anext__ = _get
 

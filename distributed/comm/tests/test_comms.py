@@ -800,14 +800,14 @@ def test_inproc_comm_closed_explicit_2():
             assert comm.closed()
             listener_errors.append(True)
         else:
-            comm.close()
+            yield comm.close()
 
     listener = listen("inproc://", handle_comm)
     listener.start()
     contact_addr = listener.contact_address
 
     comm = yield connect(contact_addr)
-    comm.close()
+    yield comm.close()
     assert comm.closed()
     start = time()
     while len(listener_errors) < 1:
@@ -821,7 +821,7 @@ def test_inproc_comm_closed_explicit_2():
         yield comm.write("foo")
 
     comm = yield connect(contact_addr)
-    comm.write("foo")
+    yield comm.write("foo")
     with pytest.raises(CommClosedError):
         yield comm.read()
     with pytest.raises(CommClosedError):
@@ -829,15 +829,15 @@ def test_inproc_comm_closed_explicit_2():
     assert comm.closed()
 
     comm = yield connect(contact_addr)
-    comm.write("foo")
+    yield comm.write("foo")
 
     start = time()
     while not comm.closed():
         yield gen.sleep(0.01)
         assert time() < start + 2
 
-    comm.close()
-    comm.close()
+    yield comm.close()
+    yield comm.close()
 
 
 #

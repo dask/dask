@@ -255,21 +255,27 @@ def test_adapt_quickly():
         d = [x for x in adapt.log[-1] if isinstance(x, dict)][0]
         assert 2 < d["n"] <= adapt.maximum
 
-        while len(cluster.scheduler.workers) < adapt.maximum:
+        while len(cluster.workers) < adapt.maximum:
             yield gen.sleep(0.01)
 
         del futures
 
-        while len(cluster.scheduler.workers) > 1:
+        while len(cluster.scheduler.tasks) > 1:
+            yield gen.sleep(0.01)
+
+        yield cluster
+
+        while len(cluster.scheduler.workers) > 1 or len(cluster.worker_spec) > 1:
             yield gen.sleep(0.01)
 
         # Don't scale up for large sequential computations
         x = yield client.scatter(1)
+        log = list(cluster._adaptive.log)
         for i in range(100):
             x = client.submit(slowinc, x)
 
         yield gen.sleep(0.1)
-        assert len(cluster.scheduler.workers) == 1
+        assert len(cluster.workers) == 1
     finally:
         yield client.close()
         yield cluster.close()

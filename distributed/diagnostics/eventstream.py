@@ -2,8 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 
-from tornado import gen
-
 from .plugin import SchedulerPlugin
 
 from ..core import connect, coerce_to_address
@@ -37,8 +35,7 @@ def teardown(scheduler, es):
     scheduler.remove_plugin(es)
 
 
-@gen.coroutine
-def eventstream(address, interval):
+async def eventstream(address, interval):
     """ Open a TCP connection to scheduler, receive batched task messages
 
     The messages coming back are lists of dicts.  Each dict is of the following
@@ -59,14 +56,14 @@ def eventstream(address, interval):
 
     Examples
     --------
-    >>> stream = yield eventstream('127.0.0.1:8786', 0.100)  # doctest: +SKIP
-    >>> print(yield read(stream))  # doctest: +SKIP
+    >>> stream = await eventstream('127.0.0.1:8786', 0.100)  # doctest: +SKIP
+    >>> print(await read(stream))  # doctest: +SKIP
     [{'key': 'x', 'status': 'OK', 'worker': '192.168.0.1:54684', ...},
      {'key': 'y', 'status': 'error', 'worker': '192.168.0.1:54684', ...}]
     """
     address = coerce_to_address(address)
-    comm = yield connect(address)
-    yield comm.write(
+    comm = await connect(address)
+    await comm.write(
         {
             "op": "feed",
             "setup": dumps_function(EventStream),
@@ -75,4 +72,4 @@ def eventstream(address, interval):
             "teardown": dumps_function(teardown),
         }
     )
-    raise gen.Return(comm)
+    return comm

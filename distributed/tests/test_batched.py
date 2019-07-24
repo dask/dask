@@ -134,7 +134,7 @@ def test_close_closed():
         b.start(comm)
 
         b.send(123)
-        comm.close()  # external closing
+        yield comm.close()  # external closing
 
         yield b.close()
         assert "closed" in repr(b)
@@ -185,7 +185,7 @@ def test_stress():
         yield All([send(), recv()])
 
         assert L == list(range(0, 10000, 1))
-        comm.close()
+        yield comm.close()
 
 
 @gen.coroutine
@@ -222,7 +222,7 @@ def run_traffic_jam(nsends, nbytes):
 
         assert results == list(range(nsends))
 
-        comm.close()  # external closing
+        yield comm.close()  # external closing
         yield b.close()
 
 

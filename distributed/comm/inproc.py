@@ -7,7 +7,7 @@ import os
 import threading
 import weakref
 
-from tornado import gen, locks
+from tornado import locks
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 
@@ -180,12 +180,11 @@ class InProc(Comm):
     def peer_address(self):
         return self._peer_addr
 
-    @gen.coroutine
-    def read(self, deserializers="ignored"):
+    async def read(self, deserializers="ignored"):
         if self._closed:
             raise CommClosedError
 
-        msg = yield self._read_q.get()
+        msg = await self._read_q.get()
         if msg is _EOF:
             self._closed = True
             self._finalizer.detach()
@@ -193,20 +192,18 @@ class InProc(Comm):
 
         if self.deserialize:
             msg = nested_deserialize(msg)
-        raise gen.Return(msg)
+        return msg
 
-    @gen.coroutine
-    def write(self, msg, serializers=None, on_error=None):
+    async def write(self, msg, serializers=None, on_error=None):
         if self.closed():
             raise CommClosedError
 
         # Ensure we feed the queue in the same thread it is read from.
         self._write_loop.add_callback(self._write_q.put_nowait, msg)
 
-        raise gen.Return(1)
+        return 1
 
-    @gen.coroutine
-    def close(self):
+    async def close(self):
         self.abort()
 
     def abort(self):
@@ -246,10 +243,9 @@ class InProcListener(Listener):
         self.deserialize = deserialize
         self.listen_q = Queue()
 
-    @gen.coroutine
-    def _listen(self):
+    async def _listen(self):
         while True:
-            conn_req = yield self.listen_q.get()
+            conn_req = await self.listen_q.get()
             if conn_req is None:
                 break
             comm = InProc(
@@ -262,7 +258,7 @@ class InProcListener(Listener):
             )
             # Notify connector
             conn_req.c_loop.add_callback(conn_req.conn_event.set)
-            self.comm_handler(comm)
+            IOLoop.current().add_callback(self.comm_handler, comm)
 
     def connect_threadsafe(self, conn_req):
         self.loop.add_callback(self.listen_q.put_nowait, conn_req)
@@ -289,8 +285,7 @@ class InProcConnector(Connector):
     def __init__(self, manager):
         self.manager = manager
 
-    @gen.coroutine
-    def connect(self, address, deserialize=True, **connection_args):
+    async def connect(self, address, deserialize=True, **connection_args):
         listener = self.manager.get_listener_for(address)
         if listener is None:
             raise IOError("no endpoint for inproc address %r" % (address,))
@@ -306,7 +301,7 @@ class InProcConnector(Connector):
         # Wait for connection acknowledgement
         # (do not pretend we're connected if the other comm never gets
         #  created, for example if the listener was stopped in the meantime)
-        yield conn_req.conn_event.wait()
+        await conn_req.conn_event.wait()
 
         comm = InProc(
             local_addr="inproc://" + conn_req.c_addr,
@@ -316,7 +311,7 @@ class InProcConnector(Connector):
             write_loop=listener.loop,
             deserialize=deserialize,
         )
-        raise gen.Return(comm)
+        return comm
 
 
 class InProcBackend(Backend):

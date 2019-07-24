@@ -332,7 +332,7 @@ def _cleanup_dangling():
     for proc in list(_dangling):
         if proc.is_alive():
             try:
-                logger.warning("reaping stray process %s" % (proc,))
+                logger.info("reaping stray process %s" % (proc,))
                 proc.terminate()
             except OSError:
                 pass

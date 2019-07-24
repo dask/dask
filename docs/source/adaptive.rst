@@ -60,8 +60,7 @@ the correct times.
 .. code-block:: python
 
    class MyCluster(object):
-       @gen.coroutine
-       def scale_up(self, n, **kwargs):
+       async def scale_up(self, n, **kwargs):
            """
            Bring the total count of workers up to ``n``
 
@@ -72,8 +71,7 @@ the correct times.
            """
            raise NotImplementedError()
 
-       @gen.coroutine
-       def scale_down(self, workers):
+       async def scale_down(self, workers):
            """
            Remove ``workers`` from the cluster
 

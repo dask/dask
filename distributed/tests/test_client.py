@@ -1,11 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
-from operator import add
-
+import asyncio
 from collections import deque
 from concurrent.futures import CancelledError
 import gc
 import logging
+from operator import add
 import os
 import pickle
 import random
@@ -3311,11 +3311,11 @@ def test_get_foo_lost_keys(c, s, u, v, w):
 @gen_cluster(
     client=True,
     Worker=Nanny,
-    check_new_threads=False,
     worker_kwargs={"death_timeout": "500ms"},
+    clean_kwargs={"processes": False, "threads": False},
 )
 def test_bad_tasks_fail(c, s, a, b):
-    f = c.submit(sys.exit, 1)
+    f = c.submit(sys.exit, 0)
     with pytest.raises(KilledWorker) as info:
         yield f
 
@@ -3486,7 +3486,7 @@ def test_scatter_raises_if_no_workers(c, s):
 @pytest.mark.slow
 def test_reconnect(loop):
     w = Worker("127.0.0.1", 9393, loop=loop)
-    w.start()
+    loop.add_callback(w.start)
 
     scheduler_cli = [
         "dask-scheduler",
@@ -4031,7 +4031,7 @@ def test_distribute_tasks_by_nthreads(c, s, a, b):
     assert len(b.data) > 2 * len(a.data)
 
 
-@gen_cluster(client=True, check_new_threads=False)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 def test_add_done_callback(c, s, a, b):
     S = set()
 
@@ -4616,9 +4616,9 @@ def test_threadsafe_get(c):
 
     from concurrent.futures import ThreadPoolExecutor
 
-    e = ThreadPoolExecutor(30)
-    results = list(e.map(f, range(30)))
-    assert results and all(results)
+    with ThreadPoolExecutor(30) as e:
+        results = list(e.map(f, range(30)))
+        assert results and all(results)
 
 
 @pytest.mark.slow
@@ -5343,13 +5343,13 @@ def test_de_serialization_none(s, a, b):
 
 @gen_cluster()
 def test_client_repr_closed(s, a, b):
-    c = yield Client(s.address, asynchronous=True)
+    c = yield Client(s.address, asynchronous=True, dashboard_address=None)
     yield c.close()
     c._repr_html_()
 
 
 def test_client_repr_closed_sync(loop):
-    with Client(loop=loop, processes=False) as c:
+    with Client(loop=loop, processes=False, dashboard_address=None) as c:
         c.close()
         c._repr_html_()
 
@@ -5498,7 +5498,7 @@ def test_released_dependencies(c, s, a, b):
         assert result == 101
 
 
-@gen_cluster(client=True, check_new_threads=False)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 def test_profile_bokeh(c, s, a, b):
     pytest.importorskip("bokeh.plotting")
     from bokeh.model import Model
@@ -5578,7 +5578,7 @@ def test_instances(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_wait_for_workers(c, s, a, b):
-    future = c.wait_for_workers(n_workers=3)
+    future = asyncio.ensure_future(c.wait_for_workers(n_workers=3))
     yield gen.sleep(0.22)  # 2 chances
     assert not future.done()
 

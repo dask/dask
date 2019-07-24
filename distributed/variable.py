@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import asyncio
 from collections import defaultdict
 import logging
 import uuid
@@ -58,15 +59,14 @@ class VariableExtension(object):
             pass
         else:
             if old["type"] == "Future" and old["value"] != key:
-                self.release(old["value"], name)
+                asyncio.ensure_future(self.release(old["value"], name))
         if name not in self.variables:
             self.started.notify_all()
         self.variables[name] = record
 
-    @gen.coroutine
-    def release(self, key, name):
+    async def release(self, key, name):
         while self.waiting[key, name]:
-            yield self.waiting_conditions[name].wait()
+            await self.waiting_conditions[name].wait()
 
         self.scheduler.client_releases_keys(keys=[key], client="variable-%s" % name)
         del self.waiting[key, name]
@@ -76,8 +76,7 @@ class VariableExtension(object):
         if not self.waiting[key, name]:
             self.waiting_conditions[name].notify_all()
 
-    @gen.coroutine
-    def get(self, stream=None, name=None, client=None, timeout=None):
+    async def get(self, stream=None, name=None, client=None, timeout=None):
         start = time()
         while name not in self.variables:
             if timeout is not None:
@@ -86,7 +85,7 @@ class VariableExtension(object):
                 left = None
             if left and left < 0:
                 raise gen.TimeoutError()
-            yield self.started.wait(timeout=left)
+            await self.started.wait(timeout=left)
         record = self.variables[name]
         if record["type"] == "Future":
             key = record["value"]
@@ -99,10 +98,9 @@ class VariableExtension(object):
                 msg["traceback"] = ts.exception_blame.traceback
             record = merge(record, msg)
             self.waiting[key, name].add(token)
-        raise gen.Return(record)
+        return record
 
-    @gen.coroutine
-    def delete(self, stream=None, name=None, client=None):
+    async def delete(self, stream=None, name=None, client=None):
         with log_errors():
             try:
                 old = self.variables[name]
@@ -110,7 +108,7 @@ class VariableExtension(object):
                 pass
             else:
                 if old["type"] == "Future":
-                    yield self.release(old["value"], name)
+                    await self.release(old["value"], name)
             del self.waiting_conditions[name]
             del self.variables[name]
 
@@ -151,14 +149,13 @@ class Variable(object):
         self.client = client or _get_global_client()
         self.name = name or "variable-" + uuid.uuid4().hex
 
-    @gen.coroutine
-    def _set(self, value):
+    async def _set(self, value):
         if isinstance(value, Future):
-            yield self.client.scheduler.variable_set(
+            await self.client.scheduler.variable_set(
                 key=tokey(value.key), name=self.name
             )
         else:
-            yield self.client.scheduler.variable_set(data=value, name=self.name)
+            await self.client.scheduler.variable_set(data=value, name=self.name)
 
     def set(self, value, **kwargs):
         """ Set the value of this variable
@@ -170,9 +167,8 @@ class Variable(object):
         """
         return self.client.sync(self._set, value, **kwargs)
 
-    @gen.coroutine
-    def _get(self, timeout=None):
-        d = yield self.client.scheduler.variable_get(
+    async def _get(self, timeout=None):
+        d = await self.client.scheduler.variable_get(
             timeout=timeout, name=self.name, client=self.client.id
         )
         if d["type"] == "Future":
@@ -189,7 +185,7 @@ class Variable(object):
             )
         else:
             value = d["value"]
-        raise gen.Return(value)
+        return value
 
     def get(self, timeout=None, **kwargs):
         """ Get the value of this variable """

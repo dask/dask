@@ -19,8 +19,8 @@ from distributed.utils_test import gen_tls_cluster, inc, double, slowinc, slowad
 def test_Queue(c, s, a, b):
     assert s.address.startswith("tls://")
 
-    x = Queue("x")
-    y = Queue("y")
+    x = yield Queue("x")
+    y = yield Queue("y")
 
     size = yield x.qsize()
     assert size == 0

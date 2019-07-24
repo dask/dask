@@ -86,25 +86,23 @@ Server Side
 
 .. code-block:: python
 
-   from tornado import gen
-   from tornado.ioloop import IOLoop
+   import asyncio
    from distributed.core import Server
 
    def add(comm, x=None, y=None):  # simple handler, just a function
        return x + y
 
-   @gen.coroutine
-   def stream_data(comm, interval=1):  # complex handler, multiple responses
+   async def stream_data(comm, interval=1):  # complex handler, multiple responses
        data = 0
        while True:
-           yield gen.sleep(interval)
+           await asyncio.sleep(interval)
            data += 1
-           yield comm.write(data)
+           await comm.write(data)
 
    s = Server({'add': add, 'stream_data': stream_data})
    s.listen('tcp://:8888')   # listen on TCP port 8888
 
-   IOLoop.current().start()
+   asyncio.get_event_loop().run_forever()
 
 
 Client Side
@@ -112,30 +110,27 @@ Client Side
 
 .. code-block:: python
 
-   from tornado import gen
-   from tornado.ioloop import IOLoop
+   import asyncio
    from distributed.core import connect
 
-   @gen.coroutine
-   def f():
-       comm = yield connect('tcp://127.0.0.1:8888')
-       yield comm.write({'op': 'add', 'x': 1, 'y': 2})
-       result = yield comm.read()
-       yield comm.close()
+   async def f():
+       comm = await connect('tcp://127.0.0.1:8888')
+       await comm.write({'op': 'add', 'x': 1, 'y': 2})
+       result = await comm.read()
+       await comm.close()
        print(result)
 
-   >>> IOLoop().run_sync(f)
+   >>> asyncio.get_event_loop().run_until_complete(g())
    3
 
-   @gen.coroutine
-   def g():
-       comm = yield connect('tcp://127.0.0.1:8888')
-       yield comm.write({'op': 'stream_data', 'interval': 1})
+   async def g():
+       comm = await connect('tcp://127.0.0.1:8888')
+       await comm.write({'op': 'stream_data', 'interval': 1})
        while True:
-           result = yield comm.read()
+           result = await comm.read()
            print(result)
 
-   >>> IOLoop().run_sync(g)
+   >>> asyncio.get_event_loop().run_until_complete(g())
    1
    2
    3
@@ -152,21 +147,17 @@ with the stream data case above.
 
 .. code-block:: python
 
-   from tornado import gen
-   from tornado.ioloop import IOLoop
+   import asyncio
    from distributed.core import rpc
 
-   @gen.coroutine
-   def f():
-       # comm = yield connect('tcp://127.0.0.1', 8888)
-       # yield comm.write({'op': 'add', 'x': 1, 'y': 2})
-       # result = yield comm.read()
-       r = rpc('tcp://127.0.0.1:8888')
-       result = yield r.add(x=1, y=2)
-       r.close_comms()
+   async def f():
+       # comm = await connect('tcp://127.0.0.1', 8888)
+       # await comm.write({'op': 'add', 'x': 1, 'y': 2})
+       # result = await comm.read()
+       with rpc('tcp://127.0.0.1:8888') as r:
+           result = await r.add(x=1, y=2)
 
        print(result)
 
-   >>> IOLoop().run_sync(f)
+   >>> asyncio.get_event_loop().run_until_complete(f())
    3
-

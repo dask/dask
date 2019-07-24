@@ -501,7 +501,8 @@ def test_memory_limit_auto():
     assert isinstance(a.memory_limit, Number)
     assert isinstance(b.memory_limit, Number)
 
-    assert a.memory_limit < b.memory_limit
+    if multiprocessing.cpu_count() > 1:
+        assert a.memory_limit < b.memory_limit
 
     assert c.memory_limit == d.memory_limit
 
@@ -1050,7 +1051,14 @@ def test_statistical_profiling(c, s, a, b):
 
 @pytest.mark.slow
 @nodebug
-@gen_cluster(client=True, timeout=20)
+@gen_cluster(
+    client=True,
+    timeout=30,
+    config={
+        "distributed.worker.profile.interval": "1ms",
+        "distributed.worker.profile.cycle": "100ms",
+    },
+)
 def test_statistical_profiling_2(c, s, a, b):
     da = pytest.importorskip("dask.array")
     while True:

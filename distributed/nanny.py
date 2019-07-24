@@ -191,8 +191,7 @@ class Nanny(ServerNode):
     def __repr__(self):
         return "<Nanny: %s, threads: %d>" % (self.worker_address, self.nthreads)
 
-    @gen.coroutine
-    def _unregister(self, timeout=10):
+    async def _unregister(self, timeout=10):
         if self.process is None:
             return
         worker_address = self.process.worker_address
@@ -206,7 +205,7 @@ class Nanny(ServerNode):
             RPCClosed,
         )
         try:
-            yield gen.with_timeout(
+            await gen.with_timeout(
                 timedelta(seconds=timeout),
                 self.scheduler.unregister(address=self.worker_address),
                 quiet_exceptions=allowed_errors,
@@ -222,26 +221,24 @@ class Nanny(ServerNode):
     def worker_dir(self):
         return None if self.process is None else self.process.worker_dir
 
-    @gen.coroutine
-    def start(self):
+    async def start(self):
         """ Start nanny, start local process, start watching """
         self.listen(self._start_address, listen_args=self.listen_args)
         self.ip = get_address_host(self.address)
 
         logger.info("        Start Nanny at: %r", self.address)
-        response = yield self.instantiate()
+        response = await self.instantiate()
         if response == "running":
             assert self.worker_address
             self.status = "running"
         else:
-            yield self.close()
+            await self.close()
 
         self.start_periodic_callbacks()
 
         return self
 
-    @gen.coroutine
-    def kill(self, comm=None, timeout=2):
+    async def kill(self, comm=None, timeout=2):
         """ Kill the local worker process
 
         Blocks until both the process is down and the scheduler is properly
@@ -249,13 +246,12 @@ class Nanny(ServerNode):
         """
         self.auto_restart = False
         if self.process is None:
-            raise gen.Return("OK")
+            return "OK"
 
         deadline = self.loop.time() + timeout
-        yield self.process.kill(timeout=0.8 * (deadline - self.loop.time()))
+        await self.process.kill(timeout=0.8 * (deadline - self.loop.time()))
 
-    @gen.coroutine
-    def instantiate(self, comm=None):
+    async def instantiate(self, comm=None):
         """ Start a local worker process
 
         Blocks until the process is up and the scheduler is properly informed
@@ -292,7 +288,7 @@ class Nanny(ServerNode):
                 worker_kwargs=worker_kwargs,
                 worker_start_args=(start_arg,),
                 silence_logs=self.silence_logs,
-                on_exit=self._on_exit,
+                on_exit=self._on_exit_sync,
                 worker=self.Worker,
                 env=self.env,
             )
@@ -300,11 +296,11 @@ class Nanny(ServerNode):
         self.auto_restart = True
         if self.death_timeout:
             try:
-                result = yield gen.with_timeout(
+                result = await gen.with_timeout(
                     timedelta(seconds=self.death_timeout), self.process.start()
                 )
             except gen.TimeoutError:
-                yield self.close(timeout=self.death_timeout)
+                await self.close(timeout=self.death_timeout)
                 logger.exception(
                     "Timed out connecting Nanny '%s' to scheduler '%s'",
                     self,
@@ -313,26 +309,24 @@ class Nanny(ServerNode):
                 raise
 
         else:
-            result = yield self.process.start()
-        raise gen.Return(result)
+            result = await self.process.start()
+        return result
 
-    @gen.coroutine
-    def restart(self, comm=None, timeout=2, executor_wait=True):
+    async def restart(self, comm=None, timeout=2, executor_wait=True):
         start = time()
 
-        @gen.coroutine
-        def _():
+        async def _():
             if self.process is not None:
-                yield self.kill()
-                yield self.instantiate()
+                await self.kill()
+                await self.instantiate()
 
         try:
-            yield gen.with_timeout(timedelta(seconds=timeout), _())
+            await gen.with_timeout(timedelta(seconds=timeout), _())
         except gen.TimeoutError:
             logger.error("Restart timed out, returning before finished")
-            raise gen.Return("timed out")
+            return "timed out"
         else:
-            raise gen.Return("OK")
+            return "OK"
 
     def memory_monitor(self):
         """ Track worker's memory.  Restart if it goes above terminate fraction """
@@ -360,21 +354,23 @@ class Nanny(ServerNode):
     def run(self, *args, **kwargs):
         return run(self, *args, **kwargs)
 
-    @gen.coroutine
-    def _on_exit(self, exitcode):
+    def _on_exit_sync(self, exitcode):
+        self.loop.add_callback(self._on_exit, exitcode)
+
+    async def _on_exit(self, exitcode):
         if self.status not in ("closing", "closed"):
             try:
-                yield self.scheduler.unregister(address=self.worker_address)
+                await self.scheduler.unregister(address=self.worker_address)
             except (EnvironmentError, CommClosedError):
                 if not self.reconnect:
-                    yield self.close()
+                    await self.close()
                     return
 
             try:
                 if self.status not in ("closing", "closed", "closing-gracefully"):
                     if self.auto_restart:
                         logger.warning("Restarting worker")
-                        yield self.instantiate()
+                        await self.instantiate()
             except Exception:
                 logger.error(
                     "Failed to restart worker after its process exited", exc_info=True
@@ -396,13 +392,12 @@ class Nanny(ServerNode):
         """
         self.status = "closing-gracefully"
 
-    @gen.coroutine
-    def close(self, comm=None, timeout=5, report=None):
+    async def close(self, comm=None, timeout=5, report=None):
         """
         Close the worker process, stop all comms.
         """
         if self.status == "closing":
-            yield self.finished()
+            await self.finished()
             assert self.status == "closed"
 
         if self.status == "closed":
@@ -413,15 +408,15 @@ class Nanny(ServerNode):
         self.stop()
         try:
             if self.process is not None:
-                yield self.kill(timeout=timeout)
+                await self.kill(timeout=timeout)
         except Exception:
             pass
         self.process = None
         self.rpc.close()
         self.status = "closed"
         if comm:
-            yield comm.write("OK")
-        yield ServerNode.close(self)
+            await comm.write("OK")
+        await ServerNode.close(self)
 
 
 class WorkerProcess(object):
@@ -441,17 +436,16 @@ class WorkerProcess(object):
         self.worker_dir = None
         self.worker_address = None
 
-    @gen.coroutine
-    def start(self):
+    async def start(self):
         """
         Ensure the worker process is started.
         """
         enable_proctitle_on_children()
         if self.status == "running":
-            raise gen.Return(self.status)
+            return self.status
         if self.status == "starting":
-            yield self.running.wait()
-            raise gen.Return(self.status)
+            await self.running.wait()
+            return self.status
 
         self.init_result_q = init_q = mp_context.Queue()
         self.child_stop_q = mp_context.Queue()
@@ -476,10 +470,16 @@ class WorkerProcess(object):
         self.running = Event()
         self.stopped = Event()
         self.status = "starting"
-        yield self.process.start()
-        msg = yield self._wait_until_connected(uid)
+        try:
+            await self.process.start()
+        except OSError:
+            logger.exception("Nanny failed to start process", exc_info=True)
+            self.process.terminate()
+            return
+
+        msg = await self._wait_until_connected(uid)
         if not msg:
-            raise gen.Return(self.status)
+            return self.status
         self.worker_address = msg["address"]
         self.worker_dir = msg["dir"]
         assert self.worker_address
@@ -488,7 +488,7 @@ class WorkerProcess(object):
 
         init_q.close()
 
-        raise gen.Return(self.status)
+        return self.status
 
     def _on_exit(self, proc):
         if proc is not self.process:
@@ -518,7 +518,7 @@ class WorkerProcess(object):
             assert r is not None
             if r != 0:
                 msg = self._death_message(self.process.pid, r)
-                logger.warning(msg)
+                logger.info(msg)
             self.status = "stopped"
             self.stopped.set()
             # Release resources
@@ -534,8 +534,7 @@ class WorkerProcess(object):
             if self.on_exit is not None:
                 self.on_exit(r)
 
-    @gen.coroutine
-    def kill(self, timeout=2, executor_wait=True):
+    async def kill(self, timeout=2, executor_wait=True):
         """
         Ensure the worker process is stopped, waiting at most
         *timeout* seconds before terminating it abruptly.
@@ -546,7 +545,7 @@ class WorkerProcess(object):
         if self.status == "stopped":
             return
         if self.status == "stopping":
-            yield self.stopped.wait()
+            await self.stopped.wait()
             return
         assert self.status in ("starting", "running")
         self.status = "stopping"
@@ -562,19 +561,18 @@ class WorkerProcess(object):
         self.child_stop_q.close()
 
         while process.is_alive() and loop.time() < deadline:
-            yield gen.sleep(0.05)
+            await gen.sleep(0.05)
 
         if process.is_alive():
             logger.warning(
                 "Worker process still alive after %d seconds, killing", timeout
             )
             try:
-                yield process.terminate()
+                await process.terminate()
             except Exception as e:
                 logger.error("Failed to kill worker process: %s", e)
 
-    @gen.coroutine
-    def _wait_until_connected(self, uid):
+    async def _wait_until_connected(self, uid):
         delay = 0.05
         while True:
             if self.status != "starting":
@@ -582,7 +580,7 @@ class WorkerProcess(object):
             try:
                 msg = self.init_result_q.get_nowait()
             except Empty:
-                yield gen.sleep(delay)
+                await gen.sleep(delay)
                 continue
 
             if msg["uid"] != uid:  # ensure that we didn't cross queues
@@ -592,10 +590,10 @@ class WorkerProcess(object):
                 logger.error(
                     "Failed while trying to start worker process: %s", msg["exception"]
                 )
-                yield self.process.join()
+                await self.process.join()
                 raise msg
             else:
-                raise gen.Return(msg)
+                return msg
 
     @classmethod
     def _run(
@@ -625,10 +623,9 @@ class WorkerProcess(object):
         loop.make_current()
         worker = Worker(**worker_kwargs)
 
-        @gen.coroutine
-        def do_stop(timeout=5, executor_wait=True):
+        async def do_stop(timeout=5, executor_wait=True):
             try:
-                yield worker.close(
+                await worker.close(
                     report=False,
                     nanny=False,
                     executor_wait=executor_wait,
@@ -657,13 +654,12 @@ class WorkerProcess(object):
         t.daemon = True
         t.start()
 
-        @gen.coroutine
-        def run():
+        async def run():
             """
             Try to start worker and inform parent of outcome.
             """
             try:
-                yield worker
+                await worker
             except Exception as e:
                 logger.exception("Failed to start worker")
                 init_result_q.put({"uid": uid, "exception": e})
@@ -674,7 +670,7 @@ class WorkerProcess(object):
                     {"address": worker.address, "dir": worker.local_dir, "uid": uid}
                 )
                 init_result_q.close()
-                yield worker.wait_until_closed()
+                await worker.wait_until_closed()
                 logger.info("Worker closed")
 
         try:

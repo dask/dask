@@ -380,8 +380,8 @@ def test_full_collections(c, s, a, b):
 def test_collections_get(client, optimize_graph, s, a, b):
     da = pytest.importorskip("dask.array")
 
-    def f(dask_worker):
-        dask_worker.set_resources(**{"A": 1})
+    async def f(dask_worker):
+        await dask_worker.set_resources(**{"A": 1})
 
     client.run(f, workers=[a["address"]])
 

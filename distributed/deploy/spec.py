@@ -272,7 +272,7 @@ class SpecCluster(Cluster):
 
     def __del__(self):
         if self.status != "closed":
-            self.close()
+            self.loop.add_callback(self.close)
 
     def __enter__(self):
         self.sync(self._correct_state)

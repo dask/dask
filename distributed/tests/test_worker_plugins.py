@@ -27,7 +27,7 @@ def test_create_with_client(c, s):
     assert worker._my_plugin_status == "setup"
     assert worker._my_plugin_data == 123
 
-    yield worker._close()
+    yield worker.close()
     assert worker._my_plugin_status == "teardown"
 
 

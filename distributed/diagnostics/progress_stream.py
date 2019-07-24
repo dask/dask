@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 from toolz import valmap, merge
-from tornado import gen
 
 from .progress import AllProgress
 
@@ -26,8 +25,7 @@ def counts(scheduler, allprogress):
     )
 
 
-@gen.coroutine
-def progress_stream(address, interval):
+async def progress_stream(address, interval):
     """ Open a TCP connection to scheduler, receive progress messages
 
     The messages coming back are dicts containing counts of key groups::
@@ -42,12 +40,12 @@ def progress_stream(address, interval):
 
     Examples
     --------
-    >>> stream = yield eventstream('127.0.0.1:8786', 0.100)  # doctest: +SKIP
-    >>> print(yield read(stream))  # doctest: +SKIP
+    >>> stream = await eventstream('127.0.0.1:8786', 0.100)  # doctest: +SKIP
+    >>> print(await read(stream))  # doctest: +SKIP
     """
     address = coerce_to_address(address)
-    comm = yield connect(address)
-    yield comm.write(
+    comm = await connect(address)
+    await comm.write(
         {
             "op": "feed",
             "setup": dumps_function(AllProgress),
@@ -56,7 +54,7 @@ def progress_stream(address, interval):
             "teardown": dumps_function(Scheduler.remove_plugin),
         }
     )
-    raise gen.Return(comm)
+    return comm
 
 
 def nbytes_bar(nbytes):

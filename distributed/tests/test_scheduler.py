@@ -110,7 +110,7 @@ def test_decide_worker_with_many_independent_leaves(c, s, a, b):
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
 def test_decide_worker_with_restrictions(client, s, a, b, c):
     x = client.submit(inc, 1, workers=[a.address, b.address])
-    yield wait(x)
+    yield x
     assert x.key in a.data or x.key in b.data
 
 
@@ -621,14 +621,6 @@ def test_update_graph_culls(s, a, b):
     assert "z" not in s.dependencies
 
 
-@gen_cluster(nthreads=[])
-def test_add_worker_is_idempotent(s):
-    s.add_worker(address=alice, nthreads=1, resolve_address=False)
-    nthreads = dict(s.nthreads)
-    s.add_worker(address=alice, resolve_address=False)
-    assert s.nthreads == s.nthreads
-
-
 def test_io_loop(loop):
     s = Scheduler(loop=loop, validate=True)
     assert s.io_loop is loop
@@ -956,7 +948,7 @@ def test_worker_breaks_and_returns(c, s, a):
 
     yield wait(future)
 
-    a.batched_stream.comm.close()
+    yield a.batched_stream.comm.close()
 
     yield gen.sleep(0.1)
     start = time()
@@ -1146,11 +1138,13 @@ def test_scheduler_file():
 
 @pytest.mark.xfail(reason="")
 @gen_cluster(client=True, nthreads=[])
-def test_non_existent_worker(c, s):
+async def test_non_existent_worker(c, s):
     with dask.config.set({"distributed.comm.timeouts.connect": "100ms"}):
-        s.add_worker(address="127.0.0.1:5738", nthreads=2, nbytes={}, host_info={})
+        await s.add_worker(
+            address="127.0.0.1:5738", nthreads=2, nbytes={}, host_info={}
+        )
         futures = c.map(inc, range(10))
-        yield gen.sleep(0.300)
+        await gen.sleep(0.300)
         assert not s.workers
         assert all(ts.state == "no-worker" for ts in s.tasks.values())
 
@@ -1317,19 +1311,19 @@ def test_retries(c, s, a, b):
 
 @pytest.mark.xfail(reason="second worker also errant for some reason")
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3, timeout=5)
-def test_mising_data_errant_worker(c, s, w1, w2, w3):
+async def test_mising_data_errant_worker(c, s, w1, w2, w3):
     with dask.config.set({"distributed.comm.timeouts.connect": "1s"}):
         np = pytest.importorskip("numpy")
 
         x = c.submit(np.random.random, 10000000, workers=w1.address)
-        yield wait(x)
-        yield c.replicate(x, workers=[w1.address, w2.address])
+        await wait(x)
+        await c.replicate(x, workers=[w1.address, w2.address])
 
         y = c.submit(len, x, workers=w3.address)
         while not w3.tasks:
-            yield gen.sleep(0.001)
-        w1.close()
-        yield wait(y)
+            await gen.sleep(0.001)
+        await w1.close()
+        await wait(y)
 
 
 @gen_cluster(client=True)

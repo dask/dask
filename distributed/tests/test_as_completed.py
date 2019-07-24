@@ -238,7 +238,7 @@ def test_as_completed_with_results_no_raise_async(c, s, a, b):
     z = c.submit(inc, 1)
 
     ac = as_completed([x, y, z], with_results=True, raise_errors=False)
-    y.cancel()
+    c.loop.add_callback(y.cancel)
     first = yield ac.__anext__()
     second = yield ac.__anext__()
     third = yield ac.__anext__()

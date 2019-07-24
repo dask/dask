@@ -1,3 +1,4 @@
+import asyncio
 from tornado import gen
 import functools
 
@@ -128,10 +129,9 @@ class Actor(WrappedKey):
 
             @functools.wraps(attr)
             def func(*args, **kwargs):
-                @gen.coroutine
-                def run_actor_function_on_worker():
+                async def run_actor_function_on_worker():
                     try:
-                        result = yield self._worker_rpc.actor_execute(
+                        result = await self._worker_rpc.actor_execute(
                             function=key,
                             actor=self.key,
                             args=[to_serialize(arg) for arg in args],
@@ -139,21 +139,20 @@ class Actor(WrappedKey):
                         )
                     except OSError:
                         if self._future:
-                            yield self._future
+                            await self._future
                         else:
                             raise OSError("Unable to contact Actor's worker")
-                    raise gen.Return(result["result"])
+                    return result["result"]
 
                 if self._asynchronous:
-                    return run_actor_function_on_worker()
+                    return asyncio.ensure_future(run_actor_function_on_worker())
                 else:
                     # TODO: this mechanism is error prone
                     # we should endeavor to make dask's standard code work here
                     q = Queue()
 
-                    @gen.coroutine
-                    def wait_then_add_to_queue():
-                        x = yield run_actor_function_on_worker()
+                    async def wait_then_add_to_queue():
+                        x = await run_actor_function_on_worker()
                         q.put(x)
 
                     self._io_loop.add_callback(wait_then_add_to_queue)
@@ -164,11 +163,11 @@ class Actor(WrappedKey):
 
         else:
 
-            @gen.coroutine
-            def get_actor_attribute_from_worker():
-                x = yield self._worker_rpc.actor_attribute(
+            async def get_actor_attribute_from_worker():
+                x = await self._worker_rpc.actor_attribute(
                     attribute=key, actor=self.key
                 )
+                return x["result"]
                 raise gen.Return(x["result"])
 
             return self._sync(get_actor_attribute_from_worker)
@@ -188,11 +187,10 @@ class ProxyRPC(object):
         self._address = address
 
     def __getattr__(self, key):
-        @gen.coroutine
-        def func(**msg):
+        async def func(**msg):
             msg["op"] = key
-            result = yield self.rpc.proxy(worker=self._address, msg=msg)
-            raise gen.Return(result)
+            result = await self.rpc.proxy(worker=self._address, msg=msg)
+            return result
 
         return func
 

@@ -73,7 +73,7 @@ def test_prefix(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    check_new_threads=False,
+    clean_kwargs={"threads": False},
     scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
 )
 def test_prometheus(c, s, a, b):
@@ -98,7 +98,7 @@ def test_prometheus(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    check_new_threads=False,
+    clean_kwargs={"threads": False},
     scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
 )
 def test_health(c, s, a, b):

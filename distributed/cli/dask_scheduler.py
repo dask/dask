@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-import dask
 import logging
 import gc
 import os
@@ -16,9 +15,9 @@ import click
 from tornado.ioloop import IOLoop
 
 from distributed import Scheduler
+from distributed.preloading import validate_preload_argv
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
-from distributed.preloading import preload_modules, validate_preload_argv
 from distributed.proctitle import (
     enable_proctitle_on_children,
     enable_proctitle_on_current,
@@ -219,16 +218,9 @@ def main(
         dashboard_address=dashboard_address if dashboard else None,
         service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
         idle_timeout=idle_timeout,
+        preload=preload,
+        preload_argv=preload_argv,
     )
-    scheduler.start()
-    if not preload:
-        preload = dask.config.get("distributed.scheduler.preload")
-    if not preload_argv:
-        preload_argv = dask.config.get("distributed.scheduler.preload-argv")
-    preload_modules(
-        preload, parameter=scheduler, file_dir=local_directory, argv=preload_argv
-    )
-
     logger.info("Local Directory: %26s", local_directory)
     logger.info("-" * 47)
 

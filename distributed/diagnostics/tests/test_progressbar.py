@@ -2,10 +2,12 @@ from __future__ import print_function, division, absolute_import
 
 from time import sleep
 
+import pytest
+
 from distributed import Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
 from distributed.metrics import time
-from distributed.utils_test import inc, div, gen_cluster, gen_test
+from distributed.utils_test import inc, div, gen_cluster
 from distributed.utils_test import client, loop, cluster_fixture  # noqa: F401
 
 
@@ -40,23 +42,18 @@ def test_TextProgressBar_error(c, s, a, b):
     assert progress.comm.closed()
 
 
-def test_TextProgressBar_empty(capsys):
-    @gen_test()
-    def f():
-        s = yield Scheduler(port=0)
-        a, b = yield [Worker(s.address, nthreads=1), Worker(s.address, nthreads=1)]
+@pytest.mark.asyncio
+async def test_TextProgressBar_empty(capsys):
+    async with Scheduler(port=0) as s:
+        async with Worker(s.address, nthreads=1) as a:
+            async with Worker(s.address, nthreads=1) as b:
+                progress = TextProgressBar(
+                    [], scheduler=s.address, start=False, interval=0.01
+                )
+                await progress.listen()
 
-        progress = TextProgressBar([], scheduler=s.address, start=False, interval=0.01)
-        yield progress.listen()
-
-        assert progress.status == "finished"
-        check_bar_completed(capsys)
-
-        yield [a.close(), b.close()]
-        s.close()
-        yield s.finished()
-
-    f()
+                assert progress.status == "finished"
+                check_bar_completed(capsys)
 
 
 def check_bar_completed(capsys, width=40):

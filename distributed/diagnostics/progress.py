@@ -74,12 +74,11 @@ class Progress(SchedulerPlugin):
         self.status = None
         self.extra = {}
 
-    @gen.coroutine
-    def setup(self):
+    async def setup(self):
         keys = self.keys
 
         while not keys.issubset(self.scheduler.tasks):
-            yield gen.sleep(0.05)
+            await gen.sleep(0.05)
 
         tasks = [self.scheduler.tasks[k] for k in keys]
 
@@ -163,12 +162,11 @@ class MultiProgress(Progress):
             self, keys, scheduler, minimum=minimum, dt=dt, complete=complete
         )
 
-    @gen.coroutine
-    def setup(self):
+    async def setup(self):
         keys = self.keys
 
         while not keys.issubset(self.scheduler.tasks):
-            yield gen.sleep(0.05)
+            await gen.sleep(0.05)
 
         tasks = [self.scheduler.tasks[k] for k in keys]
 

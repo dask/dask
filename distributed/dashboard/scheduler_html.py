@@ -3,7 +3,6 @@ from datetime import datetime
 from dask.utils import format_bytes
 import toolz
 from tornado import escape
-from tornado import gen
 
 from ..utils import log_errors, format_time
 from .proxy import GlobalProxyHandler
@@ -59,22 +58,20 @@ class Logs(RequestHandler):
 
 
 class WorkerLogs(RequestHandler):
-    @gen.coroutine
-    def get(self, worker):
+    async def get(self, worker):
         with log_errors():
             worker = escape.url_unescape(worker)
-            logs = yield self.server.get_worker_logs(workers=[worker])
+            logs = await self.server.get_worker_logs(workers=[worker])
             logs = logs[worker]
             self.render("logs.html", title="Logs: " + worker, logs=logs, **self.extra)
 
 
 class WorkerCallStacks(RequestHandler):
-    @gen.coroutine
-    def get(self, worker):
+    async def get(self, worker):
         with log_errors():
             worker = escape.url_unescape(worker)
             keys = self.server.processing[worker]
-            call_stack = yield self.server.get_call_stack(keys=keys)
+            call_stack = await self.server.get_call_stack(keys=keys)
             self.render(
                 "call-stack.html",
                 title="Call Stacks: " + worker,
@@ -84,11 +81,10 @@ class WorkerCallStacks(RequestHandler):
 
 
 class TaskCallStack(RequestHandler):
-    @gen.coroutine
-    def get(self, key):
+    async def get(self, key):
         with log_errors():
             key = escape.url_unescape(key)
-            call_stack = yield self.server.get_call_stack(keys=[key])
+            call_stack = await self.server.get_call_stack(keys=[key])
             if not call_stack:
                 self.write(
                     "<p>Task not actively running. "

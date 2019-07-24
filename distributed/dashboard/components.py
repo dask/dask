@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import asyncio
 from bisect import bisect
 from operator import add
 from time import time
@@ -549,8 +550,7 @@ class ProfileTimePlot(DashboardComponent):
 
     @without_property_validation
     def trigger_update(self, update_metadata=True):
-        @gen.coroutine
-        def cb():
+        async def cb():
             with log_errors():
                 prof = self.server.get_profile(
                     key=self.key, start=self.start, stop=self.stop
@@ -560,7 +560,7 @@ class ProfileTimePlot(DashboardComponent):
                 else:
                     metadata = None
                 if isinstance(prof, gen.Future):
-                    prof, metadata = yield [prof, metadata]
+                    prof, metadata = await asyncio.gather(prof, metadata)
                 self.doc().add_next_tick_callback(lambda: self.update(prof, metadata))
 
         self.server.loop.add_callback(cb)

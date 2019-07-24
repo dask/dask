@@ -149,8 +149,8 @@ keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
 .. _pure: https://toolz.readthedocs.io/en/latest/purity.html
 
 
-Tornado Coroutines
-------------------
+Async/await Operation
+---------------------
 
 If we are operating in an asynchronous environment then the blocking functions
 listed above become asynchronous equivalents.  You must start your client
@@ -159,11 +159,10 @@ functions.
 
 .. code-block:: python
 
-   @gen.coroutine
-   def f():
-       client = yield Client(asynchronous=True)
+   async def f():
+       client = await Client(asynchronous=True)
        future = client.submit(func, *args)
-       result = yield future
+       result = await future
        return result
 
 If you want to reuse the same client in asynchronous and synchronous
@@ -174,10 +173,9 @@ call.
 
    client = Client()  # normal blocking client
 
-   @gen.coroutine
-   def f():
+   async def f():
        futures = client.map(func, L)
-       results = yield client.gather(futures, asynchronous=True)
+       results = await client.gather(futures, asynchronous=True)
        return results
 
 See the :doc:`Asynchronous <asynchronous>` documentation for more information.
