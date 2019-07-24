@@ -13,6 +13,7 @@ from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
 from . import methods
 
+
 def overlap_chunk(
     func, prev_part, current_part, next_part, before, after, args, kwargs
 ):
