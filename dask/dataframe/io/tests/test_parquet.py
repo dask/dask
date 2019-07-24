@@ -957,7 +957,9 @@ def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
             ("partition_column", pa.int64()),
         ]
     )
-    ddf.to_parquet(fn, engine="pyarrow", partition_on=["partition_column"], schema=schema)
+    ddf.to_parquet(
+        fn, engine="pyarrow", partition_on=["partition_column"], schema=schema
+    )
     ddf2 = dd.read_parquet(fn, engine=engine)
 
     # np.isnan not support for dtype "object"
