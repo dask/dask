@@ -153,7 +153,10 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
-    typ = type(count.to_frame()) if is_series_like(count) else type(count)
+    if is_series_like(count) and hasattr(count, "to_frame"):
+        typ = type(count.to_frame())
+    else:
+        typ = type(q)
 
     if is_timedelta_col:
         mean = pd.to_timedelta(mean)
@@ -167,7 +170,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     )
 
     q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]
-    if is_series_like(q) and is_dataframe_like(typ):
+    if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
 
@@ -351,12 +354,19 @@ def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **kwar
     else:
         func = concat_dispatch.dispatch(type(dfs[0]))
         return func(
-            dfs, axis=axis, join=join, uniform=uniform, filter_warning=filter_warning, **kwargs
+            dfs,
+            axis=axis,
+            join=join,
+            uniform=uniform,
+            filter_warning=filter_warning,
+            **kwargs
         )
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True, **kwargs):
+def concat_pandas(
+    dfs, axis=0, join="outer", uniform=False, filter_warning=True, **kwargs
+):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **kwargs)
 
