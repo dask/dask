@@ -973,7 +973,11 @@ def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
 
     ddf = dd.from_pandas(df, npartitions=2)
     schema = pa.schema(
-        [("arrays", pa.list_(pa.int64())), ("strings", pa.list_(pa.string()))]
+        [
+            ("arrays", pa.list_(pa.int64())),
+            ("strings", pa.string()),
+            ("partition_column", pa.int64())
+        ]
     )
     engine = "pyarrow"
     ddf.to_parquet(fn, engine=engine, partition_on=["partition_column"], schema=schema)
