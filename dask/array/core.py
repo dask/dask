@@ -2770,8 +2770,20 @@ def to_zarr(
         where overwrite=True will replace the existing data.
     compute, return_stored: see ``store()``
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+
+    Raises
+    ------
+    ValueError
+        If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+
     """
     import zarr
+
+    if np.isnan(arr.shape).any():
+        raise ValueError(
+            "Saving a dask array with unknown chunk sizes is not "
+            "currently supported by Zarr"
+        )
 
     if isinstance(url, zarr.Array):
         z = url
