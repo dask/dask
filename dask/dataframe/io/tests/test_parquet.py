@@ -960,7 +960,6 @@ def test_to_parquet_consistent_schema_partition_pyarrow(tmpdir, engine):
 
 
 def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
-    check_fastparquet()
     check_pyarrow()
     fn = str(tmpdir.join("dask.pa"))
 
