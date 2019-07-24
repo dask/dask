@@ -11,7 +11,7 @@ from ..utils import M, funcname, derived_from
 from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
-
+from . import methods
 
 def overlap_chunk(
     func, prev_part, current_part, next_part, before, after, args, kwargs
@@ -32,7 +32,7 @@ def overlap_chunk(
             raise NotImplementedError(msg)
 
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
-    combined = pd.concat(parts)
+    combined = methods.concat(parts)
     out = func(combined, *args, **kwargs)
     if prev_part is None:
         before = None
