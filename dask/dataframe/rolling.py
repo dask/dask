@@ -242,7 +242,7 @@ def _tail_timedelta(prevs, current, before):
     -------
     overlapped : DataFrame
     """
-    selected = pd.concat(
+    selected = methods.concat(
         [prev[prev.index > (current.index.min() - before)] for prev in prevs]
     )
     return selected
