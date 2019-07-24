@@ -976,7 +976,7 @@ def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
         [
             ("arrays", pa.list_(pa.int64())),
             ("strings", pa.string()),
-            ("partition_column", pa.int64())
+            ("partition_column", pa.int64()),
         ]
     )
     engine = "pyarrow"
