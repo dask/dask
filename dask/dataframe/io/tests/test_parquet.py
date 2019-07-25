@@ -1725,3 +1725,25 @@ def test_read_glob_nostats(tmpdir, write_engine, read_engine):
         os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
     )
     assert_eq(ddf, ddf2, check_divisions=False)
+
+
+@pytest.mark.parametrize("statistics", [True, False, None])
+@pytest.mark.parametrize("remove_common", [True, False])
+@write_read_engines()
+def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_common):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    if os.path.exists(os.path.join(tmp_path, "_metadata")):
+        os.unlink(os.path.join(tmp_path, "_metadata"))
+    files = os.listdir(tmp_path)
+    assert "_metadata" not in files
+
+    if remove_common and os.path.exists(os.path.join(tmp_path, "_common_metadata")):
+        os.unlink(os.path.join(tmp_path, "_common_metadata"))
+
+    ddf2 = dd.read_parquet(
+        tmp_path,
+        engine=read_engine,
+        gather_statistics=statistics,
+    )
+    assert_eq(ddf, ddf2, check_divisions=False)
