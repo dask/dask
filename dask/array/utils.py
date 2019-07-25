@@ -11,7 +11,7 @@ from toolz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, is_arraylike
+from ..utils import has_keyword, ignoring, is_arraylike
 
 try:
     AxisError = np.AxisError
@@ -120,6 +120,9 @@ def compute_meta(func, _dtype, *args, **kwargs):
             meta = func(*args_meta)
         else:
             try:
+                # some reduction functions need to know they are computing meta
+                if has_keyword(func, "computing_meta"):
+                    kwargs_meta["computing_meta"] = True
                 meta = func(*args_meta, **kwargs_meta)
             except TypeError as e:
                 if (

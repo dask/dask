@@ -752,6 +752,8 @@ def test_compute_divisions():
 
 
 def test_temporary_directory(tmpdir):
+    from multiprocessing.pool import Pool
+
     df = pd.DataFrame(
         {
             "x": np.random.random(100),
@@ -761,10 +763,18 @@ def test_temporary_directory(tmpdir):
     )
     ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
 
-    with dask.config.set(temporary_directory=str(tmpdir), scheduler="processes"):
-        ddf2 = ddf.set_index("x", shuffle="disk")
-        ddf2.compute()
-        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
+    # We use a pool to avoid a race condition between the pool close
+    # cleaning up files, and the assert below.
+    pool = Pool(4)
+    with pool:
+        with dask.config.set(
+            temporary_directory=str(tmpdir), scheduler="processes", pool=pool
+        ):
+            ddf2 = ddf.set_index("x", shuffle="disk")
+            ddf2.compute()
+            assert any(
+                fn.endswith(".partd") for fn in os.listdir(str(tmpdir))
+            ), os.listdir(str(tmpdir))
 
 
 def test_empty_partitions():

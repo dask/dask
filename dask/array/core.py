@@ -62,7 +62,6 @@ from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
-from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
@@ -2570,7 +2569,7 @@ def from_array(
 ):
     """ Create dask array from something that looks like an array
 
-    Input must have a ``.shape`` and support numpy-style slicing.
+    Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
 
     Parameters
     ----------
@@ -2725,11 +2724,9 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        from ..bytes.core import get_mapper
+
+        mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
         mapper = url
@@ -2773,8 +2770,20 @@ def to_zarr(
         where overwrite=True will replace the existing data.
     compute, return_stored: see ``store()``
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+
+    Raises
+    ------
+    ValueError
+        If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+
     """
     import zarr
+
+    if np.isnan(arr.shape).any():
+        raise ValueError(
+            "Saving a dask array with unknown chunk sizes is not "
+            "currently supported by Zarr"
+        )
 
     if isinstance(url, zarr.Array):
         z = url
@@ -2797,11 +2806,9 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        from ..bytes.core import get_mapper
+
+        mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
         mapper = url

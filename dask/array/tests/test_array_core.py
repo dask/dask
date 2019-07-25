@@ -46,6 +46,7 @@ from dask.array.core import (
     concatenate_axes,
 )
 from dask.blockwise import make_blockwise_graph as top, broadcast_dimensions
+from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 
 from numpy import nancumsum, nancumprod
@@ -3702,6 +3703,14 @@ def test_zarr_existing_array():
     assert a2.chunks == a.chunks
 
 
+def test_to_zarr_unknown_chunks_raises():
+    pytest.importorskip("zarr")
+    a = da.random.random((10,), chunks=(3,))
+    a = a[a > 0.5]
+    with pytest.raises(ValueError, match="unknown chunk sizes"):
+        a.to_zarr({})
+
+
 def test_read_zarr_chunks():
     pytest.importorskip("zarr")
     a = da.zeros((9,), chunks=(3,))
@@ -4051,6 +4060,7 @@ def test_no_warnings_from_blockwise():
     assert not record
 
 
+@pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
 def test_from_array_meta():
     sparse = pytest.importorskip("sparse")
     x = np.ones(10)

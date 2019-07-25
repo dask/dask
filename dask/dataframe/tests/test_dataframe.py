@@ -16,6 +16,7 @@ from dask.base import compute_as_if_collection
 from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
+from dask.array.numpy_compat import _numpy_117
 from dask.dataframe.core import (
     repartition_divisions,
     aca,
@@ -26,8 +27,13 @@ from dask.dataframe.core import (
     total_mem_usage,
 )
 from dask.dataframe import methods
-from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps, PANDAS_VERSION
-
+from dask.dataframe.utils import (
+    assert_eq,
+    make_meta,
+    assert_max_deps,
+    PANDAS_VERSION,
+    PANDAS_GT_0250,
+)
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -397,6 +403,7 @@ def test_describe(include, exclude, percentiles, subset):
             )
 
 
+@pytest.mark.xfail(PANDAS_GT_0250, reason="Pandas change.")
 def test_describe_empty():
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(df_none, 2)
@@ -406,9 +413,16 @@ def test_describe_empty():
 
     # Pandas have different dtypes for resulting describe dataframe if there are only
     # None-values, pre-compute dask df to bypass _meta check
-    assert_eq(
-        df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
-    )
+    if PANDAS_GT_0250:
+        # https://github.com/pandas-dev/pandas/issues/27183
+        # may be fixed for pandas RC. If so, remove
+        expected = df_none.describe()
+        result = ddf_none.describe(percentiles_method="dask").compute()
+        assert_eq(expected, result)
+    else:
+        assert_eq(
+            df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
+        )
 
     with pytest.raises(ValueError):
         ddf_len0.describe(percentiles_method="dask").compute()
@@ -420,6 +434,7 @@ def test_describe_empty():
         ddf_nocols.describe(percentiles_method="dask").compute()
 
 
+@pytest.mark.xfail(PANDAS_GT_0250, reason="Pandas change.")
 def test_describe_empty_tdigest():
     pytest.importorskip("crick")
 
@@ -2169,9 +2184,9 @@ def test_select_dtypes(include, exclude):
     assert_eq(result, expected)
 
     # count dtypes
-    tm.assert_series_equal(a.get_dtype_counts(), df.get_dtype_counts())
+    tm.assert_series_equal(a.dtypes.value_counts(), df.dtypes.value_counts())
 
-    tm.assert_series_equal(result.get_dtype_counts(), expected.get_dtype_counts())
+    tm.assert_series_equal(result.dtypes.value_counts(), expected.dtypes.value_counts())
 
     if PANDAS_VERSION >= "0.23.0":
         ctx = pytest.warns(FutureWarning)
@@ -3861,6 +3876,7 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
+@pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Aviod searchsorted failure.
