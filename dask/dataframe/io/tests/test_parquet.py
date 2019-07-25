@@ -938,37 +938,72 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-def test_to_parquet_inconsistent_schema_partition_pyarrow(tmpdir):
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(tmpdir):
     check_pyarrow()
-    fn = str(tmpdir.join("dask.pa"))
 
-    arrays = np.array([np.array([0, 1, 2]), np.array([3, 4]), np.nan, np.nan])
-    strings = np.array(["a", "b", np.nan, np.nan])
+    df = pd.DataFrame(
+        {"partition_column": [0, 0, 1, 1], "strings": ["a", "b", None, None]}
+    )
 
-    df = pd.DataFrame([0, 0, 1, 1], columns=["partition_column"])
-    df["arrays"] = pd.Series(arrays)
-    df["strings"] = pd.Series(strings)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
+
+    # Test that read fails because of default behavior when schema not provided
+    with pytest.raises(ValueError) as e_info:
+        dd.read_parquet(str(tmpdir), engine="pyarrow")
+        assert e_info.message.contains("ValueError: Schema in partition")
+        assert e_info.message.contains("was different")
+
+
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
+    tmpdir
+):
+    check_pyarrow()
+
+    # Data types to test: strings, arrays, ints, timezone aware timestamps
+    in_arrays = [[0, 1, 2], [3, 4], np.nan, np.nan]
+    out_arrays = [[0, 1, 2], [3, 4], None, None]
+    in_strings = ["a", "b", np.nan, np.nan]
+    out_strings = ["a", "b", None, None]
+    timestamp = pd.Timestamp(1513393355, unit="s", tz="UTC")
+    timestamps = [timestamp, timestamp, pd.NaT, pd.NaT]
+
+    df = pd.DataFrame(
+        {
+            "partition_column": [0, 0, 1, 1],
+            "arrays": in_arrays,
+            "strings": in_strings,
+            "timestamps": timestamps,
+        }
+    )
 
     ddf = dd.from_pandas(df, npartitions=2)
     schema = pa.schema(
         [
             ("arrays", pa.list_(pa.int64())),
             ("strings", pa.string()),
+            ("timestamps", pa.timestamp("ns", "UTC")),
             ("partition_column", pa.int64()),
         ]
     )
     ddf.to_parquet(
-        fn, engine="pyarrow", partition_on=["partition_column"], schema=schema
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
     )
-    ddf2 = dd.read_parquet(fn, engine=engine)
+    ddf_after_write = dd.read_parquet(str(tmpdir), engine="pyarrow")
 
-    # np.isnan not support for dtype "object"
-    isnan = [str(a) == "nan" for a in arrays]
-    expected_arrays = np.where(isnan, None, arrays)
-    resulting_arrays = ddf2.compute()["arrays"].values
-    for i in range(resulting_arrays.size):
-        assert np.array_equal(resulting_arrays[i], expected_arrays[i])
-    assert np.array_equal(ddf2["partition_column"], df["partition_column"])
+    # Check array support
+    arrays_after_write = ddf_after_write.arrays.values.compute()
+    for i in range(len(df)):
+        assert np.array_equal(arrays_after_write[i], out_arrays[i])
+
+    # Check string support
+    assert np.array_equal(ddf_after_write.strings.values.compute(), out_strings)
+
+    # Check datetime support
+    assert df.timestamps.equals(ddf_after_write.timestamps.compute())
+
+    # Check partition column
+    assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
 
 
 @write_read_engines_xfail
