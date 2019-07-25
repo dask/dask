@@ -376,13 +376,15 @@ def test_check_meta_typename():
     assert "pandas" in str(info.value)
 
 
-def test_is_dataframe_like(monkeypatch):
+@pytest.mark.parametrize("frame_value_counts", [True, False])
+def test_is_dataframe_like(monkeypatch, frame_value_counts):
+    # When we drop support for pandas 1.0, this compat check can
+    # be dropped
+    if frame_value_counts:
+        monkeypatch.setattr(pd.DataFrame, "value_counts", lambda x: None, raising=False)
+
     df = pd.DataFrame({"x": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
-
-    if not hasattr(pd.DataFrame, "value_counts"):
-        # TODO: Set the pandas version this shows up in (likely 1.0)
-        monkeypatch.setattr(pd.DataFrame, "value_counts", lambda x: None, raising=False)
 
     assert is_dataframe_like(df)
     assert is_dataframe_like(ddf)
