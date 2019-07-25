@@ -13,8 +13,9 @@ from tornado import gen
 
 from distributed.comm import connect, listen
 from distributed.security import Security
-from distributed.utils_test import new_config, get_cert, gen_test
+from distributed.utils_test import get_cert, gen_test
 
+import dask
 
 ca_file = get_cert("tls-ca-cert.pem")
 
@@ -35,8 +36,7 @@ TLS_13_CIPHERS = [
 
 
 def test_defaults():
-    with new_config({}):
-        sec = Security()
+    sec = Security()
     assert sec.require_encryption in (None, False)
     assert sec.tls_ca_file is None
     assert sec.tls_ciphers is None
@@ -46,6 +46,13 @@ def test_defaults():
     assert sec.tls_scheduler_cert is None
     assert sec.tls_worker_key is None
     assert sec.tls_worker_cert is None
+
+
+def test_constructor_errors():
+    with pytest.raises(TypeError) as exc:
+        Security(unknown_keyword="bar")
+
+    assert "unknown_keyword" in str(exc.value)
 
 
 def test_attribute_error():
@@ -59,16 +66,17 @@ def test_attribute_error():
 
 def test_from_config():
     c = {
-        "tls": {
-            "ca-file": "ca.pem",
-            "scheduler": {"key": "skey.pem", "cert": "scert.pem"},
-            "worker": {"cert": "wcert.pem"},
-            "ciphers": FORCED_CIPHER,
-        },
-        "require-encryption": True,
+        "distributed.comm.tls.ca-file": "ca.pem",
+        "distributed.comm.tls.scheduler.key": "skey.pem",
+        "distributed.comm.tls.scheduler.cert": "scert.pem",
+        "distributed.comm.tls.worker.cert": "wcert.pem",
+        "distributed.comm.tls.ciphers": FORCED_CIPHER,
+        "distributed.comm.require-encryption": True,
     }
-    with new_config(c):
+
+    with dask.config.set(c):
         sec = Security()
+
     assert sec.require_encryption is True
     assert sec.tls_ca_file == "ca.pem"
     assert sec.tls_ciphers == FORCED_CIPHER
@@ -82,18 +90,16 @@ def test_from_config():
 
 def test_kwargs():
     c = {
-        "tls": {
-            "ca-file": "ca.pem",
-            "scheduler": {"key": "skey.pem", "cert": "scert.pem"},
-        }
+        "distributed.comm.tls.ca-file": "ca.pem",
+        "distributed.comm.tls.scheduler.key": "skey.pem",
+        "distributed.comm.tls.scheduler.cert": "scert.pem",
     }
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security(
             tls_scheduler_cert="newcert.pem", require_encryption=True, tls_ca_file=None
         )
     assert sec.require_encryption is True
-    # None value didn't override default
-    assert sec.tls_ca_file == "ca.pem"
+    assert sec.tls_ca_file is None
     assert sec.tls_ciphers is None
     assert sec.tls_client_key is None
     assert sec.tls_client_cert is None
@@ -104,24 +110,22 @@ def test_kwargs():
 
 
 def test_repr():
-    with new_config({}):
-        sec = Security(tls_ca_file="ca.pem", tls_scheduler_cert="scert.pem")
-        assert (
-            repr(sec)
-            == "Security(tls_ca_file='ca.pem', tls_scheduler_cert='scert.pem')"
-        )
+    sec = Security(tls_ca_file="ca.pem", tls_scheduler_cert="scert.pem")
+    assert (
+        repr(sec)
+        == "Security(require_encryption=False, tls_ca_file='ca.pem', tls_scheduler_cert='scert.pem')"
+    )
 
 
 def test_tls_config_for_role():
     c = {
-        "tls": {
-            "ca-file": "ca.pem",
-            "scheduler": {"key": "skey.pem", "cert": "scert.pem"},
-            "worker": {"cert": "wcert.pem"},
-            "ciphers": FORCED_CIPHER,
-        }
+        "distributed.comm.tls.ca-file": "ca.pem",
+        "distributed.comm.tls.scheduler.key": "skey.pem",
+        "distributed.comm.tls.scheduler.cert": "scert.pem",
+        "distributed.comm.tls.worker.cert": "wcert.pem",
+        "distributed.comm.tls.ciphers": FORCED_CIPHER,
     }
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
     t = sec.get_tls_config_for_role("scheduler")
     assert t == {
@@ -158,13 +162,12 @@ def test_connection_args():
             assert len(ctx.get_ciphers()) > 2  # Most likely
 
     c = {
-        "tls": {
-            "ca-file": ca_file,
-            "scheduler": {"key": key1, "cert": cert1},
-            "worker": {"cert": keycert1},
-        }
+        "distributed.comm.tls.ca-file": ca_file,
+        "distributed.comm.tls.scheduler.key": key1,
+        "distributed.comm.tls.scheduler.cert": cert1,
+        "distributed.comm.tls.worker.cert": keycert1,
     }
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
 
     d = sec.get_connection_args("scheduler")
@@ -183,10 +186,10 @@ def test_connection_args():
     assert d.get("ssl_context") is None
 
     # With more settings
-    c["tls"]["ciphers"] = FORCED_CIPHER
-    c["require-encryption"] = True
+    c["distributed.comm.tls.ciphers"] = FORCED_CIPHER
+    c["distributed.comm.require-encryption"] = True
 
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
 
     d = sec.get_listen_args("scheduler")
@@ -212,13 +215,12 @@ def test_listen_args():
             assert len(ctx.get_ciphers()) > 2  # Most likely
 
     c = {
-        "tls": {
-            "ca-file": ca_file,
-            "scheduler": {"key": key1, "cert": cert1},
-            "worker": {"cert": keycert1},
-        }
+        "distributed.comm.tls.ca-file": ca_file,
+        "distributed.comm.tls.scheduler.key": key1,
+        "distributed.comm.tls.scheduler.cert": cert1,
+        "distributed.comm.tls.worker.cert": keycert1,
     }
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
 
     d = sec.get_listen_args("scheduler")
@@ -237,10 +239,10 @@ def test_listen_args():
     assert d.get("ssl_context") is None
 
     # With more settings
-    c["tls"]["ciphers"] = FORCED_CIPHER
-    c["require-encryption"] = True
+    c["distributed.comm.tls.ciphers"] = FORCED_CIPHER
+    c["distributed.comm.require-encryption"] = True
 
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
 
     d = sec.get_listen_args("scheduler")
@@ -270,17 +272,16 @@ def test_tls_listen_connect():
         yield comm.close()
 
     c = {
-        "tls": {
-            "ca-file": ca_file,
-            "scheduler": {"key": key1, "cert": cert1},
-            "worker": {"cert": keycert1},
-        }
+        "distributed.comm.tls.ca-file": ca_file,
+        "distributed.comm.tls.scheduler.key": key1,
+        "distributed.comm.tls.scheduler.cert": cert1,
+        "distributed.comm.tls.worker.cert": keycert1,
     }
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
 
-    c["tls"]["ciphers"] = FORCED_CIPHER
-    with new_config(c):
+    c["distributed.comm.tls.ciphers"] = FORCED_CIPHER
+    with dask.config.set(c):
         forced_cipher_sec = Security()
 
     with listen(
@@ -321,16 +322,16 @@ def test_require_encryption():
         comm.abort()
 
     c = {
-        "tls": {
-            "ca-file": ca_file,
-            "scheduler": {"key": key1, "cert": cert1},
-            "worker": {"cert": keycert1},
-        }
+        "distributed.comm.tls.ca-file": ca_file,
+        "distributed.comm.tls.scheduler.key": key1,
+        "distributed.comm.tls.scheduler.cert": cert1,
+        "distributed.comm.tls.worker.cert": keycert1,
     }
-    with new_config(c):
+    with dask.config.set(c):
         sec = Security()
-    c["require-encryption"] = True
-    with new_config(c):
+
+    c["distributed.comm.require-encryption"] = True
+    with dask.config.set(c):
         sec2 = Security()
 
     for listen_addr in ["inproc://", "tls://"]:

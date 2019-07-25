@@ -96,3 +96,12 @@ very large data over very high speed network links.
    `A study of AES-NI acceleration <https://calomel.org/aesni_ssl_performance.html>`_
    shows recent x86 CPUs can AES-encrypt more than 1 GB per second
    on each CPU core.
+
+
+API
+---
+
+.. currentmodule:: distributed
+
+.. autoclass:: distributed.security.Security
+   :members:

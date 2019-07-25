@@ -1265,10 +1265,10 @@ def new_config(new_config):
     from .config import defaults
 
     config = dask.config.config
-    orig_config = config.copy()
+    orig_config = copy.deepcopy(config)
     try:
         config.clear()
-        config.update(defaults.copy())
+        config.update(copy.deepcopy(defaults))
         dask.config.update(config, new_config)
         initialize_logging(config)
         yield
@@ -1332,15 +1332,18 @@ def tls_config():
     ca_file = get_cert("tls-ca-cert.pem")
     keycert = get_cert("tls-key-cert.pem")
 
-    c = {
-        "tls": {
-            "ca-file": ca_file,
-            "client": {"cert": keycert},
-            "scheduler": {"cert": keycert},
-            "worker": {"cert": keycert},
+    return {
+        "distributed": {
+            "comm": {
+                "tls": {
+                    "ca-file": ca_file,
+                    "client": {"cert": keycert},
+                    "scheduler": {"cert": keycert},
+                    "worker": {"cert": keycert},
+                }
+            }
         }
     }
-    return c
 
 
 def tls_only_config():
@@ -1349,7 +1352,7 @@ def tls_only_config():
     plain TCP communications.
     """
     c = tls_config()
-    c["require-encryption"] = True
+    c["distributed"]["comm"]["require-encryption"] = True
     return c
 
 

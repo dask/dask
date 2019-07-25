@@ -72,21 +72,22 @@ distributed:
       connect: 10s          # time before connecting fails
       tcp: 30s              # time before calling an unresponsive connection dead
 
-  # require-encryption: False   # whether to require encryption on non-local comms
-  #
-  # tls:
-  #   ca-file: xxx.pem
-  #   scheduler:
-  #     key: xxx.pem
-  #     cert: xxx.pem
-  #   worker:
-  #     key: xxx.pem
-  #     cert: xxx.pem
-  #   client:
-  #     key: xxx.pem
-  #     cert: xxx.pem
-  #   ciphers:
-  #     ECDHE-ECDSA-AES128-GCM-SHA256
+    require-encryption: False   # Whether to require encryption on non-local comms
+
+    tls:
+      ciphers: null   # Allowed ciphers, specified as an OpenSSL cipher string.
+      ca-file: null   # Path to a CA file, in pem format, optional
+      scheduler:
+        cert: null    # Path to certificate file for scheduler.
+        key: null     # Path to key file for scheduler. Alternatively, the key
+                      # can be appended to the cert file above, and this field
+                      # left blank.
+      worker:
+        key: null
+        cert: null
+      client:
+        key: null
+        cert: null
 
 
   ###################

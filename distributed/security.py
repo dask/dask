@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 try:
     import ssl
 except ImportError:
@@ -8,80 +6,85 @@ except ImportError:
 import dask
 
 
-_roles = ["client", "scheduler", "worker"]
-
-_tls_per_role_fields = ["key", "cert"]
-
-_tls_fields = ["ca_file", "ciphers"]
-
-_misc_fields = ["require_encryption"]
-
-_fields = set(
-    _misc_fields
-    + ["tls_%s" % field for field in _tls_fields]
-    + ["tls_%s_%s" % (role, field) for role in _roles for field in _tls_per_role_fields]
-)
-
-
-def _field_to_config_key(field):
-    return field.replace("_", "-")
+__all__ = ("Security",)
 
 
 class Security(object):
-    """
-    An object to gather and pass around security configuration.
-    Default values are gathered from the global ``config`` object and
-    can be overriden by constructor args.
+    """Security configuration for a Dask cluster.
 
-    Supported fields:
-        - require_encryption
-        - tls_ca_file
-        - tls_ciphers
-        - tls_client_key
-        - tls_client_cert
-        - tls_scheduler_key
-        - tls_scheduler_cert
-        - tls_worker_key
-        - tls_worker_cert
+    Default values are loaded from Dask's configuration files, and can be
+    overridden in the constructor.
+
+    Parameters
+    ----------
+    require_encryption : bool, optional
+        Whether TLS encryption is required for all connections.
+    tls_ca_file : str, optional
+        Path to a CA certificate file encoded in PEM format.
+    tls_ciphers : str, optional
+        An OpenSSL cipher string of allowed ciphers. If not provided, the
+        system defaults will be used.
+    tls_client_cert : str, optional
+        Path to a certificate file for the client, encoded in PEM format.
+    tls_client_key : str, optional
+        Path to a key file for the client, encoded in PEM format.
+        Alternatively, the key may be appended to the cert file, and this
+        parameter be omitted.
+    tls_scheduler_cert : str, optional
+        Path to a certificate file for the scheduler, encoded in PEM format.
+    tls_scheduler_key : str, optional
+        Path to a key file for the scheduler, encoded in PEM format.
+        Alternatively, the key may be appended to the cert file, and this
+        parameter be omitted.
+    tls_worker_cert : str, optional
+        Path to a certificate file for a worker, encoded in PEM format.
+    tls_worker_key : str, optional
+        Path to a key file for a worker, encoded in PEM format.
+        Alternatively, the key may be appended to the cert file, and this
+        parameter be omitted.
     """
 
-    __slots__ = tuple(_fields)
+    __slots__ = (
+        "require_encryption",
+        "tls_ca_file",
+        "tls_ciphers",
+        "tls_client_key",
+        "tls_client_cert",
+        "tls_scheduler_key",
+        "tls_scheduler_cert",
+        "tls_worker_key",
+        "tls_worker_cert",
+    )
 
     def __init__(self, **kwargs):
-        self._init_from_dict(dask.config.config)
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        for k in _fields:
-            if not hasattr(self, k):
-                setattr(self, k, None)
+        extra = set(kwargs).difference(self.__slots__)
+        if extra:
+            raise TypeError("Unknown parameters: %r" % sorted(extra))
+        self._set_field(
+            kwargs, "require_encryption", "distributed.comm.require-encryption"
+        )
+        self._set_field(kwargs, "tls_ciphers", "distributed.comm.tls.ciphers")
+        self._set_field(kwargs, "tls_ca_file", "distributed.comm.tls.ca-file")
+        self._set_field(kwargs, "tls_client_key", "distributed.comm.tls.client.key")
+        self._set_field(kwargs, "tls_client_cert", "distributed.comm.tls.client.cert")
+        self._set_field(
+            kwargs, "tls_scheduler_key", "distributed.comm.tls.scheduler.key"
+        )
+        self._set_field(
+            kwargs, "tls_scheduler_cert", "distributed.comm.tls.scheduler.cert"
+        )
+        self._set_field(kwargs, "tls_worker_key", "distributed.comm.tls.worker.key")
+        self._set_field(kwargs, "tls_worker_cert", "distributed.comm.tls.worker.cert")
 
-    def _init_from_dict(self, d):
-        """
-        Initialize Security from nested dict.
-        """
-        self._init_fields_from_dict(d, "", _misc_fields, {})
-        self._init_fields_from_dict(d, "tls", _tls_fields, _tls_per_role_fields)
-
-    def _init_fields_from_dict(self, d, category, fields, per_role_fields):
-        if category:
-            d = d.get(category, {})
-            category_prefix = category + "_"
+    def _set_field(self, kwargs, field, config_name):
+        if field in kwargs:
+            out = kwargs[field]
         else:
-            category_prefix = ""
-        for field in fields:
-            k = _field_to_config_key(field)
-            if k in d:
-                setattr(self, "%s%s" % (category_prefix, field), d[k])
-        for role in _roles:
-            dd = d.get(role, {})
-            for field in per_role_fields:
-                k = _field_to_config_key(field)
-                if k in dd:
-                    setattr(self, "%s%s_%s" % (category_prefix, role, field), dd[k])
+            out = dask.config.get(config_name)
+        setattr(self, field, out)
 
     def __repr__(self):
-        items = sorted((k, getattr(self, k)) for k in _fields)
+        items = sorted((k, getattr(self, k)) for k in self.__slots__)
         return (
             "Security("
             + ", ".join("%s=%r" % (k, v) for k, v in items if v is not None)
@@ -92,26 +95,18 @@ class Security(object):
         """
         Return the TLS configuration for the given role, as a flat dict.
         """
-        return self._get_config_for_role("tls", role, _tls_fields, _tls_per_role_fields)
-
-    def _get_config_for_role(self, category, role, fields, per_role_fields):
-        if role not in _roles:
+        if role not in {"client", "scheduler", "worker"}:
             raise ValueError("unknown role %r" % (role,))
-        d = {}
-        for field in fields:
-            k = "%s_%s" % (category, field)
-            d[field] = getattr(self, k)
-        for field in per_role_fields:
-            k = "%s_%s_%s" % (category, role, field)
-            d[field] = getattr(self, k)
-        return d
+        return {
+            "ca_file": self.tls_ca_file,
+            "ciphers": self.tls_ciphers,
+            "cert": getattr(self, "tls_%s_cert" % role),
+            "key": getattr(self, "tls_%s_key" % role),
+        }
 
     def _get_tls_context(self, tls, purpose):
         if tls.get("ca_file") and tls.get("cert"):
-            try:
-                ctx = ssl.create_default_context(purpose=purpose, cafile=tls["ca_file"])
-            except AttributeError:
-                raise RuntimeError("TLS functionality requires Python 2.7.9+")
+            ctx = ssl.create_default_context(purpose=purpose, cafile=tls["ca_file"])
             ctx.verify_mode = ssl.CERT_REQUIRED
             # We expect a dedicated CA for the cluster and people using
             # IP addresses rather than hostnames
@@ -126,23 +121,19 @@ class Security(object):
         Get the *connection_args* argument for a connect() call with
         the given *role*.
         """
-        d = {}
         tls = self.get_tls_config_for_role(role)
-        # Ensure backwards compatibility (ssl.Purpose is Python 2.7.9+ only)
-        purpose = ssl.Purpose.SERVER_AUTH if hasattr(ssl, "Purpose") else None
-        d["ssl_context"] = self._get_tls_context(tls, purpose)
-        d["require_encryption"] = self.require_encryption
-        return d
+        return {
+            "ssl_context": self._get_tls_context(tls, ssl.Purpose.SERVER_AUTH),
+            "require_encryption": self.require_encryption,
+        }
 
     def get_listen_args(self, role):
         """
         Get the *connection_args* argument for a listen() call with
         the given *role*.
         """
-        d = {}
         tls = self.get_tls_config_for_role(role)
-        # Ensure backwards compatibility (ssl.Purpose is Python 2.7.9+ only)
-        purpose = ssl.Purpose.CLIENT_AUTH if hasattr(ssl, "Purpose") else None
-        d["ssl_context"] = self._get_tls_context(tls, purpose)
-        d["require_encryption"] = self.require_encryption
-        return d
+        return {
+            "ssl_context": self._get_tls_context(tls, ssl.Purpose.CLIENT_AUTH),
+            "require_encryption": self.require_encryption,
+        }
