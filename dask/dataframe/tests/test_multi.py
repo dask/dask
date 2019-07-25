@@ -527,13 +527,12 @@ def test_indexed_concat(join):
 
     B = pd.DataFrame({"x": [10, 20, 40, 50, 60, 80]}, index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
-
     expected = pd.concat([A, B], axis=0, join=join, **concat_kwargs)
-    result = concat_indexed_dataframes([a, b], join=join)
-    assert_eq(result, expected)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
+        result = concat_indexed_dataframes([a, b], join=join)
+        assert_eq(result, expected)
         assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == sorted(
             concat_indexed_dataframes([a, b], join=join).dask
         )
@@ -563,25 +562,29 @@ def test_concat(join):
         kwargs = {"sort": False}
     else:
         kwargs = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        for (dd1, dd2, pd1, pd2) in [
+            (ddf1, ddf2, pdf1, pdf2),
+            (ddf1, ddf3, pdf1, pdf3),
+        ]:
 
-    for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2), (ddf1, ddf3, pdf1, pdf3)]:
+            expected = pd.concat([pd1, pd2], join=join, **kwargs)
+            result = dd.concat([dd1, dd2], join=join)
+            assert_eq(result, expected)
 
-        expected = pd.concat([pd1, pd2], join=join, **kwargs)
-        result = dd.concat([dd1, dd2], join=join)
-        assert_eq(result, expected)
-
-    # test outer only, inner has a problem on pandas side
-    for (dd1, dd2, pd1, pd2) in [
-        (ddf1, ddf2, pdf1, pdf2),
-        (ddf1, ddf3, pdf1, pdf3),
-        (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
-        (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
-        (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
-        (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
-    ]:
-        expected = pd.concat([pd1, pd2], **kwargs)
-        result = dd.concat([dd1, dd2])
-        assert_eq(result, expected)
+        # test outer only, inner has a problem on pandas side
+        for (dd1, dd2, pd1, pd2) in [
+            (ddf1, ddf2, pdf1, pdf2),
+            (ddf1, ddf3, pdf1, pdf3),
+            (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
+            (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
+            (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
+            (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
+        ]:
+            expected = pd.concat([pd1, pd2], **kwargs)
+            result = dd.concat([dd1, dd2])
+            assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("join", ["inner", "outer"])
@@ -1770,7 +1773,7 @@ def test_append():
             warnings.simplefilter("ignore", FutureWarning)
             expected = pandas_obj.append(pandas_append)
 
-        result = dask_obj.append(dask_append)
+            result = dask_obj.append(dask_append)
 
         assert_eq(result, expected)
 
