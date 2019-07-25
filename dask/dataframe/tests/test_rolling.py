@@ -117,33 +117,33 @@ def mad(x):
 
 
 rolling_method_args_check_less_precise = [
-    ("count", (), False),
-    ("cov", (), False),
-    ("sum", (), False),
-    ("mean", (), False),
-    ("median", (), False),
-    ("min", (), False),
-    ("max", (), False),
-    ("std", (), True),
-    ("var", (), True),
-    ("skew", (), True),  # here and elsewhere, results for kurt and skew are
-    ("kurt", (), True),  # checked with check_less_precise=True so that we are
+    ("count", (), False, False),
+    ("cov", (), False, True),
+    ("sum", (), False, False),
+    ("mean", (), False, False),
+    ("median", (), False, False),
+    ("min", (), False, False),
+    ("max", (), False, False),
+    ("std", (), True, False),
+    ("var", (), True, False),
+    ("skew", (), True, False),  # here and elsewhere, results for kurt and skew are
+    ("kurt", (), True, False),  # checked with check_less_precise=True so that we are
     # only looking at 3ish decimal places for the equality check
     # rather than 5ish. I have encountered a case where a test
     # seems to have failed due to numerical problems with kurt.
     # So far, I am only weakening the check for kurt and skew,
     # as they involve third degree powers and higher
-    ("quantile", (0.38,), False),
-    ("apply", (mad,), False),
+    ("quantile", (0.38,), False, False),
+    ("apply", (mad,), False, False),
 ]
 
 
 @pytest.mark.parametrize(
-    "method,args,check_less_precise", rolling_method_args_check_less_precise
+    "method,args,check_less_precise,inf_as_nan", rolling_method_args_check_less_precise
 )
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
-def test_rolling_methods(method, args, window, center, check_less_precise):
+def test_rolling_methods(method, args, window, center, check_less_precise, inf_as_nan):
     # DataFrame
     prolling = df.rolling(window, center=center)
     drolling = ddf.rolling(window, center=center)
@@ -155,6 +155,7 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
         check_less_precise=check_less_precise,
+        inf_as_nan=inf_as_nan,
     )
 
     # Series
@@ -164,6 +165,7 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
         check_less_precise=check_less_precise,
+        inf_as_nan=inf_as_nan,
     )
 
 
@@ -247,10 +249,10 @@ def test_time_rolling_constructor():
 
 
 @pytest.mark.parametrize(
-    "method,args,check_less_precise", rolling_method_args_check_less_precise
+    "method,args,check_less_precise,inf_as_nan", rolling_method_args_check_less_precise
 )
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
-def test_time_rolling_methods(method, args, window, check_less_precise):
+def test_time_rolling_methods(method, args, window, check_less_precise, inf_as_nan):
     # DataFrame
     if method == "apply" and PANDAS_VERSION >= "0.23.0":
         kwargs = {"raw": False}
@@ -262,6 +264,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
         check_less_precise=check_less_precise,
+        inf_as_nan=inf_as_nan,
     )
 
     # Series
@@ -271,6 +274,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
         check_less_precise=check_less_precise,
+        inf_as_nan=inf_as_nan,
     )
 
 

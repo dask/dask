@@ -743,6 +743,7 @@ def assert_eq(
     check_dtypes=True,
     check_divisions=True,
     check_index=True,
+    inf_as_nan=False,
     **kwargs
 ):
     if check_divisions:
@@ -756,6 +757,9 @@ def assert_eq(
     assert_sane_keynames(b)
     a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
     b = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes)
+    if inf_as_nan:
+        a = a.replace([np.inf, -np.inf], np.nan)
+        b = b.replace([np.inf, -np.inf], np.nan)
     if not check_index:
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
