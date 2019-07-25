@@ -28,7 +28,7 @@ Conversation happens in the following places:
 
 .. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues/
-.. _`this Google Canedar invite`: https://calendar.google.com/event?action=TEMPLATE&tmeid=NmxnamVvcGtjY3E2NGI5bTZzcW1hYjlrYzhybTZiYjFjY29qOGI5ZzY0cWoyYzFrNjFpMzhwaGlja18yMDE5MDYwNlQxNjAwMDBaIDRsMHZ0czBjMWNnZGJxNWpoY29najU1c2ZzQGc&tmsrc=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com&scp=ALL
+.. _`this Google Calendar invite`: https://calendar.google.com/event?action=TEMPLATE&tmeid=NmxnamVvcGtjY3E2NGI5bTZzcW1hYjlrYzhybTZiYjFjY29qOGI5ZzY0cWoyYzFrNjFpMzhwaGlja18yMDE5MDYwNlQxNjAwMDBaIDRsMHZ0czBjMWNnZGJxNWpoY29najU1c2ZzQGc&tmsrc=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com&scp=ALL
 
 
 Asking for help
