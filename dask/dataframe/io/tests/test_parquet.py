@@ -1741,9 +1741,5 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
     if remove_common and os.path.exists(os.path.join(tmp_path, "_common_metadata")):
         os.unlink(os.path.join(tmp_path, "_common_metadata"))
 
-    ddf2 = dd.read_parquet(
-        tmp_path,
-        engine=read_engine,
-        gather_statistics=statistics,
-    )
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)

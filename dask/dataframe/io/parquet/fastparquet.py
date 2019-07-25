@@ -104,7 +104,7 @@ class FastParquetEngine(Engine):
         else:
             if fs.isdir(paths[0]):
                 # This is a directory, check for _metadata, then _common_metadata
-                paths = fs.glob(paths[0]+fs.sep+'*')
+                paths = fs.glob(paths[0] + fs.sep + "*")
                 base, fns = analyse_paths(paths)
                 relpaths = [path.replace(base, "").lstrip("/") for path in paths]
                 if "_metadata" in relpaths:
@@ -117,7 +117,7 @@ class FastParquetEngine(Engine):
                     )
                     if gather_statistics is None:
                         gather_statistics = True
-                    
+
                 elif gather_statistics is not False:
                     # Scan every file
                     pf = ParquetFile(paths, open_with=fs.open, **kwargs.get("file", {}))
@@ -131,7 +131,9 @@ class FastParquetEngine(Engine):
                             **kwargs.get("file", {})
                         )
                     else:
-                        pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
+                        pf = ParquetFile(
+                            paths[0], open_with=fs.open, **kwargs.get("file", {})
+                        )
                     scheme = get_file_scheme(fns)
                     pf.file_scheme = scheme
                     pf.cats = _paths_to_cats(fns, scheme)
