@@ -950,7 +950,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
 
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
-        dd.read_parquet(str(tmpdir), engine="pyarrow")
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
 
@@ -989,7 +989,9 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
     ddf.to_parquet(
         str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
     )
-    ddf_after_write = dd.read_parquet(str(tmpdir), engine="pyarrow")
+    ddf_after_write = dd.read_parquet(
+        str(tmpdir), engine="pyarrow", gather_statistics=False
+    )
 
     # Check array support
     arrays_after_write = ddf_after_write.arrays.values.compute()
