@@ -61,7 +61,7 @@ class Engine:
             ]
         parts: List[object]
             A list of objects to be passed to ``Engine.read_partition``.
-            Each object should represent a row group of data.
+            Each object should represent a piece of data (usually a row-group).
             The type of each object can be anything, as long as the
             engine's read_partition function knows how to interpret it.
         """
