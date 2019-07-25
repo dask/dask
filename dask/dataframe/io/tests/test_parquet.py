@@ -1714,3 +1714,14 @@ def test_categories_large(tmpdir, engine):
     ddf = dd.read_parquet(fn, engine=engine, categories={"name": 80000})
 
     assert_eq(sorted(df.name.cat.categories), sorted(ddf.compute().name.cat.categories))
+
+
+@write_read_engines()
+def test_read_glob_nostats(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+
+    ddf2 = dd.read_parquet(
+        os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
+    )
+    assert_eq(ddf, ddf2, check_divisions=False)

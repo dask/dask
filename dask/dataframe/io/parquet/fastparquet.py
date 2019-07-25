@@ -84,28 +84,26 @@ class FastParquetEngine(Engine):
         filters=None,
         **kwargs
     ):
+        parts = []
         if len(paths) > 1:
             if gather_statistics is not False:
                 # this scans all the files, allowing index/divisions
                 # and filtering
-                pf = fastparquet.ParquetFile(
+                pf = ParquetFile(
                     paths, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
                 )
             else:
-                base, fns = analyse_paths(paths)
+                # Rely on metadata for 0th file.
+                # Will need to pass a list of paths to read_partition
+                _, fns = analyse_paths(paths)
                 scheme = get_file_scheme(fns)
                 pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
                 pf.file_scheme = scheme
                 pf.cats = _paths_to_cats(fns, scheme)
-                relpath = paths.replace(base, "").lstrip("/")
-                for rg in pf.row_groups:
-                    rg.cats = pf.cats
-                    rg.schema = pf.schema
-                    for ch in rg.columns:
-                        ch.file_path = relpath
+                parts = paths.copy()
         else:
             try:
-                pf = fastparquet.ParquetFile(
+                pf = ParquetFile(
                     paths[0] + fs.sep + "_metadata",
                     open_with=fs.open,
                     sep=fs.sep,
@@ -114,7 +112,7 @@ class FastParquetEngine(Engine):
                 if gather_statistics is None:
                     gather_statistics = True
             except Exception:
-                pf = fastparquet.ParquetFile(
+                pf = ParquetFile(
                     paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
                 )
 
@@ -233,31 +231,45 @@ class FastParquetEngine(Engine):
         pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
         pf.fmd.row_groups = None
 
-        # Create `parts` (list of row-group-descriptor dicts)
+        # Create `parts`
+        # This is a list of row-group-descriptor dicts, or file-paths
+        # if we have a list of files and gather_statistics=False
+        if not parts:
+            parts = pf.row_groups
+        else:
+            pf = None
         parts = [
             {
-                "piece": rg,
+                "piece": piece,
                 "kwargs": {"pf": pf, "categories": categories_dict or categories},
             }
-            for rg in pf.row_groups
+            for piece in parts
         ]
 
         return (meta, stats, parts)
 
     @staticmethod
     def read_partition(fs, piece, columns, index, categories=(), pf=None, **kwargs):
-        if index is False:
-            ind = False
-        else:
-            ind = None
-            if isinstance(index, list):
-                columns += index
+        if isinstance(index, list):
+            columns += index
 
-        df = pf.read_row_group_file(
-            piece, columns, categories, index=ind, **kwargs.get("read", {})
-        )
-        if index:
-            df = df.set_index(index)
+        if pf:
+            df = pf.read_row_group_file(
+                piece, columns, categories, index=index, **kwargs.get("read", {})
+            )
+        else:
+            base, fns = analyse_paths([piece])
+            scheme = get_file_scheme(fns)
+            pf = ParquetFile(piece, open_with=fs.open)
+            relpath = piece.replace(base, "").lstrip("/")
+            for rg in pf.row_groups:
+                for ch in rg.columns:
+                    ch.file_path = relpath
+            pf.file_scheme = scheme
+            pf.cats = _paths_to_cats(fns, scheme)
+            pf.fn = base
+            df = pf.to_pandas(columns, categories, index=index)
+
         return df
 
     @staticmethod
