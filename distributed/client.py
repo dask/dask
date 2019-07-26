@@ -932,7 +932,9 @@ class Client(Node):
 
             try:
                 self.cluster = await LocalCluster(
-                    loop=self.loop, asynchronous=True, **self._startup_kwargs
+                    loop=self.loop,
+                    asynchronous=self._asynchronous,
+                    **self._startup_kwargs
                 )
             except (OSError, socket.error) as e:
                 if e.errno != errno.EADDRINUSE:
