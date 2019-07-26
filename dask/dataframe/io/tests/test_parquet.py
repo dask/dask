@@ -965,15 +965,27 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
     out_arrays = [[0, 1, 2], [3, 4], None, None]
     in_strings = ["a", "b", np.nan, np.nan]
     out_strings = ["a", "b", None, None]
-    timestamp = pd.Timestamp(1513393355, unit="s", tz="UTC")
-    timestamps = [timestamp, timestamp, pd.NaT, pd.NaT]
+    tstamp = pd.Timestamp(1513393355, unit="s")
+    in_tstamps = [tstamp, tstamp, pd.NaT, pd.NaT]
+    out_tstamps = [tstamp, tstamp, np.datetime64("NaT"), np.datetime64("NaT")]
+    timezone = "US/Eastern"
+    tz_tstamp = pd.Timestamp(1513393355, unit="s", tz=timezone)
+    in_tz_tstamps = [tz_tstamp, tz_tstamp, pd.NaT, pd.NaT]
+    # NOTE - Timezones to not make it through a write-read cycle.
+    out_tz_tstamps = [
+        tz_tstamp.tz_convert(None),
+        tz_tstamp.tz_convert(None),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
 
     df = pd.DataFrame(
         {
             "partition_column": [0, 0, 1, 1],
             "arrays": in_arrays,
             "strings": in_strings,
-            "timestamps": timestamps,
+            "tstamps": in_tstamps,
+            "tz_tstamps": in_tz_tstamps,
         }
     )
 
@@ -982,27 +994,45 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
         [
             ("arrays", pa.list_(pa.int64())),
             ("strings", pa.string()),
-            ("timestamps", pa.timestamp("ns", "UTC")),
+            ("tstamps", pa.timestamp("ns")),
+            ("tz_tstamps", pa.timestamp("ns", timezone)),
             ("partition_column", pa.int64()),
         ]
     )
     ddf.to_parquet(
         str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
     )
-    ddf_after_write = dd.read_parquet(
-        str(tmpdir), engine="pyarrow", gather_statistics=False
+    ddf_after_write = (
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
+        .compute()
+        .reset_index(drop=True)
     )
 
     # Check array support
-    arrays_after_write = ddf_after_write.arrays.values.compute()
+    arrays_after_write = ddf_after_write.arrays.values
     for i in range(len(df)):
-        assert np.array_equal(arrays_after_write[i], out_arrays[i])
-
-    # Check string support
-    assert np.array_equal(ddf_after_write.strings.values.compute(), out_strings)
+        assert np.array_equal(arrays_after_write[i], out_arrays[i]), type(out_arrays[i])
 
     # Check datetime support
-    assert df.timestamps.equals(ddf_after_write.timestamps.compute())
+    tstamps_after_write = ddf_after_write.tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tstamps_after_write[i]):
+            assert np.isnat(out_tstamps[i])
+        else:
+            assert tstamps_after_write[i] == out_tstamps[i]
+
+    # Check timezone aware datetime support
+    tz_tstamps_after_write = ddf_after_write.tz_tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tz_tstamps_after_write[i]):
+            assert np.isnat(out_tz_tstamps[i])
+        else:
+            assert tz_tstamps_after_write[i] == out_tz_tstamps[i]
+
+    # Check string support
+    assert np.array_equal(ddf_after_write.strings.values, out_strings)
 
     # Check partition column
     assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
