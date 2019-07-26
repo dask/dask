@@ -172,12 +172,12 @@ def test_rolling_cov(window, center):
     # DataFrame
     prolling = df.drop("a", 1).rolling(window, center=center)
     drolling = ddf.drop("a", 1).rolling(window, center=center)
-    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
+    assert_eq(prolling.cov(), drolling.cov())
 
     # Series
     prolling = df.b.rolling(window, center=center)
     drolling = ddf.b.rolling(window, center=center)
-    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
+    assert_eq(prolling.cov(), drolling.cov())
 
 
 @pytest.mark.skipif(PANDAS_VERSION >= "0.23.0", reason="Raw is allowed.")
@@ -292,12 +292,12 @@ def test_time_rolling_cov(window):
     # DataFrame
     prolling = ts.drop("a", 1).rolling(window)
     drolling = dts.drop("a", 1).rolling(window)
-    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
+    assert_eq(prolling.cov(), drolling.cov())
 
     # Series
     prolling = ts.b.rolling(window)
     drolling = dts.b.rolling(window)
-    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
+    assert_eq(prolling.cov(), drolling.cov())
 
 
 @pytest.mark.parametrize(
