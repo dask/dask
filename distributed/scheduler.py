@@ -2631,7 +2631,7 @@ class Scheduler(ServerNode):
         serializers=None,
     ):
         """ Broadcast message to workers, return all results """
-        if workers is None:
+        if workers is None or workers is True:
             if hosts is None:
                 workers = list(self.workers)
             else:

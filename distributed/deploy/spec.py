@@ -6,7 +6,7 @@ from tornado import gen
 
 from .cluster import Cluster
 from ..core import rpc, CommClosedError
-from ..utils import LoopRunner, silence_logging, ignoring
+from ..utils import LoopRunner, silence_logging, ignoring, Log, Logs
 from ..scheduler import Scheduler
 from ..security import Security
 
@@ -370,6 +370,39 @@ class SpecCluster(Cluster):
             self.scheduler_address,
             len(self.workers),
         )
+
+    async def _logs(self, scheduler=True, workers=True):
+        logs = Logs()
+
+        if scheduler:
+            L = await self.scheduler_comm.logs()
+            logs["Scheduler"] = Log("\n".join(line for level, line in L))
+
+        if workers:
+            d = await self.scheduler_comm.worker_logs(workers=workers)
+            for k, v in d.items():
+                logs[k] = Log("\n".join(line for level, line in v))
+
+        return logs
+
+    def logs(self, scheduler=True, workers=True):
+        """ Return logs for the scheduler and workers
+
+        Parameters
+        ----------
+        scheduler : boolean
+            Whether or not to collect logs for the scheduler
+        workers : boolean or Iterable[str], optional
+            A list of worker addresses to select.
+            Defaults to all workers if `True` or no workers if `False`
+
+        Returns
+        -------
+        logs: Dict[str]
+            A dictionary of logs, with one item for the scheduler and one for
+            each worker
+        """
+        return self.sync(self._logs, scheduler=scheduler, workers=workers)
 
 
 @atexit.register

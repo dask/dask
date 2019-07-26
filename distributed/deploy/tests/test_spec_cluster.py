@@ -1,6 +1,7 @@
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
 from distributed.deploy.spec import close_clusters, ProcessInterface
 from distributed.utils_test import loop, cleanup  # noqa: F401
+import toolz
 import pytest
 
 
@@ -174,3 +175,33 @@ async def test_spec_process():
     assert proc.status == "running"
     await proc.close()
     assert proc.status == "closed"
+
+
+@pytest.mark.asyncio
+async def test_logs(cleanup):
+    worker = {"cls": Worker, "options": {"nthreads": 1}}
+    async with SpecCluster(
+        asynchronous=True, scheduler=scheduler, worker=worker
+    ) as cluster:
+        cluster.scale(2)
+        await cluster
+
+        logs = await cluster.logs()
+        assert "Scheduler" in logs
+        for worker in cluster.scheduler.workers:
+            assert worker in logs
+
+        assert "Registered" in str(logs)
+
+        logs = await cluster.logs(scheduler=True, workers=False)
+        assert list(logs) == ["Scheduler"]
+
+        logs = await cluster.logs(scheduler=False, workers=False)
+        assert list(logs) == []
+
+        logs = await cluster.logs(scheduler=False, workers=True)
+        assert set(logs) == set(cluster.scheduler.workers)
+
+        w = toolz.first(cluster.scheduler.workers)
+        logs = await cluster.logs(scheduler=False, workers=[w])
+        assert set(logs) == {w}
