@@ -318,8 +318,6 @@ class SpecCluster(Cluster):
     async def scale_down(self, workers):
         workers = set(workers)
 
-        # TODO: this is linear cost.  We should be indexing by name or something
-        to_close = [w for w in self.workers.values() if w.address in workers]
         for k, v in self.workers.items():
             if v.worker_address in workers:
                 del self.worker_spec[k]
