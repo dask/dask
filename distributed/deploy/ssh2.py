@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import sys
 import warnings
@@ -6,7 +5,7 @@ import weakref
 
 import asyncssh
 
-from .spec import SpecCluster
+from .spec import SpecCluster, ProcessInterface
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ warnings.warn(
 )
 
 
-class Process:
+class Process(ProcessInterface):
     """ A superclass for SSH Workers and Nannies
 
     See Also
@@ -25,27 +24,20 @@ class Process:
     Scheduler
     """
 
-    def __init__(self):
-        self.lock = asyncio.Lock()
+    def __init__(self, **kwargs):
         self.connection = None
         self.proc = None
-        self.status = "created"
+        super().__init__(**kwargs)
 
-    def __await__(self):
-        async def _():
-            async with self.lock:
-                if not self.connection:
-                    await self.start()
-                    assert self.connection
-                    weakref.finalize(self, self.proc.terminate)
-            return self
-
-        return _().__await__()
+    async def start(self):
+        assert self.connection
+        weakref.finalize(self, self.proc.terminate)
+        await super().start()
 
     async def close(self):
         self.proc.terminate()
         self.connection.close()
-        self.status = "closed"
+        await super().close()
 
     def __repr__(self):
         return "<SSH %s: status=%s>" % (type(self).__name__, self.status)
@@ -97,6 +89,7 @@ class Worker(Process):
                 self.status = "running"
                 break
         logger.debug("%s", line)
+        await super().start()
 
 
 class Scheduler(Process):
@@ -135,6 +128,7 @@ class Scheduler(Process):
                 self.address = line.split("Scheduler at:")[1].strip()
                 break
         logger.debug("%s", line)
+        await super().start()
 
 
 def SSHCluster(hosts, connect_kwargs, **kwargs):

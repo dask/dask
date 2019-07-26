@@ -1,5 +1,5 @@
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
-from distributed.deploy.spec import close_clusters
+from distributed.deploy.spec import close_clusters, ProcessInterface
 from distributed.utils_test import loop, cleanup  # noqa: F401
 import pytest
 
@@ -164,3 +164,13 @@ async def test_nanny_port():
         scheduler=scheduler, workers=workers, asynchronous=True
     ) as cluster:
         pass
+
+
+@pytest.mark.asyncio
+async def test_spec_process():
+    proc = ProcessInterface()
+    assert proc.status == "created"
+    await proc
+    assert proc.status == "running"
+    await proc.close()
+    assert proc.status == "closed"

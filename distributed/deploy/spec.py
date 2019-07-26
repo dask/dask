@@ -11,6 +11,44 @@ from ..scheduler import Scheduler
 from ..security import Security
 
 
+class ProcessInterface:
+    """ An interface for Scheduler and Worker processes for use in SpecCluster
+
+    Parameters
+    ----------
+    loop:
+        A pointer to the running loop.
+
+    """
+
+    def __init__(self, loop=None):
+        self.address = None
+        self.loop = loop
+        self.lock = asyncio.Lock()
+        self.status = "created"
+
+    def __await__(self):
+        async def _():
+            async with self.lock:
+                if self.status == "created":
+                    await self.start()
+                    assert self.status == "running"
+            return self
+
+        return _().__await__()
+
+    async def start(self):
+        """ Start the process. """
+        self.status = "running"
+
+    async def close(self):
+        """ Close the process. """
+        self.status = "closed"
+
+    def __repr__(self):
+        return "<%s: status=%s>" % (type(self).__name__, self.status)
+
+
 class SpecCluster(Cluster):
     """ Cluster that requires a full specification of workers
 
@@ -319,7 +357,7 @@ class SpecCluster(Cluster):
         workers = set(workers)
 
         for k, v in self.workers.items():
-            if v.worker_address in workers:
+            if getattr(v, "worker_address", v.address) in workers:
                 del self.worker_spec[k]
 
         await self
