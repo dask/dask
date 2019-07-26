@@ -938,8 +938,7 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-@write_read_engines_xfail
-def test_partition_on(tmpdir, write_engine, read_engine):
+def test_partition_on(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -949,11 +948,11 @@ def test_partition_on(tmpdir, write_engine, read_engine):
         }
     )
     d = dd.from_pandas(df, npartitions=2)
-    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=write_engine)
-    # Note #1: fastparquet is not discovering the partions when written by pyarrow
+    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=engine)
+    # Note #1: Cross-engine functionality is missing
     # Note #2: The index is not preserved in pyarrow when partition_on is used
     out = dd.read_parquet(
-        tmpdir, index=False, engine=read_engine, gather_statistics=False
+        tmpdir, index=False, engine=engine, gather_statistics=False
     ).compute()
     for val in df.a.unique():
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
