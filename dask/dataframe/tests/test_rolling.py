@@ -165,24 +165,20 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
         check_less_precise=check_less_precise,
     )
 
+
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
     # DataFrame
-    prolling = df.drop('a', 1).rolling(window, center=center)
-    drolling = ddf.drop('a', 1).rolling(window, center=center)
-    assert_eq(
-        getattr(prolling, 'cov')(),
-        getattr(drolling, 'cov')(),
-    )
+    prolling = df.drop("a", 1).rolling(window, center=center)
+    drolling = ddf.drop("a", 1).rolling(window, center=center)
+    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
 
     # Series
     prolling = df.b.rolling(window, center=center)
     drolling = ddf.b.rolling(window, center=center)
-    assert_eq(
-        getattr(prolling, 'cov')(),
-        getattr(drolling, 'cov')(),
-    )
+    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
+
 
 @pytest.mark.skipif(PANDAS_VERSION >= "0.23.0", reason="Raw is allowed.")
 def test_rolling_raw_pandas_lt_0230_raises():
@@ -289,6 +285,20 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
         getattr(drolling, method)(*args, **kwargs),
         check_less_precise=check_less_precise,
     )
+
+
+@pytest.mark.parametrize("window", [1, 2, 4, 5])
+@pytest.mark.parametrize("center", [True, False])
+def test_time_rolling_cov(window, center):
+    # DataFrame
+    prolling = ts.drop("a", 1).rolling(window)
+    drolling = dts.drop("a", 1).rolling(window)
+    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
+
+    # Series
+    prolling = ts.b.rolling(window, center=center)
+    drolling = dts.b.rolling(window, center=center)
+    assert_eq(getattr(prolling, "cov")(), getattr(drolling, "cov")())
 
 
 @pytest.mark.parametrize(
