@@ -1490,3 +1490,23 @@ def format_dashboard_link(host, port):
 
 def is_coroutine_function(f):
     return asyncio.iscoroutinefunction(f) or gen.is_coroutine_function(f)
+
+
+class Log(str):
+    """ A container for logs """
+
+    def _repr_html_(self):
+        return "<pre><code>{log}</code></pre>".format(log=self)
+
+
+class Logs(dict):
+    """ A container for multiple logs """
+
+    def _repr_html_(self):
+        summaries = [
+            "<details><summary>{title}</summary>{log}</details>".format(
+                title=title, log=log._repr_html_()
+            )
+            for title, log in self.items()
+        ]
+        return "\n".join(summaries)

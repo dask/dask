@@ -7,6 +7,7 @@ import socket
 import sys
 from time import sleep
 import traceback
+import xml.etree.ElementTree
 
 import numpy as np
 import pytest
@@ -18,6 +19,8 @@ from distributed.compatibility import Queue, Empty, PY2
 from distributed.metrics import time
 from distributed.utils import (
     All,
+    Log,
+    Logs,
     sync,
     is_kernel,
     ensure_ip,
@@ -548,3 +551,12 @@ def test_warn_on_duration():
 def test_format_bytes_compat():
     # moved to dask, but exported here for compatibility
     from distributed.utils import format_bytes  # noqa
+
+
+def test_logs():
+    d = Logs({"123": Log("Hello"), "456": Log("World!")})
+    text = d._repr_html_()
+    for line in text.split("\n"):
+        assert xml.etree.ElementTree.fromstring(line) is not None
+    assert "Hello" in text
+    assert "456" in text
