@@ -63,7 +63,7 @@ managing the cluster..
 
    async def f():
        s = Scheduler()        # scheduler created, but not yet running
-       s = await Scheduler()  # the scheduler is running
+       s = await s            # the scheduler is running
        await s.finished()     # wait until the scheduler closes
 
    asyncio.get_event_loop().run_until_complete(f())
