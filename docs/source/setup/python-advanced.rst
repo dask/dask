@@ -189,6 +189,9 @@ workers that should live in different processes in order to avoid the GIL_.
 API
 ---
 
+These classes have a variety of keyword arguments that you can use to control
+their behavior.  See the API documentation below for more information.
+
 Scheduler
 ~~~~~~~~~
 .. autoclass:: Scheduler
