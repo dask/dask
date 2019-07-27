@@ -1528,14 +1528,14 @@ def check_instances():
 
 
 @contextmanager
-def clean(threads=not WINDOWS, instances=True, timeout=1):
+def clean(threads=not WINDOWS, instances=True, timeout=1, processes=True):
     @contextmanager
     def null():
         yield
 
     with check_thread_leak() if threads else null():
         with pristine_loop() as loop:
-            with check_process_leak():
+            with check_process_leak() if processes else null():
                 with check_instances() if instances else null():
                     with check_active_rpc(loop, timeout):
                         reset_config()

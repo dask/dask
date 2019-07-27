@@ -266,23 +266,26 @@ def test_fast_kill(c, s, a, b):
 
 @gen_cluster(Worker=Nanny, timeout=60)
 def test_multiple_clients_restart(s, a, b):
-    e1 = yield Client(s.address, asynchronous=True)
-    e2 = yield Client(s.address, asynchronous=True)
+    c1 = yield Client(s.address, asynchronous=True)
+    c2 = yield Client(s.address, asynchronous=True)
 
-    x = e1.submit(inc, 1)
-    y = e2.submit(inc, 2)
+    x = c1.submit(inc, 1)
+    y = c2.submit(inc, 2)
     xx = yield x
     yy = yield y
     assert xx == 2
     assert yy == 3
 
-    yield e1._restart()
+    yield c1.restart()
 
     assert x.cancelled()
-    assert y.cancelled()
+    start = time()
+    while not y.cancelled():
+        yield gen.sleep(0.01)
+        assert time() < start + 5
 
-    yield e1._close(fast=True)
-    yield e2._close(fast=True)
+    yield c1.close()
+    yield c2.close()
 
 
 @gen_cluster(Worker=Nanny, timeout=60)
