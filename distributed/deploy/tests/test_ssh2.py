@@ -19,6 +19,8 @@ async def test_basic():
             result = await client.submit(lambda x: x + 1, 10)
             assert result == 11
 
+        assert "SSH" in repr(cluster)
+
 
 @pytest.mark.asyncio
 async def test_keywords():

@@ -207,4 +207,4 @@ def SSHCluster(
         }
         for i, host in enumerate(hosts[1:])
     }
-    return SpecCluster(workers, scheduler, **kwargs)
+    return SpecCluster(workers, scheduler, name="SSHCluster", **kwargs)
