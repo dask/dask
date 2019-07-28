@@ -92,7 +92,7 @@ def test_basic(c, s, a, b):
         data = ss.source.data
         assert len(first(data.values()))
         if component is Occupancy:
-            assert all(addr == "127.0.0.1" for addr in data["dashboard_host"])
+            assert all("127.0.0.1" in addr for addr in data["escaped_worker"])
 
 
 @gen_cluster(client=True)
