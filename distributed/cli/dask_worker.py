@@ -357,7 +357,7 @@ def main(
             resources=resources,
             memory_limit=memory_limit,
             reconnect=reconnect,
-            local_dir=local_directory,
+            local_directory=local_directory,
             death_timeout=death_timeout,
             preload=preload,
             preload_argv=preload_argv,
