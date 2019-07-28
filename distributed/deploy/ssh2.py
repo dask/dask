@@ -6,6 +6,9 @@ import weakref
 import asyncssh
 
 from .spec import SpecCluster, ProcessInterface
+from ..utils import cli_keywords
+from ..scheduler import Scheduler as _Scheduler
+from ..worker import Worker as _Worker
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +57,25 @@ class Worker(Process):
         The hostname where we should run this worker
     connect_kwargs: dict
         kwargs to be passed to asyncssh connections
-    kwargs:
-        TODO
+    kwargs: dict
+        These will be passed through the dask-worker CLI to the
+        dask.distributed.Worker class
     """
 
-    def __init__(self, scheduler: str, address: str, connect_kwargs: dict, **kwargs):
+    def __init__(
+        self,
+        scheduler: str,
+        address: str,
+        connect_kwargs: dict,
+        kwargs: dict,
+        loop=None,
+        name=None,
+    ):
         self.address = address
         self.scheduler = scheduler
         self.connect_kwargs = connect_kwargs
         self.kwargs = kwargs
+        self.name = name
 
         super().__init__()
 
@@ -75,15 +88,19 @@ class Worker(Process):
                     "-m",
                     "distributed.cli.dask_worker",
                     self.scheduler,
-                    "--name",  # we need to have name for SpecCluster
-                    str(self.kwargs["name"]),
+                    "--name",
+                    str(self.name),
                 ]
+                + cli_keywords(self.kwargs, cls=_Worker)
             )
         )
 
         # We watch stderr in order to get the address, then we return
         while True:
             line = await self.proc.stderr.readline()
+            if not line.strip():
+                raise Exception("Worker failed to start")
+            logger.info(line.strip())
             if "worker at" in line:
                 self.address = line.split("worker at:")[1].strip()
                 self.status = "running"
@@ -101,11 +118,12 @@ class Scheduler(Process):
         The hostname where we should run this worker
     connect_kwargs: dict
         kwargs to be passed to asyncssh connections
-    kwargs:
-        TODO
+    kwargs: dict
+        These will be passed through the dask-scheduler CLI to the
+        dask.distributed.Scheduler class
     """
 
-    def __init__(self, address: str, connect_kwargs: dict, **kwargs):
+    def __init__(self, address: str, connect_kwargs: dict, kwargs: dict, loop=None):
         self.address = address
         self.kwargs = kwargs
         self.connect_kwargs = connect_kwargs
@@ -118,12 +136,18 @@ class Scheduler(Process):
         self.connection = await asyncssh.connect(self.address, **self.connect_kwargs)
 
         self.proc = await self.connection.create_process(
-            " ".join([sys.executable, "-m", "distributed.cli.dask_scheduler"])
+            " ".join(
+                [sys.executable, "-m", "distributed.cli.dask_scheduler"]
+                + cli_keywords(self.kwargs, cls=_Scheduler)
+            )
         )
 
         # We watch stderr in order to get the address, then we return
         while True:
             line = await self.proc.stderr.readline()
+            if not line.strip():
+                raise Exception("Worker failed to start")
+            logger.info(line.strip())
             if "Scheduler at" in line:
                 self.address = line.split("Scheduler at:")[1].strip()
                 break
@@ -131,7 +155,9 @@ class Scheduler(Process):
         await super().start()
 
 
-def SSHCluster(hosts, connect_kwargs, **kwargs):
+def SSHCluster(
+    hosts, connect_kwargs={}, worker_kwargs={}, scheduler_kwargs={}, **kwargs
+):
     """ Deploy a Dask cluster using SSH
 
     Parameters
@@ -140,25 +166,44 @@ def SSHCluster(hosts, connect_kwargs, **kwargs):
         List of hostnames or addresses on which to launch our cluster
         The first will be used for the scheduler and the rest for workers
     connect_kwargs:
+        Keywords to pass through to asyncssh.connect
         known_hosts: List[str] or None
             The list of keys which will be used to validate the server host
             key presented during the SSH handshake.  If this is not specified,
             the keys will be looked up in the file .ssh/known_hosts.  If this
             is explicitly set to None, server host key validation will be disabled.
-        TODO
-    kwargs:
-        TODO
-    ----
-    This doesn't handle any keyword arguments yet.  It is a proof of concept
+    scheduler_kwargs:
+        Keywords to pass on to dask-scheduler
+    worker_kwargs:
+        Keywords to pass on to dask-worker
+
+    Examples
+    --------
+    >>> from dask.distributed import Client
+    >>> from distributed.deploy.ssh2 import SSHCluster  # experimental for now
+    >>> cluster = SSHCluster(
+    ...     ["localhost"] * 4,
+    ...     connect_kwargs={"known_hosts": None},
+    ...     worker_kwargs={"nthreads": 2},
+    ...     scheduler_kwargs={"port": 0, "dashboard_address": ":8797"})
+    >>> client = Client(cluster)
     """
     scheduler = {
         "cls": Scheduler,
-        "options": {"address": hosts[0], "connect_kwargs": connect_kwargs},
+        "options": {
+            "address": hosts[0],
+            "connect_kwargs": connect_kwargs,
+            "kwargs": scheduler_kwargs,
+        },
     }
     workers = {
         i: {
             "cls": Worker,
-            "options": {"address": host, "connect_kwargs": connect_kwargs},
+            "options": {
+                "address": host,
+                "connect_kwargs": connect_kwargs,
+                "kwargs": worker_kwargs,
+            },
         }
         for i, host in enumerate(hosts[1:])
     }

@@ -803,7 +803,7 @@ def tokey(o):
     --------
 
     >>> tokey(b'x')
-    'x'
+    b'x'
     >>> tokey('x')
     'x'
     >>> tokey(1)
@@ -1210,7 +1210,7 @@ def parse_timedelta(s, default="seconds"):
     >>> parse_timedelta('300ms')
     0.3
     >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
-    3
+    3.0
     """
     if s is None:
         return None
@@ -1510,3 +1510,42 @@ class Logs(dict):
             for title, log in self.items()
         ]
         return "\n".join(summaries)
+
+
+def cli_keywords(d: dict, cls=None):
+    """ Convert a kwargs dictionary into a list of CLI keywords
+
+    Parameters
+    ----------
+    d: dict
+        The keywords to convert
+    cls: callable
+        The callable that consumes these terms to check them for validity
+
+    Examples
+    --------
+    >>> cli_keywords({"x": 123, "save_file": "foo.txt"})
+    ['--x', '123', '--save-file', 'foo.txt']
+
+    >>> from dask.distributed import Worker
+    >>> cli_keywords({"x": 123}, Worker)
+    Traceback (most recent call last):
+    ...
+    ValueError: Class distributed.worker.Worker does not support keyword x
+    """
+    if cls:
+        for k in d:
+            if not has_keyword(cls, k):
+                raise ValueError(
+                    "Class %s does not support keyword %s" % (typename(cls), k)
+                )
+
+    def convert_value(v):
+        out = str(v)
+        if " " in out and "'" not in out and '"' not in out:
+            out = '"' + out + '"'
+        return out
+
+    return sum(
+        [["--" + k.replace("_", "-"), convert_value(v)] for k, v in d.items()], []
+    )
