@@ -11,7 +11,6 @@ import warnings
 import click
 import dask
 from distributed import Nanny, Worker
-from distributed.utils import parse_timedelta
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
@@ -199,25 +198,18 @@ def main(
     nprocs,
     nanny,
     name,
-    memory_limit,
     pid_file,
-    reconnect,
     resources,
     dashboard,
     bokeh,
     bokeh_port,
-    local_directory,
     scheduler_file,
-    interface,
-    protocol,
-    death_timeout,
-    preload,
-    preload_argv,
     dashboard_prefix,
     tls_ca_file,
     tls_cert,
     tls_key,
     dashboard_address,
+    **kwargs
 ):
     g0, g1, g2 = gc.get_threshold()  # https://github.com/dask/distributed/issues/1653
     gc.set_threshold(g0 * 3, g1 * 3, g2 * 3)
@@ -314,8 +306,6 @@ def main(
 
         atexit.register(del_pid_file)
 
-    services = {}
-
     if resources:
         resources = resources.replace(",", " ").split()
         resources = dict(pair.split("=") for pair in resources)
@@ -326,10 +316,9 @@ def main(
     loop = IOLoop.current()
 
     if nanny:
-        kwargs = {"worker_port": worker_port, "listen_address": listen_address}
+        kwargs.update({"worker_port": worker_port, "listen_address": listen_address})
         t = Nanny
     else:
-        kwargs = {}
         if nanny_port:
             kwargs["service_ports"] = {"nanny": nanny_port}
         t = Worker
@@ -344,33 +333,21 @@ def main(
             "dask-worker SCHEDULER_ADDRESS:8786"
         )
 
-    if death_timeout is not None:
-        death_timeout = parse_timedelta(death_timeout, "s")
-
     nannies = [
         t(
             scheduler,
             scheduler_file=scheduler_file,
             nthreads=nthreads,
-            services=services,
             loop=loop,
             resources=resources,
-            memory_limit=memory_limit,
-            reconnect=reconnect,
-            local_directory=local_directory,
-            death_timeout=death_timeout,
-            preload=preload,
-            preload_argv=preload_argv,
             security=sec,
             contact_address=contact_address,
-            interface=interface,
-            protocol=protocol,
             host=host,
             port=port,
             dashboard_address=dashboard_address if dashboard else None,
             service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
             name=name if nprocs == 1 or not name else name + "-" + str(i),
-            **kwargs
+            **kwargs,
         )
         for i in range(nprocs)
     ]

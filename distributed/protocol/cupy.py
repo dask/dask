@@ -31,7 +31,7 @@ def serialize_cupy_ndarray(x):
 
 @cuda_deserialize.register(cupy.ndarray)
 def deserialize_cupy_array(header, frames):
-    frame, = frames
+    (frame,) = frames
     # TODO: put this in ucx... as a kind of "fixup"
     try:
         frame.typestr = header["typestr"]

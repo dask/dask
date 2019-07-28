@@ -136,17 +136,12 @@ def main(
     dashboard_prefix,
     use_xheaders,
     pid_file,
-    scheduler_file,
-    interface,
-    protocol,
     local_directory,
-    preload,
-    preload_argv,
     tls_ca_file,
     tls_cert,
     tls_key,
     dashboard_address,
-    idle_timeout,
+    **kwargs
 ):
     g0, g1, g2 = gc.get_threshold()  # https://github.com/dask/distributed/issues/1653
     gc.set_threshold(g0 * 3, g1 * 3, g2 * 3)
@@ -217,17 +212,12 @@ def main(
 
     scheduler = Scheduler(
         loop=loop,
-        scheduler_file=scheduler_file,
         security=sec,
         host=host,
         port=port,
-        interface=interface,
-        protocol=protocol,
         dashboard_address=dashboard_address if dashboard else None,
         service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
-        idle_timeout=idle_timeout,
-        preload=preload,
-        preload_argv=preload_argv,
+        **kwargs,
     )
     logger.info("Local Directory: %26s", local_directory)
     logger.info("-" * 47)

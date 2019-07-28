@@ -24,7 +24,7 @@ install:
 script:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/run_tests.sh ; fi
   - if [[ $LINT == true ]]; then pip install flake8 ; flake8 distributed ; fi
-  - if [[ $LINT == true ]]; then pip install black; black distributed --check; fi
+  - if [[ $LINT == true ]]; then pip install git+https://github.com/psf/black@cad4138050b86d1c8570b926883e32f7465c2880; black distributed --check; fi
 
 after_success:
   - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi

@@ -36,7 +36,7 @@ def serialize_numba_ndarray(x):
 
 @cuda_deserialize.register(numba.cuda.devicearray.DeviceNDArray)
 def deserialize_numba_ndarray(header, frames):
-    frame, = frames
+    (frame,) = frames
     # TODO: put this in ucx... as a kind of "fixup"
     if isinstance(frame, bytes):
         import numpy as np
