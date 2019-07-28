@@ -1026,6 +1026,11 @@ class Client(Node):
             await comm.write(
                 {"op": "register-client", "client": self.id, "reply": False}
             )
+        except Exception as e:
+            if self.status == "closed":
+                return
+            else:
+                raise
         finally:
             self._connecting_to_scheduler = False
         if timeout is not None:
