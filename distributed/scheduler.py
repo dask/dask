@@ -1643,7 +1643,7 @@ class Scheduler(ServerNode):
         for key in set(priority) & touched_keys:
             ts = self.tasks[key]
             if ts.priority is None:
-                ts.priority = (-user_priority.get(key, 0), generation, priority[key])
+                ts.priority = (-(user_priority.get(key, 0)), generation, priority[key])
 
         # Ensure all runnables have a priority
         runnables = [ts for ts in touched_tasks if ts.run_spec]

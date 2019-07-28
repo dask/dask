@@ -433,11 +433,10 @@ def test_filtered_communication(s, a, b):
             "keys": ["z"],
         }
     )
-
-    msg, = yield c.read()
+    (msg,) = yield c.read()
     assert msg["op"] == "key-in-memory"
     assert msg["key"] == "y"
-    msg, = yield f.read()
+    (msg,) = yield f.read()
     assert msg["op"] == "key-in-memory"
     assert msg["key"] == "z"
 

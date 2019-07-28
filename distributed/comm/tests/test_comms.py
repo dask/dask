@@ -969,7 +969,7 @@ def check_deserialize(addr):
         assert deserialize(ser.header, ser.frames) == 456
 
         assert isinstance(to_ser, list)
-        to_ser, = to_ser
+        (to_ser,) = to_ser
         # The to_serialize() value could have been actually serialized
         # or not (it's a transport-specific optimization)
         if isinstance(to_ser, Serialized):
@@ -1021,7 +1021,7 @@ def check_deserialize(addr):
             assert isinstance(ser, Serialized)
             assert deserialize(ser.header, ser.frames) == _uncompressible
             assert isinstance(to_ser, list)
-            to_ser, = to_ser
+            (to_ser,) = to_ser
             # The to_serialize() value could have been actually serialized
             # or not (it's a transport-specific optimization)
             if isinstance(to_ser, Serialized):

@@ -396,9 +396,9 @@ class Worker(ServerNode):
             ("flight", "memory"): self.transition_dep_flight_memory,
         }
 
-        self.incoming_transfer_log = deque(maxlen=(100000))
+        self.incoming_transfer_log = deque(maxlen=100000)
         self.incoming_count = 0
-        self.outgoing_transfer_log = deque(maxlen=(100000))
+        self.outgoing_transfer_log = deque(maxlen=100000)
         self.outgoing_count = 0
         self.outgoing_current_count = 0
         self.repetitively_busy = 0
