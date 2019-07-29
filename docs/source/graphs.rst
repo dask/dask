@@ -1,16 +1,16 @@
 Overview
 ========
 
-An explanation of dask task graphs.
+An explanation of Dask task graphs.
 
 
 Motivation
 ----------
 
 Normally, humans write programs and then compilers/interpreters interpret them
-(for example  ``python``, ``javac``, ``clang``).  Sometimes humans disagree with how
+(for example, ``python``, ``javac``, ``clang``).  Sometimes humans disagree with how
 these compilers/interpreters choose to interpret and execute their programs.
-In these cases humans often bring the analysis, optimization, and execution of
+In these cases, humans often bring the analysis, optimization, and execution of
 code into the code itself.
 
 Commonly a desire for parallel execution causes this shift of responsibility
@@ -77,10 +77,10 @@ the extra complexity.
 Schedulers
 ----------
 
-The ``dask`` library currently contains a few schedulers to execute these
+The Dask library currently contains a few schedulers to execute these
 graphs.  Each scheduler works differently, providing different performance
 guarantees and operating in different contexts.  These implementations are not
 special and others can write different schedulers better suited to other
-applications or architectures easily.  Systems that emit dask graphs (like
-``dask.array``, ``dask.bag``, and so on) may leverage the appropriate scheduler for
+applications or architectures easily.  Systems that emit dask graphs (like 
+Dask Array, Dask Bag, and so on) may leverage the appropriate scheduler for
 the application and hardware.

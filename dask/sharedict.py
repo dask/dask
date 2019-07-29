@@ -2,6 +2,14 @@ from toolz import concat, unique, count
 
 from .compatibility import Mapping
 
+import warnings
+
+warnings.warn(
+    "ShareDict has been deprecated in favor of HighLevelGraph "
+    "and will be removed in future versions",
+    stacklevel=2,
+)
+
 
 class ShareDict(Mapping):
     """ A Mapping composed of other Mappings
@@ -49,19 +57,28 @@ class ShareDict(Mapping):
     >>> s.dicts  # doctest: +SKIP
     {'a': {'x': 1, 'y': 2}, 'b': {'z': 3}}
     """
-    def __init__(self):
-        self.dicts = dict()
 
-    def update_with_key(self, arg, key=None):
+    def __init__(self, dicts=None, dependencies=None):
+        self.dicts = dicts or dict()
+        self.dependencies = dependencies or dict()
+
+        assert set(self.dependencies) == set(self.dicts)
+
+    def update_with_key(self, arg, key=None, dependencies=None):
         if type(arg) is ShareDict:
-            assert key is None
+            assert key is None or key in arg.dicts
             self.dicts.update(arg.dicts)
+            self.dependencies.update(arg.dependencies)
             return
 
         if key is None:
             key = id(arg)
 
-        assert isinstance(arg, dict)
+        if dependencies:
+            assert isinstance(dependencies, (tuple, list, set))
+            self.dependencies[key] = set(dependencies)
+
+        assert isinstance(arg, Mapping)
         if arg:
             self.dicts[key] = arg
 
@@ -89,7 +106,10 @@ class ShareDict(Mapping):
         return unique(concat(self.dicts.values()))
 
 
-def merge(*dicts):
+def merge(*dicts, **kwargs):
+    dependencies = kwargs.pop("dependencies", None)
+    assert not kwargs
+    # assert dependencies is not None
     result = ShareDict()
     for d in dicts:
         if isinstance(d, tuple):
@@ -97,4 +117,5 @@ def merge(*dicts):
             result.update_with_key(d, key=key)
         else:
             result.update_with_key(d)
+    result.dependencies.update(dependencies or {})
     return result

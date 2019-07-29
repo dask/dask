@@ -7,7 +7,10 @@ import pytest
 collect_ignore = ['dask/bytes/hdfs3.py',
                   'dask/bytes/pyarrow.py',
                   'dask/bytes/s3.py',
-                  'dask/array/fft.py']
+                  'dask/array/ghost.py',
+                  'dask/array/fft.py',
+                  'dask/dataframe/io/io.py',
+                  'dask/dot.py']
 
 
 def pytest_addoption(parser):

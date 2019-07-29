@@ -1,16 +1,25 @@
 from __future__ import division, print_function, absolute_import
 
-from distutils.version import LooseVersion
-from functools import wraps
-
 import numpy as np
 from numpy.compat import basestring
 
-from .core import (atop, asarray)
-from . import chunk
+from .core import blockwise, asarray, einsum_lookup
+from ..utils import derived_from
 
-einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)
+
+
+def chunk_einsum(*operands, **kwargs):
+    subscripts = kwargs.pop("subscripts")
+    ncontract_inds = kwargs.pop("ncontract_inds")
+    dtype = kwargs.pop("kernel_dtype")
+    einsum = einsum_lookup.dispatch(type(operands[0]))
+    chunk = einsum(subscripts, *operands, dtype=dtype, **kwargs)
+
+    # Avoid concatenate=True in blockwise by adding 1's
+    # for the contracted dimensions
+    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
 # This function duplicates numpy's _parse_einsum_input() function
@@ -50,7 +59,7 @@ def parse_einsum_input(operands):
 
         # Ensure all characters are valid
         for s in subscripts:
-            if s in '.,->':
+            if s in ".,->":
                 continue
             if s not in einsum_symbols_set:
                 raise ValueError("Character %s is not a valid symbol." % s)
@@ -74,8 +83,10 @@ def parse_einsum_input(operands):
                 elif isinstance(s, int):
                     subscripts += einsum_symbols[s]
                 else:
-                    raise TypeError("For this input type lists must contain "
-                                    "either int or Ellipsis")
+                    raise TypeError(
+                        "For this input type lists must contain "
+                        "either int or Ellipsis"
+                    )
             if num != last:
                 subscripts += ","
 
@@ -87,8 +98,10 @@ def parse_einsum_input(operands):
                 elif isinstance(s, int):
                     subscripts += einsum_symbols[s]
                 else:
-                    raise TypeError("For this input type lists must contain "
-                                    "either int or Ellipsis")
+                    raise TypeError(
+                        "For this input type lists must contain "
+                        "either int or Ellipsis"
+                    )
     # Check for proper "->"
     if ("-" in subscripts) or (">" in subscripts):
         invalid = (subscripts.count("-") > 1) or (subscripts.count(">") > 1)
@@ -107,7 +120,7 @@ def parse_einsum_input(operands):
             split_subscripts = input_tmp.split(",")
             out_sub = True
         else:
-            split_subscripts = subscripts.split(',')
+            split_subscripts = subscripts.split(",")
             out_sub = False
 
         for num, sub in enumerate(split_subscripts):
@@ -120,7 +133,7 @@ def parse_einsum_input(operands):
                     ellipse_count = 0
                 else:
                     ellipse_count = max(operands[num].ndim, 1)
-                    ellipse_count -= (len(sub) - 3)
+                    ellipse_count -= len(sub) - 3
 
                 if ellipse_count > longest:
                     longest = ellipse_count
@@ -128,10 +141,10 @@ def parse_einsum_input(operands):
                 if ellipse_count < 0:
                     raise ValueError("Ellipses lengths do not match.")
                 elif ellipse_count == 0:
-                    split_subscripts[num] = sub.replace('...', '')
+                    split_subscripts[num] = sub.replace("...", "")
                 else:
                     rep_inds = ellipse_inds[-ellipse_count:]
-                    split_subscripts[num] = sub.replace('...', rep_inds)
+                    split_subscripts[num] = sub.replace("...", rep_inds)
 
         subscripts = ",".join(split_subscripts)
         if longest == 0:
@@ -150,8 +163,7 @@ def parse_einsum_input(operands):
                     raise ValueError("Character %s is not a valid symbol." % s)
                 if tmp_subscripts.count(s) == 1:
                     output_subscript += s
-            normal_inds = ''.join(sorted(set(output_subscript) -
-                                         set(out_ellipse)))
+            normal_inds = "".join(sorted(set(output_subscript) - set(out_ellipse)))
 
             subscripts += "->" + out_ellipse + normal_inds
 
@@ -172,52 +184,38 @@ def parse_einsum_input(operands):
     # Make sure output subscripts are in the input
     for char in output_subscript:
         if char not in input_subscripts:
-            raise ValueError("Output character %s did not appear in the input"
-                             % char)
+            raise ValueError("Output character %s did not appear in the input" % char)
 
     # Make sure number operands is equivalent to the number of terms
-    if len(input_subscripts.split(',')) != len(operands):
-        raise ValueError("Number of einsum subscripts must be equal to the "
-                         "number of operands.")
+    if len(input_subscripts.split(",")) != len(operands):
+        raise ValueError(
+            "Number of einsum subscripts must be equal to the " "number of operands."
+        )
 
     return (input_subscripts, output_subscript, operands)
 
 
-einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
-
-
-@wraps(np.einsum)
+@derived_from(np)
 def einsum(*operands, **kwargs):
-    casting = kwargs.pop('casting', 'safe')
-    dtype = kwargs.pop('dtype', None)
-    optimize = kwargs.pop('optimize', False)
-    order = kwargs.pop('order', 'K')
-    split_every = kwargs.pop('split_every', None)
-    if kwargs:
-        raise TypeError("einsum() got unexpected keyword "
-                        "argument(s) %s" % ",".join(kwargs))
+    dtype = kwargs.pop("dtype", None)
+    optimize = kwargs.pop("optimize", False)
+    split_every = kwargs.pop("split_every", None)
 
     einsum_dtype = dtype
 
     inputs, outputs, ops = parse_einsum_input(operands)
-    subscripts = '->'.join((inputs, outputs))
+    subscripts = "->".join((inputs, outputs))
 
     # Infer the output dtype from operands
     if dtype is None:
         dtype = np.result_type(*[o.dtype for o in ops])
 
-    if einsum_can_optimize:
-        if optimize is not False:
-            # Avoid computation of dask arrays within np.einsum_path
-            # by passing in small numpy arrays broadcasted
-            # up to the right shape
-            fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape)
-                        for o in ops]
-            optimize, _ = np.einsum_path(subscripts, *fake_ops,
-                                         optimize=optimize)
-        kwargs = {'optimize': optimize}
-    else:
-        kwargs = {}
+    if optimize is not False:
+        # Avoid computation of dask arrays within np.einsum_path
+        # by passing in small numpy arrays broadcasted
+        # up to the right shape
+        fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape) for o in ops]
+        optimize, _ = np.einsum_path(subscripts, *fake_ops, optimize=optimize)
 
     inputs = [tuple(i) for i in inputs.split(",")]
 
@@ -228,21 +226,28 @@ def einsum(*operands, **kwargs):
     contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
 
-    # Introduce the contracted indices into the atop product
+    # Introduce the contracted indices into the blockwise product
     # so that we get numpy arrays, not lists
-    result = atop(chunk.einsum, tuple(outputs) + tuple(contract_inds),
-                  *(a for ap in zip(ops, inputs) for a in ap),
-                  # atop parameters
-                  adjust_chunks={ind: 1 for ind in contract_inds}, dtype=dtype,
-                  # np.einsum parameters
-                  subscripts=subscripts, kernel_dtype=einsum_dtype,
-                  ncontract_inds=ncontract_inds, order=order,
-                  casting=casting, **kwargs)
+    result = blockwise(
+        chunk_einsum,
+        tuple(outputs) + tuple(contract_inds),
+        *(a for ap in zip(ops, inputs) for a in ap),
+        # blockwise parameters
+        adjust_chunks={ind: 1 for ind in contract_inds},
+        dtype=dtype,
+        # np.einsum parameters
+        subscripts=subscripts,
+        kernel_dtype=einsum_dtype,
+        ncontract_inds=ncontract_inds,
+        optimize=optimize,
+        **kwargs
+    )
 
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:
         size = len(outputs)
-        return result.sum(axis=list(range(size, size + ncontract_inds)),
-                          split_every=split_every)
+        return result.sum(
+            axis=list(range(size, size + ncontract_inds)), split_every=split_every
+        )
 
     return result

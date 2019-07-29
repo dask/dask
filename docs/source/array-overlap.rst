@@ -11,9 +11,9 @@ blocks.  Example operations include the following:
 *  Evaluate a partial derivative
 *  Play the game of Life_
 
-Dask array supports these operations by creating a new array where each
+Dask Array supports these operations by creating a new array where each
 block is slightly expanded by the borders of its neighbors.  This costs an
-excess copy and the communication of many small chunks but allows localized
+excess copy and the communication of many small chunks, but allows localized
 functions to evaluate in an embarrassingly parallel manner.
 
 The main API for these computations is the ``map_overlap`` method defined
@@ -30,13 +30,13 @@ below:
 Explanation
 -----------
 
-Consider two neighboring blocks in a Dask array.
+Consider two neighboring blocks in a Dask array:
 
 .. image:: images/unoverlapping-neighbors.png
    :width: 30%
    :alt: un-overlapping neighbors
 
-We extend each block by trading thin nearby slices between arrays
+We extend each block by trading thin nearby slices between arrays:
 
 .. image:: images/overlapping-neighbors.png
    :width: 30%
@@ -86,14 +86,14 @@ overlap function:
 Boundaries
 ----------
 
-While overlaping you can specify how to handle the boundaries.  Current policies
+With respect to overlaping, you can specify how to handle the boundaries.  Current policies
 include the following:
 
 *  ``periodic`` - wrap borders around to the other side
 *  ``reflect`` - reflect each border outwards
 *  ``any-constant`` - pad the border with this value
 
-So an example boundary kind argument might look like the following
+An example boundary kind argument might look like the following:
 
 .. code-block:: python
 
@@ -101,7 +101,7 @@ So an example boundary kind argument might look like the following
     1: 'reflect',
     2: np.nan}
 
-Alternatively you can use :py:func:`dask.array.pad` for other types of
+Alternatively, you can use :py:func:`dask.array.pad` for other types of
 paddings.
 
 
@@ -110,7 +110,7 @@ Map a function across blocks
 
 Overlapping goes hand-in-hand with mapping a function across blocks.  This
 function can now use the additional information copied over from the neighbors
-that is not stored locally in each block
+that is not stored locally in each block:
 
 .. code-block:: python
 
@@ -120,20 +120,21 @@ that is not stored locally in each block
 
    >>> filt = g.map_blocks(func)
 
-While in this case we used a SciPy function above this could have been any
-arbitrary function.  This is a good interaction point with Numba_.
+While in this case we used a SciPy function, any arbitrary function could have been 
+used instead. This is a good interaction point with Numba_.
 
-If your function does not preserve the shape of the block then you will need to
-provide a ``chunks`` keyword argument.  If your block sizes are regular  then
-this can be a blockshape, such as ``(1000, 1000)`` or if your blocks are irregular
-then this must be a full chunks tuple, for example ``((1000, 700, 1000), (200, 300))``.
+If your function does not preserve the shape of the block, then you will need to
+provide a ``chunks`` keyword argument. If your block size is regular, then this
+argument can take a block shape of, for example, ``(1000, 1000)``. In case of
+irregular block sizes, it must be a tuple with the full chunks shape like
+``((1000, 700, 1000), (200, 300))``.
 
 .. code-block:: python
 
    >>> g.map_blocks(myfunc, chunks=(5, 5))
 
-If your function needs to know the location of the block on which it operates
-you can give your function a keyword argument ``block_id``
+If your function needs to know the location of the block on which it operates,
+you can give your function a keyword argument ``block_id``:
 
 .. code-block:: python
 
@@ -141,17 +142,17 @@ you can give your function a keyword argument ``block_id``
        ...
 
 This extra keyword argument will be given a tuple that provides the block
-location like ``(0, 0)`` for the upper right block or ``(0, 1)`` for the block
+location like ``(0, 0)`` for the upper-left block or ``(0, 1)`` for the block
 just to the right of that block.
 
 
 Trim Excess
 -----------
 
-After mapping a blocked function you may want to trim off the borders from each
+After mapping a blocked function, you may want to trim off the borders from each
 block by the same amount by which they were expanded.  The function
 ``trim_internal`` is useful here and takes the same ``depth`` argument
-given to ``overlap``.
+given to ``overlap``:
 
 .. code-block:: python
 
@@ -166,8 +167,8 @@ given to ``overlap``.
 Full Workflow
 -------------
 
-And so a pretty typical overlaping workflow includes ``overlap``, ``map_blocks``,
-and ``trim_internal``
+And so, a pretty typical overlaping workflow includes ``overlap``, ``map_blocks``
+and ``trim_internal``:
 
 .. code-block:: python
 
@@ -177,5 +178,5 @@ and ``trim_internal``
    >>> g2 = g.map_blocks(myfunc)
    >>> result = da.overlap.trim_internal(g2, {0: 2, 1: 2})
 
-.. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
-.. _Numba: http://numba.pydata.org/
+.. _Life: https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
+.. _Numba: https://numba.pydata.org/

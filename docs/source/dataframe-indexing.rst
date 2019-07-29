@@ -3,7 +3,7 @@
 Indexing into Dask DataFrames
 =============================
 
-Dask DataFrame supports some of pandas' indexing behavior.
+Dask DataFrame supports some of Pandas' indexing behavior.
 
 .. currentmodule:: dask.dataframe
 
@@ -15,14 +15,14 @@ Dask DataFrame supports some of pandas' indexing behavior.
 Label-based Indexing
 --------------------
 
-Just like pandas, Dask DataFrame supports label-based indexing with the ``.loc``
+Just like Pandas, Dask DataFrame supports label-based indexing with the ``.loc``
 accessor for selecting rows or columns, and ``__getitem__`` (square brackets)
 for selecting just columns.
 
 .. note::
 
    To select rows, the DataFrame's divisions must be known (see
-   :ref:`dataframe.design` and :ref:`dataframe.performance`) for more.
+   :ref:`dataframe.design` and :ref:`dataframe.performance` for more information.)
 
 .. code-block:: python
 
@@ -76,7 +76,7 @@ Slicing rows and (optionally) columns with ``.loc``:
    c                ...
    Dask Name: loc, 2 tasks
 
-Dask DataFrame supports pandas' `partial-string indexing <https://pandas.pydata.org/pandas-docs/stable/timeseries.html#partial-string-indexing>`_:
+Dask DataFrame supports Pandas' `partial-string indexing <https://pandas.pydata.org/pandas-docs/stable/timeseries.html#partial-string-indexing>`_:
 
 .. code-block:: python
 
