@@ -166,6 +166,15 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
 
+if PANDAS_VERSION <= "0.25.0" and PANDAS_VERSION >= "0.20.0":
+    filter_panel_warning = pytest.mark.filterwarnings(
+        "ignore::DeprecationWarning:pandas[.*]"
+    )
+else:
+    filter_panel_warning = lambda f: f
+
+
+@filter_panel_warning
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
