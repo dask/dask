@@ -967,9 +967,23 @@ def test_pyarrow_partition_inconsistent_schema_succeeds(tmpdir):
     out_strings = ["a", "b", None, None]
     tstamp = pd.Timestamp(1513393355, unit="s")
     in_tstamps = [tstamp, tstamp, pd.NaT, pd.NaT]
+    out_tstamps = [
+        # Timestamps come out in numpy.datetime64 format
+        tstamp.to_datetime64(),
+        tstamp.to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
     timezone = "US/Eastern"
     tz_tstamp = pd.Timestamp(1513393355, unit="s", tz=timezone)
     in_tz_tstamps = [tz_tstamp, tz_tstamp, pd.NaT, pd.NaT]
+    out_tz_tstamps = [
+        # Timezones do not make it through a write-read cycle.
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
 
     df = pd.DataFrame(
         {
@@ -1005,11 +1019,23 @@ def test_pyarrow_partition_inconsistent_schema_succeeds(tmpdir):
     for i in range(len(df)):
         assert np.array_equal(arrays_after_write[i], out_arrays[i]), type(out_arrays[i])
 
-    # Check timestamps
-    df.tstamps.equals(ddf_after_write.tstamps)
+    # Check datetime support
+    tstamps_after_write = ddf_after_write.tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tstamps_after_write[i]):
+            assert np.isnat(out_tstamps[i])
+        else:
+            assert tstamps_after_write[i] == out_tstamps[i]
 
-    # Check timestamps with time-zone support
-    df.tz_tstamps.equals(ddf_after_write.tz_tstamps)
+    # Check timezone aware datetime support
+    tz_tstamps_after_write = ddf_after_write.tz_tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tz_tstamps_after_write[i]):
+            assert np.isnat(out_tz_tstamps[i])
+        else:
+            assert tz_tstamps_after_write[i] == out_tz_tstamps[i]
 
     # Check string support
     assert np.array_equal(ddf_after_write.strings.values, out_strings)
