@@ -107,7 +107,7 @@ class ArrowEngine(Engine):
         filters=None,
         **kwargs,
     ):
-        # Define the parquet-file (pf) object to use for metadata,
+        # Define the dataset object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below)
