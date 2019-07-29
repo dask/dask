@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import itertools
 from operator import mul
 import random
@@ -114,8 +112,8 @@ def test_worksteal_many_thieves(c, s, *workers):
 def test_dont_steal_unknown_functions(c, s, a, b):
     futures = c.map(inc, [1, 2], workers=a.address, allow_other_workers=True)
     yield wait(futures)
-    assert len(a.data) == 2
-    assert len(b.data) == 0
+    assert len(a.data) == 2, [len(a.data), len(b.data)]
+    assert len(b.data) == 0, [len(a.data), len(b.data)]
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)

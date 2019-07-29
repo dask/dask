@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import asyncio
 from collections import defaultdict, deque
 from concurrent.futures import CancelledError

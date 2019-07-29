@@ -20,8 +20,6 @@ which is included as a comment at the end of this file:
 
    Copyright 2001-2016 Python Software Foundation; All Rights Reserved
 """
-from __future__ import print_function, division, absolute_import
-
 from . import _concurrent_futures_thread as thread
 import os
 import logging

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import errno
 import logging
 import socket

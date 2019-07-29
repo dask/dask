@@ -1,7 +1,5 @@
 """ utilities for package version introspection """
 
-from __future__ import print_function, division, absolute_import
-
 import platform
 import struct
 import os

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import logging
 from .client import futures_of, wait
 from .utils import sync, tokey

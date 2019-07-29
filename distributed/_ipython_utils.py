@@ -4,8 +4,6 @@ These functions should probably reside in Jupyter and IPython repositories,
 after which we can import them instead of having our own definitions.
 """
 
-from __future__ import print_function
-
 import atexit
 import os
 

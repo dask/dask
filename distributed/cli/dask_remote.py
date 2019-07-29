@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import click
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.submit import _remote

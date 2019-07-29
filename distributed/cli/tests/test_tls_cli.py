@@ -1,7 +1,4 @@
-from __future__ import print_function, division, absolute_import
-
 from time import sleep
-
 
 from distributed import Client
 from distributed.utils_test import (

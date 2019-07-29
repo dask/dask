@@ -1,4 +1,3 @@
-from __future__ import print_function, division, absolute_import
 from mock import Mock
 
 from tornado import gen

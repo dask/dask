@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import asyncio
 from bisect import bisect
 from operator import add

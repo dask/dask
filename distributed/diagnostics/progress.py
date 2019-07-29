@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from collections import defaultdict
 import logging
 from timeit import default_timer

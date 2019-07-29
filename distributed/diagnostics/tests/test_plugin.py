@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distributed import Worker
 from distributed.utils_test import inc, gen_cluster
 from distributed.diagnostics.plugin import SchedulerPlugin

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distributed.protocol.utils import merge_frames, pack_frames, unpack_frames
 from distributed.utils import ensure_bytes
 

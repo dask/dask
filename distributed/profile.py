@@ -24,8 +24,6 @@ We represent this tree as a nested dictionary with the following form:
                    'children': {...}}}
     }
 """
-from __future__ import print_function, division, absolute_import
-
 import bisect
 from collections import defaultdict, deque
 import linecache

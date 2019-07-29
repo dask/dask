@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import atexit
 from collections import defaultdict, Iterator
 from concurrent.futures import ThreadPoolExecutor, CancelledError

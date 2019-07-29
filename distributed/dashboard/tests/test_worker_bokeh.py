@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from operator import add, sub
 import re
 from time import sleep

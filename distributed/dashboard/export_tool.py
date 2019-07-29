@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import os
 
 from bokeh.core.properties import Int, String
