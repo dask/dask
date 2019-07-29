@@ -938,6 +938,86 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
+def test_pyarrow_partition_inconsistent_schema_raises(tmpdir):
+    check_pyarrow()
+
+    df = pd.DataFrame(
+        {"partition_column": [0, 0, 1, 1], "strings": ["a", "b", None, None]}
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
+
+    # Read should fail when schema is not provided
+    with pytest.raises(ValueError) as e_info:
+        dd.read_parquet(
+            str(tmpdir), engine="pyarrow", gather_statistics=False
+        ).compute()
+        assert e_info.message.contains("ValueError: Schema in partition")
+        assert e_info.message.contains("was different")
+
+
+def test_pyarrow_partition_inconsistent_schema_succeeds(tmpdir):
+    check_pyarrow()
+
+    # Data types to test: strings, arrays, ints, timezone aware timestamps
+    in_arrays = [[0, 1, 2], [3, 4], np.nan, np.nan]
+    out_arrays = [[0, 1, 2], [3, 4], None, None]
+    in_strings = ["a", "b", np.nan, np.nan]
+    out_strings = ["a", "b", None, None]
+    tstamp = pd.Timestamp(1513393355, unit="s")
+    in_tstamps = [tstamp, tstamp, pd.NaT, pd.NaT]
+    timezone = "US/Eastern"
+    tz_tstamp = pd.Timestamp(1513393355, unit="s", tz=timezone)
+    in_tz_tstamps = [tz_tstamp, tz_tstamp, pd.NaT, pd.NaT]
+
+    df = pd.DataFrame(
+        {
+            "partition_column": [0, 0, 1, 1],
+            "arrays": in_arrays,
+            "strings": in_strings,
+            "tstamps": in_tstamps,
+            "tz_tstamps": in_tz_tstamps,
+        }
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    schema = pa.schema(
+        [
+            ("arrays", pa.list_(pa.int64())),
+            ("strings", pa.string()),
+            ("tstamps", pa.timestamp("ns")),
+            ("tz_tstamps", pa.timestamp("ns", timezone)),
+            ("partition_column", pa.int64()),
+        ]
+    )
+    ddf.to_parquet(
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
+    )
+    ddf_after_write = (
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
+        .compute()
+        .reset_index(drop=True)
+    )
+
+    # Check array support
+    arrays_after_write = ddf_after_write.arrays.values
+    for i in range(len(df)):
+        assert np.array_equal(arrays_after_write[i], out_arrays[i]), type(out_arrays[i])
+
+    # Check timestamps
+    df.tstamps.equals(ddf_after_write.tstamps)
+
+    # Check timestamps with time-zone support
+    df.tz_tstamps.equals(ddf_after_write.tz_tstamps)
+
+    # Check string support
+    assert np.array_equal(ddf_after_write.strings.values, out_strings)
+
+    # Check partition column
+    assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
+
+
 def test_partition_on(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
