@@ -123,7 +123,7 @@ class Scheduler(Process):
         dask.distributed.Scheduler class
     """
 
-    def __init__(self, address: str, connect_kwargs: dict, kwargs: dict, loop=None):
+    def __init__(self, address: str, connect_kwargs: dict, kwargs: dict):
         self.address = address
         self.kwargs = kwargs
         self.connect_kwargs = connect_kwargs

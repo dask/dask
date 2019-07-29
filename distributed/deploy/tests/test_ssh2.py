@@ -18,6 +18,7 @@ async def test_basic():
         async with Client(cluster, asynchronous=True) as client:
             result = await client.submit(lambda x: x + 1, 10)
             assert result == 11
+        assert not cluster._supports_scaling
 
         assert "SSH" in repr(cluster)
 
