@@ -8,7 +8,6 @@ import re
 
 import pytest
 
-from distributed.compatibility import PY2
 from distributed.metrics import thread_time
 from distributed.utils_perf import FractionalTimer, GCDiagnosis, disable_gc_diagnosis
 from distributed.utils_test import captured_logger, run_for
@@ -84,7 +83,6 @@ def enable_gc_diagnosis_and_log(diag, level="INFO"):
             gc.enable()
 
 
-@pytest.mark.skipif(PY2, reason="requires Python 3")
 def test_gc_diagnosis_cpu_time():
     diag = GCDiagnosis(warn_over_frac=0.75)
     diag.N_SAMPLES = 3  # shorten tests
@@ -115,7 +113,6 @@ def test_gc_diagnosis_cpu_time():
 
 
 @pytest.mark.xfail(reason="unknown")
-@pytest.mark.skipif(PY2, reason="requires Python 3")
 def test_gc_diagnosis_rss_win():
     diag = GCDiagnosis(info_over_rss_win=10e6)
 

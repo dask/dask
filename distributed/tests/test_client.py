@@ -51,7 +51,7 @@ from distributed.client import (
     futures_of,
     temp_default_client,
 )
-from distributed.compatibility import PY3, WINDOWS
+from distributed.compatibility import WINDOWS
 
 from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
@@ -4833,7 +4833,6 @@ def test_bytes_keys(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_unicode_ascii_keys(c, s, a, b):
-    # cross-version unicode type (py2: unicode, py3: str)
     uni_type = type(u"")
     key = u"inc-123"
     future = c.submit(inc, 1, key=key)
@@ -4846,7 +4845,6 @@ def test_unicode_ascii_keys(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_unicode_keys(c, s, a, b):
-    # cross-version unicode type (py2: unicode, py3: str)
     uni_type = type(u"")
     key = u"inc-123\u03bc"
     future = c.submit(inc, 1, key=key)
@@ -5036,12 +5034,7 @@ def test_client_async_before_loop_starts():
 
 
 @pytest.mark.slow
-@gen_cluster(
-    client=True,
-    Worker=Nanny if PY3 else Worker,
-    timeout=60,
-    nthreads=[("127.0.0.1", 3)] * 2,
-)
+@gen_cluster(client=True, Worker=Nanny, timeout=60, nthreads=[("127.0.0.1", 3)] * 2)
 def test_nested_compute(c, s, a, b):
     def fib(x):
         assert get_worker().get_current_task()

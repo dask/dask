@@ -11,7 +11,6 @@ import pytest
 from tornado import gen, ioloop, locks, queues
 from tornado.concurrent import Future
 
-from distributed.compatibility import PY3
 from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (
@@ -333,8 +332,7 @@ def test_comm_failure_threading():
         yield connect("tcp://localhost:28400", 0.052)
     max_thread_count = yield sleep_future
     # 2 is the number set by BaseTCPConnector.executor (ThreadPoolExecutor)
-    if PY3:
-        assert max_thread_count <= 2 + original_thread_count
+    assert max_thread_count <= 2 + original_thread_count
 
     # tcp.TLSConnector()
     sleep_future = sleep_for_60ms()
@@ -345,8 +343,7 @@ def test_comm_failure_threading():
             connection_args={"ssl_context": get_client_ssl_context()},
         )
     max_thread_count = yield sleep_future
-    if PY3:
-        assert max_thread_count <= 2 + original_thread_count
+    assert max_thread_count <= 2 + original_thread_count
 
 
 @gen.coroutine

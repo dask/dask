@@ -11,7 +11,6 @@ from tornado import locks
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 
-from ..compatibility import finalize
 from ..protocol import nested_deserialize
 from ..utils import get_ip
 
@@ -161,7 +160,7 @@ class InProc(Comm):
         self._write_loop = write_loop
         self._closed = False
 
-        self._finalizer = finalize(self, self._get_finalizer())
+        self._finalizer = weakref.finalize(self, self._get_finalizer())
         self._finalizer.atexit = False
         self._initialized = True
 

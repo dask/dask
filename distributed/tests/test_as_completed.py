@@ -1,5 +1,7 @@
 from concurrent.futures import CancelledError
+from collections import Iterator
 from operator import add
+import queue
 import random
 from time import sleep
 
@@ -7,7 +9,6 @@ import pytest
 from tornado import gen
 
 from distributed.client import _as_completed, as_completed, _first_completed
-from distributed.compatibility import Empty, StopAsyncIteration, Queue, Iterator
 from distributed.utils_test import gen_cluster, inc, throws
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 
@@ -18,11 +19,11 @@ def test__as_completed(c, s, a, b):
     y = c.submit(inc, 1)
     z = c.submit(inc, 2)
 
-    queue = Queue()
-    yield _as_completed([x, y, z], queue)
+    q = queue.Queue()
+    yield _as_completed([x, y, z], q)
 
-    assert queue.qsize() == 3
-    assert {queue.get(), queue.get(), queue.get()} == {x, y, z}
+    assert q.qsize() == 3
+    assert {q.get(), q.get(), q.get()} == {x, y, z}
 
     result = yield _first_completed([x, y, z])
     assert result in [x, y, z]
@@ -112,7 +113,7 @@ def test_as_completed_cancel(client):
     assert next(ac) is x or y
     assert next(ac) is y or x
 
-    with pytest.raises(Empty):
+    with pytest.raises(queue.Empty):
         ac.queue.get(timeout=0.1)
 
     res = list(as_completed([x, y, x]))

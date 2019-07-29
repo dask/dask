@@ -1,12 +1,12 @@
 from collections import defaultdict, deque
 import datetime
 import logging
+import threading
 import weakref
 
 import tornado.locks
 from tornado import gen
 
-from .compatibility import finalize, get_thread_identity
 from .core import CommClosedError
 from .utils import sync
 from .protocol.serialize import to_serialize
@@ -306,7 +306,7 @@ class Pub(object):
         if self.worker:
             pubsub = self.worker.extensions["pubsub"]
             self.loop.add_callback(pubsub.publishers[name].add, self)
-            finalize(self, pubsub.trigger_cleanup)
+            weakref.finalize(self, pubsub.trigger_cleanup)
 
     async def _start(self):
         if self.worker:
@@ -385,7 +385,7 @@ class Sub(object):
         else:
             raise Exception()
 
-        finalize(self, pubsub.trigger_cleanup)
+        weakref.finalize(self, pubsub.trigger_cleanup)
 
     async def _get(self, timeout=None):
         if timeout is not None:
@@ -408,7 +408,7 @@ class Sub(object):
         """ Get a single message """
         if self.client:
             return self.client.sync(self._get, timeout=timeout)
-        elif self.worker.thread_id == get_thread_identity():
+        elif self.worker.thread_id == threading.get_ident():
             return self._get()
         else:
             if self.buffer:  # fastpath

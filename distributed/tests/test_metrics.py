@@ -5,7 +5,6 @@ import threading
 import time
 
 from distributed import metrics
-from distributed.compatibility import PY3
 from distributed.utils_test import run_for
 
 
@@ -37,12 +36,11 @@ def test_process_time():
     dt = metrics.process_time() - start
     assert dt >= 0.05
 
-    if PY3:
-        # Sleep time not counted
-        start = metrics.process_time()
-        time.sleep(0.1)
-        dt = metrics.process_time() - start
-        assert dt <= 0.05
+    # Sleep time not counted
+    start = metrics.process_time()
+    time.sleep(0.1)
+    dt = metrics.process_time() - start
+    assert dt <= 0.05
 
 
 def test_thread_time():
@@ -51,18 +49,17 @@ def test_thread_time():
     dt = metrics.thread_time() - start
     assert 0.03 <= dt <= 0.2
 
-    if PY3:
-        # Sleep time not counted
+    # Sleep time not counted
+    start = metrics.thread_time()
+    time.sleep(0.1)
+    dt = metrics.thread_time() - start
+    assert dt <= 0.05
+
+    if sys.platform == "linux":
+        # Always per-thread on Linux
+        t = threading.Thread(target=run_for, args=(0.1,))
         start = metrics.thread_time()
-        time.sleep(0.1)
+        t.start()
+        t.join()
         dt = metrics.thread_time() - start
         assert dt <= 0.05
-
-        if sys.platform == "linux":
-            # Always per-thread on Linux
-            t = threading.Thread(target=run_for, args=(0.1,))
-            start = metrics.thread_time()
-            t.start()
-            t.join()
-            dt = metrics.thread_time() - start
-            assert dt <= 0.05

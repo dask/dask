@@ -1,9 +1,10 @@
 import asyncio
 from tornado import gen
 import functools
+import threading
+from queue import Queue
 
 from .client import Future, default_client
-from .compatibility import get_thread_identity, Queue
 from .protocol import to_serialize
 from .utils import sync
 from .utils_comm import WrappedKey
@@ -103,7 +104,7 @@ class Actor(WrappedKey):
         if self._client:
             return self._client.asynchronous
         else:
-            return get_thread_identity() == self._worker.thread_id
+            return threading.get_ident() == self._worker.thread_id
 
     def _sync(self, func, *args, **kwargs):
         if self._client:

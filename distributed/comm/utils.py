@@ -3,11 +3,11 @@ from __future__ import print_function, division, absolute_import
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import socket
+import weakref
 
 from tornado import gen
 
 from .. import protocol
-from ..compatibility import finalize, PY3
 from ..utils import get_ip, get_ipv6, nbytes
 
 
@@ -25,7 +25,7 @@ try:
     )
 except TypeError:
     _offload_executor = ThreadPoolExecutor(max_workers=1)
-finalize(_offload_executor, _offload_executor.shutdown)
+weakref.finalize(_offload_executor, _offload_executor.shutdown)
 
 
 def offload(fn, *args, **kwargs):
@@ -50,10 +50,7 @@ def to_frames(msg, serializers=None, on_error="message", context=None):
             logger.exception(e)
             raise
 
-    if PY3:
-        res = yield offload(_to_frames)
-    else:  # distributed/deploy/tests/test_adaptive.py::test_get_scale_up_kwargs fails on Py27.  Don't know why
-        res = _to_frames()
+    res = yield offload(_to_frames)
 
     raise gen.Return(res)
 

@@ -1,5 +1,6 @@
 from datetime import timedelta
 import logging
+import threading
 from weakref import ref
 
 from dask.utils import format_bytes
@@ -7,7 +8,6 @@ from tornado import gen
 
 from .adaptive import Adaptive
 
-from ..compatibility import get_thread_identity
 from ..utils import (
     PeriodicCallback,
     log_errors,
@@ -231,7 +231,7 @@ class Cluster(object):
             self._asynchronous
             or getattr(thread_state, "asynchronous", False)
             or hasattr(self.loop, "_thread_identity")
-            and self.loop._thread_identity == get_thread_identity()
+            and self.loop._thread_identity == threading.get_ident()
         )
 
     def sync(self, func, *args, asynchronous=None, callback_timeout=None, **kwargs):

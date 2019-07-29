@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+import importlib
 import logging
 import multiprocessing
 from numbers import Number
@@ -32,7 +33,7 @@ from distributed import (
     Reschedule,
     wait,
 )
-from distributed.compatibility import WINDOWS, cache_from_source
+from distributed.compatibility import WINDOWS
 from distributed.core import rpc
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
@@ -219,7 +220,7 @@ def test_upload_file_pyc(c, s, w):
             import foo
 
             assert foo.f() == 123
-            pyc = cache_from_source(os.path.join(dirname, "foo.py"))
+            pyc = importlib.util.cache_from_source(os.path.join(dirname, "foo.py"))
             assert os.path.exists(pyc)
             yield c.upload_file(pyc)
 

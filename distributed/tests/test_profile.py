@@ -4,7 +4,7 @@ import time
 from toolz import first
 import threading
 
-from distributed.compatibility import get_thread_identity, WINDOWS
+from distributed.compatibility import WINDOWS
 from distributed import metrics
 from distributed.profile import (
     process,
@@ -164,7 +164,7 @@ def test_merge_empty():
 
 
 def test_call_stack():
-    frame = sys._current_frames()[get_thread_identity()]
+    frame = sys._current_frames()[threading.get_ident()]
     L = call_stack(frame)
     assert isinstance(L, list)
     assert all(isinstance(s, str) for s in L)
@@ -172,7 +172,7 @@ def test_call_stack():
 
 
 def test_identifier():
-    frame = sys._current_frames()[get_thread_identity()]
+    frame = sys._current_frames()[threading.get_ident()]
     assert identifier(frame) == identifier(frame)
     assert identifier(None) == identifier(None)
 

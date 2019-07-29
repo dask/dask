@@ -7,11 +7,11 @@ import os
 import shutil
 import stat
 import tempfile
+import weakref
 
 import dask
 
 from . import locket
-from .compatibility import finalize
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class WorkDir(object):
                 raise
             workspace._known_locks.add(self._lock_path)
 
-            self._finalizer = finalize(
+            self._finalizer = weakref.finalize(
                 self,
                 self._finalize,
                 workspace,
@@ -82,7 +82,7 @@ class WorkDir(object):
                 self.dir_path,
             )
         else:
-            self._finalizer = finalize(
+            self._finalizer = weakref.finalize(
                 self, self._finalize, workspace, None, None, self.dir_path
             )
 

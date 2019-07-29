@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import html
 from timeit import default_timer
 import sys
 import weakref
@@ -10,7 +11,6 @@ from tornado.ioloop import IOLoop
 
 from .progress import format_time, Progress, MultiProgress
 
-from ..compatibility import html_escape
 from ..core import connect, coerce_to_address, CommClosedError
 from ..client import default_client, futures_of
 from ..protocol.pickle import dumps
@@ -334,7 +334,7 @@ class MultiProgressWidget(MultiProgressBar):
                 '<div style="padding: 0px 10px 0px 10px;'
                 " text-align:left; word-wrap: "
                 'break-word;">'
-                + html_escape(key.decode() if isinstance(key, bytes) else key)
+                + html.escape(key.decode() if isinstance(key, bytes) else key)
                 + "</div>"
             )
             for key in all

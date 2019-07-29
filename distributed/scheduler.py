@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import asyncio
-from collections import defaultdict, deque, OrderedDict
+from collections import defaultdict, deque, OrderedDict, Mapping, Set
 from datetime import timedelta
 from functools import partial
 import itertools
@@ -39,7 +39,6 @@ from .comm import (
     unparse_host_port,
 )
 from .comm.addressing import address_from_user_args
-from .compatibility import finalize, unicode, Mapping, Set
 from .core import rpc, connect, send_recv, clean_exception, CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
 from . import profile
@@ -1229,7 +1228,7 @@ class Scheduler(ServerNode):
                 if os.path.exists(fn):
                     os.remove(fn)
 
-            finalize(self, del_scheduler_file)
+            weakref.finalize(self, del_scheduler_file)
 
         preload_modules(self.preload, parameter=self, argv=self.preload_argv)
 
@@ -2124,7 +2123,7 @@ class Scheduler(ServerNode):
             raise ValueError("Workers not the same in all collections")
 
         for w, ws in self.workers.items():
-            assert isinstance(w, (str, unicode)), (type(w), w)
+            assert isinstance(w, str), (type(w), w)
             assert isinstance(ws, WorkerState), (type(ws), ws)
             assert ws.address == w
             if not ws.processing:
@@ -3706,7 +3705,7 @@ class Scheduler(ServerNode):
         try:
             ts = self.tasks[key]
             assert worker
-            assert isinstance(worker, (str, unicode))
+            assert isinstance(worker, str)
 
             if self.validate:
                 assert ts.processing_on

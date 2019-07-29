@@ -37,7 +37,6 @@ import toolz
 
 from .metrics import time
 from .utils import format_time, color_of, parse_timedelta
-from .compatibility import get_thread_identity
 
 
 def identifier(frame):
@@ -304,7 +303,7 @@ def watch(
     deque
     """
     if thread_id is None:
-        thread_id = get_thread_identity()
+        thread_id = threading.get_ident()
 
     log = deque(maxlen=maxlen)
 

@@ -4,11 +4,11 @@ import atexit
 from datetime import timedelta
 import logging
 import os
+from queue import Queue as PyQueue
 import re
 import threading
 import weakref
 
-from .compatibility import finalize, Queue as PyQueue
 from .utils import mp_context
 
 from tornado import gen
@@ -112,7 +112,7 @@ class AsyncProcess(object):
             # We don't join the thread here as a finalizer can be called
             # asynchronously from anywhere
 
-        self._finalizer = finalize(self, stop_thread, q=self._watch_q)
+        self._finalizer = weakref.finalize(self, stop_thread, q=self._watch_q)
         self._finalizer.atexit = False
 
     def _on_exit(self, exitcode):

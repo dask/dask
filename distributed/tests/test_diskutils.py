@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import functools
 import gc
 import os
+import queue
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,7 @@ import mock
 import pytest
 
 import dask
-from distributed.compatibility import Empty, WINDOWS
+from distributed.compatibility import WINDOWS
 from distributed.diskutils import WorkSpace
 from distributed.metrics import time
 from distributed.utils import mp_context
@@ -258,7 +259,7 @@ def _test_workspace_concurrency(tmpdir, timeout, max_procs):
     # Any errors?
     try:
         err = err_q.get_nowait()
-    except Empty:
+    except queue.Empty:
         pass
     else:
         raise err
@@ -266,7 +267,7 @@ def _test_workspace_concurrency(tmpdir, timeout, max_procs):
     try:
         while True:
             n_purged += purged_q.get_nowait()
-    except Empty:
+    except queue.Empty:
         pass
     # We attempted to purge most directories at some point
     assert n_purged >= 0.5 * n_created > 0

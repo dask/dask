@@ -1,13 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
-import warnings
 import logging
+import warnings
+import weakref
 
 from tornado.ioloop import IOLoop
 from tornado import gen
 import dask
 
-from .compatibility import unicode, finalize
 from .core import Server, ConnectionPool
 from .versions import get_versions
 from .utils import DequeHandler
@@ -97,7 +97,7 @@ class ServerNode(Node, Server):
             else:
                 port = 0
 
-            if isinstance(port, (str, unicode)):
+            if isinstance(port, str):
                 port = port.split(":")
 
             if isinstance(port, (tuple, list)):
@@ -143,7 +143,7 @@ class ServerNode(Node, Server):
             logging.Formatter(dask.config.get("distributed.admin.log-format"))
         )
         logger.addHandler(self._deque_handler)
-        finalize(self, logger.removeHandler, self._deque_handler)
+        weakref.finalize(self, logger.removeHandler, self._deque_handler)
 
     def get_logs(self, comm=None, n=None):
         deque_handler = self._deque_handler

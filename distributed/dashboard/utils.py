@@ -7,13 +7,11 @@ import bokeh
 from tornado import web
 from toolz import partition
 
-from ..compatibility import PY2
-
 BOKEH_VERSION = LooseVersion(bokeh.__version__)
 dirname = os.path.dirname(__file__)
 
 
-if BOKEH_VERSION >= "1.0.0" and not PY2:
+if BOKEH_VERSION >= "1.0.0":
     # This decorator is only available in bokeh >= 1.0.0, and doesn't work for
     # callbacks in Python 2, since the signature introspection won't line up.
     from bokeh.core.properties import without_property_validation

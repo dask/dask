@@ -7,25 +7,22 @@ h5py = pytest.importorskip("h5py")
 
 from distributed.protocol import deserialize, serialize
 
-from distributed.utils import PY3, tmpfile
+from distributed.utils import tmpfile
 
 
 def silence_h5py_issue775(func):
     @functools.wraps(func)
     def wrapper():
-        if PY3:
-            try:
-                func()
-            except RuntimeError as e:
-                # https://github.com/h5py/h5py/issues/775
-                if str(e) != "dictionary changed size during iteration":
-                    raise
-                tb = traceback.extract_tb(e.__traceback__)
-                filename, lineno, _, _ = tb[-1]
-                if not filename.endswith("h5py/_objects.pyx"):
-                    raise
-        else:
+        try:
             func()
+        except RuntimeError as e:
+            # https://github.com/h5py/h5py/issues/775
+            if str(e) != "dictionary changed size during iteration":
+                raise
+            tb = traceback.extract_tb(e.__traceback__)
+            filename, lineno, _, _ = tb[-1]
+            if not filename.endswith("h5py/_objects.pyx"):
+                raise
 
     return wrapper
 

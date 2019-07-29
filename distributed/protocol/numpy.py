@@ -1,12 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
+import math
 import numpy as np
 
 from .utils import frame_split_size, merge_frames
 from .serialize import dask_serialize, dask_deserialize
 from . import pickle
 
-from ..compatibility import gcd
 from ..utils import log_errors
 
 
@@ -60,13 +60,13 @@ def serialize_numpy_ndarray(x):
         data = x.ravel()
 
     if data.dtype.fields or data.dtype.itemsize > 8:
-        data = data.view("u%d" % gcd(x.dtype.itemsize, 8))
+        data = data.view("u%d" % math.gcd(x.dtype.itemsize, 8))
 
     try:
         data = data.data
     except ValueError:
         # "ValueError: cannot include dtype 'M' in a buffer"
-        data = data.view("u%d" % gcd(x.dtype.itemsize, 8)).data
+        data = data.view("u%d" % math.gcd(x.dtype.itemsize, 8)).data
 
     header = {"dtype": dt, "shape": x.shape, "strides": strides}
 

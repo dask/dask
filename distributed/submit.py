@@ -11,11 +11,9 @@ from tornado import gen
 
 from tornado.ioloop import IOLoop
 
-from distributed import rpc
-from distributed.compatibility import unicode
-from distributed.core import Server
-from distributed.security import Security
-from distributed.utils import get_ip
+from .core import rpc, Server
+from .security import Security
+from .utils import get_ip
 
 
 logger = logging.getLogger("distributed.remote")
@@ -62,7 +60,7 @@ class RemoteClient(Server):
 
     def upload_file(self, stream, filename=None, file_payload=None):
         out_filename = os.path.join(self.local_dir, filename)
-        if isinstance(file_payload, unicode):
+        if isinstance(file_payload, str):
             file_payload = file_payload.encode()
         with open(out_filename, "wb") as f:
             f.write(file_payload)

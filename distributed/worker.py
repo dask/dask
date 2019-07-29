@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import asyncio
 import bisect
-from collections import defaultdict, deque
+from collections import defaultdict, deque, MutableMapping
 from datetime import timedelta
 import heapq
 import logging
@@ -35,7 +35,6 @@ from .batched import BatchedSend
 from .comm import get_address_host, connect
 from .comm.utils import offload
 from .comm.addressing import address_from_user_args
-from .compatibility import unicode, get_thread_identity, MutableMapping
 from .core import error_message, CommClosedError, send_recv, pingpong, coerce_to_address
 from .diskutils import WorkSpace
 from .metrics import time
@@ -856,7 +855,7 @@ class Worker(ServerNode):
         out_filename = os.path.join(self.local_directory, filename)
 
         def func(data):
-            if isinstance(data, unicode):
+            if isinstance(data, str):
                 data = data.encode()
             with open(out_filename, "wb") as f:
                 f.write(data)
@@ -2303,8 +2302,8 @@ class Worker(ServerNode):
                     from .actor import Actor  # TODO: create local actor
 
                     data[k] = Actor(type(self.actors[k]), self.address, k, self)
-            args2 = pack_data(args, data, key_types=(bytes, unicode))
-            kwargs2 = pack_data(kwargs, data, key_types=(bytes, unicode))
+            args2 = pack_data(args, data, key_types=(bytes, str))
+            kwargs2 = pack_data(kwargs, data, key_types=(bytes, str))
             stop = time()
             if stop - start > 0.005:
                 self.startstops[key].append(("disk-read", start, stop))
@@ -2796,7 +2795,7 @@ class Worker(ServerNode):
         --------
         get_worker
         """
-        return self.active_threads[get_thread_identity()]
+        return self.active_threads[threading.get_ident()]
 
 
 def get_worker():
@@ -2946,7 +2945,7 @@ def parse_memory_limit(memory_limit, nthreads, total_cores=multiprocessing.cpu_c
         if isinstance(memory_limit, float) and memory_limit <= 1:
             memory_limit = int(memory_limit * TOTAL_MEMORY)
 
-    if isinstance(memory_limit, (unicode, str)):
+    if isinstance(memory_limit, str):
         memory_limit = parse_bytes(memory_limit)
     else:
         memory_limit = int(memory_limit)
@@ -3146,7 +3145,7 @@ def apply_function(
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
-    ident = get_thread_identity()
+    ident = threading.get_ident()
     with active_threads_lock:
         active_threads[ident] = key
     thread_state.start_time = time()
@@ -3186,7 +3185,7 @@ def apply_function_actor(
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
-    ident = get_thread_identity()
+    ident = threading.get_ident()
 
     with active_threads_lock:
         active_threads[ident] = key

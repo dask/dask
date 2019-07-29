@@ -3,13 +3,13 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import os
 import socket
+import threading
 import weakref
 
 from tornado import gen
 import pytest
 
 import dask
-from distributed.compatibility import finalize, get_thread_identity
 from distributed.core import (
     pingpong,
     Server,
@@ -63,7 +63,7 @@ class CountedObject(object):
     def __new__(cls):
         cls.n_instances += 1
         obj = object.__new__(cls)
-        finalize(obj, cls._finalize)
+        weakref.finalize(obj, cls._finalize)
         return obj
 
     @classmethod
@@ -702,7 +702,7 @@ def test_rpc_serialization(loop):
 
 @gen_cluster()
 def test_thread_id(s, a, b):
-    assert s.thread_id == a.thread_id == b.thread_id == get_thread_identity()
+    assert s.thread_id == a.thread_id == b.thread_id == threading.get_ident()
 
 
 @gen_test()
