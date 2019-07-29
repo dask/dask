@@ -296,6 +296,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
+@filter_panel_warning
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
