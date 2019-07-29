@@ -24,7 +24,7 @@ codebase:
 - **Local or Network File System**: ``file://`` - the local file system, default in the absence of any protocol
 
 - **Hadoop File System**: ``hdfs://`` - Hadoop Distributed File System, for resilient, replicated
-  files within a cluster. Uses pyarrow_ as the backend.
+  files within a cluster. This uses PyArrow_ as the backend.
 
 - **Amazon S3**: ``s3://`` - Amazon S3 remote binary store, often used with Amazon EC2,
   using the library s3fs_
@@ -39,7 +39,7 @@ codebase:
   ``fsspec``, but a new version using Microsoft's "protocol 2" should come soon.
 
 ``fsspec`` also provides other file sytstems that may be of interest to Dask users, such as
-ssh, ftp, webhdfs - see the documentation.
+ssh, ftp and webhdfs. See the documentation for more information.
 
 When specifying a storage location, a URL should be provided using the general
 form ``protocol://path/to/data``.  If no protocol is provided, the local
@@ -49,7 +49,7 @@ file system is assumed (same as ``file://``).
 .. _s3fs: https://s3fs.readthedocs.io/
 .. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
 .. _gcsfs: https://github.com/dask/gcsfs/
-.. _pyarrow: https://arrow.apache.org/docs/python/
+.. _PyArrow: https://arrow.apache.org/docs/python/
 
 Lower-level details on how Dask handles remote data is described in Section
 :doc:`Internal Data Ingestion <bytes>`.
@@ -62,6 +62,7 @@ extending the URL to include username, password, server, port, etc.; and
 providing ``storage_options``, a dictionary of parameters to pass on. The
 second form is more general, as any number of file system-specific options
 can be passed.
+
 Examples:
 
 .. code-block:: python
@@ -71,13 +72,13 @@ Examples:
    df = dd.read_parquet('s3://bucket/path',
                         storage_options={'anon': True, 'use_ssl': False})
 
-Further details on how to provide configuration for the main back-ends
-is listed next, but further details can be found in the docs pages of the
-relavant back-end.
+Details on how to provide configuration for the main back-ends
+are listed next, but further details can be found in the documentation pages of the
+relevant back-end.
 
 Each back-end has additional installation requirements and may not be available
 at runtime. The dictionary ``fsspec.registry`` contains the
-currently imported file systems, and to see which backends ``fsspec`` knows how
+currently imported file systems. To see which backends ``fsspec`` knows how
 to import, you can do
 
 .. code-block:: python
@@ -86,7 +87,7 @@ to import, you can do
     known_implementations
 
 Note that some backends appear twice, if they can be referenced with multiple
-protocol strings, e.g., "http" and "https".
+protocol strings, like "http" and "https".
 
 Local File System
 -----------------
@@ -111,7 +112,7 @@ Hadoop File System
 
 The Hadoop File System (HDFS) is a widely deployed, distributed, data-local file
 system written in Java. This file system backs many clusters running Hadoop and
-Spark. HDFS support can be provided by pyarrow_.
+Spark. HDFS support can be provided by PyArrow_.
 
 By default, the back-end attempts to read the default server and port from
 local Hadoop configuration files on each node, so it may be that no
@@ -123,16 +124,16 @@ part of the url: ``hdfs://user:pass@server:port/path/to/data``, or using the
 Extra Configuration for PyArrow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following additional options may be passed to the ``pyarrow`` driver via
+The following additional options may be passed to the ``PyArrow`` driver via
 ``storage_options``:
 
     - ``host``, ``port``, ``user``: Basic authentication
     - ``kerb_ticket``: Path to kerberos ticket cache
 
 PyArrow's ``libhdfs`` driver can also be affected by a few environment
-variables. For more information on these, see the `pyarrow documentation`_.
+variables. For more information on these, see the `PyArrow documentation`_.
 
-.. _pyarrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
+.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
 
 
 Amazon S3
