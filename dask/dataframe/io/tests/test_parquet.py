@@ -967,14 +967,20 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
     out_strings = ["a", "b", None, None]
     tstamp = pd.Timestamp(1513393355, unit="s")
     in_tstamps = [tstamp, tstamp, pd.NaT, pd.NaT]
-    out_tstamps = [tstamp, tstamp, np.datetime64("NaT"), np.datetime64("NaT")]
+    out_tstamps = [
+        # Timestamps come out in numpy.datetime64 format
+        tstamp.to_datetime64(),
+        tstamp.to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
     timezone = "US/Eastern"
     tz_tstamp = pd.Timestamp(1513393355, unit="s", tz=timezone)
     in_tz_tstamps = [tz_tstamp, tz_tstamp, pd.NaT, pd.NaT]
-    # NOTE - Timezones to not make it through a write-read cycle.
     out_tz_tstamps = [
-        tz_tstamp.tz_convert(None),
-        tz_tstamp.tz_convert(None),
+        # Timezones do not make it through a write-read cycle.
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        tz_tstamp.tz_convert(None).to_datetime64(),
         np.datetime64("NaT"),
         np.datetime64("NaT"),
     ]
