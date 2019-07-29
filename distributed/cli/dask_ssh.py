@@ -20,8 +20,9 @@ from distributed.cli.utils import check_python_3
 @click.option(
     "--scheduler-port",
     default=8786,
+    show_default=True,
     type=int,
-    help="Specify scheduler port number.  Defaults to port 8786.",
+    help="Specify scheduler port number.",
 )
 @click.option(
     "--nthreads",
@@ -36,8 +37,9 @@ from distributed.cli.utils import check_python_3
 @click.option(
     "--nprocs",
     default=1,
+    show_default=True,
     type=int,
-    help="Number of worker processes per host.  Defaults to one.",
+    help="Number of worker processes per host.",
 )
 @click.argument("hostnames", nargs=-1, type=str)
 @click.option(
@@ -53,7 +55,11 @@ from distributed.cli.utils import check_python_3
     help="Username to use when establishing SSH connections.",
 )
 @click.option(
-    "--ssh-port", default=22, type=int, help="Port to use for SSH connections."
+    "--ssh-port",
+    default=22,
+    type=int,
+    show_default=True,
+    help="Port to use for SSH connections.",
 )
 @click.option(
     "--ssh-private-key",
@@ -77,6 +83,7 @@ from distributed.cli.utils import check_python_3
 @click.option(
     "--memory-limit",
     default="auto",
+    show_default=True,
     help="Bytes of memory that the worker can use. "
     "This can be an integer (bytes), "
     "float (fraction of total system memory), "
@@ -95,8 +102,9 @@ from distributed.cli.utils import check_python_3
 @click.option(
     "--remote-dask-worker",
     default="distributed.cli.dask_worker",
+    show_default=True,
     type=str,
-    help="Worker to run. Defaults to distributed.cli.dask_worker",
+    help="Worker to run.",
 )
 @click.pass_context
 @click.version_option()
