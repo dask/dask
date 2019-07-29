@@ -1036,9 +1036,10 @@ def slice_with_bool_dask_array(x, index):
             index = tuple(i.ravel() for i in index)
         elif x.ndim > 1:
             warnings.warn(
-                "When slicing a dask array of unknown chunks with a boolean mask "
-                "dask array, the output array may have a different ordering "
-                "compared to the equivalent NumPy operation.",
+                "When slicing a Dask array of unknown chunks with a boolean mask "
+                "Dask array, the output array may have a different ordering "
+                "compared to the equivalent NumPy operation. This will raise an "
+                "error in a future release of Dask.",
                 stacklevel=3,
             )
         y = elemwise(getitem, x, *index, dtype=x.dtype)
