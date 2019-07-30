@@ -39,14 +39,16 @@ def overlap_chunk(
     if isinstance(before, datetime.timedelta):
         before = len(prev_part)
 
-    expansion = out.shape[0] // combined.shape[0]
-    if before:
+    expansion = None
+    if combined.shape[0] != 0:
+        expansion = out.shape[0] // combined.shape[0]
+    if before and expansion:
         before *= expansion
     if next_part is None:
         return out.iloc[before:]
     if isinstance(after, datetime.timedelta):
         after = len(next_part)
-    if after:
+    if after and expansion:
         after *= expansion
     return out.iloc[before:-after]
 
