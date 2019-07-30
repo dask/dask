@@ -13,7 +13,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 import dask
-from distributed import Nanny, rpc, Scheduler, Worker
+from distributed import Nanny, rpc, Scheduler, Worker, Client
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -396,3 +396,18 @@ async def test_nanny_closes_cleanly(cleanup):
         assert not n.process
         assert not proc.is_alive()
         assert proc.exitcode == 0
+
+
+@pytest.mark.asyncio
+async def test_nanny_closes_cleanly(cleanup):
+    async with Scheduler() as s:
+        async with Nanny(s.address) as n:
+            async with Client(s.address, asynchronous=True) as client:
+                with client.rpc(n.worker_address) as w:
+                    IOLoop.current().add_callback(w.terminate)
+                    start = time()
+                    while n.status != "closed":
+                        await gen.sleep(0.01)
+                        assert time() < start + 5
+
+                    assert n.status == "closed"

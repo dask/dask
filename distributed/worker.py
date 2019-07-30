@@ -575,7 +575,7 @@ class Worker(ServerNode):
             "get_data": self.get_data,
             "update_data": self.update_data,
             "delete_data": self.delete_data,
-            "terminate": self.terminate,
+            "terminate": self.close,
             "ping": pingpong,
             "upload_file": self.upload_file,
             "start_ipython": self.start_ipython,
@@ -830,7 +830,7 @@ class Worker(ServerNode):
             logger.exception(e)
             raise
         finally:
-            if self.reconnect:
+            if self.reconnect and self.status == "running":
                 logger.info("Connection to scheduler broken.  Reconnecting...")
                 self.loop.add_callback(self._register_with_scheduler)
             else:
@@ -996,13 +996,6 @@ class Worker(ServerNode):
                         self.scheduler.unregister(address=self.contact_address),
                     )
             self.scheduler.close_rpc()
-            self.actor_executor._work_queue.queue.clear()
-            if isinstance(self.executor, ThreadPoolExecutor):
-                self.executor._work_queue.queue.clear()
-                self.executor.shutdown(wait=executor_wait, timeout=timeout)
-            else:
-                self.executor.shutdown(wait=False)
-            self.actor_executor.shutdown(wait=executor_wait, timeout=timeout)
             self._workdir.release()
 
             for k, v in self.services.items():
@@ -1014,9 +1007,13 @@ class Worker(ServerNode):
             if self.batched_stream:
                 self.batched_stream.close()
 
-            if nanny and self.nanny:
-                with self.rpc(self.nanny) as r:
-                    await r.terminate()
+            self.actor_executor._work_queue.queue.clear()
+            if isinstance(self.executor, ThreadPoolExecutor):
+                self.executor._work_queue.queue.clear()
+                self.executor.shutdown(wait=executor_wait, timeout=timeout)
+            else:
+                self.executor.shutdown(wait=False)
+            self.actor_executor.shutdown(wait=executor_wait, timeout=timeout)
 
             self.stop()
             self.rpc.close()
@@ -1026,9 +1023,10 @@ class Worker(ServerNode):
             await ServerNode.close(self)
 
             setproctitle("dask-worker [closed]")
+        return "OK"
 
-    async def terminate(self, comm, report=True):
-        await self.close(report=report)
+    async def terminate(self, comm, report=True, **kwargs):
+        await self.close(report=report, **kwargs)
         return "OK"
 
     async def wait_until_closed(self):

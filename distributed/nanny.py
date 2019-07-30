@@ -380,6 +380,9 @@ class Nanny(ServerNode):
                     if self.auto_restart:
                         logger.warning("Restarting worker")
                         await self.instantiate()
+                elif self.status == "closing-gracefully":
+                    await self.close()
+
             except Exception:
                 logger.error(
                     "Failed to restart worker after its process exited", exc_info=True
