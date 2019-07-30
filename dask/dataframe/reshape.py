@@ -243,22 +243,25 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
 
     kwargs = {"index": index, "columns": columns, "values": values}
 
-    pv_sum = apply_concat_apply(
-        [df],
-        chunk=methods.pivot_sum,
-        aggregate=methods.pivot_agg,
-        meta=meta,
-        token="pivot_table_sum",
-        chunk_kwargs=kwargs,
-    )
-    pv_count = apply_concat_apply(
-        [df],
-        chunk=methods.pivot_count,
-        aggregate=methods.pivot_agg,
-        meta=meta,
-        token="pivot_table_count",
-        chunk_kwargs=kwargs,
-    )
+    if aggfunc in ["sum", "mean"]:
+        pv_sum = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_sum,
+            aggregate=methods.pivot_agg,
+            meta=meta,
+            token="pivot_table_sum",
+            chunk_kwargs=kwargs,
+        )
+
+    if aggfunc in ["count", "mean"]:
+        pv_count = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_count,
+            aggregate=methods.pivot_agg,
+            meta=meta,
+            token="pivot_table_count",
+            chunk_kwargs=kwargs,
+        )
 
     if aggfunc == "sum":
         return pv_sum
