@@ -10,8 +10,7 @@ from dask.array.utils import allclose
 
 
 @pytest.mark.parametrize(
-    "kind, kwargs",
-    [("skew", {}), ("kurtosis", {}), ("kurtosis", {"fisher": False})],
+    "kind, kwargs", [("skew", {}), ("kurtosis", {}), ("kurtosis", {"fisher": False})]
 )
 @pytest.mark.parametrize("single_dim", [True, False])
 def test_measures(kind, kwargs, single_dim):
