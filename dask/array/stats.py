@@ -261,10 +261,6 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         # need a version of np.place
         raise NotImplementedError("bias=False is not implemented.")
 
-    if vals.ndim == 0:
-        return vals  # TODO: scalar
-        # vals = vals.item()  # array scalar
-
     if fisher:
         return vals - 3
     else:
