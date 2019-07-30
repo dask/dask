@@ -267,9 +267,6 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         return vals
         # TODO: scalar; vals = vals.item()  # array scalar
 
-    return vals  # TODO: scalar
-    # vals = vals.item()  # array scalar
-
 
 @doc_wraps(scipy.stats.kurtosistest)
 def kurtosistest(a, axis=0, nan_policy="propagate"):
