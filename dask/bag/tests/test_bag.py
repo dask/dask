@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 from itertools import repeat
+import multiprocessing
 import math
 import os
 import random
@@ -1369,10 +1370,15 @@ def test_repeated_groupby():
 def test_temporary_directory(tmpdir):
     b = db.range(10, npartitions=4)
 
-    with dask.config.set(temporary_directory=str(tmpdir)):
-        b2 = b.groupby(lambda x: x % 2)
-        b2.compute()
-        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
+    # We use a pool to avoid a race condition between the pool close
+    # cleaning up files, and the assert below.
+    pool = multiprocessing.Pool(4)
+
+    with pool:
+        with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
+            b2 = b.groupby(lambda x: x % 2)
+            b2.compute()
+            assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_bag():
