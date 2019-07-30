@@ -15,17 +15,18 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - fsspec
   - sqlalchemy
   - pyarrow
   # other -- IO
   - bcolz
   - blosc
-  - s3fs
   - boto3
   - botocore
   - bokeh
   - httpretty
   - chest
+  - s3fs
   - cloudpickle
   - crick
   - cytoolz

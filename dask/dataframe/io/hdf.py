@@ -9,12 +9,15 @@ from warnings import warn
 import pandas as pd
 from toolz import merge
 
+# this import checks for the importability of fsspec
+from ...bytes import read_bytes  # noqa
+from fsspec.utils import build_name_function, stringify_path
+
 from .io import _link
 from ...base import get_scheduler
 from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
-from ...bytes.utils import build_name_function, stringify_path
 from ...compatibility import PY3
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock

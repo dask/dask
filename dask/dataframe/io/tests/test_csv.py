@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from io import BytesIO
 import os
 import gzip
+import sys
 from time import sleep
 
 import pytest
@@ -24,10 +25,11 @@ from dask.dataframe.io.csv import (
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
+from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
-from dask.bytes.compression import compress, files as cfiles, seekable_files
+from fsspec.compression import compr
 
-fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
+fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
 def normalize_text(s):
@@ -701,9 +703,17 @@ def test_read_csv_sensitive_to_enforce():
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
+    if fmt == "zip" and sys.version_info.minor == 5:
+        pytest.skip("zipfile is read-only on py35")
+    if fmt not in compress:
+        pytest.skip("compress function not provided for %s" % fmt)
     files2 = valmap(compress[fmt], csv_files)
     with filetexts(files2, mode="b"):
-        df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+        if fmt and blocksize:
+            with pytest.warns(UserWarning):
+                df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+        else:
+            df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),
@@ -711,6 +721,7 @@ def test_read_csv_compression(fmt, blocksize):
         )
 
 
+@pytest.mark.skip
 def test_warn_non_seekable_files():
     files2 = valmap(compress["gzip"], csv_files)
     with filetexts(files2, mode="b"):
@@ -1340,7 +1351,10 @@ def test_to_csv_with_get():
 def test_to_csv_paths():
     df = pd.DataFrame({"A": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert ddf.to_csv("foo*.csv") == ["foo0.csv", "foo1.csv"]
+    paths = ddf.to_csv("foo*.csv")
+    assert paths[0].endswith("foo0.csv")
+    assert paths[1].endswith("foo1.csv")
+
     os.remove("foo0.csv")
     os.remove("foo1.csv")
 
