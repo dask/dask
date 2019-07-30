@@ -123,7 +123,7 @@ Reasons you might choose Dask
 
 
 Reasons to choose both
----------------------
+----------------------
 
 It is easy to use both Dask and Spark on the same data and on the same cluster.
 
