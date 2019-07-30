@@ -10,7 +10,7 @@ from pprint import pformat
 
 import numpy as np
 import pandas as pd
-from pandas.util import cache_readonly, hash_pandas_object
+from pandas.util import cache_readonly
 from pandas.api.types import (
     is_bool_dtype,
     is_timedelta64_dtype,
@@ -4461,9 +4461,11 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
         h = df
-    h = hash_pandas_object(h, index=False)
+    import sys
+    package = sys.modules[df.__class__.__module__.split(".")[0]]
+    h = package.util.hash_pandas_object(h, index=False)
     if is_series_like(h):
-        h = h._values
+        h = h.values
     h %= nparts
     return {i: df.iloc[h == i] for i in range(nparts)}
 
