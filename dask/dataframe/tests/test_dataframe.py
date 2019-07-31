@@ -2950,11 +2950,13 @@ def test_series_iteritems():
     for (a, b) in zip(df["x"].iteritems(), ddf["x"].iteritems()):
         assert a == b
 
+
 def test_series_iter():
     s = pd.DataFrame({"x": [1, 2, 3, 4]})
     ds = dd.from_pandas(s, npartitions=2)
     for (a, b) in zip(s["x"], ds["x"]):
         assert a == b
+
 
 def test_dataframe_iterrows():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
