@@ -2685,12 +2685,12 @@ Dask Name: {name}, {task} tasks""".format(
             for item in s.iteritems():
                 yield item
 
-    #@derived_from(pd.Series)
-    #def __iter__(self):
-    #    for i in range(self.npartitions):
-    #        s = self.get_partition(i).compute()
-    #        for row in s:
-    #            yield row
+    @derived_from(pd.Series)
+    def __iter__(self):
+        for i in range(self.npartitions):
+            s = self.get_partition(i).compute()
+            for row in s:
+                yield row
 
     @classmethod
     def _validate_axis(cls, axis=0):
