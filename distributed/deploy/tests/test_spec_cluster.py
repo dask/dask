@@ -4,6 +4,7 @@ from time import time
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
 from distributed.deploy.spec import close_clusters, ProcessInterface
 from distributed.utils_test import loop, cleanup  # noqa: F401
+from distributed.utils import is_valid_xml
 import toolz
 import pytest
 
@@ -190,6 +191,7 @@ async def test_logs(cleanup):
         await cluster
 
         logs = await cluster.logs()
+        assert is_valid_xml("<div>" + logs._repr_html_() + "</div>")
         assert "Scheduler" in logs
         for worker in cluster.scheduler.workers:
             assert worker in logs

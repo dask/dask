@@ -552,8 +552,7 @@ def test_format_bytes_compat():
 def test_logs():
     d = Logs({"123": Log("Hello"), "456": Log("World!")})
     text = d._repr_html_()
-    for line in text.split("\n"):
-        assert is_valid_xml(line)
+    assert is_valid_xml("<div>" + text + "</div>")
     assert "Hello" in text
     assert "456" in text
 
