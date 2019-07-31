@@ -257,7 +257,7 @@ Or collect all futures in batches that had arrived since the last iteration:
       for future, result in batch:
           ...
 
-Additionally, for iterative algorithms, you can add more futures into the 
+Additionally, for iterative algorithms, you can add more futures into the
 ``as_completed`` iterator *during* iteration:
 
 .. code-block:: python
@@ -380,7 +380,7 @@ thread that does not take up a slot within the Dask worker:
 If you intend to do more work in the same thread after waiting on client work,
 you may want to explicitly block until the thread is able to *rejoin* the
 thread pool.  This allows some control over the number of threads that are
-created and stops too many threads from being active at once, over-saturating 
+created and stops too many threads from being active at once, over-saturating
 your hardware:
 
 .. code-block:: python
@@ -575,7 +575,7 @@ Using a consistent name is convenient when you want to lock some known named res
 
    futures = client.map(load, filenames)
 
-Passing around a lock works as well and is easier when you want to create short-term 
+Passing around a lock works as well and is easier when you want to create short-term
 locks for a particular situation:
 
 .. code-block:: python
@@ -792,7 +792,6 @@ API
 
 .. autoclass:: Future
    :members:
-
 
 .. autoclass:: Queue
    :members:
