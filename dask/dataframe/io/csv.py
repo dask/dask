@@ -688,7 +688,8 @@ def to_csv(
     nanRep : None
         deprecated, use na_rep
     mode : str
-        Python write mode, default 'w'
+        Python write mode, default 'w'. Note that not all filesystems
+        support the append mode.
     encoding : string, optional
         A string representing the encoding to use in the output file,
         defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
@@ -727,12 +728,13 @@ def to_csv(
     """
     if PY2:
         default_encoding = None
-        mode = "wb"
+        default_mode = "wb"
     else:
         default_encoding = "utf-8"
-        mode = "wt"
+        default_mode = "wt"
 
     encoding = kwargs.get("encoding", default_encoding)
+    mode = kwargs.get("mode", default_mode)
 
     files = open_files(
         filename,
