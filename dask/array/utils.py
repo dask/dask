@@ -108,41 +108,42 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 
 def compute_meta(func, _dtype, *args, **kwargs):
-    args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
-    kwargs_meta = {
-        k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()
-    }
+    with np.errstate(all="ignore"):
+        args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
+        kwargs_meta = {
+            k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()
+        }
 
-    # todo: look for alternative to this, causes issues when using map_blocks()
-    # with np.vectorize, such as dask.array.routines._isnonzero_vec().
-    if isinstance(func, np.vectorize):
-        meta = func(*args_meta)
-    else:
-        try:
-            # some reduction functions need to know they are computing meta
-            if has_keyword(func, "computing_meta"):
-                kwargs_meta["computing_meta"] = True
-            meta = func(*args_meta, **kwargs_meta)
-        except TypeError as e:
-            if (
-                "unexpected keyword argument" in str(e)
-                or "is an invalid keyword for" in str(e)
-                or "Did not understand the following kwargs" in str(e)
-            ):
-                raise
-            else:
+        # todo: look for alternative to this, causes issues when using map_blocks()
+        # with np.vectorize, such as dask.array.routines._isnonzero_vec().
+        if isinstance(func, np.vectorize):
+            meta = func(*args_meta)
+        else:
+            try:
+                # some reduction functions need to know they are computing meta
+                if has_keyword(func, "computing_meta"):
+                    kwargs_meta["computing_meta"] = True
+                meta = func(*args_meta, **kwargs_meta)
+            except TypeError as e:
+                if (
+                    "unexpected keyword argument" in str(e)
+                    or "is an invalid keyword for" in str(e)
+                    or "Did not understand the following kwargs" in str(e)
+                ):
+                    raise
+                else:
+                    return None
+            except Exception:
                 return None
-        except Exception:
-            return None
 
-    if _dtype and getattr(meta, "dtype", None) != _dtype:
-        with ignoring(AttributeError):
-            meta = meta.astype(_dtype)
+        if _dtype and getattr(meta, "dtype", None) != _dtype:
+            with ignoring(AttributeError):
+                meta = meta.astype(_dtype)
 
-    if np.isscalar(meta):
-        meta = np.array(meta)
+        if np.isscalar(meta):
+            meta = np.array(meta)
 
-    return meta
+        return meta
 
 
 def allclose(a, b, equal_nan=False, **kwargs):

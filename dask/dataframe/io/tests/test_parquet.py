@@ -938,7 +938,7 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-def test_pyarrow_partition_inconsistent_schema_raises(tmpdir):
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(tmpdir):
     check_pyarrow()
 
     df = pd.DataFrame(
@@ -948,16 +948,16 @@ def test_pyarrow_partition_inconsistent_schema_raises(tmpdir):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
 
-    # Read should fail when schema is not provided
+    # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
-        dd.read_parquet(
-            str(tmpdir), engine="pyarrow", gather_statistics=False
-        ).compute()
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
 
 
-def test_pyarrow_partition_inconsistent_schema_succeeds(tmpdir):
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
+    tmpdir
+):
     check_pyarrow()
 
     # Data types to test: strings, arrays, ints, timezone aware timestamps
