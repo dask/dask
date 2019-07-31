@@ -167,14 +167,7 @@ class CategoricalAccessor(Accessor):
     So `df.a.cat.codes` <=> `df.a.map_partitions(lambda x: x.cat.codes)`
     """
 
-    _accessor = pd.Series.cat
     _accessor_name = "cat"
-
-    def _validate(self, series):
-        if not is_categorical_dtype(series.dtype):
-            raise AttributeError(
-                "Can only use .cat accessor with a " "'category' dtype"
-            )
 
     @property
     def known(self):
