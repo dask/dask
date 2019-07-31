@@ -953,7 +953,11 @@ class Client(Node):
             self.scheduler = self.rpc(address)
         self.scheduler_comm = None
 
-        await self._ensure_connected(timeout=timeout)
+        try:
+            await self._ensure_connected(timeout=timeout)
+        except OSError:
+            await self._close()
+            raise
 
         for pc in self._periodic_callbacks.values():
             pc.start()

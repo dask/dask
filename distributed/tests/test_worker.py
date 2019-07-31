@@ -1497,3 +1497,42 @@ async def test_worker_listens_on_same_interface_by_default(Worker):
         assert s.ip in {"127.0.0.1", "localhost"}
         async with Worker(s.address) as w:
             assert s.ip == w.ip
+
+
+@gen_cluster(client=True)
+async def test_close_gracefully(c, s, a, b):
+    futures = c.map(slowinc, range(200), delay=0.1)
+    while not b.data:
+        await gen.sleep(0.1)
+
+    mem = set(b.data)
+    proc = set(b.executing)
+
+    await b.close_gracefully()
+
+    assert b.status == "closed"
+    assert b.address not in s.workers
+    assert mem.issubset(set(a.data))
+    for key in proc:
+        assert s.tasks[key].state in ("processing", "memory")
+
+
+@pytest.mark.slow
+@pytest.mark.asyncio
+async def test_lifetime(cleanup):
+    async with Scheduler() as s:
+        async with Worker(s.address) as a, Worker(s.address, lifetime="1 seconds") as b:
+            async with Client(s.address, asynchronous=True) as c:
+                futures = c.map(slowinc, range(200), delay=0.1)
+                await gen.sleep(1.5)
+                assert b.status != "running"
+                await b.finished()
+
+                assert set(b.data).issubset(a.data)  # successfully moved data over
+
+
+@gen_cluster(client=True, worker_kwargs={"lifetime": "10s", "lifetime_stagger": "2s"})
+async def test_lifetime_stagger(c, s, a, b):
+    assert a.lifetime != b.lifetime
+    assert 8 <= a.lifetime <= 12
+    assert 8 <= b.lifetime <= 12

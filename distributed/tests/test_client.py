@@ -3318,6 +3318,7 @@ def test_bad_tasks_fail(c, s, a, b):
         yield f
 
     assert info.value.last_worker.nanny in {a.address, b.address}
+    yield [a.close(), b.close()]
 
 
 def test_get_processing_sync(c, s, a, b):
@@ -5233,6 +5234,7 @@ def test_client_timeout_2():
             yield c
         stop = time()
 
+        assert c.status == "closed"
         yield c.close()
 
         assert stop - start < 1

@@ -249,6 +249,16 @@ class Worker(ServerNode):
         Resources that this worker has like ``{'GPU': 2}``
     nanny: str
         Address on which to contact nanny, if it exists
+    lifetime: str
+        Amount of time like "1 hour" after which we gracefully shut down the worker.
+        This defaults to None, meaning no explicit shutdown time.
+    lifetime_stagger: str
+        Amount of time like "5 minutes" to stagger the lifetime value
+        The actual lifetime will be selected uniformly at random between
+        lifetime +/- lifetime_stagger
+    lifetime_restart: bool
+        Whether or not to restart a worker after it has reached its lifetime
+        Default False
 
     Examples
     --------
@@ -308,6 +318,9 @@ class Worker(ServerNode):
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
         validate=False,
         profile_cycle_interval=None,
+        lifetime=None,
+        lifetime_stagger=None,
+        lifetime_restart=None,
         **kwargs
     ):
         self.tasks = dict()
@@ -653,6 +666,23 @@ class Worker(ServerNode):
         self.plugins = {}
         self._pending_plugins = plugins
 
+        self.lifetime = lifetime or dask.config.get(
+            "distributed.worker.lifetime.duration"
+        )
+        lifetime_stagger = lifetime_stagger or dask.config.get(
+            "distributed.worker.lifetime.stagger"
+        )
+        self.lifetime_restart = lifetime_restart or dask.config.get(
+            "distributed.worker.lifetime.restart"
+        )
+        if isinstance(self.lifetime, str):
+            self.lifetime = parse_timedelta(self.lifetime)
+        if isinstance(lifetime_stagger, str):
+            lifetime_stagger = parse_timedelta(lifetime_stagger)
+        if self.lifetime:
+            self.lifetime += (random.random() * 2 - 1) * lifetime_stagger
+            self.io_loop.call_later(self.lifetime, self.close_gracefully)
+
         Worker._instances.add(self)
 
     ##################
@@ -903,6 +933,8 @@ class Worker(ServerNode):
     #############
 
     async def start(self):
+        if self.status and self.status.startswith("clos"):
+            return
         assert self.status is None, self.status
 
         enable_gc_diagnosis()
@@ -957,19 +989,22 @@ class Worker(ServerNode):
         warnings.warn("Worker._close has moved to Worker.close", stacklevel=2)
         return self.close(*args, **kwargs)
 
-    async def close(self, report=True, timeout=10, nanny=True, executor_wait=True):
+    async def close(
+        self, report=True, timeout=10, nanny=True, executor_wait=True, safe=False
+    ):
         with log_errors():
             if self.status in ("closed", "closing"):
                 await self.finished()
                 return
 
+            self.reconnect = False
             disable_gc_diagnosis()
 
             try:
                 logger.info("Stopping worker at %s", self.address)
             except ValueError:  # address not available if already closed
                 logger.info("Stopping worker")
-            if self.status != "running":
+            if self.status not in ("running", "closing-gracefully"):
                 logger.info("Closed worker has not yet started: %s", self.status)
             self.status = "closing"
 
@@ -993,7 +1028,9 @@ class Worker(ServerNode):
                 if report:
                     await gen.with_timeout(
                         timedelta(seconds=timeout),
-                        self.scheduler.unregister(address=self.contact_address),
+                        self.scheduler.unregister(
+                            address=self.contact_address, safe=safe
+                        ),
                     )
             self.scheduler.close_rpc()
             self._workdir.release()
@@ -1024,6 +1061,23 @@ class Worker(ServerNode):
 
             setproctitle("dask-worker [closed]")
         return "OK"
+
+    async def close_gracefully(self):
+        """ Gracefully shut down a worker
+
+        This first informs the scheduler that we're shutting down, and asks it
+        to move our data elsewhere.  Afterwards, we close as normal
+        """
+        if self.status.startswith("closing"):
+            await self.finished()
+
+        if self.status == "closed":
+            return
+
+        logger.info("Closing worker gracefully: %s", self.address)
+        self.status = "closing-gracefully"
+        await self.scheduler.retire_workers(workers=[self.address], remove=False)
+        await self.close(safe=True, nanny=not self.lifetime_restart)
 
     async def terminate(self, comm, report=True, **kwargs):
         await self.close(report=report, **kwargs)
@@ -1541,7 +1595,7 @@ class Worker(ServerNode):
                 if key in self.dep_state:
                     self.transition_dep(key, "memory")
 
-            if report and self.batched_stream:
+            if report and self.batched_stream and self.status == "running":
                 self.send_task_state_to_scheduler(key)
             else:
                 raise CommClosedError
@@ -2278,7 +2332,7 @@ class Worker(ServerNode):
 
     async def execute(self, key, report=False):
         executor_error = None
-        if self.status in ("closing", "closed"):
+        if self.status in ("closing", "closed", "closing-gracefully"):
             return
         try:
             if key not in self.executing or key not in self.task_state:

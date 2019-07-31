@@ -175,6 +175,28 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     "--dashboard-prefix", type=str, default="", help="Prefix for the dashboard"
 )
 @click.option(
+    "--lifetime",
+    type=str,
+    default="",
+    help="If provided, shut down the worker after this duration.",
+)
+@click.option(
+    "--lifetime-stagger",
+    type=str,
+    default="0 seconds",
+    show_default=True,
+    help="Random amount by which to stagger lifetime values",
+)
+@click.option(
+    "--lifetime-restart/--no-lifetime-restart",
+    "lifetime_restart",
+    default=False,
+    show_default=True,
+    required=False,
+    help="Whether or not to restart the worker after the lifetime lapses. "
+    "This assumes that you are using the --lifetime and --nanny keywords",
+)
+@click.option(
     "--preload",
     type=str,
     multiple=True,
@@ -346,7 +368,7 @@ def main(
             dashboard_address=dashboard_address if dashboard else None,
             service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
             name=name if nprocs == 1 or not name else name + "-" + str(i),
-            **kwargs,
+            **kwargs
         )
         for i in range(nprocs)
     ]
