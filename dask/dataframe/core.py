@@ -4462,6 +4462,7 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
     else:
         h = df
     import sys
+
     package = sys.modules[df.__class__.__module__.split(".")[0]]
     h = package.util.hash_pandas_object(h, index=False)
     if is_series_like(h):
