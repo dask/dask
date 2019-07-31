@@ -16,7 +16,6 @@ from dask.base import compute_as_if_collection
 from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
-from dask.array.numpy_compat import _numpy_117
 from dask.dataframe.core import (
     apply_and_enforce,
     repartition_divisions,
@@ -3784,7 +3783,6 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
-@pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Aviod searchsorted failure.
