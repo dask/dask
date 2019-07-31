@@ -2606,10 +2606,10 @@ Dask Name: {name}, {task} tasks""".format(
         """
         from pandas.api.types import is_scalar, is_list_like, is_dict_like
 
-        if is_scalar(index) or (is_list_like(index) and not is_dict_like(index)):
+        if is_scalar(index):
             res = self if inplace else self.copy()
             res.name = index
-        else:
+        elif is_dict_like(index) or callable(index) or is_list_like(index):
             res = self.map_partitions(M.rename, index)
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
@@ -2685,12 +2685,12 @@ Dask Name: {name}, {task} tasks""".format(
             for item in s.iteritems():
                 yield item
 
-    @derived_from(pd.Series)
-    def __iter__(self):
-        for i in range(self.npartitions):
-            s = self.get_partition(i).compute()
-            for row in s:
-                yield row
+    #@derived_from(pd.Series)
+    #def __iter__(self):
+    #    for i in range(self.npartitions):
+    #        s = self.get_partition(i).compute()
+    #        for row in s:
+    #            yield row
 
     @classmethod
     def _validate_axis(cls, axis=0):
