@@ -950,7 +950,9 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
 
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
-        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
+        dd.read_parquet(
+            str(tmpdir), engine="pyarrow", gather_statistics=False
+        ).compute()
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
 
@@ -1044,8 +1046,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
     assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
 
 
-@write_read_engines_xfail
-def test_partition_on(tmpdir, write_engine, read_engine):
+def test_partition_on(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -1055,11 +1056,11 @@ def test_partition_on(tmpdir, write_engine, read_engine):
         }
     )
     d = dd.from_pandas(df, npartitions=2)
-    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=write_engine)
-    # Note #1: fastparquet is not discovering the partions when written by pyarrow
+    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=engine)
+    # Note #1: Cross-engine functionality is missing
     # Note #2: The index is not preserved in pyarrow when partition_on is used
     out = dd.read_parquet(
-        tmpdir, index=False, engine=read_engine, gather_statistics=False
+        tmpdir, index=False, engine=engine, gather_statistics=False
     ).compute()
     for val in df.a.unique():
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
@@ -1820,3 +1821,32 @@ def test_categories_large(tmpdir, engine):
     ddf = dd.read_parquet(fn, engine=engine, categories={"name": 80000})
 
     assert_eq(sorted(df.name.cat.categories), sorted(ddf.compute().name.cat.categories))
+
+
+@write_read_engines()
+def test_read_glob_nostats(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+
+    ddf2 = dd.read_parquet(
+        os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
+    )
+    assert_eq(ddf, ddf2, check_divisions=False)
+
+
+@pytest.mark.parametrize("statistics", [True, False, None])
+@pytest.mark.parametrize("remove_common", [True, False])
+@write_read_engines()
+def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_common):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    if os.path.exists(os.path.join(tmp_path, "_metadata")):
+        os.unlink(os.path.join(tmp_path, "_metadata"))
+    files = os.listdir(tmp_path)
+    assert "_metadata" not in files
+
+    if remove_common and os.path.exists(os.path.join(tmp_path, "_common_metadata")):
+        os.unlink(os.path.join(tmp_path, "_common_metadata"))
+
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
+    assert_eq(ddf, ddf2, check_divisions=False)
