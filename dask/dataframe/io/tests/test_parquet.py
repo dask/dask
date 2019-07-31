@@ -938,6 +938,112 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(tmpdir):
+    check_pyarrow()
+
+    df = pd.DataFrame(
+        {"partition_column": [0, 0, 1, 1], "strings": ["a", "b", None, None]}
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
+
+    # Test that read fails because of default behavior when schema not provided
+    with pytest.raises(ValueError) as e_info:
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
+        assert e_info.message.contains("ValueError: Schema in partition")
+        assert e_info.message.contains("was different")
+
+
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
+    tmpdir
+):
+    check_pyarrow()
+
+    # Data types to test: strings, arrays, ints, timezone aware timestamps
+    in_arrays = [[0, 1, 2], [3, 4], np.nan, np.nan]
+    out_arrays = [[0, 1, 2], [3, 4], None, None]
+    in_strings = ["a", "b", np.nan, np.nan]
+    out_strings = ["a", "b", None, None]
+    tstamp = pd.Timestamp(1513393355, unit="s")
+    in_tstamps = [tstamp, tstamp, pd.NaT, pd.NaT]
+    out_tstamps = [
+        # Timestamps come out in numpy.datetime64 format
+        tstamp.to_datetime64(),
+        tstamp.to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
+    timezone = "US/Eastern"
+    tz_tstamp = pd.Timestamp(1513393355, unit="s", tz=timezone)
+    in_tz_tstamps = [tz_tstamp, tz_tstamp, pd.NaT, pd.NaT]
+    out_tz_tstamps = [
+        # Timezones do not make it through a write-read cycle.
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
+
+    df = pd.DataFrame(
+        {
+            "partition_column": [0, 0, 1, 1],
+            "arrays": in_arrays,
+            "strings": in_strings,
+            "tstamps": in_tstamps,
+            "tz_tstamps": in_tz_tstamps,
+        }
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    schema = pa.schema(
+        [
+            ("arrays", pa.list_(pa.int64())),
+            ("strings", pa.string()),
+            ("tstamps", pa.timestamp("ns")),
+            ("tz_tstamps", pa.timestamp("ns", timezone)),
+            ("partition_column", pa.int64()),
+        ]
+    )
+    ddf.to_parquet(
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
+    )
+    ddf_after_write = (
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
+        .compute()
+        .reset_index(drop=True)
+    )
+
+    # Check array support
+    arrays_after_write = ddf_after_write.arrays.values
+    for i in range(len(df)):
+        assert np.array_equal(arrays_after_write[i], out_arrays[i]), type(out_arrays[i])
+
+    # Check datetime support
+    tstamps_after_write = ddf_after_write.tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tstamps_after_write[i]):
+            assert np.isnat(out_tstamps[i])
+        else:
+            assert tstamps_after_write[i] == out_tstamps[i]
+
+    # Check timezone aware datetime support
+    tz_tstamps_after_write = ddf_after_write.tz_tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tz_tstamps_after_write[i]):
+            assert np.isnat(out_tz_tstamps[i])
+        else:
+            assert tz_tstamps_after_write[i] == out_tz_tstamps[i]
+
+    # Check string support
+    assert np.array_equal(ddf_after_write.strings.values, out_strings)
+
+    # Check partition column
+    assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
+
+
 @write_read_engines_xfail
 def test_partition_on(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
