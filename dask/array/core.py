@@ -3325,7 +3325,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     )
 
     # Drop empty arrays
-    seq = [a for a in seq if a.size]
+    seq2 = [a for a in seq if a.size]
+    if not seq2:
+        seq2 = seq[:1]
 
     if axis < 0:
         axis = ndim + axis
@@ -3336,45 +3338,45 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         )
         raise ValueError(msg % (ndim, axis))
 
-    n = len(seq)
+    n = len(seq2)
     if n == 0:
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
-        return seq[0]
+        return seq2[0]
 
     if not allow_unknown_chunksizes and not all(
-        i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
+        i == axis or all(x.shape[i] == seq2[0].shape[i] for x in seq2)
         for i in range(ndim)
     ):
-        if any(map(np.isnan, seq[0].shape)):
+        if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
                 " shape %s.  To force concatenation pass"
-                " allow_unknown_chunksizes=True." % str(seq[0].shape)
+                " allow_unknown_chunksizes=True." % str(seq2[0].shape)
             )
-        raise ValueError("Shapes do not align: %s", [x.shape for x in seq])
+        raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 
     inds = [list(range(ndim)) for i in range(n)]
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
 
-    uc_args = list(concat(zip(seq, inds)))
-    _, seq = unify_chunks(*uc_args, warn=False)
+    uc_args = list(concat(zip(seq2, inds)))
+    _, seq2 = unify_chunks(*uc_args, warn=False)
 
-    bds = [a.chunks for a in seq]
+    bds = [a.chunks for a in seq2]
 
     chunks = (
-        seq[0].chunks[:axis]
+        seq2[0].chunks[:axis]
         + (sum([bd[axis] for bd in bds], ()),)
-        + seq[0].chunks[axis + 1 :]
+        + seq2[0].chunks[axis + 1 :]
     )
 
-    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
+    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq2]))
 
-    names = [a.name for a in seq]
+    names = [a.name for a in seq2]
 
     name = "concatenate-" + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
@@ -3388,7 +3390,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     ]
 
     dsk = dict(zip(keys, values))
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
 
@@ -4109,9 +4111,11 @@ def stack(seq, axis=0):
         for i in range(meta.ndim)
     )
 
-    seq = [a for a in seq if a.size]
+    seq2 = [a for a in seq if a.size]
+    if not seq2:
+        seq2 = seq[:1]
 
-    n = len(seq)
+    n = len(seq2)
     if n == 0:
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
@@ -4119,13 +4123,13 @@ def stack(seq, axis=0):
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
 
     ind = list(range(ndim))
-    uc_args = list(concat((x, ind) for x in seq))
-    _, seq = unify_chunks(*uc_args)
+    uc_args = list(concat((x, ind) for x in seq2))
+    _, seq2 = unify_chunks(*uc_args)
 
-    assert len(set(a.chunks for a in seq)) == 1  # same chunks
-    chunks = seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:]
+    assert len(set(a.chunks for a in seq2)) == 1  # same chunks
+    chunks = seq2[0].chunks[:axis] + ((1,) * n,) + seq2[0].chunks[axis:]
 
-    names = [a.name for a in seq]
+    names = [a.name for a in seq2]
     name = "stack-" + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
@@ -4144,7 +4148,7 @@ def stack(seq, axis=0):
     ]
 
     layer = dict(zip(keys, values))
-    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
 
