@@ -1,6 +1,5 @@
 import json
 import re
-import xml.etree.ElementTree
 
 import pytest
 
@@ -10,6 +9,7 @@ from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient
 
 from dask.sizeof import sizeof
+from distributed.utils import is_valid_xml
 from distributed.utils_test import gen_cluster, slowinc, inc
 from distributed.dashboard import BokehScheduler, BokehWorker
 
@@ -45,7 +45,7 @@ def test_connect(c, s, a, b):
         if suffix.endswith(".json"):
             json.loads(body)
         else:
-            assert xml.etree.ElementTree.fromstring(body) is not None
+            assert is_valid_xml(body)
             assert not re.search("href=./", body)  # no absolute links
 
 
@@ -66,7 +66,7 @@ def test_prefix(c, s, a, b):
         if suffix.endswith(".json"):
             json.loads(body)
         else:
-            assert xml.etree.ElementTree.fromstring(body) is not None
+            assert is_valid_xml(body)
 
 
 @gen_cluster(

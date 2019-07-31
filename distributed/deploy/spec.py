@@ -492,9 +492,9 @@ class SpecCluster(Cluster):
     }
   </style>
   <table style="text-align: right;">
-    <tr><th>Workers</th> <td>%d</td></tr>
-    <tr><th>Cores</th> <td>%d</td></tr>
-    <tr><th>Memory</th> <td>%s</td></tr>
+    <tr> <th>Workers</th> <td>%d</td></tr>
+    <tr> <th>Cores</th> <td>%d</td></tr>
+    <tr> <th>Memory</th> <td>%s</td></tr>
   </table>
 </div>
 """ % (

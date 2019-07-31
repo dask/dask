@@ -26,6 +26,7 @@ import weakref
 import pkgutil
 import six
 import tblib.pickling_support
+import xml.etree.ElementTree
 
 try:
     import resource
@@ -1466,3 +1467,7 @@ def cli_keywords(d: dict, cls=None):
     return sum(
         [["--" + k.replace("_", "-"), convert_value(v)] for k, v in d.items()], []
     )
+
+
+def is_valid_xml(text):
+    return xml.etree.ElementTree.fromstring(text) is not None
