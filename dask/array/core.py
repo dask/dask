@@ -3327,7 +3327,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     # Drop empty arrays
     seq2 = [a for a in seq if a.size]
     if not seq2:
-        seq2 = seq[:1]
+        seq2 = seq
 
     if axis < 0:
         axis = ndim + axis
@@ -4113,7 +4113,7 @@ def stack(seq, axis=0):
 
     seq2 = [a for a in seq if a.size]
     if not seq2:
-        seq2 = seq[:1]
+        seq2 = seq
 
     n = len(seq2)
     if n == 0:
