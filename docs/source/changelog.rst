@@ -1,6 +1,51 @@
 Changelog
 =========
 
+2.2.0 - 2019-07-31
+------------------
+
+-  Respect security configuration in LocalCluster (:pr:`2822`) `Russ Bubley`_
+-  Add Nanny to worker docs (:pr:`2826`) `Christian Hudon`_
+-  Don't make False add-keys report to scheduler (:pr:`2421`) `tjb900`_
+-  Include type name in SpecCluster repr (:pr:`2834`) `Jacob Tomlinson`_
+-  Extend prometheus metrics endpoint (:pr:`2833`) `Gabriel Sailer`_
+-  Add alternative SSHCluster implementation (:pr:`2827`) `Matthew Rocklin`_
+-  Dont reuse closed worker in get_worker (:pr:`2841`) `Pierre Glaser`_
+-  SpecCluster: move init logic into start (:pr:`2850`) `Jacob Tomlinson`_
+-  Document distributed.Reschedule in API docs (:pr:`2860`) `James Bourbeau`_
+-  Add fsspec to installation of test builds (:pr:`2859`) `Martin Durant`_
+-  Make await/start more consistent across Scheduler/Worker/Nanny (:pr:`2831`) `Matthew Rocklin`_
+-  Add cleanup fixture for asyncio tests (:pr:`2866`) `Matthew Rocklin`_
+-  Use only remote connection to scheduler in Adaptive (:pr:`2865`) `Matthew Rocklin`_
+-  Add Server.finished async function  (:pr:`2864`) `Matthew Rocklin`_
+-  Align text and remove bullets in Client HTML repr (:pr:`2867`) `Matthew Rocklin`_
+-  Test dask-scheduler --idle-timeout flag (:pr:`2862`) `Matthew Rocklin`_
+-  Remove ``Client.upload_environment`` (:pr:`2877`) `Jim Crist`_
+-  Replace gen.coroutine with async/await in core (:pr:`2871`) `Matthew Rocklin`_
+-  Forcefully kill all processes before each test (:pr:`2882`) `Matthew Rocklin`_
+-  Cleanup Security class and configuration (:pr:`2873`) `Jim Crist`_
+-  Remove unused variable in SpecCluster scale down (:pr:`2870`) `Jacob Tomlinson`_
+-  Add SpecCluster ProcessInterface (:pr:`2874`) `Jacob Tomlinson`_
+-  Add Log(str) and Logs(dict) classes for nice HTML reprs (:pr:`2875`) `Jacob Tomlinson`_
+-  Pass Client._asynchronous to Cluster._asynchronous (:pr:`2890`) `Matthew Rocklin`_
+-  Add default logs method to Spec Cluster (:pr:`2889`) `Matthew Rocklin`_
+-  Add processes keyword back into clean (:pr:`2891`) `Matthew Rocklin`_
+-  Update black (:pr:`2901`) `Matthew Rocklin`_
+-  Move Worker.local_dir attribute to Worker.local_directory (:pr:`2900`) `Matthew Rocklin`_
+-  Link from TapTools to worker info pages in dashboard (:pr:`2894`) `Matthew Rocklin`_
+-  Avoid exception in Client._ensure_connected if closed (:pr:`2893`) `Matthew Rocklin`_
+-  Convert Pythonic kwargs to CLI Keywords for SSHCluster (:pr:`2898`) `Matthew Rocklin`_
+-  Use kwargs in CLI (:pr:`2899`) `Matthew Rocklin`_
+-  Name SSHClusters by providing name= keyword to SpecCluster (:pr:`2903`) `Matthew Rocklin`_
+-  Request feed of worker information from Scheduler to SpecCluster (:pr:`2902`) `Matthew Rocklin`_
+-  Clear out compatibillity file (:pr:`2896`) `Matthew Rocklin`_
+-  Remove future imports (:pr:`2897`) `Matthew Rocklin`_
+-  Use click's show_default=True in relevant places (:pr:`2838`) `Christian Hudon`_
+-  Close workers more gracefully (:pr:`2905`) `Matthew Rocklin`_
+-  Close workers gracefully with --lifetime keywords (:pr:`2892`) `Matthew Rocklin`_
+-  Add closing <li> tags to Client._repr_html_ (:pr:`2911`) `Matthew Rocklin`_
+-  Add endline spacing in Logs._repr_html_ (:pr:`2912`) `Matthew Rocklin`_
+
 2.1.0 - 2019-07-08
 ------------------
 
@@ -1125,3 +1170,6 @@ significantly without many new features.
 .. _`Magnus Nord`: https://github.com/magnunor
 .. _`Sam Grayson`: https://github.com/charmoniumQ
 .. _`Mathieu Dugré`: https://github.com/mathdugre
+.. _`Christian Hudon`: https://github.com/chrish42
+.. _`Gabriel Sailer`: https://github.com/sublinus
+.. _`Pierre Glaser`: https://github.com/pierreglase
