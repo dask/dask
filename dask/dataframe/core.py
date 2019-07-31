@@ -4837,7 +4837,9 @@ def apply_and_enforce(*args, **kwargs):
             ):
                 raise ValueError(
                     "The columns in the computed data do not match"
-                    " the columns in the provided metadata"
+                    " the columns in the provided metadata\n"
+                    "  Expected: %s\n"
+                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
                 )
             else:
                 c = meta.columns
