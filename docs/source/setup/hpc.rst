@@ -23,7 +23,7 @@ HPC cluster.  This is technical and aimed both at users with some experience
 deploying Dask and also system administrators.
 
 The preferred and simplest way to run Dask on HPC systems today both for new,
-experienced users or administrator is to use 
+experienced users or administrator is to use
 `dask-jobqueue <https://jobqueue.dask.org>`_.
 
 However, dask-jobqueue is slightly oriented toward interactive analysis usage,
@@ -61,7 +61,7 @@ They provide interfaces that look like the following:
    client = Client(cluster)    # Connect to that cluster
 
 Dask-jobqueue provides a lot of possibilities like adaptive dynamic scaling
-of workers, we recommend reading the `dask-jobqueue documentation 
+of workers, we recommend reading the `dask-jobqueue documentation
 <https://jobqueue.dask.org>`_ first to get a basic system running and then
 returning to this documentation for fine-tuning if necessary.
 
@@ -69,7 +69,7 @@ returning to this documentation for fine-tuning if necessary.
 Using MPI
 ---------
 
-.. note:: This section may not be necessary if you use a tool like 
+.. note:: This section may not be necessary if you use a tool like
    dask-jobqueue.
 
 You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
@@ -85,8 +85,8 @@ You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
    client = Client(scheduler_file='/path/to/scheduler.json')
 
 This depends on the `mpi4py <https://mpi4py.readthedocs.io/>`_ library.  It only
-uses MPI to start the Dask cluster and not for inter-node communication. MPI 
-implementations differ: the use of ``mpirun --np 4`` is specific to the 
+uses MPI to start the Dask cluster and not for inter-node communication. MPI
+implementations differ: the use of ``mpirun --np 4`` is specific to the
 ``mpich`` or ``open-mpi`` MPI implementation installed through conda and linked
 to mpi4py.
 
@@ -102,7 +102,7 @@ very familiar with these concerns and able to help.
 
 In some setups, MPI processes are not allowed to fork other processes. In this
 case, we recommend using ``--no-nanny`` option in order to prevent dask from
-using an additional nanny process to manage workers. 
+using an additional nanny process to manage workers.
 
 Run ``dask-mpi --help`` to see more options for the ``dask-mpi`` command.
 
@@ -170,22 +170,40 @@ administrator or by inspecting the output of ``ifconfig``
 https://stackoverflow.com/questions/43881157/how-do-i-use-an-infiniband-network-with-dask
 
 
-No Local Storage
-----------------
+Local Storage
+-------------
 
 Users often exceed memory limits available to a specific Dask deployment.  In
-normal operation, Dask spills excess data to disk.  However, in HPC systems, the
-individual compute nodes often lack locally attached storage, preferring
-instead to store data in a robust high performance network storage solution.
-As a result, when a Dask cluster starts to exceed memory limits, its workers can
-start making many small writes to the remote network file system.  This is both
-inefficient (small writes to a network file system are *much* slower than local
-storage for this use case) and potentially dangerous to the file system itself.
+normal operation, Dask spills excess data to disk, often to the default
+temporary directory.
 
-See `this page
-<https://distributed.dask.org/en/latest/worker.html#memory-management>`_
+However, in HPC systems this default temporary directory may point to an
+network file system (NFS) mount which can cause problems as Dask tries to read
+and write many small files.  *Beware, reading and writing many tiny files from
+many distributed processes is a good way to shut down a national
+supercomputer*.
+
+If available, it's good practice to point Dask workers to local storage, or
+hard drives that are physically on each node.  Your IT administrators will be
+able to point you to these locations.  You can do this with the
+``--local-directory`` or ``local_directory=`` keyword in the ``dask-worker``
+command::
+
+   dask-mpi ... --local-directory /path/to/local/storage
+
+or any of the other Dask Setup utilities, or by specifying the
+following :doc:`configuration value <../configuration>`:
+
+.. code-block:: yaml
+
+   temporary-directory: /path/to/local/storage
+
+However, not all HPC systems have local storage.  If this is the case then you
+may want to turn off Dask's ability to spill to disk altogether.  See `this
+page <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
 for more information on Dask's memory policies.  Consider changing the
-following values in your ``~/.config/dask/distributed.yaml`` file:
+following values in your ``~/.config/dask/distributed.yaml`` file to disable
+spilling data to disk:
 
 .. code-block:: yaml
 
@@ -204,12 +222,6 @@ As a reminder, you can set the memory limit for a worker using the
 ``--memory-limit`` keyword::
 
    dask-mpi ... --memory-limit 10GB
-
-Alternatively, if you *do* have local storage mounted on your compute nodes, you
-can point Dask workers to use a particular location in your filesystem using
-the ``--local-directory`` keyword::
-
-   dask-mpi ... --local-directory /scratch
 
 
 Launch Many Small Jobs
