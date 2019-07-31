@@ -459,7 +459,7 @@ hash_object_dispatch = Dispatch("hash_object_dispatch")
 def hash_object_pandas(
     obj, index=True, encoding="utf8", hash_key=None, categorize=True
 ):
-    return pd.util.hash_cudf_object(
+    return pd.util.hash_pandas_object(
         obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
     )
 
