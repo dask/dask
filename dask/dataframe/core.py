@@ -4461,10 +4461,10 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
         h = df
-    import sys
+    from .utils import hash_object_dispatch
 
-    package = sys.modules[df.__class__.__module__.split(".")[0]]
-    h = package.util.hash_pandas_object(h, index=False)
+    hash_object_func = hash_object_dispatch.dispatch(type(h))
+    h = hash_object_func(h, index=False)
     if is_series_like(h):
         h = h.values
     h %= nparts

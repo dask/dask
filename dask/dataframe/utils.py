@@ -452,6 +452,18 @@ def _nonempty_index(idx):
     )
 
 
+hash_object_dispatch = Dispatch("hash_object_dispatch")
+
+
+@hash_object_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def hash_object_pandas(
+    obj, index=True, encoding="utf8", hash_key=None, categorize=True
+):
+    return pd.util.hash_cudf_object(
+        obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
+    )
+
+
 _simple_fake_mapping = {
     "b": np.bool_(True),
     "V": np.void(b" "),
