@@ -1,6 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
+import gc
 from itertools import repeat
 import multiprocessing
 import math
@@ -1419,3 +1420,34 @@ def test_map_keynames():
     assert set(b.map(inc).__dask_graph__()) != set(
         b.map_partitions(inc).__dask_graph__()
     )
+
+
+def test_eager_drop():
+    # see gh 5189
+    # we use a tmpdir to count the number of active instances of C here because weakref cannot be pickled easily
+    class C:
+        def __init__(self, i, dir):
+            self.i = i
+            self.fname = os.path.join(dir, str(i))
+            with open(self.fname, "w"):
+                pass
+
+        def __del__(self):
+            os.remove(self.fname)
+
+    with tmpdir() as dir:
+
+        def f1(i, dir):
+            assert len(os.listdir(dir)) == 0
+            o = C(i, dir)
+            return o
+
+        def f2(o):
+            return o.i
+
+        b = db.from_sequence(range(2), npartitions=1).map(f1, dir=dir).map(f2).sum()
+        try:
+            gc.disable()
+            b.compute()
+        finally:
+            gc.enable()
