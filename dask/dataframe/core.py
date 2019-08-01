@@ -4712,8 +4712,6 @@ def _emulate(func, *args, **kwargs):
     """
     with raise_on_meta_error(funcname(func), udf=kwargs.pop("udf", False)):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
-    # kwargs.pop('udf')
-    # return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
 @insert_meta_param_description
