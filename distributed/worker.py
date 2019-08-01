@@ -862,7 +862,7 @@ class Worker(ServerNode):
         finally:
             if self.reconnect and self.status == "running":
                 logger.info("Connection to scheduler broken.  Reconnecting...")
-                self.loop.add_callback(self._register_with_scheduler)
+                self.loop.add_callback(self.heartbeat)
             else:
                 await self.close(report=False)
 

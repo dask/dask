@@ -1325,11 +1325,10 @@ class Scheduler(ServerNode):
     ):
         address = self.coerce_address(address, resolve_address)
         address = normalize_address(address)
-        host = get_address_host(address)
         if address not in self.workers:
-            logger.info("Received heartbeat from removed worker: %s", address)
-            return
+            return {"status": "missing"}
 
+        host = get_address_host(address)
         local_now = time()
         now = now or time()
         metrics = metrics or {}
@@ -1342,9 +1341,7 @@ class Scheduler(ServerNode):
         except KeyError:
             pass
 
-        ws = self.workers.get(address)
-        if not ws:
-            return {"status": "missing"}
+        ws = self.workers[address]
 
         ws.last_seen = time()
 
