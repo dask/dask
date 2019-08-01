@@ -26,7 +26,6 @@ except ImportError:
     from toolz import pluck, partial, merge, first
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.locks import Event
 
 from . import profile, comm
 from .batched import BatchedSend
@@ -546,7 +545,6 @@ class Worker(ServerNode):
         self.actors = {}
         self.loop = loop or IOLoop.current()
         self.status = None
-        self._closed = Event()
         self.reconnect = reconnect
         self.executor = executor or ThreadPoolExecutor(
             self.nthreads, thread_name_prefix="Dask-Worker-Threads'"
@@ -1054,7 +1052,6 @@ class Worker(ServerNode):
 
             self.stop()
             self.rpc.close()
-            self._closed.set()
 
             self.status = "closed"
             await ServerNode.close(self)
@@ -1084,7 +1081,8 @@ class Worker(ServerNode):
         return "OK"
 
     async def wait_until_closed(self):
-        await self._closed.wait()
+        warnings.warn("wait_until_closed has moved to finished()")
+        await self.finished()
         assert self.status == "closed"
 
     ################

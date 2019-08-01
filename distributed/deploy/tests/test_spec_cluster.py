@@ -252,7 +252,10 @@ async def test_dashboard_link(cleanup):
 @pytest.mark.asyncio
 async def test_widget(cleanup):
     async with SpecCluster(
-        workers=worker_spec, scheduler=scheduler, asynchronous=True
+        workers=worker_spec,
+        scheduler=scheduler,
+        asynchronous=True,
+        worker={"cls": Worker, "options": {"nthreads": 1}},
     ) as cluster:
 
         start = time()  # wait for all workers
@@ -262,3 +265,6 @@ async def test_widget(cleanup):
 
         assert "3" in cluster._widget_status()
         assert "GB" in cluster._widget_status()
+
+        cluster.scale(5)
+        assert "3 / 5" in cluster._widget_status()

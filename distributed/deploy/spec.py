@@ -192,7 +192,6 @@ class SpecCluster(Cluster):
             self._loop_runner.start()
             self.sync(self._start)
             self.sync(self._correct_state)
-            self.sync(self._wait_for_workers)
 
     async def _start(self):
         while self.status == "starting":
@@ -306,7 +305,6 @@ class SpecCluster(Cluster):
             await self._correct_state()
             if self.workers:
                 await asyncio.wait(list(self.workers.values()))  # maybe there are more
-            await self._wait_for_workers()
             return self
 
         return _().__await__()
@@ -367,7 +365,6 @@ class SpecCluster(Cluster):
 
     def __enter__(self):
         self.sync(self._correct_state)
-        self.sync(self._wait_for_workers)
         assert self.status == "running"
         return self
 
@@ -376,6 +373,13 @@ class SpecCluster(Cluster):
         self._loop_runner.stop()
 
     def scale(self, n):
+        if len(self.worker_spec) > n:
+            not_yet_launched = set(self.worker_spec) - {
+                v["name"] for v in self.scheduler_info["workers"].values()
+            }
+            while len(self.worker_spec) > n and not_yet_launched:
+                del self.worker_spec[not_yet_launched.pop()]
+
         while len(self.worker_spec) > n:
             self.worker_spec.popitem()
 
@@ -411,12 +415,9 @@ class SpecCluster(Cluster):
         return not not self.new_spec
 
     async def scale_down(self, workers):
-        workers = set(workers)
-
-        for k, v in self.workers.items():
-            if getattr(v, "worker_address", v.address) in workers:
-                del self.worker_spec[k]
-
+        for w in workers:
+            if w in self.worker_spec:
+                del self.worker_spec[w]
         await self
 
     scale_up = scale  # backwards compatibility
@@ -473,6 +474,7 @@ class SpecCluster(Cluster):
 
     def _widget_status(self):
         workers = len(self.scheduler_info["workers"])
+        requested = len(self.worker_spec)
         cores = sum(v["nthreads"] for v in self.scheduler_info["workers"].values())
         memory = sum(v["memory_limit"] for v in self.scheduler_info["workers"].values())
         memory = format_bytes(memory)
@@ -492,13 +494,13 @@ class SpecCluster(Cluster):
     }
   </style>
   <table style="text-align: right;">
-    <tr> <th>Workers</th> <td>%d</td></tr>
+    <tr> <th>Workers</th> <td>%s</td></tr>
     <tr> <th>Cores</th> <td>%d</td></tr>
     <tr> <th>Memory</th> <td>%s</td></tr>
   </table>
 </div>
 """ % (
-            workers,
+            workers if workers == requested else "%d / %d" % (workers, requested),
             cores,
             memory,
         )
@@ -547,6 +549,7 @@ class SpecCluster(Cluster):
 
             def adapt_cb(b):
                 self.adapt(minimum=minimum.value, maximum=maximum.value)
+                update()
 
             adapt.on_click(adapt_cb)
 
@@ -556,6 +559,7 @@ class SpecCluster(Cluster):
                     with ignoring(AttributeError):
                         self._adaptive.stop()
                     self.scale(n)
+                    update()
 
             scale.on_click(scale_cb)
         else:

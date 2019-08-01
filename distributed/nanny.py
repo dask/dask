@@ -690,7 +690,7 @@ class WorkerProcess(object):
                         }
                     )
                     init_result_q.close()
-                    await worker.wait_until_closed()
+                    await worker.finished()
                     logger.info("Worker closed")
 
         try:

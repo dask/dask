@@ -1231,7 +1231,9 @@ def test_cancel_fire_and_forget(c, s, a, b):
     assert not s.tasks
 
 
-@gen_cluster(client=True, Worker=Nanny, clean_kwargs={"processes": False})
+@gen_cluster(
+    client=True, Worker=Nanny, clean_kwargs={"processes": False, "threads": False}
+)
 def test_log_tasks_during_restart(c, s, a, b):
     future = c.submit(sys.exit, 0)
     yield wait(future)
