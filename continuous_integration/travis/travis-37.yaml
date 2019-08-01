@@ -4,8 +4,8 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7.*
-  - numpy=1.16.*
-  - pandas=0.24.*
+  - numpy=1.17.*
+  - pandas=0.25.*
   # test dependencies
   - pytest
   - pytest-xdist
