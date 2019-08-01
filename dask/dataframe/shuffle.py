@@ -140,7 +140,14 @@ def remove_nans(divisions):
 
 
 def set_partition(
-    df, index, divisions, max_branch=32, drop=True, shuffle=None, compute=None
+    df,
+    index,
+    divisions,
+    max_branch=32,
+    drop=True,
+    shuffle=None,
+    compute=None,
+    meta=None,
 ):
     """ Group DataFrame by index
 
@@ -173,14 +180,18 @@ def set_partition(
     shuffle
     partd
     """
+    if isinstance(divisions, list) or isinstance(divisions, tuple):
+        divisions = pd.Series(divisions)
+    if meta is None:
+        meta = pd.Series([0])
     if np.isscalar(index):
         partitions = df[index].map_partitions(
-            set_partitions_pre, divisions=divisions, meta=pd.Series([0])
+            set_partitions_pre, divisions=divisions, meta=meta
         )
         df2 = df.assign(_partitions=partitions)
     else:
         partitions = index.map_partitions(
-            set_partitions_pre, divisions=divisions, meta=pd.Series([0])
+            set_partitions_pre, divisions=divisions, meta=meta
         )
         df2 = df.assign(_partitions=partitions, _index=index)
 
@@ -208,7 +219,10 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = divisions
+    if hasattr(divisions, "tolist"):
+        df4.divisions = divisions.tolist()
+    else:
+        df4.divisions = divisions.values.tolist()
 
     return df4.map_partitions(M.sort_index)
 
@@ -253,11 +267,17 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     return df3
 
 
-def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
+def rearrange_by_divisions(
+    df, column, divisions, meta=None, max_branch=None, shuffle=None
+):
     """ Shuffle dataframe so that column separates along divisions """
+    if isinstance(divisions, list) or isinstance(divisions, tuple):
+        divisions = pd.Series(divisions)
+    if meta is None:
+        meta = pd.Series([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
-        set_partitions_pre, divisions=divisions, meta=pd.Series([0])
+        set_partitions_pre, divisions=divisions, meta=meta
     )
     df2 = df.assign(_partitions=partitions)
 
@@ -545,15 +565,19 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions):
-    partitions = pd.Series(divisions).searchsorted(s, side="right") - 1
-    partitions[(s >= divisions[-1]).values] = len(divisions) - 2
+    if isinstance(divisions, list) or isinstance(divisions, tuple):
+        divisions = pd.Series(divisions)
+    partitions = divisions.searchsorted(s, side="right") - 1
+    if hasattr(partitions, "index"):
+        partitions = partitions.values
+    partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions
 
 
 def shuffle_group_2(df, col):
     if not len(df):
         return {}, df
-    ind = df[col]._values.astype(np.int64)
+    ind = df[col].values.astype(np.int64)
     n = ind.max() + 1
     indexer, locations = groupsort_indexer(ind.view(np.int64), n)
     df2 = df.take(indexer)
@@ -602,7 +626,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     else:
         ind = hash_pandas_object(df[col], index=False)
 
-    c = ind._values
+    c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
 
     c = np.mod(c, npartitions).astype(typ, copy=False)
@@ -624,7 +648,10 @@ def shuffle_group_3(df, col, npartitions, p):
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):
-    df2 = df.drop("_partitions", axis=1).set_index(index_name, drop=drop)
+    if not drop:
+        df2 = df.drop("_partitions", axis=1).set_index(index_name, drop=drop)
+    else:
+        df2 = df.drop("_partitions", axis=1).set_index(index_name)
     df2.columns = df2.columns.astype(column_dtype)
     return df2
 
