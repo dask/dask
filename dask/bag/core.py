@@ -91,6 +91,59 @@ no_result = type(
 )
 
 
+class _Ref:
+    """
+    Helper class that holds a refence to an Python object.
+
+    It can be helpful in cases where an object is generated and consumed but due to Pythons reference counting system,
+    it is not dropped quickly enough.
+    """
+
+    def __init__(self, obj):
+        self.obj = obj
+        self.taken = False
+
+    def check_not_taken(self):
+        """
+        Check that the object that :class:`_Ref` holds is not already taken.
+        """
+        if self.taken:
+            raise RuntimeError("__getitem__ on taken _Ref!")
+
+    def __iter__(self):
+        return iter(self.get())
+
+    def __getitem__(self, i):
+        # do NOT consume here!
+        self.check_not_taken()
+        return self.obj[i]
+
+    def get(self):
+        """
+        Move the object out of the :class:`_Ref` container. This function can only called once!
+        """
+        self.check_not_taken()
+        tmp = self.obj
+        self.obj = None
+        self.taken = True
+        return tmp
+
+
+def _unpack_ref(obj):
+    """
+    Unpack potential :class:`_Ref` containers and consume the objects.
+    """
+    if isinstance(obj, _Ref):
+        return obj.get()
+    elif isinstance(obj, tuple):
+        return tuple((_unpack_ref(x) for x in obj))
+    elif isinstance(obj, dict):
+        return {k: _unpack_ref(v) for k, v in obj.items()}
+    elif isinstance(obj, Iterator):
+        return (_unpack_ref(o) for o in obj)
+    return obj
+
+
 def lazify_task(task, start=True):
     """
     Given a task, remove unnecessary calls to ``list`` and ``reify``.
@@ -180,6 +233,7 @@ def _to_textfiles_chunk(data, lazy_file, last_endline):
                 f.write(endline)
             else:
                 started = True
+            d = _unpack_ref(d)
             f.write(ensure(d))
         if last_endline:
             f.write(endline)
@@ -273,7 +327,7 @@ def to_textfiles(
 
     if compute:
         out.compute(**kwargs)
-        return [f.path for f in files]
+        return _unpack_ref([f.path for f in files])
     else:
         return out.to_delayed()
 
@@ -1433,7 +1487,7 @@ class Bag(DaskMethodsMixin):
         b = Bag(graph, name, 1)
 
         if compute:
-            return tuple(b.compute())
+            return _unpack_ref(tuple(b.compute()))
         else:
             return b
 
@@ -1844,9 +1898,9 @@ def concat(bags):
 
 def reify(seq):
     if isinstance(seq, Iterator):
-        seq = list(seq)
+        seq = list((_unpack_ref(o) for o in seq))
     if seq and isinstance(seq[0], Iterator):
-        seq = list(map(list, seq))
+        seq = [[_unpack_ref(o) for o in seq2] for seq2 in seq]
     return seq
 
 
@@ -2006,13 +2060,24 @@ def map_chunk(f, args, bag_kwargs, kwargs):
         kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
         if args:
             for a, k in zip(zip(*args), kw_iter):
-                yield f(*a, **k)
+                a = _unpack_ref(a)
+                k = _unpack_ref(k)
+                b = _Ref(f(*a, **k))
+                del a
+                del k
+                yield b
         else:
             for k in kw_iter:
-                yield f(**k)
+                k = _unpack_ref(k)
+                b = _Ref(f(**k))
+                del k
+                yield b
     else:
         for a in zip(*args):
-            yield f(*a)
+            a = _unpack_ref(a)
+            b = _Ref(f(*a))
+            del a
+            yield b
 
     # Check that all iterators are fully exhausted
     if len(iters) > 1:
@@ -2430,14 +2495,17 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
 def empty_safe_apply(func, part, is_last):
     if isinstance(part, Iterator):
         try:
-            _, part = peek(part)
+            _junk, part = peek(part)
+            del _junk
         except StopIteration:
             if not is_last:
                 return no_result
+        part = _unpack_ref(part)
         return func(part)
     elif not is_last and len(part) == 0:
         return no_result
     else:
+        part = _unpack_ref(part)
         return func(part)
 
 
@@ -2502,7 +2570,7 @@ def split(seq, n):
     [[0, 1, 2], [3, 4, 5], [6, 7, 8, 9]]
     """
     if not isinstance(seq, (list, tuple)):
-        seq = list(seq)
+        seq = list((_unpack_ref(o) for o in seq))
 
     part = len(seq) / n
     L = [seq[int(part * i) : int(part * (i + 1))] for i in range(n - 1)]
@@ -2517,5 +2585,6 @@ def to_dataframe(seq, columns, dtypes):
     # pd.DataFrame expects lists, only copy if necessary
     if not isinstance(seq, list):
         seq = list(seq)
+    seq = _unpack_ref(seq)
     res = pd.DataFrame(seq, columns=list(columns))
     return res.astype(dtypes, copy=False)
