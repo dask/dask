@@ -22,7 +22,7 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  - pyarrow
+  # - pyarrow
   # other -- IO
   - bcolz
   - blosc
