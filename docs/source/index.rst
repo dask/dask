@@ -147,6 +147,7 @@ Index
    use-cases.rst
    support.rst
    why.rst
+   institutional-faq.rst
 
 **Collections**
 
