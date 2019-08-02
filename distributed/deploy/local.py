@@ -80,7 +80,7 @@ class LocalCluster(SpecCluster):
 
     Pass extra keyword arguments to Bokeh
 
-    >>> LocalCluster(service_kwargs={'bokeh': {'prefix': '/foo'}})  # doctest: +SKIP
+    >>> LocalCluster(service_kwargs={'dashboard': {'prefix': '/foo'}})  # doctest: +SKIP
     """
 
     def __init__(
