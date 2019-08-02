@@ -9,6 +9,7 @@ import versioneer
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
   'array': ['numpy >= 1.13.0', 'toolz >= 0.7.3'],
+  'arrow': ['pyarrow >= 0.13.1'],
   'bag': ['fsspec >= 0.3.3', 'cloudpickle >= 0.2.1', 'toolz >= 0.7.3',
           'partd >= 0.3.10'],
   'dataframe': ['numpy >= 1.13.0', 'pandas >= 0.21.0', 'toolz >= 0.7.3',
@@ -16,6 +17,7 @@ extras_require = {
   'distributed': ['distributed >= 2.0'],
   'diagnostics': ['bokeh >= 1.0.0'],
   'delayed': ['toolz >= 0.7.3'],
+  'fastparquet': ['fastparquet'],
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
