@@ -10,14 +10,14 @@ dependencies:
   - pytest
   - pytest-xdist
   - moto
-  # - fastparquet
+  - fastparquet
   - h5py
   - pytables
   - zarr
   - tiledb-py
   - fsspec
   - sqlalchemy
-  # - pyarrow
+  - pyarrow
   # other -- IO
   - bcolz
   - blosc
