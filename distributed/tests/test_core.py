@@ -445,9 +445,16 @@ def test_identity_inproc():
 
 
 def test_ports(loop):
-    port = 9877
-    server = Server({}, io_loop=loop)
-    server.listen(port)
+    for port in range(9877, 9887):
+        server = Server({}, io_loop=loop)
+        try:
+            server.listen(port)
+        except OSError:  # port already taken?
+            pass
+        else:
+            break
+    else:
+        raise Exception()
     try:
         assert server.port == port
 

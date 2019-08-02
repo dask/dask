@@ -1025,6 +1025,7 @@ class Scheduler(ServerNode):
             "missing-data": self.handle_missing_data,
             "long-running": self.handle_long_running,
             "reschedule": self.reschedule,
+            "keep-alive": lambda *args, **kwargs: None,
         }
 
         client_handlers = {

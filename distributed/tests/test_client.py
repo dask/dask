@@ -3319,7 +3319,7 @@ def test_get_foo_lost_keys(c, s, u, v, w):
     client=True,
     Worker=Nanny,
     worker_kwargs={"death_timeout": "500ms"},
-    clean_kwargs={"threads": False},
+    clean_kwargs={"threads": False, "processes": False},
 )
 def test_bad_tasks_fail(c, s, a, b):
     f = c.submit(sys.exit, 0)
