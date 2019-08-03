@@ -6,6 +6,7 @@ import json
 import operator
 import sys
 from time import sleep
+import logging
 
 import dask
 from dask import delayed
@@ -23,6 +24,7 @@ from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils import tmpfile
 from distributed.utils_test import (  # noqa: F401
+    captured_logger,
     cleanup,
     inc,
     dec,
@@ -1258,6 +1260,15 @@ def test_reschedule(c, s, a, b):
     yield wait(x)
     assert sum(future.key in b.data for future in x) >= 3
     assert sum(future.key in a.data for future in x) <= 1
+
+
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)
+def test_reschedule_warns(c, s, a, b):
+    with captured_logger(logging.getLogger("distributed.scheduler")) as sched:
+        s.reschedule(key="__this-key-does-not-exist__")
+
+    assert "not found on the scheduler" in sched.getvalue()
+    assert "Aborting reschedule" in sched.getvalue()
 
 
 @gen_cluster(client=True)
