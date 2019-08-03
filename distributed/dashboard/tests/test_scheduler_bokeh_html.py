@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("bokeh")
 
 from tornado.escape import url_escape
-from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import AsyncHTTPClient, HTTPClientError
 
 from dask.sizeof import sizeof
 from distributed.utils import is_valid_xml
@@ -47,6 +47,25 @@ def test_connect(c, s, a, b):
         else:
             assert is_valid_xml(body)
             assert not re.search("href=./", body)  # no absolute links
+
+
+@gen_cluster(
+    client=True,
+    nthreads=[],
+    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+)
+def test_worker_404(c, s):
+    http_client = AsyncHTTPClient()
+    with pytest.raises(HTTPClientError) as err:
+        yield http_client.fetch(
+            "http://localhost:%d/info/worker/unknown" % s.services["dashboard"].port
+        )
+    assert err.value.code == 404
+    with pytest.raises(HTTPClientError) as err:
+        yield http_client.fetch(
+            "http://localhost:%d/info/task/unknown" % s.services["dashboard"].port
+        )
+    assert err.value.code == 404
 
 
 @gen_cluster(
