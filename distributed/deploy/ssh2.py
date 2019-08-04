@@ -34,11 +34,13 @@ class Process(ProcessInterface):
 
     async def start(self):
         assert self.connection
-        weakref.finalize(self, self.proc.terminate)
+        weakref.finalize(
+            self, self.proc.kill
+        )  # https://github.com/ronf/asyncssh/issues/112
         await super().start()
 
     async def close(self):
-        self.proc.terminate()
+        self.proc.kill()  # https://github.com/ronf/asyncssh/issues/112
         self.connection.close()
         await super().close()
 
