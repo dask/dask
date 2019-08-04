@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict
 from itertools import cycle
+import logging
 import random
 
 from dask.optimization import SubgraphCallable
@@ -8,6 +9,8 @@ from toolz import merge, concat, groupby, drop
 
 from .core import rpc
 from .utils import All, tokey
+
+logger = logging.getLogger(__name__)
 
 
 async def gather_from_workers(who_has, rpc, close=True, serializers=None, who=None):
@@ -71,6 +74,11 @@ async def gather_from_workers(who_has, rpc, close=True, serializers=None, who=No
                 try:
                     r = await c
                 except EnvironmentError:
+                    missing_workers.add(worker)
+                except ValueError as e:
+                    logger.info(
+                        "Got an unexpected error while collecting from workers: %s", e
+                    )
                     missing_workers.add(worker)
                 else:
                     response.update(r["data"])

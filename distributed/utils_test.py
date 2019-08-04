@@ -1447,21 +1447,24 @@ def check_thread_leak():
 
 
 @contextmanager
-def check_process_leak():
+def check_process_leak(check=True):
     for proc in mp_context.active_children():
         proc.terminate()
 
     yield
 
-    for i in range(100):
-        if not set(mp_context.active_children()):
-            break
+    if check:
+        for i in range(100):
+            if not set(mp_context.active_children()):
+                break
+            else:
+                sleep(0.2)
         else:
-            sleep(0.2)
-    else:
-        assert not mp_context.active_children()
+            assert not mp_context.active_children()
 
     _cleanup_dangling()
+    for proc in mp_context.active_children():
+        proc.terminate()
 
 
 @contextmanager
@@ -1524,7 +1527,7 @@ def clean(threads=not WINDOWS, instances=True, timeout=1, processes=True):
 
     with check_thread_leak() if threads else null():
         with pristine_loop() as loop:
-            with check_process_leak() if processes else null():
+            with check_process_leak(check=processes):
                 with check_instances() if instances else null():
                     with check_active_rpc(loop, timeout):
                         reset_config()
