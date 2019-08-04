@@ -24,13 +24,12 @@ from ..security import Security
 
 
 class ProcessInterface:
-    """ An interface for Scheduler and Worker processes for use in SpecCluster
+    """
+    An interface for Scheduler and Worker processes for use in SpecCluster
 
-    Parameters
-    ----------
-    loop:
-        A pointer to the running loop.
-
+    This interface is responsible to submit a worker or scheduler process to a
+    resource manager like Kubernetes, Yarn, or SLURM/PBS/SGE/...
+    It should implement the methods below, like ``start`` and ``close``
     """
 
     def __init__(self):
@@ -49,11 +48,25 @@ class ProcessInterface:
         return _().__await__()
 
     async def start(self):
-        """ Start the process. """
+        """ Submit the process to the resource manager
+
+        For workers this doesn't have to wait until the process actually starts,
+        but can return once the resource manager has the request, and will work
+        to make the job exist in the future
+
+        For the scheduler we will expect the scheduler's ``.address`` attribute
+        to be avaialble after this completes.
+        """
         self.status = "running"
 
     async def close(self):
-        """ Close the process. """
+        """ Close the process
+
+        This will be called by the Cluster object when we scale down a node,
+        but only after we ask the Scheduler to close the worker gracefully.
+        This method should kill the process a bit more forcefully and does not
+        need to worry about shutting down gracefully
+        """
         self.status = "closed"
 
     def __repr__(self):
