@@ -711,7 +711,9 @@ class Worker(ServerNode):
     @property
     def local_dir(self):
         """ For API compatibility with Nanny """
-        warnings.warn("The local_dir attribute has moved to local_directory")
+        warnings.warn(
+            "The local_dir attribute has moved to local_directory", stacklevel=2
+        )
         return self.local_directory
 
     def get_metrics(self):

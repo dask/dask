@@ -126,7 +126,7 @@ def test_server_raises_on_blocked_handlers(loop):
         assert isinstance(msg["exception"], ValueError)
         assert "'ping' handler has been explicitly disallowed" in repr(msg["exception"])
 
-        comm.close()
+        yield comm.close()
         server.stop()
 
     res = loop.run_sync(f)

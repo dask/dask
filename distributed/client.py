@@ -2860,7 +2860,7 @@ class Client(Node):
 
         def dump_to_file(dask_worker=None):
             if not os.path.isabs(remote_filename):
-                fn = os.path.join(dask_worker.local_dir, remote_filename)
+                fn = os.path.join(dask_worker.local_directory, remote_filename)
             else:
                 fn = remote_filename
             with open(fn, "wb") as f:
@@ -3267,7 +3267,8 @@ class Client(Node):
                                          'stored': 0,
                                          'time-delay': 0.0061032772064208984}}}
         """
-        self.sync(self._update_scheduler_info)
+        if not self.asynchronous:
+            self.sync(self._update_scheduler_info)
         return self._scheduler_identity
 
     def write_scheduler_file(self, scheduler_file):

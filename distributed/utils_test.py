@@ -636,7 +636,7 @@ def cluster(
             q = mp_context.Queue()
             fn = "_test_worker-%s" % uuid.uuid4()
             kwargs = merge(
-                {"nthreads": 1, "local_dir": fn, "memory_limit": TOTAL_MEMORY},
+                {"nthreads": 1, "local_directory": fn, "memory_limit": TOTAL_MEMORY},
                 worker_kwargs,
             )
             proc = mp_context.Process(

@@ -204,7 +204,7 @@ def test_as_completed_with_results_async(c, s, a, b):
     z = c.submit(inc, 1)
 
     ac = as_completed([x, y, z], with_results=True)
-    y.cancel()
+    yield y.cancel()
     with pytest.raises(RuntimeError) as exc:
         first = yield ac.__anext__()
         second = yield ac.__anext__()
