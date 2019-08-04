@@ -391,7 +391,15 @@ class Rolling(object):
     @derived_from(pd_Rolling)
     def quantile(self, quantile):
         return self._call_method("quantile", quantile)
-
+    
+    @derived_from(pd_Rolling)
+    def min(self):
+        return self._call_method("cov")
+    
+    @derived_from(pd_Rolling)
+    def min(self):
+        return self._call_method("corr")
+    
     @derived_from(pd_Rolling)
     def apply(self, func, args=(), kwargs={}, **kwds):
         # TODO: In a future version of pandas this will change to
