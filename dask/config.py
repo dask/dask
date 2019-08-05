@@ -262,11 +262,33 @@ def ensure_file(source, destination=None, comment=True):
 class set(object):
     """ Temporarily set configuration values within a context manager
 
+    Parameters
+    ----------
+    arg : mapping or None, optional
+        A mapping of configuration key-value pairs to set.
+    **kwargs :
+        Additional key-value pairs to set. If ``arg`` is provided, values set
+        in ``arg`` will be applied before those in ``kwargs``.
+        Double-underscores (``__``) in keyword arguments will be replaced with
+        ``.``, allowing nested values to be easily set.
+
     Examples
     --------
     >>> import dask
-    >>> with dask.config.set({'foo': 123}):
+
+    Set ``'foo.bar'`` in a context, by providing a mapping.
+
+    >>> with dask.config.set({'foo.bar': 123}):
     ...     pass
+
+    Set ``'foo.bar'`` in a context, by providing a keyword argument.
+
+    >>> with dask.config.set(foo__bar=123):
+    ...     pass
+
+    Set ``'foo.bar'`` globally.
+
+    >>> dask.config.set(foo__bar=123)  # doctest: +SKIP
 
     See Also
     --------
@@ -274,68 +296,70 @@ class set(object):
     """
 
     def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
-        if arg and not kwargs:
-            kwargs = arg
-
         with lock:
             self.config = config
-            self.old = {}
+            self._record = []
 
-            for key, value in kwargs.items():
-                self._assign(key.split("."), value, config, old=self.old)
+            if arg is not None:
+                for key, value in arg.items():
+                    self._assign(key.split("."), value, config)
+            if kwargs:
+                for key, value in kwargs.items():
+                    self._assign(key.split("__"), value, config)
 
     def __enter__(self):
         return self.config
 
     def __exit__(self, type, value, traceback):
-        for keys, value in self.old.items():
-            if value == "--delete--":
-                d = self.config
-                try:
-                    while len(keys) > 1:
-                        d = d[keys[0]]
-                        keys = keys[1:]
-                    del d[keys[0]]
-                except KeyError:
-                    pass
-            else:
-                self._assign(keys, value, self.config)
+        for op, path, value in reversed(self._record):
+            d = self.config
+            if op == "replace":
+                for key in path[:-1]:
+                    d = d.setdefault(key, {})
+                d[path[-1]] = value
+            else:  # insert
+                for key in path[:-1]:
+                    try:
+                        d = d[key]
+                    except KeyError:
+                        break
+                else:
+                    d.pop(path[-1], None)
 
-    @classmethod
-    def _assign(cls, keys, value, d, old=None, path=[]):
-        """ Assign value into a nested configuration dictionary
-
-        Optionally record the old values in old
+    def _assign(self, keys, value, d, path=(), record=True):
+        """Assign value into a nested configuration dictionary
 
         Parameters
         ----------
-        keys: Sequence[str]
-            The nested path of keys to assign the value, similar to toolz.put_in
-        value: object
-        d: dict
+        keys : Sequence[str]
+            The nested path of keys to assign the value.
+        value : object
+        d : dict
             The part of the nested dictionary into which we want to assign the
             value
-        old: dict, optional
-            If provided this will hold the old values
-        path: List[str]
-            Used internally to hold the path of old values
+        path : Tuple[str], optional
+            The path history up to this point.
+        record : bool, optional
+            Whether this operation needs to be recorded to allow for rollback.
         """
         key = canonical_name(keys[0], d)
+        path = path + (key,)
+
         if len(keys) == 1:
-            if old is not None:
-                path_key = tuple(path + [key])
+            if record:
                 if key in d:
-                    old[path_key] = d[key]
+                    self._record.append(("replace", path, d[key]))
                 else:
-                    old[path_key] = "--delete--"
+                    self._record.append(("insert", path, None))
             d[key] = value
         else:
             if key not in d:
+                if record:
+                    self._record.append(("insert", path, None))
                 d[key] = {}
-                if old is not None:
-                    old[tuple(path + [key])] = "--delete--"
-                old = None
-            cls._assign(keys[1:], value, d[key], path=path + [key], old=old)
+                # No need to record after an insert
+                record = False
+            self._assign(keys[1:], value, d[key], path, record=record)
 
 
 def collect(paths=paths, env=None):
