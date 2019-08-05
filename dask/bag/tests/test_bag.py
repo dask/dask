@@ -1,11 +1,13 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
+import gc
 from itertools import repeat
 import multiprocessing
 import math
 import os
 import random
+import weakref
 
 import partd
 import pytest
@@ -1419,3 +1421,50 @@ def test_map_keynames():
     assert set(b.map(inc).__dask_graph__()) != set(
         b.map_partitions(inc).__dask_graph__()
     )
+
+
+def test_eager_drop():
+    # see gh 5189
+    #
+    # We test 2 variant of potential dangling references here:
+    # 1. Within an item of a partition (`f_create->f_drop->f_create->f_drop`):
+    #    At the time of the second `f_create`, the `C` from the first `f_create` should be dropped.
+    # 2. Within a partition:
+    #    When the second item within a partition is processed, `C` from the first item should already be dropped.
+    class C:
+        def __init__(self, i):
+            self.i = i
+
+        def __del__(self):
+            os.remove(self.fname)
+
+    # keep a weakref to all existing instances of `C`
+    memory = weakref.WeakValueDictionary()
+
+    def f_create(i):
+        # check that there are no instances of `C` left
+        assert len(memory) == 0
+
+        # create new instance
+        o = C(i)
+        memory[i] = o
+
+        return o
+
+    def f_drop(o):
+        # the user/payload code does not require the `o` (an instance of `C`) anymore, so it should be dropped
+        return o.i + 100
+
+    b = (
+        db.from_sequence(range(2), npartitions=1)
+        .map(f_create)
+        .map(f_drop)
+        .map(f_create)
+        .map(f_drop)
+        .sum()
+    )
+    try:
+        gc.disable()
+        b.compute(scheduler="sync")
+    finally:
+        gc.enable()
