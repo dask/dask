@@ -225,23 +225,29 @@ def test_from_pandas_dataframe():
         dict(a=a, b=np.random.randn(len(a))),
         index=pd.date_range(start="20120101", periods=len(a)),
     )
-    ddf = dd.from_pandas(df, 3)
+    ddf = dd.from_pandas(df, npartitions=3)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf)
+
     ddf = dd.from_pandas(df, chunksize=8)
-    msg = "Exactly one of npartitions and chunksize must be specified."
-    with pytest.raises(ValueError) as err:
-        dd.from_pandas(df, npartitions=2, chunksize=2)
-    assert msg in str(err.value)
-    with pytest.raises((ValueError, AssertionError)) as err:
-        dd.from_pandas(df)
-    assert msg in str(err.value)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert isinstance(ddf.divisions[0], type(df.index[0]))
-    tm.assert_frame_equal(df, ddf.compute())
+    assert_eq(df, ddf.compute())
+
+    ddf = dd.from_pandas(df)
+    assert len(ddf.dask) == 1
+    assert len(ddf.divisions) == len(ddf.dask) + 1
+    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    assert_eq(df, ddf.compute())
+
+    ddf = dd.from_pandas(df, chunksize="180")
+    assert len(ddf.dask) == 11
+    assert len(ddf.divisions) == len(ddf.dask) + 1
+    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    assert_eq(df, ddf.compute())
 
 
 def test_from_pandas_small():
