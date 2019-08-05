@@ -18,6 +18,7 @@ from bokeh.models import (
     Range1d,
     Plot,
     Quad,
+    Span,
     value,
     LinearAxis,
     NumeralTickFormatter,
@@ -309,6 +310,8 @@ class CurrentLoad(DashboardComponent):
                     "nbytes": [1, 2],
                     "nbytes-half": [0.5, 1],
                     "nbytes_text": ["1B", "2B"],
+                    "cpu": [1, 2],
+                    "cpu-half": [0.5, 1],
                     "worker": ["a", "b"],
                     "y": [1, 2],
                     "nbytes-color": ["blue", "blue"],
@@ -353,6 +356,32 @@ class CurrentLoad(DashboardComponent):
             )
             rect.nonselection_glyph = None
 
+            cpu = figure(
+                title="CPU Utilization",
+                tools="",
+                id="bk-cpu-worker-plot",
+                width=int(width / 2),
+                name="cpu_hist",
+                **kwargs
+            )
+            rect = cpu.rect(
+                source=self.source,
+                x="cpu-half",
+                y="y",
+                width="cpu",
+                height=1,
+                color="blue",
+            )
+            rect.nonselection_glyph = None
+            hundred_span = Span(
+                location=100,
+                dimension="height",
+                line_color="gray",
+                line_dash="dashed",
+                line_width=3,
+            )
+            cpu.add_layout(hundred_span)
+
             nbytes.axis[0].ticker = BasicTicker(mantissas=[1, 256, 512], base=1024)
             nbytes.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
             nbytes.xaxis.major_label_orientation = -math.pi / 12
@@ -382,10 +411,17 @@ class CurrentLoad(DashboardComponent):
             hover.point_policy = "follow_mouse"
             nbytes.add_tools(hover)
 
+            hover = HoverTool()
+            hover.tooltips = "@worker : @cpu %"
+            hover.point_policy = "follow_mouse"
+            cpu.add_tools(hover)
+
             self.processing_figure = processing
             self.nbytes_figure = nbytes
+            self.cpu_figure = cpu
 
             processing.y_range = nbytes.y_range
+            cpu.y_range = nbytes.y_range
 
     @without_property_validation
     def update(self):
@@ -393,6 +429,9 @@ class CurrentLoad(DashboardComponent):
             workers = list(self.scheduler.workers.values())
 
             y = list(range(len(workers)))
+
+            cpu = [int(ws.metrics["cpu"]) for ws in workers]
+
             nprocessing = [len(ws.processing) for ws in workers]
             processing_color = []
             for ws in workers:
@@ -427,6 +466,8 @@ class CurrentLoad(DashboardComponent):
             if any(nprocessing) or self.last + 1 < now:
                 self.last = now
                 result = {
+                    "cpu": cpu,
+                    "cpu-half": [c / 2 for c in cpu],
                     "nprocessing": nprocessing,
                     "nprocessing-half": [np / 2 for np in nprocessing],
                     "nprocessing-color": processing_color,
@@ -1495,6 +1536,14 @@ def individual_nbytes_doc(scheduler, extra, doc):
     doc.theme = BOKEH_THEME
 
 
+def individual_cpu_doc(scheduler, extra, doc):
+    current_load = CurrentLoad(scheduler, sizing_mode="stretch_both")
+    current_load.update()
+    add_periodic_callback(doc, current_load, 100)
+    doc.add_root(current_load.cpu_figure)
+    doc.theme = BOKEH_THEME
+
+
 def individual_nprocessing_doc(scheduler, extra, doc):
     current_load = CurrentLoad(scheduler, sizing_mode="stretch_both")
     current_load.update()
@@ -1619,6 +1668,7 @@ class BokehScheduler(BokehServer):
             "/individual-profile": individual_profile_doc,
             "/individual-profile-server": individual_profile_server_doc,
             "/individual-nbytes": individual_nbytes_doc,
+            "/individual-cpu": individual_cpu_doc,
             "/individual-nprocessing": individual_nprocessing_doc,
             "/individual-workers": individual_workers_doc,
         }
