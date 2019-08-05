@@ -1993,27 +1993,7 @@ def bag_zip(*bags):
     return Bag(graph, name, npartitions)
 
 
-def map_chunk(f, args, bag_kwargs, kwargs):
-    if kwargs:
-        f = partial(f, **kwargs)
-
-    args = [iter(a) for a in args]
-    iters = list(args)
-    if bag_kwargs:
-        keys = list(bag_kwargs)
-        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
-        iters.extend(kw_val_iters)
-        kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
-        if args:
-            for a, k in zip(zip(*args), kw_iter):
-                yield f(*a, **k)
-        else:
-            for k in kw_iter:
-                yield f(**k)
-    else:
-        for a in zip(*args):
-            yield f(*a)
-
+def _map_chunk_check_iters(iters):
     # Check that all iterators are fully exhausted
     if len(iters) > 1:
         for i in iters:
@@ -2030,6 +2010,80 @@ def map_chunk(f, args, bag_kwargs, kwargs):
                     "have the same partition lengths"
                 )
                 raise ValueError(msg)
+
+
+class _Zip(Iterator):
+    """
+    Alternative to the builtin zip which keeps references to their results around for too long.
+    """
+
+    def __init__(self, *args):
+        self.iters = [iter(arg) for arg in args]
+
+    def __next__(self):
+        results = []
+        for it in self.iters:
+            results.append(next(it))
+        return tuple(results)
+
+
+class _MapChunkItGeneric(Iterator):
+    """
+    Hand-written iterator that prevents potential memory leaks. `yield` in generators holds a reference until the
+    control flow returns to the yielding generator. In iterator chain, this piles up loads of objects. In dask bags with
+    a partition_size > 1, this means that objects for multile items within a partition and multiple functions within a
+    fused chain are kept in memory instead of a single intermediate result of a single item.
+    """
+
+    def __init__(self, f, it, iters):
+        self.f = f
+        self.it = it
+        self.iters = iters
+
+    def __next__(self):
+        try:
+            params = next(self.it)
+        except StopIteration:
+            _map_chunk_check_iters(self.iters)
+            raise StopIteration
+
+        return self.call_f(params)
+
+
+class _MapChunkItAK(_MapChunkItGeneric):
+    def call_f(self, params):
+        a, k = params
+        return self.f(*a, **k)
+
+
+class _MapChunkItK(_MapChunkItGeneric):
+    def call_f(self, params):
+        return self.f(**params)
+
+
+class _MapChunkItA(_MapChunkItGeneric):
+    def call_f(self, params):
+        return self.f(*params)
+
+
+def map_chunk(f, args, bag_kwargs, kwargs):
+    if kwargs:
+        f = partial(f, **kwargs)
+
+    args = [iter(a) for a in args]
+    iters = list(args)
+
+    if bag_kwargs:
+        keys = list(bag_kwargs)
+        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
+        iters.extend(kw_val_iters)
+        kw_iter = (dict(_Zip(keys, k)) for k in _Zip(*kw_val_iters))
+        if args:
+            return _MapChunkItAK(f, _Zip(_Zip(*args), kw_iter), iters)
+        else:
+            return _MapChunkItK(f, kw_iter, iters)
+    else:
+        return _MapChunkItA(f, _Zip(*args), iters)
 
 
 def starmap_chunk(f, x, kwargs):
