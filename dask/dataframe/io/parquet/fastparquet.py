@@ -297,6 +297,7 @@ class FastParquetEngine(Engine):
         # Create `parts`
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
+        partitions = pf.cats
         if not parts:
             partsin = pf.row_groups
             pf.fmd.key_value_metadata = None
@@ -315,7 +316,7 @@ class FastParquetEngine(Engine):
             }
             parts.append(part)
 
-        return (meta, stats, parts)
+        return (meta, stats, parts, partitions)
 
     @staticmethod
     def read_partition(fs, piece, columns, index, categories=(), pf=None, **kwargs):

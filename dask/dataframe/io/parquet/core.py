@@ -145,7 +145,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts = engine.read_metadata(
+    meta, statistics, parts, partitions = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -162,7 +162,11 @@ def read_parquet(
         # User didn't specify columns, so ignore any intersection
         # of auto-detected values with the index (if necessary)
         ignore_index_column_intersection = True
-        columns = meta.columns
+        columns = [c for c in meta.columns]
+    else:
+        pass
+        # import pdb; pdb.set_trace()
+        # columns.extend([p for p in partitions if p not in columns])
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
@@ -299,7 +303,9 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
-    return df
+    columns = columns or []
+    index = index or []
+    return df[[c for c in columns if c not in index]]
 
 
 def to_parquet(
