@@ -2532,8 +2532,7 @@ def test_apply():
 
 
 @pytest.mark.skipif(
-    PY2,
-    reason="Global filter is applied by another library, and " "not reset properly.",
+    PY2, reason="Global filter is applied by another library, and not reset properly."
 )
 def test_apply_warns():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})

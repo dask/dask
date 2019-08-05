@@ -57,7 +57,7 @@ class RemoteException(Exception):
         self.traceback = traceback
 
     def __str__(self):
-        return str(self.exception) + "\n\n" "Traceback\n" "---------\n" + self.traceback
+        return str(self.exception) + "\n\nTraceback\n---------\n" + self.traceback
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) + dir(self.exception)))

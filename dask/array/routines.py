@@ -531,7 +531,7 @@ def gradient(f, *varargs, **kwargs):
         varargs = len(axis) * varargs
     if len(varargs) != len(axis):
         raise TypeError(
-            "Spacing must either be a single scalar, or a scalar / 1d-array " "per axis"
+            "Spacing must either be a single scalar, or a scalar / 1d-array per axis"
         )
 
     if issubclass(f.dtype.type, (np.bool8, Integral)):
@@ -592,7 +592,7 @@ def _bincount_sum(bincounts, dtype=int):
 @derived_from(np)
 def bincount(x, weights=None, minlength=0):
     if x.ndim != 1:
-        raise ValueError("Input array must be one dimensional. " "Try using x.ravel()")
+        raise ValueError("Input array must be one dimensional. Try using x.ravel()")
     if weights is not None:
         if weights.chunks != x.chunks:
             raise ValueError("Chunks of input array x and weights must match.")
@@ -681,9 +681,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         )
 
     if weights is not None and weights.chunks != a.chunks:
-        raise ValueError(
-            "Input array and weights must have the same " "chunked structure"
-        )
+        raise ValueError("Input array and weights must have the same chunked structure")
 
     if normed is not False:
         raise ValueError(
@@ -1003,7 +1001,7 @@ def roll(array, shift, axis=None):
 
         if not isinstance(shift, Integral):
             raise TypeError(
-                "Expect `shift` to be an instance of Integral" " when `axis` is None."
+                "Expect `shift` to be an instance of Integral when `axis` is None."
             )
 
         shift = (shift,)
@@ -1394,7 +1392,7 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
         if a.shape != wgt.shape:
             if axis is None:
                 raise TypeError(
-                    "Axis must be specified when shapes of a and weights " "differ."
+                    "Axis must be specified when shapes of a and weights differ."
                 )
             if wgt.ndim != 1:
                 raise TypeError(

@@ -522,9 +522,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     def _scalarfunc(self, cast_type):
         def wrapper():
-            raise TypeError(
-                "cannot convert the series to " "{0}".format(str(cast_type))
-            )
+            raise TypeError("cannot convert the series to {0}".format(str(cast_type)))
 
         return wrapper
 
@@ -884,7 +882,7 @@ Dask Name: {name}, {task} tasks""".format(
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword " "argument" % target
+                    "%s is both the pipe target and a keyword argument" % target
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -2974,9 +2972,7 @@ Dask Name: {name}, {task} tasks""".format(
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         df = concat([self, other], axis=1)
         return cov_corr(
             df, min_periods, corr=True, scalar=True, split_every=split_every
@@ -3555,7 +3551,7 @@ class DataFrame(_Frame):
             inplace = False
         if "=" in expr and inplace in (True, None):
             raise NotImplementedError(
-                "Inplace eval not supported." " Please use inplace=False"
+                "Inplace eval not supported. Please use inplace=False"
             )
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
@@ -3588,7 +3584,7 @@ class DataFrame(_Frame):
 
         elif axis == 0:
             raise NotImplementedError(
-                "{0} does not support " "squeeze along axis 0".format(type(self))
+                "{0} does not support squeeze along axis 0".format(type(self))
             )
 
         elif axis not in [0, 1, None]:
@@ -3988,9 +3984,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def corr(self, method="pearson", min_periods=None, split_every=False):
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         return cov_corr(self, min_periods, True, split_every=split_every)
 
     def info(self, buf=None, verbose=False, memory_usage=False):
@@ -4997,7 +4991,7 @@ def quantile(df, q, method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest " "method."
+            "crick", "crick is a required dependency for using the t-digest method."
         )
 
         from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
