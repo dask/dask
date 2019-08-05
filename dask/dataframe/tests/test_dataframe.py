@@ -2382,6 +2382,7 @@ def test_drop_axis_1():
         ddf.drop(["a", "x"], axis=1, errors="ignore"),
         df.drop(["a", "x"], axis=1, errors="ignore"),
     )
+    assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
 def test_gh580():
