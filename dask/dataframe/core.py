@@ -2604,7 +2604,7 @@ Dask Name: {name}, {task} tasks""".format(
         --------
         pandas.Series.rename
         """
-        from pandas.api.types import is_scalar, is_list_like, is_dict_like
+        from pandas.api.types import is_scalar, is_dict_like
         from dask.dataframe import Index
 
         if is_scalar(index) and not isinstance(index, Index):
