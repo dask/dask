@@ -2605,11 +2605,12 @@ Dask Name: {name}, {task} tasks""".format(
         pandas.Series.rename
         """
         from pandas.api.types import is_scalar, is_list_like, is_dict_like
+        from dask.dataframe import Index
 
-        if is_scalar(index):
+        if is_scalar(index) and not(index, Index):
             res = self if inplace else self.copy()
             res.name = index
-        elif is_dict_like(index) or callable(index) or is_list_like(index):
+        else:
             res = self.map_partitions(M.rename, index)
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
