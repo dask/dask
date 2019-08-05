@@ -40,10 +40,17 @@ def overlap_chunk(
     if isinstance(before, datetime.timedelta):
         before = len(prev_part)
 
+    expansion = None
+    if combined.shape[0] != 0:
+        expansion = out.shape[0] // combined.shape[0]
+    if before and expansion:
+        before *= expansion
     if next_part is None:
         return out.iloc[before:]
     if isinstance(after, datetime.timedelta):
         after = len(next_part)
+    if after and expansion:
+        after *= expansion
     return out.iloc[before:-after]
 
 
@@ -353,6 +360,10 @@ class Rolling(object):
         return self._call_method("count")
 
     @derived_from(pd_Rolling)
+    def cov(self):
+        return self._call_method("cov")
+
+    @derived_from(pd_Rolling)
     def sum(self):
         return self._call_method("sum")
 
@@ -403,7 +414,7 @@ class Rolling(object):
             if kwargs:
                 msg = (
                     "Invalid argument to 'apply'. Keyword arguments "
-                    "should be given as a dict to the 'kwargs' arugment. "
+                    "should be given as a dict to the 'kwargs' argument. "
                 )
                 raise TypeError(msg)
         return self._call_method("apply", func, args=args, kwargs=kwargs, **kwds)
