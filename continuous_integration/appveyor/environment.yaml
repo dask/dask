@@ -1,6 +1,7 @@
 name: testenv
 channels:
   - conda-forge
+  - defaults
 dependencies:
   # required dependencies
   - python=3.6.*
