@@ -2607,7 +2607,7 @@ Dask Name: {name}, {task} tasks""".format(
         from pandas.api.types import is_scalar, is_list_like, is_dict_like
         from dask.dataframe import Index
 
-        if is_scalar(index) and not(index, Index):
+        if is_scalar(index) and not isinstance(index, Index):
             res = self if inplace else self.copy()
             res.name = index
         else:
