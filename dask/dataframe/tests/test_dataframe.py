@@ -3135,6 +3135,13 @@ def test_column_assignment():
     assert_eq(df, ddf)
     assert "z" not in orig.columns
 
+    arr = np.array([5, 6, 7, 8])
+    darr = da.from_array(arr, chunks=2)
+
+    df['w'] = arr
+    ddf['w'] = darr
+    assert_eq(df, ddf)
+
 
 def test_columns_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
