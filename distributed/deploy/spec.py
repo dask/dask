@@ -72,6 +72,13 @@ class ProcessInterface:
     def __repr__(self):
         return "<%s: status=%s>" % (type(self).__name__, self.status)
 
+    async def __aenter__(self):
+        await self
+        return self
+
+    async def __aexit__(self, *args, **kwargs):
+        await self.close()
+
 
 class SpecCluster(Cluster):
     """ Cluster that requires a full specification of workers
