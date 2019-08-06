@@ -80,13 +80,7 @@ from .core import (
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import (
-    strip_unknown_categories,
-    is_dataframe_like,
-    is_series_like,
-    asciitable,
-    PANDAS_GT_0230,
-)
+from .utils import strip_unknown_categories, is_series_like, asciitable, PANDAS_GT_0230
 
 
 def align_partitions(*dfs):
@@ -608,16 +602,12 @@ def fix_overlap(ddf):
 
 
 def most_recent_tail(left, right):
-    if left is None or right is None:
-        raise ValueError("dafuq did u do")
     if right.empty:
         return left
     return right.tail(1)
 
 
 def most_recent_tail_summary(left, right, by=None):
-    if left is None or right is None:
-        raise ValueError("dafuq did u do")
     return pd.concat([left, right]).drop_duplicates(subset=by, keep="last")
 
 
@@ -635,16 +625,12 @@ def compute_tails(ddf, by=None):
 
 
 def most_recent_head(left, right):
-    if left is None or right is None:
-        raise ValueError("dafuq did u do")
     if left.empty:
         return right
     return left.head(1)
 
 
 def most_recent_head_summary(left, right, by=None):
-    if left is None or right is None:
-        raise ValueError("dafuq did u do")
     return pd.concat([left, right]).drop_duplicates(subset=by, keep="first")
 
 
@@ -691,9 +677,6 @@ def pair_partitions(L, R):
 
 def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
     """ merge_asof but potentially adding rows to the beginning/end of right """
-    if left is None or right is None:
-        raise ValueError("dafuq did u do")
-
     frames = []
     if prev is not None:
         frames.append(prev)
@@ -938,11 +921,7 @@ def stack_partitions(dfs, divisions, join="outer"):
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
-        if is_dataframe_like(df):
-            shared = df.columns.intersection(meta)
-            if not df._meta[shared].dtypes.equals(meta[shared].dtypes):
-                df = df.astype(meta[shared].dtypes)
-        elif is_series_like(df) and is_series_like(meta):
+        if is_series_like(df) and is_series_like(meta):
             if not df.dtype == meta.dtype and str(df.dtype) != "category":
                 df = df.astype(meta.dtype)
         else:

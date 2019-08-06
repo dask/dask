@@ -18,8 +18,11 @@ from pandas.api.types import (
     CategoricalDtype,
 )
 
+# this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_files
-from ...bytes.compression import seekable_files, files as cfiles
+
+# from ...bytes.compression import seekable_files, files as cfiles
+from fsspec.compression import compr
 from ...compatibility import PY2, PY3, Mapping, unicode
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
@@ -137,7 +140,7 @@ def coerce_dtypes(df, dtypes):
 
         bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
         table = asciitable(["Column", "Found", "Expected"], bad_dtypes)
-        dtype_kw = "dtype={%s}" % ",\n" "       ".join(
+        dtype_kw = "dtype={%s}" % ",\n       ".join(
             "%r: '%s'" % (k, v) for (k, v, _) in bad_dtypes
         )
 
@@ -169,7 +172,7 @@ def coerce_dtypes(df, dtypes):
 
     if bad_dtypes or bad_dates:
         rule = "\n\n%s\n\n" % ("-" * 61)
-        msg = "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n" "%s" % (
+        msg = "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n%s" % (
             rule.join(filter(None, [dtype_msg, date_msg]))
         )
         raise ValueError(msg)
@@ -346,7 +349,7 @@ def read_pandas(
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
-            raise ValueError("{0} not supported for " "dd.{1}".format(kw, reader_name))
+            raise ValueError("{0} not supported for dd.{1}".format(kw, reader_name))
     if kwargs.get("nrows", None):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
@@ -368,7 +371,7 @@ def read_pandas(
         firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
     if isinstance(kwargs.get("header"), list):
         raise TypeError(
-            "List of header rows not supported for " "dd.{0}".format(reader_name)
+            "List of header rows not supported for dd.{0}".format(reader_name)
         )
     if isinstance(kwargs.get("converters"), dict) and include_path_column:
         path_converter = kwargs.get("converters").get(include_path_column, None)
@@ -377,7 +380,8 @@ def read_pandas(
 
     if isinstance(blocksize, (str, unicode)):
         blocksize = parse_bytes(blocksize)
-    if blocksize and compression not in seekable_files:
+    if blocksize and compression:
+        # NONE of the compressions should use chunking
         warn(
             "Warning %s compression does not support breaking apart files\n"
             "Please ensure that each individual file can fit in memory and\n"
@@ -385,7 +389,7 @@ def read_pandas(
             "Setting ``blocksize=None``" % compression
         )
         blocksize = None
-    if compression not in seekable_files and compression not in cfiles:
+    if compression not in compr:
         raise NotImplementedError("Compression format %s not installed" % compression)
     if blocksize and sample and blocksize < sample and lastskiprow != 0:
         warn(

@@ -61,9 +61,8 @@ def test_orc_single(orc_files):
     assert d.npartitions == 8
     d2 = read_orc(fn, columns=["time", "date"])
     assert_eq(d[columns], d2[columns])
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match="nonexist"):
         read_orc(fn, columns=["time", "nonexist"])
-    assert "nonexist" in str(e)
 
 
 def test_orc_multiple(orc_files):

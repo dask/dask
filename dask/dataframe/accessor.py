@@ -5,7 +5,7 @@ import pandas as pd
 from toolz import partial
 
 from ..utils import derived_from
-from .utils import is_categorical_dtype, PANDAS_VERSION
+from .utils import PANDAS_VERSION
 
 
 def maybe_wrap_pandas(obj, x):
@@ -22,10 +22,7 @@ class Accessor(object):
 
     Notes
     -----
-    Subclasses should define the following attributes:
-
-    * _accessor
-    * _accessor_name
+    Subclasses should define ``_accessor_name``
     """
 
     _not_implemented = set()
@@ -35,18 +32,14 @@ class Accessor(object):
 
         if not isinstance(series, Series):
             raise ValueError("Accessor cannot be initialized")
-        self._validate(series)
+
+        series_meta = series._meta
+        if hasattr(series_meta, "to_series"):  # is index-like
+            series_meta = series_meta.to_series()
+        meta = getattr(series_meta, self._accessor_name)
+
+        self._meta = meta
         self._series = series
-
-    def _validate(self, series):
-        pass
-
-    @property
-    def _accessor(self):
-        meta = self._series._meta
-        if hasattr(meta, "to_series"):  # is index-like
-            meta = meta.to_series()
-        return getattr(meta, self._accessor_name)
 
     @staticmethod
     def _delegate_property(obj, accessor, attr):
@@ -85,7 +78,7 @@ class Accessor(object):
 
     @property
     def _delegates(self):
-        return set(dir(self._accessor)).difference(self._not_implemented)
+        return set(dir(self._meta)).difference(self._not_implemented)
 
     def __dir__(self):
         o = self._delegates
@@ -95,7 +88,7 @@ class Accessor(object):
 
     def __getattr__(self, key):
         if key in self._delegates:
-            if callable(getattr(self._accessor, key)):
+            if callable(getattr(self._meta, key)):
                 return partial(self._function_map, key)
             else:
                 return self._property_map(key)
@@ -127,15 +120,6 @@ class StringAccessor(Accessor):
     _accessor_name = "str"
     _not_implemented = {"get_dummies"}
 
-    def _validate(self, series):
-        if not (
-            series.dtype == "object"
-            or (
-                is_categorical_dtype(series) and series.cat.categories.dtype == "object"
-            )
-        ):
-            raise AttributeError("Can only use .str accessor with object dtype")
-
     @derived_from(pd.core.strings.StringMethods)
     def split(self, pat=None, n=-1, expand=False):
         if expand:
@@ -147,6 +131,8 @@ class StringAccessor(Accessor):
             else:
                 meta = type(self._series._meta)([" ".join(["a"] * 2 * n)])
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
+        else:
+            meta = (self._series.name, object)
         return self._function_map("split", pat=pat, n=n, expand=expand, meta=meta)
 
     @derived_from(pd.core.strings.StringMethods)

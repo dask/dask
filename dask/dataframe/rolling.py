@@ -11,6 +11,7 @@ from ..utils import M, funcname, derived_from
 from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
+from . import methods
 
 
 def overlap_chunk(
@@ -32,17 +33,24 @@ def overlap_chunk(
             raise NotImplementedError(msg)
 
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
-    combined = pd.concat(parts)
+    combined = methods.concat(parts)
     out = func(combined, *args, **kwargs)
     if prev_part is None:
         before = None
     if isinstance(before, datetime.timedelta):
         before = len(prev_part)
 
+    expansion = None
+    if combined.shape[0] != 0:
+        expansion = out.shape[0] // combined.shape[0]
+    if before and expansion:
+        before *= expansion
     if next_part is None:
         return out.iloc[before:]
     if isinstance(after, datetime.timedelta):
         after = len(next_part)
+    if after and expansion:
+        after *= expansion
     return out.iloc[before:-after]
 
 
@@ -241,7 +249,7 @@ def _tail_timedelta(prevs, current, before):
     -------
     overlapped : DataFrame
     """
-    selected = pd.concat(
+    selected = methods.concat(
         [prev[prev.index > (current.index.min() - before)] for prev in prevs]
     )
     return selected
@@ -352,6 +360,10 @@ class Rolling(object):
         return self._call_method("count")
 
     @derived_from(pd_Rolling)
+    def cov(self):
+        return self._call_method("cov")
+
+    @derived_from(pd_Rolling)
     def sum(self):
         return self._call_method("sum")
 
@@ -402,7 +414,7 @@ class Rolling(object):
             if kwargs:
                 msg = (
                     "Invalid argument to 'apply'. Keyword arguments "
-                    "should be given as a dict to the 'kwargs' arugment. "
+                    "should be given as a dict to the 'kwargs' argument. "
                 )
                 raise TypeError(msg)
         return self._call_method("apply", func, args=args, kwargs=kwargs, **kwds)

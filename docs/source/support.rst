@@ -22,11 +22,13 @@ Conversation happens in the following places:
     questions and bug reports on gitter and instead ask people to use Stack
     Overflow or GitHub.
 4.  **Monthly developer meeting** happens the first Thursday of the month at
-    4pm UTC (11am in New York, 8am in Los Angeles, 12am in Beijing) at
-    https://appear.in/dask-dev
+    11:00 US Central Time in https://appear.in/dask-dev. Subscribe to
+    `this Google Calendar invite`_ to be notified of changes to the meeting
+    schedule. Meeting notes are available at https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit
 
 .. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues/
+.. _`this Google Calendar invite`: https://calendar.google.com/event?action=TEMPLATE&tmeid=NmxnamVvcGtjY3E2NGI5bTZzcW1hYjlrYzhybTZiYjFjY29qOGI5ZzY0cWoyYzFrNjFpMzhwaGlja18yMDE5MDYwNlQxNjAwMDBaIDRsMHZ0czBjMWNnZGJxNWpoY29najU1c2ZzQGc&tmsrc=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com&scp=ALL
 
 
 Asking for help

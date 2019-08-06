@@ -25,6 +25,10 @@ def test_numel(dtype, keepdims):
     x = np.ones((2, 3, 4))
 
     assert_eq(
+        da.reductions.numel(x, axis=(), keepdims=keepdims, dtype=dtype),
+        np.sum(x, axis=(), keepdims=keepdims, dtype=dtype),
+    )
+    assert_eq(
         da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
         np.sum(x, axis=0, keepdims=keepdims, dtype=dtype),
     )
@@ -48,6 +52,7 @@ def test_numel(dtype, keepdims):
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert_eq(da_func(darr), np_func(narr))
     assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+    assert_eq(da_func(darr, axis=()), np_func(narr, axis=()))
     assert same_keys(da_func(darr), da_func(darr))
     assert same_keys(da_func(darr, keepdims=True), da_func(darr, keepdims=True))
     if use_dtype:
@@ -94,6 +99,7 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
         warnings.simplefilter("ignore")  # overflow
         assert_eq(da_func(darr), np_func(narr))
         assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+        assert_eq(da_func(darr, axis=()), np_func(narr, axis=()))
         assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
         assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
         assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
@@ -101,8 +107,12 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
         assert_eq(
             da_func(darr, axis=1, keepdims=True), np_func(narr, axis=1, keepdims=True)
         )
+        assert_eq(
+            da_func(darr, axis=(), keepdims=True), np_func(narr, axis=(), keepdims=True)
+        )
         assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
 
+        assert same_keys(da_func(darr, axis=()), da_func(darr, axis=()))
         assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
         assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
 
@@ -120,7 +130,12 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
                 da_func(darr, keepdims=True, split_every=4),
                 np_func(narr, keepdims=True),
             )
+            assert_eq(da_func(darr, axis=(), split_every=2), np_func(narr, axis=()))
             assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
+            assert_eq(
+                da_func(darr, axis=(), keepdims=True, split_every=2),
+                np_func(narr, axis=(), keepdims=True),
+            )
             assert_eq(
                 da_func(darr, axis=0, keepdims=True, split_every=2),
                 np_func(narr, axis=0, keepdims=True),
@@ -385,12 +400,26 @@ def test_nan_object(func):
         )
         d = da.from_array(x, chunks=(2, 2))
 
+        if func in {"nanmin", "nanmax"}:
+            warnings.simplefilter("ignore", RuntimeWarning)
+
+        assert_eq(getattr(np, func)(x, axis=()), getattr(da, func)(d, axis=()))
+
+        if func in {"nanmin", "nanmax"}:
+            warnings.simplefilter("default", RuntimeWarning)
+
+        if func in {"min", "max"}:
+            warnings.simplefilter("ignore", RuntimeWarning)
         assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+        if os.name != "nt" and func in {"min", "max"}:
+            warnings.simplefilter("default", RuntimeWarning)
+
         assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
         assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():
+    x = da.mean(da.ones(4, chunks=4), axis=()).compute()
     x = da.mean(da.ones(4, chunks=4), axis=0).compute()
     y = np.mean(np.ones(4))
     assert type(x) == type(y)
@@ -414,6 +443,7 @@ def test_reductions_with_empty_array():
     for dx, x in [(dx1, x1), (dx2, x2)]:
         with pytest.warns(None):  # empty slice warning
             assert_eq(dx.mean(), x.mean())
+            assert_eq(dx.mean(axis=()), x.mean(axis=()))
             assert_eq(dx.mean(axis=0), x.mean(axis=0))
             assert_eq(dx.mean(axis=1), x.mean(axis=1))
             assert_eq(dx.mean(axis=2), x.mean(axis=2))
@@ -432,9 +462,11 @@ def test_tree_reduce_depth():
     x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
     thresh = {0: 2, 1: 3}
     assert_max_deps(x.sum(split_every=thresh), 2 * 3)
+    assert_max_deps(x.sum(axis=(), split_every=thresh), 1)
     assert_max_deps(x.sum(axis=0, split_every=thresh), 2)
     assert_max_deps(x.sum(axis=1, split_every=thresh), 3)
     assert_max_deps(x.sum(split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=(), split_every=20), 1)
     assert_max_deps(x.sum(axis=0, split_every=20), 4)
     assert_max_deps(x.sum(axis=1, split_every=20), 6)
 
@@ -442,6 +474,7 @@ def test_tree_reduce_depth():
     x = da.from_array(np.arange(11 * 22 * 29).reshape((11, 22, 29)), chunks=(3, 4, 5))
     thresh = {0: 2, 1: 3, 2: 4}
     assert_max_deps(x.sum(split_every=thresh), 2 * 3 * 4)
+    assert_max_deps(x.sum(axis=(), split_every=thresh), 1)
     assert_max_deps(x.sum(axis=0, split_every=thresh), 2)
     assert_max_deps(x.sum(axis=1, split_every=thresh), 3)
     assert_max_deps(x.sum(axis=2, split_every=thresh), 4)
@@ -449,6 +482,7 @@ def test_tree_reduce_depth():
     assert_max_deps(x.sum(axis=(0, 2), split_every=thresh), 2 * 4)
     assert_max_deps(x.sum(axis=(1, 2), split_every=thresh), 3 * 4)
     assert_max_deps(x.sum(split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=(), split_every=20), 1)
     assert_max_deps(x.sum(axis=0, split_every=20), 4)
     assert_max_deps(x.sum(axis=1, split_every=20), 6)
     assert_max_deps(x.sum(axis=2, split_every=20), 6)
@@ -464,6 +498,7 @@ def test_tree_reduce_set_options():
     x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
     with config.set(split_every={0: 2, 1: 3}):
         assert_max_deps(x.sum(), 2 * 3)
+        assert_max_deps(x.sum(axis=()), 1)
         assert_max_deps(x.sum(axis=0), 2)
 
 
@@ -477,6 +512,7 @@ def test_reduction_names():
     assert x.mean().name.startswith("mean")
 
 
+@pytest.mark.filterwarnings("ignore:`argmax` is not implemented by dask")
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))
@@ -601,6 +637,9 @@ def test_regres_3940(func):
     assert func(a).name != func(a + 1).name
     assert func(a, axis=0).name != func(a).name
     assert func(a, axis=0).name != func(a, axis=1).name
+    if func not in {da.cumsum, da.cumprod, da.argmin, da.argmax}:
+        assert func(a, axis=()).name != func(a).name
+        assert func(a, axis=()).name != func(a, axis=0).name
 
 
 def test_trace():

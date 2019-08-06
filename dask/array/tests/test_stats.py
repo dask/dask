@@ -12,14 +12,22 @@ from dask.array.utils import allclose
 @pytest.mark.parametrize(
     "kind, kwargs", [("skew", {}), ("kurtosis", {}), ("kurtosis", {"fisher": False})]
 )
-def test_measures(kind, kwargs):
-    x = np.random.random(size=(30, 2))
+@pytest.mark.parametrize("single_dim", [True, False])
+def test_measures(kind, kwargs, single_dim):
+    np.random.seed(seed=1337)
+    if single_dim:
+        x = np.random.random(size=(30,))
+    else:
+        x = np.random.random(size=(30, 2))
     y = da.from_array(x, 3)
     dfunc = getattr(dask.array.stats, kind)
     sfunc = getattr(scipy.stats, kind)
 
     expected = sfunc(x, **kwargs)
     result = dfunc(y, **kwargs)
+    if np.isscalar(expected):
+        # make it an array to account for possible numeric errors
+        expected = np.array(expected)
     assert_eq(result, expected)
     assert isinstance(result, da.Array)
 
@@ -133,7 +141,5 @@ def test_power_divergence_invalid():
 
 def test_skew_raises():
     a = da.ones((7,), chunks=(7,))
-    with pytest.raises(ValueError) as rec:
+    with pytest.raises(ValueError, match="7 samples"):
         dask.array.stats.skewtest(a)
-
-    assert "7 samples" in str(rec)

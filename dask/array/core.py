@@ -27,7 +27,7 @@ from toolz import map, reduce, frequencies
 import numpy as np
 
 from . import chunk
-from .. import config
+from .. import config, compute
 from ..base import (
     DaskMethodsMixin,
     tokenize,
@@ -62,7 +62,6 @@ from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
-from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
@@ -138,6 +137,33 @@ def getter_inline(a, b, asarray=True, lock=None):
 from .optimization import optimize, fuse_slice
 
 
+# __array_function__ dict for mapping aliases and mismatching names
+_HANDLED_FUNCTIONS = {}
+
+
+def implements(*numpy_functions):
+    """Register an __array_function__ implementation for dask.array.Array
+
+    Register that a function implements the API of a NumPy function (or several
+    NumPy functions in case of aliases) which is handled with
+    ``__array_function__``.
+
+    Parameters
+    ----------
+    \\*numpy_functions : callables
+        One or more NumPy functions that are handled by ``__array_function__``
+        and will be mapped by `implements` to a `dask.array` function.
+    """
+
+    def decorator(dask_func):
+        for numpy_function in numpy_functions:
+            _HANDLED_FUNCTIONS[numpy_function] = dask_func
+
+        return dask_func
+
+    return decorator
+
+
 def slices_from_chunks(chunks):
     """ Translate chunks tuple to a set of slices in product order
 
@@ -188,7 +214,11 @@ def getem(
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if getitem is not operator.getitem and (not asarray or lock):
+    if (
+        has_keyword(getitem, "asarray")
+        and has_keyword(getitem, "lock")
+        and (not asarray or lock)
+    ):
         values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
         # Common case, drop extra parameters
@@ -224,6 +254,8 @@ def _concatenate2(arrays, axes=[]):
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
+    If axes is an empty list or tuple, return arrays, or arrays[0] if
+    arrays is a list.
 
     >>> x = np.array([[1, 2], [3, 4]])
     >>> _concatenate2([x, x], axes=[0])
@@ -246,7 +278,18 @@ def _concatenate2(arrays, axes=[]):
     >>> _concatenate2(iter([x, x]), axes=[1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4]])
+
+    Special Case
+    >>> _concatenate2([x, x], axes=())
+    array([[1, 2],
+           [3, 4]])
     """
+    if axes == ():
+        if isinstance(arrays, list):
+            return arrays[0]
+        else:
+            return arrays
+
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
     if not isinstance(arrays, (list, tuple)):
@@ -1145,8 +1188,8 @@ class Array(DaskMethodsMixin):
             cbytes = "unknown"
 
         table = [
-            "<table>"
-            "  <thead>"
+            "<table>",
+            "  <thead>",
             "    <tr><td> </td><th> Array </th><th> Chunk </th></tr>",
             "  </thead>",
             "  <tbody>",
@@ -1162,7 +1205,8 @@ class Array(DaskMethodsMixin):
                 type(self._meta).__module__.split(".")[0],
                 type(self._meta).__name__,
             ),
-            "  </tbody>" "</table>",
+            "  </tbody>",
+            "</table>",
         ]
         return "\n".join(table)
 
@@ -1208,16 +1252,41 @@ class Array(DaskMethodsMixin):
     def __array_function__(self, func, types, args, kwargs):
         import dask.array as module
 
+        def handle_nonmatching_names(func, args, kwargs):
+            if func not in _HANDLED_FUNCTIONS:
+                warnings.warn(
+                    "The `{}` function is not implemented by Dask array. "
+                    "You may want to use the da.map_blocks function "
+                    "or something similar to silence this warning. "
+                    "Your code may stop working in a future release.".format(
+                        func.__module__ + "." + func.__name__
+                    ),
+                    FutureWarning,
+                )
+                # Need to convert to array object (e.g. numpy.ndarray or
+                # cupy.ndarray) as needed, so we can call the NumPy function
+                # again and it gets the chance to dispatch to the right
+                # implementation.
+                args, kwargs = compute(args, kwargs)
+                return func(*args, **kwargs)
+
+            return _HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+        # First try to find a matching function name.  If that doesn't work, we may
+        # be dealing with an alias or a function that's simply not in the Dask API.
+        # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
         for submodule in func.__module__.split(".")[1:]:
             try:
                 module = getattr(module, submodule)
             except AttributeError:
-                return NotImplemented
+                return handle_nonmatching_names(func, args, kwargs)
+
         if not hasattr(module, func.__name__):
-            return NotImplemented
+            return handle_nonmatching_names(func, args, kwargs)
+
         da_func = getattr(module, func.__name__)
         if da_func is func:
-            return NotImplemented
+            return handle_nonmatching_names(func, args, kwargs)
         return da_func(*args, **kwargs)
 
     @property
@@ -1310,9 +1379,7 @@ class Array(DaskMethodsMixin):
 
     def _scalarfunc(self, cast_type):
         if self.size > 1:
-            raise TypeError(
-                "Only length-1 arrays can be converted " "to Python scalars"
-            )
+            raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
             return cast_type(self.compute())
 
@@ -2398,7 +2465,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             and np.isnan(x).any()
         ):
             raise ValueError(
-                "Can not perform automatic rechunking with unknown " "(nan) chunk sizes"
+                "Can not perform automatic rechunking with unknown (nan) chunk sizes"
             )
 
     limit = max(1, limit)
@@ -2494,14 +2561,14 @@ def from_array(
     chunks="auto",
     name=None,
     lock=False,
-    asarray=True,
+    asarray=None,
     fancy=True,
     getitem=None,
     meta=None,
 ):
     """ Create dask array from something that looks like an array
 
-    Input must have a ``.shape`` and support numpy-style slicing.
+    Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
 
     Parameters
     ----------
@@ -2529,8 +2596,10 @@ def from_array(
         If ``x`` doesn't support concurrent reads then provide a lock here, or
         pass in True to have dask.array create one for you.
     asarray : bool, optional
-        If True (default), then chunks will be converted to instances of
-        ``ndarray``. Set to False to pass passed chunks through unchanged.
+        If True then call np.asarray on chunks to convert them to numpy arrays.
+        If False then chunks are passed through unchanged.
+        If None (default) then we use True if the ``__array_function__`` method
+        is undefined.
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
@@ -2561,6 +2630,9 @@ def from_array(
     """
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
+
+    if asarray is None:
+        asarray = not hasattr(x, "__array_function__")
 
     previous_chunks = getattr(x, "chunks", None)
 
@@ -2651,11 +2723,9 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        from ..bytes.core import get_mapper
+
+        mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
         mapper = url
@@ -2699,8 +2769,20 @@ def to_zarr(
         where overwrite=True will replace the existing data.
     compute, return_stored: see ``store()``
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+
+    Raises
+    ------
+    ValueError
+        If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+
     """
     import zarr
+
+    if np.isnan(arr.shape).any():
+        raise ValueError(
+            "Saving a dask array with unknown chunk sizes is not "
+            "currently supported by Zarr"
+        )
 
     if isinstance(url, zarr.Array):
         z = url
@@ -2723,11 +2805,9 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        from ..bytes.core import get_mapper
+
+        mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
         mapper = url
@@ -3244,7 +3324,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     )
 
     # Drop empty arrays
-    seq = [a for a in seq if a.size]
+    seq2 = [a for a in seq if a.size]
+    if not seq2:
+        seq2 = seq
 
     if axis < 0:
         axis = ndim + axis
@@ -3255,45 +3337,45 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         )
         raise ValueError(msg % (ndim, axis))
 
-    n = len(seq)
+    n = len(seq2)
     if n == 0:
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
-        return seq[0]
+        return seq2[0]
 
     if not allow_unknown_chunksizes and not all(
-        i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
+        i == axis or all(x.shape[i] == seq2[0].shape[i] for x in seq2)
         for i in range(ndim)
     ):
-        if any(map(np.isnan, seq[0].shape)):
+        if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
                 " shape %s.  To force concatenation pass"
-                " allow_unknown_chunksizes=True." % str(seq[0].shape)
+                " allow_unknown_chunksizes=True." % str(seq2[0].shape)
             )
-        raise ValueError("Shapes do not align: %s", [x.shape for x in seq])
+        raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 
     inds = [list(range(ndim)) for i in range(n)]
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
 
-    uc_args = list(concat(zip(seq, inds)))
-    _, seq = unify_chunks(*uc_args, warn=False)
+    uc_args = list(concat(zip(seq2, inds)))
+    _, seq2 = unify_chunks(*uc_args, warn=False)
 
-    bds = [a.chunks for a in seq]
+    bds = [a.chunks for a in seq2]
 
     chunks = (
-        seq[0].chunks[:axis]
+        seq2[0].chunks[:axis]
         + (sum([bd[axis] for bd in bds], ()),)
-        + seq[0].chunks[axis + 1 :]
+        + seq2[0].chunks[axis + 1 :]
     )
 
-    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
+    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq2]))
 
-    names = [a.name for a in seq]
+    names = [a.name for a in seq2]
 
     name = "concatenate-" + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
@@ -3307,7 +3389,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     ]
 
     dsk = dict(zip(keys, values))
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
 
@@ -3999,18 +4081,12 @@ def stack(seq, axis=0):
     --------
     concatenate
     """
+    from . import wrap
+
     seq = [asarray(a) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to stack")
-
-    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
-    seq = [x.astype(meta.dtype) for x in seq]
-
-    n = len(seq)
-    ndim = meta.ndim - 1
-    if axis < 0:
-        axis = ndim + axis + 1
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError(
@@ -4021,14 +4097,38 @@ def stack(seq, axis=0):
             )
         )
 
+    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
+    seq = [x.astype(meta.dtype) for x in seq]
+
+    ndim = meta.ndim - 1
+    if axis < 0:
+        axis = ndim + axis + 1
+    shape = tuple(
+        len(seq)
+        if i == axis
+        else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
+        for i in range(meta.ndim)
+    )
+
+    seq2 = [a for a in seq if a.size]
+    if not seq2:
+        seq2 = seq
+
+    n = len(seq2)
+    if n == 0:
+        try:
+            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
+        except TypeError:
+            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
+
     ind = list(range(ndim))
-    uc_args = list(concat((x, ind) for x in seq))
-    _, seq = unify_chunks(*uc_args)
+    uc_args = list(concat((x, ind) for x in seq2))
+    _, seq2 = unify_chunks(*uc_args)
 
-    assert len(set(a.chunks for a in seq)) == 1  # same chunks
-    chunks = seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:]
+    assert len(set(a.chunks for a in seq2)) == 1  # same chunks
+    chunks = seq2[0].chunks[:axis] + ((1,) * n,) + seq2[0].chunks[axis:]
 
-    names = [a.name for a in seq]
+    names = [a.name for a in seq2]
     name = "stack-" + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
@@ -4047,7 +4147,7 @@ def stack(seq, axis=0):
     ]
 
     layer = dict(zip(keys, values))
-    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
 
@@ -4252,9 +4352,7 @@ def _vindex(x, *indexes):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == "b":
-                raise IndexError(
-                    "vindex does not support indexing with " "boolean arrays"
-                )
+                raise IndexError("vindex does not support indexing with boolean arrays")
             if ((ind >= size) | (ind < -size)).any():
                 raise IndexError(
                     "vindex key has entries out of bounds for "

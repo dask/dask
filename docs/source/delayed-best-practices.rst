@@ -174,19 +174,19 @@ is ok, but it can become a problem if you apply ``dask.delayed`` too finely.  In
 this case, it's often best to break up your many tasks into batches or use one
 of the Dask collections to help you.
 
-+------------------------------------+-------------------------------------------------------+
-| **Don't**                          | **Do**                                                |
-+------------------------------------+-------------------------------------------------------+
-| .. code-block:: python             | .. code-block:: python                                |
-|                                    |                                                       |
-|    # Too mamy tasks                |    # Use collections                                  |
-|                                    |                                                       |
-|    results = []                    |    import dask.bag as db                              |
-|    for x in range(1000000000):     |    b = db.from_sequence(1000000000, npartitions=1000) |
-|        y = dask.delayed(f)(x)      |    b = b.map(f)                                       |
-|        results.append(y)           |    ...                                                |
-|                                    |                                                       |
-+------------------------------------+-------------------------------------------------------+
++------------------------------------+-------------------------------------------------------------+
+| **Don't**                          | **Do**                                                      |
++------------------------------------+-------------------------------------------------------------+
+| .. code-block:: python             | .. code-block:: python                                      |
+|                                    |                                                             |
+|    # Too mamy tasks                |    # Use collections                                        |
+|                                    |                                                             |
+|    results = []                    |    import dask.bag as db                                    |
+|    for x in range(10000000):       |    b = db.from_sequence(range(10000000), npartitions=1000)  |
+|        y = dask.delayed(f)(x)      |    b = b.map(f)                                             |
+|        results.append(y)           |    ...                                                      |
+|                                    |                                                             |
++------------------------------------+-------------------------------------------------------------+
 
 Here we use ``dask.bag`` to automatically batch applying our function. We could also have constructed
 our own batching as follows
@@ -200,8 +200,8 @@ our own batching as follows
        return sub_results
 
     batches = []
-    for i in range(0, 1000000000, 1000000):
-        result_batch = dask.delayed(batch, range(i, i + 1000000))
+    for i in range(0, 10000000, 10000):
+        result_batch = dask.delayed(batch, range(i, i + 10000))
         batches.append(result_batch)
 
 

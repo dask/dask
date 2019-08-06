@@ -167,7 +167,7 @@ else:
                 raise
 
     def _make_reraise():
-        _code = "def reraise(exc, tb=None):" "    raise type(exc), exc, tb"
+        _code = "def reraise(exc, tb=None): raise type(exc), exc, tb"
         namespace = {}
         exec("exec _code in namespace")
         return namespace["reraise"]

@@ -107,7 +107,7 @@ def read_sql_table(
     )
     if not isinstance(index_col, string_types + (elements.Label,)):
         raise ValueError(
-            "Use label when passing an SQLAlchemy instance" " as the index (%s)" % index
+            "Use label when passing an SQLAlchemy instance as the index (%s)" % index
         )
     if divisions and npartitions:
         raise TypeError("Must supply either divisions or npartitions, not both")
@@ -147,7 +147,7 @@ def read_sql_table(
     else:
         if divisions is None and npartitions is None:
             raise ValueError(
-                "Must provide divisions or npartitions when" "using explicit meta."
+                "Must provide divisions or npartitions when using explicit meta."
             )
 
     if divisions is None:

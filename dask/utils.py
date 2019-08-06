@@ -550,13 +550,13 @@ def ignore_warning(doc, cls, name, extra=""):
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s. \n\n" "" % (
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" % (
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s. \n\n" "" % (cls.__name__, name)
+        l1 = "This docstring was copied from %s.%s. \n\n" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -1051,8 +1051,9 @@ def is_arraylike(x):
     Examples
     --------
     >>> import numpy as np
-    >>> x = np.ones(5)
-    >>> is_arraylike(x)
+    >>> is_arraylike(np.ones(5))
+    True
+    >>> is_arraylike(np.ones(()))
     True
     >>> is_arraylike(5)
     False
@@ -1061,10 +1062,9 @@ def is_arraylike(x):
     """
     from .base import is_dask_collection
 
-    return (
+    return bool(
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
-        and x.shape
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
     )
@@ -1075,8 +1075,8 @@ def is_dataframe_like(df):
     typ = type(df)
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
-        and all(hasattr(df, name) for name in ("dtypes",))
-        and not any(hasattr(typ, name) for name in ("value_counts", "dtype"))
+        and all(hasattr(df, name) for name in ("dtypes", "columns"))
+        and not any(hasattr(typ, name) for name in ("name", "dtype"))
     )
 
 

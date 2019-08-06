@@ -10,7 +10,7 @@ from pprint import pformat
 
 import numpy as np
 import pandas as pd
-from pandas.util import cache_readonly, hash_pandas_object
+from pandas.util import cache_readonly
 from pandas.api.types import (
     is_bool_dtype,
     is_timedelta64_dtype,
@@ -78,6 +78,7 @@ from .utils import (
     is_series_like,
     is_index_like,
     valid_divisions,
+    hash_object_dispatch,
 )
 
 no_default = "__no_default__"
@@ -522,9 +523,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     def _scalarfunc(self, cast_type):
         def wrapper():
-            raise TypeError(
-                "cannot convert the series to " "{0}".format(str(cast_type))
-            )
+            raise TypeError("cannot convert the series to {0}".format(str(cast_type)))
 
         return wrapper
 
@@ -884,7 +883,7 @@ Dask Name: {name}, {task} tasks""".format(
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword " "argument" % target
+                    "%s is both the pipe target and a keyword argument" % target
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -2604,9 +2603,14 @@ Dask Name: {name}, {task} tasks""".format(
         --------
         pandas.Series.rename
         """
-        from pandas.api.types import is_scalar, is_list_like, is_dict_like
+        from pandas.api.types import is_scalar, is_dict_like, is_list_like
+        import dask.dataframe as dd
 
-        if is_scalar(index) or (is_list_like(index) and not is_dict_like(index)):
+        if is_scalar(index) or (
+            is_list_like(index)
+            and not is_dict_like(index)
+            and not isinstance(index, dd.Series)
+        ):
             res = self if inplace else self.copy()
             res.name = index
         else:
@@ -2684,6 +2688,13 @@ Dask Name: {name}, {task} tasks""".format(
             s = self.get_partition(i).compute()
             for item in s.iteritems():
                 yield item
+
+    @derived_from(pd.Series)
+    def __iter__(self):
+        for i in range(self.npartitions):
+            s = self.get_partition(i).compute()
+            for row in s:
+                yield row
 
     @classmethod
     def _validate_axis(cls, axis=0):
@@ -2974,9 +2985,7 @@ Dask Name: {name}, {task} tasks""".format(
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         df = concat([self, other], axis=1)
         return cov_corr(
             df, min_periods, corr=True, scalar=True, split_every=split_every
@@ -3366,7 +3375,7 @@ class DataFrame(_Frame):
         inplace=False,
         **kwargs
     ):
-        """Set the DataFrame index (row labels) using an existing column
+        """Set the DataFrame index (row labels) using an existing column.
 
         This realigns the dataset to be sorted by a new column.  This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
@@ -3376,7 +3385,7 @@ class DataFrame(_Frame):
         then perform many cheap computations off of the sorted dataset.
 
         This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (it is much more expensive).  Under normal
+        different performance costs (dask dataframe ``set_index`` is much more expensive).  Under normal
         operation this function does an initial pass over the index column to
         compute approximate qunatiles to serve as future divisions.  It then passes
         over the data a second time, splitting up each input partition into several
@@ -3408,13 +3417,15 @@ class DataFrame(_Frame):
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If this is untrue, you should
+            the existing partitions in the data. If ``sorted=False``, you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace : bool, optional
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
+            Note, that even if you set ``compute=False``, an immediate computation
+            will still be triggered if ``divisions`` is ``None``.
 
         Examples
         --------
@@ -3553,7 +3564,7 @@ class DataFrame(_Frame):
             inplace = False
         if "=" in expr and inplace in (True, None):
             raise NotImplementedError(
-                "Inplace eval not supported." " Please use inplace=False"
+                "Inplace eval not supported. Please use inplace=False"
             )
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
@@ -3586,7 +3597,7 @@ class DataFrame(_Frame):
 
         elif axis == 0:
             raise NotImplementedError(
-                "{0} does not support " "squeeze along axis 0".format(type(self))
+                "{0} does not support squeeze along axis 0".format(type(self))
             )
 
         elif axis not in [0, 1, None]:
@@ -3641,11 +3652,15 @@ class DataFrame(_Frame):
         return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0, errors="raise"):
+    def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if axis == 1:
-            return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
-        raise NotImplementedError("Drop currently only works for axis=1")
+        if (axis == 1) or (columns is not None):
+            return self.map_partitions(
+                M.drop, labels=labels, axis=axis, columns=columns, errors=errors
+            )
+        raise NotImplementedError(
+            "Drop currently only works for axis=1 or when columns is not None"
+        )
 
     def merge(
         self,
@@ -3982,9 +3997,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def corr(self, method="pearson", min_periods=None, split_every=False):
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         return cov_corr(self, min_periods, True, split_every=split_every)
 
     def info(self, buf=None, verbose=False, memory_usage=False):
@@ -4250,6 +4263,7 @@ for name in [
     "sub",
     "mul",
     "div",
+    "divide",
     "truediv",
     "floordiv",
     "mod",
@@ -4458,9 +4472,10 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
         h = df
-    h = hash_pandas_object(h, index=False)
+
+    h = hash_object_dispatch(h, index=False)
     if is_series_like(h):
-        h = h._values
+        h = h.values
     h %= nparts
     return {i: df.iloc[h == i] for i in range(nparts)}
 
@@ -4759,7 +4774,7 @@ def map_partitions(func, *args, **kwargs):
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta)):
+    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = make_meta(_concat([meta]), index=meta_index)
@@ -4834,7 +4849,9 @@ def apply_and_enforce(*args, **kwargs):
             ):
                 raise ValueError(
                     "The columns in the computed data do not match"
-                    " the columns in the provided metadata"
+                    " the columns in the provided metadata\n"
+                    "  Expected: %s\n"
+                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
                 )
             else:
                 c = meta.columns
@@ -4988,7 +5005,7 @@ def quantile(df, q, method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest " "method."
+            "crick", "crick is a required dependency for using the t-digest method."
         )
 
         from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
@@ -5119,7 +5136,8 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
+            # Use .values to get the ndarray for the ufunc.
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx].values, mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
@@ -5237,7 +5255,7 @@ def _take_last(a, skipna=True):
         # in each column
         if is_dataframe_like(a):
             # create Series from appropriate backend dataframe library
-            series_typ = type(a.loc[0:1, a.columns[0]])
+            series_typ = type(a.iloc[0:1, 0])
             if a.empty:
                 return series_typ([])
             return series_typ(
@@ -5447,7 +5465,7 @@ def repartition_size(df, size):
         split_mem_usages = []
         for n, usage in zip(nsplits, mem_usages):
             split_mem_usages.extend([usage / n] * n)
-        mem_usages = pd.Series(split_mem_usages, dtype=mem_usages.dtype)
+        mem_usages = pd.Series(split_mem_usages)
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
@@ -5841,7 +5859,7 @@ def new_dd_object(dsk, name, meta, divisions):
     """
     if has_parallel_type(meta):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
-    elif is_arraylike(meta):
+    elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
         chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(

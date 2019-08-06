@@ -313,6 +313,16 @@ def test_stack():
     assert stack([a, b, c], axis=-1).chunks == stack([a, b, c], axis=2).chunks
 
 
+def test_stack_zero_size():
+    x = np.empty((2, 0, 3))
+    y = da.from_array(x, chunks=1)
+
+    result_np = np.concatenate([x, x])
+    result_da = da.concatenate([y, y])
+
+    assert_eq(result_np, result_da)
+
+
 def test_short_stack():
     x = np.array([1])
     d = da.from_array(x, chunks=(1,))
@@ -3313,7 +3323,7 @@ def test_raise_informative_errors_no_chunks():
     ]:
         with pytest.raises(ValueError) as e:
             op()
-        if "chunk" not in str(e) or "unknown" not in str(e):
+        if "chunk" not in str(e.value) or "unknown" not in str(e.value):
             op()
 
 
@@ -3325,9 +3335,8 @@ def test_no_chunks_slicing_2d():
     assert_eq(x[0], X[0])
 
     for op in [lambda: x[:, 4], lambda: x[:, ::2], lambda: x[0, 2:4]]:
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError, match="chunk sizes are unknown"):
             op()
-        assert "chunk" in str(e) and "unknown" in str(e)
 
 
 def test_index_array_with_array_1d():
@@ -3347,10 +3356,20 @@ def test_index_array_with_array_1d():
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(x[x > 6], dx[dx > 6])
+    assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
+
+    # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    assert sorted(x[x % 2 == 0].tolist()) == sorted(dx[dx % 2 == 0].compute().tolist())
-    assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+    with pytest.warns(UserWarning, match="different ordering") as record:
+        assert sorted(x[x % 2 == 0].tolist()) == sorted(
+            dx[dx % 2 == 0].compute().tolist()
+        )
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+
+    assert len(record) == 2
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")
@@ -3467,13 +3486,10 @@ def test_from_array_name():
 
 
 def test_concatenate_errs():
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match=r"Shapes.*\(2, 1\)"):
         da.concatenate(
             [da.zeros((2, 1), chunks=(2, 1)), da.zeros((2, 3), chunks=(2, 3))]
         )
-
-    assert "shape" in str(e).lower()
-    assert "(2, 1)" in str(e)
 
     with pytest.raises(ValueError):
         da.concatenate(
@@ -3694,6 +3710,14 @@ def test_zarr_existing_array():
     a2 = da.from_zarr(z)
     assert_eq(a, a2)
     assert a2.chunks == a.chunks
+
+
+def test_to_zarr_unknown_chunks_raises():
+    pytest.importorskip("zarr")
+    a = da.random.random((10,), chunks=(3,))
+    a = a[a > 0.5]
+    with pytest.raises(ValueError, match="unknown chunk sizes"):
+        a.to_zarr({})
 
 
 def test_read_zarr_chunks():
@@ -4034,11 +4058,14 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
-    x = da.ones((15, 15), chunks=(5, 5))
+    with pytest.warns(None) as record:
+        x = da.ones((15, 15), chunks=(5, 5))
+        (x.dot(x.T + 1) - x.mean(axis=0)).std()
+    assert not record
 
     with pytest.warns(None) as record:
-        (x.dot(x.T + 1) - x.mean(axis=0)).std()
-
+        x = da.ones((1,), chunks=(1,))
+        1 / x[0]
     assert not record
 
 

@@ -1031,6 +1031,17 @@ def slice_with_bool_dask_array(x, index):
     ]
 
     if len(index) == 1 and index[0].ndim == x.ndim:
+        if not np.isnan(x.shape).any() and not np.isnan(index[0].shape).any():
+            x = x.ravel()
+            index = tuple(i.ravel() for i in index)
+        elif x.ndim > 1:
+            warnings.warn(
+                "When slicing a Dask array of unknown chunks with a boolean mask "
+                "Dask array, the output array may have a different ordering "
+                "compared to the equivalent NumPy operation. This will raise an "
+                "error in a future release of Dask.",
+                stacklevel=3,
+            )
         y = elemwise(getitem, x, *index, dtype=x.dtype)
         name = "getitem-" + tokenize(x, index)
         dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
