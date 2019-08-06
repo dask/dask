@@ -517,7 +517,7 @@ def diag(v):
         return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
         raise TypeError(
-            "v must be a dask array or numpy array, " "got {0}".format(type(v))
+            "v must be a dask array or numpy array, got {0}".format(type(v))
         )
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
@@ -528,7 +528,7 @@ def diag(v):
             return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
             raise NotImplementedError(
-                "Extracting diagonals from non-square " "chunked arrays"
+                "Extracting diagonals from non-square chunked arrays"
             )
     chunks_1d = v.chunks[0]
     blocks = v.__dask_keys__()
