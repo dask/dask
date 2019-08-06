@@ -268,13 +268,17 @@ class TCP(Comm):
 
         return sum(map(nbytes, frames))
 
-    async def close(self):
+    @gen.coroutine
+    def close(self):
+        # We use gen.coroutine here rather than async def to avoid errors like
+        # Task was destroyed but it is pending!
+        # Triggered by distributed.deploy.tests.test_local::test_silent_startup
         stream, self.stream = self.stream, None
         if stream is not None and not stream.closed():
             try:
                 # Flush the stream's write buffer by waiting for a last write.
                 if stream.writing():
-                    await stream.write(b"")
+                    yield stream.write(b"")
                 stream.socket.shutdown(socket.SHUT_RDWR)
             except EnvironmentError:
                 pass
