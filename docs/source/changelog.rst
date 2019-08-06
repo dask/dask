@@ -1,6 +1,68 @@
 Changelog
 =========
 
+2.2.0 / 2019-08-01
+------------------
+
+Array
++++++
+
+-  Use da.from_array(..., asarray=False) if input follows NEP-18 (:pr:`5074`) `Matthew Rocklin`_
+-  Add missing attributes to from_array documentation (:pr:`5108`) `Peter Andreas Entschev`_
+-  Fix meta computation for some reduction functions (:pr:`5035`) `Peter Andreas Entschev`_
+-  Raise informative error in to_zarr if unknown chunks (:pr:`5148`) `James Bourbeau`_
+-  Remove invalid pad tests (:pr:`5122`) `Tom Augspurger`_
+-  Ignore NumPy warnings in compute_meta (:pr:`5103`) `Peter Andreas Entschev`_
+-  Fix kurtosis calc for single dimension input array (:pr:`5177`) `@andrethrill`_
+-  Support Numpy 1.17 in tests (:pr:`5192`) `Matthew Rocklin`_
+
+Bag
++++
+
+-  Supply pool to bag test to resolve intermittent failure (:pr:`5172`) `Tom Augspurger`_
+
+Core
+++++
+
+-  Base dask on fsspec (:pr:`5064`) (:pr:`5121`) `Martin Durant`_
+-  Various upstream compatibility fixes (:pr:`5056`) `Tom Augspurger`_
+-  Make distributed tests optional again. (:pr:`5128`) `Elliott Sales de Andrade`_
+-  Fix HDFS in dask (:pr:`5130`) `Martin Durant`_
+-  Ignore some more invalid value warnings. (:pr:`5140`) `Elliott Sales de Andrade`_
+
+DataFrame
++++++++++
+
+-  Fix pd.MultiIndex size estimate (:pr:`5066`) `Brett Naul`_
+-  Generalizing has_known_categories (:pr:`5090`) `GALI PREM SAGAR`_
+-  Refactor Parquet engine (:pr:`4995`) `Richard J Zamora`_
+-  Add divide method to series and dataframe (:pr:`5094`) `msbrown47`_
+-  fix flaky partd test (:pr:`5111`) `Tom Augspurger`_
+-  Adjust is_dataframe_like to adjust for value_counts change (:pr:`5143`) `Tom Augspurger`_
+-  Generalize rolling windows to support non-Pandas dataframes (:pr:`5149`) `Nick Becker`_
+-  Avoid unnecessary aggregation in pivot_table (:pr:`5173`) `Daniel Saxton`_
+-  Add column names to apply_and_enforce error message (:pr:`5180`) `Matthew Rocklin`_
+-  Add schema keyword argument to to_parquet (:pr:`5150`) `Sarah Bird`_
+-  Remove recursion error in accessors (:pr:`5182`) `Jim Crist`_
+-  Allow fastparquet to handle gather_statistics=False for file lists (:pr:`5157`) `Richard J Zamora`_
+
+Documentation
++++++++++++++
+
+-  Adds NumFOCUS badge to the README (:pr:`5086`) `James Bourbeau`_
+-  Update developer docs [ci skip] (:pr:`5093`) `Jim Crist`_
+-  Document DataFrame.set_index computataion behavior `Natalya Rapstine`_
+-  Use pip install . instead of calling setup.py (:pr:`5139`) `Matthias Bussonier`_
+-  Close user survey (:pr:`5147`) `Tom Augspurger`_
+-  Fix Google Calendar meeting link (:pr:`5155`) `Loïc Estève`_
+-  Add docker image customization example (:pr:`5171`) `James Bourbeau`_
+-  Update remote-data-services after fsspec (:pr:`5170`) `Martin Durant`_
+-  Fix typo in spark.rst (:pr:`5164`) `Xavier Holt`_
+-  Update setup/python docs for async/await API (:pr:`5163`) `Matthew Rocklin`_
+-  Update Local Storage HPC documentation (:pr:`5165`) `Matthew Rocklin`_
+
+
+
 2.1.0 / 2019-07-08
 ------------------
 
@@ -2295,3 +2357,8 @@ Other
 .. _`tshatrov`: https://github.com/tshatrov
 .. _`Dustin Tindall`: https://github.com/dustindall
 .. _`Sean McKenna`: https://github.com/seanmck
+.. _`msbrown47`: https://github.com/msbrown47
+.. _`Natalya Rapstine`: https://github.com/natalya-patrikeeva
+.. _`Loïc Estève`: https://github.com/lesteve
+.. _`Xavier Holt`: https://github.com/xavi-ai
+.. _`Sarah Bird`: https://github.com/birdsarah

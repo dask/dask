@@ -3643,11 +3643,15 @@ class DataFrame(_Frame):
         return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0, errors="raise"):
+    def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if axis == 1:
-            return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
-        raise NotImplementedError("Drop currently only works for axis=1")
+        if (axis == 1) or (columns is not None):
+            return self.map_partitions(
+                M.drop, labels=labels, axis=axis, columns=columns, errors=errors
+            )
+        raise NotImplementedError(
+            "Drop currently only works for axis=1 or when columns is not None"
+        )
 
     def merge(
         self,
@@ -4840,7 +4844,9 @@ def apply_and_enforce(*args, **kwargs):
             ):
                 raise ValueError(
                     "The columns in the computed data do not match"
-                    " the columns in the provided metadata"
+                    " the columns in the provided metadata\n"
+                    "  Expected: %s\n"
+                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
                 )
             else:
                 c = meta.columns

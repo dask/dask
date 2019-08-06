@@ -733,7 +733,7 @@ def test_append_wo_index(tmpdir, engine):
     assert_eq(df.set_index("f"), ddf3)
 
 
-def test_append_overlapping_divisions(tmpdir):
+def test_append_overlapping_divisions(tmpdir, engine):
     """Test raising of error when divisions overlapping."""
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -749,16 +749,16 @@ def test_append_overlapping_divisions(tmpdir):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half - 10 :], chunksize=100)
-    ddf1.to_parquet(tmp)
+    ddf1.to_parquet(tmp, engine=engine)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf2.to_parquet(tmp, append=True)
+        ddf2.to_parquet(tmp, engine=engine, append=True)
     assert "Appended divisions" in str(excinfo.value)
 
-    ddf2.to_parquet(tmp, append=True, ignore_divisions=True)
+    ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
 
-def test_append_different_columns(tmpdir):
+def test_append_different_columns(tmpdir, engine):
     """Test raising of error when non equal columns."""
     tmp = str(tmpdir)
     df1 = pd.DataFrame({"i32": np.arange(100, dtype=np.int32)})
@@ -769,14 +769,14 @@ def test_append_different_columns(tmpdir):
     ddf2 = dd.from_pandas(df2, chunksize=2)
     ddf3 = dd.from_pandas(df3, chunksize=2)
 
-    ddf1.to_parquet(tmp)
+    ddf1.to_parquet(tmp, engine=engine)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf2.to_parquet(tmp, append=True)
+        ddf2.to_parquet(tmp, engine=engine, append=True)
     assert "Appended columns" in str(excinfo.value)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf3.to_parquet(tmp, append=True)
+        ddf3.to_parquet(tmp, engine=engine, append=True)
     assert "Appended dtypes" in str(excinfo.value)
 
 
@@ -938,8 +938,115 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-@write_read_engines_xfail
-def test_partition_on(tmpdir, write_engine, read_engine):
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(tmpdir):
+    check_pyarrow()
+
+    df = pd.DataFrame(
+        {"partition_column": [0, 0, 1, 1], "strings": ["a", "b", None, None]}
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
+
+    # Test that read fails because of default behavior when schema not provided
+    with pytest.raises(ValueError) as e_info:
+        dd.read_parquet(
+            str(tmpdir), engine="pyarrow", gather_statistics=False
+        ).compute()
+        assert e_info.message.contains("ValueError: Schema in partition")
+        assert e_info.message.contains("was different")
+
+
+def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
+    tmpdir
+):
+    check_pyarrow()
+
+    # Data types to test: strings, arrays, ints, timezone aware timestamps
+    in_arrays = [[0, 1, 2], [3, 4], np.nan, np.nan]
+    out_arrays = [[0, 1, 2], [3, 4], None, None]
+    in_strings = ["a", "b", np.nan, np.nan]
+    out_strings = ["a", "b", None, None]
+    tstamp = pd.Timestamp(1513393355, unit="s")
+    in_tstamps = [tstamp, tstamp, pd.NaT, pd.NaT]
+    out_tstamps = [
+        # Timestamps come out in numpy.datetime64 format
+        tstamp.to_datetime64(),
+        tstamp.to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
+    timezone = "US/Eastern"
+    tz_tstamp = pd.Timestamp(1513393355, unit="s", tz=timezone)
+    in_tz_tstamps = [tz_tstamp, tz_tstamp, pd.NaT, pd.NaT]
+    out_tz_tstamps = [
+        # Timezones do not make it through a write-read cycle.
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        tz_tstamp.tz_convert(None).to_datetime64(),
+        np.datetime64("NaT"),
+        np.datetime64("NaT"),
+    ]
+
+    df = pd.DataFrame(
+        {
+            "partition_column": [0, 0, 1, 1],
+            "arrays": in_arrays,
+            "strings": in_strings,
+            "tstamps": in_tstamps,
+            "tz_tstamps": in_tz_tstamps,
+        }
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    schema = pa.schema(
+        [
+            ("arrays", pa.list_(pa.int64())),
+            ("strings", pa.string()),
+            ("tstamps", pa.timestamp("ns")),
+            ("tz_tstamps", pa.timestamp("ns", timezone)),
+            ("partition_column", pa.int64()),
+        ]
+    )
+    ddf.to_parquet(
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
+    )
+    ddf_after_write = (
+        dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
+        .compute()
+        .reset_index(drop=True)
+    )
+
+    # Check array support
+    arrays_after_write = ddf_after_write.arrays.values
+    for i in range(len(df)):
+        assert np.array_equal(arrays_after_write[i], out_arrays[i]), type(out_arrays[i])
+
+    # Check datetime support
+    tstamps_after_write = ddf_after_write.tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tstamps_after_write[i]):
+            assert np.isnat(out_tstamps[i])
+        else:
+            assert tstamps_after_write[i] == out_tstamps[i]
+
+    # Check timezone aware datetime support
+    tz_tstamps_after_write = ddf_after_write.tz_tstamps.values
+    for i in range(len(df)):
+        # Need to test NaT seperately
+        if np.isnat(tz_tstamps_after_write[i]):
+            assert np.isnat(out_tz_tstamps[i])
+        else:
+            assert tz_tstamps_after_write[i] == out_tz_tstamps[i]
+
+    # Check string support
+    assert np.array_equal(ddf_after_write.strings.values, out_strings)
+
+    # Check partition column
+    assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
+
+
+def test_partition_on(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -949,11 +1056,11 @@ def test_partition_on(tmpdir, write_engine, read_engine):
         }
     )
     d = dd.from_pandas(df, npartitions=2)
-    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=write_engine)
-    # Note #1: fastparquet is not discovering the partions when written by pyarrow
+    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=engine)
+    # Note #1: Cross-engine functionality is missing
     # Note #2: The index is not preserved in pyarrow when partition_on is used
     out = dd.read_parquet(
-        tmpdir, index=False, engine=read_engine, gather_statistics=False
+        tmpdir, index=False, engine=engine, gather_statistics=False
     ).compute()
     for val in df.a.unique():
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
@@ -1714,3 +1821,32 @@ def test_categories_large(tmpdir, engine):
     ddf = dd.read_parquet(fn, engine=engine, categories={"name": 80000})
 
     assert_eq(sorted(df.name.cat.categories), sorted(ddf.compute().name.cat.categories))
+
+
+@write_read_engines()
+def test_read_glob_nostats(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+
+    ddf2 = dd.read_parquet(
+        os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
+    )
+    assert_eq(ddf, ddf2, check_divisions=False)
+
+
+@pytest.mark.parametrize("statistics", [True, False, None])
+@pytest.mark.parametrize("remove_common", [True, False])
+@write_read_engines()
+def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_common):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    if os.path.exists(os.path.join(tmp_path, "_metadata")):
+        os.unlink(os.path.join(tmp_path, "_metadata"))
+    files = os.listdir(tmp_path)
+    assert "_metadata" not in files
+
+    if remove_common and os.path.exists(os.path.join(tmp_path, "_common_metadata")):
+        os.unlink(os.path.join(tmp_path, "_common_metadata"))
+
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
+    assert_eq(ddf, ddf2, check_divisions=False)

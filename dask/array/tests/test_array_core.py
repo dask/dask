@@ -46,7 +46,6 @@ from dask.array.core import (
     concatenate_axes,
 )
 from dask.blockwise import make_blockwise_graph as top, broadcast_dimensions
-from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 
 from numpy import nancumsum, nancumprod
@@ -3357,10 +3356,20 @@ def test_index_array_with_array_1d():
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(x[x > 6], dx[dx > 6])
+    assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
+
+    # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    assert sorted(x[x % 2 == 0].tolist()) == sorted(dx[dx % 2 == 0].compute().tolist())
-    assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+    with pytest.warns(UserWarning, match="different ordering") as record:
+        assert sorted(x[x % 2 == 0].tolist()) == sorted(
+            dx[dx % 2 == 0].compute().tolist()
+        )
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+
+    assert len(record) == 2
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")
@@ -4060,7 +4069,6 @@ def test_no_warnings_from_blockwise():
     assert not record
 
 
-@pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
 def test_from_array_meta():
     sparse = pytest.importorskip("sparse")
     x = np.ones(10)

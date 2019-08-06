@@ -16,8 +16,8 @@ from dask.base import compute_as_if_collection
 from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
-from dask.array.numpy_compat import _numpy_117
 from dask.dataframe.core import (
+    apply_and_enforce,
     repartition_divisions,
     aca,
     _concat,
@@ -2031,99 +2031,6 @@ def test_sample_raises():
         a.sample(frac=None)
 
 
-def test_datetime_accessor():
-    df = pd.DataFrame({"x": [1, 2, 3, 4]})
-    df["x"] = df.x.astype("M8[us]")
-
-    a = dd.from_pandas(df, 2)
-
-    assert "date" in dir(a.x.dt)
-
-    # pandas loses Series.name via datetime accessor
-    # see https://github.com/pydata/pandas/issues/10712
-    assert_eq(a.x.dt.date, df.x.dt.date, check_names=False)
-
-    # to_pydatetime returns a numpy array in pandas, but a Series in dask
-    assert_eq(
-        a.x.dt.to_pydatetime(),
-        pd.Series(df.x.dt.to_pydatetime(), index=df.index, dtype=object),
-    )
-
-    assert set(a.x.dt.date.dask) == set(a.x.dt.date.dask)
-    assert set(a.x.dt.to_pydatetime().dask) == set(a.x.dt.to_pydatetime().dask)
-
-
-def test_str_accessor():
-    df = pd.DataFrame(
-        {"x": ["abc", "bcd", "cdef", "DEFG"], "y": [1, 2, 3, 4]},
-        index=["E", "f", "g", "h"],
-    )
-
-    ddf = dd.from_pandas(df, 2)
-
-    # Check that str not in dir/hasattr for non-object columns
-    assert "str" not in dir(ddf.y)
-    assert not hasattr(ddf.y, "str")
-
-    # not implemented methods don't show up
-    assert "get_dummies" not in dir(ddf.x.str)
-    assert not hasattr(ddf.x.str, "get_dummies")
-
-    assert "upper" in dir(ddf.x.str)
-    assert_eq(ddf.x.str.upper(), df.x.str.upper())
-    assert set(ddf.x.str.upper().dask) == set(ddf.x.str.upper().dask)
-
-    assert "upper" in dir(ddf.index.str)
-    assert_eq(ddf.index.str.upper(), df.index.str.upper())
-    assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
-
-    # make sure to pass thru args & kwargs
-    assert "contains" in dir(ddf.x.str)
-    assert_eq(ddf.x.str.contains("a"), df.x.str.contains("a"))
-    assert set(ddf.x.str.contains("a").dask) == set(ddf.x.str.contains("a").dask)
-
-    assert_eq(ddf.x.str.contains("d", case=False), df.x.str.contains("d", case=False))
-    assert set(ddf.x.str.contains("d", case=False).dask) == set(
-        ddf.x.str.contains("d", case=False).dask
-    )
-
-    for na in [True, False]:
-        assert_eq(ddf.x.str.contains("a", na=na), df.x.str.contains("a", na=na))
-        assert set(ddf.x.str.contains("a", na=na).dask) == set(
-            ddf.x.str.contains("a", na=na).dask
-        )
-
-    for regex in [True, False]:
-        assert_eq(
-            ddf.x.str.contains("a", regex=regex), df.x.str.contains("a", regex=regex)
-        )
-        assert set(ddf.x.str.contains("a", regex=regex).dask) == set(
-            ddf.x.str.contains("a", regex=regex).dask
-        )
-
-    assert_eq(ddf.x.str[:2], df.x.str[:2])
-    assert_eq(ddf.x.str[1], df.x.str[1])
-
-    # str.extractall
-    assert_eq(ddf.x.str.extractall("(.*)b(.*)"), df.x.str.extractall("(.*)b(.*)"))
-
-    # str.cat
-    sol = df.x.str.cat(df.x.str.upper(), sep=":")
-    assert_eq(ddf.x.str.cat(ddf.x.str.upper(), sep=":"), sol)
-    assert_eq(ddf.x.str.cat(df.x.str.upper(), sep=":"), sol)
-    assert_eq(
-        ddf.x.str.cat([ddf.x.str.upper(), df.x.str.lower()], sep=":"),
-        df.x.str.cat([df.x.str.upper(), df.x.str.lower()], sep=":"),
-    )
-
-    for o in ["foo", ["foo"]]:
-        with pytest.raises(TypeError):
-            ddf.x.str.cat(o)
-
-    with pytest.raises(NotImplementedError):
-        ddf.x.str.cat(sep=":")
-
-
 def test_empty_max():
     meta = make_meta({"x": "i8"})
     a = dd.DataFrame(
@@ -2475,6 +2382,7 @@ def test_drop_axis_1():
         ddf.drop(["a", "x"], axis=1, errors="ignore"),
         df.drop(["a", "x"], axis=1, errors="ignore"),
     )
+    assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
 def test_gh580():
@@ -3876,7 +3784,6 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
-@pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Aviod searchsorted failure.
@@ -4096,42 +4003,6 @@ def test_map_partitions_delays_lists():
     assert any(str(L) == str(v) for v in out.__dask_graph__().values())
 
 
-def test_str_noexpand():
-    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], name="foo")
-    ds = dd.from_pandas(s, npartitions=2)
-
-    for n in [1, 2, 3]:
-        assert_eq(s.str.split(n=n, expand=False), ds.str.split(n=n, expand=False))
-
-    assert ds.str.split(n=1, expand=False).name == "foo"
-
-
-def test_str_expand():
-    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"])
-    ds = dd.from_pandas(s, npartitions=2)
-
-    for n in [1, 2, 3]:
-        assert_eq(s.str.split(n=n, expand=True), ds.str.split(n=n, expand=True))
-
-    with pytest.raises(NotImplementedError) as info:
-        ds.str.split(expand=True)
-
-    assert "n=" in str(info.value)
-
-
-@pytest.mark.xfail(reason="Need to pad columns")
-def test_str_expand_more_columns():
-    s = pd.Series(["a b c d", "aa", "aaa bbb ccc dddd"])
-    ds = dd.from_pandas(s, npartitions=2)
-
-    assert_eq(s.str.split(n=3, expand=True), ds.str.split(n=3, expand=True))
-
-    s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
-    ds = dd.from_pandas(s, npartitions=2)
-
-    s.str.split(n=10, expand=True).compute()
-
-
 def test_dtype_cast():
     df = pd.DataFrame(
         {
@@ -4180,3 +4051,16 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     dask_map = dd.from_pandas(mapper, npartitions=map_npart)
     result = dask_base.map(dask_map)
     dd.utils.assert_eq(expected, result)
+
+
+def test_apply_and_enforce_error_message():
+    meta = pd.DataFrame({"x": [1]}).iloc[:0]
+
+    def func():
+        return pd.DataFrame({"x": [1.0], "y": [1]})
+
+    with pytest.raises(ValueError) as info:
+        apply_and_enforce(_func=func, _meta=meta)
+
+    assert "['x']" in str(info.value)
+    assert "['x', 'y']" in str(info.value)
