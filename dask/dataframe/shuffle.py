@@ -147,7 +147,6 @@ def set_partition(
     drop=True,
     shuffle=None,
     compute=None,
-    meta=None,
 ):
     """ Group DataFrame by index
 
@@ -180,10 +179,9 @@ def set_partition(
     shuffle
     partd
     """
-    if isinstance(divisions, list) or isinstance(divisions, tuple):
+    if isinstance(divisions, (list, tuple)):
         divisions = pd.Series(divisions)
-    if meta is None:
-        meta = pd.Series([0])
+    meta = type(df[df.columns[0]]._meta)([0])
     if np.isscalar(index):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
@@ -219,10 +217,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    if hasattr(divisions, "tolist"):
-        df4.divisions = divisions.tolist()
-    else:
-        df4.divisions = divisions.values.tolist()
+    df4.divisions = [v for v in divisions.values]
 
     return df4.map_partitions(M.sort_index)
 
@@ -268,13 +263,12 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
 
 
 def rearrange_by_divisions(
-    df, column, divisions, meta=None, max_branch=None, shuffle=None
+    df, column, divisions, max_branch=None, shuffle=None
 ):
     """ Shuffle dataframe so that column separates along divisions """
-    if isinstance(divisions, list) or isinstance(divisions, tuple):
+    if isinstance(divisions, (list, tuple)):
         divisions = pd.Series(divisions)
-    if meta is None:
-        meta = pd.Series([0])
+    meta = type(df[df.columns[0]]._meta)([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre, divisions=divisions, meta=meta
@@ -565,8 +559,6 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions):
-    if isinstance(divisions, list) or isinstance(divisions, tuple):
-        divisions = pd.Series(divisions)
     partitions = divisions.searchsorted(s, side="right") - 1
     if hasattr(partitions, "index"):
         partitions = partitions.values
