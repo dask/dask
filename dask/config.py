@@ -357,7 +357,7 @@ class set(object):
                 if record:
                     self._record.append(("insert", path, None))
                 d[key] = {}
-                # No need to record after an insert
+                # No need to record subsequent operations after an insert
                 record = False
             self._assign(keys[1:], value, d[key], path, record=record)
 
