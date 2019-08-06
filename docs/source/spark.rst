@@ -122,8 +122,8 @@ Reasons you might choose Dask
    multiple packages
 
 
-Reaons to choose both
----------------------
+Reasons to choose both
+----------------------
 
 It is easy to use both Dask and Spark on the same data and on the same cluster.
 

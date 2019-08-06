@@ -171,6 +171,7 @@ def test_metadata():
         assert isinstance(np.stack([y, y])._meta, sparse.COO)
         if _numpy_117:
             assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
+            assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
 
 
 def test_html_repr():
@@ -192,3 +193,12 @@ def test_from_delayed_meta():
     x = da.from_delayed(d, shape=(3, 3), meta=sparse.COO.from_numpy(np.eye(1)))
     assert isinstance(x._meta, sparse.COO)
     assert_eq(x, x)
+
+
+def test_from_array():
+    x = sparse.COO.from_numpy(np.eye(10))
+    d = da.from_array(x, chunks=(5, 5))
+
+    assert isinstance(d._meta, sparse.COO)
+    assert_eq(d, d)
+    assert isinstance(d.compute(), sparse.COO)

@@ -1,6 +1,116 @@
 Changelog
 =========
 
+2.2.0 / 2019-08-01
+------------------
+
+Array
++++++
+
+-  Use da.from_array(..., asarray=False) if input follows NEP-18 (:pr:`5074`) `Matthew Rocklin`_
+-  Add missing attributes to from_array documentation (:pr:`5108`) `Peter Andreas Entschev`_
+-  Fix meta computation for some reduction functions (:pr:`5035`) `Peter Andreas Entschev`_
+-  Raise informative error in to_zarr if unknown chunks (:pr:`5148`) `James Bourbeau`_
+-  Remove invalid pad tests (:pr:`5122`) `Tom Augspurger`_
+-  Ignore NumPy warnings in compute_meta (:pr:`5103`) `Peter Andreas Entschev`_
+-  Fix kurtosis calc for single dimension input array (:pr:`5177`) `@andrethrill`_
+-  Support Numpy 1.17 in tests (:pr:`5192`) `Matthew Rocklin`_
+
+Bag
++++
+
+-  Supply pool to bag test to resolve intermittent failure (:pr:`5172`) `Tom Augspurger`_
+
+Core
+++++
+
+-  Base dask on fsspec (:pr:`5064`) (:pr:`5121`) `Martin Durant`_
+-  Various upstream compatibility fixes (:pr:`5056`) `Tom Augspurger`_
+-  Make distributed tests optional again. (:pr:`5128`) `Elliott Sales de Andrade`_
+-  Fix HDFS in dask (:pr:`5130`) `Martin Durant`_
+-  Ignore some more invalid value warnings. (:pr:`5140`) `Elliott Sales de Andrade`_
+
+DataFrame
++++++++++
+
+-  Fix pd.MultiIndex size estimate (:pr:`5066`) `Brett Naul`_
+-  Generalizing has_known_categories (:pr:`5090`) `GALI PREM SAGAR`_
+-  Refactor Parquet engine (:pr:`4995`) `Richard J Zamora`_
+-  Add divide method to series and dataframe (:pr:`5094`) `msbrown47`_
+-  fix flaky partd test (:pr:`5111`) `Tom Augspurger`_
+-  Adjust is_dataframe_like to adjust for value_counts change (:pr:`5143`) `Tom Augspurger`_
+-  Generalize rolling windows to support non-Pandas dataframes (:pr:`5149`) `Nick Becker`_
+-  Avoid unnecessary aggregation in pivot_table (:pr:`5173`) `Daniel Saxton`_
+-  Add column names to apply_and_enforce error message (:pr:`5180`) `Matthew Rocklin`_
+-  Add schema keyword argument to to_parquet (:pr:`5150`) `Sarah Bird`_
+-  Remove recursion error in accessors (:pr:`5182`) `Jim Crist`_
+-  Allow fastparquet to handle gather_statistics=False for file lists (:pr:`5157`) `Richard J Zamora`_
+
+Documentation
++++++++++++++
+
+-  Adds NumFOCUS badge to the README (:pr:`5086`) `James Bourbeau`_
+-  Update developer docs [ci skip] (:pr:`5093`) `Jim Crist`_
+-  Document DataFrame.set_index computataion behavior `Natalya Rapstine`_
+-  Use pip install . instead of calling setup.py (:pr:`5139`) `Matthias Bussonier`_
+-  Close user survey (:pr:`5147`) `Tom Augspurger`_
+-  Fix Google Calendar meeting link (:pr:`5155`) `Loïc Estève`_
+-  Add docker image customization example (:pr:`5171`) `James Bourbeau`_
+-  Update remote-data-services after fsspec (:pr:`5170`) `Martin Durant`_
+-  Fix typo in spark.rst (:pr:`5164`) `Xavier Holt`_
+-  Update setup/python docs for async/await API (:pr:`5163`) `Matthew Rocklin`_
+-  Update Local Storage HPC documentation (:pr:`5165`) `Matthew Rocklin`_
+
+
+
+2.1.0 / 2019-07-08
+------------------
+
+Array
++++++
+
+- Add ``recompute=`` keyword to ``svd_compressed`` for lower-memory use (:pr:`5041`) `Matthew Rocklin`_
+- Change ``__array_function__`` implementation for backwards compatibility (:pr:`5043`) `Ralf Gommers`_
+- Added ``dtype`` and ``shape`` kwargs to ``apply_along_axis`` (:pr:`3742`) `Davis Bennett`_
+- Fix reduction with empty tuple axis (:pr:`5025`) `Peter Andreas Entschev`_
+- Drop size 0 arrays in ``stack`` (:pr:`4978`) `John A Kirkham`_
+
+Core
+++++
+
+- Removes index keyword from pandas ``to_parquet`` call (:pr:`5075`) `James Bourbeau`_
+- Fixes upstream dev CI build installation (:pr:`5072`) `James Bourbeau`_
+- Ensure scalar arrays are not rendered to SVG (:pr:`5058`) `Willi Rath`_
+- Environment creation overhaul (:pr:`5038`) `Tom Augspurger`_
+- s3fs, moto compatibility (:pr:`5033`) `Tom Augspurger`_
+- pytest 5.0 compat (:pr:`5027`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Fix ``compute_meta`` recursion in blockwise (:pr:`5048`) `Peter Andreas Entschev`_
+- Remove hard dependency on pandas in ``get_dummies`` (:pr:`5057`) `GALI PREM SAGAR`_
+- Check dtypes unchanged when using ``DataFrame.assign`` (:pr:`5047`) `asmith26`_
+- Fix cumulative functions on tables with more than 1 partition (:pr:`5034`) `tshatrov`_
+- Handle non-divisible sizes in repartition (:pr:`5013`) `George Sakkis`_
+- Handles timestamp and ``preserve_index`` changes in pyarrow (:pr:`5018`) `Richard J Zamora`_
+- Fix undefined ``meta`` for ``str.split(expand=False)`` (:pr:`5022`) `Brett Naul`_
+- Removed checks used for debugging ``merge_asof`` (:pr:`5011`) `Cody Johnson`_
+- Don't use type when getting accessor in dataframes (:pr:`4992`) `Matthew Rocklin`_
+- Add ``melt`` as a method of Dask DataFrame (:pr:`4984`) `Dustin Tindall`_
+- Adds path-like support to ``to_hdf`` (:pr:`5003`) `James Bourbeau`_
+
+Documentation
++++++++++++++
+
+- Point to latest K8s setup article in JupyterHub docs (:pr:`5065`) `Sean McKenna`_
+- Changes vizualize to visualize (:pr:`5061`) `David Brochart`_
+- Fix ``from_sequence`` typo in delayed best practices (:pr:`5045`) `James Bourbeau`_
+- Add user survey link to docs (:pr:`5026`) `James Bourbeau`_
+- Fixes typo in optimization docs (:pr:`5015`) `James Bourbeau`_
+- Update community meeting information (:pr:`5006`) `Tom Augspurger`_
+
+
 2.0.0 / 2019-06-25
 ------------------
 
@@ -2239,3 +2349,16 @@ Other
 .. _`mbarkhau`: https://github.com/mbarkhau
 .. _`Hugo`: https://github.com/hugovk
 .. _`Paweł Kordek`: https://github.com/kordek
+.. _`Ralf Gommers`: https://github.com/rgommers
+.. _`Davis Bennett`: https://github.com/d-v-b
+.. _`Willi Rath`: https://github.com/willirath
+.. _`David Brochart`: https://github.com/davidbrochart
+.. _`GALI PREM SAGAR`: https://github.com/galipremsagar
+.. _`tshatrov`: https://github.com/tshatrov
+.. _`Dustin Tindall`: https://github.com/dustindall
+.. _`Sean McKenna`: https://github.com/seanmck
+.. _`msbrown47`: https://github.com/msbrown47
+.. _`Natalya Rapstine`: https://github.com/natalya-patrikeeva
+.. _`Loïc Estève`: https://github.com/lesteve
+.. _`Xavier Holt`: https://github.com/xavi-ai
+.. _`Sarah Bird`: https://github.com/birdsarah
