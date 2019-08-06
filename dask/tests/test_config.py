@@ -259,6 +259,22 @@ def test_set():
     assert d["abc"]["x"] == 123
 
 
+def test_set_kwargs():
+    with set(foo__bar=1, foo__baz=2):
+        assert config["foo"] == {"bar": 1, "baz": 2}
+    assert "foo" not in config
+
+    # Mix kwargs and dict, kwargs override
+    with set({"foo.bar": 1, "foo.baz": 2}, foo__buzz=3, foo__bar=4):
+        assert config["foo"] == {"bar": 4, "baz": 2, "buzz": 3}
+    assert "foo" not in config
+
+    # Mix kwargs and nested dict, kwargs override
+    with set({"foo": {"bar": 1, "baz": 2}}, foo__buzz=3, foo__bar=4):
+        assert config["foo"] == {"bar": 4, "baz": 2, "buzz": 3}
+    assert "foo" not in config
+
+
 def test_set_nested():
     with set({"abc": {"x": 123}}):
         assert config["abc"] == {"x": 123}
