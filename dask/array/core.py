@@ -1188,8 +1188,8 @@ class Array(DaskMethodsMixin):
             cbytes = "unknown"
 
         table = [
-            "<table>"
-            "  <thead>"
+            "<table>",
+            "  <thead>",
             "    <tr><td> </td><th> Array </th><th> Chunk </th></tr>",
             "  </thead>",
             "  <tbody>",
@@ -1205,7 +1205,8 @@ class Array(DaskMethodsMixin):
                 type(self._meta).__module__.split(".")[0],
                 type(self._meta).__name__,
             ),
-            "  </tbody>" "</table>",
+            "  </tbody>",
+            "</table>",
         ]
         return "\n".join(table)
 
@@ -1378,9 +1379,7 @@ class Array(DaskMethodsMixin):
 
     def _scalarfunc(self, cast_type):
         if self.size > 1:
-            raise TypeError(
-                "Only length-1 arrays can be converted " "to Python scalars"
-            )
+            raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
             return cast_type(self.compute())
 
@@ -2466,7 +2465,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             and np.isnan(x).any()
         ):
             raise ValueError(
-                "Can not perform automatic rechunking with unknown " "(nan) chunk sizes"
+                "Can not perform automatic rechunking with unknown (nan) chunk sizes"
             )
 
     limit = max(1, limit)
@@ -4353,9 +4352,7 @@ def _vindex(x, *indexes):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == "b":
-                raise IndexError(
-                    "vindex does not support indexing with " "boolean arrays"
-                )
+                raise IndexError("vindex does not support indexing with boolean arrays")
             if ((ind >= size) | (ind < -size)).any():
                 raise IndexError(
                     "vindex key has entries out of bounds for "

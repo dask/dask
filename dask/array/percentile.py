@@ -113,7 +113,7 @@ def percentile(a, q, interpolation="linear", method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest " "method."
+            "crick", "crick is a required dependency for using the t-digest method."
         )
 
         name = "percentile_tdigest_chunk-" + token

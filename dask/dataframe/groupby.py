@@ -1438,7 +1438,7 @@ class _GroupBy(object):
             isinstance(item, Series) for item in self.index
         ):
             raise NotImplementedError(
-                "groupby-apply with a multiple Series " "is currently not supported"
+                "groupby-apply with a multiple Series is currently not supported"
             )
 
         df = self.obj

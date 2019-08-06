@@ -364,7 +364,7 @@ class FastParquetEngine(Engine):
         if append:
             if pf.file_scheme not in ["hive", "empty", "flat"]:
                 raise ValueError(
-                    "Requested file scheme is hive, " "but existing file scheme is not."
+                    "Requested file scheme is hive, but existing file scheme is not."
                 )
             elif (set(pf.columns) != set(df.columns) - set(partition_on)) or (
                 set(partition_on) != set(pf.cats)

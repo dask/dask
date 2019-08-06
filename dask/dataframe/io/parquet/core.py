@@ -201,9 +201,7 @@ def read_parquet(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError(
-                    "Specified index is invalid.\n" "index: {}".format(index)
-                )
+                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
         elif index is not False and len(out) > 1:
             if any(o["name"] == "index" for o in out):
                 # Use sorted column named "index" as the index
@@ -214,7 +212,7 @@ def read_parquet(
                     index_in_columns = True
                 elif index != [o["name"]]:
                     raise ValueError(
-                        "Specified index is invalid.\n" "index: {}".format(index)
+                        "Specified index is invalid.\nindex: {}".format(index)
                     )
             else:
                 # Multiple sorted columns found, cannot autodetect the index

@@ -946,7 +946,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
-        raise TypeError("axis must be either `None` or int, " "got '{0}'".format(axis))
+        raise TypeError("axis must be either `None` or int, got '{0}'".format(axis))
 
     for ax in axis:
         chunks = x.chunks[ax]

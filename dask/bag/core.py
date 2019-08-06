@@ -1690,7 +1690,7 @@ class Bag(DaskMethodsMixin):
         """
         if not _implement_accumulate:
             raise NotImplementedError(
-                "accumulate requires `toolz` > 0.7.4" " or `cytoolz` > 0.7.3."
+                "accumulate requires `toolz` > 0.7.4 or `cytoolz` > 0.7.3."
             )
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)

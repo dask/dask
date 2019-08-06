@@ -235,7 +235,7 @@ class _Tracker(Process):
     def run(self):
 
         psutil = import_required(
-            "psutil", "Tracking resource usage requires " "`psutil` to be installed"
+            "psutil", "Tracking resource usage requires `psutil` to be installed"
         )
         self.parent = psutil.Process(self.parent_pid)
 

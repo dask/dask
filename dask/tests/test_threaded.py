@@ -137,7 +137,7 @@ def test_thread_safety():
 
 @pytest.mark.xfail(
     "xdist" in sys.modules,
-    reason=("This test fails intermittently when using " "pytest-xdist (maybe)"),
+    reason="This test fails intermittently when using pytest-xdist (maybe)",
 )
 def test_interrupt():
     # Python 2 and windows 2 & 3 both implement `queue.get` using polling,

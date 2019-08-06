@@ -418,7 +418,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
             raise ValueError(
-                "nout must be None or a non-negative integer," " got %s" % nout
+                "nout must be None or a non-negative integer, got %s" % nout
             )
         if not name:
             try:
@@ -525,13 +525,13 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __iter__(self):
         if getattr(self, "_length", None) is None:
-            raise TypeError("Delayed objects of unspecified length are " "not iterable")
+            raise TypeError("Delayed objects of unspecified length are not iterable")
         for i in range(self._length):
             yield self[i]
 
     def __len__(self):
         if getattr(self, "_length", None) is None:
-            raise TypeError("Delayed objects of unspecified length have " "no len()")
+            raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
     def __call__(self, *args, **kwargs):

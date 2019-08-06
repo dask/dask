@@ -45,9 +45,7 @@ def _meta_from_array(x, columns=None, index=None):
             raise ValueError("For a struct dtype, columns must be a list.")
         elif not all(i in x.dtype.names for i in columns):
             extra = sorted(set(columns).difference(x.dtype.names))
-            raise ValueError(
-                "dtype {0} doesn't have fields " "{1}".format(x.dtype, extra)
-            )
+            raise ValueError("dtype {0} doesn't have fields {1}".format(x.dtype, extra))
         fields = x.dtype.fields
         dtypes = [fields[n][0] if n in fields else "f8" for n in columns]
     elif x.ndim == 1:
@@ -58,7 +56,7 @@ def _meta_from_array(x, columns=None, index=None):
                 np.array([], dtype=x.dtype), columns=columns, index=index
             )
         raise ValueError(
-            "For a 1d array, columns must be a scalar or single " "element list"
+            "For a 1d array, columns must be a scalar or single element list"
         )
     else:
         if np.isnan(x.shape[1]):
