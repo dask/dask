@@ -140,13 +140,7 @@ def remove_nans(divisions):
 
 
 def set_partition(
-    df,
-    index,
-    divisions,
-    max_branch=32,
-    drop=True,
-    shuffle=None,
-    compute=None,
+    df, index, divisions, max_branch=32, drop=True, shuffle=None, compute=None
 ):
     """ Group DataFrame by index
 
@@ -262,9 +256,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     return df3
 
 
-def rearrange_by_divisions(
-    df, column, divisions, max_branch=None, shuffle=None
-):
+def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
     """ Shuffle dataframe so that column separates along divisions """
     if isinstance(divisions, (list, tuple)):
         divisions = pd.Series(divisions)
