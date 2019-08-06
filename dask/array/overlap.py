@@ -275,7 +275,7 @@ def periodic(x, axis, depth):
     Useful to create periodic boundary conditions for overlap
     """
 
-    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis) * (0,), "wrap")
+    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis - 1) * (0,), "wrap")
 
 
 def reflect(x, axis, depth):
@@ -284,7 +284,7 @@ def reflect(x, axis, depth):
     This is the converse of ``periodic``
     """
 
-    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis) * (0,), "reflect")
+    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis - 1) * (0,), "reflect")
 
 
 def nearest(x, axis, depth):
@@ -294,7 +294,7 @@ def nearest(x, axis, depth):
     does.
     """
 
-    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis) * (0,), "symmetric")
+    return pad(x, axis * (0,) + (depth,) + (x.ndim - axis - 1) * (0,), "symmetric")
 
 
 def constant(x, axis, depth, value):
@@ -302,7 +302,7 @@ def constant(x, axis, depth, value):
 
     return pad(
         x,
-        axis * (0,) + (depth,) + (x.ndim - axis) * (0,),
+        axis * (0,) + (depth,) + (x.ndim - axis - 1) * (0,),
         "constant",
         constant_values=value,
     )
