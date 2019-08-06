@@ -2366,9 +2366,7 @@ class Scheduler(ServerNode):
 
         ws = ts.processing_on
         if ws is None:
-            logger.debug(
-                "Received long-running signal from duplicate task. " "Ignoring."
-            )
+            logger.debug("Received long-running signal from duplicate task. Ignoring.")
             return
 
         if compute_duration:
@@ -4730,7 +4728,7 @@ class Scheduler(ServerNode):
         for ws in self.workers.values():
             if ws.last_seen < now - self.worker_ttl:
                 logger.warning(
-                    "Worker failed to heartbeat within %s seconds. " "Closing: %s",
+                    "Worker failed to heartbeat within %s seconds. Closing: %s",
                     self.worker_ttl,
                     ws,
                 )

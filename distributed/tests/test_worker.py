@@ -464,7 +464,7 @@ def test_Executor(c, s):
 
 
 @pytest.mark.skip(
-    reason="Other tests leak memory, so process-level checks" "trigger immediately"
+    reason="Other tests leak memory, so process-level checks trigger immediately"
 )
 @gen_cluster(
     client=True,

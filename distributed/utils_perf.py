@@ -42,7 +42,7 @@ class ThrottledGC(object):
         elapsed = max(collect_start - self.last_collect, MIN_RUNTIME)
         if self.last_gc_duration / elapsed < self.max_in_gc_frac:
             self.logger.debug(
-                "Calling gc.collect(). %0.3fs elapsed since " "previous call.", elapsed
+                "Calling gc.collect(). %0.3fs elapsed since previous call.", elapsed
             )
             gc.collect()
             self.last_collect = collect_start

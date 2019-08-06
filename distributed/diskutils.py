@@ -237,7 +237,7 @@ class WorkSpace(object):
             self._purge_leftovers()
         except OSError:
             logger.error(
-                "Failed to clean up lingering worker directories " "in path: %s ",
+                "Failed to clean up lingering worker directories in path: %s ",
                 exc_info=True,
             )
         return WorkDir(self, **kwargs)

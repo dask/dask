@@ -215,7 +215,7 @@ def main(
         port=port,
         dashboard_address=dashboard_address if dashboard else None,
         service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
-        **kwargs,
+        **kwargs
     )
     logger.info("Local Directory: %26s", local_directory)
     logger.info("-" * 47)

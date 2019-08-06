@@ -905,7 +905,7 @@ class Client(Node):
                 pass
             except Exception:
                 logger.info(
-                    "Tried to start cluster and received an error. " "Proceeding.",
+                    "Tried to start cluster and received an error. Proceeding.",
                     exc_info=True,
                 )
             address = self.cluster.scheduler_address
@@ -2383,9 +2383,7 @@ class Client(Node):
             dsk3 = {k: v for k, v in dsk2.items() if k is not v}
             for future in extra_futures:
                 if future.client is not self:
-                    msg = (
-                        "Inputs contain futures that were created by " "another client."
-                    )
+                    msg = "Inputs contain futures that were created by another client."
                     raise ValueError(msg)
 
             if restrictions:
@@ -3485,7 +3483,7 @@ class Client(Node):
                     errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
 
                 raise ValueError(
-                    "Mismatched versions found\n" "\n" "%s" % ("\n\n".join(errs))
+                    "Mismatched versions found\n\n%s" % ("\n\n".join(errs))
                 )
 
         return result
@@ -3967,7 +3965,7 @@ async def _wait(fs, timeout=None, return_when=ALL_COMPLETED):
         wait_for = Any
     else:
         raise NotImplementedError(
-            "Only return_when='ALL_COMPLETED' and 'FIRST_COMPLETED' are " "supported"
+            "Only return_when='ALL_COMPLETED' and 'FIRST_COMPLETED' are supported"
         )
 
     future = wait_for({f._state.wait() for f in fs})

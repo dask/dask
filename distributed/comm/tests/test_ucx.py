@@ -261,7 +261,7 @@ def test_ucx_localcluster(loop, processes):
         threads_per_worker=1,
         processes=processes,
         loop=loop,
-        **kwargs,
+        **kwargs
     ) as cluster:
         with Client(cluster) as client:
             x = client.submit(inc, 1)
