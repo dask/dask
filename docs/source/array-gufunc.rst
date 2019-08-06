@@ -33,10 +33,10 @@ NumPy Generalized UFuncs
 Create Generalized UFuncs
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-As of NumPy 1.17 it is difficult to create your own GUFuncs without going into
-the CPython API.  However, the `Numba <https://numba.pydata.org>`_ project does
-provide a nice implementation with their ``numba.guvectorize`` decorator.  See
-`Numba's documentation
+It can be difficult to create your own GUFuncs without going into the CPython API.
+However, the `Numba <https://numba.pydata.org>`_ project does provide a
+nice implementation with their ``numba.guvectorize`` decorator.  See `Numba's
+documentation
 <https://numba.pydata.org/numba-doc/dev/user/vectorize.html#the-guvectorize-decorator>`_
 for more information.
 
