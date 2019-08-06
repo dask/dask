@@ -78,6 +78,7 @@ from .utils import (
     is_series_like,
     is_index_like,
     valid_divisions,
+    hash_object_dispatch,
 )
 
 no_default = "__no_default__"
@@ -4465,10 +4466,8 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
         h = df
-    from .utils import hash_object_dispatch
 
-    hash_object_func = hash_object_dispatch.dispatch(type(h))
-    h = hash_object_func(h, index=False)
+    h = hash_object_dispatch(h, index=False)
     if is_series_like(h):
         h = h.values
     h %= nparts
