@@ -4,8 +4,8 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7.*
-  - numpy=1.16.*
-  - pandas=0.24.*
+  - numpy=1.17.*
+  - pandas=0.25.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -15,17 +15,18 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - fsspec
   - sqlalchemy
   - pyarrow
   # other -- IO
   - bcolz
   - blosc
-  - s3fs
   - boto3
   - botocore
   - bokeh
   - httpretty
   - chest
+  - s3fs
   - cloudpickle
   - crick
   - cytoolz

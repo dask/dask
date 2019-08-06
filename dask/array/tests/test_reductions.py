@@ -408,7 +408,12 @@ def test_nan_object(func):
         if func in {"nanmin", "nanmax"}:
             warnings.simplefilter("default", RuntimeWarning)
 
+        if func in {"min", "max"}:
+            warnings.simplefilter("ignore", RuntimeWarning)
         assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+        if os.name != "nt" and func in {"min", "max"}:
+            warnings.simplefilter("default", RuntimeWarning)
+
         assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
         assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 

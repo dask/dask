@@ -522,9 +522,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     def _scalarfunc(self, cast_type):
         def wrapper():
-            raise TypeError(
-                "cannot convert the series to " "{0}".format(str(cast_type))
-            )
+            raise TypeError("cannot convert the series to {0}".format(str(cast_type)))
 
         return wrapper
 
@@ -884,7 +882,7 @@ Dask Name: {name}, {task} tasks""".format(
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword " "argument" % target
+                    "%s is both the pipe target and a keyword argument" % target
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -2986,9 +2984,7 @@ Dask Name: {name}, {task} tasks""".format(
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         df = concat([self, other], axis=1)
         return cov_corr(
             df, min_periods, corr=True, scalar=True, split_every=split_every
@@ -3378,7 +3374,7 @@ class DataFrame(_Frame):
         inplace=False,
         **kwargs
     ):
-        """Set the DataFrame index (row labels) using an existing column
+        """Set the DataFrame index (row labels) using an existing column.
 
         This realigns the dataset to be sorted by a new column.  This can have a
         significant impact on performance, because joins, groupbys, lookups, etc.
@@ -3388,7 +3384,7 @@ class DataFrame(_Frame):
         then perform many cheap computations off of the sorted dataset.
 
         This function operates exactly like ``pandas.set_index`` except with
-        different performance costs (it is much more expensive).  Under normal
+        different performance costs (dask dataframe ``set_index`` is much more expensive).  Under normal
         operation this function does an initial pass over the index column to
         compute approximate qunatiles to serve as future divisions.  It then passes
         over the data a second time, splitting up each input partition into several
@@ -3420,13 +3416,15 @@ class DataFrame(_Frame):
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If this is untrue, you should
+            the existing partitions in the data. If ``sorted=False``, you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace : bool, optional
             Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
+            Note, that even if you set ``compute=False``, an immediate computation
+            will still be triggered if ``divisions`` is ``None``.
 
         Examples
         --------
@@ -3565,7 +3563,7 @@ class DataFrame(_Frame):
             inplace = False
         if "=" in expr and inplace in (True, None):
             raise NotImplementedError(
-                "Inplace eval not supported." " Please use inplace=False"
+                "Inplace eval not supported. Please use inplace=False"
             )
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
@@ -3598,7 +3596,7 @@ class DataFrame(_Frame):
 
         elif axis == 0:
             raise NotImplementedError(
-                "{0} does not support " "squeeze along axis 0".format(type(self))
+                "{0} does not support squeeze along axis 0".format(type(self))
             )
 
         elif axis not in [0, 1, None]:
@@ -3653,11 +3651,15 @@ class DataFrame(_Frame):
         return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0, errors="raise"):
+    def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if axis == 1:
-            return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
-        raise NotImplementedError("Drop currently only works for axis=1")
+        if (axis == 1) or (columns is not None):
+            return self.map_partitions(
+                M.drop, labels=labels, axis=axis, columns=columns, errors=errors
+            )
+        raise NotImplementedError(
+            "Drop currently only works for axis=1 or when columns is not None"
+        )
 
     def merge(
         self,
@@ -3994,9 +3996,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def corr(self, method="pearson", min_periods=None, split_every=False):
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         return cov_corr(self, min_periods, True, split_every=split_every)
 
     def info(self, buf=None, verbose=False, memory_usage=False):
@@ -4262,6 +4262,7 @@ for name in [
     "sub",
     "mul",
     "div",
+    "divide",
     "truediv",
     "floordiv",
     "mod",
@@ -4846,7 +4847,9 @@ def apply_and_enforce(*args, **kwargs):
             ):
                 raise ValueError(
                     "The columns in the computed data do not match"
-                    " the columns in the provided metadata"
+                    " the columns in the provided metadata\n"
+                    "  Expected: %s\n"
+                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
                 )
             else:
                 c = meta.columns
@@ -5000,7 +5003,7 @@ def quantile(df, q, method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest " "method."
+            "crick", "crick is a required dependency for using the t-digest method."
         )
 
         from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
@@ -5131,7 +5134,8 @@ def cov_corr_chunk(df, corr=False):
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            mu_discrepancy = np.subtract.outer(df.iloc[:, idx], mu[idx]) ** 2
+            # Use .values to get the ndarray for the ufunc.
+            mu_discrepancy = np.subtract.outer(df.iloc[:, idx].values, mu[idx]) ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T

@@ -58,11 +58,11 @@ def read_header(fo):
 
 def open_head(fs, path, compression):
     """Open a file just to read its head and size"""
-    from dask.bytes.core import OpenFile, logical_size
+    from dask.bytes.core import OpenFile
 
     with OpenFile(fs, path, compression=compression) as f:
         head = read_header(f)
-    size = logical_size(fs, path, compression)
+    size = fs.info(path)["size"]
     return head, size
 
 
@@ -93,7 +93,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
     from dask.bag import from_delayed
 
     import_required(
-        "fastavro", "fastavro is a required dependency for using " "bag.read_avro()."
+        "fastavro", "fastavro is a required dependency for using bag.read_avro()."
     )
 
     storage_options = storage_options or {}
@@ -237,7 +237,7 @@ def to_avro(
     from dask.bytes.core import open_files
 
     import_required(
-        "fastavro", "fastavro is a required dependency for using " "bag.to_avro()."
+        "fastavro", "fastavro is a required dependency for using bag.to_avro()."
     )
     _verify_schema(schema)
 

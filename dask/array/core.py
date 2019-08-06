@@ -62,7 +62,6 @@ from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
-from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
@@ -1189,8 +1188,8 @@ class Array(DaskMethodsMixin):
             cbytes = "unknown"
 
         table = [
-            "<table>"
-            "  <thead>"
+            "<table>",
+            "  <thead>",
             "    <tr><td> </td><th> Array </th><th> Chunk </th></tr>",
             "  </thead>",
             "  <tbody>",
@@ -1206,7 +1205,8 @@ class Array(DaskMethodsMixin):
                 type(self._meta).__module__.split(".")[0],
                 type(self._meta).__name__,
             ),
-            "  </tbody>" "</table>",
+            "  </tbody>",
+            "</table>",
         ]
         return "\n".join(table)
 
@@ -1379,9 +1379,7 @@ class Array(DaskMethodsMixin):
 
     def _scalarfunc(self, cast_type):
         if self.size > 1:
-            raise TypeError(
-                "Only length-1 arrays can be converted " "to Python scalars"
-            )
+            raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
             return cast_type(self.compute())
 
@@ -2467,7 +2465,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             and np.isnan(x).any()
         ):
             raise ValueError(
-                "Can not perform automatic rechunking with unknown " "(nan) chunk sizes"
+                "Can not perform automatic rechunking with unknown (nan) chunk sizes"
             )
 
     limit = max(1, limit)
@@ -2570,7 +2568,7 @@ def from_array(
 ):
     """ Create dask array from something that looks like an array
 
-    Input must have a ``.shape`` and support numpy-style slicing.
+    Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
 
     Parameters
     ----------
@@ -2725,11 +2723,9 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        from ..bytes.core import get_mapper
+
+        mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
         mapper = url
@@ -2773,8 +2769,20 @@ def to_zarr(
         where overwrite=True will replace the existing data.
     compute, return_stored: see ``store()``
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+
+    Raises
+    ------
+    ValueError
+        If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+
     """
     import zarr
+
+    if np.isnan(arr.shape).any():
+        raise ValueError(
+            "Saving a dask array with unknown chunk sizes is not "
+            "currently supported by Zarr"
+        )
 
     if isinstance(url, zarr.Array):
         z = url
@@ -2797,11 +2805,9 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        fs, fs_token, path = get_fs_token_paths(
-            url, "rb", storage_options=storage_options
-        )
-        assert len(path) == 1
-        mapper = get_mapper(fs, path[0])
+        from ..bytes.core import get_mapper
+
+        mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
         mapper = url
@@ -3318,7 +3324,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     )
 
     # Drop empty arrays
-    seq = [a for a in seq if a.size]
+    seq2 = [a for a in seq if a.size]
+    if not seq2:
+        seq2 = seq
 
     if axis < 0:
         axis = ndim + axis
@@ -3329,45 +3337,45 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         )
         raise ValueError(msg % (ndim, axis))
 
-    n = len(seq)
+    n = len(seq2)
     if n == 0:
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
-        return seq[0]
+        return seq2[0]
 
     if not allow_unknown_chunksizes and not all(
-        i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
+        i == axis or all(x.shape[i] == seq2[0].shape[i] for x in seq2)
         for i in range(ndim)
     ):
-        if any(map(np.isnan, seq[0].shape)):
+        if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
                 " shape %s.  To force concatenation pass"
-                " allow_unknown_chunksizes=True." % str(seq[0].shape)
+                " allow_unknown_chunksizes=True." % str(seq2[0].shape)
             )
-        raise ValueError("Shapes do not align: %s", [x.shape for x in seq])
+        raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 
     inds = [list(range(ndim)) for i in range(n)]
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
 
-    uc_args = list(concat(zip(seq, inds)))
-    _, seq = unify_chunks(*uc_args, warn=False)
+    uc_args = list(concat(zip(seq2, inds)))
+    _, seq2 = unify_chunks(*uc_args, warn=False)
 
-    bds = [a.chunks for a in seq]
+    bds = [a.chunks for a in seq2]
 
     chunks = (
-        seq[0].chunks[:axis]
+        seq2[0].chunks[:axis]
         + (sum([bd[axis] for bd in bds], ()),)
-        + seq[0].chunks[axis + 1 :]
+        + seq2[0].chunks[axis + 1 :]
     )
 
-    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
+    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq2]))
 
-    names = [a.name for a in seq]
+    names = [a.name for a in seq2]
 
     name = "concatenate-" + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
@@ -3381,7 +3389,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     ]
 
     dsk = dict(zip(keys, values))
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
 
@@ -4102,9 +4110,11 @@ def stack(seq, axis=0):
         for i in range(meta.ndim)
     )
 
-    seq = [a for a in seq if a.size]
+    seq2 = [a for a in seq if a.size]
+    if not seq2:
+        seq2 = seq
 
-    n = len(seq)
+    n = len(seq2)
     if n == 0:
         try:
             return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
@@ -4112,13 +4122,13 @@ def stack(seq, axis=0):
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
 
     ind = list(range(ndim))
-    uc_args = list(concat((x, ind) for x in seq))
-    _, seq = unify_chunks(*uc_args)
+    uc_args = list(concat((x, ind) for x in seq2))
+    _, seq2 = unify_chunks(*uc_args)
 
-    assert len(set(a.chunks for a in seq)) == 1  # same chunks
-    chunks = seq[0].chunks[:axis] + ((1,) * n,) + seq[0].chunks[axis:]
+    assert len(set(a.chunks for a in seq2)) == 1  # same chunks
+    chunks = seq2[0].chunks[:axis] + ((1,) * n,) + seq2[0].chunks[axis:]
 
-    names = [a.name for a in seq]
+    names = [a.name for a in seq2]
     name = "stack-" + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
@@ -4137,7 +4147,7 @@ def stack(seq, axis=0):
     ]
 
     layer = dict(zip(keys, values))
-    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
 
@@ -4342,9 +4352,7 @@ def _vindex(x, *indexes):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == "b":
-                raise IndexError(
-                    "vindex does not support indexing with " "boolean arrays"
-                )
+                raise IndexError("vindex does not support indexing with boolean arrays")
             if ((ind >= size) | (ind < -size)).any():
                 raise IndexError(
                     "vindex key has entries out of bounds for "

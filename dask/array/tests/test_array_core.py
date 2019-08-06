@@ -3356,10 +3356,20 @@ def test_index_array_with_array_1d():
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(x[x > 6], dx[dx > 6])
+    assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
+
+    # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    assert sorted(x[x % 2 == 0].tolist()) == sorted(dx[dx % 2 == 0].compute().tolist())
-    assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+    with pytest.warns(UserWarning, match="different ordering") as record:
+        assert sorted(x[x % 2 == 0].tolist()) == sorted(
+            dx[dx % 2 == 0].compute().tolist()
+        )
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+
+    assert len(record) == 2
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")
@@ -3702,6 +3712,14 @@ def test_zarr_existing_array():
     assert a2.chunks == a.chunks
 
 
+def test_to_zarr_unknown_chunks_raises():
+    pytest.importorskip("zarr")
+    a = da.random.random((10,), chunks=(3,))
+    a = a[a > 0.5]
+    with pytest.raises(ValueError, match="unknown chunk sizes"):
+        a.to_zarr({})
+
+
 def test_read_zarr_chunks():
     pytest.importorskip("zarr")
     a = da.zeros((9,), chunks=(3,))
@@ -4040,11 +4058,14 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
-    x = da.ones((15, 15), chunks=(5, 5))
+    with pytest.warns(None) as record:
+        x = da.ones((15, 15), chunks=(5, 5))
+        (x.dot(x.T + 1) - x.mean(axis=0)).std()
+    assert not record
 
     with pytest.warns(None) as record:
-        (x.dot(x.T + 1) - x.mean(axis=0)).std()
-
+        x = da.ones((1,), chunks=(1,))
+        1 / x[0]
     assert not record
 
 

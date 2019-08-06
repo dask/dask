@@ -94,7 +94,7 @@ def ttest_ind(a, b, axis=0, equal_var=True):
 def ttest_1samp(a, popmean, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
     n = a.shape[axis]
     df = n - 1
@@ -113,7 +113,7 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate"):
 def ttest_rel(a, b, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
 
     n = a.shape[axis]
@@ -187,7 +187,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 def skew(a, axis=0, bias=True, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
 
     n = a.shape[axis]  # noqa; for bias
@@ -214,7 +214,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
 def skewtest(a, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
 
     b2 = skew(a, axis)
@@ -245,7 +245,7 @@ def skewtest(a, axis=0, nan_policy="propagate"):
 def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
     n = a.shape[axis]  # noqa; for bias
     m2 = moment(a, 2, axis)
@@ -261,10 +261,6 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         # need a version of np.place
         raise NotImplementedError("bias=False is not implemented.")
 
-    if vals.ndim == 0:
-        return vals  # TODO: scalar
-        # vals = vals.item()  # array scalar
-
     if fisher:
         return vals - 3
     else:
@@ -276,7 +272,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
 def kurtosistest(a, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
 
     n = float(a.shape[axis])
@@ -313,7 +309,7 @@ def kurtosistest(a, axis=0, nan_policy="propagate"):
 def normaltest(a, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
 
     s, _ = skewtest(a, axis)
@@ -361,7 +357,7 @@ def f_oneway(*args):
 def moment(a, moment=1, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
-            "`nan_policy` other than 'propagate' " "have not been implemented."
+            "`nan_policy` other than 'propagate' have not been implemented."
         )
     return da.moment(a, moment, axis=axis)
 

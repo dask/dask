@@ -550,13 +550,13 @@ def ignore_warning(doc, cls, name, extra=""):
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s. \n\n" "" % (
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" % (
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s. \n\n" "" % (cls.__name__, name)
+        l1 = "This docstring was copied from %s.%s. \n\n" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -1075,8 +1075,8 @@ def is_dataframe_like(df):
     typ = type(df)
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
-        and all(hasattr(df, name) for name in ("dtypes",))
-        and not any(hasattr(typ, name) for name in ("value_counts", "dtype"))
+        and all(hasattr(df, name) for name in ("dtypes", "columns"))
+        and not any(hasattr(typ, name) for name in ("name", "dtype"))
     )
 
 

@@ -1,13 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
+import sys
+
 import pytest
 from toolz import partial
 
 import dask
 from dask import compute
 from dask.utils import filetexts
-from dask.bytes import compression
+from dask.bytes import utils
 from dask.bag.text import read_text
+from fsspec.compression import compr
 
 compute = partial(compute, scheduler="sync")
 
@@ -30,18 +33,19 @@ files = {
 
 expected = "".join([files[v] for v in sorted(files)])
 
-fmt_bs = (
-    [(fmt, None) for fmt in compression.files]
-    + [(fmt, "10 B") for fmt in compression.seekable_files]
-    + [(fmt, None) for fmt in compression.seekable_files]
-)
+fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
+
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs for encoding in encodings]
 
 
 @pytest.mark.parametrize("fmt,bs,encoding", fmt_bs_enc)
 def test_read_text(fmt, bs, encoding):
-    compress = compression.compress[fmt]
+    if fmt == "zip" and sys.version_info.minor == 5:
+        pytest.skip("zipfile is read-only on py35")
+    if fmt not in utils.compress:
+        pytest.skip("compress function not provided for %s" % fmt)
+    compress = utils.compress[fmt]
     files2 = dict((k, compress(v.encode(encoding))) for k, v in files.items())
     with filetexts(files2, mode="b"):
         b = read_text(

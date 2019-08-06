@@ -171,6 +171,7 @@ def test_metadata():
         assert isinstance(np.stack([y, y])._meta, sparse.COO)
         if _numpy_117:
             assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
+            assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
 
 
 def test_html_repr():
