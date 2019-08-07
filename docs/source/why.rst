@@ -3,8 +3,7 @@ Why Dask?
 
 This document gives high-level motivation on why people choose to adopt Dask.
 
-.. toctree::
-   :maxdepth: 1
+.. contents:: :local:
 
 Python's role in Data Science
 -----------------------------
