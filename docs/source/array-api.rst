@@ -117,7 +117,6 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   ~core.map_blocks
    map_overlap
    map_blocks
    matmul
