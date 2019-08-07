@@ -58,7 +58,7 @@ Scope:
 +-----------------------------------------------+-----------------------------------------------------+
 | Applied more generally both to business       | More focused on traditional business intelligence   |
 | intelligence  applications, as well as a      | operations like SQL and lightweight machine         |
-| number of scientific and custom situations.   |  learning.                                          |
+| number of scientific and custom situations.   | learning.                                           |
 +-----------------------------------------------+-----------------------------------------------------+
 
 Internal Design:
@@ -84,51 +84,74 @@ Scale:
 | clusters.                                     | clusters.                                           |
 +-----------------------------------------------+-----------------------------------------------------+
 
-- APIs
-    - DataFrames
-        - Spark DataFrame has its own API and memory model.  It also
-          implements a large subset of the SQL language.  Spark includes a
-          high-level query optimizer for complex queries.
-        - Dask DataFrame reuses the Pandas API and memory model.  It implements
-          neither SQL nor a query optimizer.  It is able to do random access,
-          efficient time series operations, and other Pandas-style indexed
-          operations.
-    - Machine Learning
-        - Spark MLLib is a cohesive project with support for common operations
-          that are easy to implement with Spark's Map-Shuffle-Reduce style
-          system.  People considering MLLib might also want to consider *other*
-          JVM-based machine learning libraries like H2O, which may have better
-          performance.
-        - Dask relies on and interoperates with existing libraries like
-          Scikit-Learn and XGBoost.  These can be more familiar or higher
-          performance, but generally results in a less-cohesive whole.  See the
-          `dask-ml`_ project for integrations.
-    - Arrays
-        - Spark does not include support for multi-dimensional arrays natively
-          (this would be challenging given their computation model), although
-          some support for two-dimensional matrices may be found in MLLib.
-          People may also want to look at the `Thunder
-          <https://github.com/thunder-project/thunder>`_ project, which
-          combines Apache Spark with NumPy arrays.
-        - Dask fully supports the NumPy model for :doc:`scalable multi-dimensional
-          arrays <array>`.
-    - Streaming
-        - Spark's support for streaming data is first-class and integrates well
-          into their other APIs.  It follows a mini-batch approach.  This
-          provides decent performance on large uniform streaming operations.
-        - Dask provides a :doc:`real-time futures interface <futures>` that is
-          lower-level than Spark streaming.  This enables more creative and
-          complex use-cases, but requires more work than Spark streaming.
-    - Graphs / complex networks
-        - Spark provides GraphX, a library for graph processing.
-        - Dask provides no such library.
-    - Custom parallelism
-        - Spark generally expects users to compose computations out of their
-          high-level primitives (map, reduce, groupby, join, ...).  It is also
-          possible to extend Spark through subclassing RDDs, although this is
-          rarely done.
-        - Dask allows you to specify arbitrary task graphs for more complex and
-          custom systems that are not part of the standard set of collections.
+Dataframe API:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Reuses the Pandas API and memory model.       | Has its own API and memory model.                   |
+| It implements neither SQL nor a query         | It also implements a large subset of the SQL        |
+| optimizer. It is able to do random access,    | language.  Spark includes a high-level query        |
+| efficient time series operations, and other   | optimizer for complex queries.                      |
+| Pandas-style indexed operations.              |                                                     |
++-----------------------------------------------+-----------------------------------------------------+
+
+Machine Learning:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Relies on and interoperates with existing     | Spark MLLib is a cohesive project with support for  |
+| libraries like Scikit-Learn and XGBoost.      | common operations that are easy to implement with   |
+| These can be more familiar or higher          | Spark's Map-Shuffle-Reduce style  system.  People   |
+| performance, but generally results in a       | considering MLLib might also want to consider       |
+| less-cohesive whole.  See the `dask-ml`_      | *other* JVM-based machine learning libraries like   |
+| project for integrations.                     | H2O, which may have better performance.             |
++-----------------------------------------------+-----------------------------------------------------+
+
+Array API:
+
++--------------------------------------------------+--------------------------------------------------------+
+| **Dask**                                         | **Spark**                                              |
++--------------------------------------------------+--------------------------------------------------------+
+| Fully supports the NumPy model for               | Does not include support for multi-dimensional         |
+| :doc:`scalable multi-dimensional arrays <array>`.| arrays natively (this would be challenging given       |
+|                                                  | their computation model), although some support for    |
+|                                                  | two-dimensional matrices may be found in MLLib.        |
+|                                                  | People may also want to look at the                    |
+|                                                  | `Thunder <https://github.com/thunder-project/thunder>`_|
+|                                                  | project, which combines Apache Spark with NumPy arrays.|
++--------------------------------------------------+--------------------------------------------------------+
+
+Streaming API:
+
++--------------------------------------------------------+--------------------------------------------------------+
+| **Dask**                                               | **Spark**                                              |
++--------------------------------------------------------+--------------------------------------------------------+
+| Provides a :doc:`real-time futures interface <futures>`| Support for streaming data is first-class and          |
+| that is lower-level than Spark streaming. This enables | integrates well into their other APIs. It follows      |
+| more creative and complex use-cases, but requires      | a mini-batch approach.  This provides decent           |
+| more work than Spark streaming.                        | performance on large uniform streaming operations.     |
++--------------------------------------------------------+--------------------------------------------------------+
+
+Graphs / complex networks:
+
++--------------------------------------------------------+--------------------------------------------------------+
+| **Dask**                                               | **Spark**                                              |
++--------------------------------------------------------+--------------------------------------------------------+
+| Provides no such library.                              | Provides GraphX, a library for graph processing.       |
++--------------------------------------------------------+--------------------------------------------------------+
+
+Custom parallelism:
+
++--------------------------------------------------------+--------------------------------------------------------+
+| **Dask**                                               | **Spark**                                              |
++--------------------------------------------------------+--------------------------------------------------------+
+| Allows you to specify arbitrary task graphs for more   | Generally expects users to compose computations out    |
+| complex and custom systems that are not part of the    | of theirhigh-level primitives (map, reduce, groupby,   |
+| standard set of collections.                           | join, ...).  It is also possible to extend Spark       |
+|                                                        | through subclassing RDDs, although this is rarely done.|
++--------------------------------------------------------+--------------------------------------------------------+
 
 .. _dask-ml: https://ml.dask.org
 
