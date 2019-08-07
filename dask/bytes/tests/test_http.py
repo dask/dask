@@ -3,6 +3,8 @@ import pytest
 import subprocess
 import sys
 import time
+import fsspec
+from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
 from dask.compatibility import PY2
@@ -176,4 +178,19 @@ def test_bag():
     ]
     b = db.read_text(urls)
     assert b.npartitions == 2
+    b.compute()
+
+
+@pytest.mark.xfail(
+    LooseVersion(fsspec.__version__) <= "0.4.1",
+    reason="https://github.com/dask/dask/pull/5231",
+)
+@pytest.mark.network
+def test_read_csv():
+    dd = pytest.importorskip("dask.dataframe")
+    url = (
+        "https://raw.githubusercontent.com/weierophinney/pastebin/"
+        "master/public/js-src/dojox/data/tests/stores/patterns.csv"
+    )
+    b = dd.read_csv(url)
     b.compute()
