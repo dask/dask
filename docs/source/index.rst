@@ -173,18 +173,6 @@ messy situations in everyday problems.
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Graphs
-
-   graphs.rst
-   spec.rst
-   custom-graphs.rst
-   optimize.rst
-   custom-collections.rst
-   high-level-graphs.rst
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
    :caption: Help & reference
 
    develop.rst
@@ -195,6 +183,7 @@ messy situations in everyday problems.
    spark.rst
    caching.rst
    bytes.rst
+   graphs.rst
    remote-data-services.rst
    gpu.rst
    cite.rst
