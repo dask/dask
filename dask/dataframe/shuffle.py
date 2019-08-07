@@ -380,6 +380,17 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
     partitions.  If there are enough partitions then it does this work in
     stages to avoid scheduling overhead.
 
+    Lets explain the motivation for this further.  Imagine that we have 1000
+    input partitions and 1000 output partitions. In theory we could split each
+    input into 1000 pieces, and then move the 1 000 000 resulting pieces
+    around, and then concatenate them all into 1000 output groups.  This would
+    be fine, but the central scheduling overhead of 1 000 000 tasks would
+    become a bottleneck.  Instead we do this in stages so that we split each of
+    the 1000 inputs into 30 pieces (we now have 30 000 pieces) move those
+    around, concatenate back down to 1000, and then do the same process again.
+    This has the same result as the full transfer, but now we've moved data
+    twice (expensive) but done so with only 60 000 tasks (cheap).
+
     Parameters
     ----------
     df: dask.dataframe.DataFrame
