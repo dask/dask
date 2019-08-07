@@ -117,10 +117,15 @@ def read_bytes(
                 comp = compression
             if comp is not None:
                 raise ValueError(
-                    "Cannot do chunked reads on compressed files."
+                    "Cannot do chunked reads on compressed files. "
                     "To read, set blocksize=None"
                 )
             size = fs.info(path)["size"]
+            if size is None:
+                raise ValueError(
+                    "Backing filesystem couldn't determine file size, cannot "
+                    "do chunked reads. To read, set blocksize=None."
+                )
             off = list(range(0, size, blocksize))
             length = [blocksize] * len(off)
             if not_zero:
