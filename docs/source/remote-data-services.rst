@@ -1,3 +1,74 @@
+Data Ingestion
+``````````````
+
+Internal Data Ingestion
+=======================
+
+Dask contains internal tools for extensible data ingestion in the
+``dask.bytes`` package and using `fsspec`_.
+.  *These functions are developer-focused rather than for
+direct consumption by users.  These functions power user facing functions like*
+``dd.read_csv`` *and* ``db.read_text`` *which are probably more useful for most
+users.*
+
+
+.. currentmodule:: dask.bytes
+
+.. autosummary::
+   read_bytes
+   open_files
+
+These functions are extensible in their output formats (bytes, file objects),
+their input locations (file system, S3, HDFS), line delimiters, and compression
+formats.
+
+Both functions are *lazy*, returning either
+point to blocks of bytes (``read_bytes``) or open file objects
+(``open_files``).  They can handle different storage backends by prepending
+protocols like ``s3://`` or ``hdfs://`` (see below). They handle compression formats
+listed in ``fsspec.compression``, some of which may require additional packages
+to be installed.
+
+These functions are not used for all data sources.  Some data sources like HDF5
+are quite particular and receive custom treatment.
+
+
+Delimiters
+----------
+
+The ``read_bytes`` function takes a path (or globstring of paths) and produces
+a sample of the first file and a list of delayed objects for each of the other
+files.  If passed a delimiter such as ``delimiter=b'\n'``, it will ensure that
+the blocks of bytes start directly after a delimiter and end directly before a
+delimiter.  This allows other functions, like ``pd.read_csv``, to operate on
+these delayed values with expected behavior.
+
+These delimiters are useful both for typical line-based formats (log files,
+CSV, JSON) as well as other delimited formats like Avro, which may separate
+logical chunks by a complex sentinel string. Note that the delimiter finding
+algorithm is simple, and will not accound for characters that are escaped,
+part of a UTF8 code sequence or within the quote marks of a string.
+
+Compression
+-----------
+
+These functions support widely available compression technologies like ``gzip``,
+``bz2``, ``xz``, ``snappy``, and ``lz4``.  More compressions can be easily
+added by inserting functions into dictionaries available in the
+``fsspec.compression`` module.  This can be done at runtime and need not be
+added directly to the codebase.
+
+However, most compression technologies like ``gzip`` do not support efficient
+random access, and so are useful for streaming ``open_files`` but not useful for
+``read_bytes`` which splits files at various points.
+
+Functions
+---------
+
+.. autofunction:: read_bytes
+.. autofunction:: open_files
+
+
 Remote Data
 ===========
 

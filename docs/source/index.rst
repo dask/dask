@@ -251,7 +251,6 @@ often a better choice. If you are a *core developer*, then you should start here
 * :doc:`cheatsheet`
 * :doc:`spark`
 * :doc:`caching`
-* :doc:`bytes`
 * :doc:`remote-data-services`
 * :doc:`gpu`
 * :doc:`cite`
@@ -270,7 +269,6 @@ often a better choice. If you are a *core developer*, then you should start here
    cheatsheet.rst
    spark.rst
    caching.rst
-   bytes.rst
    remote-data-services.rst
    gpu.rst
    cite.rst
