@@ -1,21 +1,20 @@
 Task Graphs
 ===========
 
+Internally, Dask encodes algorithms in a simple format involving Python dicts,
+tuples, and functions. This graph format can be used in isolation from the
+dask collections. Working directly with dask graphs is rare, unless you intend
+to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
+often a better choice. If you are a *core developer*, then you should start here.
+
 .. toctree::
    :maxdepth: 1
-   :hidden:
 
    spec.rst
    custom-graphs.rst
    optimize.rst
    custom-collections.rst
    high-level-graphs.rst
-
-Internally, Dask encodes algorithms in a simple format involving Python dicts,
-tuples, and functions. This graph format can be used in isolation from the
-dask collections. Working directly with dask graphs is rare, unless you intend
-to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
-often a better choice. If you are a *core developer*, then you should start here.
 
 
 Motivation
