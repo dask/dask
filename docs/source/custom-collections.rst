@@ -6,9 +6,6 @@ For many problems, the built-in Dask collections (``dask.array``,
 cases where they aren't, it's possible to create your own Dask collections. Here
 we describe the required methods to fullfill the Dask collection interface.
 
-.. warning:: The custom collection API is experimental and subject to change
-             without going through a deprecation cycle.
-
 .. note:: This is considered an advanced feature. For most cases the built-in
           collections are probably sufficient.
 
