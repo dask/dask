@@ -1,6 +1,3 @@
-Data Ingestion
-``````````````
-
 Remote Data
 ===========
 
@@ -54,8 +51,8 @@ file system is assumed (same as ``file://``).
 .. _gcsfs: https://github.com/dask/gcsfs/
 .. _PyArrow: https://arrow.apache.org/docs/python/
 
-Lower-level details on how Dask handles remote data is described in Section
-:doc:`Internal Data Ingestion <bytes>`.
+Lower-level details on how Dask handles remote data is described is described
+below in the Internals section
 
 Optional Parameters
 -------------------
@@ -234,7 +231,7 @@ General recommendations for distributed clusters, in order:
 
 - use 'anon' for public data
 - use 'cloud' if this is available
-- use `gcloud`_ to generate a JSON file, and distribute this to all workers, and 
+- use `gcloud`_ to generate a JSON file, and distribute this to all workers, and
   supply the path to the file
 
 - use gcsfs directly with the 'browser' method to generate a token cache file
@@ -304,8 +301,8 @@ be dispatched to the methods of this class:
 However, it would be better to submit a PR to ``fsspec`` to include the class in
 the ``known_implementations``.
 
-Internal Data Ingestion
-=======================
+Internals
+---------
 
 Dask contains internal tools for extensible data ingestion in the
 ``dask.bytes`` package and using `fsspec`_.
@@ -337,7 +334,7 @@ are quite particular and receive custom treatment.
 
 
 Delimiters
-----------
+^^^^^^^^^^
 
 The ``read_bytes`` function takes a path (or globstring of paths) and produces
 a sample of the first file and a list of delayed objects for each of the other
@@ -353,7 +350,7 @@ algorithm is simple, and will not accound for characters that are escaped,
 part of a UTF8 code sequence or within the quote marks of a string.
 
 Compression
------------
+^^^^^^^^^^^
 
 These functions support widely available compression technologies like ``gzip``,
 ``bz2``, ``xz``, ``snappy``, and ``lz4``.  More compressions can be easily
@@ -365,8 +362,8 @@ However, most compression technologies like ``gzip`` do not support efficient
 random access, and so are useful for streaming ``open_files`` but not useful for
 ``read_bytes`` which splits files at various points.
 
-Functions
----------
+API
+^^^
 
 .. autofunction:: read_bytes
 .. autofunction:: open_files
