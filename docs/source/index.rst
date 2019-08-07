@@ -125,18 +125,6 @@ We originally needed this complexity to build complex algorithms for
 n-dimensional arrays but have found it to be equally valuable when dealing with
 messy situations in everyday problems.
 
-
-Index
------
-
-**Getting Started**
-
-* :doc:`install`
-* :doc:`setup`
-* :doc:`use-cases`
-* :doc:`support`
-* :doc:`why`
-
 .. toctree::
    :maxdepth: 1
    :hidden:
@@ -144,21 +132,9 @@ Index
 
    install.rst
    setup.rst
-   use-cases.rst
+   Use Cases <https://stories.dask.org>
    support.rst
    why.rst
-
-**Collections**
-
-Dask collections are the main interaction point for users. They look like
-NumPy and Pandas but generate dask graphs internally. If you are a dask *user*
-then you should start here.
-
-* :doc:`array`
-* :doc:`bag`
-* :doc:`dataframe`
-* :doc:`delayed`
-* :doc:`futures`
 
 .. toctree::
    :maxdepth: 1
@@ -175,15 +151,6 @@ then you should start here.
    best-practices.rst
    api.rst
 
-**Scheduling**
-
-Schedulers execute task graphs. Dask currently has two main schedulers: one
-for local processing using threads or processes; and one for
-distributed memory clusters.
-
-* :doc:`scheduling`
-* :doc:`distributed`
-
 .. toctree::
    :maxdepth: 1
    :hidden:
@@ -191,17 +158,6 @@ distributed memory clusters.
 
    scheduling.rst
    distributed.rst
-
-**Diagnosing Performance**
-
-Parallel code can be tricky to debug and profile. Dask provides several tools
-to help make debugging and profiling graph execution easier.
-
-* :doc:`understanding-performance`
-* :doc:`graphviz`
-* :doc:`diagnostics-local`
-* :doc:`diagnostics-distributed`
-* :doc:`debugging`
 
 .. toctree::
    :maxdepth: 1
@@ -214,21 +170,6 @@ to help make debugging and profiling graph execution easier.
    diagnostics-distributed.rst
    debugging.rst
 
-**Graph Internals**
-
-Internally, Dask encodes algorithms in a simple format involving Python dicts,
-tuples, and functions. This graph format can be used in isolation from the
-dask collections. Working directly with dask graphs is rare, unless you intend
-to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
-often a better choice. If you are a *core developer*, then you should start here.
-
-* :doc:`graphs`
-* :doc:`spec`
-* :doc:`custom-graphs`
-* :doc:`optimize`
-* :doc:`custom-collections`
-* :doc:`high-level-graphs`
-
 .. toctree::
    :maxdepth: 1
    :hidden:
@@ -240,23 +181,6 @@ often a better choice. If you are a *core developer*, then you should start here
    optimize.rst
    custom-collections.rst
    high-level-graphs.rst
-
-
-**Help & reference**
-
-* :doc:`develop`
-* :doc:`changelog`
-* :doc:`configuration`
-* :doc:`presentations`
-* :doc:`cheatsheet`
-* :doc:`spark`
-* :doc:`caching`
-* :doc:`bytes`
-* :doc:`remote-data-services`
-* :doc:`gpu`
-* :doc:`cite`
-* :doc:`funding`
-* :doc:`logos`
 
 .. toctree::
    :maxdepth: 1
@@ -276,8 +200,6 @@ often a better choice. If you are a *core developer*, then you should start here
    cite.rst
    funding.rst
    logos.rst
-
-Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license.
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt

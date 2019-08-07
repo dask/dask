@@ -31,10 +31,10 @@ some simple Dask DataFrame code and the task graph that it might generate:
     ('read-csv', 1): (pandas.read_csv, 'myfile.1.csv'),
     ('read-csv', 2): (pandas.read_csv, 'myfile.2.csv'),
     ('read-csv', 3): (pandas.read_csv, 'myfile.3.csv'),
-    ('add', 0): (operator.add, 'myfile.0.csv', 100),
-    ('add', 1): (operator.add, 'myfile.1.csv', 100),
-    ('add', 2): (operator.add, 'myfile.2.csv', 100),
-    ('add', 3): (operator.add, 'myfile.3.csv', 100),
+    ('add', 0): (operator.add, ('read-csv', 0), 100),
+    ('add', 1): (operator.add, ('read-csv', 1), 100),
+    ('add', 2): (operator.add, ('read-csv', 2), 100),
+    ('add', 3): (operator.add, ('read-csv', 3), 100),
     ('filter', 0): (lambda part: part[part.name == 'Alice'], ('add', 0)),
     ('filter', 1): (lambda part: part[part.name == 'Alice'], ('add', 1)),
     ('filter', 2): (lambda part: part[part.name == 'Alice'], ('add', 2)),
@@ -56,10 +56,10 @@ high-level Dask DataFrame operation:
     ('read-csv', 3): (pandas.read_csv, 'myfile.3.csv'),
 
     # From the df + 100 call
-    ('add', 0): (operator.add, 'myfile.0.csv', 100),
-    ('add', 1): (operator.add, 'myfile.1.csv', 100),
-    ('add', 2): (operator.add, 'myfile.2.csv', 100),
-    ('add', 3): (operator.add, 'myfile.3.csv', 100),
+    ('add', 0): (operator.add, ('read-csv', 0), 100),
+    ('add', 1): (operator.add, ('read-csv', 1), 100),
+    ('add', 2): (operator.add, ('read-csv', 2), 100),
+    ('add', 3): (operator.add, ('read-csv', 3), 100),
 
     # From the df[df.name == 'Alice'] call
     ('filter', 0): (lambda part: part[part.name == 'Alice'], ('add', 0)),
@@ -105,10 +105,10 @@ our task graphs in layers with dependencies between layers:
                  ('read-csv', 2): (pandas.read_csv, 'myfile.2.csv'),
                  ('read-csv', 3): (pandas.read_csv, 'myfile.3.csv')},
 
-    'add': {('add', 0): (operator.add, 'myfile.0.csv', 100),
-            ('add', 1): (operator.add, 'myfile.1.csv', 100),
-            ('add', 2): (operator.add, 'myfile.2.csv', 100),
-            ('add', 3): (operator.add, 'myfile.3.csv', 100)}
+    'add': {('add', 0): (operator.add, ('read-csv', 0), 100),
+            ('add', 1): (operator.add, ('read-csv', 1), 100),
+            ('add', 2): (operator.add, ('read-csv', 2), 100),
+            ('add', 3): (operator.add, ('read-csv', 3), 100)}
 
     'filter': {('filter', 0): (lambda part: part[part.name == 'Alice'], ('add', 0)),
                ('filter', 1): (lambda part: part[part.name == 'Alice'], ('add', 1)),
@@ -154,10 +154,10 @@ constructor:
                    ('read-csv', 2): (pandas.read_csv, 'myfile.2.csv'),
                    ('read-csv', 3): (pandas.read_csv, 'myfile.3.csv')},
 
-      'add': {('add', 0): (operator.add, 'myfile.0.csv', 100),
-              ('add', 1): (operator.add, 'myfile.1.csv', 100),
-              ('add', 2): (operator.add, 'myfile.2.csv', 100),
-              ('add', 3): (operator.add, 'myfile.3.csv', 100)}
+      'add': {('add', 0): (operator.add, ('read-csv', 0), 100),
+              ('add', 1): (operator.add, ('read-csv', 1), 100),
+              ('add', 2): (operator.add, ('read-csv', 2), 100),
+              ('add', 3): (operator.add, ('read-csv', 3), 100)}
 
       'filter': {('filter', 0): (lambda part: part[part.name == 'Alice'], ('add', 0)),
                  ('filter', 1): (lambda part: part[part.name == 'Alice'], ('add', 1)),
