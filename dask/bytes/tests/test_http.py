@@ -3,6 +3,8 @@ import pytest
 import subprocess
 import sys
 import time
+import fsspec
+from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
 from dask.compatibility import PY2
@@ -179,7 +181,10 @@ def test_bag():
     b.compute()
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/pull/5231")
+@pytest.mark.xfail(
+    LooseVersion(fsspec.__version__) <= "0.4.1",
+    reason="https://github.com/dask/dask/pull/5231",
+)
 @pytest.mark.network
 def test_read_csv():
     dd = pytest.importorskip("dask.dataframe")

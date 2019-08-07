@@ -123,8 +123,8 @@ def read_bytes(
             size = fs.info(path)["size"]
             if size is None:
                 raise ValueError(
-                    "Backing filesystem doesn't provide file size information, "
-                    "cannot do chunked reads. To read, set blocksize=None"
+                    "Backing filesystem couldn't determine file size, cannot "
+                    "do chunked reads. To read, set blocksize=None."
                 )
             off = list(range(0, size, blocksize))
             length = [blocksize] * len(off)
