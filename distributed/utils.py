@@ -1,6 +1,7 @@
 import asyncio
 import atexit
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
@@ -1471,3 +1472,18 @@ def cli_keywords(d: dict, cls=None):
 
 def is_valid_xml(text):
     return xml.etree.ElementTree.fromstring(text) is not None
+
+
+try:
+    _offload_executor = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="Dask-Offload"
+    )
+except TypeError:
+    _offload_executor = ThreadPoolExecutor(max_workers=1)
+
+weakref.finalize(_offload_executor, _offload_executor.shutdown)
+
+
+@gen.coroutine
+def offload(fn, *args, **kwargs):
+    return (yield _offload_executor.submit(fn, *args, **kwargs))

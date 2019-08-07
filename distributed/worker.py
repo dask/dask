@@ -30,7 +30,6 @@ from tornado.ioloop import IOLoop
 from . import profile, comm
 from .batched import BatchedSend
 from .comm import get_address_host, connect
-from .comm.utils import offload
 from .comm.addressing import address_from_user_args
 from .core import error_message, CommClosedError, send_recv, pingpong, coerce_to_address
 from .diskutils import WorkSpace
@@ -56,6 +55,7 @@ from .utils import (
     thread_state,
     json_load_robust,
     key_split,
+    offload,
     PeriodicCallback,
     parse_bytes,
     parse_timedelta,

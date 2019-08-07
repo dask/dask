@@ -41,7 +41,6 @@ from tornado.ioloop import IOLoop
 from .client import default_client, _global_clients, Client
 from .compatibility import WINDOWS
 from .comm import Comm
-from .comm.utils import offload
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
 from .deploy import SpecCluster
@@ -60,6 +59,7 @@ from .utils import (
     sync,
     iscoroutinefunction,
     thread_state,
+    _offload_executor,
 )
 from .worker import Worker, TOTAL_MEMORY
 from .nanny import Nanny
@@ -80,7 +80,7 @@ logging_levels = {
 }
 
 
-offload(lambda: None).result()  # create thread during import
+_offload_executor.submit(lambda: None).result()  # create thread during import
 
 
 @pytest.fixture(scope="session")

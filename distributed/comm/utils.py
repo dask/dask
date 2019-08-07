@@ -1,12 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import socket
-import weakref
 
 from tornado import gen
 
 from .. import protocol
-from ..utils import get_ip, get_ipv6, nbytes
+from ..utils import get_ip, get_ipv6, nbytes, offload
 
 
 logger = logging.getLogger(__name__)
@@ -16,18 +14,6 @@ logger = logging.getLogger(__name__)
 # We use at most 4 threads to allow for parallel processing of large messages.
 
 FRAME_OFFLOAD_THRESHOLD = 10 * 1024 ** 2  # 10 MB
-
-try:
-    _offload_executor = ThreadPoolExecutor(
-        max_workers=1, thread_name_prefix="Dask-Offload"
-    )
-except TypeError:
-    _offload_executor = ThreadPoolExecutor(max_workers=1)
-weakref.finalize(_offload_executor, _offload_executor.shutdown)
-
-
-def offload(fn, *args, **kwargs):
-    return _offload_executor.submit(fn, *args, **kwargs)
 
 
 @gen.coroutine
