@@ -4,7 +4,7 @@ Custom Collections
 For many problems, the built-in Dask collections (``dask.array``,
 ``dask.dataframe``, ``dask.bag``, and ``dask.delayed``) are sufficient. For
 cases where they aren't, it's possible to create your own Dask collections. Here
-we describe the required methods to fullfill the Dask collection interface.
+we describe the required methods to fulfill the Dask collection interface.
 
 .. note:: This is considered an advanced feature. For most cases the built-in
           collections are probably sufficient.
@@ -31,7 +31,7 @@ Before reading this you should read and underestand:
 The Dask Collection Interface
 -----------------------------
 
-To create your own Dask collection, you need to fullfill the following
+To create your own Dask collection, you need to fulfill the following
 interface. Note that there is no required base class.
 
 It is recommended to also read :ref:`core-method-internals` to see how this
