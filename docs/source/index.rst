@@ -182,7 +182,6 @@ messy situations in everyday problems.
    cheatsheet.rst
    spark.rst
    caching.rst
-   bytes.rst
    graphs.rst
    remote-data-services.rst
    gpu.rst
