@@ -214,33 +214,6 @@ to help make debugging and profiling graph execution easier.
    diagnostics-distributed.rst
    debugging.rst
 
-**Graph Internals**
-
-Internally, Dask encodes algorithms in a simple format involving Python dicts,
-tuples, and functions. This graph format can be used in isolation from the
-dask collections. Working directly with dask graphs is rare, unless you intend
-to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
-often a better choice. If you are a *core developer*, then you should start here.
-
-* :doc:`graphs`
-* :doc:`spec`
-* :doc:`custom-graphs`
-* :doc:`optimize`
-* :doc:`custom-collections`
-* :doc:`high-level-graphs`
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Graphs
-
-   graphs.rst
-   spec.rst
-   custom-graphs.rst
-   optimize.rst
-   custom-collections.rst
-   high-level-graphs.rst
-
 
 **Help & reference**
 
@@ -252,6 +225,7 @@ often a better choice. If you are a *core developer*, then you should start here
 * :doc:`spark`
 * :doc:`caching`
 * :doc:`bytes`
+* :doc:`graphs`
 * :doc:`remote-data-services`
 * :doc:`gpu`
 * :doc:`cite`
@@ -271,6 +245,7 @@ often a better choice. If you are a *core developer*, then you should start here
    spark.rst
    caching.rst
    bytes.rst
+   graphs.rst
    remote-data-services.rst
    gpu.rst
    cite.rst
