@@ -341,6 +341,7 @@ redirect_files = [
     ("examples/delayed-custom.html", "https://examples.dask.org"),
     ("docs.html", "index.html"),
     ("use-cases.html", "https://stories.dask.org"),
+    ("bag-overview.html", "bag.html"),
 ]
 
 
