@@ -342,6 +342,7 @@ redirect_files = [
     ("docs.html", "index.html"),
     ("use-cases.html", "https://stories.dask.org"),
     ("bag-overview.html", "bag.html"),
+    ("distributed.html", "https://distributed.dask.org"),
 ]
 
 
