@@ -173,9 +173,9 @@ def set_partition(
     shuffle
     partd
     """
-    if isinstance(divisions, (list, tuple)):
-        divisions = pd.Series(divisions)
-    meta = type(df[df.columns[0]]._meta)([0])
+    series_type = type(df[df.columns[0]]._meta)
+    divisions = series_type(divisions)
+    meta = series_type([0])
     if np.isscalar(index):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
@@ -258,9 +258,9 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
 
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
     """ Shuffle dataframe so that column separates along divisions """
-    if isinstance(divisions, (list, tuple)):
-        divisions = pd.Series(divisions)
-    meta = type(df[df.columns[0]]._meta)([0])
+    series_type = type(df[df.columns[0]]._meta)
+    divisions = series_type(divisions)
+    meta = series_type([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre, divisions=divisions, meta=meta
