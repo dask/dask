@@ -10,6 +10,18 @@ Dask APIs generally follow from upstream APIs:
 -  :doc:`Delayed <delayed-api>` wraps general Python code
 -  :doc:`Futures <futures>` follows `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ from the standard library for real-time computation.
 
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   Array <array-api.rst>
+   DataFrame <dataframe-api.rst>
+   Bag <bag-api.rst>
+   Machine Learning <https://ml.dask.org/modules/api.html>
+   Delayed <delayed-api.rst>
+   Futures <futures>
+
+
 Additionally, Dask has its own functions to start computations, persist data in
 memory, check progress, and so forth that complement the APIs above.
 These more general Dask functions are described below:
