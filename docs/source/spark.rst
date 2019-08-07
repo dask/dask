@@ -18,39 +18,72 @@ has fewer features and, instead, is used in conjunction with other libraries,
 particularly those in the numeric Python ecosystem.  It couples with libraries
 like Pandas or Scikit-Learn to achieve high-level functionality.
 
-- Language
-    - Spark is written in Scala with some support for Python and R.  It
-      interoperates well with other JVM code.
-    - Dask is written in Python and only really supports Python.  It
-      interoperates well with C/C++/Fortran/LLVM or other natively compiled
-      code linked through Python.
-- Ecosystem
-    - Spark is an all-in-one project that has inspired its own ecosystem.  It
-      integrates well with many other Apache projects.
-    - Dask is a component of the larger Python ecosystem.  It couples with and
-      enhances other libraries like NumPy, Pandas, and Scikit-Learn.
-- Age and Trust
-    - Spark is older (since 2010) and has become a dominant and
-      well-trusted tool in the Big Data enterprise world.
-    - Dask is younger (since 2014) and is an extension of the
-      well trusted NumPy/Pandas/Scikit-learn/Jupyter stack.
-- Scope
-    - Spark is more focused on traditional business intelligence
-      operations like SQL and lightweight machine learning.
-    - Dask is applied more generally both to business intelligence
-      applications, as well as a number of scientific and custom situations.
-- Internal Design
-    - Spark's internal model is higher level, providing good high level
-      optimizations on uniformly applied computations, but lacking flexibility
-      for more complex algorithms or ad-hoc systems.  It is fundamentally an
-      extension of the Map-Shuffle-Reduce paradigm.
-    - Dask's internal model is lower level, and so lacks high level
-      optimizations, but is able to implement more sophisticated algorithms and
-      build more complex bespoke systems.  It is fundamentally based on generic
-      task scheduling.
-- Scale
-    - Spark scales from a single node to thousand-node clusters.
-    - Dask scales from a single node to thousand-node clusters.
+Language:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Written in Python and only really supports    | Written in Scala with some support for Python and R.|
+| Python. It interoperates well with C/C++/     | It interoperates well with other JVM code.          |
+| Fortran/LLVM or other natively compiled       |                                                     |
+| code linked through Python.                   |                                                     |
++-----------------------------------------------+-----------------------------------------------------+
+
+Ecosystem:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| A component of the larger Python ecosystem.   | An all-in-one project that has inspired its own     |
+|                                               | ecosystem.                                          |
+|                                               |                                                     |
+| It couples with and enhances other libraries  | It integrates well with many other Apache           |
+| like NumPy, Pandas, and Scikit-Learn          | projects.                                           |
++-----------------------------------------------+-----------------------------------------------------+
+
+Age and trust:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Dask is younger (since 2014) and is an        | Spark is older (since 2010) and has become a        |
+| extension of the well trusted NumPy/Pandas    | dominant and  well-trusted tool in the Big          |
+| /Scikit-learn/Jupyter stack.                  | Data enterprise world.                              |
++-----------------------------------------------+-----------------------------------------------------+
+
+Scope:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Applied more generally both to business       | More focused on traditional business intelligence   |
+| intelligence  applications, as well as a      | operations like SQL and lightweight machine         |
+| number of scientific and custom situations.   |  learning.                                          |
++-----------------------------------------------+-----------------------------------------------------+
+
+Internal Design:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Lower level, and so lacks high level          | Higher level, providing good high level             |
+| optimizations, but is able to implement more  | optimizations on uniformly applied computations,    |
+| sophisticated algorithms and build more       | but lacking flexibility for more complex algorithms |
+| complex bespoke systems.                      | or ad-hoc systems.                                  |
+|                                               |                                                     |
+| It is fundamentally based on generic          | It is fundamentally an extension of the             |
+| task scheduling.                              | Map-Shuffle-Reduce paradigm.                        |
++-----------------------------------------------+-----------------------------------------------------+
+
+Scale:
+
++-----------------------------------------------+-----------------------------------------------------+
+| **Dask**                                      | **Spark**                                           |
++-----------------------------------------------+-----------------------------------------------------+
+| Scales from a single node to thousand-node    | Scales from a single node to thousand-node          |
+| clusters.                                     | clusters.                                           |
++-----------------------------------------------+-----------------------------------------------------+
+
 - APIs
     - DataFrames
         - Spark DataFrame has its own API and memory model.  It also
