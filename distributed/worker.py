@@ -97,7 +97,7 @@ class Worker(ServerNode):
 
         $ dask-worker scheduler-ip:port
 
-    Use the ``--help`` flag to see more options
+    Use the ``--help`` flag to see more options::
 
         $ dask-worker --help
 
