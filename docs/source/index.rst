@@ -157,7 +157,7 @@ messy situations in everyday problems.
    :caption: Scheduling
 
    scheduling.rst
-   Distributed Scheduler <https://distributed.dask.org/>
+   Distributed Scheduling <https://distributed.dask.org/>
 
 .. toctree::
    :maxdepth: 1
