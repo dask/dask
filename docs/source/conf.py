@@ -330,6 +330,7 @@ redirect_files = [
     ('examples/delayed-array.html', 'https://examples.dask.org'),
     ('examples/delayed-custom.html', 'https://examples.dask.org'),
     ('docs.html', 'index.html'),
+    ('bytes.html', 'remote-data-services.html')
 ]
 
 
