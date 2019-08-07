@@ -132,7 +132,7 @@ messy situations in everyday problems.
 
    install.rst
    setup.rst
-   use-cases.rst
+   Use Cases <https://stories.dask.org>
    support.rst
    why.rst
 
