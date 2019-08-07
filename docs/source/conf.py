@@ -319,7 +319,7 @@ intersphinx_mapping = {
 # https://tech.signavio.com/2017/managing-sphinx-redirects
 redirect_files = [
     # old html, new html
-    ('bytes.html', 'remote-data-services.html'),
+    ("bytes.html", "remote-data-services.html"),
     ("array-overview.html", "array.html"),
     ("array-ghost.html", "array-overlap.html"),
     ("dataframe-overview.html", "dataframe.html"),
