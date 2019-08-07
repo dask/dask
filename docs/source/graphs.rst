@@ -1,7 +1,20 @@
-Overview
-========
+Task Graphs
+===========
 
-An explanation of Dask task graphs.
+Internally, Dask encodes algorithms in a simple format involving Python dicts,
+tuples, and functions. This graph format can be used in isolation from the
+dask collections. Working directly with dask graphs is rare, unless you intend
+to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
+often a better choice. If you are a *core developer*, then you should start here.
+
+.. toctree::
+   :maxdepth: 1
+
+   spec.rst
+   custom-graphs.rst
+   optimize.rst
+   custom-collections.rst
+   high-level-graphs.rst
 
 
 Motivation
@@ -81,6 +94,6 @@ The Dask library currently contains a few schedulers to execute these
 graphs.  Each scheduler works differently, providing different performance
 guarantees and operating in different contexts.  These implementations are not
 special and others can write different schedulers better suited to other
-applications or architectures easily.  Systems that emit dask graphs (like 
+applications or architectures easily.  Systems that emit dask graphs (like
 Dask Array, Dask Bag, and so on) may leverage the appropriate scheduler for
 the application and hardware.
