@@ -3,15 +3,7 @@ Stages of Computation
 
 This page describes all of the parts of computation, some common causes of
 slowness, and how to effectively profile.  This is intended for more advanced
-users who are encountering slowdowns on larger computations.  In particular we
-cover the following:
-
-1.  Graph construction
-2.  Graph optimization
-3.  Graph serialization (distributed only)
-4.  Graph transmission (distributed only)
-5.  Scheduling
-6.  Execution
+users who are encountering slowdowns on larger computations.
 
 Graph Construction
 ------------------
