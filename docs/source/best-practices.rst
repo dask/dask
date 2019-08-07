@@ -164,7 +164,7 @@ Fortunately, there are many options to support custom workloads:
 
     map_partitions
     rolling.map_overlap
-    Aggregation
+    groupby.Aggregation
 
 .. currentmodule:: dask.array
 
