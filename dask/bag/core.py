@@ -1993,97 +1993,63 @@ def bag_zip(*bags):
     return Bag(graph, name, npartitions)
 
 
-def _map_chunk_check_iters(iters):
-    # Check that all iterators are fully exhausted
-    if len(iters) > 1:
-        for i in iters:
-            if isinstance(i, itertools.repeat):
-                continue
-            try:
-                next(i)
-            except StopIteration:
-                pass
-            else:
-                msg = (
-                    "map called with multiple bags that aren't identically "
-                    "partitioned. Please ensure that all bag arguments "
-                    "have the same partition lengths"
-                )
-                raise ValueError(msg)
+def map_chunk(f, iters, iter_kwarg_keys=None, kwargs=None):
+    """Map ``f`` across one or more iterables, maybe with keyword arguments.
 
+    Low-level function used in ``bag_map``, not user facing.
 
-class _Zip(Iterator):
+    Arguments
+    ---------
+    f : callable
+    iters : List[Iterable]
+    iter_kwarg_keys : List[str] or None
+        Keyword names to use for pair with the tail end of ``iters``, allowing
+        keyword arguments to be passed in from iterators.
+    kwargs : dict or None
+        Additional constant keyword arguments to use on every call to ``f``.
     """
-    Alternative to the builtin zip which keeps references to their results around for too long.
-    """
-
-    def __init__(self, *args):
-        self.iters = [iter(arg) for arg in args]
-
-    def __next__(self):
-        results = []
-        for it in self.iters:
-            results.append(next(it))
-        return tuple(results)
+    if kwargs:
+        f = partial(f, **kwargs)
+    iters = [iter(a) for a in iters]
+    return _MapChunk(f, iters, kwarg_keys=iter_kwarg_keys)
 
 
-class _MapChunkItGeneric(Iterator):
-    """
-    Hand-written iterator that prevents potential memory leaks. `yield` in generators holds a reference until the
-    control flow returns to the yielding generator. In iterator chain, this piles up loads of objects. In dask bags with
-    a partition_size > 1, this means that objects for multile items within a partition and multiple functions within a
-    fused chain are kept in memory instead of a single intermediate result of a single item.
-    """
-
-    def __init__(self, f, it, iters):
+class _MapChunk(Iterator):
+    def __init__(self, f, iters, kwarg_keys=None):
         self.f = f
-        self.it = it
         self.iters = iters
+        self.kwarg_keys = kwarg_keys or ()
+        self.nkws = len(self.kwarg_keys)
 
     def __next__(self):
         try:
-            params = next(self.it)
+            vals = [next(i) for i in self.iters]
         except StopIteration:
-            _map_chunk_check_iters(self.iters)
-            raise StopIteration
+            self.check_all_iterators_consumed()
+            raise
 
-        return self.call_f(params)
+        if self.nkws:
+            args = vals[: -self.nkws]
+            kwargs = dict(zip(self.kwarg_keys, vals[-self.nkws :]))
+            return self.f(*args, **kwargs)
+        return self.f(*vals)
 
-
-class _MapChunkItAK(_MapChunkItGeneric):
-    def call_f(self, params):
-        a, k = params
-        return self.f(*a, **k)
-
-
-class _MapChunkItK(_MapChunkItGeneric):
-    def call_f(self, params):
-        return self.f(**params)
-
-
-class _MapChunkItA(_MapChunkItGeneric):
-    def call_f(self, params):
-        return self.f(*params)
-
-
-def map_chunk(f, args, bag_kwargs, kwargs):
-    if kwargs:
-        f = partial(f, **kwargs)
-
-    args = [iter(a) for a in args]
-    iters = list(args)
-
-    if bag_kwargs:
-        keys = list(bag_kwargs)
-        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
-        iters.extend(kw_val_iters)
-        kw_iter = (dict(_Zip(keys, k)) for k in _Zip(*kw_val_iters))
-        if args:
-            return _MapChunkItAK(f, _Zip(_Zip(*args), kw_iter), iters)
-        else:
-            return _MapChunkItK(f, kw_iter, iters)
-    else:
-        return _MapChunkItA(f, _Zip(*args), iters)
+    def check_all_iterators_consumed(self):
+        if len(self.iters) > 1:
+            for i in self.iters:
+                if isinstance(i, itertools.repeat):
+                    continue
+                try:
+                    next(i)
+                except StopIteration:
+                    pass
+                else:
+                    msg = (
+                        "map called with multiple bags that aren't identically "
+                        "partitioned. Please ensure that all bag arguments "
+                        "have the same partition lengths"
+                    )
+                    raise ValueError(msg)
 
 
 def starmap_chunk(f, x, kwargs):
@@ -2205,21 +2171,21 @@ def bag_map(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_args(n):
-        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+    def build_iters(n):
+        args = [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+        if bag_kwargs:
+            args.extend((b.name, n) for b in bag_kwargs.values())
+        return args
 
-    def build_bag_kwargs(n):
-        if not bag_kwargs:
-            return None
-        return (
-            dict,
-            (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
-        )
+    if bag_kwargs:
+        iter_kwarg_keys = list(bag_kwargs)
+    else:
+        iter_kwarg_keys = None
 
     dsk = {
         (name, n): (
             reify,
-            (map_chunk, func, build_args(n), build_bag_kwargs(n), other_kwargs),
+            (map_chunk, func, build_iters(n), iter_kwarg_keys, other_kwargs),
         )
         for n in range(npartitions)
     }

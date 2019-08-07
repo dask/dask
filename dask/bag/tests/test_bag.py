@@ -1423,36 +1423,40 @@ def test_map_keynames():
     )
 
 
-def test_eager_drop():
-    # see gh 5189
+def test_map_releases_element_references_as_soon_as_possible():
+    # Ensure that Bag.map doesn't keep *element* references longer than
+    # necessary. Previous map implementations used ``yield``, which would keep
+    # a reference to the yielded element until the yielded method resumed (this
+    # is just how generator functions work in CPython).
     #
-    # We test 2 variant of potential dangling references here:
-    # 1. Within an item of a partition (`f_create->f_drop->f_create->f_drop`):
-    #    At the time of the second `f_create`, the `C` from the first `f_create` should be dropped.
+    # See https://github.com/dask/dask/issues/5189
+    #
+    # We test 2 variant of potential extra references here:
+    # 1. Within an element of a partition:
+    #    At the time of the second `f_create` for each element, the `C` from
+    #    the first `f_create` should be dropped.
     # 2. Within a partition:
-    #    When the second item within a partition is processed, `C` from the first item should already be dropped.
+    #    When the second item within a partition is processed, `C` from the
+    #    first item should already be dropped.
     class C:
         def __init__(self, i):
             self.i = i
 
-        def __del__(self):
-            os.remove(self.fname)
-
     # keep a weakref to all existing instances of `C`
-    memory = weakref.WeakValueDictionary()
+    in_memory = weakref.WeakSet()
 
     def f_create(i):
         # check that there are no instances of `C` left
-        assert len(memory) == 0
+        assert len(in_memory) == 0
 
         # create new instance
         o = C(i)
-        memory[i] = o
+        in_memory.add(o)
 
         return o
 
     def f_drop(o):
-        # the user/payload code does not require the `o` (an instance of `C`) anymore, so it should be dropped
+        # o reference dropped on return, should collect
         return o.i + 100
 
     b = (
@@ -1464,6 +1468,7 @@ def test_eager_drop():
         .sum()
     )
     try:
+        # Disable gc to ensure refcycles don't matter here
         gc.disable()
         b.compute(scheduler="sync")
     finally:
