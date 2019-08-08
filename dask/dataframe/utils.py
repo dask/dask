@@ -657,6 +657,12 @@ def index_summary(idx, name=None):
     return "{}: {} entries{}".format(name, n, summary)
 
 
+def series_like_df(df, values=()):
+    """Get a series that is compatible with df.
+    """
+    return type(df._meta.iloc[:, 0])(values)
+
+
 ###############################################################
 # Testing
 ###############################################################
