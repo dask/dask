@@ -1,11 +1,13 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
+import gc
 from itertools import repeat
 import multiprocessing
 import math
 import os
 import random
+import weakref
 
 import partd
 import pytest
@@ -1419,3 +1421,55 @@ def test_map_keynames():
     assert set(b.map(inc).__dask_graph__()) != set(
         b.map_partitions(inc).__dask_graph__()
     )
+
+
+def test_map_releases_element_references_as_soon_as_possible():
+    # Ensure that Bag.map doesn't keep *element* references longer than
+    # necessary. Previous map implementations used ``yield``, which would keep
+    # a reference to the yielded element until the yielded method resumed (this
+    # is just how generator functions work in CPython).
+    #
+    # See https://github.com/dask/dask/issues/5189
+    #
+    # We test 2 variant of potential extra references here:
+    # 1. Within an element of a partition:
+    #    At the time of the second `f_create` for each element, the `C` from
+    #    the first `f_create` should be dropped.
+    # 2. Within a partition:
+    #    When the second item within a partition is processed, `C` from the
+    #    first item should already be dropped.
+    class C:
+        def __init__(self, i):
+            self.i = i
+
+    # keep a weakref to all existing instances of `C`
+    in_memory = weakref.WeakSet()
+
+    def f_create(i):
+        # check that there are no instances of `C` left
+        assert len(in_memory) == 0
+
+        # create new instance
+        o = C(i)
+        in_memory.add(o)
+
+        return o
+
+    def f_drop(o):
+        # o reference dropped on return, should collect
+        return o.i + 100
+
+    b = (
+        db.from_sequence(range(2), npartitions=1)
+        .map(f_create)
+        .map(f_drop)
+        .map(f_create)
+        .map(f_drop)
+        .sum()
+    )
+    try:
+        # Disable gc to ensure refcycles don't matter here
+        gc.disable()
+        b.compute(scheduler="sync")
+    finally:
+        gc.enable()
