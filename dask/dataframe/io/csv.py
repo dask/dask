@@ -140,7 +140,7 @@ def coerce_dtypes(df, dtypes):
 
         bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
         table = asciitable(["Column", "Found", "Expected"], bad_dtypes)
-        dtype_kw = "dtype={%s}" % ",\n" "       ".join(
+        dtype_kw = "dtype={%s}" % ",\n       ".join(
             "%r: '%s'" % (k, v) for (k, v, _) in bad_dtypes
         )
 
@@ -172,7 +172,7 @@ def coerce_dtypes(df, dtypes):
 
     if bad_dtypes or bad_dates:
         rule = "\n\n%s\n\n" % ("-" * 61)
-        msg = "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n" "%s" % (
+        msg = "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n%s" % (
             rule.join(filter(None, [dtype_msg, date_msg]))
         )
         raise ValueError(msg)
@@ -349,7 +349,7 @@ def read_pandas(
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
-            raise ValueError("{0} not supported for " "dd.{1}".format(kw, reader_name))
+            raise ValueError("{0} not supported for dd.{1}".format(kw, reader_name))
     if kwargs.get("nrows", None):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
@@ -371,7 +371,7 @@ def read_pandas(
         firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
     if isinstance(kwargs.get("header"), list):
         raise TypeError(
-            "List of header rows not supported for " "dd.{0}".format(reader_name)
+            "List of header rows not supported for dd.{0}".format(reader_name)
         )
     if isinstance(kwargs.get("converters"), dict) and include_path_column:
         path_converter = kwargs.get("converters").get(include_path_column, None)

@@ -38,6 +38,7 @@ Top level user functions:
    bitwise_or
    bitwise_xor
    block
+   blockwise
    broadcast_arrays
    broadcast_to
    coarsen
@@ -116,8 +117,8 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   ~core.map_blocks
    map_overlap
+   map_blocks
    matmul
    max
    maximum
@@ -156,6 +157,7 @@ Top level user functions:
    ravel
    real
    rechunk
+   reduction
    repeat
    reshape
    result_type
@@ -279,6 +281,7 @@ Random
    random.noncentral_f
    random.normal
    random.pareto
+   random.permutation
    random.poisson
    random.power
    random.randint
@@ -410,6 +413,7 @@ Other functions
 .. autofunction:: bitwise_or
 .. autofunction:: bitwise_xor
 .. autofunction:: block
+.. autofunction:: blockwise
 .. autofunction:: broadcast_arrays
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
@@ -487,6 +491,7 @@ Other functions
 .. autofunction:: logical_not
 .. autofunction:: logical_or
 .. autofunction:: logical_xor
+.. autofunction:: map_blocks
 .. autofunction:: matmul
 .. autofunction:: max
 .. autofunction:: maximum
@@ -524,6 +529,7 @@ Other functions
 .. autofunction:: ravel
 .. autofunction:: real
 .. autofunction:: rechunk
+.. autofunction:: reduction
 .. autofunction:: repeat
 .. autofunction:: reshape
 .. autofunction:: result_type
