@@ -17,6 +17,18 @@ from dask.array.slicing import (
     take,
     normalize_index,
     slicing_plan,
+    make_block_sorted_slices,
+    shuffle_slice,
+)
+from dask.array.slicing import (
+    _sanitize_index_element,
+    _slice_1d,
+    new_blockdim,
+    sanitize_index,
+    slice_array,
+    take,
+    normalize_index,
+    slicing_plan,
     cached_cumsum,
 )
 from dask.array.utils import assert_eq, same_keys
@@ -904,6 +916,32 @@ def test_setitem_with_different_chunks_preserves_shape(params):
 def test_gh3579():
     assert_eq(np.arange(10)[0::-1], da.arange(10, chunks=3)[0::-1])
     assert_eq(np.arange(10)[::-1], da.arange(10, chunks=3)[::-1])
+
+
+def test_make_blockwise_sorted_slice():
+    x = da.arange(8, chunks=4)
+    index = np.array([6, 0, 4, 2, 7, 1, 5, 3])
+
+    a, b = make_block_sorted_slices(index, x.chunks)
+
+    index2 = np.array([0, 2, 4, 6, 1, 3, 5, 7])
+    index3 = np.array([3, 0, 2, 1, 7, 4, 6, 5])
+    np.testing.assert_array_equal(a, index2)
+    np.testing.assert_array_equal(b, index3)
+
+
+@pytest.mark.filterwarnings("ignore")
+@pytest.mark.parametrize(
+    "size, chunks", [((100, 2), (50, 2)), ((100, 2), (37, 1)), ((100,), (55,))]
+)
+def test_shuffle_slice(size, chunks):
+    x = da.random.randint(0, 1000, size=size, chunks=chunks)
+    index = np.arange(len(x))
+    np.random.shuffle(index)
+
+    a = x[index]
+    b = shuffle_slice(x, index)
+    assert_eq(a, b)
 
 
 @pytest.mark.parametrize("lock", [True, False])

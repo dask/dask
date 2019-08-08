@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from itertools import product
 from numbers import Integral
 from operator import getitem
@@ -14,6 +15,7 @@ from .core import (
     broadcast_shapes,
     broadcast_to,
 )
+from .creation import arange
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, skip_doctest
@@ -354,6 +356,17 @@ class RandomState(object):
     def pareto(self, a, size=None, chunks="auto"):
         return self._wrap("pareto", a, size=size, chunks=chunks)
 
+    @doc_wraps(np.random.RandomState.permutation)
+    def permutation(self, x):
+        from .slicing import shuffle_slice
+
+        if isinstance(x, numbers.Number):
+            x = arange(x, chunks="auto")
+
+        index = np.arange(len(x))
+        self._numpy_state.shuffle(index)
+        return shuffle_slice(x, index)
+
     @doc_wraps(np.random.RandomState.poisson)
     def poisson(self, lam=1.0, size=None, chunks="auto"):
         return self._wrap("poisson", lam, size=size, chunks=chunks)
@@ -470,6 +483,7 @@ noncentral_chisquare = _state.noncentral_chisquare
 noncentral_f = _state.noncentral_f
 normal = _state.normal
 pareto = _state.pareto
+permutation = _state.permutation
 poisson = _state.poisson
 power = _state.power
 rayleigh = _state.rayleigh
