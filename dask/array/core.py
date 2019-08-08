@@ -1793,7 +1793,7 @@ class Array(DaskMethodsMixin):
         if len(args) != self.ndim:
             raise ValueError("Indices mismatch with array rank.")
 
-        return self[args].astype(object)
+        return self[args].to_delayed()
 
     @derived_from(np.ndarray)
     def squeeze(self, axis=None):
