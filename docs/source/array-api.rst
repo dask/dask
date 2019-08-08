@@ -281,6 +281,7 @@ Random
    random.noncentral_f
    random.normal
    random.pareto
+   random.permutation
    random.poisson
    random.power
    random.randint
