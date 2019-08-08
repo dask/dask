@@ -1,4 +1,4 @@
-from collections import MutableMapping
+from collections.abc import MutableMapping
 
 from .utils import log_errors, tokey
 

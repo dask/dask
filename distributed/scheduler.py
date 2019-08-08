@@ -1,5 +1,6 @@
 import asyncio
-from collections import defaultdict, deque, OrderedDict, Mapping, Set
+from collections import defaultdict, deque, OrderedDict
+from collections.abc import Mapping, Set
 from datetime import timedelta
 from functools import partial
 import itertools

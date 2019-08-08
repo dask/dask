@@ -1,5 +1,6 @@
 import atexit
-from collections import defaultdict, Iterator
+from collections import defaultdict
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, CancelledError
 from concurrent.futures._base import DoneAndNotDoneFutures
 from contextlib import contextmanager

@@ -1,5 +1,5 @@
 from concurrent.futures import CancelledError
-from collections import Iterator
+from collections.abc import Iterator
 from operator import add
 import queue
 import random

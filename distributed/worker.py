@@ -1,6 +1,7 @@
 import asyncio
 import bisect
-from collections import defaultdict, deque, MutableMapping
+from collections import defaultdict, deque
+from collections.abc import MutableMapping
 from datetime import timedelta
 import heapq
 import logging
