@@ -148,7 +148,7 @@ Custom parallelism:
 | **Dask**                                               | **Spark**                                              |
 +--------------------------------------------------------+--------------------------------------------------------+
 | Allows you to specify arbitrary task graphs for more   | Generally expects users to compose computations out    |
-| complex and custom systems that are not part of the    | of theirhigh-level primitives (map, reduce, groupby,   |
+| complex and custom systems that are not part of the    | of their high-level primitives (map, reduce, groupby,   |
 | standard set of collections.                           | join, ...).  It is also possible to extend Spark       |
 |                                                        | through subclassing RDDs, although this is rarely done.|
 +--------------------------------------------------------+--------------------------------------------------------+
