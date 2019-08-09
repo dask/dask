@@ -166,22 +166,6 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
 4.  **Cloud**: TODO
 
 
-Are these long running, or ephemeral?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-We see both, but ephemeral deployments are more common.
-
-Most Dask use todqy is about enabling data science or data engineering users to
-scale their interactive workloads across the cluster.
-These are typically either interactive sessions with Jupyter, or batch scripts
-that run at a pre-defined time.  In both cases, the user asks the resource
-manager for a bunch of machines, does some work, and then gives up those
-machines.
-
-Some institutions also use Dask in an always-on fashion, either handling
-real-time traffic in a scalable way, or responding to a broad set of
-interactive users with large datasets that it keeps resident in memory.
-
 Is Dask Secure?
 ~~~~~~~~~~~~~~~
 
@@ -238,6 +222,29 @@ This depends on your cluster resource manager:
 
 In each case Dask typically integrates with existing processes and technologies
 that are well understood and familiar to the institution.
+
+
+How Does Dask move data between machines?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+TODO
+
+
+Are deployment long running, or ephemeral?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We see both, but ephemeral deployments are more common.
+
+Most Dask use todqy is about enabling data science or data engineering users to
+scale their interactive workloads across the cluster.
+These are typically either interactive sessions with Jupyter, or batch scripts
+that run at a pre-defined time.  In both cases, the user asks the resource
+manager for a bunch of machines, does some work, and then gives up those
+machines.
+
+Some institutions also use Dask in an always-on fashion, either handling
+real-time traffic in a scalable way, or responding to a broad set of
+interactive users with large datasets that it keeps resident in memory.
 
 
 For Technical Leads
