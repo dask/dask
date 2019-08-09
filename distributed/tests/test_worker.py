@@ -1536,3 +1536,15 @@ async def test_lifetime_stagger(c, s, a, b):
     assert a.lifetime != b.lifetime
     assert 8 <= a.lifetime <= 12
     assert 8 <= b.lifetime <= 12
+
+
+@gen_cluster()
+async def test_gpu_metrics(s, a, b):
+    pytest.importorskip("pynvml")
+    from distributed.diagnostics.nvml import count
+
+    assert "gpu" in a.metrics
+    assert len(s.workers[a.address].metrics["gpu"]["memory-used"]) == count
+
+    assert "gpu" in a.startup_information
+    assert len(s.workers[a.address].extra["gpu"]["name"]) == count

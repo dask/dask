@@ -211,6 +211,7 @@ class WorkerState(object):
     __slots__ = (
         "actors",
         "address",
+        "extra",
         "has_what",
         "last_seen",
         "local_directory",
@@ -240,6 +241,7 @@ class WorkerState(object):
         local_directory=None,
         services=None,
         nanny=None,
+        extra=None,
     ):
         self.address = address
         self.pid = pid
@@ -263,6 +265,8 @@ class WorkerState(object):
         self.resources = {}
         self.used_resources = {}
 
+        self.extra = extra or {}
+
     @property
     def host(self):
         return get_address_host(self.address)
@@ -278,6 +282,7 @@ class WorkerState(object):
             local_directory=self.local_directory,
             services=self.services,
             nanny=self.nanny,
+            extra=self.extra,
         )
         ws.processing = {ts.key for ts in self.processing}
         return ws
@@ -306,6 +311,7 @@ class WorkerState(object):
             "services": self.services,
             "metrics": self.metrics,
             "nanny": self.nanny,
+            **self.extra,
         }
 
     @property
@@ -1386,6 +1392,7 @@ class Scheduler(ServerNode):
         services=None,
         local_directory=None,
         nanny=None,
+        extra=None,
     ):
         """ Add a new worker to the cluster """
         with log_errors():
@@ -1406,6 +1413,7 @@ class Scheduler(ServerNode):
                 local_directory=local_directory,
                 services=services,
                 nanny=nanny,
+                extra=extra,
             )
 
             if name in self.aliases:
