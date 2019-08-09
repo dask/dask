@@ -67,17 +67,16 @@ Additionally, Dask is maintained both by a broad community of maintainers,
 as well as substantial institutional support (several full-time employees each)
 by both Anaconda, the company behind the leading data science distribution, and
 NVIDIA, the leading hardware manufacturer of GPUs.  Despite large corporate
-support, Dask remains a community governed project, an is fiscally sponsored by
-NumFOCUS, the same 501c3 that manages NumPy, Pandas, Jupyter, as well as many
-others.
+support, Dask remains a community governed project, and is fiscally sponsored by
+NumFOCUS, the same 501c3 that fiscally sponsors NumPy, Pandas, Jupyter, and many others.
 
 
 Who else uses Dask?
 ~~~~~~~~~~~~~~~~~~~
 
-Dask is used by individual researchers in practically every field today.
-It has X monthly downlaods, and is integrated into a many PyData software
-packages today.
+Dask is used by individual researchers in practically every field today.  It
+has millions of downloads per month, and is integrated into many PyData
+software packages today.
 
 On an *institutional* level Dask is used by analytics and research groups in a
 similarly broad set of domains across both energetic startups as well as large
@@ -91,7 +90,7 @@ How does Dask compare with Apache Spark?
 
 *This question has longer and more technical coverage :doc:`here <spark>`*
 
-Both Dask and Apache Spark are similar in that they both ...
+Dask and Apache Spark are similar in that they both ...
 
 -  Promise easy parallelism for data science Python users
 -  Provide Dataframe and ML APIs for ETL, data science, and machine learning
@@ -143,7 +142,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     with YARN, the resource manager that deploys services like Hadoop, Spark,
     Hive, and others.
 
-    To help with this, you'll likely want to use [Dask-Yarn](https://yarn.dask.org).
+    To help with this, you'll likely want to use `Dask-Yarn <https://yarn.dask.org>`_.
 
     For more information see :doc:`setup/yarn`
 
@@ -205,7 +204,7 @@ resources, and have their processes tracked accordingly.
 However, there are institutions where analyst-level users aren't given direct access to
 the cluster.  This is particularly common in Cloudera/Hortonworks Hadoop/Spark deployments.
 In these cases some level of explicit indirection may be required.  For this, we
-recommend the `Dask Gateway <https://gateway.dask.org>`_, which uses IT-level
+recommend the `Dask Gateway project <https://gateway.dask.org>`_, which uses IT-level
 permissions to properly route authenticated users into secure resources.
 
 
@@ -235,7 +234,7 @@ Are deployment long running, or ephemeral?
 
 We see both, but ephemeral deployments are more common.
 
-Most Dask use todqy is about enabling data science or data engineering users to
+Most Dask use today is about enabling data science or data engineering users to
 scale their interactive workloads across the cluster.
 These are typically either interactive sessions with Jupyter, or batch scripts
 that run at a pre-defined time.  In both cases, the user asks the resource
