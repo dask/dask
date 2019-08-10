@@ -158,11 +158,18 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
 
     For more information see :doc:`setup/hpc`
 
-3.  **Kubernetes**: Newer clusters may employ Kubernetes for deployment.
+3.  **Kubernetes/Cloud**: Newer clusters may employ Kubernetes for deployment.
+    This is particularly commonly used today on major cloud providers,
+    all of which provide hosted Kubernetes as a service.  People today use Dask
+    on Kubernetes using either of the following:
+
+    -  **Helm**: an easy way to stand up a long-running Dask cluster and
+      Jupyter notebook
+
+    -  **Dask-Kubernetes**: for native Kubernetes integration for fast moving
+      or ephemeral deployments.
 
     For more information see :doc:`setup/kubernetes`
-
-4.  **Cloud**: TODO
 
 
 Is Dask Secure?
@@ -215,18 +222,24 @@ This depends on your cluster resource manager:
 
 -  Most HPC users use their network file system
 -  Hadoop/Spark/Yarn users package their environment into a tarball and ship it
-   around with HDFS (Dask-Yarn integrates with `Conda Pack <TODO>`_ for this
-   capability)
+   around with HDFS (Dask-Yarn integrates with `Conda Pack
+   <https://conda.github.io/conda-pack/>`_ for this capability)
 -  Kubernetes or Cloud users typically use Docker images
 
 In each case Dask typically integrates with existing processes and technologies
 that are well understood and familiar to the institution.
 
 
-How Does Dask move data between machines?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+How Does Dask communicate data between machines?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TODO
+Dask usually communicates over TCP, using msgpack for small administrative
+messages, and its own protocol for efficiently passing around large messages.
+The scheduler and each worker host their own TCP server, making Dask a
+distributed peer-to-peer network that uses point-to-point communication.
+
+For high performance networks you can use either TCP-over-Infiniband for about
+1 GB/s bandwidth, or UCX (experimental) for full speed communication.
 
 
 Are deployment long running, or ephemeral?
@@ -302,11 +315,12 @@ model changes, and the performance that we get for familiar operations can be
 surprising.
 
 Our main solution to build this intutition, other than
-accumulated experience, is Dask's `Diagnostic Dashboard <TODO>`.
-The dashboard delivers a ton of visual feedback to users as they are running
-their computation to help them understand what is going on.  This both helps
-them to identify and resolve immediate bottlenecks, and also builds up that
-parallel performance intuition suprisingly quickly.
+accumulated experience, is Dask's `Diagnostic Dashboard
+<https://docs.dask.org/en/latest/diagnostics-distributed.html>`.  The dashboard
+delivers a ton of visual feedback to users as they are running their
+computation to help them understand what is going on.  This both helps them to
+identify and resolve immediate bottlenecks, and also builds up that parallel
+performance intuition suprisingly quickly.
 
 
 How much performance tuning does Dask require?
