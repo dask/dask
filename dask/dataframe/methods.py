@@ -7,11 +7,11 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like
+from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250
 from ..utils import Dispatch
 
-if PANDAS_VERSION >= '0.23':
-    concat_kwargs = {'sort': False}
+if PANDAS_VERSION >= "0.23":
+    concat_kwargs = {"sort": False}
 else:
     concat_kwargs = {}
 
@@ -44,8 +44,9 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
-                   kind='loc'):
+def boundary_slice(
+    df, start, stop, right_boundary=True, left_boundary=True, kind="loc"
+):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
     Examples
@@ -80,7 +81,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
     if df.empty:
         return df
 
-    if kind == 'loc' and not df.index.is_monotonic:
+    if kind == "loc" and not df.index.is_monotonic:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -98,11 +99,11 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
         return df
     else:
         result = getattr(df, kind)[start:stop]
-    if not right_boundary:
-        right_index = result.index.get_slice_bound(stop, 'left', kind)
+    if not right_boundary and stop is not None:
+        right_index = result.index.get_slice_bound(stop, "left", kind)
         result = result.iloc[:right_index]
-    if not left_boundary:
-        left_index = result.index.get_slice_bound(start, 'right', kind)
+    if not left_boundary and start is not None:
+        left_index = result.index.get_slice_bound(start, "right", kind)
         result = result.iloc[left_index:]
     return result
 
@@ -115,22 +116,23 @@ def index_count(x):
 def mean_aggregate(s, n):
     try:
         with warnings.catch_warnings(record=True):
-            warnings.simplefilter('always')
+            warnings.simplefilter("always")
             return s / n
     except ZeroDivisionError:
         return np.float64(np.nan)
 
 
-def var_aggregate(x2, x, n, ddof):
-    try:
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter('always')
-            result = (x2 / n) - (x / n)**2
-        if ddof != 0:
-            result = result * n / (n - ddof)
-        return result
-    except ZeroDivisionError:
-        return np.float64(np.nan)
+def wrap_var_reduction(array_var, index):
+    if isinstance(array_var, np.ndarray) or isinstance(array_var, list):
+        return pd.Series(array_var, index=index)
+
+    return array_var
+
+
+def var_mixed_concat(numeric_var, timedelta_var, columns):
+    vars = pd.concat([numeric_var, timedelta_var])
+
+    return vars.reindex(index=columns)
 
 
 def describe_aggregate(values):
@@ -144,7 +146,7 @@ def describe_aggregate(values):
             if name not in names:
                 names.append(name)
 
-    return pd.concat(values, join_axes=[pd.Index(names)], axis=1)
+    return pd.concat(values, axis=1, **concat_kwargs).reindex(names)
 
 
 def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
@@ -160,12 +162,11 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         max = pd.to_timedelta(max)
         q = q.apply(lambda x: pd.to_timedelta(x))
 
-    part1 = typ([count, mean, std, min],
-                index=['count', 'mean', 'std', 'min'])
-    q.index = ['{0:g}%'.format(l * 100) for l in q.index.tolist()]
+    part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+    q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]
     if isinstance(q, pd.Series) and typ == pd.DataFrame:
         q = q.to_frame()
-    part3 = typ([max], index=['max'])
+    part3 = typ([max], index=["max"])
 
     result = pd.concat([part1, q, part3], **concat_kwargs)
 
@@ -190,12 +191,20 @@ def describe_nonnumeric_aggregate(stats, name):
 
     # input was empty dataframe/series
     if len(top_freq) == 0:
-        return pd.Series([0, 0], index=['count', 'unique'], name=name)
+        data = [0, 0]
+        index = ["count", "unique"]
+        dtype = None
+        if PANDAS_GT_0250:
+            data.extend([None, None])
+            index.extend(["top", "freq"])
+            dtype = object
+        result = pd.Series(data, index=index, dtype=dtype, name=name)
+        return result
 
     top = top_freq.index[0]
     freq = top_freq.iloc[0]
 
-    index = ['unique', 'count', 'top', 'freq']
+    index = ["unique", "count", "top", "freq"]
     values = [nunique, count]
 
     if is_datetime_column:
@@ -209,7 +218,7 @@ def describe_nonnumeric_aggregate(stats, name):
 
         first = pd.Timestamp(min_ts, tz=tz)
         last = pd.Timestamp(max_ts, tz=tz)
-        index += ['first', 'last']
+        index += ["first", "last"]
         values += [top, freq, first, last]
     else:
         values += [top, freq]
@@ -220,14 +229,14 @@ def describe_nonnumeric_aggregate(stats, name):
 def cummin_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
-    else:       # scalar
+    else:  # scalar
         return x if x < y else y
 
 
 def cummax_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
         return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
-    else:       # scalar
+    else:  # scalar
         return x if x > y else y
 
 
@@ -279,9 +288,11 @@ def drop_columns(df, columns, dtype):
 def fillna_check(df, method, check=True):
     out = df.fillna(method=method)
     if check and out.isnull().values.all(axis=0).any():
-        raise ValueError("All NaN partition encountered in `fillna`. Try "
-                         "using ``df.repartition`` to increase the partition "
-                         "size, or specify `limit` in `fillna`.")
+        raise ValueError(
+            "All NaN partition encountered in `fillna`. Try "
+            "using ``df.repartition`` to increase the partition "
+            "size, or specify `limit` in `fillna`."
+        )
     return out
 
 
@@ -295,15 +306,17 @@ def pivot_agg(df):
 
 
 def pivot_sum(df, index, columns, values):
-    return pd.pivot_table(df, index=index, columns=columns,
-                          values=values, aggfunc='sum')
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="sum"
+    )
 
 
 def pivot_count(df, index, columns, values):
     # we cannot determine dtype until concatenationg all partitions.
     # make dtype deterministic, always coerce to np.float64
-    return pd.pivot_table(df, index=index, columns=columns,
-                          values=values, aggfunc='count').astype(np.float64)
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="count"
+    ).astype(np.float64)
 
 
 # ---------------------------------
@@ -311,10 +324,10 @@ def pivot_count(df, index, columns, values):
 # ---------------------------------
 
 
-concat_dispatch = Dispatch('concat')
+concat_dispatch = Dispatch("concat")
 
 
-def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
+def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
@@ -334,29 +347,33 @@ def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
         return dfs[0]
     else:
         func = concat_dispatch.dispatch(type(dfs[0]))
-        return func(dfs, axis=axis, join=join, uniform=uniform,
-                    filter_warning=filter_warning)
+        return func(
+            dfs, axis=axis, join=join, uniform=uniform, filter_warning=filter_warning
+        )
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
+def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **concat_kwargs)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
         if isinstance(dfs[0], pd.CategoricalIndex):
-            return pd.CategoricalIndex(union_categoricals(dfs),
-                                       name=dfs[0].name)
+            return pd.CategoricalIndex(union_categoricals(dfs), name=dfs[0].name)
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
-            if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
-                    for o in rest):
-                arrays = [concat([i._get_level_values(n) for i in dfs])
-                          for n in range(first.nlevels)]
+            if all(
+                (isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
+                for o in rest
+            ):
+                arrays = [
+                    concat([i._get_level_values(n) for i in dfs])
+                    for n in range(first.nlevels)
+                ]
                 return pd.MultiIndex.from_arrays(arrays, names=first.names)
 
-            to_concat = (first.values, ) + tuple(k._values for k in rest)
+            to_concat = (first.values,) + tuple(k._values for k in rest)
             new_tuples = np.concatenate(to_concat)
             try:
                 return pd.MultiIndex.from_tuples(new_tuples, names=first.names)
@@ -367,10 +384,10 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
     # Handle categorical index separately
     dfs0_index = dfs[0].index
 
-    has_categoricalindex = (
-        isinstance(dfs0_index, pd.CategoricalIndex) or
-        (isinstance(dfs0_index, pd.MultiIndex) and
-         any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels)))
+    has_categoricalindex = isinstance(dfs0_index, pd.CategoricalIndex) or (
+        isinstance(dfs0_index, pd.MultiIndex)
+        and any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels)
+    )
 
     if has_categoricalindex:
         dfs2 = [df.reset_index(drop=True) for df in dfs]
@@ -380,31 +397,43 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
         ind = None
 
     # Concatenate the partitions together, handling categories as needed
-    if (isinstance(dfs2[0], pd.DataFrame) if uniform else
-            any(isinstance(df, pd.DataFrame) for df in dfs2)):
+    if (
+        isinstance(dfs2[0], pd.DataFrame)
+        if uniform
+        else any(isinstance(df, pd.DataFrame) for df in dfs2)
+    ):
         if uniform:
             dfs3 = dfs2
-            cat_mask = dfs2[0].dtypes == 'category'
+            cat_mask = dfs2[0].dtypes == "category"
         else:
             # When concatenating mixed dataframes and series on axis 1, Pandas
             # converts series to dataframes with a single column named 0, then
             # concatenates.
-            dfs3 = [df if isinstance(df, pd.DataFrame) else
-                    df.to_frame().rename(columns={df.name: 0}) for df in dfs2]
+            dfs3 = [
+                df
+                if isinstance(df, pd.DataFrame)
+                else df.to_frame().rename(columns={df.name: 0})
+                for df in dfs2
+            ]
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if filter_warning:
-                    warnings.simplefilter('ignore', FutureWarning)
-                cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
-                                      for df in dfs3], join=join,
-                                     **concat_kwargs).any()
+                    warnings.simplefilter("ignore", FutureWarning)
+                cat_mask = pd.concat(
+                    [(df.dtypes == "category").to_frame().T for df in dfs3],
+                    join=join,
+                    **concat_kwargs
+                ).any()
 
         if cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
             # this should be aligned, so no need to filter warning
-            out = pd.concat([df[df.columns.intersection(not_cat)]
-                             for df in dfs3], join=join, **concat_kwargs)
+            out = pd.concat(
+                [df[df.columns.intersection(not_cat)] for df in dfs3],
+                join=join,
+                **concat_kwargs
+            )
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
                 # Find an example of categoricals in this column
@@ -418,10 +447,10 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
                     if col in df.columns:
                         parts.append(df[col])
                     else:
-                        codes = np.full(len(df), -1, dtype='i8')
-                        data = pd.Categorical.from_codes(codes,
-                                                         sample.cat.categories,
-                                                         sample.cat.ordered)
+                        codes = np.full(len(df), -1, dtype="i8")
+                        data = pd.Categorical.from_codes(
+                            codes, sample.cat.categories, sample.cat.ordered
+                        )
                         parts.append(data)
                 out[col] = union_categoricals(parts)
                 # Pandas resets index type on assignment if frame is empty
@@ -440,11 +469,10 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:
                 ind = concat([df.index for df in dfs2])
-            return pd.Series(union_categoricals(dfs2), index=ind,
-                             name=dfs2[0].name)
+            return pd.Series(union_categoricals(dfs2), index=ind, name=dfs2[0].name)
         with warnings.catch_warnings():
             if filter_warning:
-                warnings.simplefilter('ignore', FutureWarning)
+                warnings.simplefilter("ignore", FutureWarning)
             out = pd.concat(dfs2, join=join, **concat_kwargs)
     # Re-add the index if needed
     if ind is not None:

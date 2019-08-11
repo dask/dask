@@ -28,8 +28,8 @@ Microsoft.  We recommend the first part of the documentation in the guide
 that focuses on Kubernetes and Helm (you do not need to follow all of these
 instructions).  Also, JupyterHub is not necessary to deploy Dask:
 
-- `Creating a Kubernetes Cluster <https://zero-to-jupyterhub.readthedocs.io/en/v0.4-doc/create-k8s-cluster.html>`_
-- `Setting up Helm <https://zero-to-jupyterhub.readthedocs.io/en/v0.4-doc/setup-helm.html>`_
+- `Creating a Kubernetes Cluster <https://zero-to-jupyterhub.readthedocs.io/en/latest/create-k8s-cluster.html>`_
+- `Setting up Helm <https://zero-to-jupyterhub.readthedocs.io/en/latest/setup-helm.html>`_
 
 Alternatively, you may want to experiment with Kubernetes locally using
 `Minikube <https://kubernetes.io/docs/getting-started-guides/minikube/>`_.

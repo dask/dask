@@ -5,7 +5,8 @@ from functools import partial
 from operator import add
 
 import pytest
-np = pytest.importorskip('numpy')
+
+np = pytest.importorskip("numpy")
 
 import dask.array as da
 from dask.array.ufunc import da_frompyfunc
@@ -14,52 +15,118 @@ from dask.base import tokenize
 
 
 def test_ufunc_meta():
-    assert da.log.__name__ == 'log'
-    assert da.log.__doc__.replace('  # doctest: +SKIP', '') == np.log.__doc__
+    assert da.log.__name__ == "log"
+    assert da.log.__doc__.replace("  # doctest: +SKIP", "") == np.log.__doc__
 
-    assert da.modf.__name__ == 'modf'
-    assert da.modf.__doc__.replace('  # doctest: +SKIP', '') == np.modf.__doc__
+    assert da.modf.__name__ == "modf"
+    assert da.modf.__doc__.replace("  # doctest: +SKIP", "") == np.modf.__doc__
 
-    assert da.frexp.__name__ == 'frexp'
-    assert da.frexp.__doc__.replace('  # doctest: +SKIP', '') == np.frexp.__doc__
+    assert da.frexp.__name__ == "frexp"
+    assert da.frexp.__doc__.replace("  # doctest: +SKIP", "") == np.frexp.__doc__
 
 
 def test_ufunc():
-    for attr in ['nin', 'nargs', 'nout', 'ntypes', 'identity',
-                 'signature', 'types']:
+    for attr in ["nin", "nargs", "nout", "ntypes", "identity", "signature", "types"]:
         assert getattr(da.log, attr) == getattr(np.log, attr)
 
     with pytest.raises(AttributeError):
         da.log.not_an_attribute
 
     assert repr(da.log) == repr(np.log)
-    assert 'nin' in dir(da.log)
-    assert 'outer' in dir(da.log)
+    assert "nin" in dir(da.log)
+    assert "outer" in dir(da.log)
 
 
-binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
-                 'bitwise_and', 'bitwise_or', 'bitwise_xor',
-                 'floor_divide', 'fmax', 'fmin', 'fmod', 'greater',
-                 'greater_equal', 'hypot', 'ldexp', 'less', 'less_equal',
-                 'logaddexp', 'logaddexp2', 'logical_and', 'logical_or',
-                 'logical_xor', 'maximum', 'minimum', 'mod', 'multiply',
-                 'nextafter', 'not_equal', 'power', 'remainder', 'subtract',
-                 'true_divide', 'float_power']
+binary_ufuncs = [
+    "add",
+    "arctan2",
+    "copysign",
+    "divide",
+    "equal",
+    "bitwise_and",
+    "bitwise_or",
+    "bitwise_xor",
+    "floor_divide",
+    "fmax",
+    "fmin",
+    "fmod",
+    "greater",
+    "greater_equal",
+    "hypot",
+    "ldexp",
+    "less",
+    "less_equal",
+    "logaddexp",
+    "logaddexp2",
+    "logical_and",
+    "logical_or",
+    "logical_xor",
+    "maximum",
+    "minimum",
+    "mod",
+    "multiply",
+    "nextafter",
+    "not_equal",
+    "power",
+    "remainder",
+    "subtract",
+    "true_divide",
+    "float_power",
+]
 
-unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
-                'arctanh', 'bitwise_not', 'cbrt', 'ceil', 'conj', 'cos',
-                'cosh', 'deg2rad', 'degrees', 'exp', 'exp2', 'expm1', 'fabs',
-                'fix', 'floor', 'invert','isfinite', 'isinf', 'isnan', 'log',
-                'log10', 'log1p', 'log2', 'logical_not',
-                'negative', 'rad2deg', 'radians', 'reciprocal', 'rint', 'sign',
-                'signbit', 'sin', 'sinh', 'spacing', 'sqrt', 'square',
-                'tan', 'tanh', 'trunc']
+unary_ufuncs = [
+    "absolute",
+    "arccos",
+    "arccosh",
+    "arcsin",
+    "arcsinh",
+    "arctan",
+    "arctanh",
+    "bitwise_not",
+    "cbrt",
+    "ceil",
+    "conj",
+    "cos",
+    "cosh",
+    "deg2rad",
+    "degrees",
+    "exp",
+    "exp2",
+    "expm1",
+    "fabs",
+    "fix",
+    "floor",
+    "invert",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "log",
+    "log10",
+    "log1p",
+    "log2",
+    "logical_not",
+    "negative",
+    "rad2deg",
+    "radians",
+    "reciprocal",
+    "rint",
+    "sign",
+    "signbit",
+    "sin",
+    "sinh",
+    "spacing",
+    "sqrt",
+    "square",
+    "tan",
+    "tanh",
+    "trunc",
+]
 
 
-@pytest.mark.parametrize('ufunc', unary_ufuncs)
+@pytest.mark.parametrize("ufunc", unary_ufuncs)
 def test_unary_ufunc(ufunc):
-    if ufunc == 'fix':
-        pytest.skip('fix calls floor in a way that we do not yet support')
+    if ufunc == "fix":
+        pytest.skip("fix calls floor in a way that we do not yet support")
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -85,7 +152,7 @@ def test_unary_ufunc(ufunc):
         assert_eq(dafunc(arr), npfunc(arr), equal_nan=True)
 
 
-@pytest.mark.parametrize('ufunc', binary_ufuncs)
+@pytest.mark.parametrize("ufunc", binary_ufuncs)
 def test_binary_ufunc(ufunc):
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
@@ -138,23 +205,26 @@ def test_ufunc_outer():
     assert isinstance(da.add.outer(arr1, arr2), np.ndarray)
 
     # Check mix of dimensions, dtypes, and numpy/dask/object
-    cases = [((darr1, darr2), (arr1, arr2)),
-             ((darr2, darr1), (arr2, arr1)),
-             ((darr2, darr1.astype('f8')), (arr2, arr1.astype('f8'))),
-             ((darr1, arr2), (arr1, arr2)),
-             ((darr1, 1), (arr1, 1)),
-             ((1, darr2), (1, arr2)),
-             ((1.5, darr2), (1.5, arr2)),
-             (([1, 2, 3], darr2), ([1, 2, 3], arr2)),
-             ((darr1.sum(), darr2), (arr1.sum(), arr2)),
-             ((np.array(1), darr2), (np.array(1), arr2))]
+    cases = [
+        ((darr1, darr2), (arr1, arr2)),
+        ((darr2, darr1), (arr2, arr1)),
+        ((darr2, darr1.astype("f8")), (arr2, arr1.astype("f8"))),
+        ((darr1, arr2), (arr1, arr2)),
+        ((darr1, 1), (arr1, 1)),
+        ((1, darr2), (1, arr2)),
+        ((1.5, darr2), (1.5, arr2)),
+        (([1, 2, 3], darr2), ([1, 2, 3], arr2)),
+        ((darr1.sum(), darr2), (arr1.sum(), arr2)),
+        ((np.array(1), darr2), (np.array(1), arr2)),
+    ]
 
     for (dA, dB), (A, B) in cases:
         assert_eq(da.add.outer(dA, dB), np.add.outer(A, B))
 
     # Check dtype kwarg works
-    assert_eq(da.add.outer(darr1, darr2, dtype='f8'),
-              np.add.outer(arr1, arr2, dtype='f8'))
+    assert_eq(
+        da.add.outer(darr1, darr2, dtype="f8"), np.add.outer(arr1, arr2, dtype="f8")
+    )
 
     with pytest.raises(ValueError):
         da.add.outer(darr1, darr2, out=arr1)
@@ -163,10 +233,11 @@ def test_ufunc_outer():
         da.sin.outer(darr1, darr2)
 
 
-@pytest.mark.parametrize('ufunc', ['isreal', 'iscomplex', 'real', 'imag'])
+@pytest.mark.parametrize("ufunc", ["isreal", "iscomplex", "real", "imag"])
 def test_complex(ufunc):
 
     dafunc = getattr(da, ufunc)
+    # Note that these functions are not NumPy ufuncs
     npfunc = getattr(np, ufunc)
 
     real = np.random.randint(1, 100, size=(20, 20))
@@ -185,7 +256,6 @@ def test_complex(ufunc):
         # applying Dask ufunc doesn't trigger computation
         assert isinstance(dafunc(darr), da.Array)
         assert_eq(dafunc(darr), npfunc(arr))
-
         assert_eq(npfunc(darr), npfunc(arr))
 
         # applying Dask ufunc to normal ndarray triggers computation
@@ -193,7 +263,7 @@ def test_complex(ufunc):
         assert_eq(dafunc(arr), npfunc(arr))
 
 
-@pytest.mark.parametrize('ufunc', ['frexp', 'modf'])
+@pytest.mark.parametrize("ufunc", ["frexp", "modf"])
 def test_ufunc_2results(ufunc):
 
     dafunc = getattr(da, ufunc)
@@ -252,14 +322,15 @@ def test_angle():
 
 
 def test_issignedinf():
-    arr = np.random.randint(-1, 2, size=(20, 20)).astype(float) / 0
+    with np.errstate(invalid="ignore", divide="ignore"):
+        arr = np.random.randint(-1, 2, size=(20, 20)).astype(float) / 0
     darr = da.from_array(arr, 3)
 
     assert_eq(np.isneginf(arr), da.isneginf(darr))
     assert_eq(np.isposinf(arr), da.isposinf(darr))
 
 
-@pytest.mark.parametrize('func', ['i0', 'sinc', 'nan_to_num'])
+@pytest.mark.parametrize("func", ["i0", "sinc", "nan_to_num"])
 def test_non_ufunc_others(func):
     arr = np.random.randint(1, 100, size=(20, 20))
     darr = da.from_array(arr, 3)
@@ -304,27 +375,26 @@ def test_frompyfunc_wrapper():
         f.not_an_attribute
 
     # Tab completion
-    assert 'ntypes' in dir(f)
+    assert "ntypes" in dir(f)
 
     # Methods
     np.testing.assert_equal(f.outer(x, x), np_f.outer(x, x))
 
     # funcname
-    assert f.__name__ == 'frompyfunc-add'
+    assert f.__name__ == "frompyfunc-add"
 
     # repr
     assert repr(f) == "da.frompyfunc<add, 2, 1>"
 
     # tokenize
-    assert (tokenize(da_frompyfunc(add, 2, 1)) ==
-            tokenize(da_frompyfunc(add, 2, 1)))
+    assert tokenize(da_frompyfunc(add, 2, 1)) == tokenize(da_frompyfunc(add, 2, 1))
 
 
 def test_array_ufunc():
     x = np.arange(24).reshape((4, 6))
     d = da.from_array(x, chunks=(2, 3))
 
-    for func in [np.sin, np.isreal, np.sum, np.negative, partial(np.prod, axis=0)]:
+    for func in [np.sin, np.sum, np.negative, partial(np.prod, axis=0)]:
         assert isinstance(func(d), da.Array)
         assert_eq(func(d), func(x))
 
@@ -360,8 +430,8 @@ def test_out_numpy():
     with pytest.raises((TypeError, NotImplementedError)) as info:
         np.add(x, 1, out=empty)
 
-    assert 'ndarray' in str(info.value)
-    assert 'Array' in str(info.value)
+    assert "ndarray" in str(info.value)
+    assert "Array" in str(info.value)
 
 
 def test_out_shape_mismatch():
@@ -369,3 +439,31 @@ def test_out_shape_mismatch():
     y = da.arange(15, chunks=(5,))
     with pytest.raises(ValueError):
         assert np.log(x, out=y)
+
+
+def test_divmod():
+    arr1 = np.random.randint(1, 100, size=(20, 20))
+    arr2 = np.random.randint(1, 100, size=(20, 20))
+
+    darr1 = da.from_array(arr1, 3)
+    darr2 = da.from_array(arr2, 3)
+
+    result = np.divmod(darr1, 2.0)
+    expected = np.divmod(arr1, 2.0)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = np.divmod(darr1, darr2)
+    expected = np.divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, 2.0)
+    expected = divmod(arr1, 2.0)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])
+
+    result = divmod(darr1, darr2)
+    expected = divmod(arr1, arr2)
+    assert_eq(result[0], expected[0])
+    assert_eq(result[1], expected[1])

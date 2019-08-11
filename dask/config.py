@@ -4,6 +4,7 @@ import ast
 import os
 import sys
 import threading
+
 try:
     import yaml
 except ImportError:
@@ -12,21 +13,21 @@ except ImportError:
 from .compatibility import makedirs, builtins, Mapping
 
 
-no_default = '__no_default__'
+no_default = "__no_default__"
 
 
 paths = [
-    os.getenv('DASK_ROOT_CONFIG', '/etc/dask'),
-    os.path.join(sys.prefix, 'etc', 'dask'),
-    os.path.join(os.path.expanduser('~'), '.config', 'dask'),
-    os.path.join(os.path.expanduser('~'), '.dask')
+    os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
+    os.path.join(sys.prefix, "etc", "dask"),
+    os.path.join(os.path.expanduser("~"), ".config", "dask"),
+    os.path.join(os.path.expanduser("~"), ".dask"),
 ]
 
-if 'DASK_CONFIG' in os.environ:
-    PATH = os.environ['DASK_CONFIG']
+if "DASK_CONFIG" in os.environ:
+    PATH = os.environ["DASK_CONFIG"]
     paths.append(PATH)
 else:
-    PATH = os.path.join(os.path.expanduser('~'), '.config', 'dask')
+    PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
 
 global_config = config = {}
@@ -53,7 +54,7 @@ def canonical_name(k, config):
         # config is not a mapping, return the same name as provided
         return k
 
-    altk = k.replace('_', '-') if '_' in k else k.replace('-', '_')
+    altk = k.replace("_", "-") if "_" in k else k.replace("-", "_")
 
     if altk in config:
         return altk
@@ -61,7 +62,7 @@ def canonical_name(k, config):
     return k
 
 
-def update(old, new, priority='new'):
+def update(old, new, priority="new"):
     """ Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -98,7 +99,7 @@ def update(old, new, priority='new'):
                 old[k] = {}
             update(old[k], v, priority=priority)
         else:
-            if priority == 'new' or k not in old:
+            if priority == "new" or k not in old:
                 old[k] = v
 
     return old
@@ -138,11 +139,16 @@ def collect_yaml(paths=paths):
         if os.path.exists(path):
             if os.path.isdir(path):
                 try:
-                    file_paths.extend(sorted([
-                        os.path.join(path, p)
-                        for p in os.listdir(path)
-                        if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
-                    ]))
+                    file_paths.extend(
+                        sorted(
+                            [
+                                os.path.join(path, p)
+                                for p in os.listdir(path)
+                                if os.path.splitext(p)[1].lower()
+                                in (".json", ".yaml", ".yml")
+                            ]
+                        )
+                    )
                 except OSError:
                     # Ignore permission errors
                     pass
@@ -179,8 +185,8 @@ def collect_env(env=None):
         env = os.environ
     d = {}
     for name, value in env.items():
-        if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('__', '.')
+        if name.startswith("DASK_"):
+            varname = name[5:].lower().replace("__", ".")
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
@@ -192,10 +198,7 @@ def collect_env(env=None):
     return result
 
 
-def ensure_file(
-        source,
-        destination=None,
-        comment=True):
+def ensure_file(source, destination=None, comment=True):
     """
     Copy file to default location if it does not already exist
 
@@ -235,18 +238,18 @@ def ensure_file(
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
-            tmp = '%s.tmp.%d' % (destination, os.getpid())
+            tmp = "%s.tmp.%d" % (destination, os.getpid())
             with open(source) as f:
                 lines = list(f)
 
             if comment:
-                lines = ['# ' + line
-                         if line.strip() and not line.startswith('#')
-                         else line
-                         for line in lines]
+                lines = [
+                    "# " + line if line.strip() and not line.startswith("#") else line
+                    for line in lines
+                ]
 
-            with open(tmp, 'w') as f:
-                f.write(''.join(lines))
+            with open(tmp, "w") as f:
+                f.write("".join(lines))
 
             try:
                 os.rename(tmp, destination)
@@ -259,79 +262,104 @@ def ensure_file(
 class set(object):
     """ Temporarily set configuration values within a context manager
 
+    Parameters
+    ----------
+    arg : mapping or None, optional
+        A mapping of configuration key-value pairs to set.
+    **kwargs :
+        Additional key-value pairs to set. If ``arg`` is provided, values set
+        in ``arg`` will be applied before those in ``kwargs``.
+        Double-underscores (``__``) in keyword arguments will be replaced with
+        ``.``, allowing nested values to be easily set.
+
     Examples
     --------
     >>> import dask
-    >>> with dask.config.set({'foo': 123}):
+
+    Set ``'foo.bar'`` in a context, by providing a mapping.
+
+    >>> with dask.config.set({'foo.bar': 123}):
     ...     pass
+
+    Set ``'foo.bar'`` in a context, by providing a keyword argument.
+
+    >>> with dask.config.set(foo__bar=123):
+    ...     pass
+
+    Set ``'foo.bar'`` globally.
+
+    >>> dask.config.set(foo__bar=123)  # doctest: +SKIP
 
     See Also
     --------
     dask.config.get
     """
-    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
-        if arg and not kwargs:
-            kwargs = arg
 
+    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
         with lock:
             self.config = config
-            self.old = {}
+            self._record = []
 
-            for key, value in kwargs.items():
-                self._assign(key.split('.'), value, config, old=self.old)
+            if arg is not None:
+                for key, value in arg.items():
+                    self._assign(key.split("."), value, config)
+            if kwargs:
+                for key, value in kwargs.items():
+                    self._assign(key.split("__"), value, config)
 
     def __enter__(self):
         return self.config
 
     def __exit__(self, type, value, traceback):
-        for keys, value in self.old.items():
-            if value == '--delete--':
-                d = self.config
-                try:
-                    while len(keys) > 1:
-                        d = d[keys[0]]
-                        keys = keys[1:]
-                    del d[keys[0]]
-                except KeyError:
-                    pass
-            else:
-                self._assign(keys, value, self.config)
+        for op, path, value in reversed(self._record):
+            d = self.config
+            if op == "replace":
+                for key in path[:-1]:
+                    d = d.setdefault(key, {})
+                d[path[-1]] = value
+            else:  # insert
+                for key in path[:-1]:
+                    try:
+                        d = d[key]
+                    except KeyError:
+                        break
+                else:
+                    d.pop(path[-1], None)
 
-    @classmethod
-    def _assign(cls, keys, value, d, old=None, path=[]):
-        """ Assign value into a nested configuration dictionary
-
-        Optionally record the old values in old
+    def _assign(self, keys, value, d, path=(), record=True):
+        """Assign value into a nested configuration dictionary
 
         Parameters
         ----------
-        keys: Sequence[str]
-            The nested path of keys to assign the value, similar to toolz.put_in
-        value: object
-        d: dict
+        keys : Sequence[str]
+            The nested path of keys to assign the value.
+        value : object
+        d : dict
             The part of the nested dictionary into which we want to assign the
             value
-        old: dict, optional
-            If provided this will hold the old values
-        path: List[str]
-            Used internally to hold the path of old values
+        path : Tuple[str], optional
+            The path history up to this point.
+        record : bool, optional
+            Whether this operation needs to be recorded to allow for rollback.
         """
         key = canonical_name(keys[0], d)
+        path = path + (key,)
+
         if len(keys) == 1:
-            if old is not None:
-                path_key = tuple(path + [key])
+            if record:
                 if key in d:
-                    old[path_key] = d[key]
+                    self._record.append(("replace", path, d[key]))
                 else:
-                    old[path_key] = '--delete--'
+                    self._record.append(("insert", path, None))
             d[key] = value
         else:
             if key not in d:
+                if record:
+                    self._record.append(("insert", path, None))
                 d[key] = {}
-                if old is not None:
-                    old[tuple(path + [key])] = '--delete--'
-                old = None
-            cls._assign(keys[1:], value, d[key], path=path + [key], old=old)
+                # No need to record subsequent operations after an insert
+                record = False
+            self._assign(keys[1:], value, d[key], path, record=record)
 
 
 def collect(paths=paths, env=None):
@@ -393,7 +421,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
     config.clear()
 
     for d in defaults:
-        update(config, d, priority='old')
+        update(config, d, priority="old")
 
     update(config, collect(**kwargs))
 
@@ -420,7 +448,7 @@ def get(key, default=no_default, config=config):
     --------
     dask.config.set
     """
-    keys = key.split('.')
+    keys = key.split(".")
     result = config
     for k in keys:
         k = canonical_name(k, result)
@@ -448,7 +476,7 @@ def rename(aliases, config=config):
             new[n] = value
 
     for k in old:
-        del config[k]  # TODO: support nested keys
+        del config[canonical_name(k, config)]  # TODO: support nested keys
 
     set(new, config=config)
 
@@ -463,11 +491,11 @@ def update_defaults(new, config=config, defaults=defaults):
         prioritizing older values over newer ones
     """
     defaults.append(new)
-    update(config, new, priority='old')
+    update(config, new, priority="old")
 
 
 def expand_environment_variables(config):
-    ''' Expand environment variables in a nested config dictionary
+    """ Expand environment variables in a nested config dictionary
 
     This function will recursively search through any nested dictionaries
     and/or lists.
@@ -485,7 +513,7 @@ def expand_environment_variables(config):
     --------
     >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
     {'x': [1, 2, 'my-username']}
-    '''
+    """
     if isinstance(config, Mapping):
         return {k: expand_environment_variables(v) for k, v in config.items()}
     elif isinstance(config, str):

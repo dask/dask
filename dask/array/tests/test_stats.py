@@ -1,6 +1,6 @@
 import pytest
 
-scipy = pytest.importorskip('scipy')
+scipy = pytest.importorskip("scipy")
 import numpy as np
 import dask.array as da
 from dask.array.utils import assert_eq
@@ -9,19 +9,25 @@ import dask.array.stats
 from dask.array.utils import allclose
 
 
-@pytest.mark.parametrize('kind, kwargs', [
-    ('skew', {}),
-    ('kurtosis', {}),
-    ('kurtosis', {'fisher': False}),
-])
-def test_measures(kind, kwargs):
-    x = np.random.random(size=(30, 2))
+@pytest.mark.parametrize(
+    "kind, kwargs", [("skew", {}), ("kurtosis", {}), ("kurtosis", {"fisher": False})]
+)
+@pytest.mark.parametrize("single_dim", [True, False])
+def test_measures(kind, kwargs, single_dim):
+    np.random.seed(seed=1337)
+    if single_dim:
+        x = np.random.random(size=(30,))
+    else:
+        x = np.random.random(size=(30, 2))
     y = da.from_array(x, 3)
     dfunc = getattr(dask.array.stats, kind)
     sfunc = getattr(scipy.stats, kind)
 
     expected = sfunc(x, **kwargs)
     result = dfunc(y, **kwargs)
+    if np.isscalar(expected):
+        # make it an array to account for possible numeric errors
+        expected = np.array(expected)
     assert_eq(result, expected)
     assert isinstance(result, da.Array)
 
@@ -37,11 +43,11 @@ def test_bias_raises():
         dask.array.stats.kurtosis(y, bias=False)
 
 
-@pytest.mark.parametrize('kind', [
-    'chisquare', 'power_divergence', 'normaltest', 'skewtest', 'kurtosistest',
-])
+@pytest.mark.parametrize(
+    "kind", ["chisquare", "power_divergence", "normaltest", "skewtest", "kurtosistest"]
+)
 def test_one(kind):
-    a = np.random.random(size=30,)
+    a = np.random.random(size=30)
     a_ = da.from_array(a, 3)
 
     dask_test = getattr(dask.array.stats, kind)
@@ -54,20 +60,23 @@ def test_one(kind):
     assert allclose(result.compute(), expected)
 
 
-@pytest.mark.parametrize('kind, kwargs', [
-    ('ttest_ind', {}),
-    ('ttest_ind', {'equal_var': False}),
-    ('ttest_1samp', {}),
-    ('ttest_rel', {}),
-    ('chisquare', {}),
-    ('power_divergence', {}),
-    ('power_divergence', {'lambda_': 0}),
-    ('power_divergence', {'lambda_': -1}),
-    ('power_divergence', {'lambda_': 'neyman'}),
-])
+@pytest.mark.parametrize(
+    "kind, kwargs",
+    [
+        ("ttest_ind", {}),
+        ("ttest_ind", {"equal_var": False}),
+        ("ttest_1samp", {}),
+        ("ttest_rel", {}),
+        ("chisquare", {}),
+        ("power_divergence", {}),
+        ("power_divergence", {"lambda_": 0}),
+        ("power_divergence", {"lambda_": -1}),
+        ("power_divergence", {"lambda_": "neyman"}),
+    ],
+)
 def test_two(kind, kwargs):
-    a = np.random.random(size=30,)
-    b = np.random.random(size=30,)
+    a = np.random.random(size=30)
+    b = np.random.random(size=30)
     a_ = da.from_array(a, 3)
     b_ = da.from_array(b, 3)
 
@@ -84,7 +93,7 @@ def test_two(kind, kwargs):
     # assert dask.compute(*result) == expected
 
 
-@pytest.mark.parametrize('k', range(5))
+@pytest.mark.parametrize("k", range(5))
 def test_moments(k):
     x = np.random.random(size=(30, 2))
     y = da.from_array(x, 3)
@@ -104,32 +113,33 @@ def test_anova():
     assert allclose(result.compute(), expected)
 
 
-@pytest.mark.parametrize('func, nargs', [
-    (dask.array.stats.ttest_1samp, 2),
-    (dask.array.stats.ttest_rel, 2),
-    (dask.array.stats.skewtest, 1),
-    (dask.array.stats.kurtosis, 1),
-    (dask.array.stats.kurtosistest, 1),
-    (dask.array.stats.normaltest, 1),
-    (dask.array.stats.moment, 1),
-])
-@pytest.mark.parametrize('nan_policy', ['omit', 'raise'])
+@pytest.mark.parametrize(
+    "func, nargs",
+    [
+        (dask.array.stats.ttest_1samp, 2),
+        (dask.array.stats.ttest_rel, 2),
+        (dask.array.stats.skewtest, 1),
+        (dask.array.stats.kurtosis, 1),
+        (dask.array.stats.kurtosistest, 1),
+        (dask.array.stats.normaltest, 1),
+        (dask.array.stats.moment, 1),
+    ],
+)
+@pytest.mark.parametrize("nan_policy", ["omit", "raise"])
 def test_nan_raises(func, nargs, nan_policy):
     with pytest.raises(NotImplementedError):
         func(*(None,) * nargs, nan_policy=nan_policy)
 
 
 def test_power_divergence_invalid():
-    a = np.random.random(size=30,)
+    a = np.random.random(size=30)
     a_ = da.from_array(a, 3)
 
     with pytest.raises(ValueError):
-        dask.array.stats.power_divergence(a_, lambda_='wrong')
+        dask.array.stats.power_divergence(a_, lambda_="wrong")
 
 
 def test_skew_raises():
     a = da.ones((7,), chunks=(7,))
-    with pytest.raises(ValueError) as rec:
+    with pytest.raises(ValueError, match="7 samples"):
         dask.array.stats.skewtest(a)
-
-    assert "7 samples" in str(rec)

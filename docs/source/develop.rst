@@ -10,17 +10,17 @@ Where to ask for help
 
 Dask conversation happens in the following places:
 
-1.  `StackOverflow #dask tag`_: for usage questions
-2.  `Github Issue Tracker`_: for discussions around new features or established bugs
+1.  `Stack Overflow #dask tag`_: for usage questions
+2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
 3.  `Gitter chat`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of StackOverflow
-and Github issues over gitter chat.  Github and StackOverflow are more easily
+For usage questions and bug reports we strongly prefer the use of Stack Overflow
+and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
 searchable by future users and so is more efficient for everyone's time.
 Gitter chat is generally reserved for community discussion.
 
-.. _`StackOverflow #dask tag`: https://stackoverflow.com/questions/tagged/dask
-.. _`Github Issue Tracker`: https://github.com/dask/dask/issues/
+.. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
+.. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
 .. _`Gitter chat`: https://gitter.im/dask/dask
 
 
@@ -28,7 +28,7 @@ Separate Code Repositories
 --------------------------
 
 Dask maintains code and documentation in a few git repositories hosted on the
-Github ``dask`` organization, https://github.com/dask.  This includes the primary
+GitHub ``dask`` organization, https://github.com/dask.  This includes the primary
 repository and several other repositories for different components.  A
 non-exhaustive list follows:
 
@@ -41,7 +41,7 @@ non-exhaustive list follows:
 *  https://github.com/dask/hdfs3: Hadoop Filesystem interface
 *  ...
 
-Git and Github can be challenging at first.  Fortunately good materials exist
+Git and GitHub can be challenging at first.  Fortunately good materials exist
 on the internet.  Rather than repeat these materials here, we refer you to
 Pandas' documentation and links on this subject at
 https://pandas.pydata.org/pandas-docs/stable/contributing.html
@@ -51,7 +51,7 @@ Issues
 ------
 
 The community discusses and tracks known bugs and potential features in the
-`Github Issue Tracker`_.  If you have a new idea or have identified a bug, then
+`GitHub Issue Tracker`_.  If you have a new idea or have identified a bug, then
 you should raise it there to start public discussion.
 
 If you are looking for an introductory issue to get started with development,
@@ -84,7 +84,7 @@ binary package manager like conda_.  You can skip this step if you already
 have these libraries, don't care to use them, or have sufficient build
 environment on your computer to compile them when installing with ``pip``::
 
-   conda install -y numpy pandas scipy bokeh
+   conda install -y numpy pandas scipy bokeh psutil
 
 .. _conda: https://conda.io/
 
@@ -95,7 +95,7 @@ Install Dask and dependencies::
 
 For development, Dask uses the following additional dependencies::
 
-   pip install pytest moto mock
+   pip install pytest moto
 
 
 Run Tests
@@ -118,7 +118,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 2.7, 3.5, 3.6, and 3.7 in a single codebase.
+Dask supports Python versions 3.5, 3.6, and 3.7.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -240,21 +240,37 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
    conda install -y graphviz
 
 
-Style
-~~~~~
+Code Formatting
+~~~~~~~~~~~~~~~
 
-Dask verifies style uniformity with the ``flake8`` tool::
+Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
+`Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent code
+format throughout the project. ``black`` and ``flake8`` can be installed with
+``pip``::
 
-   pip install flake8
+   pip install black flake8
+
+and then run from the root of the Dask repository::
+
+   black dask
    flake8 dask
 
+to auto-format your code. Additionally, many editors have plugins that will
+apply ``black`` as you edit files.
 
-Changelog
-~~~~~~~~~
+Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
+to automatically run ``black`` and ``flake8`` when you make a git commit. This
+can be done by installing ``pre-commit``::
 
-Every significative code contribution should be listed in the
-:doc:`changelog` under the corresponding version.  When submitting a Pull
-Request in Github, please add to that file explaining what was added/modified.
+   pip install pre-commit
+
+and then running::
+
+   pre-commit install
+
+from the root of the Dask repository. Now ``black`` and ``flake8`` will be run
+each time you commit changes. You can skip these checks with
+``git commit --no-verify``.
 
 
 Contributing to Documentation

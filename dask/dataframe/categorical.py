@@ -7,8 +7,12 @@ from numbers import Integral
 
 from ..base import tokenize, compute_as_if_collection
 from .accessor import Accessor
-from .utils import (has_known_categories, clear_known_categories, is_scalar,
-                    is_categorical_dtype)
+from .utils import (
+    has_known_categories,
+    clear_known_categories,
+    is_scalar,
+    is_categorical_dtype,
+)
 
 
 def _categorize_block(df, categories, index):
@@ -55,8 +59,7 @@ def _get_categories_agg(parts):
         for k, v in p[0].items():
             res[k].append(v)
         res_ind.append(p[1])
-    res = {k: pd.concat(v, ignore_index=True).drop_duplicates()
-           for k, v in res.items()}
+    res = {k: pd.concat(v, ignore_index=True).drop_duplicates() for k, v in res.items()}
     if res_ind[0] is None:
         return res, None
     return res, res_ind[0].append(res_ind[1:]).drop_duplicates()
@@ -84,13 +87,16 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     """
     meta = df._meta
     if columns is None:
-        columns = list(meta.select_dtypes(['object', 'category']).columns)
+        columns = list(meta.select_dtypes(["object", "category"]).columns)
     elif is_scalar(columns):
         columns = [columns]
 
     # Filter out known categorical columns
-    columns = [c for c in columns if not (is_categorical_dtype(meta[c]) and
-                                          has_known_categories(meta[c]))]
+    columns = [
+        c
+        for c in columns
+        if not (is_categorical_dtype(meta[c]) and has_known_categories(meta[c]))
+    ]
 
     if index is not False:
         if is_categorical_dtype(meta.index):
@@ -110,11 +116,13 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         raise ValueError("split_every must be an integer >= 2")
 
     token = tokenize(df, columns, index, split_every)
-    a = 'get-categories-chunk-' + token
-    dsk = {(a, i): (_get_categories, key, columns, index)
-           for (i, key) in enumerate(df.__dask_keys__())}
+    a = "get-categories-chunk-" + token
+    dsk = {
+        (a, i): (_get_categories, key, columns, index)
+        for (i, key) in enumerate(df.__dask_keys__())
+    }
 
-    prefix = 'get-categories-agg-' + token
+    prefix = "get-categories-agg-" + token
     k = df.npartitions
     depth = 0
     while k > split_every:
@@ -129,8 +137,7 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     dsk.update(df.dask)
 
     # Compute the categories
-    categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0),
-                                                 **kwargs)
+    categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0), **kwargs)
 
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)
@@ -159,13 +166,8 @@ class CategoricalAccessor(Accessor):
     So `df.a.cat.categories` <=> `df.a._meta.cat.categories`
     So `df.a.cat.codes` <=> `df.a.map_partitions(lambda x: x.cat.codes)`
     """
-    _accessor = pd.Series.cat
-    _accessor_name = 'cat'
 
-    def _validate(self, series):
-        if not is_categorical_dtype(series.dtype):
-            raise AttributeError("Can only use .cat accessor with a "
-                                 "'category' dtype")
+    _accessor_name = "cat"
 
     @property
     def known(self):
@@ -186,7 +188,7 @@ class CategoricalAccessor(Accessor):
         """
         if self.known:
             return self._series
-        categories = self._property_map('categories').unique().compute(**kwargs)
+        categories = self._property_map("categories").unique().compute(**kwargs)
         return self.set_categories(categories.values)
 
     def as_unknown(self):
@@ -199,7 +201,7 @@ class CategoricalAccessor(Accessor):
 
     @property
     def ordered(self):
-        return self._delegate_property(self._series._meta, 'cat', 'ordered')
+        return self._delegate_property(self._series._meta, "cat", "ordered")
 
     @property
     def categories(self):
@@ -207,11 +209,13 @@ class CategoricalAccessor(Accessor):
 
         If categories are unknown, an error is raised"""
         if not self.known:
-            msg = ("`df.column.cat.categories` with unknown categories is not "
-                   "supported.  Please use `column.cat.as_known()` or "
-                   "`df.categorize()` beforehand to ensure known categories")
+            msg = (
+                "`df.column.cat.categories` with unknown categories is not "
+                "supported.  Please use `column.cat.as_known()` or "
+                "`df.categorize()` beforehand to ensure known categories"
+            )
             raise NotImplementedError(msg)
-        return self._delegate_property(self._series._meta, 'cat', 'categories')
+        return self._delegate_property(self._series._meta, "cat", "categories")
 
     @property
     def codes(self):
@@ -219,11 +223,13 @@ class CategoricalAccessor(Accessor):
 
         If categories are unknown, an error is raised"""
         if not self.known:
-            msg = ("`df.column.cat.codes` with unknown categories is not "
-                   "supported.  Please use `column.cat.as_known()` or "
-                   "`df.categorize()` beforehand to ensure known categories")
+            msg = (
+                "`df.column.cat.codes` with unknown categories is not "
+                "supported.  Please use `column.cat.as_known()` or "
+                "`df.categorize()` beforehand to ensure known categories"
+            )
             raise NotImplementedError(msg)
-        return self._property_map('codes')
+        return self._property_map("codes")
 
     def remove_unused_categories(self):
         """
@@ -251,8 +257,12 @@ class CategoricalAccessor(Accessor):
 
         new_categories = ordered[mask != -1]
         meta = meta_cat.set_categories(new_categories, ordered=meta_cat.ordered)
-        return self._series.map_partitions(self._delegate_method, 'cat',
-                                           'set_categories', (),
-                                           {'new_categories': new_categories},
-                                           meta=meta,
-                                           token='cat-set_categories')
+        return self._series.map_partitions(
+            self._delegate_method,
+            "cat",
+            "set_categories",
+            (),
+            {"new_categories": new_categories},
+            meta=meta,
+            token="cat-set_categories",
+        )

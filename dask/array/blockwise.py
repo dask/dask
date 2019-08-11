@@ -9,7 +9,20 @@ from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
 
 
-def blockwise(func, out_ind, *args, **kwargs):
+def blockwise(
+    func,
+    out_ind,
+    *args,
+    name=None,
+    token=None,
+    dtype=None,
+    adjust_chunks=None,
+    new_axes=None,
+    align_arrays=True,
+    concatenate=None,
+    meta=None,
+    **kwargs
+):
     """ Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
@@ -109,27 +122,24 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
     """
-    out = kwargs.pop('name', None)      # May be None at this point
-    token = kwargs.pop('token', None)
-    dtype = kwargs.pop('dtype', None)
-    adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.pop('new_axes', {})
-    align_arrays = kwargs.pop('align_arrays', True)
+    out = name
+    new_axes = new_axes or {}
 
     # Input Validation
     if len(set(out_ind)) != len(out_ind):
-        raise ValueError("Repeated elements not allowed in output index",
-                         [k for k, v in toolz.frequencies(out_ind).items() if v > 1])
-    new = (set(out_ind)
-           - {a for arg in args[1::2] if arg is not None for a in arg}
-           - set(new_axes or ()))
+        raise ValueError(
+            "Repeated elements not allowed in output index",
+            [k for k, v in toolz.frequencies(out_ind).items() if v > 1],
+        )
+    new = (
+        set(out_ind)
+        - {a for arg in args[1::2] if arg is not None for a in arg}
+        - set(new_axes or ())
+    )
     if new:
         raise ValueError("Unknown dimension", new)
 
     from .core import Array, unify_chunks, normalize_arg
-
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
@@ -149,9 +159,10 @@ def blockwise(func, out_ind, *args, **kwargs):
     arginds = list(zip(arrays, args[1::2]))
 
     for arg, ind in arginds:
-        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
-            raise ValueError("Index string %s does not match array dimension %d"
-                             % (ind, arg.ndim))
+        if hasattr(arg, "ndim") and hasattr(ind, "__len__") and arg.ndim != len(ind):
+            raise ValueError(
+                "Index string %s does not match array dimension %d" % (ind, arg.ndim)
+            )
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
 
@@ -180,13 +191,25 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     # Finish up the name
     if not out:
-        out = '%s-%s' % (token or utils.funcname(func).strip('_'),
-                         base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
+        out = "%s-%s" % (
+            token or utils.funcname(func).strip("_"),
+            base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
+        )
 
-    graph = core_blockwise(func, out, out_ind, *argindsstr, numblocks=numblocks,
-                           dependencies=dependencies, new_axes=new_axes, **kwargs2)
-    graph = HighLevelGraph.from_collections(out, graph,
-                                            dependencies=arrays + dependencies)
+    graph = core_blockwise(
+        func,
+        out,
+        out_ind,
+        *argindsstr,
+        numblocks=numblocks,
+        dependencies=dependencies,
+        new_axes=new_axes,
+        concatenate=concatenate,
+        **kwargs2
+    )
+    graph = HighLevelGraph.from_collections(
+        out, graph, dependencies=arrays + dependencies
+    )
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:
@@ -200,10 +223,18 @@ def blockwise(func, out_ind, *args, **kwargs):
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
                     raise NotImplementedError(
-                        "adjust_chunks values must be callable, int, or tuple")
+                        "adjust_chunks values must be callable, int, or tuple"
+                    )
     chunks = tuple(chunks)
 
-    return Array(graph, out, chunks, dtype=dtype)
+    if meta is None:
+        from .utils import compute_meta
+
+        meta = compute_meta(func, dtype, *args[::2], **kwargs)
+    if meta is not None:
+        return Array(graph, out, chunks, meta=meta)
+    else:
+        return Array(graph, out, chunks, dtype=dtype)
 
 
 def atop(*args, **kwargs):

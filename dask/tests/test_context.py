@@ -25,19 +25,19 @@ def test_with_get():
 
 
 def foo():
-    return 'foo'
+    return "foo"
 
 
 def bar():
-    return 'bar'
+    return "bar"
 
 
 class Foo(object):
-    @globalmethod(key='f')
+    @globalmethod(key="f")
     def f():
         return 1
 
-    g = globalmethod(foo, key='g', falsey=bar)
+    g = globalmethod(foo, key="g", falsey=bar)
 
 
 def test_globalmethod():
@@ -50,11 +50,11 @@ def test_globalmethod():
 
     with dask.config.set(f=foo):
         assert x.f is foo
-        assert x.f() == 'foo'
+        assert x.f() == "foo"
 
     assert x.g is foo
-    assert x.g() == 'foo'
+    assert x.g() == "foo"
 
     with dask.config.set(g=False):
         assert x.g is bar
-        assert x.g() == 'bar'
+        assert x.g() == "bar"

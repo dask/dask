@@ -3,7 +3,7 @@ import uuid
 
 from ..highlevelgraph import HighLevelGraph
 
-MAGIC = b'Obj\x01'
+MAGIC = b"Obj\x01"
 SYNC_SIZE = 16
 
 
@@ -38,9 +38,9 @@ def read_header(fo):
     ----------
     fo: file-like
     """
-    assert fo.read(len(MAGIC)) == MAGIC, 'Magic avro bytes missing'
+    assert fo.read(len(MAGIC)) == MAGIC, "Magic avro bytes missing"
     meta = {}
-    out = {'meta': meta}
+    out = {"meta": meta}
     while True:
         n_keys = read_long(fo)
         if n_keys == 0:
@@ -49,24 +49,24 @@ def read_header(fo):
             # ignore dtype mapping for bag version
             read_bytes(fo)  # schema keys
             read_bytes(fo)  # schema values
-    out['sync'] = fo.read(SYNC_SIZE)
-    out['header_size'] = fo.tell()
+    out["sync"] = fo.read(SYNC_SIZE)
+    out["header_size"] = fo.tell()
     fo.seek(0)
-    out['head_bytes'] = fo.read(out['header_size'])
+    out["head_bytes"] = fo.read(out["header_size"])
     return out
 
 
 def open_head(fs, path, compression):
     """Open a file just to read its head and size"""
-    from dask.bytes.core import OpenFile, logical_size
+    from dask.bytes.core import OpenFile
+
     with OpenFile(fs, path, compression=compression) as f:
         head = read_header(f)
-    size = logical_size(fs, path, compression)
+    size = fs.info(path)["size"]
     return head, size
 
 
-def read_avro(urlpath, blocksize=100000000, storage_options=None,
-              compression=None):
+def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=None):
     """Read set of avro files
 
     Use this with arbitrary nested avro schemas. Please refer to the
@@ -89,17 +89,18 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None,
     """
     from dask.utils import import_required
     from dask import delayed, compute
-    from dask.bytes.core import (open_files, get_fs_token_paths,
-                                 OpenFile, tokenize)
+    from dask.bytes.core import open_files, get_fs_token_paths, OpenFile, tokenize
     from dask.bag import from_delayed
-    import_required('fastavro',
-                    "fastavro is a required dependency for using "
-                    "bag.read_avro().")
+
+    import_required(
+        "fastavro", "fastavro is a required dependency for using bag.read_avro()."
+    )
 
     storage_options = storage_options or {}
     if blocksize is not None:
         fs, fs_token, paths = get_fs_token_paths(
-            urlpath, mode='rb', storage_options=storage_options)
+            urlpath, mode="rb", storage_options=storage_options
+        )
         dhead = delayed(open_head)
         out = compute(*[dhead(fs, path, compression) for path in paths])
         heads, sizes = zip(*out)
@@ -115,13 +116,16 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None,
 
         out = []
         for path, offset, length, head in zip(paths, offsets, lengths, heads):
-            delimiter = head['sync']
+            delimiter = head["sync"]
             f = OpenFile(fs, path, compression=compression)
-            token = tokenize(fs_token, delimiter, path, fs.ukey(path),
-                             compression, offset)
-            keys = ['read-avro-%s-%s' % (o, token) for o in offset]
-            values = [dread(f, o, l, head, dask_key_name=key)
-                      for o, key, l in zip(offset, keys, length)]
+            token = tokenize(
+                fs_token, delimiter, path, fs.ukey(path), compression, offset
+            )
+            keys = ["read-avro-%s-%s" % (o, token) for o in offset]
+            values = [
+                dread(f, o, l, head, dask_key_name=key)
+                for o, key, l in zip(offset, keys, length)
+            ]
             out.extend(values)
 
         return from_delayed(out)
@@ -136,9 +140,10 @@ def read_chunk(fobj, off, l, head):
     """Get rows from raw bytes block"""
     import fastavro
     from dask.bytes.core import read_block
+
     with fobj as f:
-        chunk = read_block(f, off, l, head['sync'])
-    head_bytes = head['head_bytes']
+        chunk = read_block(f, off, l, head["sync"])
+    head_bytes = head["head_bytes"]
     if not chunk.startswith(MAGIC):
         chunk = head_bytes + chunk
     i = io.BytesIO(chunk)
@@ -148,16 +153,26 @@ def read_chunk(fobj, off, l, head):
 def read_file(fo):
     """Get rows from file-like"""
     import fastavro
+
     with fo as f:
         return list(fastavro.iter_avro(f))
 
 
-def to_avro(b, filename, schema, name_function=None, storage_options=None,
-            codec='null', sync_interval=16000, metadata=None, compute=True,
-            **kwargs):
+def to_avro(
+    b,
+    filename,
+    schema,
+    name_function=None,
+    storage_options=None,
+    codec="null",
+    sync_interval=16000,
+    metadata=None,
+    compute=True,
+    **kwargs
+):
     """Write bag to set of avro files
 
-    The schema is a complex dictionary dscribing the data, see
+    The schema is a complex dictionary describing the data, see
     https://avro.apache.org/docs/1.8.2/gettingstartedpython.html#Defining+a+schema
     and https://fastavro.readthedocs.io/en/latest/writer.html .
     It's structure is as follows::
@@ -220,18 +235,33 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     # TODO infer schema from first partition of data
     from dask.utils import import_required
     from dask.bytes.core import open_files
-    import_required('fastavro',
-                    "fastavro is a required dependency for using "
-                    "bag.to_avro().")
+
+    import_required(
+        "fastavro", "fastavro is a required dependency for using bag.to_avro()."
+    )
     _verify_schema(schema)
 
     storage_options = storage_options or {}
-    files = open_files(filename, 'wb', name_function=name_function,
-                       num=b.npartitions, **storage_options)
-    name = 'to-avro-' + uuid.uuid4().hex
-    dsk = {(name, i): (_write_avro_part, (b.name, i), f, schema, codec,
-                       sync_interval, metadata)
-           for i, f in enumerate(files)}
+    files = open_files(
+        filename,
+        "wb",
+        name_function=name_function,
+        num=b.npartitions,
+        **storage_options
+    )
+    name = "to-avro-" + uuid.uuid4().hex
+    dsk = {
+        (name, i): (
+            _write_avro_part,
+            (b.name, i),
+            f,
+            schema,
+            codec,
+            sync_interval,
+            metadata,
+        )
+        for i, f in enumerate(files)
+    }
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b])
     out = type(b)(graph, name, b.npartitions)
     if compute:
@@ -242,17 +272,18 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
 
 
 def _verify_schema(s):
-    assert isinstance(s, dict), 'Schema must be dictionary'
-    for field in ['name', 'type', 'fields']:
+    assert isinstance(s, dict), "Schema must be dictionary"
+    for field in ["name", "type", "fields"]:
         assert field in s, "Schema missing '%s' field" % field
-    assert s['type'] == 'record', "Schema must be of type 'record'"
-    assert isinstance(s['fields'], list), 'Fields entry must be a list'
-    for f in s['fields']:
-        assert 'name' in f and 'type' in f, "Field spec incomplete: %s" % f
+    assert s["type"] == "record", "Schema must be of type 'record'"
+    assert isinstance(s["fields"], list), "Fields entry must be a list"
+    for f in s["fields"]:
+        assert "name" in f and "type" in f, "Field spec incomplete: %s" % f
 
 
 def _write_avro_part(part, f, schema, codec, sync_interval, metadata):
     """Create single avro file from list of dictionaries"""
     import fastavro
+
     with f as f:
         fastavro.writer(f, schema, part, codec, sync_interval, metadata)

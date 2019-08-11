@@ -84,6 +84,7 @@ Other functions
 .. autofunction:: from_delayed
 .. autofunction:: read_text
 .. autofunction:: from_url
+.. autofunction:: read_avro
 .. autofunction:: range
 .. autofunction:: concat
 .. autofunction:: map_partitions
