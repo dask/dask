@@ -328,7 +328,27 @@ def matmul(a, b):
     return out
 
 
-moveaxis = np.moveaxis
+# Implementation taken directly from numpy:
+# https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L1336-L1405
+@derived_from(np)
+def moveaxis(a, source, destination):
+    source = np.core.numeric.normalize_axis_tuple(source, a.ndim, "source")
+    destination = np.core.numeric.normalize_axis_tuple(
+        destination, a.ndim, "destination"
+    )
+    if len(source) != len(destination):
+        raise ValueError(
+            "`source` and `destination` arguments must have "
+            "the same number of elements"
+        )
+
+    order = [n for n in range(a.ndim) if n not in source]
+
+    for dest, src in sorted(zip(destination, source)):
+        order.insert(dest, src)
+
+    result = a.transpose(order)
+    return result
 
 
 @derived_from(np)
@@ -1042,7 +1062,25 @@ def roll(array, shift, axis=None):
     return result
 
 
-rollaxis = np.rollaxis
+# Implementation adapted directly from numpy:
+# https://github.com/numpy/numpy/blob/v1.17.0/numpy/core/numeric.py#L1107-L1204
+def rollaxis(a, axis, start=0):
+    n = a.ndim
+    axis = np.core.numeric.normalize_axis_index(axis, n)
+    if start < 0:
+        start += n
+    msg = "'%s' arg requires %d <= %s < %d, but %d was passed in"
+    if not (0 <= start < n + 1):
+        raise ValueError(msg % ("start", -n, "start", n + 1, start))
+    if axis < start:
+        # it's been removed
+        start -= 1
+    if axis == start:
+        return a[...]
+    axes = list(range(0, n))
+    axes.remove(axis)
+    axes.insert(start, axis)
+    return a.transpose(axes)
 
 
 @derived_from(np)

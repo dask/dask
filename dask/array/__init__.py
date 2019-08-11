@@ -79,7 +79,7 @@ try:
         fliplr,
         einsum,
         average,
-        roll_axis,
+        rollaxis,
         moveaxis,
     )
     from .reshape import reshape
