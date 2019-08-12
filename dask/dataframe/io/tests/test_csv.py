@@ -792,11 +792,9 @@ def test_auto_blocksize_csv(monkeypatch):
 def test_head_partial_line_fix():
     files = {
         ".overflow1.csv": (
-            "a,b\n" '0,"abcdefghijklmnopqrstuvwxyz"\n' '1,"abcdefghijklmnopqrstuvwxyz"'
+            "a,b\n0,'abcdefghijklmnopqrstuvwxyz'\n1,'abcdefghijklmnopqrstuvwxyz'"
         ),
-        ".overflow2.csv": (
-            "a,b\n" "111111,-11111\n" "222222,-22222\n" "333333,-33333\n"
-        ),
+        ".overflow2.csv": ("a,b\n111111,-11111\n222222,-22222\n333333,-33333\n"),
     }
     with filetexts(files):
         # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.
@@ -1160,9 +1158,7 @@ def test_robust_column_mismatch():
 
 
 def test_error_if_sample_is_too_small():
-    text = (
-        "AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n" "1,2,3,4,5\n" "6,7,8,9,10\n" "11,12,13,14,15"
-    )
+    text = "AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n1,2,3,4,5\n6,7,8,9,10\n11,12,13,14,15"
     with filetext(text) as fn:
         # Sample size stops mid header row
         sample = 20
@@ -1174,7 +1170,7 @@ def test_error_if_sample_is_too_small():
             dd.read_csv(fn, sample=sample, header=None), pd.read_csv(fn, header=None)
         )
 
-    skiptext = "# skip\n" "# these\n" "# lines\n"
+    skiptext = "# skip\n# these\n# lines\n"
 
     text = skiptext + text
     with filetext(text) as fn:

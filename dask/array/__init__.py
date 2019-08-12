@@ -23,6 +23,7 @@ try:
         to_zarr,
     )
     from .tiledb_io import from_tiledb, to_tiledb
+    from .numpy_compat import rollaxis, moveaxis
     from .routines import (
         take,
         choose,

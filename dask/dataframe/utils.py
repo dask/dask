@@ -336,7 +336,7 @@ def make_meta_object(x, index=None):
     elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError(
-                "Expected iterable of tuples of (name, dtype), " "got {0}".format(x)
+                "Expected iterable of tuples of (name, dtype), got {0}".format(x)
             )
         return pd.DataFrame(
             {c: _empty_series(c, d, index=index) for (c, d) in x},
@@ -448,7 +448,19 @@ def _nonempty_index(idx):
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
 
     raise TypeError(
-        "Don't know how to handle index of " "type {0}".format(typename(type(idx)))
+        "Don't know how to handle index of type {0}".format(typename(type(idx)))
+    )
+
+
+hash_object_dispatch = Dispatch("hash_object_dispatch")
+
+
+@hash_object_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def hash_object_pandas(
+    obj, index=True, encoding="utf8", hash_key=None, categorize=True
+):
+    return pd.util.hash_pandas_object(
+        obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
     )
 
 
@@ -497,7 +509,7 @@ def _nonempty_scalar(x):
         dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
         return make_scalar(dtype)
 
-    raise TypeError("Can't handle meta of type " "'{0}'".format(typename(type(x))))
+    raise TypeError("Can't handle meta of type '{0}'".format(typename(type(x))))
 
 
 @meta_nonempty.register(pd.Series)
@@ -600,7 +612,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         )
 
     if type(x) != type(meta):
-        errmsg = "Expected partition of type `%s` but got " "`%s`" % (
+        errmsg = "Expected partition of type `%s` but got `%s`" % (
             typename(type(meta)),
             typename(type(x)),
         )
@@ -655,6 +667,13 @@ def index_summary(idx, name=None):
         summary = ""
 
     return "{}: {} entries{}".format(name, n, summary)
+
+
+def series_type_like_df(df):
+    """Get the concrete series type compatible with df."""
+    # TODO: https://github.com/pandas-dev/pandas/issues/27824
+    # Use a standard API, which will handle empty DataFrames.
+    return type(df._meta.iloc[:, 0])
 
 
 ###############################################################
