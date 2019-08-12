@@ -163,6 +163,17 @@ def test_moveaxis_rollaxis_keyword():
     assert_eq(np.rollaxis(x, start=1, axis=2), da.rollaxis(d, start=1, axis=2))
 
 
+def test_moveaxis_rollaxis_numpy_api():
+    a = da.random.random((4, 4, 4), chunks=2)
+    result = np.moveaxis(a, 2, 0)
+    assert isinstance(result, da.Array)
+    assert_eq(result, np.moveaxis(a.compute(), 2, 0))
+
+    result = np.rollaxis(a, 2, 0)
+    assert isinstance(result, da.Array)
+    assert_eq(result, np.rollaxis(a.compute(), 2, 0))
+
+
 @pytest.mark.parametrize(
     "funcname, kwargs",
     [
