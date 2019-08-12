@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import math
 from operator import getitem
 import uuid
-import warnings
 
 import toolz
 import numpy as np
@@ -11,7 +10,7 @@ import pandas as pd
 from pandas._libs.algos import groupsort_indexer
 from pandas.util import hash_pandas_object
 
-from .core import DataFrame, Series, _Frame, _concat, map_partitions
+from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
@@ -101,8 +100,6 @@ def set_index(
         ):
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
-            # There are cases where this still may not be sorted
-            # so sort_index to be sure. https://github.com/dask/dask/issues/2288
             return result.map_partitions(M.sort_index)
 
     return set_partition(
@@ -647,30 +644,27 @@ def set_index_post_series(df, index_name, drop, column_dtype):
     return df2
 
 
-def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
-        meta = df._meta.set_index(index._meta, drop=drop)
+def drop_overlap(df, index):
+    return df.drop(index) if df.index.contains(index) else df
 
-    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 
-    if not divisions:
-        divisions = compute_divisions(result, **kwargs)
-    elif len(divisions) != len(df.divisions):
-        msg = (
-            "When doing `df.set_index(col, sorted=True, divisions=...)`, "
-            "divisions indicates known splits in the index column. In this "
-            "case divisions must be the same length as the existing "
-            "divisions in `df`\n\n"
-            "If the intent is to repartition into new divisions after "
-            "setting the index, you probably want:\n\n"
-            "`df.set_index(col, sorted=True).repartition(divisions=divisions)`"
-        )
-        raise ValueError(msg)
+def get_overlap(df, index):
+    return df.loc[[index]] if df.index.contains(index) else None
 
-    result.divisions = tuple(divisions)
-    return result
+
+def fix_overlap(ddf, overlap):
+    """ Ensures that the upper bound on each partition of ddf is exclusive """
+    name = "fix-overlap-" + tokenize(ddf, overlap)
+    n = len(ddf.divisions) - 1
+    dsk = {(name, i): (ddf._name, i) for i in range(n)}
+
+    for i in overlap:
+        frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
+        dsk[(name, i)] = (pd.concat, frames)
+        dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    return new_dd_object(graph, name, ddf._meta, ddf.divisions)
 
 
 def compute_divisions(df, **kwargs):
@@ -687,8 +681,33 @@ def compute_divisions(df, **kwargs):
             "Partitions must be sorted ascending with the index", mins, maxes
         )
 
-    if any(a >= b for a, b in zip(maxes[:1], mins[1:])):
-        warnings.warn("Partition indices have overlap.")
+    df.divisions = tuple(mins) + (list(maxes)[-1],)
 
-    divisions = tuple(mins) + (list(maxes)[-1],)
-    return divisions
+    overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
+    return fix_overlap(df, overlap) if overlap else df
+
+
+def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
+    if not isinstance(index, Series):
+        meta = df._meta.set_index(index, drop=drop)
+    else:
+        meta = df._meta.set_index(index._meta, drop=drop)
+
+    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
+
+    if not divisions:
+        return compute_divisions(result, **kwargs)
+    elif len(divisions) != len(df.divisions):
+        msg = (
+            "When doing `df.set_index(col, sorted=True, divisions=...)`, "
+            "divisions indicates known splits in the index column. In this "
+            "case divisions must be the same length as the existing "
+            "divisions in `df`\n\n"
+            "If the intent is to repartition into new divisions after "
+            "setting the index, you probably want:\n\n"
+            "`df.set_index(col, sorted=True).repartition(divisions=divisions)`"
+        )
+        raise ValueError(msg)
+
+    result.divisions = tuple(divisions)
+    return result
