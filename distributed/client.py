@@ -4265,7 +4265,7 @@ def default_client(c=None):
     else:
         raise ValueError(
             "No clients found\n"
-            "Start an client and point it to the scheduler address\n"
+            "Start a client and point it to the scheduler address\n"
             "  from distributed import Client\n"
             "  client = Client('ip-addr-of-scheduler:8786')\n"
         )
