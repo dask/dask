@@ -626,6 +626,12 @@ def test_rechunk_zero_dim():
     assert len(x.compute()) == 0
 
 
+def test_rechunk_empty_chunks():
+    x = da.zeros((7, 24), chunks=((7,), (10, 0, 0, 9, 0, 5)))
+    y = x.rechunk((2, 3))
+    assert_eq(x, y)
+
+
 def test_rechunk_avoid_needless_chunking():
     x = da.ones(16, chunks=2)
     y = x.rechunk(8)

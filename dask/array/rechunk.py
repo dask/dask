@@ -98,6 +98,8 @@ def _intersect_1d(breaks):
         end = br - last_br + start
         last_end = end
         if br == last_br:
+            if label == "o":
+                old_idx += 1
             continue
         ret_next.append((old_idx, slice(start, end)))
         if label == "o":
