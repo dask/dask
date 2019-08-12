@@ -18,6 +18,7 @@ from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, slowinc, div, get_cert
 from distributed.dashboard.worker import Counters, BokehWorker
 from distributed.dashboard.scheduler import (
+    applications,
     BokehScheduler,
     SystemMonitor,
     Occupancy,
@@ -54,22 +55,8 @@ def test_simple(c, s, a, b):
     yield gen.sleep(0.1)
 
     http_client = AsyncHTTPClient()
-    for suffix in [
-        "system",
-        "counters",
-        "workers",
-        "status",
-        "tasks",
-        "stealing",
-        "graph",
-        "individual-task-stream",
-        "individual-progress",
-        "individual-graph",
-        "individual-nbytes",
-        "individual-nprocessing",
-        "individual-profile",
-    ]:
-        response = yield http_client.fetch("http://localhost:%d/%s" % (port, suffix))
+    for suffix in applications:
+        response = yield http_client.fetch("http://localhost:%d%s" % (port, suffix))
         body = response.body.decode()
         assert "bokeh" in body.lower()
         assert not re.search("href=./", body)  # no absolute links
