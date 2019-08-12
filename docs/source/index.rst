@@ -135,6 +135,7 @@ messy situations in everyday problems.
    Use Cases <https://stories.dask.org>
    support.rst
    why.rst
+   institutional-faq.rst
 
 .. toctree::
    :maxdepth: 1
