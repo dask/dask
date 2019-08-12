@@ -302,7 +302,7 @@ def _var_agg(g, levels, ddof):
     g = g.groupby(level=levels, sort=False).sum()
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
-    # chunks columns are tuples (number, str), so we just keep the number part
+    # chunks columns are tuples (value, name), so we just keep the value part
     x2 = g[g.columns[nc // 3 : 2 * nc // 3]].rename(columns=lambda c: c[0])
     n = g[g.columns[-nc // 3 :]].rename(columns=lambda c: c[0])
 
