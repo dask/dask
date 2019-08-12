@@ -759,7 +759,7 @@ def qr(a):
     See Also
     --------
 
-    np.linalg.qr : Equivalent NumPy Operation
+    np.linalg.qr: Equivalent NumPy Operation
     dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """

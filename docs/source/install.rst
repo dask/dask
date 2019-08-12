@@ -7,15 +7,12 @@ Conda
 -----
 
 Dask is installed by default in `Anaconda <https://www.anaconda.com/download/>`_.
-
 You can update Dask using the `conda <https://www.anaconda.com/download/>`_ command::
 
    conda install dask
 
 This installs Dask and **all** common dependencies, including Pandas and NumPy.
-
 Dask packages are maintained both on the default channel and on `conda-forge <https://conda-forge.github.io/>`_.
-
 Optionally, you can obtain a minimal Dask installation using the following command::
 
    conda install dask-core

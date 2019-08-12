@@ -2382,6 +2382,7 @@ def test_drop_axis_1():
         ddf.drop(["a", "x"], axis=1, errors="ignore"),
         df.drop(["a", "x"], axis=1, errors="ignore"),
     )
+    assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
 def test_gh580():
@@ -2531,8 +2532,7 @@ def test_apply():
 
 
 @pytest.mark.skipif(
-    PY2,
-    reason="Global filter is applied by another library, and " "not reset properly.",
+    PY2, reason="Global filter is applied by another library, and not reset properly."
 )
 def test_apply_warns():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
@@ -2870,6 +2870,13 @@ def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
     for (a, b) in zip(df["x"].iteritems(), ddf["x"].iteritems()):
+        assert a == b
+
+
+def test_series_iter():
+    s = pd.DataFrame({"x": [1, 2, 3, 4]})
+    ds = dd.from_pandas(s, npartitions=2)
+    for (a, b) in zip(s["x"], ds["x"]):
         assert a == b
 
 

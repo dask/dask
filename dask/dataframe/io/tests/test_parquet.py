@@ -734,7 +734,7 @@ def test_append_wo_index(tmpdir, engine):
     assert_eq(df.set_index("f"), ddf3)
 
 
-def test_append_overlapping_divisions(tmpdir):
+def test_append_overlapping_divisions(tmpdir, engine):
     """Test raising of error when divisions overlapping."""
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -750,16 +750,16 @@ def test_append_overlapping_divisions(tmpdir):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half - 10 :], chunksize=100)
-    ddf1.to_parquet(tmp)
+    ddf1.to_parquet(tmp, engine=engine)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf2.to_parquet(tmp, append=True)
+        ddf2.to_parquet(tmp, engine=engine, append=True)
     assert "Appended divisions" in str(excinfo.value)
 
-    ddf2.to_parquet(tmp, append=True, ignore_divisions=True)
+    ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
 
-def test_append_different_columns(tmpdir):
+def test_append_different_columns(tmpdir, engine):
     """Test raising of error when non equal columns."""
     tmp = str(tmpdir)
     df1 = pd.DataFrame({"i32": np.arange(100, dtype=np.int32)})
@@ -770,14 +770,14 @@ def test_append_different_columns(tmpdir):
     ddf2 = dd.from_pandas(df2, chunksize=2)
     ddf3 = dd.from_pandas(df3, chunksize=2)
 
-    ddf1.to_parquet(tmp)
+    ddf1.to_parquet(tmp, engine=engine)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf2.to_parquet(tmp, append=True)
+        ddf2.to_parquet(tmp, engine=engine, append=True)
     assert "Appended columns" in str(excinfo.value)
 
     with pytest.raises(ValueError) as excinfo:
-        ddf3.to_parquet(tmp, append=True)
+        ddf3.to_parquet(tmp, engine=engine, append=True)
     assert "Appended dtypes" in str(excinfo.value)
 
 
