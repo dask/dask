@@ -14,6 +14,7 @@ from ...base import tokenize
 from ...compatibility import unicode, PY3
 from ... import array as da
 from ...delayed import delayed
+from ... import config
 
 from ..core import (
     DataFrame,
@@ -29,6 +30,8 @@ from ..utils import insert_meta_param_description, check_meta, make_meta
 from ...utils import M, ensure_dict, parse_bytes
 
 lock = Lock()
+
+config.update_defaults({"dataframe": {"chunk-size": "128MiB"}})
 
 
 def _meta_from_array(x, columns=None, index=None):
@@ -144,8 +147,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         partitions than requested.
     chunksize : int, str, optional
         If an integer is passed, it means the number of rows per index
-        partition to use. If a string is passed, it represents the number of
-        bytes to use.
+        partition to use. If a str is passed, it's parsed with :func:`dask.utils.parse_bytes`.
+        Leaving chunksize and npartitions unspecifed will create partitions with 128MiB.
     sort: bool
         Sort input first to obtain cleanly divided partitions or don't sort and
         don't get cleanly divided partitions
@@ -193,7 +196,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     # Infer npartitions if npartions and chunksize is None
     if (npartitions is None) and (chunksize is None):
-        npartitions = _infer_npartitions(data, "128 MiB")
+        default = config.get("dataframe.chunk-size")
+        npartitions = _infer_npartitions(data, default)
 
     if (npartitions is not None) and (chunksize is not None):
         warnings.warn(
