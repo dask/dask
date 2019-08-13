@@ -50,7 +50,7 @@ class ThrottledGC(object):
             if self.last_gc_duration > self.warn_if_longer:
                 self.logger.warning(
                     "gc.collect() took %0.3fs. This is usually"
-                    " a sign that the some tasks handle too"
+                    " a sign that some tasks handle too"
                     " many Python objects at the same time."
                     " Rechunking the work into smaller tasks"
                     " might help.",
