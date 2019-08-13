@@ -217,7 +217,11 @@ def read_parquet(
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
-                    "Multiple sorted columns found, cannot autodetect index",
+                    "Multiple sorted columns found %s, cannot\n "
+                    "autodetect index. Will continue without an index.\n"
+                    "To pick an index column, use the index= kwargs; to \n"
+                    "silence this warning use index=False."
+                    "" % [o['name'] for o in out],
                     RuntimeWarning,
                 )
                 index = False
