@@ -31,8 +31,6 @@ from ...utils import M, ensure_dict, parse_bytes
 
 lock = Lock()
 
-config.update_defaults({"dataframe": {"chunk-size": "128MiB"}})
-
 
 def _meta_from_array(x, columns=None, index=None):
     """ Create empty pd.DataFrame or pd.Series which has correct dtype """
@@ -196,7 +194,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     # Infer npartitions if npartions and chunksize is None
     if (npartitions is None) and (chunksize is None):
-        default = config.get("dataframe.chunk-size")
+        default = config.get("array.chunk-size")
         npartitions = _infer_npartitions(data, default)
 
     if (npartitions is not None) and (chunksize is not None):
