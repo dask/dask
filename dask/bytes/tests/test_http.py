@@ -166,6 +166,7 @@ def test_parquet():
     assert df.columns.tolist() == ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696", strict=False)
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts
