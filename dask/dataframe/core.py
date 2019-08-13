@@ -3519,6 +3519,13 @@ class DataFrame(_Frame):
 
             if isinstance(v, Array):
                 from .io import from_dask_array
+
+                if len(v.shape) > 1:
+                    raise ValueError("Array assignment only supports 1-D arrays")
+                if v.shape[0] != len(self):
+                    raise ValueError(
+                        "Size mismatch ({0} != {1})".format(v.shape[0], len(self))
+                    )
                 kwargs[k] = from_dask_array(v, index=self.index)
 
         pairs = list(sum(kwargs.items(), ()))
