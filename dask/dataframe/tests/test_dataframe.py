@@ -3135,12 +3135,37 @@ def test_column_assignment():
     assert_eq(df, ddf)
     assert "z" not in orig.columns
 
-    arr = np.array([5, 6, 7, 8])
-    darr = da.from_array(arr, chunks=2)
 
-    df['w'] = arr
-    ddf['w'] = darr
+def test_array_assignment():
+    df = pd.DataFrame({"x": np.random.normal(size=50), "y": np.random.normal(size=50)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    orig = ddf.copy()
+
+    arr = np.array(np.random.normal(size=50))
+    darr = da.from_array(arr, chunks=25)
+
+    df["z"] = arr
+    ddf["z"] = darr
     assert_eq(df, ddf)
+    assert "z" not in orig.columns
+
+    arr = np.array(np.random.normal(size=(50, 50)))
+    darr = da.from_array(arr, chunks=25)
+    msg = "Array assignment only supports 1-D arrays"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
+
+    arr = np.array(np.random.normal(size=40))
+    darr = da.from_array(arr, chunks=25)
+    msg = "Size mismatch"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
+
+    arr = np.array(np.random.normal(size=50))
+    darr = da.from_array(arr, chunks=10)
+    msg = "The index and array have different numbers of blocks"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
 
 
 def test_columns_assignment():
