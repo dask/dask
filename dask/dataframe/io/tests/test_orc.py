@@ -13,6 +13,7 @@ pytest.importorskip("pyarrow.orc")
 
 # Skip for broken ORC reader
 import pyarrow as pa
+from dask.bytes._compatibility import FSSPEC_042
 
 pytestmark = pytest.mark.skipif(
     LooseVersion(pa.__version__) == "0.10.0",
@@ -32,6 +33,11 @@ columns = ["time", "date"]
 
 
 @pytest.mark.network
+@pytest.mark.xfail(
+    FSSPEC_042,
+    reason="https://github.com/intake/filesystem_spec/issues/104",
+    strict=True,
+)
 def test_orc_with_backend():
     pytest.importorskip("requests")
     d = read_orc(url)
