@@ -221,7 +221,7 @@ def read_parquet(
                     "autodetect index. Will continue without an index.\n"
                     "To pick an index column, use the index= kwargs; to \n"
                     "silence this warning use index=False."
-                    "" % [o['name'] for o in out],
+                    "" % [o["name"] for o in out],
                     RuntimeWarning,
                 )
                 index = False

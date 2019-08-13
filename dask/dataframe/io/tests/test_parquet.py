@@ -1701,14 +1701,15 @@ def test_arrow_partitioning(tmpdir):
 
 def test_sorted_warnings(tmpdir, engine):
     tmpdir = str(tmpdir)
-    df = dd.from_pandas(pd.DataFrame({'cola': range(10), 'colb': range(10)},),
-                        npartitions=2)
+    df = dd.from_pandas(
+        pd.DataFrame({"cola": range(10), "colb": range(10)}), npartitions=2
+    )
     df.to_parquet(tmpdir, engine=engine, write_index=False)
     with pytest.warns(RuntimeWarning) as record:
         out = dd.read_parquet(tmpdir, engine=engine)
     assert "['cola', 'colb']" in str(record[-1].message)
     warnings = len(record)
-    assert out.columns.tolist() == ['cola', 'colb']
+    assert out.columns.tolist() == ["cola", "colb"]
     with pytest.warns(None) as record:
         dd.read_parquet(tmpdir, engine=engine, index=False)
     assert len(record) < warnings  # still may have some arrow warnings
