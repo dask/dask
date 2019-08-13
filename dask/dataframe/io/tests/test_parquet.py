@@ -695,6 +695,7 @@ def test_partition_on_cats_2(tmpdir, engine):
     df = dd.read_parquet(tmp, columns=["a", "c"], engine=engine)
     assert set(df.c.cat.categories) == {"x", "y", "z"}
     assert "b" not in df.columns
+    assert_eq(df, df.compute())
     df = dd.read_parquet(tmp, index="c", engine=engine)
     assert set(df.index.categories) == {"x", "y", "z"}
     assert "c" not in df.columns
@@ -1050,20 +1051,27 @@ def test_partition_on(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
         {
-            "a": np.random.choice(["A", "B", "C"], size=100),
+            "a1": np.random.choice(["A", "B", "C"], size=100),
+            "a2": np.random.choice(["X", "Y", "Z"], size=100),
             "b": np.random.random(size=100),
             "c": np.random.randint(1, 5, size=100),
+            "d": np.arange(0, 100),
         }
     )
     d = dd.from_pandas(df, npartitions=2)
-    d.to_parquet(tmpdir, partition_on=["a"], write_index=False, engine=engine)
+    d.to_parquet(tmpdir, partition_on=["a1", "a2"], engine=engine)
     # Note #1: Cross-engine functionality is missing
     # Note #2: The index is not preserved in pyarrow when partition_on is used
     out = dd.read_parquet(
-        tmpdir, index=False, engine=engine, gather_statistics=False
+        tmpdir, engine=engine, index=False, gather_statistics=False
     ).compute()
-    for val in df.a.unique():
-        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+    for val in df.a1.unique():
+        assert set(df.b[df.a1 == val]) == set(out.b[out.a1 == val])
+
+    # Now specify the columns and allow auto-index detection
+    out = dd.read_parquet(tmpdir, engine=engine, columns=["b", "a2"]).compute()
+    for val in df.a2.unique():
+        assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
 
 
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
