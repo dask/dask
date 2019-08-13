@@ -3078,9 +3078,11 @@ class Scheduler(ServerNode):
         """
         with log_errors():
             if names is not None:
-                names = set(names)
+                if names:
+                    logger.info("Retire worker names %s", names)
+                names = set(map(str, names))
                 workers = [
-                    ws.address for ws in self.workers.values() if ws.name in names
+                    ws.address for ws in self.workers.values() if str(ws.name) in names
                 ]
             if workers is None:
                 while True:
@@ -3098,6 +3100,7 @@ class Scheduler(ServerNode):
             workers = {self.workers[w] for w in workers if w in self.workers}
             if not workers:
                 return []
+            logger.info("Retire workers %s", workers)
 
             # Keys orphaned by retiring those workers
             keys = set.union(*[w.has_what for w in workers])
@@ -3106,6 +3109,7 @@ class Scheduler(ServerNode):
             other_workers = set(self.workers.values()) - workers
             if keys:
                 if other_workers:
+                    logger.info("Moving %d keys to other workers", len(keys))
                     await self.replicate(
                         keys=keys,
                         workers=[ws.address for ws in other_workers],

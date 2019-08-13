@@ -1627,3 +1627,17 @@ async def test_finished():
 
     await s.finished()
     await w.finished()
+
+
+@pytest.mark.asyncio
+async def test_retire_names_str(cleanup):
+    async with Scheduler(port=0) as s:
+        async with Worker(s.address, name="0") as a:
+            async with Worker(s.address, name="1") as b:
+                async with Client(s.address, asynchronous=True) as c:
+                    futures = c.map(inc, range(10))
+                    await wait(futures)
+                    assert a.data and b.data
+                    await s.retire_workers(names=[0])
+                    assert all(f.done() for f in futures)
+                    assert len(b.data) == 10
