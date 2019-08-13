@@ -9,6 +9,8 @@ from distutils.version import LooseVersion
 import pytest
 import numpy as np
 
+from dask.bytes._compatibility import FSSPEC_042
+
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto")
@@ -336,6 +338,9 @@ def test_read_bytes_delimited(s3, blocksize):
     "fmt,blocksize", [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 )
 def test_compression(s3, fmt, blocksize):
+    # TODO: Remove once https://github.com/intake/filesystem_spec/issues/104 is fixed.
+    if fmt in {"bz2", "zip", "xz"} and FSSPEC_042:
+        pytest.xfail(reason="fsspec __fspath__")
     if fmt == "zip" and sys.version_info.minor == 5:
         pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
@@ -387,7 +392,18 @@ def test_modification_time_read_bytes():
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "pyarrow",
+        pytest.param(
+            "fastparquet",
+            marks=pytest.mark.xfail(
+                FSSPEC_042, reason="fsspec __fspath__", strict=True
+            ),
+        ),
+    ],
+)
 def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     lib = pytest.importorskip(engine)
