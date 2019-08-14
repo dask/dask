@@ -1171,6 +1171,26 @@ class _GroupBy(object):
             token="max", func=M.max, split_every=split_every, split_out=split_out
         )
 
+    @derived_from(pd.DataFrame)
+    def idxmin(self, split_every=None, split_out=1):
+        return self._aca_agg(
+            token="idxmin",
+            func=M.idxmin,
+            aggfunc=M.first,
+            split_every=split_every,
+            split_out=split_out,
+        )
+
+    @derived_from(pd.DataFrame)
+    def idxmax(self, split_every=None, split_out=1):
+        return self._aca_agg(
+            token="idxmax",
+            func=M.idxmax,
+            aggfunc=M.first,
+            split_every=split_every,
+            split_out=split_out,
+        )
+
     @derived_from(pd.core.groupby.GroupBy)
     def count(self, split_every=None, split_out=1):
         return self._aca_agg(
