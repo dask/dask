@@ -3550,7 +3550,7 @@ class DataFrame(_Frame):
         single thread
 
             import numexpr
-            numexpr.set_nthreads(1)
+            numexpr.set_num_threads(1)
 
         See also
         --------
