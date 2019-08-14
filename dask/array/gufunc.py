@@ -463,9 +463,7 @@ significantly.".format(
 
     ## Split output
     leaf_arrs = []
-    for i, (ocd, odt, oax, meta) in enumerate(
-        zip(output_coredimss, output_dtypes, output_axes, metas)
-    ):
+    for i, (ocd, oax, meta) in enumerate(zip(output_coredimss, output_axes, metas)):
         core_output_shape = tuple(core_shapes[d] for d in ocd)
         core_chunkinds = len(ocd) * (0,)
         output_shape = loop_output_shape + core_output_shape
@@ -478,7 +476,7 @@ significantly.".format(
             for key in keys
         }
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
-        meta = meta_from_array(meta, len(output_shape), dtype=odt)
+        meta = meta_from_array(meta, len(output_shape))
         leaf_arr = Array(
             graph, leaf_name, chunks=output_chunks, shape=output_shape, meta=meta
         )
