@@ -151,7 +151,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     To help with this, you'll likely want to use `Dask-Yarn <https://yarn.dask.org>`_.
 
 2.  **HPC**: If you have an HPC machine that runs resource managers like SGE,
-    SLLURM, PBS, LSF, Torque, Condor, or other job batchqueuing systems, then
+    SLLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
     users can launch Dask on these systems today using either:
 
     -  `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
@@ -319,13 +319,13 @@ when institutions adopt Dask.  When API consistencies do exist, even
 modestly skilled programmers are able to understand why and work around them
 without much pain.
 
-Instead, the challenge is building intution around parallel performance.
+Instead, the challenge is building intuition around parallel performance.
 We've all built up a mental model for what is fast and slow on a single
 machine.  This model changes when we factor in network communication and
 parallel algorithms, and the performance that we get for familiar operations
 can be surprising.
 
-Our main solution to build this intutition, other than
+Our main solution to build this intuition, other than
 accumulated experience, is Dask's :doc:`Diagnostic Dashboard
 <diagnostics-distributed>`.
 The dashboard delivers a ton of visual feedback to users as they are running
@@ -356,7 +356,7 @@ The most common knobs to tune include the following:
 That being said, almost no institution's needs are met entirely by the common
 case, and given the variety of problems that people throw at Dask,
 exceptional problems are commonplace.
-In these cases we recommend watching the dashboaad during execution to see what
+In these cases we recommend watching the dashboard during execution to see what
 is going on.  It can commonly inform you what's going wrong, so that you can
 make changes to your system.
 
