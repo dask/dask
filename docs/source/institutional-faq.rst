@@ -23,16 +23,17 @@ Dask is a general purpose parallel programming solution.
 As such it is used in *many* different ways.
 
 However, the most common problem that Dask solves is connecting Python analysts
-to distributed hardware.  The institutions for whom Dask has the greatest
+to distributed hardware, particularly for data science and machine learning
+workloads.  The institutions for whom Dask has the greatest
 impact are those who have a large body of Python users who are accustomed to
 libraries like NumPy, Pandas, Jupyter, Scikit-Learn and others, but want to
-scale those workloads onto a cluster.  Often they also have distributed
+scale those workloads across a cluster.  Often they also have distributed
 computing resources that are going underused.
 
 Dask removes both technological and cultural barriers to connect Python users
 to computing resources in a way that is native to both the users and IT.
 
-"Help me scale my notebook onto the cluster" is a common pain point for
+"*Help me scale my notebook onto the cluster*" is a common pain point for
 institutions today, and it is a common entry point for Dask usage.
 
 
@@ -41,7 +42,6 @@ Is Dask Mature?  Why should we trust it?
 
 Yes.  While Dask itself is relatively new (it began in 2015) it is built by the
 NumPy, Pandas, Jupyter, Scikit-Learn developer community, which is well trusted.
-
 Dask is a relatively thin wrapper on top of these libraries and,
 as a result, the project can be relatively small and simple.
 It doesn't reinvent a whole new system.
@@ -50,18 +50,19 @@ Additionally, this tight integration with the broader technology stack
 gives substantial benefits long term.  For example:
 
 -   Because Pandas maintainers also maintain Dask,
-    when Pandas issues a new releases Dask issues a release in lock-step.
+    when Pandas issues a new releases Dask issues a release at the same time to
+    ensure continuity and compatibility.
 
 -   Because Scikit-Learn maintainers maintain and use Dask when they train on large clusters,
     you can be assured that Dask-ML focuses on pragmatic and important
-    solutions like XGBoost integration, and hyper-parameter selection over
-    common model types, and that integration between the two feels natural for
-    novice users.
+    solutions like XGBoost integration, and hyper-parameter selection,
+    and that the integration between the two feels natural for novice and
+    expert users alike.
 
 -   Because Jupyter maintainers also maintain Dask,
     powerful Jupyter technologies like JupyterHub and JupyterLab are designed
     with Dask's needs in mind, and new features are pushed quickly to provide a
-    first class modern user experience.
+    first class and modern user experience.
 
 Additionally, Dask is maintained both by a broad community of maintainers,
 as well as substantial institutional support (several full-time employees each)
@@ -88,7 +89,7 @@ other similar institutions.
 How does Dask compare with Apache Spark?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*This question has longer and more technical coverage :doc:`here <spark>`*
+*This question has longer and more technical coverage* :doc:`here <spark>`
 
 Dask and Apache Spark are similar in that they both ...
 
@@ -100,13 +101,14 @@ Dask differs from Apache Spark in a few ways:
 
 -  Dask is more Python native, Spark is Scala/JVM native with Python bindings.
 
-   Python users may find Dask more comfortable for a variety of reasons, but
-   Dask is only useful for Python users, where Spark can also be used from JVM
-   languages.
+   Python users may find Dask more comfortable,
+   but Dask is only useful for Python users,
+   while Spark can also be used from JVM languages.
 
 -  Dask is one component in the broader Python ecosystem alongside libraries
    like Numpy, Pandas, and Scikit-Learn,
-   while Spark is an all-in-one re-implementation.
+   while Spark is an all-in-one system that re-invents much of the Python world
+   in a single package.
 
    This means that it's often easier to compose Dask with new problem domains,
    but also that you need to install multiple things (like Dask and Pandas or
@@ -121,6 +123,10 @@ Dask differs from Apache Spark in a few ways:
    custom systems, but that it is less focused and less tuned on typical SQL
    style computations.
 
+   If you mostly want to focus on SQL queries then Spark is probably a better
+   bet.  If you want to support a wide variety of custom workloads then Dask
+   might be more natural.
+
 
 For IT
 ------
@@ -129,8 +135,8 @@ For IT
 How would I set up Dask on institutional hardware?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You probably already have cluster resources.
-Dask almost certainly can run on them today with only user permissions.
+You already have cluster resources.
+Dask can run on them today without significant change.
 
 Most institutional clusters today have a resource manager.
 This is typically managed by IT, with some mild permissions given to users to
@@ -144,10 +150,8 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
 
     To help with this, you'll likely want to use `Dask-Yarn <https://yarn.dask.org>`_.
 
-    For more information see :doc:`setup/yarn`
-
 2.  **HPC**: If you have an HPC machine that runs resource managers like SGE,
-    SLLURM, PBS, LSF, Torque, Condor, or other job batchqueuing systems, then
+    SLLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
     users can launch Dask on these systems today using either:
 
     -  `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
@@ -179,10 +183,10 @@ Dask is deployed today within highly secure institutions,
 including major financial, healthcare, and government agencies.
 
 That being said it's worth noting that, by it's very nature, Dask enables the
-execution of arbitrary user code on a large set of machines, care should be
-taken to isolate, authenticate, and govern use of these machines.  Fortunately,
+execution of arbitrary user code on a large set of machines. Care should be
+taken to isolate, authenticate, and govern access to these machines.  Fortunately,
 your institution likely already does this and uses standard technologies like
-SSL/TLS, Kerberos, and other systems that Dask can integrate with readily.
+SSL/TLS, Kerberos, and other systems with which Dask can integrate.
 
 
 Do I need to purchase a new Cluster?
@@ -224,9 +228,9 @@ This depends on your cluster resource manager:
 -  Hadoop/Spark/Yarn users package their environment into a tarball and ship it
    around with HDFS (Dask-Yarn integrates with `Conda Pack
    <https://conda.github.io/conda-pack/>`_ for this capability)
--  Kubernetes or Cloud users typically use Docker images
+-  Kubernetes or Cloud users use Docker images
 
-In each case Dask typically integrates with existing processes and technologies
+In each case Dask integrates with existing processes and technologies
 that are well understood and familiar to the institution.
 
 
@@ -234,16 +238,18 @@ How Does Dask communicate data between machines?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Dask usually communicates over TCP, using msgpack for small administrative
-messages, and its own protocol for efficiently passing around large messages.
+messages, and its own protocol for efficiently passing around large data.
 The scheduler and each worker host their own TCP server, making Dask a
 distributed peer-to-peer network that uses point-to-point communication.
+We do not use Spark-style shuffle systems.  We do not use MPI-style
+collectives.  Everything is direct point-to-point.
 
 For high performance networks you can use either TCP-over-Infiniband for about
 1 GB/s bandwidth, or UCX (experimental) for full speed communication.
 
 
-Are deployment long running, or ephemeral?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Are deployments long running, or ephemeral?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 We see both, but ephemeral deployments are more common.
 
@@ -266,8 +272,9 @@ Will Dask "just work" on our existing code?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 No, you will need to make modifications,
-but these modifications are usually relatively small.
-Certainly the vast majority of lines of business logic within your institution
+but these modifications are usually small.
+
+The vast majority of lines of business logic within your institution
 will not have to change, assuming that they are in Python and use tooling like
 Numpy, Pandas and Scikit-Learn.
 
@@ -298,29 +305,33 @@ If Dask's centralized scheduler goes down then you would need to resubmit the
 computation.  This is a fairly standard level of resiliency today, shared with
 other tooling like Apache Spark, Flink, and others.
 
+The resource managers that host Dask, like Yarn or Kubernetes, typically
+provide long-term 24/7 resilience for always-on operation.
+
 Is the API exactly the same as NumPy/Pandas/Scikit-Learn?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-No, but it's very very close.  That being said your data scientists will still
+No, but it's very close.  That being said your data scientists will still
 have to learn some things.
 
 What we find is that the Numpy/Pandas/Scikit-Learn APIs aren't the challenge
-when institutions adopt Dask.  When API consistencies do exist even very
-modestly skilled programmers are able to understand why and work around them.
+when institutions adopt Dask.  When API consistencies do exist, even
+modestly skilled programmers are able to understand why and work around them
+without much pain.
 
-Instead, the challenge is building intution around parallel performance.
+Instead, the challenge is building intuition around parallel performance.
 We've all built up a mental model for what is fast and slow on a single
-machine.  When we factor in network communication and parallel algorithms, that
-model changes, and the performance that we get for familiar operations can be
-surprising.
+machine.  This model changes when we factor in network communication and
+parallel algorithms, and the performance that we get for familiar operations
+can be surprising.
 
-Our main solution to build this intutition, other than
-accumulated experience, is Dask's `Diagnostic Dashboard
-<https://docs.dask.org/en/latest/diagnostics-distributed.html>`.  The dashboard
-delivers a ton of visual feedback to users as they are running their
-computation to help them understand what is going on.  This both helps them to
-identify and resolve immediate bottlenecks, and also builds up that parallel
-performance intuition suprisingly quickly.
+Our main solution to build this intuition, other than
+accumulated experience, is Dask's :doc:`Diagnostic Dashboard
+<diagnostics-distributed>`.
+The dashboard delivers a ton of visual feedback to users as they are running
+their computation to help them understand what is going on.  This both helps
+them to identify and resolve immediate bottlenecks, and also builds up that
+parallel performance intuition suprisingly quickly.
 
 
 How much performance tuning does Dask require?
@@ -340,12 +351,12 @@ The most common knobs to tune include the following:
 
 -   The thread/process mixture to deal with GIL-holding computations (which are
     rare in Numpy/Pandas/Scikit-Learn workflows)
--   Partition size, like should you have 100 MB chunks or 1 GB chunks
+-   Partition size, like if should you have 100 MB chunks or 1 GB chunks
 
 That being said, almost no institution's needs are met entirely by the common
 case, and given the variety of problems that people throw at Dask,
 exceptional problems are commonplace.
-In these cases we recommend watching the dashboaad during execution to see what
+In these cases we recommend watching the dashboard during execution to see what
 is going on.  It can commonly inform you what's going wrong, so that you can
 make changes to your system.
 
@@ -353,21 +364,21 @@ make changes to your system.
 What Data formats does Dask support?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Pretty much anything.  If there is nice Pandas/Numpy support for it, then Dask
-probably uses that.  That being said, not all formats are well suited for
+Because Dask builds on NumPy and Pandas, it supports most formats that they
+support, which is most formats.
+That being said, not all formats are well suited for
 parallel access.  In general people using the following formats are usually
 pretty happy:
 
--  **Tabular:** Parquet, ORC, CSV, JSON, Avro, text
+-  **Tabular:** Parquet, ORC, CSV, Line Delimited JSON, Avro, text
 -  **Arrays:** HDF5, NetCDF, Zarr, GRIB
 
-But really, Dask just relies on the existing Python stack to handle data
-access.  If you have a Python function that turns a chunk of your stored data
-into a Pandas dataframe or Numpy array then Dask can probably call that
+More generally, if you have a Python function that turns a chunk of your stored
+data into a Pandas dataframe or Numpy array then Dask can probably call that
 function many times without much effort.
 
-For groups looking for advice on which formats to use, we recommend Parquet and
-Zarr or HDF5.
+For groups looking for advice on which formats to use, we recommend Parquet
+for tables and Zarr or HDF5 for arrays.
 
 
 Does Dask have a SQL interface?
