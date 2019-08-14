@@ -391,7 +391,18 @@ def normalize_arg(x):
         return x
 
 
-def map_blocks(func, *args, **kwargs):
+def map_blocks(
+    func,
+    *args,
+    name=None,
+    token=None,
+    dtype=None,
+    chunks=None,
+    drop_axis=[],
+    new_axis=None,
+    meta=None,
+    **kwargs
+):
     """ Map a function across all blocks of a dask array.
 
     Parameters
@@ -541,17 +552,11 @@ def map_blocks(func, *args, **kwargs):
             "   or:   da.map_blocks(function, x, y, z)"
         )
         raise TypeError(msg % type(func).__name__)
-    name = kwargs.pop("name", None)
-    token = kwargs.pop("token", None)
     if token:
         warnings.warn("The token= keyword to map_blocks has been moved to name=")
         name = token
 
     name = "%s-%s" % (name or funcname(func), tokenize(func, *args, **kwargs))
-    dtype = kwargs.pop("dtype", None)
-    chunks = kwargs.pop("chunks", None)
-    drop_axis = kwargs.pop("drop_axis", [])
-    new_axis = kwargs.pop("new_axis", None)
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -577,7 +582,7 @@ def map_blocks(func, *args, **kwargs):
 
     original_kwargs = kwargs
 
-    if dtype is None:
+    if dtype is None and meta is None:
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
@@ -606,6 +611,7 @@ def map_blocks(func, *args, **kwargs):
         dtype=dtype,
         concatenate=True,
         align_arrays=False,
+        meta=meta,
         **kwargs
     )
 

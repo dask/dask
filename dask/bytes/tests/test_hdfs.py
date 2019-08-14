@@ -152,26 +152,27 @@ def test_read_text(hdfs):
 
     pool = mp.get_context("spawn").Pool(2)
 
-    with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
-        f.write("Alice 100\nBob 200\nCharlie 300".encode())
+    with pool:
+        with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
+            f.write("Alice 100\nBob 200\nCharlie 300".encode())
 
-    with hdfs.open("%s/text.2.txt" % basedir, "wb") as f:
-        f.write("Dan 400\nEdith 500\nFrank 600".encode())
+        with hdfs.open("%s/text.2.txt" % basedir, "wb") as f:
+            f.write("Dan 400\nEdith 500\nFrank 600".encode())
 
-    with hdfs.open("%s/other.txt" % basedir, "wb") as f:
-        f.write("a b\nc d".encode())
+        with hdfs.open("%s/other.txt" % basedir, "wb") as f:
+            f.write("a b\nc d".encode())
 
-    b = db.read_text("hdfs://%s/text.*.txt" % basedir)
-    with dask.config.set(pool=pool):
-        result = b.str.strip().str.split().map(len).compute()
+        b = db.read_text("hdfs://%s/text.*.txt" % basedir)
+        with dask.config.set(pool=pool):
+            result = b.str.strip().str.split().map(len).compute()
 
-    assert result == [2, 2, 2, 2, 2, 2]
+        assert result == [2, 2, 2, 2, 2, 2]
 
-    b = db.read_text("hdfs://%s/other.txt" % basedir)
-    with dask.config.set(pool=pool):
-        result = b.str.split().flatten().compute()
+        b = db.read_text("hdfs://%s/other.txt" % basedir)
+        with dask.config.set(pool=pool):
+            result = b.str.split().flatten().compute()
 
-    assert result == ["a", "b", "c", "d"]
+        assert result == ["a", "b", "c", "d"]
 
 
 def test_read_text_unicode(hdfs):

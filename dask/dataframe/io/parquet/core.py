@@ -162,7 +162,7 @@ def read_parquet(
         # User didn't specify columns, so ignore any intersection
         # of auto-detected values with the index (if necessary)
         ignore_index_column_intersection = True
-        columns = meta.columns
+        columns = [c for c in meta.columns]
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
@@ -217,7 +217,11 @@ def read_parquet(
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
-                    "Multiple sorted columns found, cannot autodetect index",
+                    "Multiple sorted columns found %s, cannot\n "
+                    "autodetect index. Will continue without an index.\n"
+                    "To pick an index column, use the index= keyword; to \n"
+                    "silence this warning use index=False."
+                    "" % [o["name"] for o in out],
                     RuntimeWarning,
                 )
                 index = False
@@ -297,7 +301,9 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
-    return df
+    columns = columns or []
+    index = index or []
+    return df[[c for c in columns if c not in index]]
 
 
 def to_parquet(
