@@ -2325,6 +2325,13 @@ def test_from_array_copy():
     assert y.compute() is not y_c.compute()
 
 
+def test_from_array_dask_array():
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=(1, 2))
+    with pytest.raises(ValueError):
+        da.from_array(dx)
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
