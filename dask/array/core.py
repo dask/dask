@@ -2634,6 +2634,9 @@ def from_array(
     >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
     >>> a = da.from_array(x)  # doctest: +SKIP
     """
+    if isinstance(x, Array):
+        raise ValueError("Array is already a dask array. Use 'asarray' or "
+            "'rechunk' instead.")
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
