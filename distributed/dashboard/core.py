@@ -28,16 +28,16 @@ class BokehServer(object):
             ip = None
         for i in range(5):
             try:
-                self.server = Server(
-                    self.apps,
+                server_kwargs = dict(
                     port=port,
                     address=ip,
                     check_unused_sessions_milliseconds=500,
                     allow_websocket_origin=["*"],
                     use_index=False,
                     extra_patterns=[(r"/", web.RedirectHandler, {"url": "/status"})],
-                    **self.server_kwargs
                 )
+                server_kwargs.update(self.server_kwargs)
+                self.server = Server(self.apps, **server_kwargs)
                 self.server.start()
 
                 handlers = [

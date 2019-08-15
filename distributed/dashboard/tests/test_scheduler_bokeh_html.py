@@ -6,7 +6,8 @@ import pytest
 pytest.importorskip("bokeh")
 
 from tornado.escape import url_escape
-from tornado.httpclient import AsyncHTTPClient, HTTPClientError
+from tornado.httpclient import AsyncHTTPClient, HTTPClientError, HTTPRequest
+from tornado.websocket import websocket_connect
 
 from dask.sizeof import sizeof
 from distributed.utils import is_valid_xml
@@ -153,3 +154,26 @@ def test_task_page(c, s, a, b):
     assert "int" in body
     assert a.address in body
     assert "memory" in body
+
+
+@gen_cluster(
+    client=True,
+    scheduler_kwargs={
+        "services": {
+            ("dashboard", 0): (
+                BokehScheduler,
+                {"allow_websocket_origin": ["good.invalid"]},
+            )
+        }
+    },
+)
+def test_allow_websocket_origin(c, s, a, b):
+    url = (
+        "ws://localhost:%d/status/ws?bokeh-protocol-version=1.0&bokeh-session-id=1"
+        % s.services["dashboard"].port
+    )
+    with pytest.raises(HTTPClientError) as err:
+        yield websocket_connect(
+            HTTPRequest(url, headers={"Origin": "http://evil.invalid"})
+        )
+    assert err.value.code == 403
