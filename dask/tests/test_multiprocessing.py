@@ -101,10 +101,10 @@ def test_unpicklable_args_generate_errors():
 
 
 def test_reuse_pool():
-    pool = multiprocessing.Pool()
-    with dask.config.set(pool=pool):
-        assert get({"x": (inc, 1)}, "x") == 2
-        assert get({"x": (inc, 1)}, "x") == 2
+    with multiprocessing.Pool() as pool:
+        with dask.config.set(pool=pool):
+            assert get({"x": (inc, 1)}, "x") == 2
+            assert get({"x": (inc, 1)}, "x") == 2
 
 
 def test_dumps_loads():

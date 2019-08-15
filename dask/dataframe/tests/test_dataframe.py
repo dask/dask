@@ -11,6 +11,7 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
+from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.compatibility import PY2
@@ -245,7 +246,12 @@ def test_rename_series():
     ind.name = "renamed"
     dind.name = "renamed"
     assert ind.name == "renamed"
-    assert_eq(dind, ind)
+    with warnings.catch_warnings():
+        if _numpy_118:
+            # Catch DeprecationWarning from numpy from rewrite_blockwise
+            # where we attempt to do `'str' in ndarray`.
+            warnings.simplefilter("ignore", DeprecationWarning)
+        assert_eq(dind, ind)
 
 
 def test_rename_series_method():

@@ -56,10 +56,10 @@ def test_exceptions_rise_to_top():
 
 
 def test_reuse_pool():
-    pool = ThreadPool()
-    with dask.config.set(pool=pool):
-        assert get({"x": (inc, 1)}, "x") == 2
-        assert get({"x": (inc, 1)}, "x") == 2
+    with ThreadPool() as pool:
+        with dask.config.set(pool=pool):
+            assert get({"x": (inc, 1)}, "x") == 2
+            assert get({"x": (inc, 1)}, "x") == 2
 
 
 @pytest.mark.skipif(PY2, reason="threading API changed")

@@ -7,6 +7,7 @@ import fsspec
 from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
+from dask.bytes._compatibility import FSSPEC_042
 from dask.compatibility import PY2
 from dask.utils import tmpdir
 
@@ -119,7 +120,13 @@ def test_errors(dir_server):
         with f as f:
             f.read()
     f = open_files("http://nohost/")[0]
-    with pytest.raises(requests.exceptions.RequestException):
+
+    if FSSPEC_042:
+        expected = FileNotFoundError
+    else:
+        expected = requests.exceptions.RequestException
+
+    with pytest.raises(expected):
         with f as f:
             f.read()
     root = "http://localhost:8999/"
