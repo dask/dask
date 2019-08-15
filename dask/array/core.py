@@ -2634,6 +2634,10 @@ def from_array(
     >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
     >>> a = da.from_array(x)  # doctest: +SKIP
     """
+    if isinstance(x, Array):
+        raise ValueError(
+            "Array is already a dask array. Use 'asarray' or " "'rechunk' instead."
+        )
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
@@ -3576,7 +3580,7 @@ def asarray(a, **kwargs):
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        a = stack(a)
+        return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
