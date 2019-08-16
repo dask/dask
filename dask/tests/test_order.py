@@ -36,7 +36,6 @@ def test_ordering_keeps_groups_together(abcde):
     assert abs(o[(a, 1)] - o[(a, 3)]) == 1
 
 
-@pytest.mark.xfail(reason="Can't please 'em all")
 def test_avoid_broker_nodes(abcde):
     r"""
 
@@ -173,7 +172,7 @@ def test_avoid_upwards_branching_complex(abcde):
     assert o[(c, 1)] < o[(b, 1)]
 
 
-@pytest.mark.xfail(reason="this case is ambiguous")
+@pytest.mark.xfail(reason="this case is ambiguous", strict=False)
 def test_deep_bases_win_over_dependents(abcde):
     r"""
     It's not clear who should run first, e or d

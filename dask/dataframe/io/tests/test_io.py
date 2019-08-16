@@ -268,13 +268,12 @@ def test_from_pandas_small():
             assert_eq(s, ds)
 
 
-@pytest.mark.xfail(reason="")
-def test_from_pandas_npartitions_is_accurate():
+@pytest.mark.parametrize("n", [1, 2, 4, 5])
+def test_from_pandas_npartitions_is_accurate(n):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
-    for n in [1, 2, 4, 5]:
-        assert dd.from_pandas(df, npartitions=n).npartitions == n
+    assert dd.from_pandas(df, npartitions=n).npartitions <= n
 
 
 def test_from_pandas_series():

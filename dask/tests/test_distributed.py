@@ -121,8 +121,20 @@ def test_to_hdf_distributed(loop):
             test_to_hdf()
 
 
-@pytest.mark.xfail(reason="HDF not multi-process safe")
-@pytest.mark.parametrize("npartitions", [1, 4, 10])
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        1,
+        pytest.param(
+            4,
+            marks=pytest.mark.xfail(reason="HDF not multi-process safe", strict=False),
+        ),
+        pytest.param(
+            10,
+            marks=pytest.mark.xfail(reason="HDF not multi-process safe", strict=False),
+        ),
+    ],
+)
 def test_to_hdf_scheduler_distributed(npartitions, loop):
     from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 

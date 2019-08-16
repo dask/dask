@@ -600,7 +600,7 @@ def test_tile_array_reps(shape, chunks, reps):
         da.tile(d, reps)
 
 
-skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061", strict=True)
+skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
 
 
 @pytest.mark.parametrize(
