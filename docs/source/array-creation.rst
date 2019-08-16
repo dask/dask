@@ -141,7 +141,7 @@ There are several ways to create a Dask array from a Dask DataFrame. Dask DataFr
 
    >>> df = dask.dataframes.from_pandas(...)
    >>> df.to_dask_array()
-   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), meta=numpy.ndarray>
 
 This mirrors the `to_numpy
 <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_numpy.html>`_
@@ -150,7 +150,7 @@ function in Pandas. The ``values`` attribute is also supported:
 .. code-block:: python
 
    >>> df.values
-   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), meta=numpy.ndarray>
 
 However, these arrays do not have known chunk sizes because dask.dataframe does
 not track the number of rows in each partition. This means that some operations
@@ -161,7 +161,7 @@ The chunk sizes can be computed:
 .. code-block:: python
 
    >>> df.to_dask_array(lengths=True)
-   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3)>
+   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3), meta=numpy.ndarray>
 
 Specifying ``lengths=True`` triggers immediate computation of the chunk sizes.
 This enables downstream computations that rely on having known chunk sizes
@@ -171,7 +171,7 @@ The Dask DataFrame ``to_records`` method also returns a Dask Array, but does not
 information:
 
    >>> df.to_records()
-   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,)>
+   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,), meta=numpy.ndarray>
 
 If you have a function that converts a Pandas DataFrame into a NumPy array,
 then calling ``map_partitions`` with that function on a Dask DataFrame will
@@ -180,7 +180,7 @@ produce a Dask array:
 .. code-block:: python
 
    >>> df.map_partitions(np.asarray)
-   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), meta=numpy.ndarray>
 
 
 Interactions with NumPy arrays
@@ -205,7 +205,7 @@ chunk shape:
    >>> y = np.ones(10)
    >>> z = x + y
    >>> z
-   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,)>
+   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,), meta=numpy.ndarray>
 
 These interactions work not just for NumPy arrays but for any object that has
 shape and dtype attributes and implements NumPy slicing syntax.
