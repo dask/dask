@@ -492,7 +492,7 @@ def map_blocks(
     ...     return np.array([a.max(), b.max()])
 
     >>> da.map_blocks(func, x, y, chunks=(2,), dtype='i8')
-    dask.array<func, shape=(20,), dtype=int64, chunksize=(2,), meta=numpy.ndarray>
+    dask.array<func, shape=(20,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
 
     >>> _.compute()
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
@@ -534,7 +534,7 @@ def map_blocks(
     ...     return np.arange(loc[0], loc[1])
 
     >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
-    dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), meta=numpy.ndarray>
+    dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), chunktype=numpy.ndarray>
 
     >>> _.compute()
     array([0, 1, 2, 3, 4, 5, 6, 7])
@@ -543,7 +543,7 @@ def map_blocks(
     the optional ``token`` keyword argument.
 
     >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
-    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), meta=numpy.ndarray>
+    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
     """
     if not callable(func):
         msg = (
@@ -1153,11 +1153,11 @@ class Array(DaskMethodsMixin):
 
         >>> import dask.array as da
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
-        dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5), meta=numpy.ndarray>
+        dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5), chunktype=numpy.ndarray>
         """
         chunksize = str(self.chunksize)
         name = self.name.rsplit("-", 1)[0]
-        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s, meta=%s.%s>" % (
+        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s, chunktype=%s.%s>" % (
             name,
             self.shape,
             self.dtype,
@@ -2892,7 +2892,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     >>> value = dask.delayed(np.ones)(5)
     >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
-    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), meta=numpy.ndarray>
+    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
@@ -3571,11 +3571,11 @@ def asarray(a, **kwargs):
     >>> import numpy as np
     >>> x = np.arange(3)
     >>> da.asarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), meta=numpy.ndarray>
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
 
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), meta=numpy.ndarray>
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
     if isinstance(a, Array):
         return a
@@ -3609,11 +3609,11 @@ def asanyarray(a):
     >>> import numpy as np
     >>> x = np.arange(3)
     >>> da.asanyarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), meta=numpy.ndarray>
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
 
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asanyarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), meta=numpy.ndarray>
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
     if isinstance(a, Array):
         return a

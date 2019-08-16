@@ -1421,12 +1421,12 @@ def test_repr():
 
 def test_repr_meta():
     d = da.ones((4, 4), chunks=(2, 2))
-    assert "meta=numpy.ndarray" in repr(d)
+    assert "chunktype=numpy.ndarray" in repr(d)
 
     # Test non-numpy meta
     sparse = pytest.importorskip("sparse")
     s = d.map_blocks(sparse.COO)
-    assert "meta=sparse.COO" in repr(s)
+    assert "chunktype=sparse.COO" in repr(s)
 
 
 def test_slicing_with_ellipsis():

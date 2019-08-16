@@ -83,7 +83,7 @@ This can also happen when creating a Dask array from a Dask DataFrame:
 
    >>> ddf = dask.dataframe.from_pandas(...)
    >>> ddf.to_dask_array()
-   ... dask.array<values, shape=(nan, 2), dtype=float64, chunksize=(nan, 2), meta=numpy.ndarray>
+   ... dask.array<values, shape=(nan, 2), dtype=float64, chunksize=(nan, 2), chunktype=numpy.ndarray>
 
 For details on how to avoid unknown chunk sizes, look at how to create a Dask
 array from a Dask DataFrame in the :doc:`documentation on Dask array creation
@@ -268,4 +268,4 @@ These values can also be used when creating arrays with operations like
 .. code-block:: python
 
    >>> dask.array.ones((10000, 10000), chunks=(-1, 'auto'))
-   dask.array<wrapped, shape=(10000, 10000), dtype=float64, chunksize=(10000, 1250), meta=numpy.ndarray>
+   dask.array<wrapped, shape=(10000, 10000), dtype=float64, chunksize=(10000, 1250), chunktype=numpy.ndarray>
