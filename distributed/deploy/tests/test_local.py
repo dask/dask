@@ -195,7 +195,7 @@ def test_Client_solo(loop):
 def test_duplicate_clients():
     pytest.importorskip("bokeh")
     c1 = yield Client(processes=False, silence_logs=False, dashboard_address=9876)
-    with pytest.warns(Exception) as info:
+    with pytest.warns(Warning) as info:
         c2 = yield Client(processes=False, silence_logs=False, dashboard_address=9876)
 
     assert "dashboard" in c1.cluster.scheduler.services
