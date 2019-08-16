@@ -1157,11 +1157,13 @@ class Array(DaskMethodsMixin):
         """
         chunksize = str(self.chunksize)
         name = self.name.rsplit("-", 1)[0]
-        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" % (
+        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s, meta=%s.%s>" % (
             name,
             self.shape,
             self.dtype,
             chunksize,
+            type(self._meta).__module__.split(".")[0],
+            type(self._meta).__name__,
         )
 
     def _repr_html_(self):

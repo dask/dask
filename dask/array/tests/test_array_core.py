@@ -1419,6 +1419,16 @@ def test_repr():
     assert len(str(d)) < 1000
 
 
+def test_repr_meta():
+    d = da.ones((4, 4), chunks=(2, 2))
+    assert "meta=numpy.ndarray" in repr(d)
+
+    # Test non-numpy meta
+    sparse = pytest.importorskip("sparse")
+    s = d.map_blocks(sparse.COO)
+    assert "meta=sparse.COO" in repr(s)
+
+
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
     d = da.from_array(x, chunks=((2, 2, 2, 2)))
