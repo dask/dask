@@ -1,6 +1,39 @@
 Changelog
 =========
 
+2.3.0 - 2019-08-16
+------------------
+
+- Except all exceptions when checking ``pynvml`` (:pr:`2961`) `Matthew Rocklin`_
+- Pass serialization down through small base collections (:pr:`2948`) `Peter Andreas Entschev`_
+- Use ``pytest.warning(Warning)`` rather than ``Exception`` (:pr:`2958`) `Matthew Rocklin`_
+- Allow ``server_kwargs`` to override defaults in dashboard (:pr:`2955`) `Bruce Merry`_
+- Update ``utils_perf.py`` (:pr:`2954`) `Shayan Amani`_
+- Normalize names with ``str`` in ``retire_workers`` (:pr:`2949`) `Matthew Rocklin`_
+- Update ``client.py`` (:pr:`2951`) `Shayan Amani`_
+- Add ``GPUCurrentLoad`` dashboard plots (:pr:`2944`) `Matthew Rocklin`_
+- Pass GPU diagnostics from worker to scheduler (:pr:`2932`) `Matthew Rocklin`_
+- Import from ``collections.abc`` (:pr:`2938`) `Jim Crist`_
+- Fixes Worker docstring formatting (:pr:`2939`) `James Bourbeau`_
+- Redirect setup docs to docs.dask.org (:pr:`2936`) `Matthew Rocklin`_
+- Wrap offload in ``gen.coroutine`` (:pr:`2934`) `Matthew Rocklin`_
+- Change ``TCP.close`` to a coroutine to avoid task pending warning (:pr:`2930`) `Matthew Rocklin`_
+- Fixup black string normalization (:pr:`2929`) `Jim Crist`_
+- Move core functionality from ``SpecCluster`` to ``Cluster`` (:pr:`2913`) `Matthew Rocklin`_
+- Add aenter/aexit protocols to ``ProcessInterface`` (:pr:`2927`) `Matthew Rocklin`_
+- Add real-time CPU utilization plot to dashboard (:pr:`2922`) `Matthew Rocklin`_
+- Always kill processes in clean tests, even if we don't check (:pr:`2924`) `Matthew Rocklin`_
+- Add timeouts to processes in SSH tests (:pr:`2925`) `Matthew Rocklin`_
+- Add documentation around ``spec.ProcessInterface`` (:pr:`2923`) `Matthew Rocklin`_
+- Cleanup async warnings in tests (:pr:`2920`) `Matthew Rocklin`_
+- Give 404 when requesting nonexistent tasks or workers (:pr:`2921`) `Martin Durant`_
+- Raise informative warning when rescheduling an unknown task (:pr:`2916`) `James Bourbeau`_
+- Fix docstring (:pr:`2917`) `Martin Durant`_
+- Add keep-alive message between worker and scheduler (:pr:`2907`) `Matthew Rocklin`_
+- Rewrite ``Adaptive``/``SpecCluster`` to support slowly arriving workers (:pr:`2904`) `Matthew Rocklin`_
+- Call heartbeat rather than reconnect on disconnection (:pr:`2906`) `Matthew Rocklin`_
+
+
 2.2.0 - 2019-07-31
 ------------------
 
@@ -1173,3 +1206,4 @@ significantly without many new features.
 .. _`Christian Hudon`: https://github.com/chrish42
 .. _`Gabriel Sailer`: https://github.com/sublinus
 .. _`Pierre Glaser`: https://github.com/pierreglase
+.. _`Shayan Amani`: https://github.com/SHi-ON
