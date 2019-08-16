@@ -135,6 +135,54 @@ def serialize(x, serializers=None, on_error="message", context=None):
     if isinstance(x, Serialized):
         return x.header, x.frames
 
+    # Determine whether keys are safe to be serialized with msgpack
+    if type(x) is dict and len(x) <= 5:
+        try:
+            msgpack.dumps(list(x.keys()))
+        except Exception:
+            dict_safe = False
+        else:
+            dict_safe = True
+
+    if (
+        type(x) in (list, set, tuple)
+        and len(x) <= 5
+        or type(x) is dict
+        and len(x) <= 5
+        and dict_safe
+    ):
+        if isinstance(x, dict):
+            headers_frames = []
+            for k, v in x.items():
+                _header, _frames = serialize(
+                    v, serializers=serializers, on_error=on_error, context=context
+                )
+                _header["key"] = k
+                headers_frames.append((_header, _frames))
+        else:
+            headers_frames = [
+                serialize(
+                    obj, serializers=serializers, on_error=on_error, context=context
+                )
+                for obj in x
+            ]
+
+        frames = []
+        lengths = []
+        for _header, _frames in headers_frames:
+            frames.extend(_frames)
+            length = len(_frames)
+            lengths.append(length)
+
+        headers = [obj[0] for obj in headers_frames]
+        headers = {
+            "sub-headers": headers,
+            "is-collection": True,
+            "frame-lengths": lengths,
+            "type-serialized": type(x).__name__,
+        }
+        return headers, frames
+
     tb = ""
 
     for name in serializers:
@@ -178,6 +226,38 @@ def deserialize(header, frames, deserializers=None):
     --------
     serialize
     """
+    if "is-collection" in header:
+        headers = header["sub-headers"]
+        lengths = header["frame-lengths"]
+        cls = {"tuple": tuple, "list": list, "set": set, "dict": dict}[
+            header["type-serialized"]
+        ]
+
+        start = 0
+        if cls is dict:
+            d = {}
+            for _header, _length in zip(headers, lengths):
+                k = _header.pop("key")
+                d[k] = deserialize(
+                    _header,
+                    frames[start : start + _length],
+                    deserializers=deserializers,
+                )
+                start += _length
+            return d
+        else:
+            lst = []
+            for _header, _length in zip(headers, lengths):
+                lst.append(
+                    deserialize(
+                        _header,
+                        frames[start : start + _length],
+                        deserializers=deserializers,
+                    )
+                )
+                start += _length
+            return cls(lst)
+
     name = header.get("serializer")
     if deserializers is not None and name not in deserializers:
         raise TypeError(

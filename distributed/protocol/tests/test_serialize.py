@@ -46,7 +46,7 @@ register_serialization(MyObj, serialize_myobj, deserialize_myobj)
 
 
 def test_dumps_serialize():
-    for x in [123, [1, 2, 3]]:
+    for x in [123, [1, 2, 3, 4, 5, 6]]:
         header, frames = serialize(x)
         assert header["serializer"] == "pickle"
         assert len(frames) == 1
@@ -235,7 +235,7 @@ def test_malicious_exception():
 
 
 def test_errors():
-    msg = {"data": {"foo": to_serialize(inc)}}
+    msg = {"data": {"foo": to_serialize(inc)}, "a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
 
     header, frames = serialize(msg, serializers=["msgpack", "pickle"])
     assert header["serializer"] == "pickle"
