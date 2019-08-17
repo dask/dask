@@ -23,6 +23,7 @@ class ProcessInterface:
 
     def __init__(self):
         self.address = None
+        self.external_address = None
         self.lock = asyncio.Lock()
         self.status = "created"
 
@@ -225,7 +226,7 @@ class SpecCluster(Cluster):
         self.status = "starting"
         self.scheduler = await self.scheduler
         self.scheduler_comm = rpc(
-            self.scheduler.address,
+            getattr(self.scheduler, "external_address", None) or self.scheduler.address,
             connection_args=self.security.get_connection_args("client"),
         )
         await super()._start()
