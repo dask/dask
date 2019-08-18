@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
-import re
 import os
+import re
+import sys
 from functools import partial
 
 from .compatibility import apply
-from .core import istask, get_dependencies, ishashable
+from .core import get_dependencies, ishashable, istask
 from .utils import funcname, import_required, key_split
-
 
 graphviz = import_required(
     "graphviz",
@@ -55,11 +55,15 @@ def has_sub_tasks(task):
         return False
 
 
+def poshash(x):
+    return hash(x) % ((sys.maxsize + 1) * 2)
+
+
 def name(x):
     try:
-        return str(hash(x))
+        return str(poshash(x))
     except TypeError:
-        return str(hash(str(x)))
+        return str(poshash(str(x)))
 
 
 _HASHPAT = re.compile("([0-9a-z]{32})")
