@@ -222,7 +222,8 @@ class RandomState(object):
                 if a < 0:
                     raise ValueError("a must be greater than 0")
             else:
-                a = asarray(a).rechunk(a.shape)
+                a = asarray(a)
+                a = a.rechunk(a.shape)
                 dtype = a.dtype
                 if a.ndim != 1:
                     raise ValueError("a must be one dimensional")
