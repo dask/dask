@@ -1,5 +1,4 @@
 import asyncio
-
 import pytest
 
 ucp = pytest.importorskip("ucp")
@@ -10,6 +9,7 @@ from distributed.comm.registry import backends, get_backend
 from distributed.comm import ucx, parse_address
 from distributed.protocol import to_serialize
 from distributed.deploy.local import LocalCluster
+from dask.dataframe.utils import assert_eq
 from distributed.utils_test import gen_test, loop, inc  # noqa: 401
 
 from .test_comms import check_deserialize
@@ -35,7 +35,7 @@ async def get_comm_pair(
     # Workaround for hanging test in
     # pytest distributed/comm/tests/test_ucx.py::test_comm_objs -vs --count=2
     # on the second time through.
-    ucp._libs.ucp_py.reader_added = 0
+    # ucp._libs.ucp_py.reader_added = 0
 
     listener = listen(listen_addr, handle_comm, connection_args=listen_args, **kwargs)
     with listener:
@@ -164,21 +164,41 @@ def test_ucx_deserialize():
 
 
 @pytest.mark.asyncio
-async def test_ping_pong_cudf():
+@pytest.mark.parametrize(
+    "g",
+    [
+        lambda cudf: cudf.Series([1, 2, 3]),
+        lambda cudf: cudf.Series([]),
+        lambda cudf: cudf.DataFrame([]),
+        lambda cudf: cudf.DataFrame([1]).head(0),
+        lambda cudf: cudf.DataFrame([1.0]).head(0),
+        lambda cudf: cudf.DataFrame({"a": []}),
+        lambda cudf: cudf.DataFrame({"a": ["a"]}).head(0),
+        lambda cudf: cudf.DataFrame({"a": [1.0]}).head(0),
+        lambda cudf: cudf.DataFrame({"a": [1]}).head(0),
+        lambda cudf: cudf.DataFrame({"a": [1, 2, None], "b": [1.0, 2.0, None]}),
+    ],
+)
+async def test_ping_pong_cudf(g):
     # if this test appears after cupy an import error arises
     # *** ImportError: /usr/lib/x86_64-linux-gnu/libstdc++.so.6: version `CXXABI_1.3.11'
     # not found (required by python3.7/site-packages/pyarrow/../../../libarrow.so.12)
     cudf = pytest.importorskip("cudf")
 
-    df = cudf.DataFrame({"A": [1, 2, None], "B": [1.0, 2.0, None]})
+    cudf_obj = g(cudf)
 
     com, serv_com = await get_comm_pair()
-    msg = {"op": "ping", "data": to_serialize(df)}
+    msg = {"op": "ping", "data": to_serialize(cudf_obj)}
 
     await com.write(msg)
     result = await serv_com.read()
-    data2 = result.pop("data")
+
+    cudf_obj_2 = result.pop("data")
     assert result["op"] == "ping"
+    assert_eq(cudf_obj, cudf_obj_2)
+
+    await com.close()
+    await serv_com.close()
 
 
 @pytest.mark.asyncio

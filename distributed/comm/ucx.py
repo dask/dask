@@ -13,7 +13,7 @@ from .addressing import parse_host_port, unparse_host_port
 from .core import Comm, Connector, Listener, CommClosedError
 from .registry import Backend, backends
 from .utils import ensure_concrete_host, to_frames, from_frames
-from ..utils import ensure_ip, get_ip, get_ipv6, nbytes
+from ..utils import ensure_ip, get_ip, get_ipv6, nbytes, log_errors
 
 import ucp
 
@@ -94,60 +94,62 @@ class UCX(Comm):
         serializers=("cuda", "dask", "pickle", "error"),
         on_error: str = "message",
     ):
-        if serializers is None:
-            serializers = ("cuda", "dask", "pickle", "error")
-        # msg can also be a list of dicts when sending batched messages
-        frames = await to_frames(msg, serializers=serializers, on_error=on_error)
-        is_gpus = b"".join(
-            [
-                struct.pack("?", hasattr(frame, "__cuda_array_interface__"))
-                for frame in frames
-            ]
-        )
-        sizes = b"".join([struct.pack("Q", nbytes(frame)) for frame in frames])
+        with log_errors():
+            if serializers is None:
+                serializers = ("cuda", "dask", "pickle", "error")
+            # msg can also be a list of dicts when sending batched messages
+            frames = await to_frames(msg, serializers=serializers, on_error=on_error)
+            is_gpus = b"".join(
+                [
+                    struct.pack("?", hasattr(frame, "__cuda_array_interface__"))
+                    for frame in frames
+                ]
+            )
+            sizes = b"".join([struct.pack("Q", nbytes(frame)) for frame in frames])
 
-        nframes = struct.pack("Q", len(frames))
+            nframes = struct.pack("Q", len(frames))
 
-        meta = b"".join([nframes, is_gpus, sizes])
+            meta = b"".join([nframes, is_gpus, sizes])
 
-        await self.ep.send_obj(meta)
+            await self.ep.send_obj(meta)
 
-        for frame in frames:
-            await self.ep.send_obj(frame)
-        return sum(map(nbytes, frames))
+            for frame in frames:
+                await self.ep.send_obj(frame)
+            return sum(map(nbytes, frames))
 
     async def read(self, deserializers=("cuda", "dask", "pickle", "error")):
-        if deserializers is None:
-            deserializers = ("cuda", "dask", "pickle", "error")
-        resp = await self.ep.recv_future()
-        obj = ucp.get_obj_from_msg(resp)
-        (nframes,) = struct.unpack(
-            "Q", obj[:8]
-        )  # first eight bytes for number of frames
+        with log_errors():
+            if deserializers is None:
+                deserializers = ("cuda", "dask", "pickle", "error")
+            resp = await self.ep.recv_future()
+            obj = ucp.get_obj_from_msg(resp)
+            (nframes,) = struct.unpack(
+                "Q", obj[:8]
+            )  # first eight bytes for number of frames
 
-        gpu_frame_msg = obj[
-            8 : 8 + nframes
-        ]  # next nframes bytes for if they're GPU frames
-        is_gpus = struct.unpack("{}?".format(nframes), gpu_frame_msg)
+            gpu_frame_msg = obj[
+                8 : 8 + nframes
+            ]  # next nframes bytes for if they're GPU frames
+            is_gpus = struct.unpack("{}?".format(nframes), gpu_frame_msg)
 
-        sized_frame_msg = obj[8 + nframes :]  # then the rest for frame sizes
-        sizes = struct.unpack("{}Q".format(nframes), sized_frame_msg)
+            sized_frame_msg = obj[8 + nframes :]  # then the rest for frame sizes
+            sizes = struct.unpack("{}Q".format(nframes), sized_frame_msg)
 
-        frames = []
+            frames = []
 
-        for i, (is_gpu, size) in enumerate(zip(is_gpus, sizes)):
-            if size > 0:
-                resp = await self.ep.recv_obj(size, cuda=is_gpu)
-            else:
-                resp = await self.ep.recv_future()
-            frame = ucp.get_obj_from_msg(resp)
-            frames.append(frame)
+            for i, (is_gpu, size) in enumerate(zip(is_gpus, sizes)):
+                if size > 0:
+                    resp = await self.ep.recv_obj(size, cuda=is_gpu)
+                else:
+                    resp = await self.ep.recv_future()
+                frame = ucp.get_obj_from_msg(resp)
+                frames.append(frame)
 
-        msg = await from_frames(
-            frames, deserialize=self.deserialize, deserializers=deserializers
-        )
+            msg = await from_frames(
+                frames, deserialize=self.deserialize, deserializers=deserializers
+            )
 
-        return msg
+            return msg
 
     def abort(self):
         if self._ep:
