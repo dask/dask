@@ -788,6 +788,12 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+@pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
+def test_shape(shape):
+    x = da.random.random(shape)
+    assert np.shape(x) == shape
+
+
 def test_ravel():
     x = np.random.randint(10, size=(4, 6))
 

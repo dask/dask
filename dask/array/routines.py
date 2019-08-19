@@ -1039,6 +1039,12 @@ def roll(array, shift, axis=None):
     return result
 
 
+@implements(np.shape)
+@derived_from(np)
+def shape(array):
+    return array.shape
+
+
 @derived_from(np)
 def ravel(array):
     return array.reshape((-1,))
