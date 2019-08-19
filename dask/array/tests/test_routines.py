@@ -801,7 +801,7 @@ def test_shape(shape):
 @pytest.mark.parametrize("reverse", [True, False])
 def test_union1d(shape, reverse):
     if any(len(x) > 1 for x in shape) and not _numpy_115:
-        pytest.skip(reason="NumPy-10563.")
+        pytest.skip("NumPy-10563.")
 
     s1, s2 = shape
     x1 = np.arange(12).reshape(s1)
