@@ -26,6 +26,7 @@ AGG_FUNCS = [
     "std",
     "var",
     "cov",
+    "corr",
     "nunique",
     "first",
     "last",
@@ -335,8 +336,11 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     dask_group = grouper(ddf)
     pandas_group = grouper(df)
 
-    # covariance only works with N+1 columns
-    if isinstance(pandas_group, pd.core.groupby.SeriesGroupBy) and agg_func == "cov":
+    # covariance/correlation only works with N+1 columns
+    if isinstance(pandas_group, pd.core.groupby.SeriesGroupBy) and agg_func in (
+        "cov",
+        "corr",
+    ):
         return
 
     dask_agg = getattr(dask_group, agg_func)
@@ -726,8 +730,8 @@ def test_groupby_reduction_split(keyword):
     # DataFrame
     for m in AGG_FUNCS:
         # nunique is not implemented for DataFrameGroupBy
-        # covariance is not a series aggregation
-        if m in ("nunique", "cov"):
+        # covariance/correlation is not a series aggregation
+        if m in ("nunique", "cov", "corr"):
             continue
         res = call(ddf.groupby("b"), m, **{keyword: 2})
         sol = call(pdf.groupby("b"), m)
@@ -741,8 +745,8 @@ def test_groupby_reduction_split(keyword):
 
     # Series, post select
     for m in AGG_FUNCS:
-        # covariance is not a series aggregation
-        if m == "cov":
+        # covariance/correlation is not a series aggregation
+        if m in ("cov", "corr"):
             continue
         res = call(ddf.groupby("b").a, m, **{keyword: 2})
         sol = call(pdf.groupby("b").a, m)
@@ -756,8 +760,8 @@ def test_groupby_reduction_split(keyword):
 
     # Series, pre select
     for m in AGG_FUNCS:
-        # covariance is not a series aggregation
-        if m == "cov":
+        # covariance/correlation is not a series aggregation
+        if m in ("cov", "corr"):
             continue
         res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
@@ -1050,7 +1054,7 @@ def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
 
     # nunique/cov is not supported in specs
-    if spec in ("nunique", "cov"):
+    if spec in ("nunique", "cov", "corr"):
         return
 
     pdf = pd.DataFrame(
@@ -1190,7 +1194,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
     ddf = dd.from_pandas(pdf, npartitions=10)
 
     # covariance only works with N+1 columns
-    if agg_func != "cov":
+    if agg_func not in ("cov", "corr"):
         assert_eq(
             call(pdf.groupby(grouper(pdf))["c"], agg_func),
             call(ddf.groupby(grouper(ddf))["c"], agg_func, split_every=2),
@@ -1203,7 +1207,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
             call(ddf.groupby(grouper(ddf))[["c", "d"]], agg_func, split_every=2),
         )
 
-        if agg_func == "cov":
+        if agg_func in ("cov", "corr"):
             # there are sorting issues between pandas and chunk cov w/dask
             df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
             cols = sorted(list(df.columns))
@@ -1237,8 +1241,8 @@ def test_series_aggregations_multilevel(grouper, agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
-    # covariance is not a series aggregation
-    if agg_func == "cov":
+    # covariance/correlation is not a series aggregation
+    if agg_func in ("cov", "corr"):
         return
 
     pdf = pd.DataFrame(
