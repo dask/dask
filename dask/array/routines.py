@@ -1045,6 +1045,12 @@ def shape(array):
     return array.shape
 
 
+@implements(np.union1d)
+@derived_from(np)
+def union1d(ar1, ar2):
+    return unique(concatenate((ar1.ravel(), ar2.ravel())))
+
+
 @derived_from(np)
 def ravel(array):
     return array.reshape((-1,))
