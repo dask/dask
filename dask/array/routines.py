@@ -1039,13 +1039,11 @@ def roll(array, shift, axis=None):
     return result
 
 
-@implements(np.shape)
 @derived_from(np)
 def shape(array):
     return array.shape
 
 
-@implements(np.union1d)
 @derived_from(np)
 def union1d(ar1, ar2):
     return unique(concatenate((ar1.ravel(), ar2.ravel())))
