@@ -35,7 +35,7 @@ async def get_comm_pair(
     # Workaround for hanging test in
     # pytest distributed/comm/tests/test_ucx.py::test_comm_objs -vs --count=2
     # on the second time through.
-    # ucp._libs.ucp_py.reader_added = 0
+    ucp._libs.ucp_py.fin()
 
     listener = listen(listen_addr, handle_comm, connection_args=listen_args, **kwargs)
     with listener:
