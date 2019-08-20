@@ -1040,6 +1040,16 @@ def roll(array, shift, axis=None):
 
 
 @derived_from(np)
+def shape(array):
+    return array.shape
+
+
+@derived_from(np)
+def union1d(ar1, ar2):
+    return unique(concatenate((ar1.ravel(), ar2.ravel())))
+
+
+@derived_from(np)
 def ravel(array):
     return array.reshape((-1,))
 

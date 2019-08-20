@@ -31,6 +31,8 @@ try:
         where,
         coarsen,
         insert,
+        shape,
+        union1d,
         ravel,
         roll,
         unique,

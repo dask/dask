@@ -11,7 +11,8 @@ np = pytest.importorskip("numpy")
 import dask.array as da
 from dask.compatibility import PY2
 from dask.utils import ignoring
-from dask.array.utils import assert_eq, same_keys, AxisError
+from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
+from dask.array.numpy_compat import _numpy_115
 
 
 def test_array():
@@ -786,6 +787,39 @@ def test_roll(chunks, shift, axis):
             da.roll(a, shift, axis)
     else:
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
+
+
+@pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
+def test_shape(shape):
+    x = da.random.random(shape)
+    assert np.shape(x) == shape
+
+
+@pytest.mark.parametrize(
+    "shape", [((12,), (12,)), ((4, 3), (3, 4)), ((12,), (1, 6, 2))]
+)
+@pytest.mark.parametrize("reverse", [True, False])
+def test_union1d(shape, reverse):
+    if any(len(x) > 1 for x in shape) and not _numpy_115:
+        pytest.skip("NumPy-10563.")
+
+    s1, s2 = shape
+    x1 = np.arange(12).reshape(s1)
+    x2 = np.arange(6, 18).reshape(s2)
+
+    if reverse:
+        x1 = x1[::-1]
+
+    dx1 = da.from_array(x1)
+    dx2 = da.from_array(x2)
+
+    result = np.union1d(dx1, dx2)
+    expected = np.union1d(x1, x2)
+
+    if IS_NEP18_ACTIVE:
+        assert isinstance(result, da.Array)
+
+    assert_eq(result, expected)
 
 
 def test_ravel():
