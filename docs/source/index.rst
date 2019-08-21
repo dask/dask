@@ -28,7 +28,7 @@ In particular it meets the following needs:
     Python standard library.  Compatible with `dask`_ API for parallel
     algorithms
 *   **Easy Setup:** As a Pure Python package distributed is ``pip`` installable
-    and easy to :doc:`set up <https://docs.dask.org/en/latest/setup.html>`_ on your own cluster.
+    and easy to `set up <https://docs.dask.org/en/latest/setup.html>`_ on your own cluster.
 
 .. _`concurrent.futures`: https://www.python.org/dev/peps/pep-3148/
 .. _`dask`: https://dask.org
@@ -80,6 +80,7 @@ Contents
    Setup <https://docs.dask.org/en/latest/setup.html>
    client
    api
+   examples-overview
    faq
 
 .. toctree::

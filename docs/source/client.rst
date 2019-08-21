@@ -3,7 +3,7 @@ Client
 
 The Client is the primary entry point for users of ``dask.distributed``.
 
-After we :doc:`setup a cluster <setup>`, we initialize a ``Client`` by pointing
+After we `setup a cluster <https://docs.dask.org/en/latest/setup.html>`_, we initialize a ``Client`` by pointing
 it to the address of a ``Scheduler``:
 
 .. code-block:: python

@@ -391,6 +391,7 @@ redirect_files = [
     # old html, new html
     ("joblib.html", "https://ml.dask.org/joblib.html"),
     ("setup.html", "https://docs.dask.org/en/latest/setup.html"),
+    ("ec2.html", "https://dask.pydata.org/en/latest/setup/cloud.html"),
 ]
 
 
