@@ -3,7 +3,7 @@ from dask.config import config
 from .actor import Actor, ActorFuture
 from .core import connect, rpc
 from .deploy import LocalCluster, Adaptive, SpecCluster
-from .diagnostics import progress
+from .diagnostics.progressbar import progress
 from .client import (
     Client,
     Executor,
