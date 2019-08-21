@@ -256,8 +256,8 @@ class Aggregation(object):
         self.__name__ = name
 
 
-def _groupby_aggregate(df, aggfunc=None, levels=None):
-    return aggfunc(df.groupby(level=levels, sort=False))
+def _groupby_aggregate(df, aggfunc=None, levels=None, **kwargs):
+    return aggfunc(df.groupby(level=levels, sort=False), **kwargs)
 
 
 def _apply_chunk(df, *index, **kwargs):
@@ -267,11 +267,11 @@ def _apply_chunk(df, *index, **kwargs):
     g = _groupby_raise_unaligned(df, by=index)
 
     if is_series_like(df) or columns is None:
-        return func(g)
+        return func(g, **kwargs)
     else:
         if isinstance(columns, (tuple, list, set, pd.Index)):
             columns = list(columns)
-        return func(g[columns])
+        return func(g[columns], **kwargs)
 
 
 def _var_chunk(df, *index):
@@ -1010,7 +1010,16 @@ class _GroupBy(object):
         grouped = sample.groupby(index_meta, group_keys=self.group_keys)
         return _maybe_slice(grouped, self._slice)
 
-    def _aca_agg(self, token, func, aggfunc=None, split_every=None, split_out=1):
+    def _aca_agg(
+        self,
+        token,
+        func,
+        aggfunc=None,
+        split_every=None,
+        split_out=1,
+        chunk_kwargs={},
+        aggregate_kwargs={},
+    ):
         if aggfunc is None:
             aggfunc = func
 
@@ -1025,12 +1034,12 @@ class _GroupBy(object):
             if not isinstance(self.index, list)
             else [self.obj] + self.index,
             chunk=_apply_chunk,
-            chunk_kwargs=dict(chunk=func, columns=columns),
+            chunk_kwargs=dict(chunk=func, columns=columns, **chunk_kwargs),
             aggregate=_groupby_aggregate,
             meta=meta,
             token=token,
             split_every=split_every,
-            aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
+            aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels, **aggregate_kwargs),
             split_out=split_out,
             split_out_setup=split_out_on_index,
         )
@@ -1172,23 +1181,25 @@ class _GroupBy(object):
         )
 
     @derived_from(pd.DataFrame)
-    def idxmin(self, split_every=None, split_out=1):
+    def idxmin(self, split_every=None, split_out=1, axis=None, skipna=True):
         return self._aca_agg(
             token="idxmin",
             func=M.idxmin,
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
+            chunk_kwargs=dict(skipna=skipna),
         )
 
     @derived_from(pd.DataFrame)
-    def idxmax(self, split_every=None, split_out=1):
+    def idxmax(self, split_every=None, split_out=1, axis=None, skipna=True):
         return self._aca_agg(
             token="idxmax",
             func=M.idxmax,
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
+            chunk_kwargs=dict(skipna=skipna),
         )
 
     @derived_from(pd.core.groupby.GroupBy)
