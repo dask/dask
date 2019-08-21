@@ -35,7 +35,6 @@ Dask assumes the following about your functions and your data:
 -  Dask may run your functions multiple times,
    such as if a worker holding an intermediate result dies.  Any side effects
    should be `idempotent <https://en.wikipedia.org/wiki/Idempotence>`_.
--
 
 Security
 --------
