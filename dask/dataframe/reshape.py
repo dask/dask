@@ -94,7 +94,7 @@ def get_dummies(
     2                ...    ...    ...
     3                ...    ...    ...
     Dask Name: get_dummies, 4 tasks
-    >>> dd.get_dummies(s).compute()
+    >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
        a  b  c
     0  1  0  0
     1  0  1  0
