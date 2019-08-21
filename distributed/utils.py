@@ -169,7 +169,16 @@ def get_ip_interface(ifname):
     """
     import psutil
 
-    for info in psutil.net_if_addrs()[ifname]:
+    net_if_addrs = psutil.net_if_addrs()
+
+    if ifname not in net_if_addrs:
+        allowed_ifnames = list(net_if_addrs.keys())
+        raise ValueError(
+            "{!r} is not a valid network interface. "
+            "Valid network interfaces are: {}".format(ifname, allowed_ifnames)
+        )
+
+    for info in net_if_addrs[ifname]:
         if info.family == socket.AF_INET:
             return info.address
     raise ValueError("interface %r doesn't have an IPv4 address" % (ifname,))
