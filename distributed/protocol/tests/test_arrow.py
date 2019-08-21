@@ -3,9 +3,9 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
+import distributed
 from distributed.utils_test import gen_cluster
-from distributed.protocol import deserialize, serialize
-
+from distributed.protocol import deserialize, serialize, to_serialize
 
 df = pd.DataFrame({"A": list("abc"), "B": [1, 2, 3]})
 tbl = pa.Table.from_pandas(df, preserve_index=False)
@@ -35,3 +35,12 @@ def test_scatter(obj):
         assert obj.equals(result)
 
     run_test()
+
+
+def test_dumps_compression():
+    # https://github.com/dask/distributed/issues/2966
+    # large enough to trigger compression
+    t = pa.Table.from_pandas(pd.DataFrame({"A": [1] * 10000}))
+    msg = {"op": "update", "data": to_serialize(t)}
+    result = distributed.protocol.loads(distributed.protocol.dumps(msg))
+    assert result["data"].equals(t)

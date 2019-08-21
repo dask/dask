@@ -904,22 +904,43 @@ def tmpfile(extension=""):
 
 
 def ensure_bytes(s):
-    """ Turn string or bytes to bytes
+    """Attempt to turn `s` into bytes.
+
+    Parameters
+    ----------
+    s : Any
+        The object to be converted. Will correctly handled
+
+        * str
+        * bytes
+        * objects implementing the buffer protocol (memoryview, ndarray, etc.)
+
+    Returns
+    -------
+    b : bytes
+
+    Raises
+    ------
+    TypeError
+        When `s` cannot be converted
+
+    Examples
+    --------
 
     >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes(b'123')
     b'123'
     """
-    if isinstance(s, bytes):
-        return s
-    if isinstance(s, memoryview):
-        return s.tobytes()
-    if isinstance(s, bytearray):  # noqa: F821
-        return bytes(s)
     if hasattr(s, "encode"):
         return s.encode()
-    raise TypeError("Object %s is neither a bytes object nor has an encode method" % s)
+    else:
+        try:
+            return bytes(s)
+        except Exception as e:
+            raise TypeError(
+                "Object %s is neither a bytes object nor has an encode method" % s
+            ) from e
 
 
 def divide_n_among_bins(n, bins):

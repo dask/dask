@@ -1,3 +1,4 @@
+import array
 import datetime
 from functools import partial
 import io
@@ -275,11 +276,23 @@ def test_funcname():
 
 
 def test_ensure_bytes():
-    data = [b"1", "1", memoryview(b"1"), bytearray(b"1")]
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("b", [49])]
     for d in data:
         result = ensure_bytes(d)
         assert isinstance(result, bytes)
         assert result == b"1"
+
+
+def test_ensure_bytes_ndarray():
+    result = ensure_bytes(np.arange(12))
+    assert isinstance(result, bytes)
+
+
+def test_ensure_bytes_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_bytes(buf)
+    assert isinstance(result, bytes)
 
 
 def test_nbytes():
