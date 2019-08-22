@@ -1894,9 +1894,27 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
-    # Can force schema validation on each partition in pyarrow:
+    # Can force schema validation on each partition in pyarrow
     if engine == "pyarrow":
+        # The schema mismatch should raise an error
         with pytest.raises(ValueError):
             ddf_read = dd.read_parquet(
                 tmp_path, dataset={"validate_schema": True}, engine=engine
             )
+        # There should be no error if you specify a schema on write
+        schema = pa.schema(
+            [
+                ("x", pa.float64()),
+                ("timestamp", pa.timestamp("ns")),
+                ("id", pa.int64()),
+                ("name", pa.string()),
+                ("y", pa.float64()),
+            ]
+        )
+        ddf2.to_parquet(tmp_path, schema=schema, engine=engine)
+        assert_eq(
+            dd.read_parquet(tmp_path, dataset={"validate_schema": True}, engine=engine),
+            ddf2,
+            check_divisions=False,
+            check_index=False,
+        )
