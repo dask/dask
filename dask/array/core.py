@@ -1083,16 +1083,16 @@ class Array(DaskMethodsMixin):
     def persist(self,):
         return super().persist()
 
-    def compute_chunksizes(self):
+    def compute_metadata(self):
         from .rechunk import _get_chunks
 
         chunks = compute(_get_chunks(self))[0]
         self._chunks = normalize_chunks(chunks, self.shape, dtype=self.dtype)
         return self
 
-    def persist(self, metadata=False, **kwargs):
-        if metadata:
-            self.compute_chunksizes()
+    def persist(self, compute_metadata=False, **kwargs):
+        if compute_metadata:
+            self.compute_metadata()
         return super().persist(**kwargs)
 
     @property
