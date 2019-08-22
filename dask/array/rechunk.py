@@ -651,3 +651,31 @@ def format_plan(plan):
     [(3*[10], 2*[15]), ([30], 3*[10])]
     """
     return [format_chunks(c) for c in plan]
+
+
+def _get_shape_helper(a):
+    s = np.asarray(a.shape, dtype=int)
+    return s[len(s) * (None,) + (slice(None),)]
+
+
+def _get_all_chunk_shapes(a):
+    return a.map_blocks(
+        _get_shape_helper,
+        dtype=int,
+        chunks=tuple(len(c) * (1,) for c in a.chunks) + ((a.ndim,),),
+        new_axis=a.ndim,
+    )
+
+
+def _get_chunks(a):
+    cs = _get_all_chunk_shapes(a)
+
+    c = []
+    for i in range(a.ndim):
+        s = a.ndim * [0] + [i]
+        s[i] = slice(None)
+        s = tuple(s)
+
+        c.append(tuple(cs[s]))
+
+    return tuple(c)

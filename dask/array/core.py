@@ -65,6 +65,7 @@ from ..highlevelgraph import HighLevelGraph
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
+from .rechunk import _get_chunks
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -1079,6 +1080,14 @@ class Array(DaskMethodsMixin):
     @property
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
+
+    def persist(self, ):
+        return super().persist()
+
+    def compute_chunksizes(self):
+        chunks = compute(_get_chunks(self))[0]
+        self._chunks = normalize_chunks(chunks, self.shape, dtype=self.dtype)
+        return self
 
     @property
     def shape(self):
