@@ -1085,6 +1085,7 @@ class Array(DaskMethodsMixin):
 
     def compute_chunksizes(self):
         from .rechunk import _get_chunks
+
         chunks = compute(_get_chunks(self))[0]
         self._chunks = normalize_chunks(chunks, self.shape, dtype=self.dtype)
         return self
