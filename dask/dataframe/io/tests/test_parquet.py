@@ -952,7 +952,10 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
         dd.read_parquet(
-            str(tmpdir), engine="pyarrow", gather_statistics=False
+            str(tmpdir),
+            engine="pyarrow",
+            gather_statistics=False,
+            dataset={"validate_schema": True},
         ).compute()
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
