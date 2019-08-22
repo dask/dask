@@ -201,7 +201,7 @@ our own batching as follows
 
     batches = []
     for i in range(0, 10000000, 10000):
-        result_batch = dask.delayed(batch, range(i, i + 10000))
+        result_batch = dask.delayed(batch)(range(i, i + 10000))
         batches.append(result_batch)
 
 
