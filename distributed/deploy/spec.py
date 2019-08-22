@@ -1,13 +1,14 @@
 import asyncio
 import atexit
 import copy
+import math
 import weakref
 
 from tornado import gen
 
 from .cluster import Cluster
 from ..core import rpc, CommClosedError
-from ..utils import LoopRunner, silence_logging, ignoring
+from ..utils import LoopRunner, silence_logging, ignoring, parse_bytes
 from ..scheduler import Scheduler
 from ..security import Security
 
@@ -330,7 +331,27 @@ class SpecCluster(Cluster):
         self.close()
         self._loop_runner.stop()
 
-    def scale(self, n):
+    def scale(self, n=0, memory=None, cores=None):
+        if memory is not None:
+            try:
+                limit = self.new_spec["options"]["memory_limit"]
+            except KeyError:
+                raise ValueError(
+                    "to use scale(memory=...) your worker definition must include a memory_limit definition"
+                )
+            else:
+                n = max(n, int(math.ceil(parse_bytes(memory) / parse_bytes(limit))))
+
+        if cores is not None:
+            try:
+                threads_per_worker = self.new_spec["options"]["nthreads"]
+            except KeyError:
+                raise ValueError(
+                    "to use scale(cores=...) your worker definition must include an nthreads= definition"
+                )
+            else:
+                n = max(n, int(math.ceil(cores / threads_per_worker)))
+
         if len(self.worker_spec) > n:
             not_yet_launched = set(self.worker_spec) - {
                 v["name"] for v in self.scheduler_info["workers"].values()

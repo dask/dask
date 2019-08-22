@@ -861,3 +861,25 @@ def test_client_cluster_synchronous(loop):
         with Client(loop=loop, processes=False) as c:
             assert not c.asynchronous
             assert not c.cluster.asynchronous
+
+
+@pytest.mark.asyncio
+async def test_scale_memory_cores(cleanup):
+    async with LocalCluster(
+        n_workers=0,
+        processes=False,
+        threads_per_worker=2,
+        memory_limit="2GB",
+        asynchronous=True,
+    ) as cluster:
+        cluster.scale(cores=4)
+        assert len(cluster.worker_spec) == 2
+
+        cluster.scale(memory="6GB")
+        assert len(cluster.worker_spec) == 3
+
+        cluster.scale(cores=1)
+        assert len(cluster.worker_spec) == 1
+
+        cluster.scale(memory="7GB")
+        assert len(cluster.worker_spec) == 4
