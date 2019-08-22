@@ -1548,3 +1548,13 @@ async def test_gpu_metrics(s, a, b):
 
     assert "gpu" in a.startup_information
     assert len(s.workers[a.address].extra["gpu"]["name"]) == count
+
+
+@pytest.mark.asyncio
+async def test_bad_metrics(cleanup):
+    def bad_metric(w):
+        raise Exception("Hello")
+
+    async with Scheduler() as s:
+        async with Worker(s.address, metrics={"bad": bad_metric}) as w:
+            assert "bad" not in s.workers[w.address].metrics

@@ -735,10 +735,13 @@ class Worker(ServerNode):
         )
         custom = {}
         for k, metric in self.metrics.items():
-            result = metric(self)
-            if hasattr(result, "__await__"):
-                result = await result
-            custom[k] = result
+            try:
+                result = metric(self)
+                if hasattr(result, "__await__"):
+                    result = await result
+                custom[k] = result
+            except Exception:  # TODO: log error once
+                pass
 
         return merge(custom, self.monitor.recent(), core)
 
