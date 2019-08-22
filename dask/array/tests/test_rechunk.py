@@ -747,12 +747,16 @@ def test_rechunk_bad_keys():
     assert "-100" in str(info.value)
 
 
-def test_compute_chunks():
+@pytest.mark.parametrize("persist", [True, False])
+def test_compute_chunks(persist):
     x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
     y = x[x < 0]
-    assert y.chunks == ((np.nan, ) * 5, )
+    assert y.chunks == ((np.nan,) * 5,)
 
-    z = y.compute_chunksizes()
+    if not persist:
+        z = y.compute_chunksizes()
+    else:
+        z = y.persist(metadata=True)
     assert y is z
     assert z.chunks == ((10, 10, 5, 0, 0),)
     assert isinstance(z, da.Array)

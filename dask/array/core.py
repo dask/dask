@@ -1081,13 +1081,18 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
-    def persist(self, ):
+    def persist(self,):
         return super().persist()
 
     def compute_chunksizes(self):
         chunks = compute(_get_chunks(self))[0]
         self._chunks = normalize_chunks(chunks, self.shape, dtype=self.dtype)
         return self
+
+    def persist(self, metadata=False, **kwargs):
+        if metadata:
+            self.compute_chunksizes()
+        return super().persist(**kwargs)
 
     @property
     def shape(self):
