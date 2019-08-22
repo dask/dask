@@ -1877,3 +1877,26 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)
+
+
+def test_timeseries_nulls_in_schema(tmpdir, engine):
+    tmp_path = str(tmpdir)
+    ddf2 = (
+        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
+        .reset_index()
+        .map_partitions(lambda x: x.loc[:5])
+    )
+    ddf2 = ddf2.set_index("x").reset_index().persist()
+    ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
+
+    ddf2.to_parquet(tmp_path, engine=engine)
+    ddf_read = dd.read_parquet(tmp_path, engine=engine)
+
+    assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
+
+    # Can force schema validation on each partition in pyarrow:
+    if engine == "pyarrow":
+        with pytest.raises(ValueError):
+            ddf_read = dd.read_parquet(
+                tmp_path, dataset={"validate_schema": True}, engine=engine
+            )
