@@ -1,6 +1,21 @@
 Changelog
 =========
 
+2.3.1 - 2019-08-22
+------------------
+
+-  Add support for separate external address for SpecCluster scheduler (:pr:`2963`) `Jacob Tomlinson`_
+-  Defer cudf serialization/deserialization to that library (:pr:`2881`) `Benjamin Zaitlen`_
+-  Workaround for hanging test now calls ucp.fin() (:pr:`2967`) `Mads R. B. Kristensen`_
+-  Remove unnecessary bullet point (:pr:`2972`) `Pav A`_
+-  Directly import progress from diagnostics.progressbar (:pr:`2975`) `Matthew Rocklin`_
+-  Handle buffer protocol objects in ensure_bytes (:pr:`2969`) `Tom Augspurger`_
+-  Fix documentatation syntax and tree (:pr:`2981`) `Pav A`_
+-  Improve get_ip_interface error message when interface does not exist (:pr:`2964`) `Loïc Estève`_
+-  Add cores= and memory= keywords to scale (:pr:`2974`) `Matthew Rocklin`_
+-  Make workers robust to bad custom metrics (:pr:`2984`) `Matthew Rocklin`_
+
+
 2.3.0 - 2019-08-16
 ------------------
 
@@ -1199,6 +1214,7 @@ significantly without many new features.
 .. _`Michael Spiegel`: https://github.com/Spiegel0
 .. _`Caleb`: https://github.com/calebho
 .. _`Ben Zaitlen`: https://github.com/quasiben
+.. _`Benjamin Zaitlen`: https://github.com/quasiben
 .. _`Manuel Garrido`: https://github.com/manugarri
 .. _`Magnus Nord`: https://github.com/magnunor
 .. _`Sam Grayson`: https://github.com/charmoniumQ
@@ -1207,3 +1223,5 @@ significantly without many new features.
 .. _`Gabriel Sailer`: https://github.com/sublinus
 .. _`Pierre Glaser`: https://github.com/pierreglase
 .. _`Shayan Amani`: https://github.com/SHi-ON
+.. _`Pav A`: https://github.com/rs2
+.. _`Mads R. B. Kristensen`: https://github.com/madsbk
