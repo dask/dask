@@ -107,7 +107,6 @@ class ArrowEngine(Engine):
         parts, dataset = _determine_dataset_parts(
             fs, paths, gather_statistics, **kwargs
         )
-        # import pdb; pdb.set_trace()
         if dataset.partitions is not None:
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
