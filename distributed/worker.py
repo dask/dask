@@ -748,10 +748,14 @@ class Worker(ServerNode):
     async def get_startup_information(self):
         result = {}
         for k, f in self.startup_information.items():
-            v = f(self)
-            if hasattr(v, "__await__"):
-                v = await v
-            result[k] = v
+            try:
+                v = f(self)
+                if hasattr(v, "__await__"):
+                    v = await v
+                result[k] = v
+            except Exception:  # TODO: log error once
+                pass
+
         return result
 
     def identity(self, comm=None):

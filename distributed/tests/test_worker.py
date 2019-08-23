@@ -1558,3 +1558,15 @@ async def test_bad_metrics(cleanup):
     async with Scheduler() as s:
         async with Worker(s.address, metrics={"bad": bad_metric}) as w:
             assert "bad" not in s.workers[w.address].metrics
+
+
+@pytest.mark.asyncio
+async def test_bad_startup(cleanup):
+    def bad_startup(w):
+        raise Exception("Hello")
+
+    async with Scheduler() as s:
+        try:
+            w = await Worker(s.address, startup_information={"bad": bad_startup})
+        except Exception:
+            pytest.fail("Startup exception was raised")
