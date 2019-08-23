@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2.3.2 - 2019-08-23
+------------------
+
+-  Skip exceptions in startup information (:pr:`2991`) `Jacob Tomlinson`_
+
 2.3.1 - 2019-08-22
 ------------------
 
