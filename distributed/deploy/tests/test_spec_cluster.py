@@ -268,3 +268,18 @@ async def test_widget(cleanup):
 
         cluster.scale(5)
         assert "3 / 5" in cluster._widget_status()
+
+
+@pytest.mark.asyncio
+async def test_scale_cores_memory(cleanup):
+    async with SpecCluster(
+        scheduler=scheduler,
+        worker={"cls": Worker, "options": {"nthreads": 1}},
+        asynchronous=True,
+    ) as cluster:
+        cluster.scale(cores=2)
+        assert len(cluster.worker_spec) == 2
+        with pytest.raises(ValueError) as info:
+            cluster.scale(memory="5GB")
+
+        assert "memory" in str(info.value)
