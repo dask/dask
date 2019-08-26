@@ -201,14 +201,6 @@ class LocalCluster(SpecCluster):
             security=security,
         )
 
-    def __repr__(self):
-        return "%s(%r, workers=%d, nthreads=%d)" % (
-            type(self).__name__,
-            self.scheduler_address,
-            len(self.workers),
-            sum(w.nthreads for w in self.workers.values()),
-        )
-
     def start_worker(self, *args, **kwargs):
         raise NotImplementedError(
             "The `cluster.start_worker` function has been removed. "

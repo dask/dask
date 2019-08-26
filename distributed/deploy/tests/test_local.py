@@ -883,3 +883,24 @@ async def test_scale_memory_cores(cleanup):
 
         cluster.scale(memory="7GB")
         assert len(cluster.worker_spec) == 4
+
+
+@pytest.mark.asyncio
+async def test_repr(cleanup):
+    async with LocalCluster(
+        n_workers=2,
+        processes=False,
+        threads_per_worker=2,
+        memory_limit="2GB",
+        asynchronous=True,
+    ) as cluster:
+        text = repr(cluster)
+        assert "workers=2" in text
+        assert cluster.scheduler_address in text
+        assert "cores=4" in text or "threads=4" in text
+        assert "GB" in text and "4" in text
+
+    async with LocalCluster(
+        n_workers=2, processes=False, memory_limit=None, asynchronous=True
+    ) as cluster:
+        assert "memory" not in repr(cluster)

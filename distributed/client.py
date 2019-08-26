@@ -761,12 +761,18 @@ class Client(Node):
             workers = info.get("workers", {})
             nworkers = len(workers)
             nthreads = sum(w["nthreads"] for w in workers.values())
-            return "<%s: scheduler=%r processes=%d cores=%d>" % (
+            text = "<%s: %r processes=%d threads=%d" % (
                 self.__class__.__name__,
                 addr,
                 nworkers,
                 nthreads,
             )
+            memory = [w["memory_limit"] for w in workers.values()]
+            if all(memory):
+                text += ", memory=" + format_bytes(sum(memory))
+            text += ">"
+            return text
+
         elif self.scheduler is not None:
             return "<%s: scheduler=%r>" % (
                 self.__class__.__name__,

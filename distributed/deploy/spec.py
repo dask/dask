@@ -401,13 +401,6 @@ class SpecCluster(Cluster):
 
     scale_up = scale  # backwards compatibility
 
-    def __repr__(self):
-        return "%s(%r, workers=%d)" % (
-            self._name,
-            self.scheduler_address,
-            len(self.workers),
-        )
-
 
 @atexit.register
 def close_clusters():

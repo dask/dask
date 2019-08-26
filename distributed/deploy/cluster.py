@@ -314,13 +314,6 @@ class Cluster(object):
     def _ipython_display_(self, **kwargs):
         return self._widget()._ipython_display_(**kwargs)
 
-    def __repr__(self):
-        return "%s(%r, workers=%d)" % (
-            type(self).__name__,
-            self.scheduler_address,
-            len(self.scheduler_info["workers"]),
-        )
-
     async def __aenter__(self):
         await self
         return self
@@ -331,3 +324,18 @@ class Cluster(object):
     @property
     def scheduler_address(self):
         return self.scheduler_comm.address
+
+    def __repr__(self):
+        text = "%s(%r, workers=%d, threads=%d" % (
+            getattr(self, "_name", type(self).__name__),
+            self.scheduler_address,
+            len(self.workers),
+            sum(w["nthreads"] for w in self.scheduler_info["workers"].values()),
+        )
+
+        memory = [w["memory_limit"] for w in self.scheduler_info["workers"].values()]
+        if all(memory):
+            text += ", memory=" + format_bytes(sum(memory))
+
+        text += ")"
+        return text
