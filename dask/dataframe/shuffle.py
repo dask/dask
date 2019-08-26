@@ -19,7 +19,7 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
-from .utils import series_type_like_df, is_series_like
+from .utils import series_type_like_df
 
 
 def set_index(
@@ -239,7 +239,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=pd.Series([0]),
+        meta=series_type_like_df(df)([0]),
         transform_divisions=False,
     )
     df2 = df.assign(_partitions=partitions)
@@ -546,7 +546,10 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    return hash_pandas_object(df, index=False) % int(npartitions)
+    if hasattr(df, "hash_columns"):
+        return df.hash_columns() % int(npartitions)
+    else:
+        return hash_pandas_object(df, index=False) % int(npartitions)
 
 
 def barrier(args):
@@ -562,8 +565,6 @@ def collect(p, part, meta, barrier_token):
 
 def set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
-    if is_series_like(partitions):
-        partitions = partitions.values
     partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions
 
@@ -571,7 +572,12 @@ def set_partitions_pre(s, divisions):
 def shuffle_group_2(df, col):
     if not len(df):
         return {}, df
-    ind = df[col].values.astype(np.int64)
+    # `groupsort_indexer` cannot handle cupy.
+    # Check if we need to get "host values" from cudf
+    if hasattr(df, "values_host"):
+        ind = df[col].values_host.astype(np.int64)
+    else:
+        ind = df[col].values.astype(np.int64)
     n = ind.max() + 1
     indexer, locations = groupsort_indexer(ind.view(np.int64), n)
     df2 = df.take(indexer)
@@ -620,7 +626,12 @@ def shuffle_group(df, col, stage, k, npartitions):
     else:
         ind = hash_pandas_object(df[col], index=False)
 
-    c = ind.values
+    # `groupsort_indexer` cannot handle cupy.
+    # Check if we need to get "host values" from cudf
+    if hasattr(ind, "values_host"):
+        c = ind.values_host
+    else:
+        c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
 
     c = np.mod(c, npartitions).astype(typ, copy=False)
