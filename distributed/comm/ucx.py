@@ -21,7 +21,7 @@ import os
 
 os.environ.setdefault("UCX_RNDV_SCHEME", "put_zcopy")
 os.environ.setdefault("UCX_MEMTYPE_CACHE", "n")
-os.environ.setdefault("UCX_TLS", "rc,cuda_copy")
+os.environ.setdefault("UCX_TLS", "rc,cuda_copy,cuda_ipc")
 
 logger = logging.getLogger(__name__)
 MAX_MSG_LOG = 23
