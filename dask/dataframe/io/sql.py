@@ -200,7 +200,7 @@ def read_sql_table(
 def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     import sqlalchemy as sa
 
-    engine_kwargs = engine_kwargs if engine_kwargs else {}
+    engine_kwargs = engine_kwargs or {}
     conn = sa.create_engine(uri, **engine_kwargs)
     df = pd.read_sql(q, conn, **kwargs)
     if df.empty:
