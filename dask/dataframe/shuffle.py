@@ -8,10 +8,9 @@ import warnings
 import toolz
 import numpy as np
 import pandas as pd
-from pandas._libs.algos import groupsort_indexer
-from pandas.util import hash_pandas_object
 
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
+from . import methods
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
@@ -546,10 +545,7 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    if hasattr(df, "hash_columns"):
-        return df.hash_columns() % int(npartitions)
-    else:
-        return hash_pandas_object(df, index=False) % int(npartitions)
+    return methods.hash_df(df) % int(npartitions)
 
 
 def barrier(args):
@@ -572,18 +568,10 @@ def set_partitions_pre(s, divisions):
 def shuffle_group_2(df, col):
     if not len(df):
         return {}, df
-    # `groupsort_indexer` cannot handle cupy.
-    # Check if we need to get "host values" from cudf
-    if hasattr(df, "values_host"):
-        ind = df[col].values_host.astype(np.int64)
-    else:
-        ind = df[col].values.astype(np.int64)
+    ind = df[col].values.astype(np.int64)
     n = ind.max() + 1
-    indexer, locations = groupsort_indexer(ind.view(np.int64), n)
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-    result2 = dict(zip(range(n), parts))
+
+    result2 = methods.df_index_split(df, ind.view(np.int64), n)
     return result2, df.iloc[:0]
 
 
@@ -624,26 +612,16 @@ def shuffle_group(df, col, stage, k, npartitions):
     if col == "_partitions":
         ind = df[col]
     else:
-        ind = hash_pandas_object(df[col], index=False)
+        ind = methods.hash_df(df)
 
-    # `groupsort_indexer` cannot handle cupy.
-    # Check if we need to get "host values" from cudf
-    if hasattr(ind, "values_host"):
-        c = ind.values_host
-    else:
-        c = ind.values
+    c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
 
     c = np.mod(c, npartitions).astype(typ, copy=False)
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    indexer, locations = groupsort_indexer(c.astype(np.int64), k)
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-
-    return dict(zip(range(k), parts))
+    return methods.df_index_split(df, c.astype(np.int64), k)
 
 
 def shuffle_group_3(df, col, npartitions, p):

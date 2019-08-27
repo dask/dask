@@ -4,7 +4,9 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from pandas.util import hash_pandas_object
 from pandas.api.types import is_categorical_dtype, union_categoricals
+from pandas._libs.algos import groupsort_indexer
 from toolz import partition
 
 from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250
@@ -478,6 +480,50 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
     if ind is not None:
         out.index = ind
     return out
+
+
+# ---------------------------------
+# hash_df
+# ---------------------------------
+
+
+hash_df_dispatch = Dispatch("hash_df")
+
+
+def hash_df(dfs):
+    """Hash each row of df, returning a Series-like object
+    """
+    func = hash_df_dispatch.dispatch(type(dfs))
+    return func(dfs)
+
+
+@hash_df_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def hash_df_pandas(dfs):
+    return hash_pandas_object(dfs, index=False)
+
+
+# ---------------------------------
+# df_index_split
+# ---------------------------------
+
+
+df_index_split_dispatch = Dispatch("df_index_split")
+
+
+def df_index_split(dfs, c, k):
+    """Split dataframe into "k" parts, using index "c"
+    """
+    func = df_index_split_dispatch.dispatch(type(dfs))
+    return func(dfs, c, k)
+
+
+@df_index_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def df_index_split_pandas(df, c, k):
+    indexer, locations = groupsort_indexer(c, k)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+    return dict(zip(range(k), parts))
 
 
 def assign_index(df, ind):
