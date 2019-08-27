@@ -20,11 +20,11 @@ def format_time(t):
     m, s = divmod(t, 60)
     h, m = divmod(m, 60)
     if h:
-        return '{0:2.0f}hr {1:2.0f}min {2:4.1f}s'.format(h, m, s)
+        return "{0:2.0f}hr {1:2.0f}min {2:4.1f}s".format(h, m, s)
     elif m:
-        return '{0:2.0f}min {1:4.1f}s'.format(m, s)
+        return "{0:2.0f}min {1:4.1f}s".format(m, s)
     else:
-        return '{0:4.1f}s'.format(s)
+        return "{0:4.1f}s".format(s)
 
 
 class ProgressBar(Callback):
@@ -106,7 +106,7 @@ class ProgressBar(Callback):
             self._draw_bar(1, elapsed)
         else:
             self._update_bar(elapsed)
-        self._file.write('\n')
+        self._file.write("\n")
         self._file.flush()
 
     def _timer_func(self):
@@ -122,16 +122,18 @@ class ProgressBar(Callback):
         if not s:
             self._draw_bar(0, elapsed)
             return
-        ndone = len(s['finished'])
-        ntasks = sum(len(s[k]) for k in ['ready', 'waiting', 'running']) + ndone
-        self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
+        ndone = len(s["finished"])
+        ntasks = sum(len(s[k]) for k in ["ready", "waiting", "running"]) + ndone
+        if ndone < ntasks:
+            self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
 
     def _draw_bar(self, frac, elapsed):
-        bar = '#' * int(self._width * frac)
+        bar = "#" * int(self._width * frac)
         percent = int(100 * frac)
         elapsed = format_time(elapsed)
-        msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self._width,
-                                                           percent, elapsed)
+        msg = "\r[{0:<{1}}] | {2}% Completed | {3}".format(
+            bar, self._width, percent, elapsed
+        )
         with ignoring(ValueError):
             self._file.write(msg)
             self._file.flush()

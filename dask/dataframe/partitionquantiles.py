@@ -73,6 +73,7 @@ from __future__ import absolute_import, division, print_function
 import math
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64tz_dtype
 
 from toolz import merge, merge_sorted, take
 
@@ -138,8 +139,8 @@ def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_stat
     for any dtype.
     """
     # *waves hands*
-    random_percentage = 1 / (1 + (4 * num_new / num_old)**0.5)
-    num_percentiles = upsample * num_new * (num_old + 22)**0.55 / num_old
+    random_percentage = 1 / (1 + (4 * num_new / num_old) ** 0.5)
+    num_percentiles = upsample * num_new * (num_old + 22) ** 0.55 / num_old
     num_fixed = int(num_percentiles * (1 - random_percentage)) + 2
     num_random = int(num_percentiles * random_percentage) + 2
 
@@ -172,7 +173,7 @@ def tree_width(N, to_binary=False):
         group_size = int(math.log(N))
     num_groups = N // group_size
     if to_binary or num_groups < 16:
-        return 2**int(math.log(N / group_size, 2))
+        return 2 ** int(math.log(N / group_size, 2))
     else:
         return num_groups
 
@@ -227,8 +228,9 @@ def create_merge_tree(func, keys, token):
         width = tree_width(prev_width)
         groups = tree_groups(prev_width, width)
         keys = [(token, level, i) for i in range(width)]
-        rv.update((key, (func, list(take(num, prev_keys))))
-                  for num, key in zip(groups, keys))
+        rv.update(
+            (key, (func, list(take(num, prev_keys)))) for num, key in zip(groups, keys)
+        )
         prev_width = width
         prev_keys = iter(keys)
         level += 1
@@ -362,8 +364,8 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         q_weights = np.cumsum(trimmed_weights)
         q_target = np.linspace(0, q_weights[-1], trimmed_npartitions + 1)
 
-        left = np.searchsorted(q_weights, q_target, side='left')
-        right = np.searchsorted(q_weights, q_target, side='right') - 1
+        left = np.searchsorted(q_weights, q_target, side="left")
+        right = np.searchsorted(q_weights, q_target, side="right") - 1
         # stay inbounds
         np.maximum(right, 0, right)
         lower = np.minimum(left, right)
@@ -374,7 +376,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
 
     if is_categorical_dtype(dtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
-    elif 'datetime64' in str(dtype):
+    elif is_datetime64tz_dtype(dtype):
+        rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
+    elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
         rv = rv.astype(dtype)
@@ -400,18 +404,19 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         each partition.  Use to improve accuracy.
     """
     from dask.array.percentile import _percentile
+
     length = len(df)
     if length == 0:
         return ()
     random_state = np.random.RandomState(state)
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
     data = df.values
-    interpolation = 'linear'
+    interpolation = "linear"
     if is_categorical_dtype(data):
         data = data.codes
-        interpolation = 'nearest'
+        interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
-    if interpolation == 'linear' and np.issubdtype(data.dtype, np.integer):
+    if interpolation == "linear" and np.issubdtype(data.dtype, np.integer):
         vals = np.round(vals).astype(data.dtype)
     vals_and_weights = percentiles_to_weights(qs, vals, length)
     return vals_and_weights
@@ -436,20 +441,28 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     qs = np.linspace(0, 1, npartitions + 1)
     token = tokenize(df, qs, upsample)
     if random_state is None:
-        random_state = hash(token) % np.iinfo(np.int32).max
+        random_state = int(token, 16) % np.iinfo(np.int32).max
     state_data = random_state_data(df.npartitions, random_state)
 
     df_keys = df.__dask_keys__()
 
-    name0 = 're-quantiles-0-' + token
+    name0 = "re-quantiles-0-" + token
     dtype_dsk = {(name0, 0): (dtype_info, df_keys[0])}
 
-    name1 = 're-quantiles-1-' + token
-    val_dsk = {(name1, i): (percentiles_summary, key, df.npartitions,
-                            npartitions, upsample, state)
-               for i, (state, key) in enumerate(zip(state_data, df_keys))}
+    name1 = "re-quantiles-1-" + token
+    val_dsk = {
+        (name1, i): (
+            percentiles_summary,
+            key,
+            df.npartitions,
+            npartitions,
+            upsample,
+            state,
+        )
+        for i, (state, key) in enumerate(zip(state_data, df_keys))
+    }
 
-    name2 = 're-quantiles-2-' + token
+    name2 = "re-quantiles-2-" + token
     merge_dsk = create_merge_tree(merge_and_compress_summaries, sorted(val_dsk), name2)
     if not merge_dsk:
         # Compress the data even if we only have one partition
@@ -457,9 +470,16 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
 
     merged_key = max(merge_dsk)
 
-    name3 = 're-quantiles-3-' + token
-    last_dsk = {(name3, 0): (pd.Series, (process_val_weights, merged_key,
-                                         npartitions, (name0, 0)), qs, None, df.name)}
+    name3 = "re-quantiles-3-" + token
+    last_dsk = {
+        (name3, 0): (
+            pd.Series,
+            (process_val_weights, merged_key, npartitions, (name0, 0)),
+            qs,
+            None,
+            df.name,
+        )
+    }
 
     dsk = merge(df.dask, dtype_dsk, val_dsk, merge_dsk, last_dsk)
     new_divisions = [0.0, 1.0]

@@ -1,18 +1,20 @@
 from __future__ import absolute_import, division, print_function
 
 import operator
-from functools import wraps
 from numbers import Number
 
 import numpy as np
 import toolz
 
-from ..base import tokenize
+from ..base import tokenize, wait
+from ..blockwise import blockwise
 from ..compatibility import apply
-from .. import sharedict
-from .core import top, dotmany, Array
+from ..highlevelgraph import HighLevelGraph
+from ..utils import derived_from
+from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
+from .utils import meta_from_array
 
 
 def _cumsum_blocks(it):
@@ -27,7 +29,28 @@ def _cumsum_part(last, new):
     return (last[1], last[1] + new)
 
 
-def tsqr(data, name=None, compute_svd=False):
+def _nanmin(m, n):
+    k_0 = min([m, n])
+    k_1 = m if np.isnan(n) else n
+    return k_1 if np.isnan(k_0) else k_0
+
+
+def _wrapped_qr(a):
+    """
+    A wrapper for np.linalg.qr that handles arrays with 0 rows
+
+    Notes: Created for tsqr so as to manage cases with uncertain
+    array dimensions. In particular, the case where arrays have
+    (uncertain) chunks with 0 rows.
+    """
+    # workaround may be removed when numpy stops rejecting edge cases
+    if a.shape[0] == 0:
+        return np.zeros((0, 0)), np.zeros((0, a.shape[1]))
+    else:
+        return np.linalg.qr(a)
+
+
+def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
     As presented in:
@@ -36,169 +59,552 @@ def tsqr(data, name=None, compute_svd=False):
         Direct QR factorizations for tall-and-skinny matrices in
         MapReduce architectures.
         IEEE International Conference on Big Data, 2013.
-        http://arxiv.org/abs/1301.1071
+        https://arxiv.org/abs/1301.1071
 
     This algorithm is used to compute both the QR decomposition and the
     Singular Value Decomposition.  It requires that the input array have a
     single column of blocks, each of which fit in memory.
 
-    If blocks are of size ``(n, k)`` then this algorithm has memory use that
-    scales as ``n**2 * k * nthreads``.
-
     Parameters
     ----------
-
     data: Array
     compute_svd: bool
         Whether to compute the SVD rather than the QR decomposition
+    _max_vchunk_size: Integer
+        Used internally in recursion to set the maximum row dimension
+        of chunks in subsequent recursive calls.
+
+    Notes
+    -----
+    With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
+    scales as ``k * n * n``.
+
+    The implementation here is the recursive variant due to the ultimate
+    need for one "single core" QR decomposition. In the non-recursive version
+    of the algorithm, given ``k`` blocks, after ``k`` ``m * n`` QR
+    decompositions, there will be a "single core" QR decomposition that will
+    have to work with a ``(k * n, n)`` matrix.
+
+    Here, recursion is applied as necessary to ensure that ``k * n`` is not
+    larger than ``m`` (if ``m / n >= 2``). In particular, this is done
+    to ensure that single core computations do not have to work on blocks
+    larger than ``(m, n)``.
+
+    Where blocks are irregular, the above logic is applied with the "height" of
+    the "tallest" block used in place of ``m``.
+
+    Consider use of the ``rechunk`` method to control this behavior.
+    Taller blocks will reduce overall memory use (assuming that many of them
+    still fit in memory at once).
 
     See Also
     --------
-
     dask.array.linalg.qr - Powered by this algorithm
     dask.array.linalg.svd - Powered by this algorithm
+    dask.array.linalg.sfqr - Variant for short-and-fat arrays
     """
+    nr, nc = len(data.chunks[0]), len(data.chunks[1])
+    cr_max, cc = max(data.chunks[0]), data.chunks[1][0]
 
-    if not (data.ndim == 2 and                    # Is a matrix
-            len(data.chunks[1]) == 1):         # Only one column block
+    if not (data.ndim == 2 and nc == 1):  # Is a matrix  # Only one column block
         raise ValueError(
             "Input must have the following properties:\n"
             "  1. Have two dimensions\n"
-            "  2. Have only one column of blocks")
+            "  2. Have only one column of blocks\n\n"
+            "Note: This function (tsqr) supports QR decomposition in the case of\n"
+            "tall-and-skinny matrices (single column chunk/block; see qr)"
+            "Current shape: {},\nCurrent chunksize: {}".format(
+                data.shape, data.chunksize
+            )
+        )
 
-    prefix = name or 'tsqr-' + tokenize(data, compute_svd)
-    prefix += '_'
+    token = "-" + tokenize(data, compute_svd)
 
     m, n = data.shape
-    numblocks = (len(data.chunks[0]), 1)
+    numblocks = (nr, 1)
 
-    name_qr_st1 = prefix + 'QR_st1'
-    dsk_qr_st1 = top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
-                     numblocks={data.name: numblocks})
-    # qr[0]
-    name_q_st1 = prefix + 'Q_st1'
-    dsk_q_st1 = dict(((name_q_st1, i, 0),
-                      (operator.getitem, (name_qr_st1, i, 0), 0))
-                     for i in range(numblocks[0]))
-    # qr[1]
-    name_r_st1 = prefix + 'R_st1'
-    dsk_r_st1 = dict(((name_r_st1, i, 0),
-                      (operator.getitem, (name_qr_st1, i, 0), 1))
-                     for i in range(numblocks[0]))
+    qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
 
-    # Stacking for in-core QR computation
-    to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
-    name_r_st1_stacked = prefix + 'R_st1_stacked'
-    dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
-                                                      (tuple, to_stack))}
-    # In-core QR computation
-    name_qr_st2 = prefix + 'QR_st2'
-    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
-                     numblocks={name_r_st1_stacked: (1, 1)})
-    # qr[0]
-    name_q_st2_aux = prefix + 'Q_st2_aux'
-    dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
-                                              (name_qr_st2, 0, 0), 0)}
-    if not any(np.isnan(c) for cs in data.chunks for c in cs):
-        q2_block_sizes = [min(e, n) for e in data.chunks[0]]
-        block_slices = [(slice(e[0], e[1]), slice(0, n))
-                        for e in _cumsum_blocks(q2_block_sizes)]
-        dsk_q_blockslices = {}
+    layers = data.__dask_graph__().layers.copy()
+    dependencies = data.__dask_graph__().dependencies.copy()
+
+    # Block qr
+    name_qr_st1 = "qr" + token
+    dsk_qr_st1 = blockwise(
+        _wrapped_qr,
+        name_qr_st1,
+        "ij",
+        data.name,
+        "ij",
+        numblocks={data.name: numblocks},
+    )
+    layers[name_qr_st1] = dsk_qr_st1
+    dependencies[name_qr_st1] = data.__dask_layers__()
+
+    # Block qr[0]
+    name_q_st1 = "getitem" + token + "-q1"
+    dsk_q_st1 = dict(
+        ((name_q_st1, i, 0), (operator.getitem, (name_qr_st1, i, 0), 0))
+        for i in range(numblocks[0])
+    )
+    layers[name_q_st1] = dsk_q_st1
+    dependencies[name_q_st1] = {name_qr_st1}
+
+    # Block qr[1]
+    name_r_st1 = "getitem" + token + "-r1"
+    dsk_r_st1 = dict(
+        ((name_r_st1, i, 0), (operator.getitem, (name_qr_st1, i, 0), 1))
+        for i in range(numblocks[0])
+    )
+    layers[name_r_st1] = dsk_r_st1
+    dependencies[name_r_st1] = {name_qr_st1}
+
+    # Next step is to obtain a QR decomposition for the stacked R factors, so either:
+    # - gather R factors into a single core and do a QR decomposition
+    # - recurse with tsqr (if single core computation too large and a-priori "meaningful
+    #   reduction" possible, meaning that chunks have to be well defined)
+
+    single_core_compute_m = nr * cc
+    chunks_well_defined = not any(np.isnan(c) for cs in data.chunks for c in cs)
+    prospective_blocks = np.ceil(single_core_compute_m / cr_max)
+    meaningful_reduction_possible = (
+        cr_max if _max_vchunk_size is None else _max_vchunk_size
+    ) >= 2 * cc
+    can_distribute = chunks_well_defined and int(prospective_blocks) > 1
+
+    if chunks_well_defined and meaningful_reduction_possible and can_distribute:
+        # stack chunks into blocks and recurse using tsqr
+
+        # Prepare to stack chunks into blocks (from block qr[1])
+        all_blocks = []
+        curr_block = []
+        curr_block_sz = 0
+        for idx, a_m in enumerate(data.chunks[0]):
+            m_q = a_m
+            n_q = min(m_q, cc)
+            m_r = n_q
+            # n_r = cc
+            if curr_block_sz + m_r > cr_max:
+                all_blocks.append(curr_block)
+                curr_block = []
+                curr_block_sz = 0
+            curr_block.append((idx, m_r))
+            curr_block_sz += m_r
+        if len(curr_block) > 0:
+            all_blocks.append(curr_block)
+
+        # R_stacked
+        name_r_stacked = "stack" + token + "-r1"
+        dsk_r_stacked = dict(
+            (
+                (name_r_stacked, i, 0),
+                (
+                    np.vstack,
+                    (tuple, [(name_r_st1, idx, 0) for idx, _ in sub_block_info]),
+                ),
+            )
+            for i, sub_block_info in enumerate(all_blocks)
+        )
+        layers[name_r_stacked] = dsk_r_stacked
+        dependencies[name_r_stacked] = {name_r_st1}
+
+        # retrieve R_stacked for recursion with tsqr
+        vchunks_rstacked = tuple(
+            [sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks]
+        )
+        graph = HighLevelGraph(layers, dependencies)
+        # dsk.dependencies[name_r_stacked] = {data.name}
+        r_stacked_meta = meta_from_array(
+            data, len((sum(vchunks_rstacked), n)), dtype=rr.dtype
+        )
+        r_stacked = Array(
+            graph,
+            name_r_stacked,
+            shape=(sum(vchunks_rstacked), n),
+            chunks=(vchunks_rstacked, (n)),
+            meta=r_stacked_meta,
+        )
+
+        # recurse
+        q_inner, r_inner = tsqr(r_stacked, _max_vchunk_size=cr_max)
+        layers = toolz.merge(q_inner.dask.layers, r_inner.dask.layers)
+        dependencies = toolz.merge(q_inner.dask.dependencies, r_inner.dask.dependencies)
+
+        # Q_inner: "unstack"
+        name_q_st2 = "getitem" + token + "-q2"
+        dsk_q_st2 = dict(
+            (
+                (name_q_st2, j, 0),
+                (
+                    operator.getitem,
+                    (q_inner.name, i, 0),
+                    ((slice(e[0], e[1])), (slice(0, n))),
+                ),
+            )
+            for i, sub_block_info in enumerate(all_blocks)
+            for j, e in zip(
+                [x[0] for x in sub_block_info],
+                _cumsum_blocks([x[1] for x in sub_block_info]),
+            )
+        )
+        layers[name_q_st2] = dsk_q_st2
+        dependencies[name_q_st2] = q_inner.__dask_layers__()
+
+        # R: R_inner
+        name_r_st2 = "r-inner" + token
+        dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
+        layers[name_r_st2] = dsk_r_st2
+        dependencies[name_r_st2] = r_inner.__dask_layers__()
+
+        # Q: Block qr[0] (*) Q_inner
+        name_q_st3 = "dot" + token + "-q3"
+        dsk_q_st3 = blockwise(
+            np.dot,
+            name_q_st3,
+            "ij",
+            name_q_st1,
+            "ij",
+            name_q_st2,
+            "ij",
+            numblocks={name_q_st1: numblocks, name_q_st2: numblocks},
+        )
+        layers[name_q_st3] = dsk_q_st3
+        dependencies[name_q_st3] = {name_q_st1, name_q_st2}
     else:
-        name_q2bs = prefix + 'q2-shape'
-        dsk_q2_shapes = {(name_q2bs, i): (min, (getattr, (data.name, i, 0), 'shape'))
-                         for i in range(numblocks[0])}
-        dsk_n = {prefix + 'n': (operator.getitem,
-                                (getattr, (data.name, 0, 0), 'shape'), 1)}
-        name_q2cs = prefix + 'q2-shape-cumsum'
-        dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
-        dsk_q2_cumsum.update({(name_q2cs, i): (_cumsum_part,
-                                               (name_q2cs, i - 1),
-                                               (name_q2bs, i))
-                              for i in range(1, numblocks[0])})
+        # Do single core computation
 
-        name_blockslice = prefix + 'q2-blockslice'
-        dsk_block_slices = {(name_blockslice, i): (tuple, [
-            (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
-            for i in range(numblocks[0])}
+        # Stacking for in-core QR computation
+        to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
+        name_r_st1_stacked = "stack" + token + "-r1"
+        dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack, (tuple, to_stack))}
+        layers[name_r_st1_stacked] = dsk_r_st1_stacked
+        dependencies[name_r_st1_stacked] = {name_r_st1}
 
-        dsk_q_blockslices = toolz.merge(dsk_n,
-                                        dsk_q2_shapes,
-                                        dsk_q2_cumsum,
-                                        dsk_block_slices)
+        # In-core QR computation
+        name_qr_st2 = "qr" + token + "-qr2"
+        dsk_qr_st2 = blockwise(
+            np.linalg.qr,
+            name_qr_st2,
+            "ij",
+            name_r_st1_stacked,
+            "ij",
+            numblocks={name_r_st1_stacked: (1, 1)},
+        )
+        layers[name_qr_st2] = dsk_qr_st2
+        dependencies[name_qr_st2] = {name_r_st1_stacked}
 
-        block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
+        # In-core qr[0]
+        name_q_st2_aux = "getitem" + token + "-q2-aux"
+        dsk_q_st2_aux = {
+            (name_q_st2_aux, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 0)
+        }
+        layers[name_q_st2_aux] = dsk_q_st2_aux
+        dependencies[name_q_st2_aux] = {name_qr_st2}
 
-    name_q_st2 = prefix + 'Q_st2'
-    dsk_q_st2 = dict(((name_q_st2, i, 0),
-                      (operator.getitem, (name_q_st2_aux, 0, 0), b))
-                     for i, b in enumerate(block_slices))
-    # qr[1]
-    name_r_st2 = prefix + 'R'
-    dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
+        if not any(np.isnan(c) for cs in data.chunks for c in cs):
+            # when chunks are all known...
+            # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
+            q2_block_sizes = [min(e, n) for e in data.chunks[0]]
+            block_slices = [
+                (slice(e[0], e[1]), slice(0, n)) for e in _cumsum_blocks(q2_block_sizes)
+            ]
+            dsk_q_blockslices = {}
+            deps = set()
+        else:
+            # when chunks are not already known...
 
-    name_q_st3 = prefix + 'Q'
-    dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
-                    name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
-                                                 name_q_st2: numblocks})
+            # request shape information: vertical chunk sizes & column dimension (n)
+            name_q2bs = "shape" + token + "-q2"
+            dsk_q2_shapes = {
+                (name_q2bs, i): (min, (getattr, (data.name, i, 0), "shape"))
+                for i in range(numblocks[0])
+            }
+            name_n = "getitem" + token + "-n"
+            dsk_n = {
+                name_n: (operator.getitem, (getattr, (data.name, 0, 0), "shape"), 1)
+            }
 
-    dsk = sharedict.ShareDict()
-    dsk.update(data.dask)
-    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
-    dsk.update_with_key(dsk_q_st1, key=name_q_st1)
-    dsk.update_with_key(dsk_r_st1, key=name_r_st1)
-    dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
-    dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
-    dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
-    dsk.update_with_key(dsk_q_st2, key=name_q_st2)
-    dsk.update_with_key(dsk_q_st3, key=name_q_st3)
-    dsk.update_with_key(dsk_q_blockslices, key=prefix + '-q-blockslices')
-    dsk.update_with_key(dsk_r_st2, key=name_r_st2)
+            # cumulative sums (start, end)
+            name_q2cs = "cumsum" + token + "-q2"
+            dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
+            dsk_q2_cumsum.update(
+                {
+                    (name_q2cs, i): (_cumsum_part, (name_q2cs, i - 1), (name_q2bs, i))
+                    for i in range(1, numblocks[0])
+                }
+            )
+
+            # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
+            name_blockslice = "slice" + token + "-q"
+            dsk_block_slices = {
+                (name_blockslice, i): (
+                    tuple,
+                    [(apply, slice, (name_q2cs, i)), (slice, 0, name_n)],
+                )
+                for i in range(numblocks[0])
+            }
+
+            dsk_q_blockslices = toolz.merge(
+                dsk_n, dsk_q2_shapes, dsk_q2_cumsum, dsk_block_slices
+            )
+
+            deps = {data.name, name_q2bs, name_q2cs}
+            block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
+
+        layers["q-blocksizes" + token] = dsk_q_blockslices
+        dependencies["q-blocksizes" + token] = deps
+
+        # In-core qr[0] unstacking
+        name_q_st2 = "getitem" + token + "-q2"
+        dsk_q_st2 = dict(
+            ((name_q_st2, i, 0), (operator.getitem, (name_q_st2_aux, 0, 0), b))
+            for i, b in enumerate(block_slices)
+        )
+        layers[name_q_st2] = dsk_q_st2
+        dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
+
+        # Q: Block qr[0] (*) In-core qr[0]
+        name_q_st3 = "dot" + token + "-q3"
+        dsk_q_st3 = blockwise(
+            np.dot,
+            name_q_st3,
+            "ij",
+            name_q_st1,
+            "ij",
+            name_q_st2,
+            "ij",
+            numblocks={name_q_st1: numblocks, name_q_st2: numblocks},
+        )
+        layers[name_q_st3] = dsk_q_st3
+        dependencies[name_q_st3] = {name_q_st1, name_q_st2}
+
+        # R: In-core qr[1]
+        name_r_st2 = "getitem" + token + "-r2"
+        dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
+        layers[name_r_st2] = dsk_r_st2
+        dependencies[name_r_st2] = {name_qr_st2}
 
     if not compute_svd:
-        qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
-        q = Array(dsk, name_q_st3,
-                  shape=data.shape, chunks=data.chunks, dtype=qq.dtype)
-        r = Array(dsk, name_r_st2,
-                  shape=(n, n), chunks=(n, n), dtype=rr.dtype)
+        is_unknown_m = np.isnan(data.shape[0]) or any(
+            np.isnan(c) for c in data.chunks[0]
+        )
+        is_unknown_n = np.isnan(data.shape[1]) or any(
+            np.isnan(c) for c in data.chunks[1]
+        )
+
+        if is_unknown_m and is_unknown_n:
+            # assumption: m >= n
+            q_shape = data.shape
+            q_chunks = (data.chunks[0], (np.nan,))
+            r_shape = (np.nan, np.nan)
+            r_chunks = ((np.nan,), (np.nan,))
+        elif is_unknown_m and not is_unknown_n:
+            # assumption: m >= n
+            q_shape = data.shape
+            q_chunks = (data.chunks[0], (n,))
+            r_shape = (n, n)
+            r_chunks = (n, n)
+        elif not is_unknown_m and is_unknown_n:
+            # assumption: m >= n
+            q_shape = data.shape
+            q_chunks = (data.chunks[0], (np.nan,))
+            r_shape = (np.nan, np.nan)
+            r_chunks = ((np.nan,), (np.nan,))
+        else:
+            q_shape = (
+                data.shape
+                if data.shape[0] >= data.shape[1]
+                else (data.shape[0], data.shape[0])
+            )
+            q_chunks = (
+                data.chunks
+                if data.shape[0] >= data.shape[1]
+                else (data.chunks[0], data.chunks[0])
+            )
+            r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
+            r_chunks = r_shape
+
+        # dsk.dependencies[name_q_st3] = {data.name}
+        # dsk.dependencies[name_r_st2] = {data.name}
+        graph = HighLevelGraph(layers, dependencies)
+        q_meta = meta_from_array(data, len(q_shape), qq.dtype)
+        r_meta = meta_from_array(data, len(r_shape), rr.dtype)
+        q = Array(graph, name_q_st3, shape=q_shape, chunks=q_chunks, meta=q_meta)
+        r = Array(graph, name_r_st2, shape=r_shape, chunks=r_chunks, meta=r_meta)
         return q, r
     else:
         # In-core SVD computation
-        name_svd_st2 = prefix + 'SVD_st2'
-        dsk_svd_st2 = top(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
-                          numblocks={name_r_st2: (1, 1)})
+        name_svd_st2 = "svd" + token + "-2"
+        dsk_svd_st2 = blockwise(
+            np.linalg.svd,
+            name_svd_st2,
+            "ij",
+            name_r_st2,
+            "ij",
+            numblocks={name_r_st2: (1, 1)},
+        )
         # svd[0]
-        name_u_st2 = prefix + 'U_st2'
-        dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem,
-                                          (name_svd_st2, 0, 0), 0)}
+        name_u_st2 = "getitem" + token + "-u2"
+        dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem, (name_svd_st2, 0, 0), 0)}
         # svd[1]
-        name_s_st2 = prefix + 'S'
-        dsk_s_st2 = {(name_s_st2, 0): (operator.getitem,
-                                       (name_svd_st2, 0, 0), 1)}
+        name_s_st2 = "getitem" + token + "-s2"
+        dsk_s_st2 = {(name_s_st2, 0): (operator.getitem, (name_svd_st2, 0, 0), 1)}
         # svd[2]
-        name_v_st2 = prefix + 'V'
-        dsk_v_st2 = {(name_v_st2, 0, 0): (operator.getitem,
-                                          (name_svd_st2, 0, 0), 2)}
+        name_v_st2 = "getitem" + token + "-v2"
+        dsk_v_st2 = {(name_v_st2, 0, 0): (operator.getitem, (name_svd_st2, 0, 0), 2)}
         # Q * U
-        name_u_st4 = prefix + 'U'
-        dsk_u_st4 = top(dotmany, name_u_st4, 'ij', name_q_st3, 'ik',
-                        name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
-                                                     name_u_st2: (1, 1)})
+        name_u_st4 = "getitem" + token + "-u4"
+        dsk_u_st4 = blockwise(
+            dotmany,
+            name_u_st4,
+            "ij",
+            name_q_st3,
+            "ik",
+            name_u_st2,
+            "kj",
+            numblocks={name_q_st3: numblocks, name_u_st2: (1, 1)},
+        )
 
-        dsk.update_with_key(dsk_svd_st2, key=name_svd_st2)
-        dsk.update_with_key(dsk_u_st2, key=name_u_st2)
-        dsk.update_with_key(dsk_u_st4, key=name_u_st4)
-        dsk.update_with_key(dsk_s_st2, key=name_s_st2)
-        dsk.update_with_key(dsk_v_st2, key=name_v_st2)
+        layers[name_svd_st2] = dsk_svd_st2
+        dependencies[name_svd_st2] = {name_r_st2}
+        layers[name_u_st2] = dsk_u_st2
+        dependencies[name_u_st2] = {name_svd_st2}
+        layers[name_u_st4] = dsk_u_st4
+        dependencies[name_u_st4] = {name_q_st3, name_u_st2}
+        layers[name_s_st2] = dsk_s_st2
+        dependencies[name_s_st2] = {name_svd_st2}
+        layers[name_v_st2] = dsk_v_st2
+        dependencies[name_v_st2] = {name_svd_st2}
 
-        uu, ss, vv = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
+        uu, ss, vvh = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
-        u = Array(dsk, name_u_st4, shape=data.shape, chunks=data.chunks,
-                  dtype=uu.dtype)
-        s = Array(dsk, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
-        v = Array(dsk, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
-                  dtype=vv.dtype)
-        return u, s, v
+        k = _nanmin(m, n)  # avoid RuntimeWarning with np.nanmin([m, n])
+
+        m_u = m
+        n_u = int(k) if not np.isnan(k) else k
+        n_s = n_u
+        m_vh = n_u
+        n_vh = n
+        d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
+        graph = HighLevelGraph(layers, dependencies)
+        u_meta = meta_from_array(data, len((m_u, n_u)), uu.dtype)
+        s_meta = meta_from_array(data, len((n_s,)), ss.dtype)
+        vh_meta = meta_from_array(data, len((d_vh, d_vh)), vvh.dtype)
+        u = Array(
+            graph,
+            name_u_st4,
+            shape=(m_u, n_u),
+            chunks=(data.chunks[0], (n_u,)),
+            meta=u_meta,
+        )
+        s = Array(graph, name_s_st2, shape=(n_s,), chunks=((n_s,),), meta=s_meta)
+        vh = Array(
+            graph, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)), meta=vh_meta
+        )
+        return u, s, vh
+
+
+def sfqr(data, name=None):
+    """ Direct Short-and-Fat QR
+
+    Currently, this is a quick hack for non-tall-and-skinny matrices which
+    are one chunk tall and (unless they are one chunk wide) have chunks
+    that are wider than they are tall
+
+    Q [R_1 R_2 ...] = [A_1 A_2 ...]
+
+    it computes the factorization Q R_1 = A_1, then computes the other
+    R_k's in parallel.
+
+    Parameters
+    ----------
+    data: Array
+
+    See Also
+    --------
+    dask.array.linalg.qr - Main user API that uses this function
+    dask.array.linalg.tsqr - Variant for tall-and-skinny case
+    """
+    nr, nc = len(data.chunks[0]), len(data.chunks[1])
+    cr, cc = data.chunks[0][0], data.chunks[1][0]
+
+    if not (
+        (data.ndim == 2)
+        and (nr == 1)  # Is a matrix
+        and (  # Has exactly one block row
+            (cr <= cc)
+            or (nc == 1)  # Chunking dimension on rows is at least that on cols or...
+        )
+    ):  # ... only one block col
+        raise ValueError(
+            "Input must have the following properties:\n"
+            "  1. Have two dimensions\n"
+            "  2. Have only one row of blocks\n"
+            "  3. Either one column of blocks or (first) chunk size on cols\n"
+            "     is at most that on rows (e.g.: for a 5x20 matrix,\n"
+            "     chunks=((5), (8,4,8)) is fine, but chunks=((5), (4,8,8)) is not;\n"
+            "     still, prefer something simple like chunks=(5,10) or chunks=5)\n\n"
+            "Note: This function (sfqr) supports QR decomposition in the case\n"
+            "of short-and-fat matrices (single row chunk/block; see qr)"
+        )
+
+    prefix = name or "sfqr-" + tokenize(data)
+    prefix += "_"
+
+    m, n = data.shape
+
+    qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
+
+    layers = data.__dask_graph__().layers.copy()
+    dependencies = data.__dask_graph__().dependencies.copy()
+
+    # data = A = [A_1 A_rest]
+    name_A_1 = prefix + "A_1"
+    name_A_rest = prefix + "A_rest"
+    layers[name_A_1] = {(name_A_1, 0, 0): (data.name, 0, 0)}
+    dependencies[name_A_1] = data.__dask_layers__()
+    layers[name_A_rest] = {
+        (name_A_rest, 0, idx): (data.name, 0, 1 + idx) for idx in range(nc - 1)
+    }
+    dependencies[name_A_rest] = data.__dask_layers__()
+
+    # Q R_1 = A_1
+    name_Q_R1 = prefix + "Q_R_1"
+    name_Q = prefix + "Q"
+    name_R_1 = prefix + "R_1"
+    layers[name_Q_R1] = {(name_Q_R1, 0, 0): (np.linalg.qr, (name_A_1, 0, 0))}
+    dependencies[name_Q_R1] = {name_A_1}
+
+    layers[name_Q] = {(name_Q, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 0)}
+    dependencies[name_Q] = {name_Q_R1}
+
+    layers[name_R_1] = {(name_R_1, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 1)}
+    dependencies[name_R_1] = {name_Q_R1}
+
+    graph = HighLevelGraph(layers, dependencies)
+
+    Q_meta = meta_from_array(data, len((m, min(m, n))), dtype=qq.dtype)
+    R_1_meta = meta_from_array(data, len((min(m, n), cc)), dtype=rr.dtype)
+    Q = Array(graph, name_Q, shape=(m, min(m, n)), chunks=(m, min(m, n)), meta=Q_meta)
+    R_1 = Array(graph, name_R_1, shape=(min(m, n), cc), chunks=(cr, cc), meta=R_1_meta)
+
+    # R = [R_1 Q'A_rest]
+    Rs = [R_1]
+
+    if nc > 1:
+        A_rest_meta = meta_from_array(data, len((min(m, n), n - cc)), dtype=rr.dtype)
+        A_rest = Array(
+            graph,
+            name_A_rest,
+            shape=(min(m, n), n - cc),
+            chunks=((cr), data.chunks[1][1:]),
+            meta=A_rest_meta,
+        )
+        Rs.append(Q.T.dot(A_rest))
+
+    R = concatenate(Rs, axis=1)
+
+    return Q, R
 
 
 def compression_level(n, q, oversampling=10, min_subspace_size=20):
@@ -220,7 +626,7 @@ def compression_level(n, q, oversampling=10, min_subspace_size=20):
     return min(max(min_subspace_size, q + oversampling), n)
 
 
-def compression_matrix(data, q, n_power_iter=0, seed=None):
+def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     """ Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
@@ -236,6 +642,12 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
     n_power_iter: int
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
+    compute : bool
+        Whether or not to compute data at each use.
+        Recomputing the input while performing several passes reduces memory
+        pressure, but means that we have to compute the input multiple times.
+        This is a good choice if the data is larger than memory and cheap to
+        recreate.
 
     References
     ----------
@@ -244,21 +656,32 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
     constructing approximate matrix decompositions.
     SIAM Rev., Survey and Review section, Vol. 53, num. 2,
     pp. 217-288, June 2011
-    http://arxiv.org/abs/0909.4061
+    https://arxiv.org/abs/0909.4061
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
-    state = RandomState(seed)
-    omega = state.standard_normal(size=(n, comp_level), chunks=(data.chunks[1],
-                                                                (comp_level,)))
+    if isinstance(seed, RandomState):
+        state = seed
+    else:
+        state = RandomState(seed)
+    omega = state.standard_normal(
+        size=(n, comp_level), chunks=(data.chunks[1], (comp_level,))
+    )
     mat_h = data.dot(omega)
     for j in range(n_power_iter):
-        mat_h = data.dot(data.T.dot(mat_h))
+        if compute:
+            mat_h = mat_h.persist()
+            wait(mat_h)
+        tmp = data.T.dot(mat_h)
+        if compute:
+            tmp = tmp.persist()
+            wait(tmp)
+        mat_h = data.dot(tmp)
     q, _ = tsqr(mat_h)
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
+def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -276,10 +699,15 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
         Number of power iterations, useful when the singular values
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
+    compute : bool
+        Whether or not to compute data at each use.
+        Recomputing the input while performing several passes reduces memory
+        pressure, but means that we have to compute the input multiple times.
+        This is a good choice if the data is larger than memory and cheap to
+        recreate.
 
     Examples
     --------
-
     >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
 
     Returns
@@ -295,11 +723,16 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
     constructing approximate matrix decompositions.
     SIAM Rev., Survey and Review section, Vol. 53, num. 2,
     pp. 217-288, June 2011
-    http://arxiv.org/abs/0909.4061
+    https://arxiv.org/abs/0909.4061
     """
-    comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
+    comp = compression_matrix(
+        a, k, n_power_iter=n_power_iter, seed=seed, compute=compute
+    )
+    if compute:
+        comp = comp.persist()
+        wait(comp)
     a_compressed = comp.dot(a)
-    v, s, u = tsqr(a_compressed.T, name, compute_svd=True)
+    v, s, u = tsqr(a_compressed.T, compute_svd=True)
     u = comp.T.dot(u)
     v = v.T
     u = u[:, :k]
@@ -308,7 +741,7 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
     return u, s, v
 
 
-def qr(a, name=None):
+def qr(a):
     """
     Compute the qr factorization of a matrix.
 
@@ -326,13 +759,27 @@ def qr(a, name=None):
     See Also
     --------
 
-    np.linalg.qr : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Actual implementation with citation
+    np.linalg.qr: Equivalent NumPy Operation
+    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
+    dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """
-    return tsqr(a, name)
+
+    if len(a.chunks[1]) == 1 and len(a.chunks[0]) > 1:
+        return tsqr(a)
+    elif len(a.chunks[0]) == 1:
+        return sfqr(a)
+    else:
+        raise NotImplementedError(
+            "qr currently supports only tall-and-skinny (single column chunk/block; see tsqr)\n"
+            "and short-and-fat (single row chunk/block; see sfqr) matrices\n\n"
+            "Consider use of the rechunk method. For example,\n\n"
+            "x.rechunk({0: -1, 1: 'auto'}) or x.rechunk({0: 'auto', 1: -1})\n\n"
+            "which rechunk one shorter axis to a single chunk, while allowing\n"
+            "the other axis to automatically grow/shrink appropriately."
+        )
 
 
-def svd(a, name=None):
+def svd(a):
     """
     Compute the singular value decomposition of a matrix.
 
@@ -352,13 +799,14 @@ def svd(a, name=None):
     --------
 
     np.linalg.svd : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Actual implementation with citation
+    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     """
-    return tsqr(a, name, compute_svd=True)
+    return tsqr(a, compute_svd=True)
 
 
 def _solve_triangular_lower(a, b):
     import scipy.linalg
+
     return scipy.linalg.solve_triangular(a, b, lower=True)
 
 
@@ -382,32 +830,34 @@ def lu(a):
     import scipy.linalg
 
     if a.ndim != 2:
-        raise ValueError('Dimension must be 2 to perform lu decomposition')
+        raise ValueError("Dimension must be 2 to perform lu decomposition")
 
     xdim, ydim = a.shape
     if xdim != ydim:
-        raise ValueError('Input must be a square matrix to perform lu decomposition')
+        raise ValueError("Input must be a square matrix to perform lu decomposition")
     if not len(set(a.chunks[0] + a.chunks[1])) == 1:
-        msg = ('All chunks must be a square matrix to perform lu decomposition. '
-               'Use .rechunk method to change the size of chunks.')
+        msg = (
+            "All chunks must be a square matrix to perform lu decomposition. "
+            "Use .rechunk method to change the size of chunks."
+        )
         raise ValueError(msg)
 
     vdim = len(a.chunks[0])
     hdim = len(a.chunks[1])
 
     token = tokenize(a)
-    name_lu = 'lu-lu-' + token
+    name_lu = "lu-lu-" + token
 
-    name_p = 'lu-p-' + token
-    name_l = 'lu-l-' + token
-    name_u = 'lu-u-' + token
+    name_p = "lu-p-" + token
+    name_l = "lu-l-" + token
+    name_u = "lu-u-" + token
 
     # for internal calculation
-    name_p_inv = 'lu-p-inv-' + token
-    name_l_permuted = 'lu-l-permute-' + token
-    name_u_transposed = 'lu-u-transpose-' + token
-    name_plu_dot = 'lu-plu-dot-' + token
-    name_lu_dot = 'lu-lu-dot-' + token
+    name_p_inv = "lu-p-inv-" + token
+    name_l_permuted = "lu-l-permute-" + token
+    name_u_transposed = "lu-u-transpose-" + token
+    name_plu_dot = "lu-plu-dot-" + token
+    name_lu_dot = "lu-lu-dot-" + token
 
     dsk = {}
     for i in range(min(vdim, hdim)):
@@ -432,8 +882,7 @@ def lu(a):
                     dsk[prev] = (np.dot, (name_l, i, p), (name_u, p, j))
                     prevs.append(prev)
                 target = (operator.sub, target, (sum, prevs))
-            dsk[name_lu, i, j] = (_solve_triangular_lower,
-                                  (name_l, i, i), target)
+            dsk[name_lu, i, j] = (_solve_triangular_lower, (name_l, i, i), target)
 
         # sweep to vertical
         for k in range(i + 1, vdim):
@@ -446,10 +895,14 @@ def lu(a):
                     prevs.append(prev)
                 target = (operator.sub, target, (sum, prevs))
             # solving x.dot(u) = target is equal to u.T.dot(x.T) = target.T
-            dsk[name_lu, k, i] = (np.transpose,
-                                  (_solve_triangular_lower,
-                                   (name_u_transposed, i, i),
-                                   (np.transpose, target)))
+            dsk[name_lu, k, i] = (
+                np.transpose,
+                (
+                    _solve_triangular_lower,
+                    (name_u_transposed, i, i),
+                    (np.transpose, target),
+                ),
+            )
 
     for i in range(min(vdim, hdim)):
         for j in range(min(vdim, hdim)):
@@ -477,11 +930,19 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk = sharedict.merge(a.dask, ('lu-' + token, dsk))
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
-    p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
-    l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
-    u = Array(dsk, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
+    pp_meta = meta_from_array(a, dtype=pp.dtype)
+    ll_meta = meta_from_array(a, dtype=ll.dtype)
+    uu_meta = meta_from_array(a, dtype=uu.dtype)
+
+    graph = HighLevelGraph.from_collections(name_p, dsk, dependencies=[a])
+    p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, meta=pp_meta)
+
+    graph = HighLevelGraph.from_collections(name_l, dsk, dependencies=[a])
+    l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, meta=ll_meta)
+
+    graph = HighLevelGraph.from_collections(name_u, dsk, dependencies=[a])
+    u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, meta=uu_meta)
 
     return p, l, u
 
@@ -509,25 +970,27 @@ def solve_triangular(a, b, lower=False):
     import scipy.linalg
 
     if a.ndim != 2:
-        raise ValueError('a must be 2 dimensional')
+        raise ValueError("a must be 2 dimensional")
     if b.ndim <= 2:
         if a.shape[1] != b.shape[0]:
-            raise ValueError('a.shape[1] and b.shape[0] must be equal')
+            raise ValueError("a.shape[1] and b.shape[0] must be equal")
         if a.chunks[1] != b.chunks[0]:
-            msg = ('a.chunks[1] and b.chunks[0] must be equal. '
-                   'Use .rechunk method to change the size of chunks.')
+            msg = (
+                "a.chunks[1] and b.chunks[0] must be equal. "
+                "Use .rechunk method to change the size of chunks."
+            )
             raise ValueError(msg)
     else:
-        raise ValueError('b must be 1 or 2 dimensional')
+        raise ValueError("b must be 1 or 2 dimensional")
 
     vchunks = len(a.chunks[1])
     hchunks = 1 if b.ndim == 1 else len(b.chunks[1])
     token = tokenize(a, b, lower)
-    name = 'solve-triangular-' + token
+    name = "solve-triangular-" + token
 
     # for internal calculation
     # (name, i, j, k, l) corresponds to a_ij.dot(b_kl)
-    name_mdot = 'solve-tri-dot-' + token
+    name_mdot = "solve-tri-dot-" + token
 
     def _b_init(i, j):
         if b.ndim == 1:
@@ -565,12 +1028,18 @@ def solve_triangular(a, b, lower=False):
                         dsk[prev] = (np.dot, (a.name, i, k), _key(k, j))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
+                dsk[_key(i, j)] = (
+                    scipy.linalg.solve_triangular,
+                    (a.name, i, i),
+                    target,
+                )
 
-    dsk = sharedict.merge(a.dask, b.dask, (name, dsk))
-    res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
-                                  np.array([0, 1], dtype=b.dtype))
-    return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
+    res = _solve_triangular_lower(
+        np.array([[1, 0], [1, 2]], dtype=a.dtype), np.array([0, 1], dtype=b.dtype)
+    )
+    meta = meta_from_array(a, b.ndim, dtype=res.dtype)
+    return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
 def solve(a, b, sym_pos=False):
@@ -624,6 +1093,7 @@ def inv(a):
 
 def _cholesky_lower(a):
     import scipy.linalg
+
     return scipy.linalg.cholesky(a, lower=True)
 
 
@@ -661,27 +1131,31 @@ def _cholesky(a):
     import scipy.linalg
 
     if a.ndim != 2:
-        raise ValueError('Dimension must be 2 to perform cholesky decomposition')
+        raise ValueError("Dimension must be 2 to perform cholesky decomposition")
 
     xdim, ydim = a.shape
     if xdim != ydim:
-        raise ValueError('Input must be a square matrix to perform cholesky decomposition')
+        raise ValueError(
+            "Input must be a square matrix to perform cholesky decomposition"
+        )
     if not len(set(a.chunks[0] + a.chunks[1])) == 1:
-        msg = ('All chunks must be a square matrix to perform cholesky decomposition. '
-               'Use .rechunk method to change the size of chunks.')
+        msg = (
+            "All chunks must be a square matrix to perform cholesky decomposition. "
+            "Use .rechunk method to change the size of chunks."
+        )
         raise ValueError(msg)
 
     vdim = len(a.chunks[0])
     hdim = len(a.chunks[1])
 
     token = tokenize(a)
-    name = 'cholesky-' + token
+    name = "cholesky-" + token
 
     # (name_lt_dot, i, j, k, l) corresponds to l_ij.dot(l_kl.T)
-    name_lt_dot = 'cholesky-lt-dot-' + token
+    name_lt_dot = "cholesky-lt-dot-" + token
     # because transposed results are needed for calculation,
     # we can build graph for upper triangular simultaneously
-    name_upper = 'cholesky-upper-' + token
+    name_upper = "cholesky-upper-" + token
 
     # calculates lower triangulars because subscriptions get simpler
     dsk = {}
@@ -713,15 +1187,17 @@ def _cholesky(a):
                         dsk[prev] = (np.dot, (name, j, p), (name_upper, p, i))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
+                dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk = sharedict.merge(a.dask, (name, dsk))
+    graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
+    graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+    meta = meta_from_array(a, dtype=cho.dtype)
 
-    lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)
     # do not use .T, because part of transposed blocks are already calculated
-    upper = Array(dsk, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    upper = Array(graph_upper, name_upper, shape=a.shape, chunks=a.chunks, meta=meta)
     return lower, upper
 
 
@@ -773,39 +1249,44 @@ def lstsq(a, b):
     # r must be a triangular with single block
 
     # rank
-    rname = 'lstsq-rank-' + token
-    rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    rdsk = sharedict.merge(r.dask, (rname, rdsk))
+    rname = "lstsq-rank-" + token
+    rdsk = {(rname,): (np.linalg.matrix_rank, (r.name, 0, 0))}
+    graph = HighLevelGraph.from_collections(rname, rdsk, dependencies=[r])
     # rank must be an integer
-    rank = Array(rdsk, rname, shape=(), chunks=(), dtype=int)
+    rank = Array(graph, rname, shape=(), chunks=(), dtype=int)
 
     # singular
-    sname = 'lstsq-singular-' + token
+    sname = "lstsq-singular-" + token
     rt = r.T
-    sdsk = {(sname, 0): (_sort_decreasing,
-                         (np.sqrt,
-                          (np.linalg.eigvals,
-                           (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    sdsk = sharedict.merge(rt.dask, (sname, sdsk))
-    _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
-                                  np.array([0, 1], dtype=b.dtype))
-    s = Array(sdsk, sname, shape=(r.shape[0], ),
-              chunks=r.shape[0], dtype=ss.dtype)
+    sdsk = {
+        (sname, 0): (
+            _sort_decreasing,
+            (np.sqrt, (np.linalg.eigvals, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
+        )
+    }
+    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
+    _, _, _, ss = np.linalg.lstsq(
+        np.array([[1, 0], [1, 2]], dtype=a.dtype),
+        np.array([0, 1], dtype=b.dtype),
+        rcond=-1,
+    )
+    meta = meta_from_array(r, 1, dtype=ss.dtype)
+    s = Array(graph, sname, shape=(r.shape[0],), chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
 
 
-@wraps(np.linalg.norm)
+@derived_from(np.linalg)
 def norm(x, ord=None, axis=None, keepdims=False):
-    if x.ndim > 2:
-        raise ValueError("Improper number of dimensions to norm.")
-
     if axis is None:
         axis = tuple(range(x.ndim))
     elif isinstance(axis, Number):
         axis = (int(axis),)
     else:
         axis = tuple(axis)
+
+    if len(axis) > 2:
+        raise ValueError("Improper number of dimensions to norm.")
 
     if ord == "fro":
         ord = None
@@ -820,6 +1301,8 @@ def norm(x, ord=None, axis=None, keepdims=False):
     elif ord == "nuc":
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
 
         r = svd(x)[1][None].sum(keepdims=keepdims)
     elif ord == np.inf:
@@ -827,29 +1310,41 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             r = r.max(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1], keepdims=keepdims).max(keepdims=keepdims)
+            r = r.sum(axis=axis[1], keepdims=True).max(axis=axis[0], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif ord == -np.inf:
         r = abs(r)
         if len(axis) == 1:
             r = r.min(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1], keepdims=keepdims).min(keepdims=keepdims)
+            r = r.sum(axis=axis[1], keepdims=True).min(axis=axis[0], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif ord == 0:
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
 
-        r = (r != 0).astype(r.dtype).sum(axis=0, keepdims=keepdims)
+        r = (r != 0).astype(r.dtype).sum(axis=axis, keepdims=keepdims)
     elif ord == 1:
         r = abs(r)
         if len(axis) == 1:
             r = r.sum(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[0], keepdims=keepdims).max(keepdims=keepdims)
+            r = r.sum(axis=axis[0], keepdims=True).max(axis=axis[1], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == -1:
-        r = abs(r).sum(axis=axis[0], keepdims=keepdims).min(keepdims=keepdims)
+        r = abs(r).sum(axis=axis[0], keepdims=True).min(axis=axis[1], keepdims=True)
+        if keepdims is False:
+            r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == 2:
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
         r = svd(x)[1][None].max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -2:
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
         r = svd(x)[1][None].min(keepdims=keepdims)
     else:
         if len(axis) == 2:

@@ -14,8 +14,7 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import pandas as pd
-
-from .hashing import hash_pandas_object
+from pandas.util import hash_pandas_object
 
 
 def compute_first_bit(a):
@@ -30,7 +29,7 @@ def compute_hll_array(obj, b):
     # b is the number of bits
 
     if not 8 <= b <= 16:
-        raise ValueError('b should be between 8 and 16')
+        raise ValueError("b should be between 8 and 16")
     num_bits_discarded = 32 - b
     m = 1 << b
 
@@ -45,8 +44,8 @@ def compute_hll_array(obj, b):
     first_bit = compute_first_bit(hashes)
 
     # Pandas can do the max aggregation
-    df = pd.DataFrame({'j': j, 'first_bit': first_bit})
-    series = df.groupby('j').max()['first_bit']
+    df = pd.DataFrame({"j": j, "first_bit": first_bit})
+    series = df.groupby("j").max()["first_bit"]
 
     # Return a dense array so we can concat them and get a result
     # that is easy to deal with
@@ -70,7 +69,7 @@ def estimate_count(Ms, b):
 
     # Estimate cardinality, no adjustments
     alpha = 0.7213 / (1 + 1.079 / m)
-    E = alpha * m / (2.0 ** -M.astype('f8')).sum() * m
+    E = alpha * m / (2.0 ** -M.astype("f8")).sum() * m
     #                        ^^^^ starts as unsigned, need a signed type for
     #                             negation operator to do something useful
 
@@ -79,6 +78,6 @@ def estimate_count(Ms, b):
         V = (M == 0).sum()
         if V:
             return m * np.log(m / V)
-    if E > 2**32 / 30.0:
-        return -2**32 * np.log1p(-E / 2**32)
+    if E > 2 ** 32 / 30.0:
+        return -2 ** 32 * np.log1p(-E / 2 ** 32)
     return E

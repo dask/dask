@@ -1,0 +1,57 @@
+# This job includes coverage
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.6.*
+  - numpy=1.15.*
+  - pandas=0.23.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  - coverage
+  - codecov
+  # Issue with conda package for NumPy 1.15?
+  # See fastparquet-444
+  # - fastparquet
+  - h5py
+  - pytables
+  - fsspec
+  - zarr
+  - tiledb-py
+  - sqlalchemy
+  - pyarrow
+  # other -- IO
+  - bcolz
+  - blosc
+  - s3fs
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed==2.0.1
+  - graphviz
+  - ipython
+  - lz4
+  - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - pandas-datareader
+  - mmh3
+  - xxhash
+  - pip

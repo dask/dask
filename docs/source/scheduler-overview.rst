@@ -10,7 +10,7 @@ implements a few different schedulers:
 - ``distributed.Client.get``: a distributed scheduler for executing graphs
    on multiple machines.  This lives in the external distributed_ project.
 
-.. _distributed: https://distributed.readthedocs.io/en/latest/
+.. _distributed: https://distributed.dask.org/en/latest/
 
 
 The ``get`` function
@@ -55,7 +55,7 @@ of the collection:
 
 The compute method takes a number of keywords:
 
-- ``get``: a scheduler ``get`` function, overrides the default for the collection
+- ``scheduler``: the name of the desired scheduler like ``"threads"``, ``"processes"``, or ``"single-threaded"`, a ``get`` function, or a ``dask.distributed.Client`` object.  Overrides the default for the collection.
 - ``**kwargs``: extra keywords to pass on to the scheduler ``get`` function.
 
 See also: :ref:`configuring-schedulers`.
@@ -111,17 +111,17 @@ may want to use a different scheduler. There are two ways to do this.
 
         >>> x.sum().compute(scheduler='processes')
 
-2. Using ``dask.set_options``. This can be used either as a context manager, or to
+2. Using ``dask.config.set``. This can be used either as a context manager, or to
    set the scheduler globally:
 
     .. code-block:: python
 
         # As a context manager
-        >>> with dask.set_options(scheduler='processes'):
+        >>> with dask.config.set(scheduler='processes'):
         ...     x.sum().compute()
 
         # Set globally
-        >>> dask.set_options(scheduler='processes')
+        >>> dask.config.set(scheduler='processes')
         >>> x.sum().compute()
 
 
@@ -137,13 +137,23 @@ calling ``compute``:
     >>> x.compute(num_workers=4)
 
 Alternatively, the multiprocessing and threaded schedulers will check for a
-global pool set with ``dask.set_options``:
+global pool set with ``dask.config.set``:
 
 .. code-block:: python
 
     >>> from multiprocessing.pool import ThreadPool
-    >>> with dask.set_options(pool=ThreadPool(4)):
+    >>> with dask.config.set(pool=ThreadPool(4)):
     ...     x.compute()
+
+The multiprocessing scheduler also supports `different contexts`_ ("spawn",
+"forkserver", "fork") which you can set with ``dask.config.set``:
+
+.. code-block:: python
+
+   >>> with dask.config.set({"multiprocessing.context": "forkserver"}):
+   ...     x.compute()
+
+.. _different contexts: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
 
 For more information on the individual options for each scheduler, see the
 docstrings for each scheduler ``get`` function.
@@ -160,7 +170,7 @@ well with ``pdb``:
 
 .. code-block:: python
 
-    >>> dask.set_options(scheduler='single-threaded')
+    >>> dask.config.set(scheduler='single-threaded')
     >>> x.sum().compute()    # This computation runs serially instead of in parallel
 
 

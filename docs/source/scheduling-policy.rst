@@ -4,7 +4,7 @@ Scheduling in Depth
 *Note: this technical document is not optimized for user readability.*
 
 The default shared memory scheduler used by most dask collections lives in
-``dask/scheduler.py``. This scheduler dynamically schedules tasks to new
+``dask/local.py``. This scheduler dynamically schedules tasks to new
 workers as they become available.  It operates in a shared memory environment
 without consideration to data locality, all workers have access to all data
 equally.
@@ -48,11 +48,11 @@ on to the next.  This encourages our workers to complete blocks/subtrees of our
 graph before moving on to new blocks/subtrees.
 
 And so to encourage this "depth first behavior" we do a depth first search and
-number all nodes according to their number in the depth first search (DFS) 
-traversal.  We use this number to break ties when adding tasks on to the stack.  
-Please note that while we spoke of optimizing the many-distinct-subtree case 
-above this choice is entirely local and applies quite generally beyond this 
-case.  Anything that behaves even remotely like the many-distinct-subtree case 
+number all nodes according to their number in the depth first search (DFS)
+traversal.  We use this number to break ties when adding tasks on to the stack.
+Please note that while we spoke of optimizing the many-distinct-subtree case
+above this choice is entirely local and applies quite generally beyond this
+case.  Anything that behaves even remotely like the many-distinct-subtree case
 will benefit accordingly, and this case is quite common in normal workloads.
 
 And yet we have glossed over another tie breaker. Performing the depth
