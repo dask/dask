@@ -48,10 +48,10 @@ DataFrames
 
 The `RAPIDS <https://rapids.ai>`_ libraries provide a GPU accelerated
 Pandas-like library,
-`cuDF <https://rapidsai.github.io/projects/cudf/en/latest/>`_,
+`cuDF <https://github.com/rapidsai/cudf>`_,
 which interoperates well and is tested against Dask DataFrame.
 
-If you have cudf installed then you should be able to convert a Pandas-backed
+If you have cuDF installed then you should be able to convert a Pandas-backed
 Dask DataFrame to a cuDF-backed Dask DataFrame as follows:
 
 .. code-block:: python
@@ -62,7 +62,7 @@ Dask DataFrame to a cuDF-backed Dask DataFrame as follows:
 
 However, cuDF does not support the entire Pandas interface, and so a variety of
 Dask DataFrame operations will not function properly. Check the
-`cudf API Reference <https://rapidsai.github.io/projects/cudf/en/latest/api.html>`_
+`cuDF API Reference <https://docs.rapids.ai/api/cudf/stable/>`_
 for currently supported interface.
 
 
