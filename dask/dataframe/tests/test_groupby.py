@@ -844,6 +844,77 @@ def test_apply_shuffle():
         )
 
 
+def test_transform_shuffle():
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4] * 5,
+            "B": np.random.randn(20),
+            "C": np.random.randn(20),
+            "D": np.random.randn(20),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 3)
+
+    with pytest.warns(UserWarning):  # meta inference
+        assert_eq(
+            ddf.groupby("A").transform(lambda x: x.sum()),
+            pdf.groupby("A").transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.groupby(ddf["A"]).transform(lambda x: x.sum()),
+            pdf.groupby(pdf["A"]).transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.groupby(ddf["A"] + 1).transform(lambda x: x.sum()),
+            pdf.groupby(pdf["A"] + 1).transform(lambda x: x.sum()),
+        )
+
+        # SeriesGroupBy
+        assert_eq(
+            ddf.groupby("A")["B"].transform(lambda x: x.sum()),
+            pdf.groupby("A")["B"].transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.groupby(ddf["A"])["B"].transform(lambda x: x.sum()),
+            pdf.groupby(pdf["A"])["B"].transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.groupby(ddf["A"] + 1)["B"].transform(lambda x: x.sum()),
+            pdf.groupby(pdf["A"] + 1)["B"].transform(lambda x: x.sum()),
+        )
+
+        # Series.groupby
+        assert_eq(
+            ddf.B.groupby(ddf["A"]).transform(lambda x: x.sum()),
+            pdf.B.groupby(pdf["A"]).transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.B.groupby(ddf["A"] + 1).transform(lambda x: x.sum()),
+            pdf.B.groupby(pdf["A"] + 1).transform(lambda x: x.sum()),
+        )
+
+        # DataFrameGroupBy with column slice
+        assert_eq(
+            ddf.groupby("A")[["B", "C"]].transform(lambda x: x.sum()),
+            pdf.groupby("A")[["B", "C"]].transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.groupby(ddf["A"])[["B", "C"]].transform(lambda x: x.sum()),
+            pdf.groupby(pdf["A"])[["B", "C"]].transform(lambda x: x.sum()),
+        )
+
+        assert_eq(
+            ddf.groupby(ddf["A"] + 1)[["B", "C"]].transform(lambda x: x.sum()),
+            pdf.groupby(pdf["A"] + 1)[["B", "C"]].transform(lambda x: x.sum()),
+        )
+
+
 @pytest.mark.parametrize(
     "grouper",
     [
@@ -887,6 +958,52 @@ def test_apply_shuffle_multilevel(grouper):
         assert_eq(
             ddf.groupby(grouper(ddf))[["B", "C"]].apply(lambda x: x.sum()),
             pdf.groupby(grouper(pdf))[["B", "C"]].apply(lambda x: x.sum()),
+        )
+
+
+@pytest.mark.parametrize(
+    "grouper",
+    [
+        lambda df: "AA",
+        lambda df: ["AA", "AB"],
+        lambda df: df["AA"],
+        lambda df: [df["AA"], df["AB"]],
+        lambda df: df["AA"] + 1,
+        pytest.param(
+            lambda df: [df["AA"] + 1, df["AB"] + 1],
+            marks=pytest.mark.xfail("NotImplemented"),
+        ),
+    ],
+)
+def test_transform_shuffle_multilevel(grouper):
+    pdf = pd.DataFrame(
+        {
+            "AB": [1, 2, 3, 4] * 5,
+            "AA": [1, 2, 3, 4] * 5,
+            "B": np.random.randn(20),
+            "C": np.random.randn(20),
+            "D": np.random.randn(20),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 3)
+
+    with pytest.warns(UserWarning):
+        # DataFrameGroupBy
+        assert_eq(
+            ddf.groupby(grouper(ddf)).transform(lambda x: x.sum()),
+            pdf.groupby(grouper(pdf)).transform(lambda x: x.sum()),
+        )
+
+        # SeriesGroupBy
+        assert_eq(
+            ddf.groupby(grouper(ddf))["B"].transform(lambda x: x.sum()),
+            pdf.groupby(grouper(pdf))["B"].transform(lambda x: x.sum()),
+        )
+
+        # DataFrameGroupBy with column slice
+        assert_eq(
+            ddf.groupby(grouper(ddf))[["B", "C"]].transform(lambda x: x.sum()),
+            pdf.groupby(grouper(pdf))[["B", "C"]].transform(lambda x: x.sum()),
         )
 
 
@@ -1974,3 +2091,29 @@ def test_groupby_cov(columns):
         assert_eq(expected, result, check_index=False)
     else:
         assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("transformation", [lambda x: x.sum(), np.sum, "sum"])
+def test_groupby_transform_funcs(transformation):
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4] * 5,
+            "B": np.random.randn(20),
+            "C": np.random.randn(20),
+            "D": np.random.randn(20),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 3)
+
+    with pytest.warns(UserWarning):
+        # DataFrame
+        assert_eq(
+            pdf.groupby("A").transform(transformation),
+            ddf.groupby("A").transform(transformation),
+        )
+
+        # Series
+        assert_eq(
+            pdf.groupby("A")["B"].transform(transformation),
+            ddf.groupby("A")["B"].transform(transformation),
+        )
