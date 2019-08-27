@@ -503,27 +503,64 @@ def hash_df_pandas(dfs):
 
 
 # ---------------------------------
-# df_index_split
+# group_scatter
 # ---------------------------------
 
 
-df_index_split_dispatch = Dispatch("df_index_split")
+group_scatter_dispatch = Dispatch("group_scatter")
 
 
-def df_index_split(dfs, c, k):
-    """Split dataframe into "k" parts, using index "c"
+def group_scatter(dfs, ind, stage, k, npartitions):
+    """Scatter dataframe into "k" parts, using index "ind"
     """
-    func = df_index_split_dispatch.dispatch(type(dfs))
-    return func(dfs, c, k)
+    func = group_scatter_dispatch.dispatch(type(dfs))
+    return func(dfs, ind, stage, k, npartitions)
 
 
-@df_index_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def df_index_split_pandas(df, c, k):
-    indexer, locations = groupsort_indexer(c, k)
+@group_scatter_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def group_scatter_pandas(df, ind, stage, k, npartitions):
+    c = ind.values
+    typ = np.min_scalar_type(npartitions * 2)
+
+    c = np.mod(c, npartitions).astype(typ, copy=False)
+    np.floor_divide(c, k ** stage, out=c)
+    np.mod(c, k, out=c)
+
+    indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+
     return dict(zip(range(k), parts))
+
+
+# ---------------------------------
+# group_scatter_2
+# ---------------------------------
+
+
+group_scatter_2_dispatch = Dispatch("group_scatter_2")
+
+
+def group_scatter_2(dfs, col):
+    """Scatter dataframe into "k" parts, using index "c"
+    """
+    func = group_scatter_2_dispatch.dispatch(type(dfs))
+    return func(dfs, col)
+
+
+@group_scatter_2_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def group_scatter_2_pandas(df, col):
+    if not len(df):
+        return {}, df
+    ind = df[col].values.astype(np.int64)
+    n = ind.max() + 1
+    indexer, locations = groupsort_indexer(ind.view(np.int64), n)
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+    result2 = dict(zip(range(n), parts))
+    return result2, df.iloc[:0]
 
 
 def assign_index(df, ind):

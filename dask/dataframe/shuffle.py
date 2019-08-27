@@ -566,13 +566,7 @@ def set_partitions_pre(s, divisions):
 
 
 def shuffle_group_2(df, col):
-    if not len(df):
-        return {}, df
-    ind = df[col].values.astype(np.int64)
-    n = ind.max() + 1
-
-    result2 = methods.df_index_split(df, ind.view(np.int64), n)
-    return result2, df.iloc[:0]
+    return methods.group_scatter_2(df, col)
 
 
 def shuffle_group_get(g_head, i):
@@ -613,15 +607,7 @@ def shuffle_group(df, col, stage, k, npartitions):
         ind = df[col]
     else:
         ind = methods.hash_df(df)
-
-    c = ind.values
-    typ = np.min_scalar_type(npartitions * 2)
-
-    c = np.mod(c, npartitions).astype(typ, copy=False)
-    np.floor_divide(c, k ** stage, out=c)
-    np.mod(c, k, out=c)
-
-    return methods.df_index_split(df, c.astype(np.int64), k)
+    return methods.group_scatter(df, ind, stage, k, npartitions)
 
 
 def shuffle_group_3(df, col, npartitions, p):
