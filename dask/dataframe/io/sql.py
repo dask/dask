@@ -188,13 +188,18 @@ def read_sql_table(
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.select(columns).where(sql.and_(index >= lower, cond)).select_from(table)
-        parts.append(delayed(_read_sql_chunk)(q, uri, meta, engine_kwargs=engine_kwargs, **kwargs))
+        parts.append(
+            delayed(_read_sql_chunk)(
+                q, uri, meta, engine_kwargs=engine_kwargs, **kwargs
+            )
+        )
 
     return from_delayed(parts, meta, divisions=divisions)
 
 
 def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     import sqlalchemy as sa
+
     engine_kwargs = engine_kwargs if engine_kwargs else {}
     conn = sa.create_engine(uri, **engine_kwargs)
     df = pd.read_sql(q, conn, **kwargs)
