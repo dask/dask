@@ -320,7 +320,8 @@ def test_extra_connection_engine_keywords(capsys, db):
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": True}
     ).compute()
     out, err = capsys.readouterr()
-    assert "SELECT" in out
+    assert "WHERE test.number >= ? AND test.number < ?" in out
+    assert "WHERE test.number >= ? AND test.number <= ?" in out
     assert_eq(data, df)
 
 
