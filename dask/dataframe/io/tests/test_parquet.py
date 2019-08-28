@@ -952,7 +952,10 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
         dd.read_parquet(
-            str(tmpdir), engine="pyarrow", gather_statistics=False
+            str(tmpdir),
+            engine="pyarrow",
+            gather_statistics=False,
+            dataset={"validate_schema": True},
         ).compute()
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
@@ -1874,3 +1877,44 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)
+
+
+def test_timeseries_nulls_in_schema(tmpdir, engine):
+    tmp_path = str(tmpdir)
+    ddf2 = (
+        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
+        .reset_index()
+        .map_partitions(lambda x: x.loc[:5])
+    )
+    ddf2 = ddf2.set_index("x").reset_index().persist()
+    ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
+
+    ddf2.to_parquet(tmp_path, engine=engine)
+    ddf_read = dd.read_parquet(tmp_path, engine=engine)
+
+    assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
+
+    # Can force schema validation on each partition in pyarrow
+    if engine == "pyarrow":
+        # The schema mismatch should raise an error
+        with pytest.raises(ValueError):
+            ddf_read = dd.read_parquet(
+                tmp_path, dataset={"validate_schema": True}, engine=engine
+            )
+        # There should be no error if you specify a schema on write
+        schema = pa.schema(
+            [
+                ("x", pa.float64()),
+                ("timestamp", pa.timestamp("ns")),
+                ("id", pa.int64()),
+                ("name", pa.string()),
+                ("y", pa.float64()),
+            ]
+        )
+        ddf2.to_parquet(tmp_path, schema=schema, engine=engine)
+        assert_eq(
+            dd.read_parquet(tmp_path, dataset={"validate_schema": True}, engine=engine),
+            ddf2,
+            check_divisions=False,
+            check_index=False,
+        )
