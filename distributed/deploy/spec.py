@@ -375,8 +375,7 @@ class SpecCluster(Cluster):
             return
 
         while len(self.worker_spec) < n:
-            k, spec = self.new_worker_spec()
-            self.worker_spec[k] = spec
+            self.worker_spec.update(self.new_worker_spec())
 
         self.loop.add_callback(self._correct_state)
 
@@ -385,8 +384,7 @@ class SpecCluster(Cluster):
 
         Returns
         -------
-        name: identifier for worker
-        spec: dict
+        d: dict mapping names to worker specs
 
         See Also
         --------
@@ -395,7 +393,7 @@ class SpecCluster(Cluster):
         while self._i in self.worker_spec:
             self._i += 1
 
-        return self._i, self.new_spec
+        return {self._i: self.new_spec}
 
     @property
     def _supports_scaling(self):

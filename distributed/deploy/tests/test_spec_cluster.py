@@ -152,7 +152,7 @@ async def test_new_worker_spec(cleanup):
     class MyCluster(SpecCluster):
         def new_worker_spec(self):
             i = len(self.worker_spec)
-            return i, {"cls": Worker, "options": {"nthreads": i + 1}}
+            return {i: {"cls": Worker, "options": {"nthreads": i + 1}}}
 
     async with MyCluster(asynchronous=True, scheduler=scheduler) as cluster:
         cluster.scale(3)
