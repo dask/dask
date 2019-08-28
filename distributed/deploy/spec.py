@@ -22,7 +22,7 @@ class ProcessInterface:
     It should implement the methods below, like ``start`` and ``close``
     """
 
-    def __init__(self):
+    def __init__(self, scheduler=None, name=None):
         self.address = None
         self.external_address = None
         self.lock = asyncio.Lock()
