@@ -1325,6 +1325,19 @@ def test_columns_name(tmpdir, engine):
     assert_eq(result, df)
 
 
+def check_compression(engine, filename, compression):
+    if engine == "fastparquet":
+        pf = fastparquet.ParquetFile(filename)
+        md = pf.fmd.row_groups[0].columns[0].meta_data
+        if compression is None:
+            assert md.total_compressed_size == md.total_uncompressed_size
+        else:
+            assert md.total_compressed_size != md.total_uncompressed_size
+    else:
+        # TODO: does pyarrow write this information?
+        pass
+
+
 @pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
@@ -1338,6 +1351,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, ddf)
+    check_compression(engine, fn, compression)
 
 
 @pytest.fixture(
