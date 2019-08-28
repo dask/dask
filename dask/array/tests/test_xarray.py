@@ -19,6 +19,6 @@ def test_asarray():
 
 
 def test_asanyarray():
-    y = da.asarray(xr.DataArray([1, 2, 3.0]))
+    y = da.asanyarray(xr.DataArray([1, 2, 3.0]))
     assert isinstance(y, da.array)
     assert_eq(y, y)
