@@ -487,45 +487,24 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
 # ---------------------------------
 
 
-hash_df_dispatch = Dispatch("hash_df")
+hash_df = Dispatch("hash_df")
 
 
-def hash_df(dfs):
-    """Hash each row of df, returning a Series-like object
-    """
-    func = hash_df_dispatch.dispatch(type(dfs))
-    return func(dfs)
-
-
-@hash_df_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+@hash_df.register((pd.DataFrame, pd.Series, pd.Index))
 def hash_df_pandas(dfs):
     return hash_pandas_object(dfs, index=False)
 
 
 # ---------------------------------
-# group_scatter
+# group_split
 # ---------------------------------
 
 
-group_scatter_dispatch = Dispatch("group_scatter")
+group_split = Dispatch("group_split")
 
 
-def group_scatter(dfs, ind, stage, k, npartitions):
-    """Scatter dataframe into "k" parts, using index "ind"
-    """
-    func = group_scatter_dispatch.dispatch(type(dfs))
-    return func(dfs, ind, stage, k, npartitions)
-
-
-@group_scatter_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def group_scatter_pandas(df, ind, stage, k, npartitions):
-    c = ind.values
-    typ = np.min_scalar_type(npartitions * 2)
-
-    c = np.mod(c, npartitions).astype(typ, copy=False)
-    np.floor_divide(c, k ** stage, out=c)
-    np.mod(c, k, out=c)
-
+@group_split.register((pd.DataFrame, pd.Series, pd.Index))
+def group_split_pandas(df, c, k):
     indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
@@ -535,22 +514,15 @@ def group_scatter_pandas(df, ind, stage, k, npartitions):
 
 
 # ---------------------------------
-# group_scatter_2
+# group_split_2
 # ---------------------------------
 
 
-group_scatter_2_dispatch = Dispatch("group_scatter_2")
+group_split_2 = Dispatch("group_split_2")
 
 
-def group_scatter_2(dfs, col):
-    """Scatter dataframe into "k" parts, using index "c"
-    """
-    func = group_scatter_2_dispatch.dispatch(type(dfs))
-    return func(dfs, col)
-
-
-@group_scatter_2_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def group_scatter_2_pandas(df, col):
+@group_split_2.register((pd.DataFrame, pd.Series, pd.Index))
+def group_split_2_pandas(df, col):
     if not len(df):
         return {}, df
     ind = df[col].values.astype(np.int64)
