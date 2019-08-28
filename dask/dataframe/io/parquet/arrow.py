@@ -32,7 +32,7 @@ def _get_md_row_groups(pieces):
     return row_groups
 
 
-def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
+def _determine_dataset_parts(fs, paths, gather_statistics, dataset_kwargs):
     """ Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
@@ -40,7 +40,6 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
     dataset.
     """
     parts = []
-    dataset_kwargs = kwargs.get("dataset", {})
     if len(paths) > 1:
         if gather_statistics is not False:
             # This scans all the files
@@ -105,7 +104,7 @@ class ArrowEngine(Engine):
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below)
         parts, dataset = _determine_dataset_parts(
-            fs, paths, gather_statistics, **kwargs
+            fs, paths, gather_statistics, kwargs.get("dataset", {})
         )
         if dataset.partitions is not None:
             partitions = [
