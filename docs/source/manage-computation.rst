@@ -128,7 +128,7 @@ tasks directly to the cluster with ``client.scatter``, ``client.submit`` or ``cl
 .. code-block:: python
 
    futures = client.scatter(args)                        # Send data
-   future = client.submit(function, *args, **kwrags)     # Send single task
+   future = client.submit(function, *args, **kwargs)     # Send single task
    futures = client.map(function, sequence, **kwargs)    # Send many tasks
 
 In this case ``*args`` or ``**kwargs`` can be normal Python objects, like ``1``
