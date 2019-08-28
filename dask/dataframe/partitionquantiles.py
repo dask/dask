@@ -410,10 +410,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         return ()
     random_state = np.random.RandomState(state)
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
-    if hasattr(df, "values_host"):
-        data = df.values_host
-    else:
-        data = df.values
+    data = df.values
     interpolation = "linear"
     if is_categorical_dtype(data):
         data = data.codes
