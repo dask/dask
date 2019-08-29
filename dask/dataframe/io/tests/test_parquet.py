@@ -1334,8 +1334,24 @@ def check_compression(engine, filename, compression):
         else:
             assert md.total_compressed_size != md.total_uncompressed_size
     else:
-        # TODO: does pyarrow write this information?
-        pass
+        metadata = pa.parquet.ParquetDataset(filename).metadata
+        names = metadata.schema.names
+        for i in range(metadata.num_row_groups):
+            row_group = metadata.row_group(i)
+            for j in range(len(names)):
+                column = row_group.column(j)
+                if compression is None:
+                    assert (
+                        column.total_compressed_size == column.total_uncompressed_size
+                    )
+                else:
+                    compress_expect = compression
+                    if compression == "default":
+                        compress_expect = "snappy"
+                    assert compress_expect.lower() == column.compression.lower()
+                    assert (
+                        column.total_compressed_size != column.total_uncompressed_size
+                    )
 
 
 @pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
