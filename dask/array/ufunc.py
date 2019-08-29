@@ -98,7 +98,7 @@ class ufunc(object):
     }
 
     def __init__(self, ufunc):
-        if not isinstance(ufunc, (np.ufunc, da_frompyfunc)):
+        if not isinstance(ufunc, (np.ufunc, np.ma.core._MaskedUFunc, da_frompyfunc)):
             raise TypeError(
                 "must be an instance of `ufunc` or "
                 "`da_frompyfunc`, got `%s" % type(ufunc).__name__
@@ -211,7 +211,7 @@ log2 = ufunc(np.log2)
 log10 = ufunc(np.log10)
 log1p = ufunc(np.log1p)
 expm1 = ufunc(np.expm1)
-sqrt = ufunc(np.sqrt)
+sqrt = ufunc(np.ma.sqrt)
 square = ufunc(np.square)
 cbrt = ufunc(np.cbrt)
 reciprocal = ufunc(np.reciprocal)
