@@ -241,4 +241,4 @@ def test_str_accessor_expand_more_columns():
     s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
     ds = dd.from_pandas(s, npartitions=2)
 
-    s.str.split(n=10, expand=True).compute()
+    ds.str.split(n=10, expand=True).compute()

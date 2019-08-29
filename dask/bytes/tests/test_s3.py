@@ -9,6 +9,7 @@ from distutils.version import LooseVersion
 import pytest
 import numpy as np
 
+
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto")

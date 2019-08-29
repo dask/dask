@@ -166,9 +166,6 @@ def test_apply_gufunc_pass_additional_kwargs():
     assert_eq(ret, np.array(1.0, dtype="f"))
 
 
-@pytest.mark.xfail(
-    reason="Currently np.einsum doesn't seem to broadcast correctly for this case"
-)
 def test_apply_gufunc_02():
     def outer_product(x, y):
         return np.einsum("...i,...j->...ij", x, y)

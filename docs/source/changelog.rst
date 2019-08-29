@@ -1,6 +1,76 @@
 Changelog
 =========
 
+2.3.0 / 2019-08-16
+------------------
+
+Array
++++++
+
+- Raise exception when ``from_array`` is given a dask array (:pr:`5280`) `David Hoese`_
+- Avoid adjusting gufunc's meta dtype twice (:pr:`5274`) `Peter Andreas Entschev`_
+- Add ``meta=`` keyword to map_blocks and add test with sparse (:pr:`5269`) `Matthew Rocklin`_
+- Add rollaxis and moveaxis (:pr:`4822`) `Tobias de Jong`_
+- Always increment old chunk index (:pr:`5256`) `James Bourbeau`_
+- Shuffle dask array (:pr:`3901`) `Tom Augspurger`_
+- Fix ordering when indexing a dask array with a bool dask array (:pr:`5151`) `James Bourbeau`_
+
+Bag
++++
+
+- Add workaround for memory leaks in bag generators (:pr:`5208`) `Marco Neumann`_
+
+Core
+++++
+
+- Set strict xfail option (:pr:`5220`) `James Bourbeau`_
+- test-upstream (:pr:`5267`) `Tom Augspurger`_
+- Fixed HDFS CI failure (:pr:`5234`) `Tom Augspurger`_
+- Error nicely if no file size inferred (:pr:`5231`) `Jim Crist`_
+- A few changes to ``config.set`` (:pr:`5226`) `Jim Crist`_
+- Fixup black string normalization (:pr:`5227`) `Jim Crist`_
+- Pin NumPy in windows tests (:pr:`5228`) `Jim Crist`_
+- Ensure parquet tests are skipped if fastparquet and pyarrow not installed (:pr:`5217`) `James Bourbeau`_
+- Add fsspec to readthedocs (:pr:`5207`) `Matthew Rocklin`_
+- Bump NumPy and Pandas to 1.17 and 0.25 in CI test (:pr:`5179`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Fix ``DataFrame.query`` docstring (incorrect numexpr API) (:pr:`5271`) `Doug Davis`_
+- Parquet metadata-handling improvements (:pr:`5218`) `Richard J Zamora`_
+- Improve messaging around sorted parquet columns for index (:pr:`5265`) `Martin Durant`_
+- Add ``rearrange_by_divisions`` and ``set_index`` support for cudf (:pr:`5205`) `Richard J Zamora`_
+- Fix ``groupby.std()`` with integer colum names (:pr:`5096`) `Nicolas Hug`_
+- Add ``Series.__iter__`` (:pr:`5071`) `Blane`_
+- Generalize ``hash_pandas_object`` to work for non-pandas backends (:pr:`5184`) `GALI PREM SAGAR`_
+- Add rolling cov (:pr:`5154`) `Ivars Geidans`_
+- Add columns argument in drop function (:pr:`5223`) `Henrique Ribeiro`_
+
+Documentation
++++++++++++++
+
+- Update institutional FAQ doc (:pr:`5277`) `Matthew Rocklin`_
+- Add draft of institutional FAQ (:pr:`5214`) `Matthew Rocklin`_
+- Make boxes for dask-spark page (:pr:`5249`) `Martin Durant`_
+- Add motivation for shuffle docs (:pr:`5213`) `Matthew Rocklin`_
+- Fix links and API entries for best-practices (:pr:`5246`) `Martin Durant`_
+- Remove "bytes" (internal data ingestion) doc page (:pr:`5242`) `Martin Durant`_
+- Redirect from our local distributed page to distributed.dask.org (:pr:`5248`) `Matthew Rocklin`_
+- Cleanup API page (:pr:`5247`) `Matthew Rocklin`_
+- Remove excess endlines from install docs (:pr:`5243`) `Matthew Rocklin`_
+- Remove item list in phases of computation doc (:pr:`5245`) `Martin Durant`_
+- Remove custom graphs from the TOC sidebar (:pr:`5241`) `Matthew Rocklin`_
+- Remove experimental status of custom collections (:pr:`5236`) `James Bourbeau`_
+- Adds table of contents to Why Dask? (:pr:`5244`) `James Bourbeau`_
+- Moves bag overview to top-level bag page (:pr:`5240`) `James Bourbeau`_
+- Remove use-cases in favor of stories.dask.org (:pr:`5238`) `Matthew Rocklin`_
+- Removes redundant TOC information in index.rst (:pr:`5235`) `James Bourbeau`_
+- Elevate dashboard in distributed diagnostics documentation (:pr:`5239`) `Martin Durant`_
+- Updates "add" layer in HLG docs example (:pr:`5237`) `James Bourbeau`_
+- Update GUFunc documentation (:pr:`5232`) `Matthew Rocklin`_
+
+
 2.2.0 / 2019-08-01
 ------------------
 
@@ -2362,3 +2432,7 @@ Other
 .. _`Loïc Estève`: https://github.com/lesteve
 .. _`Xavier Holt`: https://github.com/xavi-ai
 .. _`Sarah Bird`: https://github.com/birdsarah
+.. _`Doug Davis`: https://github.com/douglasdavis
+.. _`Nicolas Hug`: https://github.com/NicolasHug
+.. _`Blane`: https://github.com/BlaneG
+.. _`Ivars Geidans`: https://github.com/ivarsfg

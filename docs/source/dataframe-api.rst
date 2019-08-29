@@ -233,6 +233,7 @@ Groupby Operations
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
    DataFrameGroupBy.cov
+   DataFrameGroupBy.corr
    DataFrameGroupBy.first
    DataFrameGroupBy.last
    DataFrameGroupBy.idxmin
