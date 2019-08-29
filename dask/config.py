@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import ast
 import os
+import string
 import sys
 import threading
 
@@ -37,6 +38,14 @@ config_lock = threading.Lock()
 
 
 defaults = []
+
+
+class KeyExpander(string.Formatter):
+    def format_field(self, value, format_spec):
+        return get(format_spec, config=value)
+
+
+expander = KeyExpander()
 
 
 def canonical_name(k, config):
@@ -302,9 +311,11 @@ class set(object):
 
             if arg is not None:
                 for key, value in arg.items():
+                    key = expander.format(key, config=config)
                     self._assign(key.split("."), value, config)
             if kwargs:
                 for key, value in kwargs.items():
+                    key = expander.format(key, config=config)
                     self._assign(key.split("__"), value, config)
 
     def __enter__(self):
@@ -448,6 +459,7 @@ def get(key, default=no_default, config=config):
     --------
     dask.config.set
     """
+    key = expander.format(key, config=config)
     keys = key.split(".")
     result = config
     for k in keys:

@@ -187,13 +187,16 @@ def test_collect_env_none():
 
 
 def test_get():
-    d = {"x": 1, "y": {"a": 2}}
+    d = {"x": 1, "y": {"a": 2}, "z": "x"}
 
     assert get("x", config=d) == 1
     assert get("y.a", config=d) == 2
     assert get("y.b", 123, config=d) == 123
+    assert get("{config:z}", config=d) == 1
     with pytest.raises(KeyError):
         get("y.b", config=d)
+    with pytest.raises(KeyError):
+        get("{config:y.b}", config=d)
 
 
 def test_ensure_file(tmpdir):
@@ -257,6 +260,10 @@ def test_set():
     d = {}
     set({"abc.x": 123}, config=d)
     assert d["abc"]["x"] == 123
+
+    d = {"z": "x.y"}
+    set({"{config:z}": 123}, config=d)
+    assert d["x"]["y"] == 123
 
 
 def test_set_kwargs():
