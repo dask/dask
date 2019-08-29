@@ -243,7 +243,7 @@ Processes and Threads
 ---------------------
 
 If you're doing mostly numeric work with Numpy, Pandas, Scikit-Learn, Numba,
-and other libraries that release the GIL, then use mostly threads.  If you're
+and other libraries that release the `GIL <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>`_, then use mostly threads.  If you're
 doing work on text data or Python collections like lists and dicts then use
 mostly processes.
 
@@ -252,5 +252,5 @@ you should probably split things up into at least a few processes regardless.
 Python can be highly productive with 10 threads per process with numeric work,
 but not 50 threads.
 
-For more information on how to set processes and threads, see
+For more information on threads, processes, and how to configure them in Dask, see
 :doc:`the scheduler documentation <scheduling>`.
