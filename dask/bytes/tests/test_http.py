@@ -7,6 +7,7 @@ import fsspec
 from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
+from dask.bytes._compatibility import FSSPEC_042
 from dask.compatibility import PY2
 from dask.utils import tmpdir
 
@@ -119,7 +120,13 @@ def test_errors(dir_server):
         with f as f:
             f.read()
     f = open_files("http://nohost/")[0]
-    with pytest.raises(requests.exceptions.RequestException):
+
+    if FSSPEC_042:
+        expected = FileNotFoundError
+    else:
+        expected = requests.exceptions.RequestException
+
+    with pytest.raises(expected):
         with f as f:
             f.read()
     root = "http://localhost:8999/"
@@ -166,7 +173,7 @@ def test_parquet():
     assert df.columns.tolist() == ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696")
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696", strict=False)
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts

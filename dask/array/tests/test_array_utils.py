@@ -3,19 +3,13 @@ import pytest
 
 import dask.array as da
 from dask.array.utils import meta_from_array, assert_eq
-from dask.array.numpy_compat import _numpy_117
 
 asarrays = [np.asarray]
 
 try:
     import sparse
 
-    asarrays.append(
-        pytest.param(
-            sparse.COO.from_numpy,
-            marks=pytest.mark.xfail(_numpy_117, reason="sparse-257"),
-        )
-    )
+    asarrays.append(sparse.COO.from_numpy)
 except ImportError:
     pass
 

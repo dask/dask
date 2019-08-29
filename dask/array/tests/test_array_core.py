@@ -240,7 +240,6 @@ def test_Array_computation():
     LooseVersion(np.__version__) < "1.14.0",
     reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
 )
-@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.inv` breaking")
 def test_Array_numpy_gufunc_call__array_ufunc__01():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -254,7 +253,6 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
     LooseVersion(np.__version__) < "1.14.0",
     reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
 )
-@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.eig` breaking")
 def test_Array_numpy_gufunc_call__array_ufunc__02():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -1421,6 +1419,16 @@ def test_repr():
     assert len(str(d)) < 1000
 
 
+def test_repr_meta():
+    d = da.ones((4, 4), chunks=(2, 2))
+    assert "chunktype=numpy.ndarray" in repr(d)
+
+    # Test non-numpy meta
+    sparse = pytest.importorskip("sparse")
+    s = d.map_blocks(sparse.COO)
+    assert "chunktype=sparse.COO" in repr(s)
+
+
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
     d = da.from_array(x, chunks=((2, 2, 2, 2)))
@@ -2326,6 +2334,13 @@ def test_from_array_copy():
     assert y.compute() is not y_c.compute()
 
 
+def test_from_array_dask_array():
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=(1, 2))
+    with pytest.raises(ValueError):
+        da.from_array(dx)
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
@@ -2387,6 +2402,13 @@ def test_asanyarray_dataframe():
     dx = da.asanyarray(ddf.x)
     assert isinstance(dx, da.Array)
 
+    assert_eq(x, dx)
+
+
+def test_asanyarray_datetime64():
+    x = np.array(["2000-01-01"], dtype="datetime64")
+    dx = da.asanyarray(x)
+    assert isinstance(dx, da.Array)
     assert_eq(x, dx)
 
 

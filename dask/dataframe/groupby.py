@@ -272,8 +272,8 @@ class Aggregation(object):
         self.__name__ = name
 
 
-def _groupby_aggregate(df, aggfunc=None, levels=None):
-    return aggfunc(df.groupby(level=levels, sort=False))
+def _groupby_aggregate(df, aggfunc=None, levels=None, **kwargs):
+    return aggfunc(df.groupby(level=levels, sort=False), **kwargs)
 
 
 def _apply_chunk(df, *index, **kwargs):
@@ -283,11 +283,11 @@ def _apply_chunk(df, *index, **kwargs):
     g = _groupby_raise_unaligned(df, by=index)
 
     if is_series_like(df) or columns is None:
-        return func(g)
+        return func(g, **kwargs)
     else:
         if isinstance(columns, (tuple, list, set, pd.Index)):
             columns = list(columns)
-        return func(g[columns])
+        return func(g[columns], **kwargs)
 
 
 def _var_chunk(df, *index):
@@ -336,7 +336,7 @@ def _cov_combine(g, levels):
     return g
 
 
-def _cov_finalizer(df, cols):
+def _cov_finalizer(df, cols, std=False):
     vals = []
     num_elements = len(list(it.product(cols, repeat=2)))
     num_cols = len(cols)
@@ -354,6 +354,12 @@ def _cov_finalizer(df, cols):
         div = n - 1
         div[div < 0] = 0
         val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
+        if std:
+            ii = "%s%s" % (i, i)
+            jj = "%s%s" % (j, j)
+            std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
+            std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
+            val = val / np.sqrt(std_val_i * std_val_j)
 
         vals[idx] = val
         if i != j:
@@ -379,6 +385,19 @@ def _mul_cols(df, cols):
 
 
 def _cov_chunk(df, *index):
+    """Covariance Chunk Logic
+
+    Parameters
+    ----------
+    df : Pandas.DataFrame
+    std : bool, optional
+        When std=True we are calculating with Correlation
+
+    Returns
+    -------
+    tuple
+        Processed X, Multipled Cols,
+    """
     if is_series_like(df):
         df = df.to_frame()
     df = df.copy()
@@ -406,7 +425,7 @@ def _cov_chunk(df, *index):
     return (x, mul, n, col_mapping)
 
 
-def _cov_agg(_t, levels, ddof):
+def _cov_agg(_t, levels, ddof, std=False):
     sums = []
     muls = []
     counts = []
@@ -427,7 +446,7 @@ def _cov_agg(_t, levels, ddof):
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
         .groupby(level=levels)
-        .apply(_cov_finalizer, cols=cols)
+        .apply(_cov_finalizer, cols=cols, std=std)
     )
 
     inv_col_mapping = {v: k for k, v in col_mapping.items()}
@@ -1026,7 +1045,16 @@ class _GroupBy(object):
         grouped = sample.groupby(index_meta, group_keys=self.group_keys)
         return _maybe_slice(grouped, self._slice)
 
-    def _aca_agg(self, token, func, aggfunc=None, split_every=None, split_out=1):
+    def _aca_agg(
+        self,
+        token,
+        func,
+        aggfunc=None,
+        split_every=None,
+        split_out=1,
+        chunk_kwargs={},
+        aggregate_kwargs={},
+    ):
         if aggfunc is None:
             aggfunc = func
 
@@ -1041,12 +1069,12 @@ class _GroupBy(object):
             if not isinstance(self.index, list)
             else [self.obj] + self.index,
             chunk=_apply_chunk,
-            chunk_kwargs=dict(chunk=func, columns=columns),
+            chunk_kwargs=dict(chunk=func, columns=columns, **chunk_kwargs),
             aggregate=_groupby_aggregate,
             meta=meta,
             token=token,
             split_every=split_every,
-            aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
+            aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels, **aggregate_kwargs),
             split_out=split_out,
             split_out_setup=split_out_on_index,
         )
@@ -1235,6 +1263,28 @@ class _GroupBy(object):
             token="max", func=M.max, split_every=split_every, split_out=split_out
         )
 
+    @derived_from(pd.DataFrame)
+    def idxmin(self, split_every=None, split_out=1, axis=None, skipna=True):
+        return self._aca_agg(
+            token="idxmin",
+            func=M.idxmin,
+            aggfunc=M.first,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=dict(skipna=skipna),
+        )
+
+    @derived_from(pd.DataFrame)
+    def idxmax(self, split_every=None, split_out=1, axis=None, skipna=True):
+        return self._aca_agg(
+            token="idxmax",
+            func=M.idxmax,
+            aggfunc=M.first,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=dict(skipna=skipna),
+        )
+
     @derived_from(pd.core.groupby.GroupBy)
     def count(self, split_every=None, split_out=1):
         return self._aca_agg(
@@ -1295,14 +1345,23 @@ class _GroupBy(object):
         return result
 
     @derived_from(pd.DataFrame)
-    def cov(self, ddof=1, split_every=None, split_out=1):
+    def corr(self, ddof=1, split_every=None, split_out=1):
+        """Groupby correlation:
+        corr(X, Y) = cov(X, Y) / (std_x * std_y)
+        """
+        return self.cov(split_every=split_every, split_out=split_out, std=True)
+
+    @derived_from(pd.DataFrame)
+    def cov(self, ddof=1, split_every=None, split_out=1, std=False):
         """Groupby covariance is accomplished by
 
         1. Computing intermediate values for sum, count, and the product of
            all columns: a b c -> a*a, a*b, b*b, b*c, c*c.
 
         2. The values are then aggregated and the final covariance value is calculated:
-           cov(X,Y) = X*Y - Xbar * Ybar
+           cov(X, Y) = X*Y - Xbar * Ybar
+
+        When `std` is True calculate Correlation
         """
 
         levels = _determine_levels(self.index)
@@ -1323,7 +1382,7 @@ class _GroupBy(object):
             aggregate=_cov_agg,
             combine=_cov_combine,
             token=self._token_prefix + "cov",
-            aggregate_kwargs={"ddof": ddof, "levels": levels},
+            aggregate_kwargs={"ddof": ddof, "levels": levels, "std": std},
             combine_kwargs={"levels": levels},
             split_every=split_every,
             split_out=split_out,

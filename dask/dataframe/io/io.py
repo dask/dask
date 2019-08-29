@@ -516,7 +516,7 @@ def to_records(df):
     Examples
     --------
     >>> df.to_records()  # doctest: +SKIP
-    dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
+    dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,), chunktype=numpy.ndarray>  # noqa: E501
 
     See Also
     --------

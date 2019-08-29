@@ -391,7 +391,18 @@ def normalize_arg(x):
         return x
 
 
-def map_blocks(func, *args, **kwargs):
+def map_blocks(
+    func,
+    *args,
+    name=None,
+    token=None,
+    dtype=None,
+    chunks=None,
+    drop_axis=[],
+    new_axis=None,
+    meta=None,
+    **kwargs
+):
     """ Map a function across all blocks of a dask array.
 
     Parameters
@@ -481,7 +492,7 @@ def map_blocks(func, *args, **kwargs):
     ...     return np.array([a.max(), b.max()])
 
     >>> da.map_blocks(func, x, y, chunks=(2,), dtype='i8')
-    dask.array<func, shape=(20,), dtype=int64, chunksize=(2,)>
+    dask.array<func, shape=(20,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
 
     >>> _.compute()
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
@@ -523,7 +534,7 @@ def map_blocks(func, *args, **kwargs):
     ...     return np.arange(loc[0], loc[1])
 
     >>> da.map_blocks(func, chunks=((4, 4),), dtype=np.float_)
-    dask.array<func, shape=(8,), dtype=float64, chunksize=(4,)>
+    dask.array<func, shape=(8,), dtype=float64, chunksize=(4,), chunktype=numpy.ndarray>
 
     >>> _.compute()
     array([0, 1, 2, 3, 4, 5, 6, 7])
@@ -532,7 +543,7 @@ def map_blocks(func, *args, **kwargs):
     the optional ``token`` keyword argument.
 
     >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
-    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,)>
+    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
     """
     if not callable(func):
         msg = (
@@ -541,17 +552,11 @@ def map_blocks(func, *args, **kwargs):
             "   or:   da.map_blocks(function, x, y, z)"
         )
         raise TypeError(msg % type(func).__name__)
-    name = kwargs.pop("name", None)
-    token = kwargs.pop("token", None)
     if token:
         warnings.warn("The token= keyword to map_blocks has been moved to name=")
         name = token
 
     name = "%s-%s" % (name or funcname(func), tokenize(func, *args, **kwargs))
-    dtype = kwargs.pop("dtype", None)
-    chunks = kwargs.pop("chunks", None)
-    drop_axis = kwargs.pop("drop_axis", [])
-    new_axis = kwargs.pop("new_axis", None)
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -577,7 +582,7 @@ def map_blocks(func, *args, **kwargs):
 
     original_kwargs = kwargs
 
-    if dtype is None:
+    if dtype is None and meta is None:
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
@@ -606,6 +611,7 @@ def map_blocks(func, *args, **kwargs):
         dtype=dtype,
         concatenate=True,
         align_arrays=False,
+        meta=meta,
         **kwargs
     )
 
@@ -1147,15 +1153,17 @@ class Array(DaskMethodsMixin):
 
         >>> import dask.array as da
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
-        dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
+        dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5), chunktype=numpy.ndarray>
         """
         chunksize = str(self.chunksize)
         name = self.name.rsplit("-", 1)[0]
-        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" % (
+        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s, chunktype=%s.%s>" % (
             name,
             self.shape,
             self.dtype,
             chunksize,
+            type(self._meta).__module__.split(".")[0],
+            type(self._meta).__name__,
         )
 
     def _repr_html_(self):
@@ -2628,6 +2636,10 @@ def from_array(
     >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
     >>> a = da.from_array(x)  # doctest: +SKIP
     """
+    if isinstance(x, Array):
+        raise ValueError(
+            "Array is already a dask array. Use 'asarray' or " "'rechunk' instead."
+        )
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
@@ -2880,7 +2892,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     >>> value = dask.delayed(np.ones)(5)
     >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
-    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
+    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
@@ -3559,18 +3571,20 @@ def asarray(a, **kwargs):
     >>> import numpy as np
     >>> x = np.arange(3)
     >>> da.asarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
 
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
     if isinstance(a, Array):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
+    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+        return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        a = stack(a)
+        return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
@@ -3597,17 +3611,17 @@ def asanyarray(a):
     >>> import numpy as np
     >>> x = np.arange(3)
     >>> da.asanyarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
 
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asanyarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
     if isinstance(a, Array):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif hasattr(a, "data") and type(a).__module__.startswith("xarray."):
+    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
         return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
