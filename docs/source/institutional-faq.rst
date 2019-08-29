@@ -315,7 +315,7 @@ No, but it's very close.  That being said your data scientists will still
 have to learn some things.
 
 What we find is that the Numpy/Pandas/Scikit-Learn APIs aren't the challenge
-when institutions adopt Dask.  When API consistencies do exist, even
+when institutions adopt Dask.  When API inconsistencies do exist, even
 modestly skilled programmers are able to understand why and work around them
 without much pain.
 
