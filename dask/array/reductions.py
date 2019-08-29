@@ -727,7 +727,7 @@ def moment_agg(
     if isinstance(denominator, Number):
         if denominator < 0:
             denominator = np.nan
-    else:
+    elif denominator is not np.ma.masked:
         denominator[denominator < 0] = np.nan
 
     return divide(M, denominator, dtype=dtype)
