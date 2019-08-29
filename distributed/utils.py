@@ -1453,12 +1453,13 @@ class Logs(dict):
 
     def _repr_html_(self):
         summaries = [
-            "<details>\n<summary>{title}</summary>\n{log}\n</details>".format(
-                title=title, log=log._repr_html_()
-            )
-            for title, log in self.items()
+            "<details>\n"
+            "<summary style='display:list-item'>{title}</summary>\n"
+            "{log}\n"
+            "</details>".format(title=title, log=log._repr_html_())
+            for title, log in sorted(self.items())
         ]
-        return "\n\n".join(summaries)
+        return "\n".join(summaries)
 
 
 def cli_keywords(d: dict, cls=None):
