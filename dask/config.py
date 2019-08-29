@@ -447,13 +447,16 @@ def get(key, default=no_default, config=config):
     --------
     >>> from dask import config
     >>> config.get('foo')  # doctest: +SKIP
-    {'x': 1, 'y': 2}
+    {'x': 1, 'y': 2, 'z': 'y'}
 
     >>> config.get('foo.x')  # doctest: +SKIP
     1
 
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
+
+    >>> config.get('foo.{config:foo.z}')  # doctest: +SKIP
+    2
 
     See Also
     --------
