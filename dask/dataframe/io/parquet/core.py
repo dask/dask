@@ -374,6 +374,12 @@ def to_parquet(
     """
     from dask import delayed
 
+    if compression == "default":
+        if snappy is not None:
+            compression = "snappy"
+        else:
+            compression = None
+
     partition_on = partition_on or []
     if isinstance(partition_on, string_types):
         partition_on = [partition_on]
@@ -384,11 +390,6 @@ def to_parquet(
             "partition_on=%s ."
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
-
-    if compression != "default":
-        kwargs["compression"] = compression
-    elif snappy is not None:
-        kwargs["compression"] = "snappy"
 
     if isinstance(engine, str):
         engine = get_engine(engine)
@@ -466,6 +467,7 @@ def to_parquet(
             partition_on,
             write_metadata_file,
             fmd=meta,
+            compression=compression,
             index_cols=index_cols,
             **kwargs_pass
         )
