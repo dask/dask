@@ -32,7 +32,7 @@ def _get_md_row_groups(pieces):
     return row_groups
 
 
-def _determine_dataset_parts(fs, paths, gather_statistics, dataset_kwargs):
+def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
     """ Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
@@ -43,14 +43,19 @@ def _determine_dataset_parts(fs, paths, gather_statistics, dataset_kwargs):
     if len(paths) > 1:
         if gather_statistics is not False:
             # This scans all the files
-            dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
+            dataset = pq.ParquetDataset(
+                paths, filesystem=fs, filters=filters, **dataset_kwargs
+            )
         else:
             base, fns = _analyze_paths(paths, fs)
             relpaths = [path.replace(base, "").lstrip("/") for path in paths]
             if "_metadata" in relpaths:
                 # We have a _metadata file, lets use it
                 dataset = pq.ParquetDataset(
-                    base + fs.sep + "_metadata", filesystem=fs, **dataset_kwargs
+                    base + fs.sep + "_metadata",
+                    filesystem=fs,
+                    filters=filters,
+                    **dataset_kwargs,
                 )
             else:
                 # Rely on metadata for 0th file.
@@ -67,7 +72,9 @@ def _determine_dataset_parts(fs, paths, gather_statistics, dataset_kwargs):
                 dataset_kwargs["validate_schema"] = False
             if "_metadata" in relpaths or gather_statistics is not False:
                 # Let arrow do its thing (use _metadata or scan files)
-                dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
+                dataset = pq.ParquetDataset(
+                    paths, filesystem=fs, filters=filters, **dataset_kwargs
+                )
             else:
                 # Use _common_metadata file if it is available.
                 # Otherwise, just use 0th file
@@ -104,7 +111,7 @@ class ArrowEngine(Engine):
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below)
         parts, dataset = _determine_dataset_parts(
-            fs, paths, gather_statistics, kwargs.get("dataset", {})
+            fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
         if dataset.partitions is not None:
             partitions = [

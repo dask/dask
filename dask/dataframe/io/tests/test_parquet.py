@@ -1102,7 +1102,25 @@ def test_partition_on_string(tmpdir, partition_on):
         assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
-def test_filters(tmpdir):
+@write_read_engines_xfail
+def test_filters(tmpdir, write_engine, read_engine):
+    tmpdir = str(tmpdir)
+    cats = ["2018-01-01", "2018-01-02", "2018-01-03", "2018-01-04"]
+    dftest = pd.DataFrame(
+        {
+            "dummy": [1, 1, 1, 1],
+            "DatePart": pd.Categorical(cats, categories=cats, ordered=True),
+        }
+    )
+    ddftest = dd.from_pandas(dftest, npartitions=4).set_index("dummy")
+    ddftest.to_parquet(tmpdir, partition_on="DatePart", engine=write_engine)
+    ddftest_read = dd.read_parquet(
+        tmpdir, engine=read_engine, filters=[(("DatePart", "<=", "2018-01-02"))]
+    )
+    assert len(ddftest_read) == 2
+
+
+def test_filters_pyarrow(tmpdir):
     check_pyarrow()
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
