@@ -2405,6 +2405,13 @@ def test_asanyarray_dataframe():
     assert_eq(x, dx)
 
 
+def test_asanyarray_datetime64():
+    x = np.array(["2000-01-01"], dtype="datetime64")
+    dx = da.asanyarray(x)
+    assert isinstance(dx, da.Array)
+    assert_eq(x, dx)
+
+
 def test_from_func():
     x = np.arange(10)
     f = lambda n: n * x

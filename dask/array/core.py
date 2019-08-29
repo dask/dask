@@ -3581,6 +3581,8 @@ def asarray(a, **kwargs):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
+    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+        return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
@@ -3619,7 +3621,7 @@ def asanyarray(a):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif hasattr(a, "data") and type(a).__module__.startswith("xarray."):
+    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
         return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
