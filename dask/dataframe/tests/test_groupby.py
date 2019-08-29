@@ -1950,7 +1950,9 @@ def test_groupby_cov(columns):
         assert_eq(expected, result)
 
 
-@pytest.mark.parametrize("transformation", [lambda x: x.sum(), np.sum, "sum"])
+@pytest.mark.parametrize(
+    "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank, pd.Series.diff]
+)
 def test_groupby_transform_funcs(transformation):
     pdf = pd.DataFrame(
         {
