@@ -48,7 +48,7 @@ class AdaptiveCore:
         Scales the cluster up to a target number of workers, presumably
         changing at least ``plan`` and hopefully eventually also ``requested``
 
-   scale_down : Set[worker] -> None
+    scale_down : Set[worker] -> None
         Closes the provided set of workers
 
     Parameters

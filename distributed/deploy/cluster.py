@@ -339,3 +339,15 @@ class Cluster(object):
 
         text += ")"
         return text
+
+    @property
+    def plan(self):
+        return set(self.workers)
+
+    @property
+    def requested(self):
+        return set(self.workers)
+
+    @property
+    def observed(self):
+        return {d["name"] for d in self.scheduler_info["workers"].values()}

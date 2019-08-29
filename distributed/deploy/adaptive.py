@@ -98,18 +98,15 @@ class Adaptive(AdaptiveCore):
 
     @property
     def plan(self):
-        try:
-            return set(self.cluster.worker_spec)
-        except AttributeError:
-            return set(self.cluster.workers)
+        return self.cluster.plan
 
     @property
     def requested(self):
-        return set(self.cluster.workers)
+        return self.cluster.requested
 
     @property
     def observed(self):
-        return {d["name"] for d in self.cluster.scheduler_info["workers"].values()}
+        return self.cluster.observed
 
     async def target(self):
         return await self.scheduler.adaptive_target(

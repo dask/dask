@@ -160,6 +160,23 @@ class SpecCluster(Cluster):
     Also note that uniformity of the specification is not required.  Other API
     could be added externally (in subclasses) that adds workers of different
     specifications into the same dictionary.
+
+    If a single entry in the spec will generate multiple dask workers then
+    please provide a `"group"` element to the spec, that includes the suffixes
+    that will be added to each name (this should be handled by your worker
+    class).
+
+    >>> cluster.worker_spec
+    {
+        0: {"cls": MultiWorker, "options": {"processes": 3}, "group": ["-0", "-1", -2"]}
+        1: {"cls": MultiWorker, "options": {"processes": 2}, "group": ["-0", "-1"]}
+    }
+
+    These suffixes should correspond to the names used by the workers when
+    they deploy.
+
+    >>> [ws.name for ws in cluster.scheduler.workers.values()]
+    ["0-0", "0-1", "0-2", "1-0", "1-1"]
     """
 
     _instances = weakref.WeakSet()
@@ -288,18 +305,6 @@ class SpecCluster(Cluster):
 
         return _().__await__()
 
-    async def _wait_for_workers(self):
-        while {
-            str(d["name"])
-            for d in (await self.scheduler_comm.identity())["workers"].values()
-        } != set(map(str, self.workers)):
-            if (
-                any(w.status == "closed" for w in self.workers.values())
-                and self.scheduler.status == "running"
-            ):
-                raise gen.TimeoutError("Worker unexpectedly closed")
-            await asyncio.sleep(0.1)
-
     async def _close(self):
         while self.status == "closing":
             await asyncio.sleep(0.1)
@@ -400,12 +405,48 @@ class SpecCluster(Cluster):
         return not not self.new_spec
 
     async def scale_down(self, workers):
+        # We may have groups, if so, map worker addresses to job names
+        if not all(w in self.worker_spec for w in workers):
+            mapping = {}
+            for name, spec in self.worker_spec.items():
+                if "group" in spec:
+                    for suffix in spec["group"]:
+                        mapping[str(name) + suffix] = name
+                else:
+                    mapping[name] = name
+
+            workers = {mapping.get(w, w) for w in workers}
+
         for w in workers:
             if w in self.worker_spec:
                 del self.worker_spec[w]
         await self
 
     scale_up = scale  # backwards compatibility
+
+    @property
+    def plan(self):
+        out = set()
+        for name, spec in self.worker_spec.items():
+            if "group" in spec:
+                out.update({str(name) + suffix for suffix in spec["group"]})
+            else:
+                out.add(name)
+        return out
+
+    @property
+    def requested(self):
+        out = set()
+        for name in self.workers:
+            try:
+                spec = self.worker_spec[name]
+            except KeyError:
+                continue
+            if "group" in spec:
+                out.update({str(name) + suffix for suffix in spec["group"]})
+            else:
+                out.add(name)
+        return out
 
 
 @atexit.register
