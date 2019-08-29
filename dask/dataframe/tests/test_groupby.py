@@ -2120,3 +2120,31 @@ def test_groupby_transform_funcs(transformation):
             pdf.groupby("A")["B"].transform(transformation),
             ddf.groupby("A")["B"].transform(transformation),
         )
+
+
+@pytest.mark.parametrize("npartitions", list(range(1, 10)))
+@pytest.mark.parametrize("indexed", [True, False])
+def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
+    pdf = pd.DataFrame({"group": [1, 2, 3, 4, 5] * 20, "value": np.random.randn(100)})
+
+    if indexed:
+        pdf = pdf.set_index("group")
+
+    ddf = dd.from_pandas(pdf, npartitions)
+
+    with pytest.warns(UserWarning):
+        # DataFrame
+        assert_eq(
+            pdf.groupby("group").transform(lambda series: series - series.mean()),
+            ddf.groupby("group").transform(lambda series: series - series.mean()),
+        )
+
+        # Series
+        assert_eq(
+            pdf.groupby("group")["value"].transform(
+                lambda series: series - series.mean()
+            ),
+            ddf.groupby("group")["value"].transform(
+                lambda series: series - series.mean()
+            ),
+        )
