@@ -539,3 +539,11 @@ def assign_index(df, ind):
     df = df.copy()
     df.index = ind
     return df
+
+
+# ---------------------------------
+# percentiles-quantiles
+# ---------------------------------
+
+
+percentiles_summary = Dispatch("percentiles_summary")
