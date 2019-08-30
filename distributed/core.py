@@ -826,7 +826,9 @@ class ConnectionPool(object):
         self.deserializers = deserializers if deserializers is not None else serializers
         self.connection_args = connection_args
         self.timeout = timeout
-        self.event = Event()
+        self._n_connecting = 0
+        # Invariant: semaphore._value == limit - open - _n_connecting
+        self.semaphore = asyncio.Semaphore(self.limit)
         self.server = weakref.ref(server) if server else None
         self._created = weakref.WeakSet()
         self._instances.add(self)
@@ -840,7 +842,11 @@ class ConnectionPool(object):
         return self.active + sum(map(len, self.available.values()))
 
     def __repr__(self):
-        return "<ConnectionPool: open=%d, active=%d>" % (self.open, self.active)
+        return "<ConnectionPool: open=%d, active=%d, connecting=%d>" % (
+            self.open,
+            self.active,
+            self._n_connecting,
+        )
 
     def __call__(self, addr=None, ip=None, port=None):
         """ Cached rpc objects """
@@ -861,10 +867,11 @@ class ConnectionPool(object):
                 occupied.add(comm)
                 return comm
 
-        while self.open >= self.limit:
-            self.event.clear()
+        if self.semaphore.locked():
             self.collect()
-            await self.event.wait()
+
+        self._n_connecting += 1
+        await self.semaphore.acquire()
 
         try:
             comm = await connect(
@@ -877,11 +884,12 @@ class ConnectionPool(object):
             comm._pool = weakref.ref(self)
             self._created.add(comm)
         except Exception:
+            self.semaphore.release()
             raise
-        occupied.add(comm)
+        finally:
+            self._n_connecting -= 1
 
-        if self.open >= self.limit:
-            self.event.clear()
+        occupied.add(comm)
 
         return comm
 
@@ -889,30 +897,34 @@ class ConnectionPool(object):
         """
         Reuse an open communication to the given address.  For internal use.
         """
-        try:
-            self.occupied[addr].remove(comm)
-        except KeyError:
-            pass
+        # if the pool is asked to re-use a comm it does not know about, ignore
+        # this comm: just close it.
+        if comm not in self.occupied[addr]:
+            IOLoop.current().add_callback(comm.close)
         else:
+            self.occupied[addr].remove(comm)
             if comm.closed():
-                if self.open < self.limit:
-                    self.event.set()
+                self.semaphore.release()
             else:
                 self.available[addr].add(comm)
+                if self.semaphore.locked() and self._n_connecting > 0:
+                    self.collect()
 
     def collect(self):
         """
         Collect open but unused communications, to allow opening other ones.
         """
         logger.info(
-            "Collecting unused comms.  open: %d, active: %d", self.open, self.active
+            "Collecting unused comms.  open: %d, active: %d, connecting: %d",
+            self.open,
+            self.active,
+            self._n_connecting,
         )
         for addr, comms in self.available.items():
             for comm in comms:
                 IOLoop.current().add_callback(comm.close)
+                self.semaphore.release()
             comms.clear()
-        if self.open < self.limit:
-            self.event.set()
 
     def remove(self, addr):
         """
@@ -923,12 +935,12 @@ class ConnectionPool(object):
             comms = self.available.pop(addr)
             for comm in comms:
                 IOLoop.current().add_callback(comm.close)
+                self.semaphore.release()
         if addr in self.occupied:
             comms = self.occupied.pop(addr)
             for comm in comms:
                 IOLoop.current().add_callback(comm.close)
-        if self.open < self.limit:
-            self.event.set()
+                self.semaphore.release()
 
     def close(self):
         """
@@ -937,8 +949,10 @@ class ConnectionPool(object):
         for comms in self.available.values():
             for comm in comms:
                 comm.abort()
+                self.semaphore.release()
         for comms in self.occupied.values():
             for comm in comms:
+                self.semaphore.release()
                 comm.abort()
 
         for comm in self._created:
