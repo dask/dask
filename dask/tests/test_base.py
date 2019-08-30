@@ -607,17 +607,6 @@ def test_persist_array():
     assert len(y.dask) == y.npartitions
 
 
-@pytest.mark.skipif("not da")
-def test_persist_array_meta():
-    class CustomArray(np.ndarray):
-        pass
-
-    x = da.from_array(CustomArray((2, 2)))
-    y = x.persist()
-
-    assert type(x._meta) is type(y._meta)
-
-
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe():
     df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 5, 3, 3]})
