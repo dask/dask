@@ -760,4 +760,4 @@ def test_compute_metadata(compute_metadata):
         z = y.persist(compute_metadata=True)
     assert z.chunks == ((10, 10, 5, 0, 0),)
     assert isinstance(z, da.Array)
-    assert (z.compute() < 0).all()
+    assert ((-1 * z).compute() > 0).all()

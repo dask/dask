@@ -1080,7 +1080,9 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
-    def persist(self,):
+    def persist(self, compute_metadata=False):
+        if compute_metadata:
+            self.compute_metadata()
         return super().persist()
 
     def compute_metadata(self):
@@ -1089,11 +1091,6 @@ class Array(DaskMethodsMixin):
         chunks = compute(_get_chunks(self))[0]
         self._chunks = normalize_chunks(chunks, self.shape, dtype=self.dtype)
         return self
-
-    def persist(self, compute_metadata=False, **kwargs):
-        if compute_metadata:
-            self.compute_metadata()
-        return super().persist(**kwargs)
 
     @property
     def shape(self):
