@@ -1070,7 +1070,7 @@ class Array(DaskMethodsMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return Array, (self.name, self.chunks, self.dtype)
+        return Array, (self.name, self.chunks, self.dtype, self._meta)
 
     @property
     def numblocks(self):
