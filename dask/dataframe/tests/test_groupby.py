@@ -44,8 +44,7 @@ def agg_func(request):
 
 @pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
 def test_groupby_internal_repr_xfail():
-    pdf = pd.DataFrame({'x': [0, 1, 2, 3, 4, 6, 7, 8, 9, 10],
-                        'y': list('abcbabbcda')})
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     gp = pdf.groupby("y")["x"]
@@ -56,11 +55,10 @@ def test_groupby_internal_repr_xfail():
     gp = pdf.groupby(pdf.y)["x"]
     dp = ddf.groupby(ddf.y)["x"]
     assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
+
 
 def test_groupby_internal_repr():
-    pdf = pd.DataFrame({'x': [0, 1, 2, 3, 4, 6, 7, 8, 9, 10],
-                        'y': list('abcbabbcda')})
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     gp = pdf.groupby("y")
@@ -106,8 +104,7 @@ def test_groupby_internal_repr():
 
 
 def test_groupby_error():
-    pdf = pd.DataFrame({'x': [0, 1, 2, 3, 4, 6, 7, 8, 9, 10],
-                        'y': list('abcbabbcda')})
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     with pytest.raises(KeyError):
@@ -123,7 +120,7 @@ def test_groupby_error():
         dp["A"]
     assert msg in str(err.value)
 
-    msg = 'Columns not found: '
+    msg = "Columns not found: "
     with pytest.raises(KeyError) as err:
         dp[["x", "A"]]
     assert msg in str(err.value)
