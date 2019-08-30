@@ -1080,9 +1080,7 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
-    def persist(self, compute_metadata=False):
-        if compute_metadata:
-            self.compute_metadata()
+    def persist(self):
         return super().persist()
 
     def compute_metadata(self):
