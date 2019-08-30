@@ -800,13 +800,13 @@ def register_numpy():
         if not x.shape:
             return (str(x), x.dtype)
         if hasattr(x, "mode") and getattr(x, "filename", None):
-            if hasattr(x.base, "ctypes"):
+            if hasattr(x, "offset"):
+                offset = getattr(x, "offset")
+            elif hasattr(x.base, "ctypes"):
                 offset = (
                     x.ctypes.get_as_parameter().value
                     - x.base.ctypes.get_as_parameter().value
                 )
-            elif hasattr(x, "offset"):
-                offset = getattr(x, "offset")
             else:
                 offset = 0  # root memmap's have mmap object as base
             return (
