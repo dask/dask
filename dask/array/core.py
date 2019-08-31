@@ -1080,14 +1080,30 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
-    def persist(self):
-        return super().persist()
+    def compute_chunk_sizes(self):
+        """
+        Compute the chunk sizes for a Dask array. This is especially useful
+        when the chunk sizes are unknown.
 
-    def compute_metadata(self):
-        from .rechunk import _get_chunks
+        Notes
+        -----
+        This function modifies the Dask array in-place.
 
-        chunks = compute(_get_chunks(self))[0]
-        self._chunks = normalize_chunks(chunks, self.shape, dtype=self.dtype)
+        Examples
+        --------
+
+        >>> x = da.from_array(np.linspace(-1, 1), chunks=10)
+        >>> y = x[x < 0]
+        >>> y.chunks
+        ((nan, nan, nan, nan, nan),)
+        >>> y.compute_chunk_sizes()
+        >>> y.chunks
+        ((10, 10, 5, 0, 0),)
+
+        """
+        from .rechunk import _get_chunk_shapes
+
+        self._chunks = compute(_get_chunk_shapes(self))[0]
         return self
 
     @property

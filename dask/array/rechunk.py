@@ -653,22 +653,22 @@ def format_plan(plan):
     return [format_chunks(c) for c in plan]
 
 
-def _get_shape_helper(a):
+def _get_chunk_shape(a):
     s = np.asarray(a.shape, dtype=int)
     return s[len(s) * (None,) + (slice(None),)]
 
 
-def _get_all_chunk_shapes(a):
-    return a.map_blocks(
-        _get_shape_helper,
+def _get_chunk_shapes(a):
+    """
+    This function finds chunk shapes for a Dask array `a`.
+
+    """
+    chunk_shapes = a.map_blocks(
+        _get_chunk_shape,
         dtype=int,
         chunks=tuple(len(c) * (1,) for c in a.chunks) + ((a.ndim,),),
         new_axis=a.ndim,
     )
-
-
-def _get_chunks(a):
-    cs = _get_all_chunk_shapes(a)
 
     c = []
     for i in range(a.ndim):
@@ -676,6 +676,6 @@ def _get_chunks(a):
         s[i] = slice(None)
         s = tuple(s)
 
-        c.append(tuple(cs[s]))
+        c.append(tuple(chunk_shapes[s]))
 
     return tuple(c)
