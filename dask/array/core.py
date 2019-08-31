@@ -1092,6 +1092,9 @@ class Array(DaskMethodsMixin):
         Examples
         --------
 
+        >>> import dask.array as da
+        >>> import numpy as np
+        >>>
         >>> x = da.from_array(np.linspace(-1, 1), chunks=10)
         >>> y = x[x < 0]
         >>> y.chunks
