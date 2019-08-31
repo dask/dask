@@ -807,7 +807,9 @@ def register_numpy():
                 )
             else:
                 offset = 0  # root memmap's have mmap object as base
-            if hasattr(x, "offset"): #offset numpy used while opening, and not the offset to the beginning of the file
+            if hasattr(
+                x, "offset"
+            ):  # offset numpy used while opening, and not the offset to the beginning of the file
                 offset += getattr(x, "offset")
             return (
                 x.filename,
