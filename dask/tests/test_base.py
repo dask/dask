@@ -164,6 +164,10 @@ def test_tokenize_numpy_memmap_offset(tmpdir):
         mmap2 = np.memmap(f, dtype=np.uint8, mode="r", offset=5, shape=5)
 
         assert tokenize(mmap1) != tokenize(mmap2)
+        # also make sure that they tokenize correctly when taking sub-arrays
+        sub1 = mmap1[1:-1]
+        sub2 = mmap2[1:-1]
+        assert tokenize(sub1) != tokenize(sub2)
 
 
 @pytest.mark.skipif("not np")

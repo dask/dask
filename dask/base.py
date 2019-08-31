@@ -805,10 +805,12 @@ def register_numpy():
                     x.ctypes.get_as_parameter().value
                     - x.base.ctypes.get_as_parameter().value
                 )
-            elif hasattr(x, "offset"):
-                offset = getattr(x, "offset")
             else:
                 offset = 0  # root memmap's have mmap object as base
+            if hasattr(
+                x, "offset"
+            ):  # offset numpy used while opening, and not the offset to the beginning of the file
+                offset += getattr(x, "offset")
             return (
                 x.filename,
                 os.path.getmtime(x.filename),
