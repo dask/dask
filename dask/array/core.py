@@ -1094,12 +1094,11 @@ class Array(DaskMethodsMixin):
 
         >>> import dask.array as da
         >>> import numpy as np
-        >>>
         >>> x = da.from_array(np.linspace(-1, 1), chunks=10)
         >>> y = x[x < 0]
         >>> y.chunks
         ((nan, nan, nan, nan, nan),)
-        >>> y.compute_chunk_sizes()
+        >>> y = y.compute_chunk_sizes()
         >>> y.chunks
         ((10, 10, 5, 0, 0),)
 
