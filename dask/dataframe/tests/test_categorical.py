@@ -266,18 +266,14 @@ def test_categorical_set_index(shuffle):
         assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
 
 
-@pytest.mark.parametrize(
-    "ncategories", list(range(1, 6)), ids=lambda x: f"{x} categories"
-)
-@pytest.mark.parametrize(
-    "npartitions", list(range(1, 6)), ids=lambda x: f"{x} partitions"
-)
+@pytest.mark.parametrize("ncategories", [1, 3, 6])
+@pytest.mark.parametrize("npartitions", [1, 3, 6])
 def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategories):
     """https://github.com/dask/dask/issues/5343"""
     rows_per_category = 10
     n_rows = ncategories * rows_per_category
 
-    categories = [f"CAT{i}" for i in range(ncategories)]
+    categories = ["CAT" + str(i) for i in range(ncategories)]
     pdf = pd.DataFrame(
         {"id": categories * rows_per_category, "value": np.random.random(n_rows)}
     )
@@ -285,9 +281,6 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
     ddf["id"] = ddf["id"].astype("category").cat.as_ordered()
     ddf = ddf.set_index("id")
     # Test passes if this worked and didn't raise any warnings
-
-    # NOTE: All observations of a category end up together, probably not desired:
-    # part_lengths = ddf.map_partitions(len).compute()
 
 
 @pytest.mark.parametrize("npartitions", [1, 4])
