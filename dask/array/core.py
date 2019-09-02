@@ -1083,7 +1083,8 @@ class Array(DaskMethodsMixin):
     def compute_chunk_sizes(self):
         """
         Compute the chunk sizes for a Dask array. This is especially useful
-        when the chunk sizes are unknown.
+        when the chunk sizes are unknown (e.g., with conditional indexing
+        on Dask Array).
 
         Notes
         -----
@@ -1094,18 +1095,33 @@ class Array(DaskMethodsMixin):
 
         >>> import dask.array as da
         >>> import numpy as np
-        >>> x = da.from_array(np.linspace(-1, 1), chunks=10)
-        >>> y = x[x < 0]
+        >>> x = da.from_array([-2, -1, 0, 1, 2], chunks=2)
+        >>> x.chunks
+        ((2, 2, 1),)
+        >>> y = x[x <= 0]
         >>> y.chunks
-        ((nan, nan, nan, nan, nan),)
+        ((nan, nan, nan),)
         >>> y = y.compute_chunk_sizes()
         >>> y.chunks
-        ((10, 10, 5, 0, 0),)
+        ((2, 1, 0),)
 
         """
-        from .rechunk import _get_chunk_shapes
+        chunk_shapes = self.map_blocks(
+            _get_chunk_shape,
+            dtype=int,
+            chunks=tuple(len(c) * (1,) for c in self.chunks) + ((self.ndim,),),
+            new_axis=self.ndim,
+        )
 
-        self._chunks = compute(_get_chunk_shapes(self))[0]
+        c = []
+        for i in range(self.ndim):
+            s = self.ndim * [0] + [i]
+            s[i] = slice(None)
+            s = tuple(s)
+
+            c.append(tuple(chunk_shapes[s]))
+
+        self._chunks = compute(tuple(c))[0]
         return self
 
     @property
@@ -2590,6 +2606,11 @@ def round_to(c, s):
             return max(1, int(c))
     else:
         return c // s * s
+
+
+def _get_chunk_shape(a):
+    s = np.asarray(a.shape, dtype=int)
+    return s[len(s) * (None,) + (slice(None),)]
 
 
 def from_array(

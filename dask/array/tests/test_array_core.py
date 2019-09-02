@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 import copy
 
+import pandas as pd
 import pytest
 
 np = pytest.importorskip("numpy")
@@ -19,6 +20,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
@@ -4090,3 +4092,27 @@ def test_from_array_meta():
     meta = sparse.COO.from_numpy(x)
     y = da.from_array(x, meta=meta)
     assert isinstance(y._meta, sparse.COO)
+
+
+def test_compute_chunk_sizes():
+    x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
+    y = x[x < 0]
+    assert np.isnan(y.shape[0])
+    assert y.chunks == ((np.nan,) * 5,)
+
+    z = y.compute_chunk_sizes()
+    assert y is z
+    assert z.chunks == ((10, 10, 5, 0, 0),)
+    assert len(z) == 25
+
+
+def test_compute_chunk_sizes_dataframe():
+    x = np.linspace(-1, 1, num=5 * 9).reshape(9, 5)
+    ddf = dask.dataframe.from_pandas(pd.DataFrame(x), npartitions=3)
+    y = ddf.values
+    assert np.isnan(y.shape[0]) and y.shape[1] == 5
+    assert y.chunks == ((np.nan, np.nan, np.nan), (5,))
+
+    z = y.compute_chunk_sizes()
+    assert y is z
+    assert z.chunks == ((3, 3, 3), (5,))
