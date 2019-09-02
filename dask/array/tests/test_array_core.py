@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import copy
 
-import pandas as pd
 import pytest
 
 np = pytest.importorskip("numpy")
@@ -4106,13 +4105,17 @@ def test_compute_chunk_sizes():
     assert len(z) == 25
 
 
-def test_compute_chunk_sizes_dataframe():
-    x = np.linspace(-1, 1, num=5 * 9).reshape(9, 5)
-    ddf = dask.dataframe.from_pandas(pd.DataFrame(x), npartitions=3)
-    y = ddf.values
-    assert np.isnan(y.shape[0]) and y.shape[1] == 5
-    assert y.chunks == ((np.nan, np.nan, np.nan), (5,))
+def test_compute_chunk_sizes_2d_array():
+    X = np.linspace(-1, 1, num=9 * 4).reshape(9, 4)
+    X = da.from_array(X, chunks=(3, 4))
+    idx = X.sum(axis=1) > 0
+    Y = X[idx]
 
-    z = y.compute_chunk_sizes()
-    assert y is z
-    assert z.chunks == ((3, 3, 3), (5,))
+    # This is very similar to the DataFrame->Array conversion
+    assert np.isnan(Y.shape[0]) and Y.shape[1] == 4
+    assert Y.chunks == ((np.nan, np.nan, np.nan), (4,))
+
+    Z = Y.compute_chunk_sizes()
+    assert Y is Z
+    assert Z.chunks == ((0, 1, 3), (4,))
+    assert Z.shape == (4, 4)
