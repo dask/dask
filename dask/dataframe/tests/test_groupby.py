@@ -2095,7 +2095,7 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 @pytest.mark.parametrize(
-    "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank, pd.Series.diff]
+    "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
 def test_groupby_transform_funcs(transformation):
     pdf = pd.DataFrame(
