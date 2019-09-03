@@ -4175,3 +4175,18 @@ class TestUnkownChunkSizesErrors:
             da.argmin(y)
         y.compute_chunk_sizes()
         da.argmin(y)
+
+    def test_reshape(self):
+        y = self.unknown
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            da.reshape(y, (5, 5))
+        y.compute_chunk_sizes()
+        da.reshape(y, (5, 5))
+
+    def test_slicing(self):
+        x = self.known(num=100).reshape(10, 10)
+        y = x[x.sum(axis=0) < 0]
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            y[:3, :]
+        y.compute_chunk_sizes()
+        y[:3, :]

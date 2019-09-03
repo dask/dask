@@ -2844,6 +2844,10 @@ def to_zarr(
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
 
+    See Also
+    --------
+    dask.array.Array.compute_chunk_sizes
+
     """
     import zarr
 

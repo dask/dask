@@ -281,7 +281,11 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
-            raise ValueError("Arrays chunk sizes are unknown: %s", shape)
+            raise ValueError(
+                "Arrays chunk sizes are unknown: %s\n\n"
+                "Possible solution:\n  x.compute_chunk_sizes()",
+                shape
+            )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
     assert len(index) == len(blockdims)
