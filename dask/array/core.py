@@ -933,7 +933,10 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply shape= keyword argument")
     if np.isnan(sum(shape)) or np.isnan(sum(chunks)):
         raise ValueError(
-            "Array chunk sizes are unknown. shape: %s, chunks: %s" % (shape, chunks)
+            "Array chunk sizes are unknown. shape: %s, chunks: %s\n\n"
+            "A possible solution is with "
+            "Dask Array's compute_chunk_sizes method "
+            "(x.compute_chunk_sizes())" % (shape, chunks)
         )
     if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
@@ -1140,11 +1143,14 @@ class Array(DaskMethodsMixin):
         return self._chunks
 
     def _set_chunks(self, chunks):
-        raise TypeError(
+        msg = (
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
-            "  x.rechunk(%s)" % str(chunks)
+            "  x.rechunk({})\n\n"
+            "If trying to avoid unknown chunks, use\n"
+            "  x.compute_chunk_sizes()"
         )
+        raise TypeError(msg.format(chunks))
 
     chunks = property(_get_chunks, _set_chunks, "chunks property")
 
@@ -2517,7 +2523,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             and np.isnan(x).any()
         ):
             raise ValueError(
-                "Can not perform automatic rechunking with unknown (nan) chunk sizes"
+                "Can not perform automatic rechunking with unknown "
+                "(nan) chunk sizes.\n\nA possible solution is with\n"
+                "  x.compute_chunk_sizes()"
             )
 
     limit = max(1, limit)
@@ -2842,7 +2850,9 @@ def to_zarr(
     if np.isnan(arr.shape).any():
         raise ValueError(
             "Saving a dask array with unknown chunk sizes is not "
-            "currently supported by Zarr"
+            "currently supported by Zarr.\n\n"
+            "A possible solution is with\n"
+            "  arr.compute_chunk_sizes()"
         )
 
     if isinstance(url, zarr.Array):
@@ -3018,7 +3028,11 @@ def common_blockdim(blockdims):
         return max(blockdims, key=first)
 
     if np.isnan(sum(map(sum, blockdims))):
-        raise ValueError("Arrays chunk sizes are unknown: %s", blockdims)
+        raise ValueError(
+            "Arrays chunk sizes (%s) are unknown.\n\n"
+            "A possible solution:\n"
+            "  x.compute_chunk_sizes()" % blockdims
+        )
 
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
@@ -3414,8 +3428,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
-                " shape %s.  To force concatenation pass"
-                " allow_unknown_chunksizes=True." % str(seq2[0].shape)
+                " shape %s.\n\nTwo solutions:\n"
+                "  1. Force concatenation pass"
+                " allow_unknown_chunksizes=True.\n"
+                "  2. Compute shapes with "
+                "[x.compute_chunk_sizes() for x in seq]" % str(seq2[0].shape)
             )
         raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 

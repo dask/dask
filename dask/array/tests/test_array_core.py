@@ -8,6 +8,7 @@ np = pytest.importorskip("numpy")
 import os
 import sys
 import time
+from io import StringIO
 from distutils.version import LooseVersion
 import operator
 from operator import add, sub, getitem
@@ -4119,3 +4120,58 @@ def test_compute_chunk_sizes_2d_array():
     assert Y is Z
     assert Z.chunks == ((0, 1, 3), (4,))
     assert Z.shape == (4, 4)
+
+
+class TestUnkownChunkSizesErrors:
+    def known(self, num=50):
+        return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
+
+    @property
+    def unknown(self):
+        x = self.known()
+        y = x[x < 0]
+        assert y.chunks == ((np.nan,) * 5,)
+        return y
+
+    def test_rechunk(self):
+        y = self.unknown
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            y.rechunk("auto")
+        y.compute_chunk_sizes()
+        y.rechunk("auto")
+
+    def test_to_zarr(self):
+        y = self.unknown
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            with StringIO() as f:
+                y.to_zarr(f)
+        y.compute_chunk_sizes()
+
+        with pytest.raises(ValueError, match="irregular chunking"):
+            with StringIO() as f:
+                y.to_zarr(f)
+
+    def test_to_svg(self):
+        y = self.unknown
+        with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
+            y.to_svg()
+        y.compute_chunk_sizes()
+        y.to_svg()
+
+    def test_concatenate(self):
+        x = self.known(num=100).reshape(10, 10)
+        idx = x.sum(axis=0) > 0
+        y1 = x[idx]
+        y2 = x[idx]
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            da.concatenate((y1, y2), axis=1)
+        y1.compute_chunk_sizes()
+        y2.compute_chunk_sizes()
+        da.concatenate((y1, y2), axis=1)
+
+    def test_reduction(self):
+        y = self.unknown
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            da.argmin(y)
+        y.compute_chunk_sizes()
+        da.argmin(y)
