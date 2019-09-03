@@ -284,7 +284,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
             raise ValueError(
                 "Arrays chunk sizes are unknown: %s\n\n"
                 "Possible solution:\n  x.compute_chunk_sizes()",
-                shape
+                shape,
             )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
