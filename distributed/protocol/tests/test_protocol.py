@@ -57,34 +57,26 @@ def test_small_and_big():
     # assert loads([big_header, big]) == {'y': d['y']}
 
 
-def test_maybe_compress():
-    pass
+@pytest.mark.parametrize(
+    "lib,compression",
+    [(None, None), ("zlib", "zlib"), ("lz4", "lz4"), ("zstandard", "zstd")],
+)
+def test_maybe_compress(lib, compression):
+    if lib:
+        pytest.importorskip(lib)
 
     try_converters = [bytes, memoryview]
-    try_compressions = ["zlib", "lz4"]
 
-    payload = b"123"
-
-    with dask.config.set({"distributed.comm.compression": None}):
+    with dask.config.set({"distributed.comm.compression": compression}):
         for f in try_converters:
+            payload = b"123"
             assert maybe_compress(f(payload)) == (None, payload)
 
-    for compression in try_compressions:
-        try:
-            __import__(compression)
-        except ImportError:
-            continue
-
-        with dask.config.set({"distributed.comm.compression": compression}):
-            for f in try_converters:
-                payload = b"123"
-                assert maybe_compress(f(payload)) == (None, payload)
-
-                payload = b"0" * 10000
-                rc, rd = maybe_compress(f(payload))
-                # For some reason compressing memoryviews can force blosc...
-                assert rc in (compression, "blosc")
-                assert compressions[rc]["decompress"](rd) == payload
+            payload = b"0" * 10000
+            rc, rd = maybe_compress(f(payload))
+            # For some reason compressing memoryviews can force blosc...
+            assert rc in (compression, "blosc")
+            assert compressions[rc]["decompress"](rd) == payload
 
 
 def test_maybe_compress_sample():

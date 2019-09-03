@@ -93,6 +93,26 @@ with ignoring(ImportError):
     }
     default_compression = "lz4"
 
+
+with ignoring(ImportError):
+    import zstandard
+
+    zstd_compressor = zstandard.ZstdCompressor(
+        level=dask.config.get("distributed.comm.zstd.level"),
+        threads=dask.config.get("distributed.comm.zstd.threads"),
+    )
+
+    zstd_decompressor = zstandard.ZstdDecompressor()
+
+    def zstd_compress(data):
+        return zstd_compressor.compress(data)
+
+    def zstd_decompress(data):
+        return zstd_decompressor.decompress(data)
+
+    compressions["zstd"] = {"compress": zstd_compress, "decompress": zstd_decompress}
+
+
 with ignoring(ImportError):
     import blosc
 

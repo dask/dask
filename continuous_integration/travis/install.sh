@@ -56,7 +56,7 @@ conda install -q \
 
 # For low-level profiler, install libunwind and stacktrace from conda-forge
 # For stacktrace we use --no-deps to avoid upgrade of python
-conda install -c defaults -c conda-forge libunwind
+conda install -c defaults -c conda-forge libunwind zstandard
 conda install --no-deps -c defaults -c numba -c conda-forge stacktrace
 
 pip install -q "pytest>=4" pytest-repeat pytest-faulthandler pytest-asyncio

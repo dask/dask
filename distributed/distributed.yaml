@@ -71,6 +71,10 @@ distributed:
     socket-backlog: 2048
     recent-messages-log-length: 0  # number of messages to keep for debugging
 
+    zstd:
+      level: 3      # Compression level, between 1 and 22.
+      threads: 0    # Threads to use. 0 for single-threaded, -1 to infer from cpu count.
+
     timeouts:
       connect: 10s          # time before connecting fails
       tcp: 30s              # time before calling an unresponsive connection dead

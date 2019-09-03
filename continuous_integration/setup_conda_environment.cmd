@@ -18,6 +18,7 @@ call deactivate
 @rem Create test environment
 @rem (note: no cytoolz as it seems to prevent faulthandler tracebacks on crash)
 %CONDA% create -n %CONDA_ENV% -q -y ^
+    zstandard ^
     bokeh ^
     click ^
     cloudpickle ^
