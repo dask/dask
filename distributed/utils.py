@@ -1434,7 +1434,9 @@ def format_dashboard_link(host, port):
         scheme = "https"
     else:
         scheme = "http"
-    return template.format(scheme=scheme, host=host, port=port, **os.environ)
+    return template.format(
+        **toolz.merge(os.environ, dict(scheme=scheme, host=host, port=port))
+    )
 
 
 def is_coroutine_function(f):

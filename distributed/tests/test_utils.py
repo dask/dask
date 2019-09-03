@@ -2,6 +2,7 @@ import array
 import datetime
 from functools import partial
 import io
+import os
 import queue
 import socket
 import sys
@@ -40,6 +41,7 @@ from distributed.utils import (
     parse_bytes,
     parse_timedelta,
     warn_on_duration,
+    format_dashboard_link,
 )
 from distributed.utils_test import loop, loop_in_thread  # noqa: F401
 from distributed.utils_test import div, has_ipv6, inc, throws, gen_test, captured_logger
@@ -582,3 +584,17 @@ def test_is_valid_xml():
     assert is_valid_xml("<a>foo</a>")
     with pytest.raises(Exception):
         assert is_valid_xml("<a>foo")
+
+
+def test_format_dashboard_link():
+    with dask.config.set({"distributed.dashboard.link": "foo"}):
+        assert format_dashboard_link("host", 1234) == "foo"
+
+    assert "host" in format_dashboard_link("host", 1234)
+    assert "1234" in format_dashboard_link("host", 1234)
+
+    try:
+        os.environ["host"] = "hello"
+        assert "hello" not in format_dashboard_link("host", 1234)
+    finally:
+        del os.environ["host"]
