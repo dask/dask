@@ -2118,3 +2118,21 @@ def test_series_groupby_idxmax_skipna(skipna):
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
 
     assert_eq(result_pd, result_dd)
+
+
+def test_value_counts():
+    df = pd.DataFrame({"a": [1, 2, 1, 3], "b": ["a", "b", "a", "a"]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert ddf.a.value_counts().compute().to_dict() == {1: 2, 2: 1, 3: 1}
+    assert ddf.b.value_counts().compute().to_dict() == {"a": 3, "b": 1}
+
+
+def test_unique():
+    df = pd.DataFrame({"a": [1, 2, 1, 3], "b": ["a", "b", "a", "a"]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert (ddf.a.unique().compute() == [1, 2, 3]).all()
+    assert (ddf.b.unique().compute() == ["a", "b"]).all()
