@@ -2121,35 +2121,21 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
-def test_value_counts():
+def test_groupby_unique():
     rng = np.random.RandomState(42)
-    df = pd.DataFrame(
-        {"a": rng.randint(10, size=100), "b": rng.randint(4, size=100)}
-    )
-
+    df = pd.DataFrame({"foo": rng.randint(2, size=100), "bar": rng.randint(10, size=100)})
     ddf = dd.from_pandas(df, npartitions=10)
 
-    assert all(ddf.a.value_counts().compute() == df.a.value_counts())
-    assert all(ddf.b.value_counts().compute() == df.b.value_counts())
+    pgb = df.groupby("foo")["bar"].unique()
+    dgb = ddf.groupby("foo")["bar"].unique()
+    dgb = dgb.compute()
+    assert (pgb == dgb).all()
 
-def test_value_counts_normalize():
+def test_groupby_value_counts():
     rng = np.random.RandomState(42)
-    df = pd.DataFrame(
-        {"foo": rng.randint(10, size=100), "bar": rng.randint(4, size=100)}
-    )
-    ddf = dd.from_pandas(df, npartitions=10)
+    df = pd.DataFrame({"foo": rng.randint(2, size=100), "bar": rng.randint(10, size=100)})
+    ddf = dd.from_pandas(df, npartitions=2)
 
-    kwargs = {"normalize": True}
-    freqs = ddf.foo.value_counts(**kwargs)
-    assert (freqs.compute() == df.foo.value_counts(**kwargs)).all()
-
-
-def test_unique():
-    rng = np.random.RandomState(42)
-    df = pd.DataFrame(
-        {"a": rng.randint(10, size=100), "b": rng.randint(4, size=100)}
-    )
-    ddf = dd.from_pandas(df, npartitions=10)
-
-    assert (ddf.a.unique().compute() == df.a.unique()).all()
-    assert (ddf.b.unique().compute() == df.b.unique()).all()
+    pgb = df.groupby("foo")["bar"].value_counts()
+    dgb = ddf.groupby("foo")["bar"].value_counts().compute()
+    assert (pgb == dgb).all()
