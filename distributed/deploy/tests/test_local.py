@@ -530,6 +530,31 @@ def test_ipywidgets(loop):
         assert isinstance(box, ipywidgets.Widget)
 
 
+def test_no_ipywidgets(loop, monkeypatch):
+    from unittest.mock import MagicMock
+
+    mock_display = MagicMock()
+
+    monkeypatch.setitem(sys.modules, "ipywidgets", None)
+    monkeypatch.setitem(sys.modules, "IPython.display", mock_display)
+
+    with LocalCluster(
+        n_workers=0,
+        scheduler_port=0,
+        silence_logs=False,
+        loop=loop,
+        dashboard_address=False,
+        processes=False,
+    ) as cluster:
+        cluster._ipython_display_()
+        args, kwargs = mock_display.display.call_args
+        res = args[0]
+        assert kwargs == {"raw": True}
+        assert isinstance(res, dict)
+        assert "text/plain" in res
+        assert "text/html" in res
+
+
 def test_scale(loop):
     """ Directly calling scale both up and down works as expected """
     with LocalCluster(

@@ -246,7 +246,11 @@ class Cluster(object):
         except AttributeError:
             pass
 
-        from ipywidgets import Layout, VBox, HBox, IntText, Button, HTML, Accordion
+        try:
+            from ipywidgets import Layout, VBox, HBox, IntText, Button, HTML, Accordion
+        except ImportError:
+            self._cached_widget = None
+            return None
 
         layout = Layout(width="150px")
 
@@ -258,7 +262,7 @@ class Cluster(object):
         else:
             link = ""
 
-        title = "<h2>%s</h2>" % type(self).__name__
+        title = "<h2>%s</h2>" % self._cluster_class_name
         title = HTML(title)
         dashboard = HTML(link)
 
@@ -311,8 +315,32 @@ class Cluster(object):
 
         return box
 
+    def _repr_html_(self):
+        if self.dashboard_link:
+            dashboard = "<a href='{0}' target='_blank'>{0}</a>".format(
+                self.dashboard_link
+            )
+        else:
+            dashboard = "Not Available"
+        return (
+            "<div style='background-color: #f2f2f2; display: inline-block; "
+            "padding: 10px; border: 1px solid #999999;'>\n"
+            "  <h3>{cls}</h3>\n"
+            "  <ul>\n"
+            "    <li><b>Dashboard: </b>{dashboard}\n"
+            "  </ul>\n"
+            "</div>\n"
+        ).format(cls=self._cluster_class_name, dashboard=dashboard)
+
     def _ipython_display_(self, **kwargs):
-        return self._widget()._ipython_display_(**kwargs)
+        widget = self._widget()
+        if widget is not None:
+            return widget._ipython_display_(**kwargs)
+        else:
+            from IPython.display import display
+
+            data = {"text/plain": repr(self), "text/html": self._repr_html_()}
+            display(data, raw=True)
 
     async def __aenter__(self):
         await self
@@ -325,9 +353,13 @@ class Cluster(object):
     def scheduler_address(self):
         return self.scheduler_comm.address
 
+    @property
+    def _cluster_class_name(self):
+        return getattr(self, "_name", type(self).__name__)
+
     def __repr__(self):
         text = "%s(%r, workers=%d, threads=%d" % (
-            getattr(self, "_name", type(self).__name__),
+            self._cluster_class_name,
             self.scheduler_address,
             len(self.workers),
             sum(w["nthreads"] for w in self.scheduler_info["workers"].values()),
