@@ -2121,18 +2121,32 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 
 def test_value_counts():
-    df = pd.DataFrame({"a": [1, 2, 1, 3], "b": ["a", "b", "a", "a"]})
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"a": rng.randint(10, size=100), "b": rng.randint(4, size=100)}
+    )
 
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert ddf.a.value_counts().compute().to_dict() == {1: 2, 2: 1, 3: 1}
-    assert ddf.b.value_counts().compute().to_dict() == {"a": 3, "b": 1}
+    assert all(ddf.a.value_counts().compute() == df.a.value_counts())
+    assert all(ddf.b.value_counts().compute() == df.b.value_counts())
+
+def test_value_counts_normalize():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame({"a": rng.randint(10, size=100)})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    counts = ddf.a.value_counts(normalize=True)
+    assert False
 
 
 def test_unique():
-    df = pd.DataFrame({"a": [1, 2, 1, 3], "b": ["a", "b", "a", "a"]})
-
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"a": rng.randint(10, size=100), "b": rng.randint(4, size=100)}
+    )
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert (ddf.a.unique().compute() == [1, 2, 3]).all()
-    assert (ddf.b.unique().compute() == ["a", "b"]).all()
+    assert (ddf.a.unique().compute() == df.a.unique()).all()
+    assert (ddf.b.unique().compute() == df.b.unique()).all()
