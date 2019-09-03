@@ -9,6 +9,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+import dask.utils as utils  # debugging!
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
@@ -2126,19 +2127,21 @@ def test_value_counts():
         {"a": rng.randint(10, size=100), "b": rng.randint(4, size=100)}
     )
 
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, npartitions=10)
 
     assert all(ddf.a.value_counts().compute() == df.a.value_counts())
     assert all(ddf.b.value_counts().compute() == df.b.value_counts())
 
 def test_value_counts_normalize():
     rng = np.random.RandomState(42)
-    df = pd.DataFrame({"a": rng.randint(10, size=100)})
+    df = pd.DataFrame(
+        {"foo": rng.randint(10, size=100), "bar": rng.randint(4, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=10)
 
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    counts = ddf.a.value_counts(normalize=True)
-    assert False
+    kwargs = {"normalize": True}
+    freqs = ddf.foo.value_counts(**kwargs)
+    assert (freqs.compute() == df.foo.value_counts(**kwargs)).all()
 
 
 def test_unique():
@@ -2146,7 +2149,7 @@ def test_unique():
     df = pd.DataFrame(
         {"a": rng.randint(10, size=100), "b": rng.randint(4, size=100)}
     )
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, npartitions=10)
 
     assert (ddf.a.unique().compute() == df.a.unique()).all()
     assert (ddf.b.unique().compute() == df.b.unique()).all()

@@ -1638,13 +1638,16 @@ class SeriesGroupBy(_GroupBy):
         super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def value_counts(self, normalize=False, split_every=None, split_out=1):
-        return self._aca_agg(
+    def value_counts(self, split_every=None, split_out=1, normalize=False):
+        ret = self._aca_agg(
             token="value_counts",
             func=M.value_counts,
             split_every=split_every,
             split_out=split_out,
         )
+        if normalize:
+            ret /= ret.sum()
+        return ret
 
 
     @derived_from(pd.core.groupby.GroupBy)
