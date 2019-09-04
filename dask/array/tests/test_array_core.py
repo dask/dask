@@ -4094,16 +4094,14 @@ def test_from_array_meta():
     assert isinstance(y._meta, sparse.COO)
 
 
-@pytest.mark.parametrize("inplace", [True, False])
-def test_compute_chunk_sizes(inplace):
+def test_compute_chunk_sizes():
     x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
     y = x[x < 0]
     assert np.isnan(y.shape[0])
     assert y.chunks == ((np.nan,) * 5,)
 
     z = y.compute_chunk_sizes()
-    if inplace:
-        assert y is z
+    assert y is z
     assert z.chunks == ((10, 10, 5, 0, 0),)
     assert len(z) == 25
 

@@ -1083,7 +1083,7 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
-    def compute_chunk_sizes(self, inplace=True):
+    def compute_chunk_sizes(self):
         """
         Compute the chunk sizes for a Dask array. This is especially useful
         when the chunk sizes are unknown (e.g., when indexing one Dask array
@@ -1108,7 +1108,7 @@ class Array(DaskMethodsMixin):
         ((2, 1, 0),)
 
         """
-        x = self if inplace else self.copy()
+        x = self
         chunk_shapes = x.map_blocks(
             _get_chunk_shape,
             dtype=int,
