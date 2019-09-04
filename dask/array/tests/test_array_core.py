@@ -4094,14 +4094,16 @@ def test_from_array_meta():
     assert isinstance(y._meta, sparse.COO)
 
 
-def test_compute_chunk_sizes():
+@pytest.mark.parametrize("inplace", [True, False])
+def test_compute_chunk_sizes(inplace):
     x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
     y = x[x < 0]
     assert np.isnan(y.shape[0])
     assert y.chunks == ((np.nan,) * 5,)
 
     z = y.compute_chunk_sizes()
-    assert y is z
+    if inplace:
+        assert y is z
     assert z.chunks == ((10, 10, 5, 0, 0),)
     assert len(z) == 25
 
@@ -4122,71 +4124,70 @@ def test_compute_chunk_sizes_2d_array():
     assert Z.shape == (4, 4)
 
 
-class TestUnkownChunkSizesErrors:
-    def known(self, num=50):
-        return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
+def _known(num=50):
+    return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
 
-    @property
-    def unknown(self):
-        x = self.known()
-        y = x[x < 0]
-        assert y.chunks == ((np.nan,) * 5,)
-        return y
+@pytest.fixture()
+def unknown():
+    x = _known()
+    y = x[x < 0]
+    assert y.chunks == ((np.nan,) * 5,)
+    return y
 
-    def test_rechunk(self):
-        y = self.unknown
-        with pytest.raises(ValueError, match="compute_chunk_sizes"):
-            y.rechunk("auto")
-        y.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
         y.rechunk("auto")
+    y.compute_chunk_sizes()
+    y.rechunk("auto")
 
-    def test_to_zarr(self):
-        y = self.unknown
-        with pytest.raises(ValueError, match="compute_chunk_sizes"):
-            with StringIO() as f:
-                y.to_zarr(f)
-        y.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        with StringIO() as f:
+            y.to_zarr(f)
+    y.compute_chunk_sizes()
 
-        with pytest.raises(ValueError, match="irregular chunking"):
-            with StringIO() as f:
-                y.to_zarr(f)
+    with pytest.raises(ValueError, match="irregular chunking"):
+        with StringIO() as f:
+            y.to_zarr(f)
 
-    def test_to_svg(self):
-        y = self.unknown
-        with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
-            y.to_svg()
-        y.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
+    y = unknown
+    with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
         y.to_svg()
+    y.compute_chunk_sizes()
+    y.to_svg()
 
-    def test_concatenate(self):
-        x = self.known(num=100).reshape(10, 10)
-        idx = x.sum(axis=0) > 0
-        y1 = x[idx]
-        y2 = x[idx]
-        with pytest.raises(ValueError, match="compute_chunk_sizes"):
-            da.concatenate((y1, y2), axis=1)
-        y1.compute_chunk_sizes()
-        y2.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_concatenate():
+    x = _known(num=100).reshape(10, 10)
+    idx = x.sum(axis=0) > 0
+    y1 = x[idx]
+    y2 = x[idx]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
         da.concatenate((y1, y2), axis=1)
+    y1.compute_chunk_sizes()
+    y2.compute_chunk_sizes()
+    da.concatenate((y1, y2), axis=1)
 
-    def test_reduction(self):
-        y = self.unknown
-        with pytest.raises(ValueError, match="compute_chunk_sizes"):
-            da.argmin(y)
-        y.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
         da.argmin(y)
+    y.compute_chunk_sizes()
+    da.argmin(y)
 
-    def test_reshape(self):
-        y = self.unknown
-        with pytest.raises(ValueError, match="compute_chunk_sizes"):
-            da.reshape(y, (5, 5))
-        y.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
         da.reshape(y, (5, 5))
+    y.compute_chunk_sizes()
+    da.reshape(y, (5, 5))
 
-    def test_slicing(self):
-        x = self.known(num=100).reshape(10, 10)
-        y = x[x.sum(axis=0) < 0]
-        with pytest.raises(ValueError, match="compute_chunk_sizes"):
-            y[:3, :]
-        y.compute_chunk_sizes()
+def test_compute_chunk_sizes_warning_fixes_slicing():
+    x = _known(num=100).reshape(10, 10)
+    y = x[x.sum(axis=0) < 0]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
         y[:3, :]
+    y.compute_chunk_sizes()
+    y[:3, :]

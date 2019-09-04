@@ -1083,11 +1083,11 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
-    def compute_chunk_sizes(self):
+    def compute_chunk_sizes(self, inplace=True):
         """
         Compute the chunk sizes for a Dask array. This is especially useful
-        when the chunk sizes are unknown (e.g., with conditional indexing
-        on Dask Array).
+        when the chunk sizes are unknown (e.g., when indexing one Dask array
+        with another).
 
         Notes
         -----
@@ -1095,7 +1095,6 @@ class Array(DaskMethodsMixin):
 
         Examples
         --------
-
         >>> import dask.array as da
         >>> import numpy as np
         >>> x = da.from_array([-2, -1, 0, 1, 2], chunks=2)
@@ -1109,23 +1108,24 @@ class Array(DaskMethodsMixin):
         ((2, 1, 0),)
 
         """
-        chunk_shapes = self.map_blocks(
+        x = self if inplace else self.copy()
+        chunk_shapes = x.map_blocks(
             _get_chunk_shape,
             dtype=int,
-            chunks=tuple(len(c) * (1,) for c in self.chunks) + ((self.ndim,),),
-            new_axis=self.ndim,
+            chunks=tuple(len(c) * (1,) for c in x.chunks) + ((x.ndim,),),
+            new_axis=x.ndim,
         )
 
         c = []
-        for i in range(self.ndim):
-            s = self.ndim * [0] + [i]
+        for i in range(x.ndim):
+            s = x.ndim * [0] + [i]
             s[i] = slice(None)
             s = tuple(s)
 
             c.append(tuple(chunk_shapes[s]))
 
-        self._chunks = compute(tuple(c))[0]
-        return self
+        x._chunks = compute(tuple(c))[0]
+        return x
 
     @property
     def shape(self):
