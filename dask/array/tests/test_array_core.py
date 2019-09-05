@@ -2407,6 +2407,13 @@ def test_asanyarray_dataframe():
     assert_eq(x, dx)
 
 
+def test_asanyarray_datetime64():
+    x = np.array(["2000-01-01"], dtype="datetime64")
+    dx = da.asanyarray(x)
+    assert isinstance(dx, da.Array)
+    assert_eq(x, dx)
+
+
 def test_from_func():
     x = np.arange(10)
     f = lambda n: n * x
@@ -4075,6 +4082,11 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
+    with pytest.warns(None) as record:
+        x = da.ones((3, 10, 10), chunks=(3, 2, 2))
+        da.map_blocks(lambda y: np.mean(y, axis=0), x, dtype=x.dtype, drop_axis=0)
+    assert not record
+
     with pytest.warns(None) as record:
         x = da.ones((15, 15), chunks=(5, 5))
         (x.dot(x.T + 1) - x.mean(axis=0)).std()

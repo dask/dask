@@ -952,7 +952,10 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
         dd.read_parquet(
-            str(tmpdir), engine="pyarrow", gather_statistics=False
+            str(tmpdir),
+            engine="pyarrow",
+            gather_statistics=False,
+            dataset={"validate_schema": True},
         ).compute()
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
@@ -1099,7 +1102,25 @@ def test_partition_on_string(tmpdir, partition_on):
         assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
-def test_filters(tmpdir):
+@write_read_engines_xfail
+def test_filters(tmpdir, write_engine, read_engine):
+    tmpdir = str(tmpdir)
+    cats = ["2018-01-01", "2018-01-02", "2018-01-03", "2018-01-04"]
+    dftest = pd.DataFrame(
+        {
+            "dummy": [1, 1, 1, 1],
+            "DatePart": pd.Categorical(cats, categories=cats, ordered=True),
+        }
+    )
+    ddftest = dd.from_pandas(dftest, npartitions=4).set_index("dummy")
+    ddftest.to_parquet(tmpdir, partition_on="DatePart", engine=write_engine)
+    ddftest_read = dd.read_parquet(
+        tmpdir, engine=read_engine, filters=[(("DatePart", "<=", "2018-01-02"))]
+    )
+    assert len(ddftest_read) == 2
+
+
+def test_filters_pyarrow(tmpdir):
     check_pyarrow()
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
@@ -1325,6 +1346,35 @@ def test_columns_name(tmpdir, engine):
     assert_eq(result, df)
 
 
+def check_compression(engine, filename, compression):
+    if engine == "fastparquet":
+        pf = fastparquet.ParquetFile(filename)
+        md = pf.fmd.row_groups[0].columns[0].meta_data
+        if compression is None:
+            assert md.total_compressed_size == md.total_uncompressed_size
+        else:
+            assert md.total_compressed_size != md.total_uncompressed_size
+    else:
+        metadata = pa.parquet.ParquetDataset(filename).metadata
+        names = metadata.schema.names
+        for i in range(metadata.num_row_groups):
+            row_group = metadata.row_group(i)
+            for j in range(len(names)):
+                column = row_group.column(j)
+                if compression is None:
+                    assert (
+                        column.total_compressed_size == column.total_uncompressed_size
+                    )
+                else:
+                    compress_expect = compression
+                    if compression == "default":
+                        compress_expect = "snappy"
+                    assert compress_expect.lower() == column.compression.lower()
+                    assert (
+                        column.total_compressed_size != column.total_uncompressed_size
+                    )
+
+
 @pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
@@ -1338,6 +1388,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, ddf)
+    check_compression(engine, fn, compression)
 
 
 @pytest.fixture(
@@ -1874,3 +1925,44 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)
+
+
+def test_timeseries_nulls_in_schema(tmpdir, engine):
+    tmp_path = str(tmpdir)
+    ddf2 = (
+        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
+        .reset_index()
+        .map_partitions(lambda x: x.loc[:5])
+    )
+    ddf2 = ddf2.set_index("x").reset_index().persist()
+    ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
+
+    ddf2.to_parquet(tmp_path, engine=engine)
+    ddf_read = dd.read_parquet(tmp_path, engine=engine)
+
+    assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
+
+    # Can force schema validation on each partition in pyarrow
+    if engine == "pyarrow":
+        # The schema mismatch should raise an error
+        with pytest.raises(ValueError):
+            ddf_read = dd.read_parquet(
+                tmp_path, dataset={"validate_schema": True}, engine=engine
+            )
+        # There should be no error if you specify a schema on write
+        schema = pa.schema(
+            [
+                ("x", pa.float64()),
+                ("timestamp", pa.timestamp("ns")),
+                ("id", pa.int64()),
+                ("name", pa.string()),
+                ("y", pa.float64()),
+            ]
+        )
+        ddf2.to_parquet(tmp_path, schema=schema, engine=engine)
+        assert_eq(
+            dd.read_parquet(tmp_path, dataset={"validate_schema": True}, engine=engine),
+            ddf2,
+            check_divisions=False,
+            check_index=False,
+        )

@@ -238,3 +238,19 @@ For example ...
     sort by for fast selection and joins.  For Dask dataframe this might mean
     choosing chunk sizes that are aligned with your access patterns and
     algorithms.
+
+Processes and Threads
+---------------------
+
+If you're doing mostly numeric work with Numpy, Pandas, Scikit-Learn, Numba,
+and other libraries that release the `GIL <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>`_, then use mostly threads.  If you're
+doing work on text data or Python collections like lists and dicts then use
+mostly processes.
+
+If you're on larger machines with a high thread count (greater than 10), then
+you should probably split things up into at least a few processes regardless.
+Python can be highly productive with 10 threads per process with numeric work,
+but not 50 threads.
+
+For more information on threads, processes, and how to configure them in Dask, see
+:doc:`the scheduler documentation <scheduling>`.

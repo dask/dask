@@ -236,6 +236,8 @@ Groupby Operations
    DataFrameGroupBy.corr
    DataFrameGroupBy.first
    DataFrameGroupBy.last
+   DataFrameGroupBy.idxmin
+   DataFrameGroupBy.idxmax
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -255,6 +257,8 @@ Groupby Operations
    SeriesGroupBy.var
    SeriesGroupBy.first
    SeriesGroupBy.last
+   SeriesGroupBy.idxmin
+   SeriesGroupBy.idxmax
 
 .. autosummary::
    Aggregation
