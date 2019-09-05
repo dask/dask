@@ -1287,6 +1287,63 @@ def test_to_csv_multiple_files_cornercases():
         assert_eq(result, df16)
 
 
+def test_to_single_csv():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv")
+            a.to_csv(fn, index=False, single_file=True)
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            assert_eq(result, df)
+
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv")
+            r = a.to_csv(fn, index=False, compute=False, single_file=True)
+            dask.compute(r, scheduler="sync")
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            assert_eq(result, df)
+
+
+def test_to_single_csv_with_name_function():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, "test.csv")
+        with pytest.raises(
+            ValueError,
+            match="name_function is not supported under the single file mode",
+        ):
+            a.to_csv(fn, name_function=lambda x: x, index=False, single_file=True)
+
+
+def test_to_single_csv_with_header_first_partition_only():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, "test.csv")
+        with pytest.raises(
+            ValueError,
+            match="header_first_partition_only cannot be False in the single file mode.",
+        ):
+            a.to_csv(
+                fn, index=False, header_first_partition_only=False, single_file=True
+            )
+
+
+def test_to_single_csv_gzip():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv.gz")
+            a.to_csv(fn, index=False, compression="gzip", single_file=True)
+            result = pd.read_csv(fn, compression="gzip").reset_index(drop=True)
+            assert_eq(result, df)
+
+
 @pytest.mark.xfail(reason="to_csv does not support compression")
 def test_to_csv_gzip():
     df = pd.DataFrame(
