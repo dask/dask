@@ -10,6 +10,7 @@ from fsspec.core import (  # noqa: F401
     _expand_paths,  # noqa: F401
     get_compression,  # noqa: F401
 )
+from fsspec.core import open as open_file  # noqa: F401
 from fsspec.utils import (  # noqa: F401
     read_block,  # noqa: F401
     seek_delimiter,  # noqa: F401
