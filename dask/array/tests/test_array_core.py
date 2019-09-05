@@ -4137,6 +4137,7 @@ def test_compute_chunk_sizes_2d_array():
 def _known(num=50):
     return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
 
+
 @pytest.fixture()
 def unknown():
     x = _known()
@@ -4144,12 +4145,14 @@ def unknown():
     assert y.chunks == ((np.nan,) * 5,)
     return y
 
+
 def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
         y.rechunk("auto")
     y.compute_chunk_sizes()
     y.rechunk("auto")
+
 
 def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
     y = unknown
@@ -4162,12 +4165,14 @@ def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
         with StringIO() as f:
             y.to_zarr(f)
 
+
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
     y = unknown
     with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
         y.to_svg()
     y.compute_chunk_sizes()
     y.to_svg()
+
 
 def test_compute_chunk_sizes_warning_fixes_concatenate():
     x = _known(num=100).reshape(10, 10)
@@ -4180,6 +4185,7 @@ def test_compute_chunk_sizes_warning_fixes_concatenate():
     y2.compute_chunk_sizes()
     da.concatenate((y1, y2), axis=1)
 
+
 def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
@@ -4187,12 +4193,14 @@ def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
     y.compute_chunk_sizes()
     da.argmin(y)
 
+
 def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
         da.reshape(y, (5, 5))
     y.compute_chunk_sizes()
     da.reshape(y, (5, 5))
+
 
 def test_compute_chunk_sizes_warning_fixes_slicing():
     x = _known(num=100).reshape(10, 10)
