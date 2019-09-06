@@ -1110,7 +1110,8 @@ class Array(DaskMethodsMixin):
         >>> y = x[x <= 0]
         >>> y.chunks
         ((nan, nan, nan),)
-        >>> y = y.compute_chunk_sizes()
+        >>> y.compute_chunk_sizes()  # in-place computation
+        dask.array<getitem, shape=(3,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
         >>> y.chunks
         ((2, 1, 0),)
 
