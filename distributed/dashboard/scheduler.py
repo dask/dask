@@ -483,6 +483,7 @@ class CurrentLoad(DashboardComponent):
                 self.nbytes_figure.title.text = "Bytes stored: " + format_bytes(
                     sum(nbytes)
                 )
+                self.nbytes_figure.x_range.end = max_limit
 
                 update(self.source, result)
 
