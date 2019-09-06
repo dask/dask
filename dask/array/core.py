@@ -76,6 +76,15 @@ concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
 
+unknown_chunk_message = (
+    "\n\n"
+    "A possible solution: "
+    "https://docs.dask.org/en/latest/array-chunks.html#unknown-chunks\n"
+    "Summary: to compute chunks sizes, use\n\n"
+    "   x.compute_chunk_sizes()  # for Dask Array `x`\n"
+    "   ddf.to_dask_array(lengths=True)  # for Dask DataFrame `ddf`"
+)
+
 
 class PerformanceWarning(Warning):
     """ A warning given when bad chunking may cause poor performance """
@@ -933,10 +942,8 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply shape= keyword argument")
     if np.isnan(sum(shape)) or np.isnan(sum(chunks)):
         raise ValueError(
-            "Array chunk sizes are unknown. shape: %s, chunks: %s\n\n"
-            "A possible solution is with "
-            "Dask Array's compute_chunk_sizes method "
-            "(x.compute_chunk_sizes())" % (shape, chunks)
+            "Array chunk sizes are unknown. shape: %s, chunks: %s%s"
+            % (shape, chunks, unknown_chunk_message)
         )
     if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
@@ -2524,8 +2531,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         ):
             raise ValueError(
                 "Can not perform automatic rechunking with unknown "
-                "(nan) chunk sizes.\n\nA possible solution is with\n"
-                "  x.compute_chunk_sizes()"
+                "(nan) chunk sizes.%s" % unknown_chunk_message
             )
 
     limit = max(1, limit)
@@ -2854,9 +2860,7 @@ def to_zarr(
     if np.isnan(arr.shape).any():
         raise ValueError(
             "Saving a dask array with unknown chunk sizes is not "
-            "currently supported by Zarr.\n\n"
-            "A possible solution is with\n"
-            "  arr.compute_chunk_sizes()"
+            "currently supported by Zarr.%s" % unknown_chunk_message
         )
 
     if isinstance(url, zarr.Array):

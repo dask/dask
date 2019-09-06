@@ -277,14 +277,14 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
+    from .core import unknown_chunk_message
+
     shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
             raise ValueError(
-                "Arrays chunk sizes are unknown: %s\n\n"
-                "Possible solution:\n  x.compute_chunk_sizes()",
-                shape,
+                "Arrays chunk sizes are unknown: %s%s" % (shape, unknown_chunk_message)
             )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
