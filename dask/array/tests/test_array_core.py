@@ -4134,6 +4134,28 @@ def test_compute_chunk_sizes_2d_array():
     assert Z.shape == (4, 4)
 
 
+def test_compute_chunk_sizes_3d_array(N=8):
+    X = np.linspace(-1, 2, num=8 * 8 * 8).reshape(8, 8, 8)
+    X = da.from_array(X, chunks=(4, 4, 4))
+    idx = X.sum(axis=0).sum(axis=0) > 0
+    Y = X[idx]
+    idx = X.sum(axis=1).sum(axis=1) < 0
+    Y = Y[:, idx]
+    idx = X.sum(axis=2).sum(axis=1) > 0.1
+    Y = Y[:, :, idx]
+
+    # Checking to make sure shapes are different on outputs
+    assert Y.compute().shape == (8, 3, 5)
+    assert X.compute().shape == (8, 8, 8)
+
+    assert Y.chunks == ((np.nan, np.nan), ) * 3
+    assert all(np.isnan(s) for s in Y.shape)
+    Z = Y.compute_chunk_sizes()
+    assert Z is Y
+    assert Z.shape == (8, 3, 5)
+    assert Z.chunks == ((4, 4), (3, 0), (1, 4))
+
+
 def _known(num=50):
     return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
 
