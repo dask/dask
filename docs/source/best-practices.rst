@@ -254,3 +254,83 @@ but not 50 threads.
 
 For more information on threads, processes, and how to configure them in Dask, see
 :doc:`the scheduler documentation <scheduling>`.
+
+
+Load Data with Dask
+-------------------
+
+If you need to work with large Python objects, then please let Dask create
+them.  A common anti-pattern we see is people creating large Python objects
+outside of Dask, then giving those objects to Dask and asking it to manage them.
+This works, but means that Dask needs to move around these very large objects
+with its metadata, rather than as normal Dask-controlled results.
+
+Here are some common patterns to avoid and nicer alternatives:
+
+DataFrames
+~~~~~~~~~~
+
+.. code-block:: python
+
+   # Don't
+
+   ddf = ... a dask dataframe ...
+   for fn in filenames:
+       df = pandas.read_csv(fn)  # Read locally with Pandas
+       ddf = ddf.append(df)            # Give to Dask
+
+.. code-block:: python
+
+    # Do
+
+    ddf = dd.read_csv(filenames)
+
+Arrays
+~~~~~~
+
+.. code-block:: python
+
+   # Don't
+
+   f = h5py.File(...)
+   x = np.asarray(f["x"])  # Get data as a NumPy array locally
+
+   x = da.from_array(x)  # Hand NumPy array to Dask
+
+.. code-block:: python
+
+   # Do
+
+   f = h5py.File(...)
+   x = da.from_array(f["x"])  # Let Dask do the reading
+
+Delayed
+~~~~~~~
+
+.. code-block:: python
+
+    # Don't
+
+    @dask.delayed
+    def process(a, b):
+        ...
+
+    df = pandas.read_csv("some-large-file.csv")  # Create large object locally
+    results = []
+    for item in L:
+        result = process(item, df)  # include df in every delayed call
+        results.append(result)
+
+.. code-block:: python
+
+   # Do
+
+   @dask.delayed
+   def process(a, b):
+       ...
+
+   df = dask.delayed(pandas.read_csv)("some-large-file.csv")  # Let Dask build object
+   results = []
+   for item in L:
+       result = process(item, df)  # include pointer to df in every delayed call
+       results.append(result)
