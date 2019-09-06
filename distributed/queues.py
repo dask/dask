@@ -47,7 +47,7 @@ class QueueExtension(object):
         self.scheduler.extensions["queues"] = self
 
     def create(self, stream=None, name=None, client=None, maxsize=0):
-        print("name", name)
+        logger.debug("Queue name: {}".format(name))
         if name not in self.queues:
             self.queues[name] = tornado.queues.Queue(maxsize=maxsize)
             self.client_refcount[name] = 1
