@@ -95,17 +95,21 @@ class Cluster(object):
             except OSError:
                 break
 
-            for op, msg in msgs:
-                if op == "add":
-                    workers = msg.pop("workers")
-                    self.scheduler_info["workers"].update(workers)
-                    self.scheduler_info.update(msg)
-                elif op == "remove":
-                    del self.scheduler_info["workers"][msg]
-                else:
-                    raise ValueError("Invalid op", op, msg)
+            with log_errors():
+                for op, msg in msgs:
+                    self._update_worker_status(op, msg)
 
         await comm.close()
+
+    def _update_worker_status(self, op, msg):
+        if op == "add":
+            workers = msg.pop("workers")
+            self.scheduler_info["workers"].update(workers)
+            self.scheduler_info.update(msg)
+        elif op == "remove":
+            del self.scheduler_info["workers"][msg]
+        else:
+            raise ValueError("Invalid op", op, msg)
 
     def adapt(self, Adaptive=Adaptive, **kwargs) -> Adaptive:
         """ Turn on adaptivity

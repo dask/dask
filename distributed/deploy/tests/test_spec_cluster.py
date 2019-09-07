@@ -1,8 +1,9 @@
 import asyncio
-from time import time
 
+import dask
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
 from distributed.deploy.spec import close_clusters, ProcessInterface
+from distributed.metrics import time
 from distributed.utils_test import loop, cleanup  # noqa: F401
 from distributed.utils import is_valid_xml
 import toolz
@@ -122,6 +123,37 @@ async def test_scale(cleanup):
 
         await cluster
         assert len(cluster.workers) == 1
+
+
+@pytest.mark.asyncio
+async def test_unexpected_closed_worker(cleanup):
+    worker = {"cls": Worker, "options": {"nthreads": 1}}
+    with dask.config.set({"distributed.deploy.lost-worker-timeout": "10ms"}):
+        async with SpecCluster(
+            asynchronous=True, scheduler=scheduler, worker=worker
+        ) as cluster:
+            assert not cluster.workers
+            assert not cluster.worker_spec
+
+            # Scale up
+            cluster.scale(2)
+            assert not cluster.workers
+            assert cluster.worker_spec
+
+            await cluster
+            assert len(cluster.workers) == 2
+
+            # Close one
+            await list(cluster.workers.values())[0].close()
+            start = time()
+            while len(cluster.workers) > 1:  # wait for messages to flow around
+                await asyncio.sleep(0.01)
+                assert time() < start + 2
+            assert len(cluster.workers) == 1
+            assert len(cluster.worker_spec) == 2
+
+            await cluster
+            assert len(cluster.workers) == 2
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ import warnings
 
 import click
 import dask
+from dask.utils import ignoring
 from distributed import Nanny, Worker
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
@@ -354,6 +355,9 @@ def main(
             "dask-worker SCHEDULER_ADDRESS:8786"
         )
 
+    with ignoring(TypeError, ValueError):
+        name = int(name)
+
     nannies = [
         t(
             scheduler,
@@ -367,7 +371,7 @@ def main(
             port=port,
             dashboard_address=dashboard_address if dashboard else None,
             service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
-            name=name if nprocs == 1 or not name else name + "-" + str(i),
+            name=name if nprocs == 1 or not name else str(name) + "-" + str(i),
             **kwargs
         )
         for i in range(nprocs)

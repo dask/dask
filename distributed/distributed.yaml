@@ -65,6 +65,9 @@ distributed:
   client:
     heartbeat: 5s  # time between client heartbeats
 
+  deploy:
+    lost-worker-timeout: 15s  # Interval after which to hard-close a lost worker job
+
   comm:
     compression: auto
     default-scheme: tcp

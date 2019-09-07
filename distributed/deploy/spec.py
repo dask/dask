@@ -1,16 +1,21 @@
 import asyncio
 import atexit
 import copy
+import logging
 import math
 import weakref
 
+import dask
 from tornado import gen
 
 from .cluster import Cluster
 from ..core import rpc, CommClosedError
-from ..utils import LoopRunner, silence_logging, ignoring, parse_bytes
+from ..utils import LoopRunner, silence_logging, ignoring, parse_bytes, parse_timedelta
 from ..scheduler import Scheduler
 from ..security import Security
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProcessInterface:
@@ -201,6 +206,7 @@ class SpecCluster(Cluster):
         self._i = 0
         self.security = security or Security()
         self.scheduler_comm = None
+        self._futures = set()
 
         if silence_logs:
             self._old_logging_level = silence_logging(level=silence_logs)
@@ -267,13 +273,14 @@ class SpecCluster(Cluster):
             if to_close:
                 if self.scheduler.status == "running":
                     await self.scheduler_comm.retire_workers(workers=list(to_close))
-                tasks = [self.workers[w].close() for w in to_close]
+                tasks = [self.workers[w].close() for w in to_close if w in self.workers]
                 await asyncio.wait(tasks)
                 for task in tasks:  # for tornado gen.coroutine support
                     with ignoring(RuntimeError):
                         await task
             for name in to_close:
-                del self.workers[name]
+                if name in self.workers:
+                    del self.workers[name]
 
             to_open = set(self.worker_spec) - set(self.workers)
             workers = []
@@ -292,6 +299,22 @@ class SpecCluster(Cluster):
                     w._cluster = weakref.ref(self)
                     await w  # for tornado gen.coroutine support
             self.workers.update(dict(zip(to_open, workers)))
+
+    def _update_worker_status(self, op, msg):
+        if op == "remove":
+            name = self.scheduler_info["workers"][msg]["name"]
+
+            def f():
+                if name in self.workers and msg not in self.scheduler_info:
+                    self._futures.add(asyncio.ensure_future(self.workers[name].close()))
+                    del self.workers[name]
+
+            delay = parse_timedelta(
+                dask.config.get("distributed.deploy.lost-worker-timeout")
+            )
+
+            asyncio.get_event_loop().call_later(delay, f)
+        super()._update_worker_status(op, msg)
 
     def __await__(self):
         async def _():
@@ -314,13 +337,15 @@ class SpecCluster(Cluster):
 
         self.scale(0)
         await self._correct_state()
+        for future in self._futures:
+            await future
         async with self._lock:
             with ignoring(CommClosedError):
                 await self.scheduler_comm.close(close_workers=True)
 
         await self.scheduler.close()
         for w in self._created:
-            assert w.status == "closed"
+            assert w.status == "closed", w.status
 
         if hasattr(self, "_old_logging_level"):
             silence_logging(self._old_logging_level)
