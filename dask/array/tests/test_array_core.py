@@ -4148,7 +4148,7 @@ def test_compute_chunk_sizes_3d_array(N=8):
     assert Y.compute().shape == (8, 3, 5)
     assert X.compute().shape == (8, 8, 8)
 
-    assert Y.chunks == ((np.nan, np.nan), ) * 3
+    assert Y.chunks == ((np.nan, np.nan),) * 3
     assert all(np.isnan(s) for s in Y.shape)
     Z = Y.compute_chunk_sizes()
     assert Z is Y
