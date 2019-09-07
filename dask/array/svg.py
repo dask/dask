@@ -21,7 +21,10 @@ def svg(chunks, size=200, **kwargs):
     """
     shape = tuple(map(sum, chunks))
     if np.isnan(shape).any():  # don't support unknown sizes
-        raise NotImplementedError("Can't generate SVG with unknown chunk sizes")
+        raise NotImplementedError(
+            "Can't generate SVG with unknown chunk sizes.\n\n"
+            " A possible solution is with x.compute_chunk_sizes()"
+        )
     if not all(shape):
         raise NotImplementedError("Can't generate SVG with 0-length dimensions")
     if len(chunks) == 0:

@@ -142,7 +142,10 @@ def _old_to_new(old_chunks, new_chunks):
     if not sums == sums2:
         raise ValueError("Cannot change dimensions from %r to %r" % (sums, sums2))
     if not n_missing == n_missing2:
-        raise ValueError("Chunks must be unchanging along unknown dimensions")
+        raise ValueError(
+            "Chunks must be unchanging along unknown dimensions.\n\n"
+            "A possible solution:\n  x.compute_chunk_sizes()"
+        )
 
     old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
     for idx, missing in enumerate(n_missing):

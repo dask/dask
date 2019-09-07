@@ -8,6 +8,7 @@ np = pytest.importorskip("numpy")
 import os
 import sys
 import time
+from io import StringIO
 from distutils.version import LooseVersion
 import operator
 from operator import add, sub, getitem
@@ -19,6 +20,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
@@ -4102,3 +4104,130 @@ def test_from_array_meta():
     meta = sparse.COO.from_numpy(x)
     y = da.from_array(x, meta=meta)
     assert isinstance(y._meta, sparse.COO)
+
+
+def test_compute_chunk_sizes():
+    x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
+    y = x[x < 0]
+    assert np.isnan(y.shape[0])
+    assert y.chunks == ((np.nan,) * 5,)
+
+    z = y.compute_chunk_sizes()
+    assert y is z
+    assert z.chunks == ((10, 10, 5, 0, 0),)
+    assert len(z) == 25
+
+
+def test_compute_chunk_sizes_2d_array():
+    X = np.linspace(-1, 1, num=9 * 4).reshape(9, 4)
+    X = da.from_array(X, chunks=(3, 4))
+    idx = X.sum(axis=1) > 0
+    Y = X[idx]
+
+    # This is very similar to the DataFrame->Array conversion
+    assert np.isnan(Y.shape[0]) and Y.shape[1] == 4
+    assert Y.chunks == ((np.nan, np.nan, np.nan), (4,))
+
+    Z = Y.compute_chunk_sizes()
+    assert Y is Z
+    assert Z.chunks == ((0, 1, 3), (4,))
+    assert Z.shape == (4, 4)
+
+
+def test_compute_chunk_sizes_3d_array(N=8):
+    X = np.linspace(-1, 2, num=8 * 8 * 8).reshape(8, 8, 8)
+    X = da.from_array(X, chunks=(4, 4, 4))
+    idx = X.sum(axis=0).sum(axis=0) > 0
+    Y = X[idx]
+    idx = X.sum(axis=1).sum(axis=1) < 0
+    Y = Y[:, idx]
+    idx = X.sum(axis=2).sum(axis=1) > 0.1
+    Y = Y[:, :, idx]
+
+    # Checking to make sure shapes are different on outputs
+    assert Y.compute().shape == (8, 3, 5)
+    assert X.compute().shape == (8, 8, 8)
+
+    assert Y.chunks == ((np.nan, np.nan),) * 3
+    assert all(np.isnan(s) for s in Y.shape)
+    Z = Y.compute_chunk_sizes()
+    assert Z is Y
+    assert Z.shape == (8, 3, 5)
+    assert Z.chunks == ((4, 4), (3, 0), (1, 4))
+
+
+def _known(num=50):
+    return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
+
+
+@pytest.fixture()
+def unknown():
+    x = _known()
+    y = x[x < 0]
+    assert y.chunks == ((np.nan,) * 5,)
+    return y
+
+
+def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        y.rechunk("auto")
+    y.compute_chunk_sizes()
+    y.rechunk("auto")
+
+
+def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        with StringIO() as f:
+            y.to_zarr(f)
+    y.compute_chunk_sizes()
+
+    with pytest.raises(ValueError, match="irregular chunking"):
+        with StringIO() as f:
+            y.to_zarr(f)
+
+
+def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
+    y = unknown
+    with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
+        y.to_svg()
+    y.compute_chunk_sizes()
+    y.to_svg()
+
+
+def test_compute_chunk_sizes_warning_fixes_concatenate():
+    x = _known(num=100).reshape(10, 10)
+    idx = x.sum(axis=0) > 0
+    y1 = x[idx]
+    y2 = x[idx]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.concatenate((y1, y2), axis=1)
+    y1.compute_chunk_sizes()
+    y2.compute_chunk_sizes()
+    da.concatenate((y1, y2), axis=1)
+
+
+def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.argmin(y)
+    y.compute_chunk_sizes()
+    da.argmin(y)
+
+
+def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.reshape(y, (5, 5))
+    y.compute_chunk_sizes()
+    da.reshape(y, (5, 5))
+
+
+def test_compute_chunk_sizes_warning_fixes_slicing():
+    x = _known(num=100).reshape(10, 10)
+    y = x[x.sum(axis=0) < 0]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        y[:3, :]
+    y.compute_chunk_sizes()
+    y[:3, :]
