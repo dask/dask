@@ -61,7 +61,9 @@ following:
 
 .. code-block:: python
 
-   x = x[x > 100]  # don't know how many values are greater than 100 ahead of time
+   >>> x = da.from_array(np.random.randn(100), chunks=20)
+   >>> x += 0.1
+   >>> y = x[x > 0]  # don't know how many values are greater than 0 ahead of time
 
 Operations like the above result in arrays with unknown shapes and unknown
 chunk sizes.  Unknown values within shape or chunks are designated using
@@ -71,21 +73,45 @@ result in an error.
 
 .. code-block:: python
 
-   >>> x.shape
-   (np.nan, np.nan)
-
-   >>> x[100]
+   >>> y.shape
+   (np.nan,)
+   >>> y[4]
+   ...
    ValueError: Array chunk sizes unknown
 
-This can also happen when creating a Dask array from a Dask DataFrame:
+   A possible solution: https://docs.dask.org/en/latest/array-chunks.html#unknown-chunks.
+   Summary: to compute chunks sizes, use
+
+       x.compute_chunk_sizes()  # for Dask Array
+       ddf.to_dask_array(lengths=True)  # for Dask DataFrame ddf
+
+Using :func:`dask.array.Array.compute_chunk_sizes` allows this example run:
+
+.. code-block:: python
+
+   >>> y.compute_chunk_sizes()
+   dask.array<..., chunksize=(19,), ...>
+   >>> y.shape
+   (44,)
+   >>> y[4].compute()
+   0.78621774046566
+
+Unknown chunksizes also occur when using a Dask DataFrame to create a Dask array:
 
 .. code-block:: python
 
    >>> ddf = dask.dataframe.from_pandas(...)
    >>> ddf.to_dask_array()
-   ... dask.array<values, shape=(nan, 2), dtype=float64, chunksize=(nan, 2), chunktype=numpy.ndarray>
+   dask.array<..., shape=(nan, 2), ..., chunksize=(nan, 2)>
 
-For details on how to avoid unknown chunk sizes, look at how to create a Dask
+Using func:`dask.dataframe.DataFrame.to_dask_array` resolves this issue:
+
+.. code-block:: python
+
+   >>> ddf.to_dask_array(lengths=True)
+   dask.array<..., shape=(100, 2), ..., chunksize=(20, 2)>
+
+More details on ``to_dask_array`` are in mentioned in how to create a Dask
 array from a Dask DataFrame in the :doc:`documentation on Dask array creation
 <array-creation>`.
 

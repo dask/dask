@@ -953,8 +953,10 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         if len(chunks) > 1 and np.isnan(chunks).any():
             raise ValueError(
                 "Arg-reductions do not work with arrays that have "
-                "unknown chunksizes.  At some point in your computation "
-                "this array lost chunking information"
+                "unknown chunksizes. At some point in your computation "
+                "this array lost chunking information.\n\n"
+                "A possible solution is with \n"
+                "  x.compute_chunk_sizes()"
             )
 
     # Map chunk across all blocks

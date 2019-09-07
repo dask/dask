@@ -171,7 +171,10 @@ def reshape(x, shape):
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
     if np.isnan(sum(x.shape)):
-        raise ValueError("Array chunk size or shape is unknown. shape: %s", x.shape)
+        raise ValueError(
+            "Array chunk size or shape is unknown. shape: %s\n\n"
+            "Possible solution with x.compute_chunk_sizes()" % x.shape
+        )
 
     if reduce(mul, shape, 1) != x.size:
         raise ValueError("total size of new array must be unchanged")
