@@ -371,7 +371,9 @@ def main(
             port=port,
             dashboard_address=dashboard_address if dashboard else None,
             service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
-            name=name if nprocs == 1 or not name else str(name) + "-" + str(i),
+            name=name
+            if nprocs == 1 or name is None or name == ""
+            else str(name) + "-" + str(i),
             **kwargs
         )
         for i in range(nprocs)

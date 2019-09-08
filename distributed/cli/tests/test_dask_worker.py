@@ -181,7 +181,7 @@ def test_nprocs_requires_nanny(loop):
 def test_nprocs_expands_name(loop):
     with popen(["dask-scheduler", "--no-dashboard"]) as sched:
         with popen(
-            ["dask-worker", "127.0.0.1:8786", "--nprocs", "2", "--name", "foo"]
+            ["dask-worker", "127.0.0.1:8786", "--nprocs", "2", "--name", "0"]
         ) as worker:
             with popen(["dask-worker", "127.0.0.1:8786", "--nprocs", "2"]) as worker:
                 with Client("tcp://127.0.0.1:8786", loop=loop) as c:
@@ -192,7 +192,7 @@ def test_nprocs_expands_name(loop):
 
                     info = c.scheduler_info()
                     names = [d["name"] for d in info["workers"].values()]
-                    foos = [n for n in names if n.startswith("foo")]
+                    foos = [n for n in names if n.startswith("0-")]
                     assert len(foos) == 2
                     assert len(set(names)) == 4
 
