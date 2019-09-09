@@ -1296,6 +1296,8 @@ def parse_timedelta(s, default="seconds"):
     >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
     3
     """
+    if s is None:
+        return None
     if isinstance(s, timedelta):
         s = s.total_seconds()
         return int(s) if int(s) == s else s

@@ -481,6 +481,7 @@ def test_parse_bytes():
     assert parse_bytes("1e6") == 1000000
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
+    assert parse_bytes(123) == 123
 
 
 def test_parse_timedelta():
@@ -497,6 +498,8 @@ def test_parse_timedelta():
         ("1 ns", 1e-9),
         ("2m", 120),
         ("2 minutes", 120),
+        (None, None),
+        (3, 3),
         (datetime.timedelta(seconds=2), 2),
         (datetime.timedelta(milliseconds=100), 0.1),
     ]:
