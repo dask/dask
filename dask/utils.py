@@ -675,26 +675,26 @@ def funcname(func):
         return funcname(func.func)
     # methodcaller
     if isinstance(func, methodcaller):
-        return func.method
+        return func.method[:50]
 
     module_name = getattr(func, "__module__", None) or ""
     type_name = getattr(type(func), "__name__", None) or ""
 
     # toolz.curry
     if "toolz" in module_name and "curry" == type_name:
-        return func.func_name
+        return func.func_name[:50]
     # multipledispatch objects
     if "multipledispatch" in module_name and "Dispatcher" == type_name:
-        return func.name
+        return func.name[:50]
 
     # All other callables
     try:
         name = func.__name__
         if name == "<lambda>":
             return "lambda"
-        return name
+        return name[:50]
     except AttributeError:
-        return str(func)
+        return str(func)[:50]
 
 
 def typename(typ):
