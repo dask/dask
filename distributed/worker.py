@@ -1,6 +1,6 @@
 import asyncio
 import bisect
-from collections import defaultdict, deque
+from collections import defaultdict, deque, namedtuple
 from collections.abc import MutableMapping
 from datetime import timedelta
 import heapq
@@ -85,6 +85,8 @@ DEFAULT_EXTENSIONS = [PubSubWorkerExtension]
 DEFAULT_METRICS = {}
 
 DEFAULT_STARTUP_INFORMATION = {}
+
+SerializedTask = namedtuple("SerializedTask", ["function", "args", "kwargs", "task"])
 
 
 class Worker(ServerNode):
@@ -1330,23 +1332,9 @@ class Worker(ServerNode):
                 return
 
             self.log.append((key, "new"))
-            try:
-                start = time()
-                self.tasks[key] = _deserialize(function, args, kwargs, task)
-                if actor:
-                    self.actors[key] = None
-                stop = time()
-
-                if stop - start > 0.010:
-                    self.startstops[key].append(("deserialize", start, stop))
-            except Exception as e:
-                logger.warning("Could not deserialize task", exc_info=True)
-                emsg = error_message(e)
-                emsg["key"] = key
-                emsg["op"] = "task-erred"
-                self.batched_stream.send(emsg)
-                self.log.append((key, "deserialize-error"))
-                return
+            self.tasks[key] = SerializedTask(function, args, kwargs, task)
+            if actor:
+                self.actors[key] = None
 
             self.priorities[key] = priority
             self.durations[key] = duration
@@ -2344,6 +2332,26 @@ class Worker(ServerNode):
 
         return True
 
+    def _maybe_deserialize_task(self, key):
+        if not isinstance(self.tasks[key], SerializedTask):
+            return self.tasks[key]
+        try:
+            start = time()
+            function, args, kwargs = _deserialize(*self.tasks[key])
+            stop = time()
+
+            if stop - start > 0.010:
+                self.startstops[key].append(("deserialize", start, stop))
+            return function, args, kwargs
+        except Exception as e:
+            logger.warning("Could not deserialize task", exc_info=True)
+            emsg = error_message(e)
+            emsg["key"] = key
+            emsg["op"] = "task-erred"
+            self.batched_stream.send(emsg)
+            self.log.append((key, "deserialize-error"))
+            raise
+
     def ensure_computing(self):
         if self.paused:
             return
@@ -2355,12 +2363,22 @@ class Worker(ServerNode):
                     continue
                 if self.meets_resource_constraints(key):
                     self.constrained.popleft()
+                    try:
+                        # Ensure task is deserialized prior to execution
+                        self.tasks[key] = self._maybe_deserialize_task(key)
+                    except Exception:
+                        continue
                     self.transition(key, "executing")
                 else:
                     break
             while self.ready and len(self.executing) < self.nthreads:
                 _, key = heapq.heappop(self.ready)
                 if self.task_state.get(key) in READY:
+                    try:
+                        # Ensure task is deserialized prior to execution
+                        self.tasks[key] = self._maybe_deserialize_task(key)
+                    except Exception:
+                        continue
                     self.transition(key, "executing")
         except Exception as e:
             logger.exception(e)
