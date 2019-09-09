@@ -4064,17 +4064,17 @@ def test_apply_and_enforce_error_message():
 
 
 def test_dataframe_explode():
-    df = pd.DataFrame({'A': [[1, 2, 3], 'foo', [3, 4]], 'B': 1})
-    exploded_df = df.explode('A')
+    df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
+    exploded_df = df.explode("A")
     ddf = dd.from_pandas(df, npartitions=2)
-    exploded_ddf = ddf.explode('A').compute()
+    exploded_ddf = ddf.explode("A").compute()
     assert_eq(exploded_ddf.shape, exploded_df.shape)
-    assert (exploded_df['A'] == exploded_ddf['A']).all()
-    assert (exploded_df['B'] == exploded_ddf['B']).all()
+    assert (exploded_df["A"] == exploded_ddf["A"]).all()
+    assert (exploded_df["B"] == exploded_ddf["B"]).all()
 
 
 def test_series_explode():
-    s = pd.Series([[1, 2, 3], 'foo', [3, 4]])
+    s = pd.Series([[1, 2, 3], "foo", [3, 4]])
     exploded_s = s.explode()
     ds = dd.from_pandas(s, npartitions=2)
     exploded_ds = ds.explode()
