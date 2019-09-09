@@ -4070,10 +4070,9 @@ def test_dataframe_explode():
     df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
     exploded_df = df.explode("A")
     ddf = dd.from_pandas(df, npartitions=2)
-    exploded_ddf = ddf.explode("A").compute()
-    assert_eq(exploded_ddf.shape, exploded_df.shape)
-    assert (exploded_df["A"] == exploded_ddf["A"]).all()
-    assert (exploded_df["B"] == exploded_ddf["B"]).all()
+    exploded_ddf = ddf.explode("A")
+    assert ddf.divisions == exploded_ddf.divisions
+    assert_eq(exploded_ddf.compute(), exploded_df)
 
 
 @pytest.mark.skipif(
@@ -4084,5 +4083,5 @@ def test_series_explode():
     exploded_s = s.explode()
     ds = dd.from_pandas(s, npartitions=2)
     exploded_ds = ds.explode()
-    assert_eq(exploded_ds.shape, exploded_s.shape)
-    assert (exploded_ds == exploded_s).all()
+    assert_eq(exploded_ds, exploded_s)
+    assert ds.divisions == exploded_ds.divisions

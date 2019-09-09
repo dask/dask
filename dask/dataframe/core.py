@@ -2713,9 +2713,9 @@ Dask Name: {name}, {task} tasks""".format(
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
 
-    @derived_from(pd.Series)
+    @derived_from(pd.Series, version="0.25.0")
     def explode(self):
-        meta = self._meta_nonempty.explode()
+        meta = self._meta.explode()
         return self.map_partitions(M.explode, meta=meta)
 
     def unique(self, split_every=None, split_out=1):
@@ -3614,9 +3614,9 @@ class DataFrame(_Frame):
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame, version="0.25.0")
     def explode(self, column):
-        meta = self._meta_nonempty.explode(column)
+        meta = self._meta.explode(column)
         return self.map_partitions(M.explode, column, meta=meta)
 
     def to_bag(self, index=False):
