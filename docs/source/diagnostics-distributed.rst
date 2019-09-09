@@ -45,6 +45,28 @@ For more information we recommend the video guide above.
    Client
 
 
+Capture diagnostics
+-------------------
+
+.. autosummary::
+   get_task_stream
+   Client.profile
+
+You can capture some of the same information that the dashboard presents for
+offline processing using the ``get_task_stream`` and ``Client.profile``
+functions.  These capture the start and stop time of every task and transfer,
+as well as the results of a statistical profiler.
+
+.. code-block:: python
+
+   with get_task_stream(plot='save', filename="task-stream.html") as ts:
+       x.compute()
+
+   client.profile(filename="dask-profile.html")
+
+   history = ts.data
+
+
 Progress bar
 ------------
 
@@ -83,7 +105,9 @@ External Documentation
 More in-depth technical documentation about Dask's distributed scheduler is
 available at https://distributed.dask.org/en/latest
 
+
 API
 ---
 
 .. autofunction:: progress
+.. autofunction:: get_task_stream

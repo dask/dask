@@ -741,6 +741,7 @@ API
    Client.map
    Client.ncores
    Client.persist
+   Client.profile
    Client.publish_dataset
    Client.rebalance
    Client.replicate
