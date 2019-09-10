@@ -504,7 +504,7 @@ def test_parse_timedelta():
         (datetime.timedelta(milliseconds=100), 0.1),
     ]:
         result = parse_timedelta(text)
-        assert abs(result - value) < 1e-14
+        assert result == value or abs(result - value) < 1e-14
 
     assert parse_timedelta("1ms", default="seconds") == 0.001
     assert parse_timedelta("1", default="seconds") == 1
