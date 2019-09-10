@@ -246,6 +246,18 @@ def test_pivot_table_dtype():
     assert_eq(res, exp)
 
 
+def test_pivot_table_index_dtype():
+    df = pd.DataFrame({"A": pd.date_range(start="2019-08-01",
+                                          periods=3,
+                                          freq="1D"),
+                       "B": pd.Categorical(list("abc")),
+                       "C": [1,2,3]})
+    ddf = dd.from_pandas(df, 2)
+    res = dd.pivot_table(ddf, index="A", columns="B", values="C", aggfunc="count")
+
+    assert res.index.dtype == np.dtype('datetime64[ns]')
+
+
 def test_pivot_table_errors():
     df = pd.DataFrame(
         {
