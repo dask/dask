@@ -96,7 +96,7 @@ Using ``compute_chunk_sizes`` allows this example run:
    >>> y[4].compute()
    0.78621774046566
 
-Note that ``compute_chunk_sizes`` immediately performs computation and
+Note that :meth:`dask.array.Array.compute_chunk_sizes` immediately performs computation and
 modifies the array in-place.
 
 Unknown chunksizes also occur when using a Dask DataFrame to create a Dask array:
@@ -114,7 +114,7 @@ Using ``to_dask_array`` resolves this issue:
    >>> ddf.to_dask_array(lengths=True)
    dask.array<..., shape=(100, 2), ..., chunksize=(20, 2)>
 
-More details on ``to_dask_array`` are in mentioned in how to create a Dask
+More details on :meth:`dask.dataframe.DataFrame.to_dask_array` are in mentioned in how to create a Dask
 array from a Dask DataFrame in the :doc:`documentation on Dask array creation
 <array-creation>`.
 
