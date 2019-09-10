@@ -411,6 +411,12 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: utils.make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
@@ -432,3 +438,10 @@ Other functions
 .. autofunction:: get_dummies
 .. autofunction:: pivot_table
 .. autofunction:: melt
+
+Demo Data
+~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction::  demo.make_timeseries
