@@ -85,7 +85,7 @@ result in an error.
        x.compute_chunk_sizes()  # for Dask Array
        ddf.to_dask_array(lengths=True)  # for Dask DataFrame ddf
 
-Using ``compute_chunk_sizes`` allows this example run:
+Using :func:`~dask.array.Array.compute_chunk_sizes`  allows this example run:
 
 .. code-block:: python
 
@@ -96,7 +96,7 @@ Using ``compute_chunk_sizes`` allows this example run:
    >>> y[4].compute()
    0.78621774046566
 
-Note that :meth:`dask.array.Array.compute_chunk_sizes` immediately performs computation and
+Note that :func:`~dask.array.Array.compute_chunk_sizes` immediately performs computation and
 modifies the array in-place.
 
 Unknown chunksizes also occur when using a Dask DataFrame to create a Dask array:
@@ -107,14 +107,14 @@ Unknown chunksizes also occur when using a Dask DataFrame to create a Dask array
    >>> ddf.to_dask_array()
    dask.array<..., shape=(nan, 2), ..., chunksize=(nan, 2)>
 
-Using ``to_dask_array`` resolves this issue:
+Using :func:`~dask.dataframe.DataFrame.to_dask_array` resolves this issue:
 
 .. code-block:: python
 
    >>> ddf.to_dask_array(lengths=True)
    dask.array<..., shape=(100, 2), ..., chunksize=(20, 2)>
 
-More details on :meth:`dask.dataframe.DataFrame.to_dask_array` are in mentioned in how to create a Dask
+More details on :func:`~dask.dataframe.DataFrame.to_dask_array` are in mentioned in how to create a Dask
 array from a Dask DataFrame in the :doc:`documentation on Dask array creation
 <array-creation>`.
 
