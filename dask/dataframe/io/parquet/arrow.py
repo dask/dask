@@ -249,7 +249,9 @@ class ArrowEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            parts = [(piece.path, piece.partition_keys) for piece in pieces]
+            parts = [
+                (piece.path, piece.row_group, piece.partition_keys) for piece in pieces
+            ]
         parts = [
             {
                 "piece": piece,
@@ -272,10 +274,11 @@ class ArrowEngine(Engine):
                 piece, open_file_func=partial(fs.open, mode="rb")
             )
         else:
-            # `piece` contains (path, partition_keys)
+            # `piece` contains (path, row_group, partition_keys)
             piece = pq.ParquetDatasetPiece(
                 piece[0],
-                partition_keys=piece[1],
+                row_group=piece[1],
+                partition_keys=piece[2],
                 open_file_func=partial(fs.open, mode="rb"),
             )
         df = piece.read(
