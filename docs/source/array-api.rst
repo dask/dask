@@ -718,8 +718,6 @@ Other functions
 
 .. currentmodule:: dask.array
 
-.. currentmodule:: dask.array
-
 Array Methods
 ~~~~~~~~~~~~~
 
