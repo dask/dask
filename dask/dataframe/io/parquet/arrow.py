@@ -1,3 +1,4 @@
+from functools import partial
 import json
 
 import pandas as pd
@@ -248,7 +249,7 @@ class ArrowEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            parts = pieces
+            parts = [(piece.path, piece.partition_keys) for piece in pieces]
         parts = [
             {
                 "piece": piece,
@@ -266,30 +267,26 @@ class ArrowEngine(Engine):
         if isinstance(index, list):
             columns += index
         if isinstance(piece, str):
-            # `piece` is a file path
-            # TODO: What to do about partitions?
-            table = pq.read_table(
-                piece,
-                columns=columns,
-                use_pandas_metadata=True,
-                filesystem=fs,
-                use_threads=False,
-                **kwargs.get("read", {}),
+            # `piece` is a file-path string
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
             )
         else:
-            # `piece` is a row-group
-            with fs.open(piece.path, mode="rb") as f:
-                table = piece.read(
-                    columns=columns,
-                    partitions=partitions,
-                    use_pandas_metadata=True,
-                    file=f,
-                    use_threads=False,
-                    **kwargs.get("read", {}),
-                )
-        df = table.to_pandas(
-            categories=categories, use_threads=False, ignore_metadata=True
-        )[list(columns)]
+            # `piece` contains (path, partition_keys)
+            piece = pq.ParquetDatasetPiece(
+                piece[0],
+                partition_keys=piece[1],
+                open_file_func=partial(fs.open, mode="rb"),
+            )
+        df = piece.read(
+            columns=columns,
+            partitions=partitions,
+            use_pandas_metadata=True,
+            use_threads=False,
+            **kwargs.get("read", {}),
+        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
+            list(columns)
+        ]
 
         if index:
             df = df.set_index(index)
