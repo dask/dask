@@ -1,12 +1,12 @@
 import atexit
 import logging
 import math
-import multiprocessing
 import warnings
 import weakref
 
 from dask.utils import factors
 
+from .. import system
 from .spec import SpecCluster
 from ..nanny import Nanny
 from ..scheduler import Scheduler
@@ -146,14 +146,12 @@ class LocalCluster(SpecCluster):
                 n_workers, threads_per_worker = nprocesses_nthreads()
             else:
                 n_workers = 1
-                threads_per_worker = multiprocessing.cpu_count()
+                threads_per_worker = system.CPU_COUNT
         if n_workers is None and threads_per_worker is not None:
-            n_workers = max(1, multiprocessing.cpu_count() // threads_per_worker)
+            n_workers = max(1, system.CPU_COUNT // threads_per_worker)
         if n_workers and threads_per_worker is None:
             # Overcommit threads per worker, rather than undercommit
-            threads_per_worker = max(
-                1, int(math.ceil(multiprocessing.cpu_count() / n_workers))
-            )
+            threads_per_worker = max(1, int(math.ceil(system.CPU_COUNT / n_workers)))
         if n_workers and "memory_limit" not in worker_kwargs:
             worker_kwargs["memory_limit"] = parse_memory_limit("auto", 1, n_workers)
 
@@ -208,7 +206,7 @@ class LocalCluster(SpecCluster):
         )
 
 
-def nprocesses_nthreads(n=multiprocessing.cpu_count()):
+def nprocesses_nthreads(n=system.CPU_COUNT):
     """
     The default breakdown of processes and threads for a given number of cores
 

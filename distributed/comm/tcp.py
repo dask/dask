@@ -18,6 +18,7 @@ from tornado.iostream import StreamClosedError, IOStream
 from tornado.tcpclient import TCPClient
 from tornado.tcpserver import TCPServer
 
+from ..system import MEMORY_LIMIT
 from ..threadpoolexecutor import ThreadPoolExecutor
 from ..utils import (
     ensure_bytes,
@@ -38,16 +39,7 @@ from .utils import to_frames, from_frames, get_tcp_server_address, ensure_concre
 logger = logging.getLogger(__name__)
 
 
-def get_total_physical_memory():
-    try:
-        import psutil
-
-        return psutil.virtual_memory().total / 2
-    except ImportError:
-        return 2e9
-
-
-MAX_BUFFER_SIZE = get_total_physical_memory()
+MAX_BUFFER_SIZE = MEMORY_LIMIT / 2
 
 
 def set_tcp_timeout(stream):

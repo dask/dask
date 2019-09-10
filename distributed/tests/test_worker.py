@@ -2,7 +2,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 import importlib
 import logging
-import multiprocessing
 from numbers import Number
 from operator import add
 import os
@@ -30,6 +29,7 @@ from distributed import (
     get_worker,
     Reschedule,
     wait,
+    system,
 )
 from distributed.compatibility import WINDOWS
 from distributed.core import rpc
@@ -62,7 +62,7 @@ from distributed.utils_test import (  # noqa: F401
 def test_worker_nthreads():
     w = Worker("127.0.0.1", 8019)
     try:
-        assert w.executor._max_workers == multiprocessing.cpu_count()
+        assert w.executor._max_workers == system.CPU_COUNT
     finally:
         shutil.rmtree(w.local_directory)
 
@@ -500,7 +500,7 @@ def test_memory_limit_auto():
     assert isinstance(a.memory_limit, Number)
     assert isinstance(b.memory_limit, Number)
 
-    if multiprocessing.cpu_count() > 1:
+    if system.CPU_COUNT > 1:
         assert a.memory_limit < b.memory_limit
 
     assert c.memory_limit == d.memory_limit
@@ -1436,26 +1436,14 @@ def test_host_address(c, s):
     yield n.close()
 
 
-def test_resource_limit():
+def test_resource_limit(monkeypatch):
     assert parse_memory_limit("250MiB", 1, total_cores=1) == 1024 * 1024 * 250
 
-    # get current limit
-    resource = pytest.importorskip("resource")
-    try:
-        hard_limit = resource.getrlimit(resource.RLIMIT_RSS)[1]
-    except OSError:
-        pytest.skip("resource could not get the RSS limit")
-    memory_limit = psutil.virtual_memory().total
-    if hard_limit > memory_limit or hard_limit < 0:
-        hard_limit = memory_limit
+    new_limit = 1024 * 1024 * 200
+    import distributed.worker
 
-    # decrease memory limit by one byte
-    new_limit = hard_limit - 1
-    try:
-        resource.setrlimit(resource.RLIMIT_RSS, (new_limit, new_limit))
-        assert parse_memory_limit(hard_limit, 1, total_cores=1) == new_limit
-    except OSError:
-        pytest.skip("resource could not set the RSS limit")
+    monkeypatch.setattr(distributed.system, "MEMORY_LIMIT", new_limit)
+    assert parse_memory_limit("250MiB", 1, total_cores=1) == new_limit
 
 
 @pytest.mark.asyncio

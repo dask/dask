@@ -14,10 +14,11 @@ from distributed.protocol import (
     msgpack,
 )
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
-from distributed.utils import tmpfile, nbytes
-from distributed.utils_test import gen_cluster
 from distributed.protocol.numpy import itemsize
 from distributed.protocol.compression import maybe_compress
+from distributed.system import MEMORY_LIMIT
+from distributed.utils import tmpfile, nbytes
+from distributed.utils_test import gen_cluster
 
 
 def test_serialize():
@@ -151,9 +152,8 @@ def test_memmap():
 
 @pytest.mark.slow
 def test_dumps_serialize_numpy_large():
-    psutil = pytest.importorskip("psutil")
-    if psutil.virtual_memory().total < 2e9:
-        return
+    if MEMORY_LIMIT < 2e9:
+        pytest.skip("insufficient memory")
     x = np.random.random(size=int(BIG_BYTES_SHARD_SIZE * 2 // 8)).view("u1")
     assert x.nbytes == BIG_BYTES_SHARD_SIZE * 2
     frames = dumps([to_serialize(x)])

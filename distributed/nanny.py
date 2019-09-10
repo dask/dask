@@ -1,7 +1,6 @@
 from datetime import timedelta
 import logging
 from multiprocessing.queues import Empty
-import multiprocessing
 import os
 import psutil
 import shutil
@@ -23,6 +22,7 @@ from .node import ServerNode
 from .process import AsyncProcess
 from .proctitle import enable_proctitle_on_children
 from .security import Security
+from .system import CPU_COUNT
 from .utils import (
     get_ip,
     mp_context,
@@ -110,7 +110,7 @@ class Nanny(ServerNode):
             nthreads = ncores
 
         self._given_worker_port = worker_port
-        self.nthreads = nthreads or multiprocessing.cpu_count()
+        self.nthreads = nthreads or CPU_COUNT
         self.reconnect = reconnect
         self.validate = validate
         self.resources = resources

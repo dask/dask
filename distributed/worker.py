@@ -5,7 +5,6 @@ from collections.abc import MutableMapping
 from datetime import timedelta
 import heapq
 import logging
-import multiprocessing
 import os
 from pickle import PicklingError
 import random
@@ -14,7 +13,6 @@ import sys
 import uuid
 import warnings
 import weakref
-import psutil
 
 import dask
 from dask.core import istask
@@ -28,7 +26,7 @@ except ImportError:
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-from . import profile, comm
+from . import profile, comm, system
 from .batched import BatchedSend
 from .comm import get_address_host, connect
 from .comm.addressing import address_from_user_args
@@ -71,8 +69,6 @@ logger = logging.getLogger(__name__)
 LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
 
 no_value = "--no-value-sentinel--"
-
-TOTAL_MEMORY = psutil.virtual_memory().total
 
 IN_PLAY = ("waiting", "ready", "executing", "long-running")
 PENDING = ("waiting", "ready", "constrained")
@@ -242,7 +238,7 @@ class Worker(ServerNode):
     memory_limit: int, float, string
         Number of bytes of memory that this worker should use.
         Set to zero for no limit.  Set to 'auto' to calculate
-        as TOTAL_MEMORY * min(1, nthreads / total_cores)
+        as system.MEMORY_LIMIT * min(1, nthreads / total_cores)
         Use strings or numbers like 5GB or 5e9
     memory_target_fraction: float
         Fraction of memory to try to stay beneath
@@ -458,7 +454,7 @@ class Worker(ServerNode):
             warnings.warn("the ncores= parameter has moved to nthreads=")
             nthreads = ncores
 
-        self.nthreads = nthreads or multiprocessing.cpu_count()
+        self.nthreads = nthreads or system.CPU_COUNT
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
         self.death_timeout = parse_timedelta(death_timeout)
@@ -3042,33 +3038,23 @@ class Reschedule(Exception):
     pass
 
 
-def parse_memory_limit(memory_limit, nthreads, total_cores=multiprocessing.cpu_count()):
+def parse_memory_limit(memory_limit, nthreads, total_cores=system.CPU_COUNT):
     if memory_limit is None:
         return None
 
     if memory_limit == "auto":
-        memory_limit = int(TOTAL_MEMORY * min(1, nthreads / total_cores))
+        memory_limit = int(system.MEMORY_LIMIT * min(1, nthreads / total_cores))
     with ignoring(ValueError, TypeError):
         memory_limit = float(memory_limit)
         if isinstance(memory_limit, float) and memory_limit <= 1:
-            memory_limit = int(memory_limit * TOTAL_MEMORY)
+            memory_limit = int(memory_limit * system.MEMORY_LIMIT)
 
     if isinstance(memory_limit, str):
         memory_limit = parse_bytes(memory_limit)
     else:
         memory_limit = int(memory_limit)
 
-    # should be less than hard RSS limit
-    try:
-        import resource
-
-        hard_limit = resource.getrlimit(resource.RLIMIT_RSS)[1]
-        if hard_limit > 0:
-            memory_limit = min(memory_limit, hard_limit)
-    except (ImportError, OSError):
-        pass
-
-    return memory_limit
+    return min(memory_limit, system.MEMORY_LIMIT)
 
 
 async def get_data_from_worker(

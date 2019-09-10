@@ -47,23 +47,12 @@ class RPCClosed(IOError):
 logger = logging.getLogger(__name__)
 
 
-def get_total_physical_memory():
-    try:
-        import psutil
-
-        return psutil.virtual_memory().total / 2
-    except ImportError:
-        return 2e9
-
-
 def raise_later(exc):
     def _raise(*args, **kwargs):
         raise exc
 
     return _raise
 
-
-MAX_BUFFER_SIZE = get_total_physical_memory()
 
 tick_maximum_delay = parse_timedelta(
     dask.config.get("distributed.admin.tick.limit"), default="ms"

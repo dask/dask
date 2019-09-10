@@ -38,6 +38,7 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
+from . import system
 from .client import default_client, _global_clients, Client
 from .compatibility import WINDOWS
 from .comm import Comm
@@ -61,7 +62,7 @@ from .utils import (
     thread_state,
     _offload_executor,
 )
-from .worker import Worker, TOTAL_MEMORY
+from .worker import Worker
 from .nanny import Nanny
 
 try:
@@ -636,7 +637,11 @@ def cluster(
             q = mp_context.Queue()
             fn = "_test_worker-%s" % uuid.uuid4()
             kwargs = merge(
-                {"nthreads": 1, "local_directory": fn, "memory_limit": TOTAL_MEMORY},
+                {
+                    "nthreads": 1,
+                    "local_directory": fn,
+                    "memory_limit": system.MEMORY_LIMIT,
+                },
                 worker_kwargs,
             )
             proc = mp_context.Process(
@@ -860,7 +865,7 @@ def gen_cluster(
         nthreads = ncores
 
     worker_kwargs = merge(
-        {"memory_limit": TOTAL_MEMORY, "death_timeout": 5}, worker_kwargs
+        {"memory_limit": system.MEMORY_LIMIT, "death_timeout": 5}, worker_kwargs
     )
 
     def _(func):

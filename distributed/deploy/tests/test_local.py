@@ -1,6 +1,5 @@
 from functools import partial
 import gc
-import multiprocessing
 import subprocess
 import sys
 from time import sleep
@@ -15,6 +14,7 @@ import pytest
 from distributed import Client, Worker, Nanny, get_client
 from distributed.deploy.local import LocalCluster, nprocesses_nthreads
 from distributed.metrics import time
+from distributed.system import CPU_COUNT, MEMORY_LIMIT
 from distributed.utils_test import (  # noqa: F401
     clean,
     cleanup,
@@ -29,7 +29,6 @@ from distributed.utils_test import (  # noqa: F401
 )
 from distributed.utils_test import loop  # noqa: F401
 from distributed.utils import sync
-from distributed.worker import TOTAL_MEMORY
 
 from distributed.deploy.utils_test import ClusterTest
 
@@ -230,9 +229,7 @@ async def test_defaults(cleanup):
     async with LocalCluster(
         scheduler_port=0, silence_logs=False, dashboard_address=None, asynchronous=True
     ) as c:
-        assert (
-            sum(w.nthreads for w in c.workers.values()) == multiprocessing.cpu_count()
-        )
+        assert sum(w.nthreads for w in c.workers.values()) == CPU_COUNT
         assert all(isinstance(w, Nanny) for w in c.workers.values())
 
 
@@ -245,9 +242,7 @@ async def test_defaults_2(cleanup):
         dashboard_address=None,
         asynchronous=True,
     ) as c:
-        assert (
-            sum(w.nthreads for w in c.workers.values()) == multiprocessing.cpu_count()
-        )
+        assert sum(w.nthreads for w in c.workers.values()) == CPU_COUNT
         assert all(isinstance(w, Worker) for w in c.workers.values())
         assert len(c.workers) == 1
 
@@ -261,18 +256,18 @@ async def test_defaults_3(cleanup):
         dashboard_address=None,
         asynchronous=True,
     ) as c:
-        if multiprocessing.cpu_count() % 2 == 0:
-            expected_total_threads = max(2, multiprocessing.cpu_count())
+        if CPU_COUNT % 2 == 0:
+            expected_total_threads = max(2, CPU_COUNT)
         else:
             # n_workers not a divisor of _nthreads => threads are overcommitted
-            expected_total_threads = max(2, multiprocessing.cpu_count() + 1)
+            expected_total_threads = max(2, CPU_COUNT + 1)
         assert sum(w.nthreads for w in c.workers.values()) == expected_total_threads
 
 
 @pytest.mark.asyncio
 async def test_defaults_4(cleanup):
     async with LocalCluster(
-        threads_per_worker=multiprocessing.cpu_count() * 2,
+        threads_per_worker=CPU_COUNT * 2,
         scheduler_port=0,
         silence_logs=False,
         dashboard_address=None,
@@ -284,7 +279,7 @@ async def test_defaults_4(cleanup):
 @pytest.mark.asyncio
 async def test_defaults_5(cleanup):
     async with LocalCluster(
-        n_workers=multiprocessing.cpu_count() * 2,
+        n_workers=CPU_COUNT * 2,
         scheduler_port=0,
         silence_logs=False,
         dashboard_address=None,
@@ -473,7 +468,7 @@ def test_memory(loop, n_workers):
         dashboard_address=None,
         loop=loop,
     ) as cluster:
-        assert sum(w.memory_limit for w in cluster.workers.values()) <= TOTAL_MEMORY
+        assert sum(w.memory_limit for w in cluster.workers.values()) <= MEMORY_LIMIT
 
 
 @pytest.mark.parametrize("n_workers", [None, 3])
@@ -489,7 +484,7 @@ def test_memory_nanny(loop, n_workers):
         with Client(cluster.scheduler_address, loop=loop) as c:
             info = c.scheduler_info()
             assert (
-                sum(w["memory_limit"] for w in info["workers"].values()) <= TOTAL_MEMORY
+                sum(w["memory_limit"] for w in info["workers"].values()) <= MEMORY_LIMIT
             )
 
 
