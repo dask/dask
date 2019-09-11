@@ -82,16 +82,21 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     (if `gather_statistics=None`).
     """
     parts = []
+    fast_metadata = True
     if len(paths) > 1:
+        base, fns = _analyze_paths(paths, fs)
+        relpaths = [path.replace(base, "").lstrip("/") for path in paths]
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
             pf = ParquetFile(
                 paths, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
             )
+            if "_metadata" not in relpaths:
+                fast_metadata = False
         else:
-            base, fns = _analyze_paths(paths, fs)
-            relpaths = [path.replace(base, "").lstrip("/") for path in paths]
+            # base, fns = _analyze_paths(paths, fs)
+            # relpaths = [path.replace(base, "").lstrip("/") for path in paths]
             if "_metadata" in relpaths:
                 # We have a _metadata file, lets use it
                 pf = ParquetFile(
@@ -128,6 +133,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             elif gather_statistics is not False:
                 # Scan every file
                 pf = ParquetFile(paths, open_with=fs.open, **kwargs.get("file", {}))
+                fast_metadata = False
             else:
                 # Use _common_metadata file if it is available.
                 # Otherwise, just use 0th file
@@ -151,7 +157,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
                 paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
             )
 
-    return parts, pf, gather_statistics
+    return parts, pf, gather_statistics, fast_metadata
 
 
 class FastParquetEngine(Engine):
@@ -169,7 +175,7 @@ class FastParquetEngine(Engine):
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below).
-        parts, pf, gather_statistics = _determine_pf_parts(
+        parts, pf, gather_statistics, fast_metadata = _determine_pf_parts(
             fs, paths, gather_statistics, **kwargs
         )
 
@@ -299,18 +305,16 @@ class FastParquetEngine(Engine):
         # if we have a list of files and gather_statistics=False
         if not parts:
             partsin = pf.row_groups
-            pf.fmd.key_value_metadata = None
+            if fast_metadata:
+                pf = (paths, gather_statistics)
         else:
-            pf = None
             partsin = parts
+            pf = None
         parts = []
-        for piece in partsin:
-            if pf is not None:
-                for col in piece.columns:
-                    col.meta_data.statistics = None
-                    col.meta_data.encoding_stats = None
+        for i, piece in enumerate(partsin):
+            piece_item = i if pf else piece
             part = {
-                "piece": piece,
+                "piece": piece_item,
                 "kwargs": {"pf": pf, "categories": categories_dict or categories},
             }
             parts.append(part)
@@ -322,11 +326,7 @@ class FastParquetEngine(Engine):
         if isinstance(index, list):
             columns += index
 
-        if pf:
-            df = pf.read_row_group_file(
-                piece, columns, categories, index=index, **kwargs.get("read", {})
-            )
-        else:
+        if pf is None:
             base, fns = _analyze_paths([piece], fs)
             scheme = get_file_scheme(fns)
             pf = ParquetFile(piece, open_with=fs.open)
@@ -338,6 +338,14 @@ class FastParquetEngine(Engine):
             pf.cats = _paths_to_cats(fns, scheme)
             pf.fn = base
             df = pf.to_pandas(columns, categories, index=index)
+        else:
+            if isinstance(pf, tuple):
+                pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
+            piece = pf.row_groups[piece]
+            pf.fmd.key_value_metadata = None
+            df = pf.read_row_group_file(
+                piece, columns, categories, index=index, **kwargs.get("read", {})
+            )
 
         return df
 
