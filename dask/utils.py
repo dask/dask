@@ -686,6 +686,9 @@ def funcname(func):
     # multipledispatch objects
     if "multipledispatch" in module_name and "Dispatcher" == type_name:
         return func.name
+    # numpy.vectorize objects
+    if "numpy" in module_name and "vectorize" == type_name:
+        return "vectorize_" + func.pyfunc.__name__
 
     # All other callables
     try:
