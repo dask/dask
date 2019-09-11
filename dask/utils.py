@@ -1158,9 +1158,13 @@ def parse_bytes(s):
     1000000000
     >>> parse_bytes('MB')
     1000000
+    >>> parse_bytes(123)
+    123
     >>> parse_bytes('5 foos')  # doctest: +SKIP
     ValueError: Could not interpret 'foos' as a byte unit
     """
+    if isinstance(s, (int, float)):
+        return int(s)
     s = s.replace(" ", "")
     if not s[0].isdigit():
         s = "1" + s
@@ -1292,6 +1296,8 @@ def parse_timedelta(s, default="seconds"):
     >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
     3
     """
+    if s is None:
+        return None
     if isinstance(s, timedelta):
         s = s.total_seconds()
         return int(s) if int(s) == s else s

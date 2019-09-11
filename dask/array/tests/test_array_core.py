@@ -1854,7 +1854,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x")
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1862,7 +1862,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x", chunks=None)
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1870,7 +1870,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x", chunks=(1, 1))
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1879,7 +1879,7 @@ def test_to_hdf5():
     with tmpfile(".hdf5") as fn:
         da.to_hdf5(fn, {"/x": x, "/y": y})
 
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             assert_eq(f["/x"][:], x)
             assert f["/x"].chunks == (2, 2)
             assert_eq(f["/y"][:], y)
@@ -2370,7 +2370,7 @@ def test_asarray_h5py():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
             x = da.asarray(d)
             assert d in x.dask.values()
@@ -2593,7 +2593,7 @@ def test_h5py_newaxis():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile("h5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
             d = da.from_array(x, chunks=(5, 5))
             assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
@@ -2829,8 +2829,8 @@ def test_h5py_tokenize():
     h5py = pytest.importorskip("h5py")
     with tmpfile("hdf5") as fn1:
         with tmpfile("hdf5") as fn2:
-            f = h5py.File(fn1)
-            g = h5py.File(fn2)
+            f = h5py.File(fn1, mode="a")
+            g = h5py.File(fn2, mode="a")
 
             f["x"] = np.arange(10).astype(float)
             g["x"] = np.ones(10).astype(float)
@@ -4067,13 +4067,13 @@ def test_auto_chunks_h5py():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f.create_dataset(
                 "/x", shape=(1000, 1000), chunks=(32, 64), dtype="float64"
             )
             d[:] = 1
 
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f["x"]
             with dask.config.set({"array.chunk-size": "1 MiB"}):
                 x = da.from_array(d)

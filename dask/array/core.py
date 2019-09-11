@@ -828,7 +828,7 @@ def store(
     >>> x = ...  # doctest: +SKIP
 
     >>> import h5py  # doctest: +SKIP
-    >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
+    >>> f = h5py.File('myfile.hdf5', mode='a')  # doctest: +SKIP
     >>> dset = f.create_dataset('/data', shape=x.shape,
     ...                                  chunks=x.chunks,
     ...                                  dtype='f8')  # doctest: +SKIP
@@ -4356,7 +4356,7 @@ def to_hdf5(filename, *args, **kwargs):
 
     import h5py
 
-    with h5py.File(filename) as f:
+    with h5py.File(filename, mode="a") as f:
         dsets = [
             f.require_dataset(
                 dp,
