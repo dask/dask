@@ -1966,3 +1966,21 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
             check_divisions=False,
             check_index=False,
         )
+
+
+def test_graph_size_pyarrow(tmpdir):
+    check_pyarrow()
+
+    import pickle
+
+    fn = str(tmpdir)
+
+    ddf1 = dask.datasets.timeseries(
+        start="2000-01-01", end="2000-01-02", freq="60S", partition_freq="1H"
+    )
+
+    eng = "pyarrow"
+    ddf1.to_parquet(fn, engine=eng)
+    ddf2 = dd.read_parquet(fn, engine=eng)
+
+    assert len(pickle.dumps(ddf2.__dask_graph__())) < 10000
