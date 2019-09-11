@@ -235,7 +235,9 @@ def test_glob(hdfs):
         basedir + p for p in ["/a", "/a1", "/a2", "/a3"]
     }
 
-    assert set(hdfs.glob(basedir + "/c/*")) == {basedir + p for p in ["/c/x1", "/c/x2"]}
+    assert set(hdfs.glob(basedir + "/c/*")) == {
+        basedir + p for p in ["/c/x1", "/c/x2", "/c/d"]
+    }
 
     assert set(hdfs.glob(basedir + "/*/x*")) == {
         basedir + p for p in ["/c/x1", "/c/x2", "/c2/x1", "/c2/x2"]
@@ -251,7 +253,7 @@ def test_glob(hdfs):
     assert hdfs.glob(basedir + "/*/missing") == []
 
     assert set(hdfs.glob(basedir + "/*")) == {
-        basedir + p for p in ["/a", "/a1", "/a2", "/a3", "/b1"]
+        basedir + p for p in ["/a", "/a1", "/a2", "/a3", "/b1", "/c", "/c2"]
     }
 
 
