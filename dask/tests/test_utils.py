@@ -346,6 +346,14 @@ def test_funcname_multipledispatch():
     assert funcname(functools.partial(foo, a=1)) == "foo"
 
 
+def test_funcname_numpy_vectorize():
+    np = pytest.importorskip("numpy")
+
+    func = np.vectorize(int)
+
+    assert funcname(func) == "vectorize_int"
+
+
 def test_ndeepmap():
     L = 1
     assert ndeepmap(0, inc, L) == 2
