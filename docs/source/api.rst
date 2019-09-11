@@ -51,3 +51,8 @@ This more advanced API is available in the `Dask distributed documentation
 .. autofunction:: optimize
 .. autofunction:: persist
 .. autofunction:: visualize
+
+Finally, Dask has a few helpers for generating demo datasets
+
+.. autofunction:: datasets.make_people
+.. autofunction:: datasets.timeseries
