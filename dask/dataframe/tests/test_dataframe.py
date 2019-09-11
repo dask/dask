@@ -4061,3 +4061,27 @@ def test_apply_and_enforce_error_message():
 
     assert "['x']" in str(info.value)
     assert "['x', 'y']" in str(info.value)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
+)
+def test_dataframe_explode():
+    df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
+    exploded_df = df.explode("A")
+    ddf = dd.from_pandas(df, npartitions=2)
+    exploded_ddf = ddf.explode("A")
+    assert ddf.divisions == exploded_ddf.divisions
+    assert_eq(exploded_ddf.compute(), exploded_df)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
+)
+def test_series_explode():
+    s = pd.Series([[1, 2, 3], "foo", [3, 4]])
+    exploded_s = s.explode()
+    ds = dd.from_pandas(s, npartitions=2)
+    exploded_ds = ds.explode()
+    assert_eq(exploded_ds, exploded_s)
+    assert ds.divisions == exploded_ds.divisions
