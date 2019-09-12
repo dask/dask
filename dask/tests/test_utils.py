@@ -324,6 +324,17 @@ def test_funcname():
     assert "Foo" in funcname(Foo())
 
 
+def test_funcname_long():
+    def a_long_function_name_11111111111111111111111111111111111111111111111():
+        pass
+
+    result = funcname(
+        a_long_function_name_11111111111111111111111111111111111111111111111
+    )
+    assert "a_long_function_name" in result
+    assert len(result) < 60
+
+
 def test_funcname_toolz():
     toolz = pytest.importorskip("toolz")
 
