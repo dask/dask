@@ -13,7 +13,6 @@ from dask.blockwise import (
     rewrite_blockwise,
     optimize_blockwise,
     index_subs,
-    blockwise,
 )
 from dask.array.utils import assert_eq
 from dask.array.numpy_compat import _numpy_116
@@ -550,38 +549,6 @@ def test_validate_top_inputs():
 
     assert "repeated" in str(info.value).lower()
     assert "i" in str(info.value)
-
-
-def test_gh_4176():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        from dask.sharedict import ShareDict
-
-    def foo(A):
-        return A[None, ...]
-
-    A = da.ones(shape=(10, 20, 4), chunks=(2, 5, 4))
-
-    name = "D"
-
-    dsk = blockwise(
-        foo,
-        name,
-        ("nsrc", "ntime", "nbl", "npol"),
-        A.name,
-        ("ntime", "nbl", "npol"),
-        new_axes={"nsrc": 1},
-        numblocks={a.name: a.numblocks for a in (A,)},
-    )
-
-    array_dsk = ShareDict()
-    array_dsk.update(dsk)
-    array_dsk.update(A.__dask_graph__())
-
-    chunks = ((1,),) + A.chunks
-
-    D = da.Array(array_dsk, name, chunks, dtype=A.dtype)
-    D.sum(axis=0).compute()
 
 
 def test_dont_merge_before_reductions():
