@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import operator
 import warnings
 from collections.abc import Iterator, Sequence

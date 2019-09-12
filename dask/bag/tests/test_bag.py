@@ -1,4 +1,3 @@
-# coding=utf-8
 import gc
 import math
 import multiprocessing
