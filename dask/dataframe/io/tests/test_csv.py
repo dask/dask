@@ -2,6 +2,7 @@ from io import BytesIO
 import os
 import gzip
 from time import sleep
+from unittest import mock
 
 import pytest
 
@@ -771,10 +772,6 @@ def test_auto_blocksize_max64mb():
 
 def test_auto_blocksize_csv(monkeypatch):
     psutil = pytest.importorskip("psutil")
-    try:
-        from unittest import mock
-    except ImportError:
-        mock = pytest.importorskip("mock")
     total_memory = psutil.virtual_memory().total
     cpu_count = psutil.cpu_count()
     mock_read_bytes = mock.Mock(wraps=read_bytes)
