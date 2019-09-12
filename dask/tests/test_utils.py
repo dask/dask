@@ -357,6 +357,14 @@ def test_funcname_multipledispatch():
     assert funcname(functools.partial(foo, a=1)) == "foo"
 
 
+def test_funcname_numpy_vectorize():
+    np = pytest.importorskip("numpy")
+
+    func = np.vectorize(int)
+
+    assert funcname(func) == "vectorize_int"
+
+
 def test_ndeepmap():
     L = 1
     assert ndeepmap(0, inc, L) == 2
@@ -492,6 +500,7 @@ def test_parse_bytes():
     assert parse_bytes("1e6") == 1000000
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
+    assert parse_bytes(123) == 123
 
 
 def test_parse_timedelta():
@@ -508,11 +517,13 @@ def test_parse_timedelta():
         ("1 ns", 1e-9),
         ("2m", 120),
         ("2 minutes", 120),
+        (None, None),
+        (3, 3),
         (datetime.timedelta(seconds=2), 2),
         (datetime.timedelta(milliseconds=100), 0.1),
     ]:
         result = parse_timedelta(text)
-        assert abs(result - value) < 1e-14
+        assert result == value or abs(result - value) < 1e-14
 
     assert parse_timedelta("1ms", default="seconds") == 0.001
     assert parse_timedelta("1", default="seconds") == 1
