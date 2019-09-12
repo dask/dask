@@ -1,13 +1,13 @@
 """ A set of NumPy functions to apply per chunk """
 from __future__ import absolute_import, division, print_function
 
+from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 
 from toolz import concat
 import numpy as np
 from . import numpy_compat as npcompat
 
-from ..compatibility import Container, Iterable, Sequence
 from ..core import flatten
 from ..utils import ignoring
 

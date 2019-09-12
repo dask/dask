@@ -4,6 +4,7 @@ import operator
 import types
 import uuid
 import warnings
+from collections.abc import Iterator
 
 try:
     from cytoolz import curry, concat, unique, merge
@@ -13,7 +14,7 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply, Iterator, is_dataclass, dataclass_fields
+from .compatibility import apply, is_dataclass, dataclass_fields
 
 from .core import quote
 from .context import globalmethod

@@ -1,4 +1,3 @@
-import textwrap
 import warnings
 from itertools import product
 from operator import add
@@ -14,7 +13,6 @@ import dask.array as da
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (
@@ -2522,9 +2520,6 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis="index")
 
 
-@pytest.mark.skipif(
-    PY2, reason="Global filter is applied by another library, and not reset properly."
-)
 def test_apply_warns():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3006,7 +3001,6 @@ def _assert_info(df, ddf, memory_usage=True):
 
 def test_info():
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3029,7 +3023,7 @@ def test_info():
 
     # Verbose=False
     ddf.info(buf=buf, verbose=False)
-    assert buf.getvalue() == unicode(
+    assert buf.getvalue() == (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Columns: 2 entries, x to y\n"
         "dtypes: int64(2)"
@@ -3042,7 +3036,6 @@ def test_info():
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3055,7 +3048,7 @@ def test_groupby_multilevel_info():
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    assert buf.getvalue() == unicode(
+    assert buf.getvalue() == (
         """<class 'dask.dataframe.core.DataFrame'>
 Columns: 1 entries, C to C
 dtypes: int64(1)"""
@@ -3067,13 +3060,10 @@ dtypes: int64(1)"""
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    expected = unicode(
-        textwrap.dedent(
-            """\
-    <class 'dask.dataframe.core.DataFrame'>
-    Columns: 2 entries, ('C', 'count') to ('C', 'sum')
-    dtypes: int64(2)"""
-        )
+    expected = (
+        "<class 'dask.dataframe.core.DataFrame'>\n"
+        "Columns: 2 entries, ('C', 'count') to ('C', 'sum')\n"
+        "dtypes: int64(2)\n"
     )
     assert buf.getvalue() == expected
 
@@ -3082,7 +3072,6 @@ def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3095,7 +3084,7 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
-    expected = unicode(
+    expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"

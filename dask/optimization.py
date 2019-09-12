@@ -5,7 +5,6 @@ import re
 from operator import getitem
 
 from . import config, core
-from .compatibility import unicode
 from .core import (
     istask,
     get_dependencies,
@@ -69,11 +68,11 @@ def cull(dsk, keys):
 def default_fused_linear_keys_renamer(keys):
     """Create new keys for fused tasks"""
     typ = type(keys[0])
-    if typ is str or typ is unicode:
+    if typ is str:
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0])
         return "-".join(names)
-    elif typ is tuple and len(keys[0]) > 0 and isinstance(keys[0][0], (str, unicode)):
+    elif typ is tuple and len(keys[0]) > 0 and isinstance(keys[0][0], str):
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
         return ("-".join(names),) + keys[0][1:]
@@ -462,16 +461,14 @@ def default_fused_keys_renamer(keys):
     it = reversed(keys)
     first_key = next(it)
     typ = type(first_key)
-    if typ is str or typ is unicode:
+    if typ is str:
         first_name = key_split(first_key)
         names = {key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key)
         return "-".join(names)
-    elif (
-        typ is tuple and len(first_key) > 0 and isinstance(first_key[0], (str, unicode))
-    ):
+    elif typ is tuple and len(first_key) > 0 and isinstance(first_key[0], str):
         first_name = key_split(first_key)
         names = {key_split(k) for k in it}
         names.discard(first_name)

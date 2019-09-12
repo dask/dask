@@ -10,7 +10,6 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....compatibility import PY3, string_types
 from ....utils import import_required, natural_sort_key
 
 
@@ -381,7 +380,7 @@ def to_parquet(
             compression = None
 
     partition_on = partition_on or []
-    if isinstance(partition_on, string_types):
+    if isinstance(partition_on, str):
         partition_on = [partition_on]
 
     if set(partition_on) - set(df.columns):
@@ -632,5 +631,4 @@ def apply_filters(parts, statistics, filters):
     return parts, statistics
 
 
-if PY3:
-    DataFrame.to_parquet.__doc__ = to_parquet.__doc__
+DataFrame.to_parquet.__doc__ = to_parquet.__doc__

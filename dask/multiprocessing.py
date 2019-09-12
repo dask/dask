@@ -1,16 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
+import copyreg
 import multiprocessing
-import traceback
 import pickle
 import sys
+import traceback
 from warnings import warn
 
 import cloudpickle
 
 from . import config
-from .compatibility import copyreg
-from .local import get_async  # TODO: get better get
+from .local import reraise, get_async  # TODO: get better get
 from .optimization import fuse, cull
 
 
@@ -94,7 +94,6 @@ try:
     import tblib.pickling_support
 
     tblib.pickling_support.install()
-    from dask.compatibility import reraise
 
     def _pack_traceback(tb):
         return tb

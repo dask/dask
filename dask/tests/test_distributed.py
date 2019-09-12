@@ -9,9 +9,8 @@ from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
-from dask.compatibility import get_named_args
 from dask.delayed import Delayed
-from dask.utils import tmpdir
+from dask.utils import tmpdir, get_named_args
 from distributed.client import wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # noqa F401
 

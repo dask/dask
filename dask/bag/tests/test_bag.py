@@ -2,12 +2,15 @@
 from __future__ import absolute_import, division, print_function
 
 import gc
-from itertools import repeat
-import multiprocessing
 import math
+import multiprocessing
 import os
 import random
 import weakref
+from bz2 import BZ2File
+from collections.abc import Iterator
+from gzip import GzipFile
+from itertools import repeat
 
 import partd
 import pytest
@@ -29,7 +32,6 @@ from dask.bag.core import (
     from_delayed,
 )
 from dask.bag.utils import assert_eq
-from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
@@ -855,9 +857,7 @@ def test_to_dataframe():
         check_parts(df, sol)
 
 
-ext_open = [("gz", GzipFile), ("", open)]
-if not PY2:
-    ext_open.append(("bz2", BZ2File))
+ext_open = [("gz", GzipFile), ("bz2", BZ2File), ("", open)]
 
 
 @pytest.mark.parametrize("ext,myopen", ext_open)
@@ -935,9 +935,7 @@ def test_to_textfiles_name_function_warn():
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u"汽车", u"苹果", u"天气"], npartitions=2)
-    for ext, myopen in [("gz", GzipFile), ("bz2", BZ2File), ("", open)]:
-        if ext == "bz2" and PY2:
-            continue
+    for ext, myopen in ext_open:
         with tmpdir() as dir:
             c = b.to_textfiles(
                 os.path.join(dir, "*." + ext), encoding="gb18030", compute=False

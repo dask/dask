@@ -1,5 +1,6 @@
 import itertools
 import warnings
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -9,7 +10,7 @@ except ImportError:
     import toolz
 
 from . import core, utils
-from .compatibility import apply, Mapping
+from .compatibility import apply
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable

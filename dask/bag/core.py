@@ -6,11 +6,14 @@ import math
 import uuid
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from operator import getitem
 from random import Random
+from urllib.request import urlopen
 
+import toolz
 from toolz import (
     merge,
     take,
@@ -27,8 +30,6 @@ from toolz import (
     accumulate,
     peek,
 )
-from toolz.compatibility import iteritems, zip
-import toolz
 
 _implement_accumulate = LooseVersion(toolz.__version__) > "0.7.4"
 try:
@@ -66,7 +67,7 @@ from .. import config
 from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen, Iterable, Iterator
+from ..compatibility import apply
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict, flatten
 from ..delayed import Delayed, unpack_collections
@@ -1915,7 +1916,7 @@ def merge_frequencies(seqs):
     out = defaultdict(int)
     out.update(first)
     for d in rest:
-        for k, v in iteritems(d):
+        for k, v in d.items():
             out[k] += v
     return out
 

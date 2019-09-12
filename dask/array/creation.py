@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
@@ -10,7 +11,6 @@ from toolz import accumulate, sliding_window
 
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
-from ..compatibility import Sequence
 from ..utils import derived_from
 from . import chunk
 from .core import (

@@ -2,14 +2,14 @@ from __future__ import print_function, division, absolute_import
 
 import gzip
 import os
-from time import sleep
+import pathlib
 import sys
+from time import sleep
 
 import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute
-from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
@@ -41,19 +41,8 @@ csv_files = {
 }
 
 
-try:
-    # used only in test_with_urls - may be more generally useful
-    import pathlib
-
-    def to_uri(path):
-        return pathlib.Path(os.path.abspath(path)).as_uri()
-
-
-except (ImportError, NameError):
-    import urlparse, urllib
-
-    def to_uri(path):
-        return urlparse.urljoin("file:", urllib.pathname2url(os.path.abspath(path)))
+def to_uri(path):
+    return pathlib.Path(os.path.abspath(path)).as_uri()
 
 
 def test_urlpath_inference_strips_protocol(tmpdir):
@@ -218,7 +207,6 @@ def test_with_urls():
 
 @pytest.mark.skipif(sys.platform == "win32", reason="pathlib and moto clash on windows")
 def test_with_paths():
-    pathlib = pytest.importorskip("pathlib")
     with filetexts(files, mode="b"):
         url = pathlib.Path("./.test.accounts.*")
         sample, values = read_bytes(url, blocksize=None)
@@ -418,7 +406,7 @@ def test_py2_local_bytes(tmpdir):
     files = open_files(fn, compression="gzip", mode="rt")
 
     with files[0] as f:
-        assert all(isinstance(line, unicode) for line in f)
+        assert all(isinstance(line, str) for line in f)
 
 
 def test_abs_paths(tmpdir):

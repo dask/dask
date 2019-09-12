@@ -10,7 +10,6 @@ import numpy as np
 from toolz import merge
 
 from ...base import tokenize
-from ...compatibility import unicode, PY3
 from ... import array as da
 from ...delayed import delayed
 
@@ -239,7 +238,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
     import dask.array as da
     import bcolz
 
-    if isinstance(x, (str, unicode)):
+    if isinstance(x, str):
         x = bcolz.ctable(rootdir=x)
     bc_chunklen = max(x[name].chunklen for name in x.names)
     if chunksize is None and bc_chunklen > 10000:
@@ -638,6 +637,5 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     return values, positions
 
 
-if PY3:
-    DataFrame.to_records.__doc__ = to_records.__doc__
-    DataFrame.to_bag.__doc__ = to_bag.__doc__
+DataFrame.to_records.__doc__ = to_records.__doc__
+DataFrame.to_bag.__doc__ = to_bag.__doc__

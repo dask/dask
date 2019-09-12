@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from ..compatibility import Sequence
 import inspect
+from collections.abc import Sequence
 
 import numpy as np
 

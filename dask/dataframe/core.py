@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 import operator
 import warnings
+from collections.abc import Iterator, Sequence
 from functools import wraps, partial
 from numbers import Number, Integral
 from operator import getitem
@@ -29,15 +30,7 @@ from .. import core
 
 from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable
 from .. import threaded
-from ..compatibility import (
-    apply,
-    operator_div,
-    bind_method,
-    string_types,
-    isidentifier,
-    Iterator,
-    Sequence,
-)
+from ..compatibility import apply
 from ..context import globalmethod
 from ..utils import (
     random_state_data,
@@ -2877,7 +2870,7 @@ Dask Name: {name}, {task} tasks""".format(
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -2894,7 +2887,7 @@ Dask Name: {name}, {task} tasks""".format(
                 return elemwise(op, self, other, axis=axis)
 
         meth.__doc__ = skip_doctest(comparison.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
@@ -3229,7 +3222,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
-        if np.isscalar(key) or isinstance(key, (tuple, string_types)):
+        if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
@@ -3315,9 +3308,7 @@ class DataFrame(_Frame):
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
-        o.update(
-            c for c in self.columns if (isinstance(c, string_types) and isidentifier(c))
-        )
+        o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
     def _ipython_key_completions_(self):
@@ -3870,7 +3861,7 @@ class DataFrame(_Frame):
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -3883,7 +3874,7 @@ class DataFrame(_Frame):
             return elemwise(comparison, self, other, axis=axis)
 
         meth.__doc__ = skip_doctest(comparison.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
     def apply(
@@ -4240,7 +4231,6 @@ for op in [
     operator.abs,
     operator.add,
     operator.and_,
-    operator_div,
     operator.eq,
     operator.gt,
     operator.ge,
@@ -5453,7 +5443,7 @@ def repartition_size(df, size):
     """
     Repartition dataframe so that new partitions have approximately `size` memory usage each
     """
-    if isinstance(size, string_types):
+    if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
 

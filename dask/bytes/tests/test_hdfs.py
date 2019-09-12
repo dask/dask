@@ -8,7 +8,6 @@ from toolz import concat
 
 import dask
 from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
-from dask.compatibility import unicode
 
 
 try:
@@ -187,7 +186,7 @@ def test_read_text_unicode(hdfs):
 
     result = f[0].compute()
     assert len(result) == 2
-    assert list(map(unicode.strip, result)) == [data.decode("utf-8")] * 2
+    assert list(map(str.strip, result)) == [data.decode("utf-8")] * 2
     assert len(result[0].strip()) == 5
 
 

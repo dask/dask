@@ -21,7 +21,6 @@ from fsspec.utils import (  # noqa: F401
 from fsspec import get_mapper  # noqa: F401
 from fsspec.compression import compr  # noqa: F401
 
-from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
 from ..utils import is_integer, parse_bytes
@@ -99,7 +98,7 @@ def read_bytes(
         raise IOError("%s resolved to no files" % urlpath)
 
     if blocksize is not None:
-        if isinstance(blocksize, (str, unicode)):
+        if isinstance(blocksize, str):
             blocksize = parse_bytes(blocksize)
         if not is_integer(blocksize):
             raise TypeError("blocksize must be an integer")

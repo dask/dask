@@ -9,6 +9,7 @@ import sys
 import tempfile
 import re
 from errno import ENOENT
+from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
@@ -16,14 +17,6 @@ from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import (
-    get_named_args,
-    getargspec,
-    PY3,
-    unicode,
-    bind_method,
-    Iterator,
-)
 from .core import get_deps
 from .optimization import key_split  # noqa: F401
 
@@ -308,6 +301,7 @@ ONE_ARITY_BUILTINS = set(
         abs,
         all,
         any,
+        ascii,
         bool,
         bytearray,
         bytes,
@@ -352,8 +346,6 @@ ONE_ARITY_BUILTINS = set(
         memoryview,
     ]
 )
-if PY3:
-    ONE_ARITY_BUILTINS.add(ascii)  # noqa: F821
 MULTI_ARITY_BUILTINS = set(
     [
         compile,
@@ -369,6 +361,18 @@ MULTI_ARITY_BUILTINS = set(
         setattr,
     ]
 )
+
+
+def getargspec(func):
+    """Version of inspect.getargspec that works with partial and warps."""
+    if isinstance(func, functools.partial):
+        return getargspec(func.func)
+
+    func = getattr(func, "__wrapped__", func)
+    if isinstance(func, type):
+        return inspect.getfullargspec(func.__init__)
+    else:
+        return inspect.getfullargspec(func)
 
 
 def takes_multiple_arguments(func, varargs=True):
@@ -416,6 +420,16 @@ def takes_multiple_arguments(func, varargs=True):
 
     ndefaults = 0 if spec.defaults is None else len(spec.defaults)
     return len(spec.args) - ndefaults - is_constructor > 1
+
+
+def get_named_args(func):
+    """Get all non ``*args/**kwargs`` arguments for a function"""
+    s = inspect.signature(func)
+    return [
+        n
+        for n, p in s.parameters.items()
+        if p.kind in [p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY, p.KEYWORD_ONLY]
+    ]
 
 
 class Dispatch(object):
@@ -747,7 +761,7 @@ def ensure_unicode(s):
     >>> ensure_unicode(b'123')
     '123'
     """
-    if isinstance(s, unicode):
+    if isinstance(s, str):
         return s
     if hasattr(s, "decode"):
         return s.decode()
@@ -826,8 +840,8 @@ def asciitable(columns, rows):
 
 
 def put_lines(buf, lines):
-    if any(not isinstance(x, unicode) for x in lines):
-        lines = [unicode(x) for x in lines]
+    if any(not isinstance(x, str) for x in lines):
+        lines = [str(x) for x in lines]
     buf.write("\n".join(lines))
 
 
@@ -1012,15 +1026,15 @@ class OperatorMethodMixin(object):
         meth = "__{0}__".format(name)
 
         if name in ("abs", "invert", "neg", "pos"):
-            bind_method(cls, meth, cls._get_unary_operator(op))
+            setattr(cls, meth, cls._get_unary_operator(op))
         else:
-            bind_method(cls, meth, cls._get_binary_operator(op))
+            setattr(cls, meth, cls._get_binary_operator(op))
 
             if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
             rmeth = "__r{0}__".format(name)
-            bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
+            setattr(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -1330,13 +1344,7 @@ def parse_timedelta(s, default="seconds"):
 
 def has_keyword(func, keyword):
     try:
-        if PY3:
-            return keyword in inspect.signature(func).parameters
-        else:
-            if isinstance(func, functools.partial):
-                return keyword in inspect.getargspec(func.func).args
-            else:
-                return keyword in inspect.getargspec(func).args
+        return keyword in inspect.signature(func).parameters
     except Exception:
         return False
 

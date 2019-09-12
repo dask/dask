@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import reduce
 from itertools import product
 from operator import mul
 
@@ -9,7 +10,6 @@ from .core import Array
 from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
-from ..compatibility import reduce
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M
 
