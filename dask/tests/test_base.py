@@ -332,15 +332,14 @@ def test_tokenize_set():
 
 
 def test_tokenize_ordered_dict():
-    with ignoring(ImportError):
-        from collections import OrderedDict
+    from collections import OrderedDict
 
-        a = OrderedDict([("a", 1), ("b", 2)])
-        b = OrderedDict([("a", 1), ("b", 2)])
-        c = OrderedDict([("b", 2), ("a", 1)])
+    a = OrderedDict([("a", 1), ("b", 2)])
+    b = OrderedDict([("a", 1), ("b", 2)])
+    c = OrderedDict([("b", 2), ("a", 1)])
 
-        assert tokenize(a) == tokenize(b)
-        assert tokenize(a) != tokenize(c)
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
 
 
 @pytest.mark.skipif("not np")
