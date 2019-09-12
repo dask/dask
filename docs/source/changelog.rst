@@ -2436,3 +2436,4 @@ Other
 .. _`Nicolas Hug`: https://github.com/NicolasHug
 .. _`Blane`: https://github.com/BlaneG
 .. _`Ivars Geidans`: https://github.com/ivarsfg
+.. _`Scott Sievert`: https://github.com/stsievert
