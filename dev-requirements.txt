@@ -1,5 +1,4 @@
 joblib >= 0.10.2
-mock >= 2.0.0
 pandas >= 0.19.2
 numpy >= 1.11.0
 bokeh >= 0.12.3

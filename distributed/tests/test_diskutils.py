@@ -6,8 +6,8 @@ import shutil
 import subprocess
 import sys
 from time import sleep
+from unittest import mock
 
-import mock
 import pytest
 
 import dask

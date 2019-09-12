@@ -39,7 +39,6 @@ conda install -q \
     ipywidgets \
     joblib \
     jupyter_client \
-    mock \
     netcdf4 \
     paramiko \
     prometheus_client \

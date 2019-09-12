@@ -191,7 +191,7 @@ def pristine_loop():
 
 @contextmanager
 def mock_ipython():
-    import mock
+    from unittest import mock
     from distributed._ipython_utils import remote_magic
 
     ip = mock.Mock()
