@@ -324,6 +324,17 @@ def test_funcname():
     assert "Foo" in funcname(Foo())
 
 
+def test_funcname_long():
+    def a_long_function_name_11111111111111111111111111111111111111111111111():
+        pass
+
+    result = funcname(
+        a_long_function_name_11111111111111111111111111111111111111111111111
+    )
+    assert "a_long_function_name" in result
+    assert len(result) < 60
+
+
 def test_funcname_toolz():
     toolz = pytest.importorskip("toolz")
 
@@ -349,9 +360,14 @@ def test_funcname_multipledispatch():
 def test_funcname_numpy_vectorize():
     np = pytest.importorskip("numpy")
 
-    func = np.vectorize(int)
+    vfunc = np.vectorize(int)
+    assert funcname(vfunc) == "vectorize_int"
 
-    assert funcname(func) == "vectorize_int"
+    # Regression test for https://github.com/pydata/xarray/issues/3303
+    # Partial functions don't have a __name__ attribute
+    func = functools.partial(np.add, out=None)
+    vfunc = np.vectorize(func)
+    assert funcname(vfunc) == "vectorize_add"
 
 
 def test_ndeepmap():
