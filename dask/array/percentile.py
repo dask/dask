@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections.abc import Iterator
 from functools import wraps
 from numbers import Number

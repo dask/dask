@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter

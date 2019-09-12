@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pickle
 from functools import partial
 from operator import add

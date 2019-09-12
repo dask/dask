@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product

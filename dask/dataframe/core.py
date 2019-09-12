@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function
-
 import operator
 import warnings
 from collections.abc import Iterator, Sequence

@@ -68,8 +68,6 @@ such as for extremely large ``npartitions`` or if we find we need to
 increase the sample size for each partition.
 
 """
-from __future__ import absolute_import, division, print_function
-
 import math
 import numpy as np
 import pandas as pd

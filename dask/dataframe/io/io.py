@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from math import ceil
 from operator import getitem
 import os

@@ -104,8 +104,6 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
-from __future__ import absolute_import, division, print_function
-
 import os
 from queue import Queue, Empty
 
