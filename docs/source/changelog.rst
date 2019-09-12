@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2.4.0 / TODO
+------------
+
+Array
++++++
+
+- Added method to compute unknown chunk sizes, ``compute_chunk_sizes`` (:pr:`5312`). `Scott Sievert`
+
 2.3.0 / 2019-08-16
 ------------------
 
