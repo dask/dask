@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from io import BytesIO
 import os
 import gzip
-import sys
 from time import sleep
 
 import pytest
@@ -18,6 +17,7 @@ import pandas.util.testing as tm
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
+from dask.compatibility import PY_VERSION
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
     pandas_read_text,
@@ -703,7 +703,7 @@ def test_read_csv_sensitive_to_enforce():
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt == "zip" and sys.version_info.minor == 5:
+    if fmt == "zip" and PY_VERSION < "3.6":
         pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)

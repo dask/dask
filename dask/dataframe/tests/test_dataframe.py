@@ -3049,9 +3049,9 @@ def test_groupby_multilevel_info():
     buf = StringIO()
     g.info(buf, verbose=False)
     assert buf.getvalue() == (
-        """<class 'dask.dataframe.core.DataFrame'>
-Columns: 1 entries, C to C
-dtypes: int64(1)"""
+        "<class 'dask.dataframe.core.DataFrame'>\n"
+        "Columns: 1 entries, C to C\n"
+        "dtypes: int64(1)"
     )
 
     # multilevel
@@ -3063,7 +3063,7 @@ dtypes: int64(1)"""
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Columns: 2 entries, ('C', 'count') to ('C', 'sum')\n"
-        "dtypes: int64(2)\n"
+        "dtypes: int64(2)"
     )
     assert buf.getvalue() == expected
 

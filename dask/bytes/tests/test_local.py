@@ -10,6 +10,7 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute
+from dask.compatibility import PY_VERSION
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
@@ -105,9 +106,6 @@ def test_urlpath_expand_read():
         assert len(paths) == 2
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 5), reason="Recursive glob is new in Python 3.5"
-)
 def test_recursive_glob_expand():
     """Make sure * is expanded in file paths when reading."""
     with filetexts(
@@ -262,7 +260,7 @@ fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_compression(fmt, blocksize):
-    if fmt == "zip" and sys.version_info.minor == 5:
+    if fmt == "zip" and PY_VERSION < "3.6":
         pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")
@@ -315,7 +313,7 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize("mode", ["rt", "rb"])
 @pytest.mark.parametrize("fmt", list(compr))
 def test_open_files_compression(mode, fmt):
-    if fmt == "zip" and sys.version_info.minor == 5:
+    if fmt == "zip" and PY_VERSION < "3.6":
         pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")

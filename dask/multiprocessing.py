@@ -129,7 +129,7 @@ and on Windows, because they each only support a single context.
 
 def get_context():
     """ Return the current multiprocessing context."""
-    if sys.platform == "win32" or sys.version_info.major == 2:
+    if sys.platform == "win32":
         # Just do the default, since we can't change it:
         if config.get("multiprocessing.context", None) is not None:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)

@@ -1,3 +1,6 @@
+import sys
+from distutils.version import LooseVersion
+
 try:
     from dataclasses import is_dataclass, fields as dataclass_fields
 
@@ -15,3 +18,6 @@ def apply(func, args, kwargs=None):
         return func(*args, **kwargs)
     else:
         return func(*args)
+
+
+PY_VERSION = LooseVersion(".".join(map(str, sys.version_info[:3])))
