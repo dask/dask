@@ -7,7 +7,8 @@ Changelog
 Array
 +++++
 
-- Added method to compute unknown chunk sizes, ``compute_chunk_sizes`` (:pr:`5312`). `Scott Sievert`
+- Added method to compute unknown chunk sizes, ``compute_chunk_sizes`` (:pr:`5312`)
+  `Scott Sievert`_
 
 2.3.0 / 2019-08-16
 ------------------
@@ -2444,3 +2445,4 @@ Other
 .. _`Nicolas Hug`: https://github.com/NicolasHug
 .. _`Blane`: https://github.com/BlaneG
 .. _`Ivars Geidans`: https://github.com/ivarsfg
+.. _`Scott Sievert`: https://github.com/stsievert
