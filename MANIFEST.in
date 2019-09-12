@@ -12,7 +12,8 @@ include README.rst
 include LICENSE.txt
 include MANIFEST.in
 include requirements.txt
-include distributed/tests/mytestegg-1.0.0-py3.4.egg
+include distributed/tests/testegg-1.0.0-py3.4.egg
+include distributed/tests/mytest.pyz
 include distributed/tests/*.pem
 
 prune docs/_build
