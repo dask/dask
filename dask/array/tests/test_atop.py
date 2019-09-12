@@ -8,12 +8,7 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
-from dask.blockwise import (
-    Blockwise,
-    rewrite_blockwise,
-    optimize_blockwise,
-    index_subs,
-)
+from dask.blockwise import Blockwise, rewrite_blockwise, optimize_blockwise, index_subs
 from dask.array.utils import assert_eq
 from dask.array.numpy_compat import _numpy_116
 from dask.utils_test import inc, dec
