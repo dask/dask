@@ -1,6 +1,9 @@
 import sys
 from distutils.version import LooseVersion
 
+# TODO: remove this import once dask requires distributed > 2.3.2
+from .utils import apply  # noqa
+
 try:
     from dataclasses import is_dataclass, fields as dataclass_fields
 
@@ -11,13 +14,6 @@ except ImportError:
 
     def dataclass_fields(x):
         return []
-
-
-def apply(func, args, kwargs=None):
-    if kwargs:
-        return func(*args, **kwargs)
-    else:
-        return func(*args)
 
 
 PY_VERSION = LooseVersion(".".join(map(str, sys.version_info[:3])))

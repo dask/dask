@@ -12,11 +12,11 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import apply, is_dataclass, dataclass_fields
+from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict
+from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
 
 

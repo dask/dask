@@ -12,12 +12,12 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply, is_dataclass, dataclass_fields
+from .compatibility import is_dataclass, dataclass_fields
 
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
+from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
 from .highlevelgraph import HighLevelGraph
 
 __all__ = ["Delayed", "delayed"]

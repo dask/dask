@@ -4,9 +4,8 @@ from distutils.version import LooseVersion
 from itertools import cycle
 from operator import itemgetter, add
 
-from ..utils import funcname, import_required
+from ..utils import funcname, import_required, apply
 from ..core import istask
-from ..compatibility import apply
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"

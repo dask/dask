@@ -25,9 +25,8 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable
+from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
 from .. import threaded
-from ..compatibility import apply
 from ..context import globalmethod
 from ..utils import (
     random_state_data,

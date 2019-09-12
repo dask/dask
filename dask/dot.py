@@ -2,9 +2,8 @@ import re
 import os
 from functools import partial
 
-from .compatibility import apply
 from .core import istask, get_dependencies, ishashable
-from .utils import funcname, import_required, key_split
+from .utils import funcname, import_required, key_split, apply
 
 
 graphviz = import_required(

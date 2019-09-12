@@ -24,6 +24,13 @@ if system_encoding == "ascii":
     system_encoding = "utf-8"
 
 
+def apply(func, args, kwargs=None):
+    if kwargs:
+        return func(*args, **kwargs)
+    else:
+        return func(*args)
+
+
 def deepmap(func, *seqs):
     """ Apply function inside nested lists
 

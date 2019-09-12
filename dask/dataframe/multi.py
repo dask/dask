@@ -61,8 +61,8 @@ import numpy as np
 import pandas as pd
 
 from ..base import tokenize, is_dask_collection
-from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
+from ..utils import apply
 from .core import (
     _Frame,
     DataFrame,

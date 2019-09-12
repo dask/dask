@@ -65,7 +65,6 @@ from .. import config
 from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict, flatten
 from ..delayed import Delayed, unpack_collections
@@ -73,6 +72,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
 from ..optimization import fuse, cull, inline
 from ..utils import (
+    apply,
     system_encoding,
     takes_multiple_arguments,
     funcname,
