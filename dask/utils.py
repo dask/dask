@@ -688,7 +688,7 @@ def funcname(func):
         return func.name[:50]
     # numpy.vectorize objects
     if "numpy" in module_name and "vectorize" == type_name:
-        return ("vectorize_" + func.pyfunc.__name__)[:50]
+        return ("vectorize_" + funcname(func.pyfunc))[:50]
 
     # All other callables
     try:
