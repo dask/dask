@@ -118,7 +118,7 @@ def test_serialize_numpy_ma_masked():
 
 
 def test_dumps_serialize_numpy_custom_dtype():
-    from six.moves import builtins
+    import builtins
 
     test_rational = pytest.importorskip("numpy.core.test_rational")
     rational = test_rational.rational

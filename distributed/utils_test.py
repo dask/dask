@@ -5,6 +5,7 @@ import copy
 from datetime import timedelta
 import functools
 from glob import glob
+import io
 import itertools
 import logging
 import logging.config
@@ -30,7 +31,6 @@ except ImportError:
     ssl = None
 
 import pytest
-import six
 
 import dask
 from toolz import merge, memoize, assoc
@@ -1226,7 +1226,7 @@ def captured_logger(logger, level=logging.INFO, propagate=None):
     if propagate is not None:
         orig_propagate = logger.propagate
         logger.propagate = propagate
-    sio = six.StringIO()
+    sio = io.StringIO()
     logger.handlers[:] = [logging.StreamHandler(sio)]
     logger.setLevel(level)
     try:
@@ -1244,7 +1244,7 @@ def captured_handler(handler):
     """
     assert isinstance(handler, logging.StreamHandler)
     orig_stream = handler.stream
-    handler.stream = six.StringIO()
+    handler.stream = io.StringIO()
     try:
         yield handler.stream
     finally:

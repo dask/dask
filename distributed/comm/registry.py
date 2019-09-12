@@ -1,9 +1,7 @@
-from abc import ABCMeta, abstractmethod
-
-from six import with_metaclass
+from abc import ABC, abstractmethod
 
 
-class Backend(with_metaclass(ABCMeta)):
+class Backend(ABC):
     """
     A communication backend, selected by a given URI scheme (e.g. 'tcp').
     """

@@ -1,10 +1,9 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import timedelta
 import logging
 import weakref
 
 import dask
-from six import with_metaclass
 from tornado import gen
 
 from ..metrics import time
@@ -24,7 +23,7 @@ class FatalCommClosedError(CommClosedError):
     pass
 
 
-class Comm(with_metaclass(ABCMeta)):
+class Comm(ABC):
     """
     A message-oriented communication object, representing an established
     communication channel.  There should be only one reader and one
@@ -129,7 +128,7 @@ class Comm(with_metaclass(ABCMeta)):
             )
 
 
-class Listener(with_metaclass(ABCMeta)):
+class Listener(ABC):
     @abstractmethod
     def start(self):
         """
@@ -165,7 +164,7 @@ class Listener(with_metaclass(ABCMeta)):
         self.stop()
 
 
-class Connector(with_metaclass(ABCMeta)):
+class Connector(ABC):
     @abstractmethod
     def connect(self, address, deserialize=True):
         """

@@ -1,8 +1,6 @@
 import concurrent.futures as cf
 import weakref
 
-import six
-
 from toolz import merge
 
 from tornado import gen
@@ -27,7 +25,8 @@ def _cascade_future(future, cf_future):
         cf_future.set_running_or_notify_cancel()
     else:
         try:
-            six.reraise(*result)
+            typ, exc, tb = result
+            raise exc.with_traceback(tb)
         except BaseException as exc:
             cf_future.set_exception(exc)
 

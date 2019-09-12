@@ -17,7 +17,6 @@ import os
 import sys
 import uuid
 import threading
-import six
 import socket
 from queue import Queue as pyQueue
 import warnings
@@ -219,7 +218,8 @@ class Future(WrappedKey):
         # shorten error traceback
         result = self.client.sync(self._result, callback_timeout=timeout, raiseit=False)
         if self.status == "error":
-            six.reraise(*result)
+            typ, exc, tb = result
+            raise exc.with_traceback(tb)
         elif self.status == "cancelled":
             raise result
         else:
@@ -230,7 +230,8 @@ class Future(WrappedKey):
         if self.status == "error":
             exc = clean_exception(self._state.exception, self._state.traceback)
             if raiseit:
-                six.reraise(*exc)
+                typ, exc, tb = exc
+                raise exc.with_traceback(tb)
             else:
                 return exc
         elif self.status == "cancelled":
@@ -1145,7 +1146,8 @@ class Client(Node):
                         logger.debug("Client receives message %s", msg)
 
                         if "status" in msg and "error" in msg["status"]:
-                            six.reraise(*clean_exception(**msg))
+                            typ, exc, tb = clean_exception(**msg)
+                            raise exc.with_traceback(tb)
 
                         op = msg.pop("op")
 
@@ -1431,7 +1433,7 @@ class Client(Node):
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
-        if isinstance(workers, six.string_types + (Number,)):
+        if isinstance(workers, (str, Number)):
             workers = [workers]
         if workers is not None:
             restrictions = {skey: workers}
@@ -1577,7 +1579,7 @@ class Client(Node):
                 }
             )
 
-        if isinstance(workers, six.string_types + (Number,)):
+        if isinstance(workers, (str, Number)):
             workers = [workers]
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
@@ -1671,7 +1673,7 @@ class Client(Node):
                         except (KeyError, AttributeError):
                             exc = CancelledError(key)
                         else:
-                            six.reraise(type(exception), exception, traceback)
+                            raise exception.with_traceback(traceback)
                         raise exc
                     if errors == "skip":
                         bad_keys.add(key)
@@ -1830,7 +1832,7 @@ class Client(Node):
     ):
         if timeout == no_default:
             timeout = self._timeout
-        if isinstance(workers, six.string_types + (Number,)):
+        if isinstance(workers, (str, Number)):
             workers = [workers]
         if isinstance(data, dict) and not all(
             isinstance(k, (bytes, str)) for k in data
@@ -2196,7 +2198,8 @@ class Client(Node):
             function=dumps(function), args=dumps(args), kwargs=dumps(kwargs), wait=wait
         )
         if response["status"] == "error":
-            six.reraise(*clean_exception(**response))
+            typ, exc, tb = clean_exception(**response)
+            raise exc.with_traceback(tb)
         else:
             return response["result"]
 
@@ -2251,7 +2254,8 @@ class Client(Node):
             if resp["status"] == "OK":
                 results[key] = resp["result"]
             elif resp["status"] == "error":
-                six.reraise(*clean_exception(**resp))
+                typ, exc, tb = clean_exception(**resp)
+                raise exc.with_traceback(tb)
         if wait:
             return results
 
@@ -3200,7 +3204,7 @@ class Client(Node):
         >>> client.profile()  # call on collections
         >>> client.profile(filename='dask-profile.html')  # save to html file
         """
-        if isinstance(workers, six.string_types + (Number,)):
+        if isinstance(workers, (str, Number)):
             workers = [workers]
 
         return self.sync(
@@ -3224,7 +3228,7 @@ class Client(Node):
         plot=False,
         filename=None,
     ):
-        if isinstance(workers, six.string_types + (Number,)):
+        if isinstance(workers, (str, Number)):
             workers = [workers]
 
         state = await self.scheduler.profile(
@@ -3561,12 +3565,12 @@ class Client(Node):
         --------
         Client.start_ipython_scheduler: start ipython on the scheduler
         """
-        if isinstance(workers, six.string_types + (Number,)):
+        if isinstance(workers, (str, Number)):
             workers = [workers]
 
         (workers, info_dict) = sync(self.loop, self._start_ipython_workers, workers)
 
-        if magic_names and isinstance(magic_names, six.string_types):
+        if magic_names and isinstance(magic_names, str):
             if "*" in magic_names:
                 magic_names = [
                     magic_names.replace("*", str(i)) for i in range(len(workers))
@@ -3872,7 +3876,7 @@ class Client(Node):
                 exc = response["exception"]
                 typ = type(exc)
                 tb = response["traceback"]
-                six.reraise(typ, exc, tb)
+                raise exc.with_traceback(tb)
         return responses
 
     def register_worker_plugin(self, plugin=None, name=None):
@@ -4180,7 +4184,8 @@ class as_completed(object):
         if self.with_results:
             future, result = res
             if self.raise_errors and future.status == "error":
-                six.reraise(*result)
+                typ, exc, tb = result
+                raise exc.with_traceback(tb)
         return res
 
     def __next__(self):

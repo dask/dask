@@ -25,7 +25,6 @@ import threading
 import warnings
 import weakref
 import pkgutil
-import six
 import tblib.pickling_support
 import xml.etree.ElementTree
 
@@ -334,7 +333,8 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
         while not e.is_set():
             e.wait(10)
     if error[0]:
-        six.reraise(*error[0])
+        typ, exc, tb = error[0]
+        raise exc.with_traceback(tb)
     else:
         return result[0]
 

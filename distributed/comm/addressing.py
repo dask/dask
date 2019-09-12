@@ -1,5 +1,3 @@
-import six
-
 import dask
 
 from . import registry
@@ -18,7 +16,7 @@ def parse_address(addr, strict=False):
 
     If strict is set to true the address must have a scheme.
     """
-    if not isinstance(addr, six.string_types):
+    if not isinstance(addr, str):
         raise TypeError("expected str, got %r" % addr.__class__.__name__)
     scheme, sep, loc = addr.rpartition("://")
     if strict and not sep:

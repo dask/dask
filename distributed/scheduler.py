@@ -12,7 +12,6 @@ import operator
 import os
 import pickle
 import random
-import six
 import warnings
 import weakref
 
@@ -4518,7 +4517,7 @@ class Scheduler(ServerNode):
             addr = self.aliases[addr]
         if isinstance(addr, tuple):
             addr = unparse_host_port(*addr)
-        if not isinstance(addr, six.string_types):
+        if not isinstance(addr, str):
             raise TypeError("addresses should be strings or tuples, got %r" % (addr,))
 
         if resolve:

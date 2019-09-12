@@ -3,14 +3,12 @@ from collections import defaultdict, deque
 from concurrent.futures import CancelledError
 from functools import partial
 import logging
-import six
 import threading
 import traceback
 import uuid
 import weakref
 
 import dask
-from six import string_types
 from toolz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -305,7 +303,7 @@ class Server(object):
             addr = unparse_host_port(*port_or_addr)
         else:
             addr = port_or_addr
-            assert isinstance(addr, string_types)
+            assert isinstance(addr, str)
         self.listener = listen(
             addr,
             self.handle_comm,
@@ -545,7 +543,8 @@ async def send_recv(comm, reply=True, serializers=None, deserializers=None, **kw
 
     if isinstance(response, dict) and response.get("status") == "uncaught-error":
         if comm.deserialize:
-            six.reraise(*clean_exception(**response))
+            typ, exc, tb = clean_exception(**response)
+            raise exc.with_traceback(tb)
         else:
             raise Exception(response["text"])
     return response
@@ -969,7 +968,6 @@ def error_message(e, status="error"):
     See Also
     --------
     clean_exception: deserialize and unpack message into exception/traceback
-    six.reraise: raise exception/traceback
     """
     tb = get_traceback()
     e2 = truncate_exception(e, 1000)
@@ -1011,6 +1009,6 @@ def clean_exception(exception, traceback, **kwargs):
             traceback = protocol.pickle.loads(traceback)
         except (TypeError, AttributeError):
             traceback = None
-    elif isinstance(traceback, string_types):
+    elif isinstance(traceback, str):
         traceback = None  # happens if the traceback failed serializing
     return type(exception), exception, traceback
