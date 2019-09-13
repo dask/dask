@@ -217,10 +217,11 @@ class ArrowEngine(Engine):
                             if None in [cs_min, cs_max]:
                                 skip_cols.add(name)
                                 continue
+                            cs_vals = pd.Series([cs_min, cs_max])
                             d.update(
                                 {
-                                    "min": cs_min,
-                                    "max": cs_max,
+                                    "min": cs_vals[0],
+                                    "max": cs_vals[1],
                                     "null_count": column.statistics.null_count,
                                 }
                             )
