@@ -228,7 +228,7 @@ after the line.
        ValueError(...)
        """
 
-.. _numpydoc: https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
+.. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
 Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
 docstrings with pytest as follows::
