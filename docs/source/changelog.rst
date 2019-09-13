@@ -1,10 +1,43 @@
 Changelog
 =========
 
+2.4.0 - 2019-09-13
+------------------
+
+- Remove six (:pr:`3045`) `Matthew Rocklin`_
+- Add missing test data to sdist tarball (:pr:`3050`) `Elliott Sales de Andrade`_
+- Use mock from unittest standard library (:pr:`3049`) `Elliott Sales de Andrade`_
+- Use cgroups resource limits to determine default threads and memory (:pr:`3039`) `Jim Crist`_
+- Move task deserialization to immediately before task execution (:pr:`3015`) `James Bourbeau`_
+- Drop joblib shim module in distributed (:pr:`3040`) `John Kirkham`_
+- Redirect configuration doc page (:pr:`3038`) `Matthew Rocklin`_
+- Support ``--name 0`` and ``--nprocs`` keywords in dask-worker cli (:pr:`3037`) `Matthew Rocklin`_
+- Remove lost workers from ``SpecCluster.workers`` (:pr:`2990`) `Guillaume Eynard-Bontemps`_
+- Clean up ``test_local.py::test_defaults`` (:pr:`3017`) `Matthew Rocklin`_
+- Replace print statement in ``Queue.__init__`` with debug message (:pr:`3035`) `Mikhail Akimov`_
+- Set the ``x_range`` limit of the Meory utilization plot to memory-limit (:pr:`3034`) `Matthew Rocklin`_
+- Rely on cudf codebase for cudf serialization (:pr:`2998`) `Benjamin Zaitlen`_
+- Add fallback html repr for Cluster (:pr:`3023`) `Jim Crist`_
+- Add support for zstandard compression to comms (:pr:`2970`) `Abael He`_
+- Avoid collision when using ``os.environ`` in ``dashboard_link`` (:pr:`3021`) `Matthew Rocklin`_
+- Fix ``ConnectionPool`` limit handling (:pr:`3005`) `byjott`_
+- Support Spec jobs that generate multiple workers (:pr:`3013`) `Matthew Rocklin`_
+- Tweak ``Logs`` styling (:pr:`3012`) `Jim Crist`_
+- Better name for cudf deserialization function name (:pr:`3008`) `Benjamin Zaitlen`_
+- Make ``spec.ProcessInterface`` a valid no-op worker (:pr:`3004`) `Matthew Rocklin`_
+- Return dictionaries from ``new_worker_spec`` rather than name/worker pairs (:pr:`3000`) `Matthew Rocklin`_
+- Fix minor typo in documentation (:pr:`3002`) `Mohammad Noor`_
+- Permit more keyword options when scaling with cores and memory (:pr:`2997`) `Matthew Rocklin`_
+- Add ``cuda_ipc`` to UCX environment for NVLink (:pr:`2996`) `Benjamin Zaitlen`_
+- Add ``threads=`` and ``memory=`` to Cluster and Client reprs (:pr:`2995`) `Matthew Rocklin`_
+- Fix PyNVML initialization (:pr:`2993`) `Richard J Zamora`_
+
+
 2.3.2 - 2019-08-23
 ------------------
 
 -  Skip exceptions in startup information (:pr:`2991`) `Jacob Tomlinson`_
+
 
 2.3.1 - 2019-08-22
 ------------------
@@ -1230,3 +1263,8 @@ significantly without many new features.
 .. _`Shayan Amani`: https://github.com/SHi-ON
 .. _`Pav A`: https://github.com/rs2
 .. _`Mads R. B. Kristensen`: https://github.com/madsbk
+.. _`Mikhail Akimov`: https://github.com/roveo
+.. _`Abael He`: https://github.com/abaelhe
+.. _`byjott`: https://github.com/byjott
+.. _`Mohammad Noor`: https://github.com/MdSalih
+.. _`Richard J Zamora`: https://github.com/rjzamora
