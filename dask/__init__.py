@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from . import config, datasets
 from .core import istask
-from .context import set_options
 from .local import get_sync as get
 
 try:

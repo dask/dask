@@ -1339,9 +1339,7 @@ Dask Name: {name}, {task} tasks""".format(
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def rolling(
-        self, window, min_periods=None, freq=None, center=False, win_type=None, axis=0
-    ):
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
 
         Parameters
@@ -1370,10 +1368,6 @@ Dask Name: {name}, {task} tasks""".format(
         Returns
         -------
         a Rolling object on which to call a method to compute a statistic
-
-        Notes
-        -----
-        The `freq` argument is not supported.
         """
         from dask.dataframe.rolling import Rolling
 
@@ -1391,7 +1385,6 @@ Dask Name: {name}, {task} tasks""".format(
             self,
             window=window,
             min_periods=min_periods,
-            freq=freq,
             center=center,
             win_type=win_type,
             axis=axis,
