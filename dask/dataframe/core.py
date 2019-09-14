@@ -486,6 +486,7 @@ Dask Name: {name}, {task} tasks""".format(
         # Let pandas error on bad inputs
         self._meta_nonempty.drop_duplicates(**kwargs)
         if subset is not None:
+            kwargs["subset"] = subset
             split_out_setup = split_out_on_cols
             split_out_setup_kwargs = {"cols": subset}
         else:
@@ -501,7 +502,6 @@ Dask Name: {name}, {task} tasks""".format(
             aggregate=chunk,
             meta=self._meta,
             token="drop-duplicates",
-            subset=subset,
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_setup,
