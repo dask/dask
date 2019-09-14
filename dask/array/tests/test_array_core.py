@@ -4177,6 +4177,7 @@ def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
 
 
 def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
+    pytest.importorskip('zarr')
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
         with StringIO() as f:
