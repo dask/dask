@@ -482,12 +482,12 @@ Dask Name: {name}, {task} tasks""".format(
             raise ValueError(msg)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
+    def drop_duplicates(self, subset=None, split_every=None, split_out=1, **kwargs):
         # Let pandas error on bad inputs
         self._meta_nonempty.drop_duplicates(**kwargs)
-        if "subset" in kwargs and kwargs["subset"] is not None:
+        if subset is not None:
             split_out_setup = split_out_on_cols
-            split_out_setup_kwargs = {"cols": kwargs["subset"]}
+            split_out_setup_kwargs = {"cols": subset}
         else:
             split_out_setup = split_out_setup_kwargs = None
 
@@ -501,6 +501,7 @@ Dask Name: {name}, {task} tasks""".format(
             aggregate=chunk,
             meta=self._meta,
             token="drop-duplicates",
+            subset=subset,
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_setup,
