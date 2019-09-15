@@ -125,3 +125,12 @@ the task and sends a response to the scheduler:
 This avoids redundant work, and also the duplication of side effects for more
 exotic tasks.  However, concurrent or repeated execution of the same task *is
 still possible* in the event of worker death or a disrupted network connection.
+
+
+Disabling Work Stealing
+---------------------------
+
+Work stealing is a toggleable setting on the Dask Scheduler; to disable 
+work stealing, you can toggle the scheduler ``work-stealing`` configuration 
+option to ``"False"`` either by setting ``DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING="False"``
+or through your `Dask configuration file <https://docs.dask.org/en/latest/configuration.html>`_
