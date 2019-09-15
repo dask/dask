@@ -1,21 +1,20 @@
-from __future__ import absolute_import, division, print_function
-
-from bisect import bisect
 import copy
-from functools import partial, wraps
-from itertools import product
 import math
-from numbers import Number, Integral
 import operator
-from operator import add, getitem, mul
 import os
+import pickle
 import re
 import sys
 import traceback
-import pickle
-from threading import Lock
 import uuid
 import warnings
+from bisect import bisect
+from collections.abc import Iterable, Iterator, Mapping
+from functools import partial, wraps
+from itertools import product, zip_longest
+from numbers import Number, Integral
+from operator import add, getitem, mul
+from threading import Lock
 
 try:
     from cytoolz import partition, concat, first, groupby, accumulate
@@ -56,7 +55,6 @@ from ..utils import (
     ndimlist,
     format_bytes,
 )
-from ..compatibility import unicode, zip_longest, Iterable, Iterator, Mapping
 from ..core import quote
 from ..delayed import delayed, Delayed
 from .. import threaded, core
@@ -1479,12 +1477,10 @@ class Array(DaskMethodsMixin):
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
-        if isinstance(index, (str, unicode)) or (
-            isinstance(index, list)
-            and index
-            and all(isinstance(i, (str, unicode)) for i in index)
+        if isinstance(index, str) or (
+            isinstance(index, list) and index and all(isinstance(i, str) for i in index)
         ):
-            if isinstance(index, (str, unicode)):
+            if isinstance(index, str):
                 dt = self.dtype[index]
             else:
                 dt = _make_sliced_dtype(self.dtype, index)

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import dask
 
 from dask.local import start_state_from_dask, get_sync, finish_task, sortkey

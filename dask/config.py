@@ -1,16 +1,14 @@
-from __future__ import print_function, division, absolute_import
-
 import ast
+import builtins
 import os
 import sys
 import threading
+from collections.abc import Mapping
 
 try:
     import yaml
 except ImportError:
     yaml = None
-
-from .compatibility import makedirs, builtins, Mapping
 
 
 no_default = "__no_default__"
@@ -233,7 +231,7 @@ def ensure_file(source, destination=None, comment=True):
 
     try:
         if not os.path.exists(destination):
-            makedirs(directory, exist_ok=True)
+            os.makedirs(directory, exist_ok=True)
 
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the

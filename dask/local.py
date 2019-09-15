@@ -104,29 +104,18 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
-from __future__ import absolute_import, division, print_function
-
 import os
+from queue import Queue, Empty
 
-from .compatibility import Queue, Empty, reraise, PY2
-from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
 from . import config
+from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
 from .utils_test import add, inc  # noqa: F401
 
 
-if PY2:
-    # Due to a bug in python 2.7 Queue.get, if a timeout isn't specified then
-    # `Queue.get` can't be interrupted. A workaround is to specify an extremely
-    # long timeout, which then allows it to be interrupted.
-    # For more information see: https://bugs.python.org/issue1360
-    def queue_get(q):
-        return q.get(block=True, timeout=(365 * 24 * 60 * 60))
-
-
-elif os.name == "nt":
-    # Python 3 windows Queue.get also doesn't handle interrupts properly. To
+if os.name == "nt":
+    # Python 3 windows Queue.get doesn't handle interrupts properly. To
     # workaround this we poll at a sufficiently large interval that it
     # shouldn't affect performance, but small enough that users trying to kill
     # an application shouldn't care.
@@ -319,6 +308,12 @@ def default_get_id():
 
 def default_pack_exception(e, dumps):
     raise
+
+
+def reraise(exc, tb=None):
+    if exc.__traceback__ is not tb:
+        raise exc.with_traceback(tb)
+    raise exc
 
 
 def identity(x):

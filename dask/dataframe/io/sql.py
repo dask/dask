@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 from ... import delayed
-from ...compatibility import string_types
 from .io import from_delayed, from_pandas
 
 
@@ -99,13 +98,11 @@ def read_sql_table(
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(uri, **engine_kwargs)
     m = sa.MetaData()
-    if isinstance(table, string_types):
+    if isinstance(table, str):
         table = sa.Table(table, m, autoload=True, autoload_with=engine, schema=schema)
 
-    index = (
-        table.columns[index_col] if isinstance(index_col, string_types) else index_col
-    )
-    if not isinstance(index_col, string_types + (elements.Label,)):
+    index = table.columns[index_col] if isinstance(index_col, str) else index_col
+    if not isinstance(index_col, (str, elements.Label)):
         raise ValueError(
             "Use label when passing an SQLAlchemy instance as the index (%s)" % index
         )
@@ -113,18 +110,16 @@ def read_sql_table(
         raise TypeError("Must supply either divisions or npartitions, not both")
 
     columns = (
-        [(table.columns[c] if isinstance(c, string_types) else c) for c in columns]
+        [(table.columns[c] if isinstance(c, str) else c) for c in columns]
         if columns
         else list(table.columns)
     )
     if index_col not in columns:
         columns.append(
-            table.columns[index_col]
-            if isinstance(index_col, string_types)
-            else index_col
+            table.columns[index_col] if isinstance(index_col, str) else index_col
         )
 
-    if isinstance(index_col, string_types):
+    if isinstance(index_col, str):
         kwargs["index_col"] = index_col
     else:
         # function names get pandas auto-named

@@ -1,6 +1,4 @@
 # flake8: noqa
-from __future__ import absolute_import, division, print_function
-
 try:
     from distributed import *
 except ImportError:

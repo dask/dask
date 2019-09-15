@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import collections
 import itertools as it
 import operator
@@ -30,7 +28,6 @@ from .utils import (
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
-from .. import compatibility
 
 
 # #############################################
@@ -1698,7 +1695,7 @@ class DataFrameGroupBy(_GroupBy):
             set(
                 dir(type(self))
                 + list(self.__dict__)
-                + list(filter(compatibility.isidentifier, self.obj.columns))
+                + list(filter(M.isidentifier, self.obj.columns))
             )
         )
 

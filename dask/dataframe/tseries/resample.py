@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pandas as pd
 import numpy as np
 from pandas.core.resample import Resampler as pd_Resampler

@@ -68,8 +68,6 @@ such as for extremely large ``npartitions`` or if we find we need to
 increase the sample size for each partition.
 
 """
-from __future__ import absolute_import, division, print_function
-
 import math
 import numpy as np
 import pandas as pd
@@ -81,7 +79,6 @@ from ..utils import random_state_data
 from ..base import tokenize
 from .core import Series
 from .utils import is_categorical_dtype
-from dask.compatibility import zip
 
 
 def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):

@@ -1,15 +1,8 @@
+import json
 import os
+
 import pandas as pd
 import pytest
-import json
-
-try:
-    import lzma
-except ImportError:
-    try:
-        import backports.lzma as lzma
-    except ImportError:
-        lzma = None
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq

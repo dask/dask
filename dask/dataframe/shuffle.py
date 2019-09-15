@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 from operator import getitem
 import uuid

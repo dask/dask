@@ -5,8 +5,7 @@ from distutils.version import LooseVersion
 
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
-from dask.utils import ignoring, tmpfile
-from dask.compatibility import apply
+from dask.utils import ignoring, tmpfile, apply
 import pytest
 
 try:

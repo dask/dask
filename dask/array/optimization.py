@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function
-
+from itertools import zip_longest
 from operator import getitem
 
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
 from ..blockwise import optimize_blockwise
-from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pytest
 
 from dask.hashing import hashers, hash_buffer, hash_buffer_hex

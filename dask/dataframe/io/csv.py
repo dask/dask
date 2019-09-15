@@ -1,5 +1,4 @@
-from __future__ import print_function, division, absolute_import
-
+from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
 
@@ -20,18 +19,13 @@ from pandas.api.types import (
 
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
-
-# from ...bytes.compression import seekable_files, files as cfiles
-from fsspec.compression import compr
-from ...compatibility import Mapping, unicode
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
+from ..utils import clear_known_categories
+from .io import from_delayed
 
 import fsspec.implementations.local
-
-from ..utils import clear_known_categories
-
-from .io import from_delayed
+from fsspec.compression import compr
 
 
 def pandas_read_text(
@@ -380,7 +374,7 @@ def read_pandas(
     else:
         path_converter = None
 
-    if isinstance(blocksize, (str, unicode)):
+    if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:
         # NONE of the compressions should use chunking

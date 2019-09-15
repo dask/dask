@@ -6,8 +6,8 @@ import pickle
 import numpy as np
 import pytest
 
-from dask.compatibility import PY2
 from dask.utils import (
+    getargspec,
     takes_multiple_arguments,
     Dispatch,
     random_state_data,
@@ -31,6 +31,29 @@ from dask.utils import (
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
+
+
+def test_getargspec():
+    def func(x, y):
+        pass
+
+    assert getargspec(func).args == ["x", "y"]
+
+    func2 = functools.partial(func, 2)
+    # this is a bit of a lie, but maybe close enough
+    assert getargspec(func2).args == ["x", "y"]
+
+    def wrapper(*args, **kwargs):
+        pass
+
+    wrapper.__wrapped__ = func
+    assert getargspec(wrapper).args == ["x", "y"]
+
+    class MyType(object):
+        def __init__(self, x, y):
+            pass
+
+    assert getargspec(MyType).args == ["self", "x", "y"]
 
 
 def test_takes_multiple_arguments():
@@ -300,7 +323,6 @@ def test_SerializableLock_locked():
     assert not a.locked()
 
 
-@pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
 def test_SerializableLock_acquire_blocking():
     a = SerializableLock("a")
     assert a.acquire(blocking=True)
@@ -429,7 +451,6 @@ def test_has_keyword():
     assert has_keyword(bar, "c")
 
 
-@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
 def test_derived_from():
     class Foo:
         def f(a, b):
@@ -467,7 +488,6 @@ def test_derived_from():
     assert "  extra docstring\n\n" in Zap.f.__doc__
 
 
-@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
 def test_derived_from_func():
     import builtins
 
@@ -481,7 +501,6 @@ def test_derived_from_func():
     assert "This docstring was copied from builtins.sum" in sum.__doc__
 
 
-@pytest.mark.skipif(PY2, reason="Docstrings not as easy to manipulate in Py2")
 def test_derived_from_dask_dataframe():
     dd = pytest.importorskip("dask.dataframe")
 

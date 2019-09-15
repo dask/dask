@@ -3,8 +3,6 @@ A threaded shared-memory scheduler
 
 See local.py
 """
-from __future__ import absolute_import, division, print_function
-
 import sys
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
