@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import io
 import pandas as pd
 from dask.bytes import open_files, read_bytes

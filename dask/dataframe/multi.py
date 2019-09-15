@@ -53,8 +53,6 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
-from __future__ import absolute_import, division, print_function
-
 from functools import wraps, partial
 import warnings
 
@@ -63,8 +61,8 @@ import numpy as np
 import pandas as pd
 
 from ..base import tokenize, is_dask_collection
-from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
+from ..utils import apply
 from .core import (
     _Frame,
     DataFrame,

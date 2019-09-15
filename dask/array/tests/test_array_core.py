@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import copy
 
 import pytest
@@ -6,7 +5,6 @@ import pytest
 np = pytest.importorskip("numpy")
 
 import os
-import sys
 import time
 from io import StringIO
 from distutils.version import LooseVersion
@@ -22,6 +20,7 @@ import dask
 import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
+from dask.compatibility import PY_VERSION
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
@@ -858,9 +857,6 @@ def test_field_access_with_shape():
     assert_eq(x[["col1", "col2"]], data[["col1", "col2"]])
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 5), reason="Matrix multiplication operator only after Py3.5"
-)
 def test_matmul():
     x = np.random.random((5, 5))
     y = np.random.random((5, 2))
@@ -3818,7 +3814,7 @@ def test_zarr_nocompute():
 
 
 @pytest.mark.skipif(
-    sys.version_info[0:2] == (3, 5),
+    PY_VERSION < "3.6",
     reason="Skipping TileDB with python 3.5 because the tiledb-py "
     "conda-forge package is too old, and is not updatable.",
 )
@@ -3856,7 +3852,7 @@ def test_tiledb_roundtrip():
 
 
 @pytest.mark.skipif(
-    sys.version_info[0:2] == (3, 5),
+    PY_VERSION < "3.6",
     reason="Skipping TileDB with python 3.5 because the tiledb-py "
     "conda-forge package is too old, and is not updatable.",
 )
@@ -4177,6 +4173,7 @@ def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
 
 
 def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
+    pytest.importorskip("zarr")
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
         with StringIO() as f:

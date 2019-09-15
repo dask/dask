@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from fnmatch import fnmatch
 from glob import glob
 import os
@@ -18,7 +16,6 @@ from ...base import get_scheduler
 from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
-from ...compatibility import PY3
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
 
@@ -505,7 +502,6 @@ def read_hdf(
     )
 
 
-if PY3:
-    from ..core import _Frame
+from ..core import _Frame
 
-    _Frame.to_hdf.__doc__ = to_hdf.__doc__
+_Frame.to_hdf.__doc__ = to_hdf.__doc__

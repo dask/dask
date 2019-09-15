@@ -1,8 +1,6 @@
 """
 Control global computation context
 """
-from __future__ import absolute_import, division, print_function
-
 import threading
 from functools import partial
 from . import config
