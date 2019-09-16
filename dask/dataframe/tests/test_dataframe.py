@@ -919,6 +919,7 @@ def test_drop_duplicates_subset():
                 df.drop_duplicates(subset=ss, **kwarg),
                 ddf.drop_duplicates(subset=ss, **kwarg),
             )
+            assert_eq(df.drop_duplicates(ss, **kwarg), ddf.drop_duplicates(ss, **kwarg))
 
 
 def test_get_partition():
