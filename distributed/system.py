@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 
@@ -61,16 +62,20 @@ def cpu_count():
 
     # Check cgroups if available
     if sys.platform == "linux":
-        try:
-            with open("/sys/fs/cgroup/cpuacct,cpu/cpu.cfs_quota_us") as f:
-                quota = int(f.read())
-            with open("/sys/fs/cgroup/cpuacct,cpu/cpu.cfs_period_us") as f:
-                period = int(f.read())
-            cgroups_count = int(quota / period)
-            if cgroups_count > 0:
-                count = min(count, cgroups_count)
-        except Exception:
-            pass
+        # The directory name isn't standardized across linux distros, check both
+        for dirname in ["cpuacct,cpu", "cpu,cpuacct"]:
+            try:
+                with open("/sys/fs/cgroup/%s/cpu.cfs_quota_us" % dirname) as f:
+                    quota = int(f.read())
+                with open("/sys/fs/cgroup/%s/cpu.cfs_period_us" % dirname) as f:
+                    period = int(f.read())
+                # We round up on fractional CPUs
+                cgroups_count = math.ceil(quota / period)
+                if cgroups_count > 0:
+                    count = min(count, cgroups_count)
+                break
+            except Exception:
+                pass
 
     return count
 
