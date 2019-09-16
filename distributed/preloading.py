@@ -8,6 +8,8 @@ from importlib import import_module
 
 import click
 
+from dask.utils import tmpfile
+
 from .utils import import_file
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,7 @@ def validate_preload_argv(ctx, param, value):
             % ("s" if len(value) > 1 else "", " ".join(value))
         )
 
-    preload_modules = _import_modules(ctx.params.get("preload"))
+    preload_modules = {name: _import_module(name) for name in ctx.params.get("preload")}
 
     preload_commands = [
         m["dask_setup"]
@@ -58,17 +60,16 @@ def validate_preload_argv(ctx, param, value):
     return value
 
 
-def _import_modules(names, file_dir=None):
-    """ Imports modules and extracts preload interface functions.
+def _import_module(name, file_dir=None):
+    """ Imports module and extract preload interface functions.
 
-    Imports modules specified by names and extracts 'dask_setup'
+    Import modules specified by name and extract 'dask_setup'
     and 'dask_teardown' if present.
-
 
     Parameters
     ----------
-    names: list of strings
-        Module names or file paths
+    name: str
+        Module name, file path, or text of module or script
     file_dir: string
         Path of a directory where files should be copied
 
@@ -77,36 +78,37 @@ def _import_modules(names, file_dir=None):
     Nest dict of names to extracted module interface components if present
     in imported module.
     """
-    result_modules = {}
-
-    for name in names:
-        # import
-        if name.endswith(".py"):
-            # name is a file path
-            if file_dir is not None:
-                basename = os.path.basename(name)
-                copy_dst = os.path.join(file_dir, basename)
-                if os.path.exists(copy_dst):
-                    if not filecmp.cmp(name, copy_dst):
-                        logger.error("File name collision: %s", basename)
-                shutil.copy(name, copy_dst)
-                module = import_file(copy_dst)[0]
-            else:
-                module = import_file(name)[0]
-
+    if name.endswith(".py"):
+        # name is a file path
+        if file_dir is not None:
+            basename = os.path.basename(name)
+            copy_dst = os.path.join(file_dir, basename)
+            if os.path.exists(copy_dst):
+                if not filecmp.cmp(name, copy_dst):
+                    logger.error("File name collision: %s", basename)
+            shutil.copy(name, copy_dst)
+            module = import_file(copy_dst)[0]
         else:
-            # name is a module name
-            if name not in sys.modules:
-                import_module(name)
-            module = sys.modules[name]
+            module = import_file(name)[0]
 
-        logger.info("Import preload module: %s", name)
-        result_modules[name] = {
-            attrname: getattr(module, attrname, None)
-            for attrname in ("dask_setup", "dask_teardown")
-        }
+    elif " " not in name:
+        # name is a module name
+        if name not in sys.modules:
+            import_module(name)
+        module = sys.modules[name]
 
-    return result_modules
+    else:
+        # not a name, actually the text of the script
+        with tmpfile(extension=".py") as fn:
+            with open(fn, mode="w") as f:
+                f.write(name)
+            return _import_module(fn, file_dir=file_dir)
+
+    logger.info("Import preload module: %s", name)
+    return {
+        attrname: getattr(module, attrname, None)
+        for attrname in ("dask_setup", "dask_teardown")
+    }
 
 
 def preload_modules(names, parameter=None, file_dir=None, argv=None):
@@ -123,10 +125,12 @@ def preload_modules(names, parameter=None, file_dir=None, argv=None):
     file_dir: string
         Path of a directory where files should be copied
     """
+    if isinstance(names, str):
+        names = [names]
 
-    imported_modules = _import_modules(names, file_dir=file_dir)
+    for name in names:
+        interface = _import_module(name, file_dir=file_dir)
 
-    for name, interface in imported_modules.items():
         dask_setup = interface.get("dask_setup", None)
         dask_teardown = interface.get("dask_teardown", None)
 
@@ -140,5 +144,5 @@ def preload_modules(names, parameter=None, file_dir=None, argv=None):
                 dask_setup(parameter)
                 logger.info("Run preload setup function: %s", name)
 
-        if interface["dask_teardown"]:
+        if dask_teardown:
             atexit.register(interface["dask_teardown"], parameter)

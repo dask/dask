@@ -2,10 +2,11 @@ import os
 import shutil
 import sys
 import tempfile
+import pytest
 
-from distributed import Client
+from distributed import Client, Scheduler, Worker
 from distributed.utils_test import cluster
-from distributed.utils_test import loop  # noqa F401
+from distributed.utils_test import cleanup, loop  # noqa F401
 
 
 PRELOAD_TEXT = """
@@ -40,6 +41,18 @@ def test_worker_preload_file(loop):
             }
     finally:
         shutil.rmtree(tmpdir)
+
+
+@pytest.mark.asyncio
+async def test_worker_preload_text(cleanup):
+    text = """
+def dask_setup(worker):
+    worker.foo = 'setup'
+"""
+    async with Scheduler(port=0, preload=text) as s:
+        assert s.foo == "setup"
+        async with Worker(s.address, preload=[text]) as w:
+            assert w.foo == "setup"
 
 
 def test_worker_preload_module(loop):
