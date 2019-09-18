@@ -215,15 +215,6 @@ required = {"left": [0], "right": [1], "inner": [0, 1], "outer": []}
 
 def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-
-    # import sys
-    # print("lhs:", args)
-    # print("args:", args)
-    # print("kwargs:")
-    # for kw in kwargs:
-    #     print("\t", kw, kwargs[kw])
-    # sys.stdout.flush()
-
     out = lhs.merge(*args, **kwargs)
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
