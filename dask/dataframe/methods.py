@@ -482,8 +482,14 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
     return out
 
 
+def assign_index(df, ind):
+    df = df.copy()
+    df.index = ind
+    return df
+
+
 # ---------------------------------
-# hash_df
+# Shuffling/merging/sorting
 # ---------------------------------
 
 
@@ -495,55 +501,16 @@ def hash_df_pandas(dfs):
     return hash_pandas_object(dfs, index=False)
 
 
-# ---------------------------------
-# group_split
-# ---------------------------------
-
-
 group_split = Dispatch("group_split")
 
 
 @group_split.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k):
-    indexer, locations = groupsort_indexer(c.astype(np.int64), k)
+    indexer, locations = groupsort_indexer(c, k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-
     return dict(zip(range(k), parts))
-
-
-# ---------------------------------
-# group_split_2
-# ---------------------------------
-
-
-group_split_2 = Dispatch("group_split_2")
-
-
-@group_split_2.register((pd.DataFrame, pd.Series, pd.Index))
-def group_split_2_pandas(df, col):
-    if not len(df):
-        return {}, df
-    ind = df[col].values.astype(np.int64)
-    n = ind.max() + 1
-    indexer, locations = groupsort_indexer(ind.view(np.int64), n)
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-    result2 = dict(zip(range(n), parts))
-    return result2, df.iloc[:0]
-
-
-def assign_index(df, ind):
-    df = df.copy()
-    df.index = ind
-    return df
-
-
-# ---------------------------------
-# percentiles-quantiles
-# ---------------------------------
 
 
 percentiles_summary = Dispatch("percentiles_summary")

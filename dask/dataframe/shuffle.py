@@ -566,7 +566,12 @@ def set_partitions_pre(s, divisions):
 
 
 def shuffle_group_2(df, col):
-    return methods.group_split_2(df, col)
+    if not len(df):
+        return {}, df
+    ind = df[col].astype(np.int64)
+    n = ind.max() + 1
+    result2 = methods.group_split(df, ind.values.view(np.int64), n)
+    return result2, df.iloc[:0]
 
 
 def shuffle_group_get(g_head, i):
@@ -615,7 +620,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    return methods.group_split(df, c, k)
+    return methods.group_split(df, c.astype(np.int64), k)
 
 
 def shuffle_group_3(df, col, npartitions, p):
