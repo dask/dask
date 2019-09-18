@@ -57,6 +57,8 @@ class Worker(Process):
         The address of the scheduler
     address: str
         The hostname where we should run this worker
+    worker_module: str
+        The python module to run to start the worker.
     connect_kwargs: dict
         kwargs to be passed to asyncssh connections
     kwargs: dict
@@ -70,11 +72,13 @@ class Worker(Process):
         address: str,
         connect_kwargs: dict,
         kwargs: dict,
+        worker_module="distributed.cli.dask_worker",
         loop=None,
         name=None,
     ):
         self.address = address
         self.scheduler = scheduler
+        self.worker_module = worker_module
         self.connect_kwargs = connect_kwargs
         self.kwargs = kwargs
         self.name = name
@@ -88,7 +92,7 @@ class Worker(Process):
                 [
                     sys.executable,
                     "-m",
-                    "distributed.cli.dask_worker",
+                    self.worker_module,
                     self.scheduler,
                     "--name",
                     str(self.name),
@@ -158,7 +162,12 @@ class Scheduler(Process):
 
 
 def SSHCluster(
-    hosts, connect_kwargs={}, worker_kwargs={}, scheduler_kwargs={}, **kwargs
+    hosts,
+    connect_kwargs={},
+    worker_kwargs={},
+    scheduler_kwargs={},
+    worker_module="distributed.cli.dask_worker",
+    **kwargs
 ):
     """ Deploy a Dask cluster using SSH
 
@@ -174,10 +183,12 @@ def SSHCluster(
             key presented during the SSH handshake.  If this is not specified,
             the keys will be looked up in the file .ssh/known_hosts.  If this
             is explicitly set to None, server host key validation will be disabled.
-    scheduler_kwargs:
-        Keywords to pass on to dask-scheduler
     worker_kwargs:
         Keywords to pass on to dask-worker
+    scheduler_kwargs:
+        Keywords to pass on to dask-scheduler
+    worker_module:
+        Python module to call to start the worker
 
     Examples
     --------
@@ -189,6 +200,18 @@ def SSHCluster(
     ...     worker_kwargs={"nthreads": 2},
     ...     scheduler_kwargs={"port": 0, "dashboard_address": ":8797"})
     >>> client = Client(cluster)
+
+    Running GPU workers (requires ``dask_cuda`` to be installed on all hosts)
+
+    >>> from dask.distributed import Client
+    >>> from distributed.deploy.ssh2 import SSHCluster  # experimental for now
+    >>> cluster = SSHCluster(
+    ...     ["localhost", "hostwithgpus", "anothergpuhost"],
+    ...     connect_kwargs={"known_hosts": None},
+    ...     scheduler_kwargs={"port": 0, "dashboard_address": ":8797"},
+    ...     worker_module='dask_cuda.dask_cuda_worker')
+    >>> client = Client(cluster)
+
     """
     scheduler = {
         "cls": Scheduler,
@@ -205,6 +228,7 @@ def SSHCluster(
                 "address": host,
                 "connect_kwargs": connect_kwargs,
                 "kwargs": worker_kwargs,
+                "worker_module": worker_module,
             },
         }
         for i, host in enumerate(hosts[1:])
