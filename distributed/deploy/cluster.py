@@ -365,7 +365,7 @@ class Cluster(object):
         text = "%s(%r, workers=%d, threads=%d" % (
             self._cluster_class_name,
             self.scheduler_address,
-            len(self.workers),
+            len(self.scheduler_info["workers"]),
             sum(w["nthreads"] for w in self.scheduler_info["workers"].values()),
         )
 

@@ -374,6 +374,8 @@ async def test_MultiWorker(cleanup):
             assert len(cluster.worker_spec) == 2
             await client.wait_for_workers(4)
 
+            assert "workers=4" in repr(cluster)
+
             cluster.scale(1)
             await cluster
             assert len(s.workers) == 2
