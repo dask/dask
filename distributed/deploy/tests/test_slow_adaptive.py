@@ -47,7 +47,7 @@ async def test_startup(cleanup):
     ) as cluster:
         assert len(cluster.workers) == len(cluster.worker_spec) == 3
         assert time() < start + 5
-        assert 1 <= len(cluster.scheduler_info["workers"]) <= 2
+        assert 0 <= len(cluster.scheduler_info["workers"]) <= 2
 
         async with Client(cluster, asynchronous=True) as client:
             await client.wait_for_workers(n_workers=2)

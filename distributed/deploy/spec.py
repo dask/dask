@@ -8,6 +8,7 @@ import weakref
 import dask
 from tornado import gen
 
+from .adaptive import Adaptive
 from .cluster import Cluster
 from ..core import rpc, CommClosedError
 from ..utils import LoopRunner, silence_logging, ignoring, parse_bytes, parse_timedelta
@@ -361,34 +362,39 @@ class SpecCluster(Cluster):
         self.close()
         self._loop_runner.stop()
 
+    def _threads_per_worker(self) -> int:
+        """ Return the number of threads per worker for new workers """
+        if not self.new_spec:
+            raise ValueError("To scale by cores= you must specify cores per worker")
+
+        for name in ["nthreads", "ncores", "threads", "cores"]:
+            with ignoring(KeyError):
+                return self.new_spec["options"][name]
+
+        if not self.new_spec:
+            raise ValueError("To scale by cores= you must specify cores per worker")
+
+    def _memory_per_worker(self) -> int:
+        """ Return the memory limit per worker for new workers """
+        if not self.new_spec:
+            raise ValueError(
+                "to scale by memory= your worker definition must include a memory_limit definition"
+            )
+
+        for name in ["memory_limit", "memory"]:
+            with ignoring(KeyError):
+                return parse_bytes(self.new_spec["options"][name])
+
+        raise ValueError(
+            "to use scale(memory=...) your worker definition must include a memory_limit definition"
+        )
+
     def scale(self, n=0, memory=None, cores=None):
         if memory is not None:
-            for name in ["memory_limit", "memory"]:
-                try:
-                    limit = self.new_spec["options"][name]
-                except KeyError:
-                    pass
-                else:
-                    n = max(n, int(math.ceil(parse_bytes(memory) / parse_bytes(limit))))
-                    break
-            else:
-                raise ValueError(
-                    "to use scale(memory=...) your worker definition must include a memory_limit definition"
-                )
+            n = max(n, int(math.ceil(parse_bytes(memory) / self._memory_per_worker())))
 
         if cores is not None:
-            for name in ["nthreads", "ncores", "threads", "cores"]:
-                try:
-                    threads_per_worker = self.new_spec["options"][name]
-                except KeyError:
-                    pass
-                else:
-                    n = max(n, int(math.ceil(cores / threads_per_worker)))
-                    break
-            else:
-                raise ValueError(
-                    "to use scale(cores=...) your worker definition must include an nthreads= definition"
-                )
+            n = max(n, int(math.ceil(cores / self._threads_per_worker())))
 
         if len(self.worker_spec) > n:
             not_yet_launched = set(self.worker_spec) - {
@@ -472,6 +478,67 @@ class SpecCluster(Cluster):
             else:
                 out.add(name)
         return out
+
+    def adapt(
+        self,
+        *args,
+        minimum=0,
+        maximum=math.inf,
+        minimum_cores: int = None,
+        maximum_cores: int = None,
+        minimum_memory: str = None,
+        maximum_memory: str = None,
+        **kwargs
+    ) -> Adaptive:
+        """ Turn on adaptivity
+
+        This scales Dask clusters automatically based on scheduler activity.
+
+        Parameters
+        ----------
+        minimum : int
+            Minimum number of workers
+        maximum : int
+            Maximum number of workers
+        minimum_cores : int
+            Minimum number of cores/threads to keep around in the cluster
+        maximum_cores : int
+            Maximum number of cores/threads to keep around in the cluster
+        minimum_memory : str
+            Minimum amount of memory to keep around in the cluster
+            Expressed as a string like "100 GiB"
+        maximum_cores : int
+            Maximum amount of memory to keep around in the cluster
+            Expressed as a string like "100 GiB"
+
+        Examples
+        --------
+        >>> cluster.adapt(minimum=0, maximum_memory="100 GiB", interval='500ms')
+
+        See Also
+        --------
+        dask.distributed.Adaptive : for more keyword arguments
+        """
+        if minimum_cores is not None:
+            minimum = max(
+                minimum or 0, math.ceil(minimum_cores / self._threads_per_worker())
+            )
+        if minimum_memory is not None:
+            minimum = max(
+                minimum or 0,
+                math.ceil(parse_bytes(minimum_memory) / self._memory_per_worker()),
+            )
+        if maximum_cores is not None:
+            maximum = min(
+                maximum, math.floor(maximum_cores / self._threads_per_worker())
+            )
+        if maximum_memory is not None:
+            maximum = min(
+                maximum,
+                math.floor(parse_bytes(maximum_memory) / self._memory_per_worker()),
+            )
+
+        return super().adapt(*args, minimum=minimum, maximum=maximum, **kwargs)
 
 
 @atexit.register

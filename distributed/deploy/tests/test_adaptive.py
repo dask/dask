@@ -397,3 +397,33 @@ async def test_worker_keys(cleanup):
 
         names = {ws.name for ws in cluster.scheduler.workers.values()}
         assert names == {"a-1", "a-2"} or names == {"b-1", "b-2"}
+
+
+@pytest.mark.asyncio
+async def test_adapt_cores_memory(cleanup):
+    async with LocalCluster(
+        0,
+        threads_per_worker=2,
+        memory_limit="3 GB",
+        scheduler_port=0,
+        silence_logs=False,
+        processes=False,
+        dashboard_address=None,
+        asynchronous=True,
+    ) as cluster:
+        adapt = cluster.adapt(minimum_cores=3, maximum_cores=9)
+        assert adapt.minimum == 2
+        assert adapt.maximum == 4
+
+        adapt = cluster.adapt(minimum_memory="7GB", maximum_memory="20 GB")
+        assert adapt.minimum == 3
+        assert adapt.maximum == 6
+
+        adapt = cluster.adapt(
+            minimum_cores=1,
+            minimum_memory="7GB",
+            maximum_cores=10,
+            maximum_memory="1 TB",
+        )
+        assert adapt.minimum == 3
+        assert adapt.maximum == 5
