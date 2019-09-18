@@ -77,7 +77,6 @@ from pandas.api.types import is_datetime64tz_dtype
 
 from toolz import merge, merge_sorted, take
 
-from . import methods
 from ..utils import random_state_data
 from ..base import tokenize
 from .core import Series
@@ -386,8 +385,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     return rv
 
 
-@methods.percentiles_summary.register(pd.Series)
-def percentiles_summary_pandas(df, num_old, num_new, upsample, state):
+def percentiles_summary(df, num_old, num_new, upsample, state):
     """Summarize data using percentiles and derived weights.
 
     These summaries can be merged, compressed, and converted back into
@@ -454,7 +452,7 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     name1 = "re-quantiles-1-" + token
     val_dsk = {
         (name1, i): (
-            methods.percentiles_summary,
+            percentiles_summary,
             key,
             df.npartitions,
             npartitions,

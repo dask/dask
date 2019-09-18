@@ -511,6 +511,3 @@ def group_split_pandas(df, c, k):
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
     return dict(zip(range(k), parts))
-
-
-percentiles_summary = Dispatch("percentiles_summary")
