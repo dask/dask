@@ -470,7 +470,7 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
     name3 = "re-quantiles-3-" + token
     last_dsk = {
         (name3, 0): (
-            pd.Series,
+            pd.Series,  # TODO: Use `type(df._meta)` when cudf adds `tolist()`
             (process_val_weights, merged_key, npartitions, (name0, 0)),
             qs,
             None,

@@ -6,10 +6,9 @@ import warnings
 import toolz
 import numpy as np
 import pandas as pd
-from pandas._libs.algos import groupsort_indexer
-from pandas.util import hash_pandas_object
 
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
+from . import methods
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
@@ -17,7 +16,7 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
-from .utils import series_type_like_df, is_series_like
+from .utils import series_type_like_df
 
 
 def set_index(
@@ -237,7 +236,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=pd.Series([0]),
+        meta=series_type_like_df(df)([0]),
         transform_divisions=False,
     )
     df2 = df.assign(_partitions=partitions)
@@ -544,7 +543,7 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    return hash_pandas_object(df, index=False) % int(npartitions)
+    return methods.hash_df(df) % int(npartitions)
 
 
 def barrier(args):
@@ -560,8 +559,6 @@ def collect(p, part, meta, barrier_token):
 
 def set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
-    if is_series_like(partitions):
-        partitions = partitions.values
     partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions
 
@@ -569,13 +566,9 @@ def set_partitions_pre(s, divisions):
 def shuffle_group_2(df, col):
     if not len(df):
         return {}, df
-    ind = df[col].values.astype(np.int64)
+    ind = df[col].astype(np.int64)
     n = ind.max() + 1
-    indexer, locations = groupsort_indexer(ind.view(np.int64), n)
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-    result2 = dict(zip(range(n), parts))
+    result2 = methods.group_split(df, ind.values.view(np.int64), n)
     return result2, df.iloc[:0]
 
 
@@ -616,7 +609,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     if col == "_partitions":
         ind = df[col]
     else:
-        ind = hash_pandas_object(df[col], index=False)
+        ind = methods.hash_df(df)
 
     c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
@@ -625,12 +618,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    indexer, locations = groupsort_indexer(c.astype(np.int64), k)
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-
-    return dict(zip(range(k), parts))
+    return methods.group_split(df, c.astype(np.int64), k)
 
 
 def shuffle_group_3(df, col, npartitions, p):
