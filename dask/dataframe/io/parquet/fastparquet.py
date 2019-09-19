@@ -341,6 +341,8 @@ class FastParquetEngine(Engine):
         else:
             if isinstance(pf, tuple):
                 pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
+                pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
+                pf.fmd.row_groups = None
             piece = pf.row_groups[piece]
             pf.fmd.key_value_metadata = None
             df = pf.read_row_group_file(
