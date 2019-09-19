@@ -95,8 +95,6 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             if "_metadata" not in relpaths:
                 fast_metadata = False
         else:
-            # base, fns = _analyze_paths(paths, fs)
-            # relpaths = [path.replace(base, "").lstrip("/") for path in paths]
             if "_metadata" in relpaths:
                 # We have a _metadata file, lets use it
                 pf = ParquetFile(
