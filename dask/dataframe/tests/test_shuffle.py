@@ -1,6 +1,5 @@
 import itertools
 import os
-import sys
 import pandas as pd
 import pytest
 import pickle
@@ -377,9 +376,6 @@ def test_set_index_divisions_sorted():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    sys.version_info < (3, 4), reason="multiprocessing spawn only after Py3.4"
-)
 def test_set_index_consistent_divisions():
     # See https://github.com/dask/dask/issues/3867
     df = pd.DataFrame(

@@ -32,7 +32,7 @@ def _get_md_row_groups(pieces):
     return row_groups
 
 
-def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
+def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
     """ Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
@@ -44,7 +44,7 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
         if gather_statistics is not False:
             # This scans all the files
             dataset = pq.ParquetDataset(
-                paths, filesystem=fs, **kwargs.get("dataset", {})
+                paths, filesystem=fs, filters=filters, **dataset_kwargs
             )
         else:
             base, fns = _analyze_paths(paths, fs)
@@ -54,25 +54,26 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
                 dataset = pq.ParquetDataset(
                     base + fs.sep + "_metadata",
                     filesystem=fs,
-                    **kwargs.get("dataset", {}),
+                    filters=filters,
+                    **dataset_kwargs,
                 )
             else:
                 # Rely on metadata for 0th file.
                 # Will need to pass a list of paths to read_partition
-                dataset = pq.ParquetDataset(
-                    paths[0], filesystem=fs, **kwargs.get("dataset", {})
-                )
+                dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
                 parts = [base + fs.sep + fn for fn in fns]
     else:
         if fs.isdir(paths[0]):
             # This is a directory, check for _metadata, then _common_metadata
             allpaths = fs.glob(paths[0] + fs.sep + "*")
-            base, fns = _analyze_paths(paths, fs)
+            base, fns = _analyze_paths(allpaths, fs)
             relpaths = [path.replace(base, "").lstrip("/") for path in allpaths]
+            if "_metadata" in relpaths and "validate_schema" not in dataset_kwargs:
+                dataset_kwargs["validate_schema"] = False
             if "_metadata" in relpaths or gather_statistics is not False:
                 # Let arrow do its thing (use _metadata or scan files)
                 dataset = pq.ParquetDataset(
-                    paths, filesystem=fs, **kwargs.get("dataset", {})
+                    paths, filesystem=fs, filters=filters, **dataset_kwargs
                 )
             else:
                 # Use _common_metadata file if it is available.
@@ -81,18 +82,16 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
                     dataset = pq.ParquetDataset(
                         base + fs.sep + "_common_metadata",
                         filesystem=fs,
-                        **kwargs.get("dataset", {}),
+                        **dataset_kwargs,
                     )
                 else:
                     dataset = pq.ParquetDataset(
-                        allpaths[0], filesystem=fs, **kwargs.get("dataset", {})
+                        allpaths[0], filesystem=fs, **dataset_kwargs
                     )
                 parts = [base + fs.sep + fn for fn in fns]
         else:
             # There is only one file to read
-            dataset = pq.ParquetDataset(
-                paths, filesystem=fs, **kwargs.get("dataset", {})
-            )
+            dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
     return parts, dataset
 
 
@@ -112,9 +111,8 @@ class ArrowEngine(Engine):
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below)
         parts, dataset = _determine_dataset_parts(
-            fs, paths, gather_statistics, **kwargs
+            fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
-
         if dataset.partitions is not None:
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
@@ -122,7 +120,10 @@ class ArrowEngine(Engine):
         else:
             partitions = []
 
-        schema = dataset.schema.to_arrow_schema()
+        if dataset.metadata:
+            schema = dataset.metadata.schema.to_arrow_schema()
+        else:
+            schema = dataset.schema.to_arrow_schema()
         columns = None
 
         has_pandas_metadata = (
@@ -216,10 +217,11 @@ class ArrowEngine(Engine):
                             if None in [cs_min, cs_max]:
                                 skip_cols.add(name)
                                 continue
+                            cs_vals = pd.Series([cs_min, cs_max])
                             d.update(
                                 {
-                                    "min": cs_min,
-                                    "max": cs_max,
+                                    "min": cs_vals[0],
+                                    "max": cs_vals[1],
                                     "null_count": column.statistics.null_count,
                                 }
                             )

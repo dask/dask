@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from itertools import chain
 
 from .utils_test import add, inc  # noqa: F401

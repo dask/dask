@@ -26,6 +26,7 @@ AGG_FUNCS = [
     "std",
     "var",
     "cov",
+    "corr",
     "nunique",
     "first",
     "last",
@@ -335,8 +336,11 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
     dask_group = grouper(ddf)
     pandas_group = grouper(df)
 
-    # covariance only works with N+1 columns
-    if isinstance(pandas_group, pd.core.groupby.SeriesGroupBy) and agg_func == "cov":
+    # covariance/correlation only works with N+1 columns
+    if isinstance(pandas_group, pd.core.groupby.SeriesGroupBy) and agg_func in (
+        "cov",
+        "corr",
+    ):
         return
 
     dask_agg = getattr(dask_group, agg_func)
@@ -726,8 +730,8 @@ def test_groupby_reduction_split(keyword):
     # DataFrame
     for m in AGG_FUNCS:
         # nunique is not implemented for DataFrameGroupBy
-        # covariance is not a series aggregation
-        if m in ("nunique", "cov"):
+        # covariance/correlation is not a series aggregation
+        if m in ("nunique", "cov", "corr"):
             continue
         res = call(ddf.groupby("b"), m, **{keyword: 2})
         sol = call(pdf.groupby("b"), m)
@@ -741,8 +745,8 @@ def test_groupby_reduction_split(keyword):
 
     # Series, post select
     for m in AGG_FUNCS:
-        # covariance is not a series aggregation
-        if m == "cov":
+        # covariance/correlation is not a series aggregation
+        if m in ("cov", "corr"):
             continue
         res = call(ddf.groupby("b").a, m, **{keyword: 2})
         sol = call(pdf.groupby("b").a, m)
@@ -756,8 +760,8 @@ def test_groupby_reduction_split(keyword):
 
     # Series, pre select
     for m in AGG_FUNCS:
-        # covariance is not a series aggregation
-        if m == "cov":
+        # covariance/correlation is not a series aggregation
+        if m in ("cov", "corr"):
             continue
         res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
@@ -773,7 +777,34 @@ def test_groupby_reduction_split(keyword):
     assert call(ddf.a.groupby(ddf.b), "var", ddof=2)._name != res._name
 
 
-def test_apply_shuffle():
+@pytest.mark.parametrize(
+    "grouped",
+    [
+        lambda df: df.groupby("A"),
+        lambda df: df.groupby(df["A"]),
+        lambda df: df.groupby(df["A"] + 1),
+        lambda df: df.groupby("A")["B"],
+        # SeriesGroupBy:
+        lambda df: df.groupby("A")["B"],
+        lambda df: df.groupby(df["A"])["B"],
+        lambda df: df.groupby(df["A"] + 1)["B"],
+        # Series.groupby():
+        lambda df: df.B.groupby(df["A"]),
+        lambda df: df.B.groupby(df["A"] + 1),
+        # DataFrameGroupBy with column slice:
+        lambda df: df.groupby("A")[["B", "C"]],
+        lambda df: df.groupby(df["A"])[["B", "C"]],
+        lambda df: df.groupby(df["A"] + 1)[["B", "C"]],
+    ],
+)
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda grp: grp.apply(lambda x: x.sum()),
+        lambda grp: grp.transform(lambda x: x.sum()),
+    ],
+)
+def test_apply_or_transform_shuffle(grouped, func):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 4] * 5,
@@ -785,63 +816,7 @@ def test_apply_shuffle():
     ddf = dd.from_pandas(pdf, 3)
 
     with pytest.warns(UserWarning):  # meta inference
-        assert_eq(
-            ddf.groupby("A").apply(lambda x: x.sum()),
-            pdf.groupby("A").apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"]).apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"]).apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"] + 1).apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"] + 1).apply(lambda x: x.sum()),
-        )
-
-        # SeriesGroupBy
-        assert_eq(
-            ddf.groupby("A")["B"].apply(lambda x: x.sum()),
-            pdf.groupby("A")["B"].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"])["B"].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"])["B"].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"] + 1)["B"].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"] + 1)["B"].apply(lambda x: x.sum()),
-        )
-
-        # Series.groupby
-        assert_eq(
-            ddf.B.groupby(ddf["A"]).apply(lambda x: x.sum()),
-            pdf.B.groupby(pdf["A"]).apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.B.groupby(ddf["A"] + 1).apply(lambda x: x.sum()),
-            pdf.B.groupby(pdf["A"] + 1).apply(lambda x: x.sum()),
-        )
-
-        # DataFrameGroupBy with column slice
-        assert_eq(
-            ddf.groupby("A")[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby("A")[["B", "C"]].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"])[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"])[["B", "C"]].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"] + 1)[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"] + 1)[["B", "C"]].apply(lambda x: x.sum()),
-        )
+        assert_eq(func(grouped(pdf)), func(grouped(ddf)))
 
 
 @pytest.mark.parametrize(
@@ -858,7 +833,14 @@ def test_apply_shuffle():
         ),
     ],
 )
-def test_apply_shuffle_multilevel(grouper):
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda grouped: grouped.apply(lambda x: x.sum()),
+        lambda grouped: grouped.transform(lambda x: x.sum()),
+    ],
+)
+def test_apply_or_transform_shuffle_multilevel(grouper, func):
     pdf = pd.DataFrame(
         {
             "AB": [1, 2, 3, 4] * 5,
@@ -872,21 +854,17 @@ def test_apply_shuffle_multilevel(grouper):
 
     with pytest.warns(UserWarning):
         # DataFrameGroupBy
-        assert_eq(
-            ddf.groupby(grouper(ddf)).apply(lambda x: x.sum()),
-            pdf.groupby(grouper(pdf)).apply(lambda x: x.sum()),
-        )
+        assert_eq(func(ddf.groupby(grouper(ddf))), func(pdf.groupby(grouper(pdf))))
 
         # SeriesGroupBy
         assert_eq(
-            ddf.groupby(grouper(ddf))["B"].apply(lambda x: x.sum()),
-            pdf.groupby(grouper(pdf))["B"].apply(lambda x: x.sum()),
+            func(ddf.groupby(grouper(ddf))["B"]), func(pdf.groupby(grouper(pdf))["B"])
         )
 
         # DataFrameGroupBy with column slice
         assert_eq(
-            ddf.groupby(grouper(ddf))[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby(grouper(pdf))[["B", "C"]].apply(lambda x: x.sum()),
+            func(ddf.groupby(grouper(ddf))[["B", "C"]]),
+            func(pdf.groupby(grouper(pdf))[["B", "C"]]),
         )
 
 
@@ -1050,7 +1028,7 @@ def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
 
     # nunique/cov is not supported in specs
-    if spec in ("nunique", "cov"):
+    if spec in ("nunique", "cov", "corr"):
         return
 
     pdf = pd.DataFrame(
@@ -1190,7 +1168,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
     ddf = dd.from_pandas(pdf, npartitions=10)
 
     # covariance only works with N+1 columns
-    if agg_func != "cov":
+    if agg_func not in ("cov", "corr"):
         assert_eq(
             call(pdf.groupby(grouper(pdf))["c"], agg_func),
             call(ddf.groupby(grouper(ddf))["c"], agg_func, split_every=2),
@@ -1203,7 +1181,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
             call(ddf.groupby(grouper(ddf))[["c", "d"]], agg_func, split_every=2),
         )
 
-        if agg_func == "cov":
+        if agg_func in ("cov", "corr"):
             # there are sorting issues between pandas and chunk cov w/dask
             df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
             cols = sorted(list(df.columns))
@@ -1237,8 +1215,8 @@ def test_series_aggregations_multilevel(grouper, agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
-    # covariance is not a series aggregation
-    if agg_func == "cov":
+    # covariance/correlation is not a series aggregation
+    if agg_func in ("cov", "corr"):
         return
 
     pdf = pd.DataFrame(
@@ -1974,3 +1952,199 @@ def test_groupby_cov(columns):
         assert_eq(expected, result, check_index=False)
     else:
         assert_eq(expected, result)
+
+
+def test_df_groupby_idxmin():
+    pdf = pd.DataFrame(
+        {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    expected = pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group")
+
+    result_pd = pdf.groupby("group").idxmin()
+    result_dd = ddf.groupby("group").idxmin()
+
+    assert_eq(result_pd, result_dd)
+    assert_eq(expected, result_dd)
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+def test_df_groupby_idxmin_skipna(skipna):
+    pdf = pd.DataFrame(
+        {
+            "idx": list(range(4)),
+            "group": [1, 1, 2, 2],
+            "value": [np.nan, 20.1, np.nan, 10.1],
+        }
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    result_pd = pdf.groupby("group").idxmin(skipna=skipna)
+    result_dd = ddf.groupby("group").idxmin(skipna=skipna)
+
+    assert_eq(result_pd, result_dd)
+
+
+def test_df_groupby_idxmax():
+    pdf = pd.DataFrame(
+        {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    expected = pd.DataFrame({"group": [1, 2], "value": [1, 2]}).set_index("group")
+
+    result_pd = pdf.groupby("group").idxmax()
+    result_dd = ddf.groupby("group").idxmax()
+
+    assert_eq(result_pd, result_dd)
+    assert_eq(expected, result_dd)
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+def test_df_groupby_idxmax_skipna(skipna):
+    pdf = pd.DataFrame(
+        {
+            "idx": list(range(4)),
+            "group": [1, 1, 2, 2],
+            "value": [np.nan, 20.1, np.nan, 10.1],
+        }
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    result_pd = pdf.groupby("group").idxmax(skipna=skipna)
+    result_dd = ddf.groupby("group").idxmax(skipna=skipna)
+
+    assert_eq(result_pd, result_dd)
+
+
+def test_series_groupby_idxmin():
+    pdf = pd.DataFrame(
+        {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    expected = (
+        pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group").squeeze()
+    )
+
+    result_pd = pdf.groupby("group")["value"].idxmin()
+    result_dd = ddf.groupby("group")["value"].idxmin()
+
+    assert_eq(result_pd, result_dd)
+    assert_eq(expected, result_dd)
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+def test_series_groupby_idxmin_skipna(skipna):
+    pdf = pd.DataFrame(
+        {
+            "idx": list(range(4)),
+            "group": [1, 1, 2, 2],
+            "value": [np.nan, 20.1, np.nan, 10.1],
+        }
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
+    result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
+
+    assert_eq(result_pd, result_dd)
+
+
+def test_series_groupby_idxmax():
+    pdf = pd.DataFrame(
+        {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    expected = (
+        pd.DataFrame({"group": [1, 2], "value": [1, 2]}).set_index("group").squeeze()
+    )
+
+    result_pd = pdf.groupby("group")["value"].idxmax()
+    result_dd = ddf.groupby("group")["value"].idxmax()
+
+    assert_eq(result_pd, result_dd)
+    assert_eq(expected, result_dd)
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+def test_series_groupby_idxmax_skipna(skipna):
+    pdf = pd.DataFrame(
+        {
+            "idx": list(range(4)),
+            "group": [1, 1, 2, 2],
+            "value": [np.nan, 20.1, np.nan, 10.1],
+        }
+    ).set_index("idx")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
+    result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
+
+    assert_eq(result_pd, result_dd)
+
+
+@pytest.mark.parametrize(
+    "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
+)
+def test_groupby_transform_funcs(transformation):
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4] * 5,
+            "B": np.random.randn(20),
+            "C": np.random.randn(20),
+            "D": np.random.randn(20),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 3)
+
+    with pytest.warns(UserWarning):
+        # DataFrame
+        assert_eq(
+            pdf.groupby("A").transform(transformation),
+            ddf.groupby("A").transform(transformation),
+        )
+
+        # Series
+        assert_eq(
+            pdf.groupby("A")["B"].transform(transformation),
+            ddf.groupby("A")["B"].transform(transformation),
+        )
+
+
+@pytest.mark.parametrize("npartitions", list(range(1, 10)))
+@pytest.mark.parametrize("indexed", [True, False])
+def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
+    pdf = pd.DataFrame({"group": [1, 2, 3, 4, 5] * 20, "value": np.random.randn(100)})
+
+    if indexed:
+        pdf = pdf.set_index("group")
+
+    ddf = dd.from_pandas(pdf, npartitions)
+
+    with pytest.warns(UserWarning):
+        # DataFrame
+        assert_eq(
+            pdf.groupby("group").transform(lambda series: series - series.mean()),
+            ddf.groupby("group").transform(lambda series: series - series.mean()),
+        )
+
+        # Series
+        assert_eq(
+            pdf.groupby("group")["value"].transform(
+                lambda series: series - series.mean()
+            ),
+            ddf.groupby("group")["value"].transform(
+                lambda series: series - series.mean()
+            ),
+        )

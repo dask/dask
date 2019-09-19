@@ -1,4 +1,3 @@
-import textwrap
 import warnings
 from itertools import product
 from operator import add
@@ -14,7 +13,6 @@ import dask.array as da
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (
@@ -921,6 +919,7 @@ def test_drop_duplicates_subset():
                 df.drop_duplicates(subset=ss, **kwarg),
                 ddf.drop_duplicates(subset=ss, **kwarg),
             )
+            assert_eq(df.drop_duplicates(ss, **kwarg), ddf.drop_duplicates(ss, **kwarg))
 
 
 def test_get_partition():
@@ -2522,9 +2521,6 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis="index")
 
 
-@pytest.mark.skipif(
-    PY2, reason="Global filter is applied by another library, and not reset properly."
-)
 def test_apply_warns():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3006,7 +3002,6 @@ def _assert_info(df, ddf, memory_usage=True):
 
 def test_info():
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3029,7 +3024,7 @@ def test_info():
 
     # Verbose=False
     ddf.info(buf=buf, verbose=False)
-    assert buf.getvalue() == unicode(
+    assert buf.getvalue() == (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Columns: 2 entries, x to y\n"
         "dtypes: int64(2)"
@@ -3042,7 +3037,6 @@ def test_info():
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3055,10 +3049,10 @@ def test_groupby_multilevel_info():
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    assert buf.getvalue() == unicode(
-        """<class 'dask.dataframe.core.DataFrame'>
-Columns: 1 entries, C to C
-dtypes: int64(1)"""
+    assert buf.getvalue() == (
+        "<class 'dask.dataframe.core.DataFrame'>\n"
+        "Columns: 1 entries, C to C\n"
+        "dtypes: int64(1)"
     )
 
     # multilevel
@@ -3067,13 +3061,10 @@ dtypes: int64(1)"""
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    expected = unicode(
-        textwrap.dedent(
-            """\
-    <class 'dask.dataframe.core.DataFrame'>
-    Columns: 2 entries, ('C', 'count') to ('C', 'sum')
-    dtypes: int64(2)"""
-        )
+    expected = (
+        "<class 'dask.dataframe.core.DataFrame'>\n"
+        "Columns: 2 entries, ('C', 'count') to ('C', 'sum')\n"
+        "dtypes: int64(2)"
     )
     assert buf.getvalue() == expected
 
@@ -3082,7 +3073,6 @@ def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3095,7 +3085,7 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
-    expected = unicode(
+    expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"
@@ -4061,3 +4051,27 @@ def test_apply_and_enforce_error_message():
 
     assert "['x']" in str(info.value)
     assert "['x', 'y']" in str(info.value)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
+)
+def test_dataframe_explode():
+    df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
+    exploded_df = df.explode("A")
+    ddf = dd.from_pandas(df, npartitions=2)
+    exploded_ddf = ddf.explode("A")
+    assert ddf.divisions == exploded_ddf.divisions
+    assert_eq(exploded_ddf.compute(), exploded_df)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
+)
+def test_series_explode():
+    s = pd.Series([[1, 2, 3], "foo", [3, 4]])
+    exploded_s = s.explode()
+    ds = dd.from_pandas(s, npartitions=2)
+    exploded_ds = ds.explode()
+    assert_eq(exploded_ds, exploded_s)
+    assert ds.divisions == exploded_ds.divisions

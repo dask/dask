@@ -30,6 +30,7 @@ Dataframe
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.explode
     DataFrame.fillna
     DataFrame.floordiv
     DataFrame.get_partition
@@ -132,6 +133,7 @@ Series
    Series.dt
    Series.dtype
    Series.eq
+   Series.explode
    Series.ffill
    Series.fillna
    Series.first
@@ -233,8 +235,11 @@ Groupby Operations
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
    DataFrameGroupBy.cov
+   DataFrameGroupBy.corr
    DataFrameGroupBy.first
    DataFrameGroupBy.last
+   DataFrameGroupBy.idxmin
+   DataFrameGroupBy.idxmax
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -254,6 +259,8 @@ Groupby Operations
    SeriesGroupBy.var
    SeriesGroupBy.first
    SeriesGroupBy.last
+   SeriesGroupBy.idxmin
+   SeriesGroupBy.idxmax
 
 .. autosummary::
    Aggregation
@@ -406,6 +413,12 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: utils.make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~

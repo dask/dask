@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 try:
     from .blockwise import blockwise, atop
     from .core import (
@@ -31,6 +29,8 @@ try:
         where,
         coarsen,
         insert,
+        shape,
+        union1d,
         ravel,
         roll,
         unique,

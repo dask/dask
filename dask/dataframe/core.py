@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function
-
 import operator
 import warnings
+from collections.abc import Iterator, Sequence
 from functools import wraps, partial
 from numbers import Number, Integral
 from operator import getitem
@@ -27,17 +25,8 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable
+from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
 from .. import threaded
-from ..compatibility import (
-    apply,
-    operator_div,
-    bind_method,
-    string_types,
-    isidentifier,
-    Iterator,
-    Sequence,
-)
 from ..context import globalmethod
 from ..utils import (
     random_state_data,
@@ -482,13 +471,15 @@ Dask Name: {name}, {task} tasks""".format(
             raise ValueError(msg)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
-        # Let pandas error on bad inputs
-        self._meta_nonempty.drop_duplicates(**kwargs)
-        if "subset" in kwargs and kwargs["subset"] is not None:
+    def drop_duplicates(self, subset=None, split_every=None, split_out=1, **kwargs):
+        if subset is not None:
+            # Let pandas error on bad inputs
+            self._meta_nonempty.drop_duplicates(subset=subset, **kwargs)
+            kwargs["subset"] = subset
             split_out_setup = split_out_on_cols
-            split_out_setup_kwargs = {"cols": kwargs["subset"]}
+            split_out_setup_kwargs = {"cols": subset}
         else:
+            self._meta_nonempty.drop_duplicates(**kwargs)
             split_out_setup = split_out_setup_kwargs = None
 
         if kwargs.get("keep", True) is False:
@@ -1339,9 +1330,7 @@ Dask Name: {name}, {task} tasks""".format(
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def rolling(
-        self, window, min_periods=None, freq=None, center=False, win_type=None, axis=0
-    ):
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
 
         Parameters
@@ -1370,10 +1359,6 @@ Dask Name: {name}, {task} tasks""".format(
         Returns
         -------
         a Rolling object on which to call a method to compute a statistic
-
-        Notes
-        -----
-        The `freq` argument is not supported.
         """
         from dask.dataframe.rolling import Rolling
 
@@ -1391,7 +1376,6 @@ Dask Name: {name}, {task} tasks""".format(
             self,
             window=window,
             min_periods=min_periods,
-            freq=freq,
             center=center,
             win_type=win_type,
             axis=axis,
@@ -2713,6 +2697,11 @@ Dask Name: {name}, {task} tasks""".format(
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
 
+    @derived_from(pd.Series, version="0.25.0")
+    def explode(self):
+        meta = self._meta.explode()
+        return self.map_partitions(M.explode, meta=meta)
+
     def unique(self, split_every=None, split_out=1):
         """
         Return Series of unique values in the object. Includes NA values.
@@ -2879,7 +2868,7 @@ Dask Name: {name}, {task} tasks""".format(
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -2896,7 +2885,7 @@ Dask Name: {name}, {task} tasks""".format(
                 return elemwise(op, self, other, axis=axis)
 
         meth.__doc__ = skip_doctest(comparison.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
@@ -3231,7 +3220,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
-        if np.isscalar(key) or isinstance(key, (tuple, string_types)):
+        if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
@@ -3317,9 +3306,7 @@ class DataFrame(_Frame):
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
-        o.update(
-            c for c in self.columns if (isinstance(c, string_types) and isidentifier(c))
-        )
+        o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
     def _ipython_key_completions_(self):
@@ -3609,6 +3596,11 @@ class DataFrame(_Frame):
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
+    @derived_from(pd.DataFrame, version="0.25.0")
+    def explode(self, column):
+        meta = self._meta.explode(column)
+        return self.map_partitions(M.explode, column, meta=meta)
+
     def to_bag(self, index=False):
         """Convert to a dask Bag of tuples of each row.
 
@@ -3867,7 +3859,7 @@ class DataFrame(_Frame):
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -3880,7 +3872,7 @@ class DataFrame(_Frame):
             return elemwise(comparison, self, other, axis=axis)
 
         meth.__doc__ = skip_doctest(comparison.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
     def apply(
@@ -4237,7 +4229,6 @@ for op in [
     operator.abs,
     operator.add,
     operator.and_,
-    operator_div,
     operator.eq,
     operator.gt,
     operator.ge,
@@ -5450,7 +5441,7 @@ def repartition_size(df, size):
     """
     Repartition dataframe so that new partitions have approximately `size` memory usage each
     """
-    if isinstance(size, string_types):
+    if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
 

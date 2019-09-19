@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from distutils.version import LooseVersion
 
 import toolz
@@ -10,7 +8,6 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....compatibility import PY3, string_types
 from ....utils import import_required, natural_sort_key
 
 
@@ -374,8 +371,14 @@ def to_parquet(
     """
     from dask import delayed
 
+    if compression == "default":
+        if snappy is not None:
+            compression = "snappy"
+        else:
+            compression = None
+
     partition_on = partition_on or []
-    if isinstance(partition_on, string_types):
+    if isinstance(partition_on, str):
         partition_on = [partition_on]
 
     if set(partition_on) - set(df.columns):
@@ -384,11 +387,6 @@ def to_parquet(
             "partition_on=%s ."
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
-
-    if compression != "default":
-        kwargs["compression"] = compression
-    elif snappy is not None:
-        kwargs["compression"] = "snappy"
 
     if isinstance(engine, str):
         engine = get_engine(engine)
@@ -466,6 +464,7 @@ def to_parquet(
             partition_on,
             write_metadata_file,
             fmd=meta,
+            compression=compression,
             index_cols=index_cols,
             **kwargs_pass
         )
@@ -630,5 +629,4 @@ def apply_filters(parts, statistics, filters):
     return parts, statistics
 
 
-if PY3:
-    DataFrame.to_parquet.__doc__ = to_parquet.__doc__
+DataFrame.to_parquet.__doc__ = to_parquet.__doc__

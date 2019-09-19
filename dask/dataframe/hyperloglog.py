@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 u"""Implementation of HyperLogLog
 
 This implements the HyperLogLog algorithm for cardinality estimation, found
@@ -10,8 +9,6 @@ in
         (2007)
 
 """
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 import pandas as pd
 from pandas.util import hash_pandas_object

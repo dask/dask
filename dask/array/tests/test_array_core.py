@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import copy
 
 import pytest
@@ -6,8 +5,8 @@ import pytest
 np = pytest.importorskip("numpy")
 
 import os
-import sys
 import time
+from io import StringIO
 from distutils.version import LooseVersion
 import operator
 from operator import add, sub, getitem
@@ -19,7 +18,9 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
+from dask.compatibility import PY_VERSION
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
@@ -856,9 +857,6 @@ def test_field_access_with_shape():
     assert_eq(x[["col1", "col2"]], data[["col1", "col2"]])
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 5), reason="Matrix multiplication operator only after Py3.5"
-)
 def test_matmul():
     x = np.random.random((5, 5))
     y = np.random.random((5, 2))
@@ -1852,7 +1850,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x")
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1860,7 +1858,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x", chunks=None)
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1868,7 +1866,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x", chunks=(1, 1))
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1877,7 +1875,7 @@ def test_to_hdf5():
     with tmpfile(".hdf5") as fn:
         da.to_hdf5(fn, {"/x": x, "/y": y})
 
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             assert_eq(f["/x"][:], x)
             assert f["/x"].chunks == (2, 2)
             assert_eq(f["/y"][:], y)
@@ -2368,7 +2366,7 @@ def test_asarray_h5py():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
             x = da.asarray(d)
             assert d in x.dask.values()
@@ -2402,6 +2400,13 @@ def test_asanyarray_dataframe():
     dx = da.asanyarray(ddf.x)
     assert isinstance(dx, da.Array)
 
+    assert_eq(x, dx)
+
+
+def test_asanyarray_datetime64():
+    x = np.array(["2000-01-01"], dtype="datetime64")
+    dx = da.asanyarray(x)
+    assert isinstance(dx, da.Array)
     assert_eq(x, dx)
 
 
@@ -2584,7 +2589,7 @@ def test_h5py_newaxis():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile("h5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
             d = da.from_array(x, chunks=(5, 5))
             assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
@@ -2820,8 +2825,8 @@ def test_h5py_tokenize():
     h5py = pytest.importorskip("h5py")
     with tmpfile("hdf5") as fn1:
         with tmpfile("hdf5") as fn2:
-            f = h5py.File(fn1)
-            g = h5py.File(fn2)
+            f = h5py.File(fn1, mode="a")
+            g = h5py.File(fn2, mode="a")
 
             f["x"] = np.arange(10).astype(float)
             g["x"] = np.ones(10).astype(float)
@@ -3809,7 +3814,7 @@ def test_zarr_nocompute():
 
 
 @pytest.mark.skipif(
-    sys.version_info[0:2] == (3, 5),
+    PY_VERSION < "3.6",
     reason="Skipping TileDB with python 3.5 because the tiledb-py "
     "conda-forge package is too old, and is not updatable.",
 )
@@ -3847,7 +3852,7 @@ def test_tiledb_roundtrip():
 
 
 @pytest.mark.skipif(
-    sys.version_info[0:2] == (3, 5),
+    PY_VERSION < "3.6",
     reason="Skipping TileDB with python 3.5 because the tiledb-py "
     "conda-forge package is too old, and is not updatable.",
 )
@@ -4058,13 +4063,13 @@ def test_auto_chunks_h5py():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f.create_dataset(
                 "/x", shape=(1000, 1000), chunks=(32, 64), dtype="float64"
             )
             d[:] = 1
 
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f["x"]
             with dask.config.set({"array.chunk-size": "1 MiB"}):
                 x = da.from_array(d)
@@ -4073,6 +4078,11 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
+    with pytest.warns(None) as record:
+        x = da.ones((3, 10, 10), chunks=(3, 2, 2))
+        da.map_blocks(lambda y: np.mean(y, axis=0), x, dtype=x.dtype, drop_axis=0)
+    assert not record
+
     with pytest.warns(None) as record:
         x = da.ones((15, 15), chunks=(5, 5))
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
@@ -4090,3 +4100,131 @@ def test_from_array_meta():
     meta = sparse.COO.from_numpy(x)
     y = da.from_array(x, meta=meta)
     assert isinstance(y._meta, sparse.COO)
+
+
+def test_compute_chunk_sizes():
+    x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
+    y = x[x < 0]
+    assert np.isnan(y.shape[0])
+    assert y.chunks == ((np.nan,) * 5,)
+
+    z = y.compute_chunk_sizes()
+    assert y is z
+    assert z.chunks == ((10, 10, 5, 0, 0),)
+    assert len(z) == 25
+
+
+def test_compute_chunk_sizes_2d_array():
+    X = np.linspace(-1, 1, num=9 * 4).reshape(9, 4)
+    X = da.from_array(X, chunks=(3, 4))
+    idx = X.sum(axis=1) > 0
+    Y = X[idx]
+
+    # This is very similar to the DataFrame->Array conversion
+    assert np.isnan(Y.shape[0]) and Y.shape[1] == 4
+    assert Y.chunks == ((np.nan, np.nan, np.nan), (4,))
+
+    Z = Y.compute_chunk_sizes()
+    assert Y is Z
+    assert Z.chunks == ((0, 1, 3), (4,))
+    assert Z.shape == (4, 4)
+
+
+def test_compute_chunk_sizes_3d_array(N=8):
+    X = np.linspace(-1, 2, num=8 * 8 * 8).reshape(8, 8, 8)
+    X = da.from_array(X, chunks=(4, 4, 4))
+    idx = X.sum(axis=0).sum(axis=0) > 0
+    Y = X[idx]
+    idx = X.sum(axis=1).sum(axis=1) < 0
+    Y = Y[:, idx]
+    idx = X.sum(axis=2).sum(axis=1) > 0.1
+    Y = Y[:, :, idx]
+
+    # Checking to make sure shapes are different on outputs
+    assert Y.compute().shape == (8, 3, 5)
+    assert X.compute().shape == (8, 8, 8)
+
+    assert Y.chunks == ((np.nan, np.nan),) * 3
+    assert all(np.isnan(s) for s in Y.shape)
+    Z = Y.compute_chunk_sizes()
+    assert Z is Y
+    assert Z.shape == (8, 3, 5)
+    assert Z.chunks == ((4, 4), (3, 0), (1, 4))
+
+
+def _known(num=50):
+    return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
+
+
+@pytest.fixture()
+def unknown():
+    x = _known()
+    y = x[x < 0]
+    assert y.chunks == ((np.nan,) * 5,)
+    return y
+
+
+def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        y.rechunk("auto")
+    y.compute_chunk_sizes()
+    y.rechunk("auto")
+
+
+def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
+    pytest.importorskip("zarr")
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        with StringIO() as f:
+            y.to_zarr(f)
+    y.compute_chunk_sizes()
+
+    with pytest.raises(ValueError, match="irregular chunking"):
+        with StringIO() as f:
+            y.to_zarr(f)
+
+
+def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
+    y = unknown
+    with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
+        y.to_svg()
+    y.compute_chunk_sizes()
+    y.to_svg()
+
+
+def test_compute_chunk_sizes_warning_fixes_concatenate():
+    x = _known(num=100).reshape(10, 10)
+    idx = x.sum(axis=0) > 0
+    y1 = x[idx]
+    y2 = x[idx]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.concatenate((y1, y2), axis=1)
+    y1.compute_chunk_sizes()
+    y2.compute_chunk_sizes()
+    da.concatenate((y1, y2), axis=1)
+
+
+def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.argmin(y)
+    y.compute_chunk_sizes()
+    da.argmin(y)
+
+
+def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.reshape(y, (5, 5))
+    y.compute_chunk_sizes()
+    da.reshape(y, (5, 5))
+
+
+def test_compute_chunk_sizes_warning_fixes_slicing():
+    x = _known(num=100).reshape(10, 10)
+    y = x[x.sum(axis=0) < 0]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        y[:3, :]
+    y.compute_chunk_sizes()
+    y[:3, :]

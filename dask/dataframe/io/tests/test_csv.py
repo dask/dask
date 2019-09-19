@@ -1,10 +1,8 @@
-from __future__ import print_function, division, absolute_import
-
 from io import BytesIO
 import os
 import gzip
-import sys
 from time import sleep
+from unittest import mock
 
 import pytest
 
@@ -18,6 +16,7 @@ import pandas.util.testing as tm
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
+from dask.compatibility import PY_VERSION
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
     pandas_read_text,
@@ -703,7 +702,7 @@ def test_read_csv_sensitive_to_enforce():
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt == "zip" and sys.version_info.minor == 5:
+    if fmt == "zip" and PY_VERSION < "3.6":
         pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
@@ -773,10 +772,6 @@ def test_auto_blocksize_max64mb():
 
 def test_auto_blocksize_csv(monkeypatch):
     psutil = pytest.importorskip("psutil")
-    try:
-        from unittest import mock
-    except ImportError:
-        mock = pytest.importorskip("mock")
     total_memory = psutil.virtual_memory().total
     cpu_count = psutil.cpu_count()
     mock_read_bytes = mock.Mock(wraps=read_bytes)
@@ -1285,6 +1280,63 @@ def test_to_csv_multiple_files_cornercases():
         a.to_csv(fn, mode="w", index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
         assert_eq(result, df16)
+
+
+def test_to_single_csv():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv")
+            a.to_csv(fn, index=False, single_file=True)
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            assert_eq(result, df)
+
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv")
+            r = a.to_csv(fn, index=False, compute=False, single_file=True)
+            dask.compute(r, scheduler="sync")
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            assert_eq(result, df)
+
+
+def test_to_single_csv_with_name_function():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, "test.csv")
+        with pytest.raises(
+            ValueError,
+            match="name_function is not supported under the single file mode",
+        ):
+            a.to_csv(fn, name_function=lambda x: x, index=False, single_file=True)
+
+
+def test_to_single_csv_with_header_first_partition_only():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, "test.csv")
+        with pytest.raises(
+            ValueError,
+            match="header_first_partition_only cannot be False in the single file mode.",
+        ):
+            a.to_csv(
+                fn, index=False, header_first_partition_only=False, single_file=True
+            )
+
+
+def test_to_single_csv_gzip():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv.gz")
+            a.to_csv(fn, index=False, compression="gzip", single_file=True)
+            result = pd.read_csv(fn, compression="gzip").reset_index(drop=True)
+            assert_eq(result, df)
 
 
 @pytest.mark.xfail(reason="to_csv does not support compression")

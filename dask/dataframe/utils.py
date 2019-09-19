@@ -1,9 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 import numbers
 import re
 import textwrap
+from collections.abc import Iterator, Mapping
 from distutils.version import LooseVersion
 
 import sys
@@ -24,7 +23,6 @@ from pandas.api.types import (
 
 from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
-from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
 from ..local import get_sync
 from ..utils import asciitable, is_arraylike, Dispatch, typename
@@ -851,8 +849,7 @@ def assert_sane_keynames(ddf):
         assert isinstance(k, (str, bytes))
         assert len(k) < 100
         assert " " not in k
-        if not PY2:
-            assert k.split("-")[0].isidentifier()
+        assert k.split("-")[0].isidentifier()
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):

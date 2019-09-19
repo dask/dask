@@ -8,7 +8,6 @@ from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
 from dask.bytes._compatibility import FSSPEC_042
-from dask.compatibility import PY2
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -22,10 +21,7 @@ def dir_server():
             with open(os.path.join(d, fn), "wb") as f:
                 f.write(b"a" * 10000)
 
-        if PY2:
-            cmd = [sys.executable, "-m", "SimpleHTTPServer", "8999"]
-        else:
-            cmd = [sys.executable, "-m", "http.server", "8999"]
+        cmd = [sys.executable, "-m", "http.server", "8999"]
         p = subprocess.Popen(cmd, cwd=d)
         timeout = 10
         while True:

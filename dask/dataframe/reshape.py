@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 import pandas as pd
 
@@ -94,7 +92,7 @@ def get_dummies(
     2                ...    ...    ...
     3                ...    ...    ...
     Dask Name: get_dummies, 4 tasks
-    >>> dd.get_dummies(s).compute()
+    >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
        a  b  c
     0  1  0  0
     1  0  1  0
@@ -238,8 +236,9 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
     new_columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
-    meta = pd.DataFrame(columns=new_columns, dtype=np.float64)
-    meta.index.name = index
+    meta = pd.DataFrame(
+        columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
+    )
 
     kwargs = {"index": index, "columns": columns, "values": values}
 
