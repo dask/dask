@@ -8,8 +8,6 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ....compatibility import string_types
-
 try:
     import fastparquet
     from fastparquet import ParquetFile
@@ -220,7 +218,7 @@ class FastParquetEngine(Engine):
 
         if categories is None:
             categories = pf.categories
-        elif isinstance(categories, string_types):
+        elif isinstance(categories, str):
             categories = [categories]
         else:
             categories = list(categories)

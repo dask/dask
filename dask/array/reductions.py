@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+import builtins
 import operator
 from functools import partial, wraps
 from itertools import product, repeat
@@ -19,10 +18,9 @@ from .ufunc import sqrt
 from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
-from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch, deepmap
+from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec
 from .. import config
 
 # Generic functions to support chunks of different types

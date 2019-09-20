@@ -176,7 +176,7 @@ typically tested directly against the NumPy or Pandas libraries using the
 
    def test_aggregations():
        nx = np.random.random(100)
-       dx = da.from_array(x, chunks=(10,))
+       dx = da.from_array(nx, chunks=(10,))
 
        assert_eq(nx.sum(), dx.sum())
        assert_eq(nx.min(), dx.min())
@@ -228,7 +228,7 @@ after the line.
        ValueError(...)
        """
 
-.. _numpydoc: https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
+.. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
 Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
 docstrings with pytest as follows::

@@ -1,5 +1,6 @@
 import itertools
 import warnings
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -8,11 +9,11 @@ try:
 except ImportError:
     import toolz
 
-from . import core, utils
-from .compatibility import apply, Mapping
+from .core import reverse_dict
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable
+from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
 def subs(task, substitution):
@@ -382,7 +383,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     if kwargs:
         task, dsk2 = to_task_dask(kwargs)
         if dsk2:
-            dsk.update(utils.ensure_dict(dsk2))
+            dsk.update(ensure_dict(dsk2))
             kwargs2 = task
         else:
             kwargs2 = kwargs
@@ -488,7 +489,7 @@ def optimize_blockwise(graph, keys=()):
 def _optimize_blockwise(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
-    dependents = core.reverse_dict(full_graph.dependencies)
+    dependents = reverse_dict(full_graph.dependencies)
     roots = {k for k in full_graph.dicts if not dependents.get(k)}
     stack = list(roots)
 
@@ -581,7 +582,7 @@ def rewrite_blockwise(inputs):
         inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
         for inp in inputs.values()
     }
-    dependents = core.reverse_dict(dependencies)
+    dependents = reverse_dict(dependencies)
 
     new_index_iter = (
         c + (str(d) if d else "")  # A, B, ... A1, B1, ...
@@ -713,7 +714,7 @@ def zero_broadcast_dimensions(lol, nblocks):
     lol_tuples
     """
     f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return utils.homogeneous_deepmap(f, lol)
+    return homogeneous_deepmap(f, lol)
 
 
 def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=None):
