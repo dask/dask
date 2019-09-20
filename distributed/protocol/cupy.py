@@ -7,36 +7,18 @@ from .cuda import cuda_serialize, cuda_deserialize
 
 @cuda_serialize.register(cupy.ndarray)
 def serialize_cupy_ndarray(x):
-    # TODO: handle non-contiguous
-    # TODO: Handle order='K' ravel
-    # TODO: 0d
+    # Making sure `x` is behaving
+    if not x.flags.c_contiguous:
+        x = cupy.array(x, copy=True)
 
-    if x.flags.c_contiguous or x.flags.f_contiguous:
-        strides = x.strides
-        data = x.ravel()  # order='K'
-    else:
-        x = cupy.ascontiguousarray(x)
-        strides = x.strides
-        data = x.ravel()
-
-    dtype = (0, x.dtype.str)
-
-    # used in the ucx comms for gpu/cpu message passing
-    # 'lengths' set by dask
     header = x.__cuda_array_interface__.copy()
-    header["is_cuda"] = 1
-    header["dtype"] = dtype
-    return header, [data]
+    return header, [x]
 
 
 @cuda_deserialize.register(cupy.ndarray)
 def deserialize_cupy_array(header, frames):
     (frame,) = frames
-    # TODO: put this in ucx... as a kind of "fixup"
-    try:
-        frame.typestr = header["typestr"]
-        frame.shape = header["shape"]
-    except AttributeError:
-        pass
-    arr = cupy.asarray(frame)
+    arr = cupy.ndarray(
+        header["shape"], dtype=header["typestr"], memptr=cupy.asarray(frame).data
+    )
     return arr
