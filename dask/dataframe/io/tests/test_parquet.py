@@ -1928,9 +1928,7 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 def test_timeseries_nulls_in_schema(tmpdir, engine):
     tmp_path = str(tmpdir)
     ddf2 = (
-        dask.datasets.timeseries(
-            start="2000-01-01", end="2000-01-03", freq="1h", seed=42
-        )
+        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
         .reset_index()
         .map_partitions(lambda x: x.loc[:5])
     )
@@ -1955,9 +1953,7 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir):
     check_pyarrow()
     tmp_path = str(tmpdir)
     ddf2 = (
-        dask.datasets.timeseries(
-            start="2000-01-01", end="2000-01-03", freq="1h", seed=42
-        )
+        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
         .reset_index()
         .map_partitions(lambda x: x.loc[:5])
     )
