@@ -112,6 +112,7 @@ Contents
    local-cluster
    ipython
    Joblib Integration <https://ml.dask.org/joblib.html>
+   prometheus
    publish
    queues
    resources
