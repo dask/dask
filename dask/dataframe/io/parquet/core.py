@@ -567,6 +567,9 @@ def sorted_columns(statistics):
         success = True
         for stats in statistics[1:]:
             c = stats["columns"][i]
+            if c["min"] is None:
+                success = False
+                break
             if c["min"] >= max:
                 divisions.append(c["min"])
                 max = c["max"]

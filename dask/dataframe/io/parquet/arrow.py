@@ -205,7 +205,7 @@ class ArrowEngine(Engine):
         if gather_statistics:
             stats = []
             skip_cols = set()  # Columns with min/max = None detected
-            for row_group in row_groups:
+            for ri, row_group in enumerate(row_groups):
                 s = {"num-rows": row_group.num_rows, "columns": []}
                 for i, name in enumerate(names):
                     if name not in skip_cols:
@@ -214,7 +214,7 @@ class ArrowEngine(Engine):
                         if column.statistics:
                             cs_min = column.statistics.min
                             cs_max = column.statistics.max
-                            if None in [cs_min, cs_max]:
+                            if None in [cs_min, cs_max] and ri == 0:
                                 skip_cols.add(name)
                                 continue
                             cs_vals = pd.Series([cs_min, cs_max])

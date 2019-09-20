@@ -1930,7 +1930,9 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 def test_timeseries_nulls_in_schema(tmpdir, engine):
     tmp_path = str(tmpdir)
     ddf2 = (
-        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
+        dask.datasets.timeseries(
+            start="2000-01-01", end="2000-01-03", freq="1h", seed=42
+        )
         .reset_index()
         .map_partitions(lambda x: x.loc[:5])
     )
@@ -1949,20 +1951,37 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
             ddf_read = dd.read_parquet(
                 tmp_path, dataset={"validate_schema": True}, engine=engine
             )
-        # There should be no error if you specify a schema on write
-        schema = pa.schema(
-            [
-                ("x", pa.float64()),
-                ("timestamp", pa.timestamp("ns")),
-                ("id", pa.int64()),
-                ("name", pa.string()),
-                ("y", pa.float64()),
-            ]
+
+
+def test_timeseries_nulls_in_schema_pyarrow(tmpdir):
+    check_pyarrow()
+    tmp_path = str(tmpdir)
+    ddf2 = (
+        dask.datasets.timeseries(
+            start="2000-01-01", end="2000-01-03", freq="1h", seed=42
         )
-        ddf2.to_parquet(tmp_path, schema=schema, engine=engine)
-        assert_eq(
-            dd.read_parquet(tmp_path, dataset={"validate_schema": True}, engine=engine),
-            ddf2,
-            check_divisions=False,
-            check_index=False,
-        )
+        .reset_index()
+        .map_partitions(lambda x: x.loc[:5])
+    )
+    ddf2 = ddf2.set_index("x").reset_index().persist()
+    ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
+
+    # There should be no schema error if you specify a schema on write
+    schema = pa.schema(
+        [
+            ("x", pa.float64()),
+            ("timestamp", pa.timestamp("ns")),
+            ("id", pa.int64()),
+            ("name", pa.string()),
+            ("y", pa.float64()),
+        ]
+    )
+    ddf2.to_parquet(tmp_path, schema=schema, write_index=False, engine="pyarrow")
+    assert_eq(
+        dd.read_parquet(
+            tmp_path, dataset={"validate_schema": True}, index=False, engine="pyarrow"
+        ),
+        ddf2,
+        check_divisions=False,
+        check_index=False,
+    )
