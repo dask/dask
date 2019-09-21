@@ -57,6 +57,7 @@ Dataframe
     DataFrame.nlargest
     DataFrame.npartitions
     DataFrame.partitions
+    DataFrame.pop
     DataFrame.pow
     DataFrame.prod
     DataFrame.quantile
