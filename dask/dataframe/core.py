@@ -3456,6 +3456,12 @@ class DataFrame(_Frame):
             )
 
     @derived_from(pd.DataFrame)
+    def pop(self, item):
+        out = self[item]
+        del self[item]
+        return out
+
+    @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
         token = "dataframe-nlargest"
         return aca(
