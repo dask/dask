@@ -26,6 +26,7 @@ from distributed.utils_test import (  # noqa: F401
     assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6,
     captured_logger,
+    tls_only_security,
 )
 from distributed.utils_test import loop  # noqa: F401
 from distributed.utils import sync
@@ -952,3 +953,18 @@ async def test_repr(cleanup):
         n_workers=2, processes=False, memory_limit=None, asynchronous=True
     ) as cluster:
         assert "memory" not in repr(cluster)
+
+
+@pytest.mark.asyncio
+async def test_capture_security(cleanup):
+    security = tls_only_security()
+    async with LocalCluster(
+        n_workers=0,
+        silence_logs=False,
+        security=security,
+        asynchronous=True,
+        dashboard_address=False,
+        host="tls://0.0.0.0",
+    ) as cluster:
+        async with Client(cluster, asynchronous=True) as client:
+            assert client.security == cluster.security
