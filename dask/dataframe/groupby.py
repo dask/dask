@@ -1685,6 +1685,8 @@ class SeriesGroupBy(_GroupBy):
         return self._aca_agg(
             token="value_counts",
             func=M.value_counts,
+            aggfunc=lambda s:
+                pd.Series(pd.concat({k: v.sum(level=1) for k, v in s})),
             split_every=split_every,
             split_out=split_out,
         )
@@ -1692,5 +1694,11 @@ class SeriesGroupBy(_GroupBy):
     #  @derived_from(pd.core.groupby.SeriesGroupBy)
     def unique(self, split_every=None, split_out=1):
         return self._aca_agg(
-            token="unique", func=M.unique, split_every=split_every, split_out=split_out
+            token="unique",
+            func=M.unique,
+            aggfunc=lambda series_gb: pd.Series(
+                {k: v.explode().unique() for k, v in series_gb}
+            ),
+            split_every=split_every,
+            split_out=split_out,
         )

@@ -2123,19 +2123,28 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 def test_groupby_unique():
     rng = np.random.RandomState(42)
-    df = pd.DataFrame({"foo": rng.randint(2, size=100), "bar": rng.randint(10, size=100)})
+    df = pd.DataFrame({"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)})
     ddf = dd.from_pandas(df, npartitions=10)
 
-    pgb = df.groupby("foo")["bar"].unique()
-    dgb = ddf.groupby("foo")["bar"].unique()
-    dgb = dgb.compute()
-    assert (pgb == dgb).all()
+    pd_gb = df.groupby("foo")["bar"].unique()
+    dd_gb = ddf.groupby("foo")["bar"].unique().compute()
+
+    pd_gb = pd_gb.to_dict()
+    dd_gb = dd_gb.to_dict()
+
+    # These keys are unique values of column "bar"
+    assert set(pd_gb.keys()) == set(dd_gb.keys()) == {0, 1, 2}
+    assert (np.diff(pd_gb[0]) < 0).any() and (np.diff(pd_gb[0]) > 0).any()  # Note: pandas not ordered
+    for k, v_dask in dd_gb.items():
+        v_pd = pd_gb[k]
+        assert set(v_dask) == set(v_pd)  # This ignores ordering
+
 
 def test_groupby_value_counts():
     rng = np.random.RandomState(42)
-    df = pd.DataFrame({"foo": rng.randint(2, size=100), "bar": rng.randint(10, size=100)})
+    df = pd.DataFrame({"foo": rng.randint(3, size=100), "bar": rng.randint(4, size=100)})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    pgb = df.groupby("foo")["bar"].value_counts()
-    dgb = ddf.groupby("foo")["bar"].value_counts().compute()
-    assert (pgb == dgb).all()
+    pd_gb = df.groupby("foo")["bar"].value_counts()
+    dd_gb = ddf.groupby("foo")["bar"].value_counts().compute()
+    assert (pd_gb == dd_gb).all()
