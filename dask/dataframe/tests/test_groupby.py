@@ -9,7 +9,6 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-import dask.utils as utils  # debugging!
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
