@@ -2148,3 +2148,28 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
                 lambda series: series - series.mean()
             ),
         )
+
+
+@pytest.mark.parametrize(
+    "grouping",
+    [
+        lambda df: df.drop(columns="category_2").groupby("category_1"),
+        lambda df: df.groupby(["category_1", "category_2"]),
+    ],
+)
+@pytest.mark.parametrize("agg", [lambda grp: grp.mean(), lambda grp: grp.agg("mean")])
+def test_groupby_aggregate_categoricals(grouping, agg):
+    pdf = pd.DataFrame(
+        {
+            "category_1": pd.Categorical(list("AABBCC")),
+            "category_2": pd.Categorical(list("ABCABC")),
+            "value": np.random.uniform(size=6),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 2)
+
+    # DataFrameGroupBy
+    assert_eq(agg(grouping(pdf)), agg(grouping(ddf)))
+
+    # SeriesGroupBy
+    assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
