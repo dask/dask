@@ -21,6 +21,15 @@ for larger-than-memory computing on a single machine, or on many different
 machines in a cluster.  One Dask DataFrame operation triggers many operations
 on the constituent Pandas DataFrames.
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/6qwlDc959b0"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 Design
 ------
 
