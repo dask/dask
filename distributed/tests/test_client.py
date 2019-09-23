@@ -91,6 +91,7 @@ from distributed.utils_test import (
 from distributed.utils_test import (  # noqa: F401
     client as c,
     client_secondary as c2,
+    cleanup,
     cluster_fixture,
     loop,
     loop_in_thread,
@@ -5616,6 +5617,18 @@ async def test_file_descriptors_dont_leak(Worker):
     while proc.num_fds() > begin:
         await asyncio.sleep(0.01)
         assert time() < begin + 5, (start, proc.num_fds())
+
+
+@pytest.mark.asyncio
+async def test_dashboard_link_cluster(cleanup):
+    class MyCluster(LocalCluster):
+        @property
+        def dashboard_link(self):
+            return "http://foo.com"
+
+    async with MyCluster(processes=False, asynchronous=True) as cluster:
+        async with Client(cluster, asynchronous=True) as client:
+            assert "http://foo.com" in client._repr_html_()
 
 
 if sys.version_info >= (3, 5):

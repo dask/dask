@@ -811,13 +811,19 @@ class Client(Node):
             text += "  <li><b>Scheduler: not connected</b></li>\n"
 
         if info and "dashboard" in info["services"]:
-            protocol, rest = scheduler.address.split("://")
-            port = info["services"]["dashboard"]
-            if protocol == "inproc":
-                host = "localhost"
-            else:
-                host = rest.split(":")[0]
-            address = format_dashboard_link(host, port)
+            try:
+                address = self.cluster.dashboard_link
+            except AttributeError:
+                protocol, rest = scheduler.address.split("://")
+
+                port = info["services"]["dashboard"]
+                if protocol == "inproc":
+                    host = "localhost"
+                else:
+                    host = rest.split(":")[0]
+
+                address = format_dashboard_link(host, port)
+
             text += (
                 "  <li><b>Dashboard: </b><a href='%(web)s' target='_blank'>%(web)s</a>\n"
                 % {"web": address}
