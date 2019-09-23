@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import datetime
 
 import pandas as pd
@@ -264,19 +262,8 @@ class Rolling(object):
     """Provides rolling window calculations."""
 
     def __init__(
-        self,
-        obj,
-        window=None,
-        min_periods=None,
-        freq=None,
-        center=False,
-        win_type=None,
-        axis=0,
+        self, obj, window=None, min_periods=None, center=False, win_type=None, axis=0
     ):
-        if freq is not None:
-            msg = "The deprecated freq argument is not supported."
-            raise NotImplementedError(msg)
-
         self.obj = obj  # dataframe or series
         self.window = window
         self.min_periods = min_periods

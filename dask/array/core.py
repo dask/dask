@@ -1,21 +1,20 @@
-from __future__ import absolute_import, division, print_function
-
-from bisect import bisect
 import copy
-from functools import partial, wraps
-from itertools import product
 import math
-from numbers import Number, Integral
 import operator
-from operator import add, getitem, mul
 import os
+import pickle
 import re
 import sys
 import traceback
-import pickle
-from threading import Lock
 import uuid
 import warnings
+from bisect import bisect
+from collections.abc import Iterable, Iterator, Mapping
+from functools import partial, wraps
+from itertools import product, zip_longest
+from numbers import Number, Integral
+from operator import add, getitem, mul
+from threading import Lock
 
 try:
     from cytoolz import partition, concat, first, groupby, accumulate
@@ -56,7 +55,6 @@ from ..utils import (
     ndimlist,
     format_bytes,
 )
-from ..compatibility import unicode, zip_longest, Iterable, Iterator, Mapping
 from ..core import quote
 from ..delayed import delayed, Delayed
 from .. import threaded, core
@@ -75,6 +73,15 @@ einsum_lookup = Dispatch("einsum")
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
+
+unknown_chunk_message = (
+    "\n\n"
+    "A possible solution: "
+    "https://docs.dask.org/en/latest/array-chunks.html#unknown-chunks\n"
+    "Summary: to compute chunks sizes, use\n\n"
+    "   x.compute_chunk_sizes()  # for Dask Array `x`\n"
+    "   ddf.to_dask_array(lengths=True)  # for Dask DataFrame `ddf`"
+)
 
 
 class PerformanceWarning(Warning):
@@ -819,7 +826,7 @@ def store(
     >>> x = ...  # doctest: +SKIP
 
     >>> import h5py  # doctest: +SKIP
-    >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
+    >>> f = h5py.File('myfile.hdf5', mode='a')  # doctest: +SKIP
     >>> dset = f.create_dataset('/data', shape=x.shape,
     ...                                  chunks=x.chunks,
     ...                                  dtype='f8')  # doctest: +SKIP
@@ -933,7 +940,8 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply shape= keyword argument")
     if np.isnan(sum(shape)) or np.isnan(sum(chunks)):
         raise ValueError(
-            "Array chunk sizes are unknown. shape: %s, chunks: %s" % (shape, chunks)
+            "Array chunk sizes are unknown. shape: %s, chunks: %s%s"
+            % (shape, chunks, unknown_chunk_message)
         )
     if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
@@ -1080,6 +1088,51 @@ class Array(DaskMethodsMixin):
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
+    def compute_chunk_sizes(self):
+        """
+        Compute the chunk sizes for a Dask array. This is especially useful
+        when the chunk sizes are unknown (e.g., when indexing one Dask array
+        with another).
+
+        Notes
+        -----
+        This function modifies the Dask array in-place.
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> import numpy as np
+        >>> x = da.from_array([-2, -1, 0, 1, 2], chunks=2)
+        >>> x.chunks
+        ((2, 2, 1),)
+        >>> y = x[x <= 0]
+        >>> y.chunks
+        ((nan, nan, nan),)
+        >>> y.compute_chunk_sizes()  # in-place computation
+        dask.array<getitem, shape=(3,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
+        >>> y.chunks
+        ((2, 1, 0),)
+
+        """
+        x = self
+        chunk_shapes = x.map_blocks(
+            _get_chunk_shape,
+            dtype=int,
+            chunks=tuple(len(c) * (1,) for c in x.chunks) + ((x.ndim,),),
+            new_axis=x.ndim,
+        )
+
+        c = []
+        for i in range(x.ndim):
+            s = x.ndim * [0] + [i]
+            s[i] = slice(None)
+            s = tuple(s)
+
+            c.append(tuple(chunk_shapes[s]))
+
+        x._chunks = compute(tuple(c))[0]
+        return x
+
     @property
     def shape(self):
         return tuple(map(sum, self.chunks))
@@ -1096,11 +1149,14 @@ class Array(DaskMethodsMixin):
         return self._chunks
 
     def _set_chunks(self, chunks):
-        raise TypeError(
+        msg = (
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
-            "  x.rechunk(%s)" % str(chunks)
+            "  x.rechunk({})\n\n"
+            "If trying to avoid unknown chunks, use\n"
+            "  x.compute_chunk_sizes()"
         )
+        raise TypeError(msg.format(chunks))
 
     chunks = property(_get_chunks, _set_chunks, "chunks property")
 
@@ -1421,12 +1477,10 @@ class Array(DaskMethodsMixin):
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
-        if isinstance(index, (str, unicode)) or (
-            isinstance(index, list)
-            and index
-            and all(isinstance(i, (str, unicode)) for i in index)
+        if isinstance(index, str) or (
+            isinstance(index, list) and index and all(isinstance(i, str) for i in index)
         ):
-            if isinstance(index, (str, unicode)):
+            if isinstance(index, str):
                 dt = self.dtype[index]
             else:
                 dt = _make_sliced_dtype(self.dtype, index)
@@ -2473,7 +2527,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             and np.isnan(x).any()
         ):
             raise ValueError(
-                "Can not perform automatic rechunking with unknown (nan) chunk sizes"
+                "Can not perform automatic rechunking with unknown "
+                "(nan) chunk sizes.%s" % unknown_chunk_message
             )
 
     limit = max(1, limit)
@@ -2562,6 +2617,11 @@ def round_to(c, s):
             return max(1, int(c))
     else:
         return c // s * s
+
+
+def _get_chunk_shape(a):
+    s = np.asarray(a.shape, dtype=int)
+    return s[len(s) * (None,) + (slice(None),)]
 
 
 def from_array(
@@ -2787,13 +2847,17 @@ def to_zarr(
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
 
+    See Also
+    --------
+    dask.array.Array.compute_chunk_sizes
+
     """
     import zarr
 
     if np.isnan(arr.shape).any():
         raise ValueError(
             "Saving a dask array with unknown chunk sizes is not "
-            "currently supported by Zarr"
+            "currently supported by Zarr.%s" % unknown_chunk_message
         )
 
     if isinstance(url, zarr.Array):
@@ -2969,7 +3033,11 @@ def common_blockdim(blockdims):
         return max(blockdims, key=first)
 
     if np.isnan(sum(map(sum, blockdims))):
-        raise ValueError("Arrays chunk sizes are unknown: %s", blockdims)
+        raise ValueError(
+            "Arrays chunk sizes (%s) are unknown.\n\n"
+            "A possible solution:\n"
+            "  x.compute_chunk_sizes()" % blockdims
+        )
 
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
@@ -3365,8 +3433,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
-                " shape %s.  To force concatenation pass"
-                " allow_unknown_chunksizes=True." % str(seq2[0].shape)
+                " shape %s.\n\nTwo solutions:\n"
+                "  1. Force concatenation pass"
+                " allow_unknown_chunksizes=True.\n"
+                "  2. Compute shapes with "
+                "[x.compute_chunk_sizes() for x in seq]" % str(seq2[0].shape)
             )
         raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 
@@ -4281,7 +4352,7 @@ def to_hdf5(filename, *args, **kwargs):
 
     import h5py
 
-    with h5py.File(filename) as f:
+    with h5py.File(filename, mode="a") as f:
         dsets = [
             f.require_dataset(
                 dp,

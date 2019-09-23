@@ -777,7 +777,34 @@ def test_groupby_reduction_split(keyword):
     assert call(ddf.a.groupby(ddf.b), "var", ddof=2)._name != res._name
 
 
-def test_apply_shuffle():
+@pytest.mark.parametrize(
+    "grouped",
+    [
+        lambda df: df.groupby("A"),
+        lambda df: df.groupby(df["A"]),
+        lambda df: df.groupby(df["A"] + 1),
+        lambda df: df.groupby("A")["B"],
+        # SeriesGroupBy:
+        lambda df: df.groupby("A")["B"],
+        lambda df: df.groupby(df["A"])["B"],
+        lambda df: df.groupby(df["A"] + 1)["B"],
+        # Series.groupby():
+        lambda df: df.B.groupby(df["A"]),
+        lambda df: df.B.groupby(df["A"] + 1),
+        # DataFrameGroupBy with column slice:
+        lambda df: df.groupby("A")[["B", "C"]],
+        lambda df: df.groupby(df["A"])[["B", "C"]],
+        lambda df: df.groupby(df["A"] + 1)[["B", "C"]],
+    ],
+)
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda grp: grp.apply(lambda x: x.sum()),
+        lambda grp: grp.transform(lambda x: x.sum()),
+    ],
+)
+def test_apply_or_transform_shuffle(grouped, func):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 4] * 5,
@@ -789,63 +816,7 @@ def test_apply_shuffle():
     ddf = dd.from_pandas(pdf, 3)
 
     with pytest.warns(UserWarning):  # meta inference
-        assert_eq(
-            ddf.groupby("A").apply(lambda x: x.sum()),
-            pdf.groupby("A").apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"]).apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"]).apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"] + 1).apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"] + 1).apply(lambda x: x.sum()),
-        )
-
-        # SeriesGroupBy
-        assert_eq(
-            ddf.groupby("A")["B"].apply(lambda x: x.sum()),
-            pdf.groupby("A")["B"].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"])["B"].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"])["B"].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"] + 1)["B"].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"] + 1)["B"].apply(lambda x: x.sum()),
-        )
-
-        # Series.groupby
-        assert_eq(
-            ddf.B.groupby(ddf["A"]).apply(lambda x: x.sum()),
-            pdf.B.groupby(pdf["A"]).apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.B.groupby(ddf["A"] + 1).apply(lambda x: x.sum()),
-            pdf.B.groupby(pdf["A"] + 1).apply(lambda x: x.sum()),
-        )
-
-        # DataFrameGroupBy with column slice
-        assert_eq(
-            ddf.groupby("A")[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby("A")[["B", "C"]].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"])[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"])[["B", "C"]].apply(lambda x: x.sum()),
-        )
-
-        assert_eq(
-            ddf.groupby(ddf["A"] + 1)[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby(pdf["A"] + 1)[["B", "C"]].apply(lambda x: x.sum()),
-        )
+        assert_eq(func(grouped(pdf)), func(grouped(ddf)))
 
 
 @pytest.mark.parametrize(
@@ -862,7 +833,14 @@ def test_apply_shuffle():
         ),
     ],
 )
-def test_apply_shuffle_multilevel(grouper):
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda grouped: grouped.apply(lambda x: x.sum()),
+        lambda grouped: grouped.transform(lambda x: x.sum()),
+    ],
+)
+def test_apply_or_transform_shuffle_multilevel(grouper, func):
     pdf = pd.DataFrame(
         {
             "AB": [1, 2, 3, 4] * 5,
@@ -876,21 +854,17 @@ def test_apply_shuffle_multilevel(grouper):
 
     with pytest.warns(UserWarning):
         # DataFrameGroupBy
-        assert_eq(
-            ddf.groupby(grouper(ddf)).apply(lambda x: x.sum()),
-            pdf.groupby(grouper(pdf)).apply(lambda x: x.sum()),
-        )
+        assert_eq(func(ddf.groupby(grouper(ddf))), func(pdf.groupby(grouper(pdf))))
 
         # SeriesGroupBy
         assert_eq(
-            ddf.groupby(grouper(ddf))["B"].apply(lambda x: x.sum()),
-            pdf.groupby(grouper(pdf))["B"].apply(lambda x: x.sum()),
+            func(ddf.groupby(grouper(ddf))["B"]), func(pdf.groupby(grouper(pdf))["B"])
         )
 
         # DataFrameGroupBy with column slice
         assert_eq(
-            ddf.groupby(grouper(ddf))[["B", "C"]].apply(lambda x: x.sum()),
-            pdf.groupby(grouper(pdf))[["B", "C"]].apply(lambda x: x.sum()),
+            func(ddf.groupby(grouper(ddf))[["B", "C"]]),
+            func(pdf.groupby(grouper(pdf))[["B", "C"]]),
         )
 
 
@@ -2147,3 +2121,59 @@ def test_groupby_value_counts():
     pd_gb = df.groupby("foo")["bar"].value_counts()
     dd_gb = ddf.groupby("foo")["bar"].value_counts().compute()
     assert (pd_gb == dd_gb).all()
+
+
+@pytest.mark.parametrize(
+    "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
+)
+def test_groupby_transform_funcs(transformation):
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4] * 5,
+            "B": np.random.randn(20),
+            "C": np.random.randn(20),
+            "D": np.random.randn(20),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 3)
+
+    with pytest.warns(UserWarning):
+        # DataFrame
+        assert_eq(
+            pdf.groupby("A").transform(transformation),
+            ddf.groupby("A").transform(transformation),
+        )
+
+        # Series
+        assert_eq(
+            pdf.groupby("A")["B"].transform(transformation),
+            ddf.groupby("A")["B"].transform(transformation),
+        )
+
+
+@pytest.mark.parametrize("npartitions", list(range(1, 10)))
+@pytest.mark.parametrize("indexed", [True, False])
+def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
+    pdf = pd.DataFrame({"group": [1, 2, 3, 4, 5] * 20, "value": np.random.randn(100)})
+
+    if indexed:
+        pdf = pdf.set_index("group")
+
+    ddf = dd.from_pandas(pdf, npartitions)
+
+    with pytest.warns(UserWarning):
+        # DataFrame
+        assert_eq(
+            pdf.groupby("group").transform(lambda series: series - series.mean()),
+            ddf.groupby("group").transform(lambda series: series - series.mean()),
+        )
+
+        # Series
+        assert_eq(
+            pdf.groupby("group")["value"].transform(
+                lambda series: series - series.mean()
+            ),
+            ddf.groupby("group")["value"].transform(
+                lambda series: series - series.mean()
+            ),
+        )

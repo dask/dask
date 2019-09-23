@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import operator
 from numbers import Number
 
@@ -8,9 +6,8 @@ import toolz
 
 from ..base import tokenize, wait
 from ..blockwise import blockwise
-from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from
+from ..utils import derived_from, apply
 from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
