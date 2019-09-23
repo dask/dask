@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 import itertools
 from numbers import Number
 
@@ -9,7 +7,6 @@ from distutils.version import LooseVersion
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.compatibility import PY2
 from dask.utils import ignoring
 from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.numpy_compat import _numpy_115
@@ -26,7 +23,6 @@ def test_array():
     assert isinstance(y, da.Array)
 
 
-@pytest.mark.skipif(PY2, reason="Docstrings stripped in optimised Py2")
 def test_derived_docstrings():
     assert "This docstring was copied from numpy.array" in da.routines.array.__doc__
     assert "Create an array." in da.routines.array.__doc__
@@ -280,7 +276,7 @@ def test_tensordot():
     assert same_keys(da.tensordot(a, b, axes=(1, 0)), da.tensordot(a, b, axes=(1, 0)))
 
     # Increasing number of chunks warning
-    with pytest.warns(None if PY2 else da.PerformanceWarning):
+    with pytest.warns(da.PerformanceWarning):
         assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
 
 

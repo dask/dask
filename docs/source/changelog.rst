@@ -1,6 +1,66 @@
 Changelog
 =========
 
+2.4.0 / 2019-09-13
+------------------
+
+Array
++++++
+
+- Adds explicit ``h5py.File`` mode (:pr:`5390`) `James Bourbeau`_
+- Provides method to compute unknown array chunks sizes (:pr:`5312`) `Scott Sievert`_
+- Ignore runtime warning in Array ``compute_meta`` (:pr:`5356`) `estebanag`_
+- Add ``_meta`` to ``Array.__dask_postpersist__`` (:pr:`5353`) `Benoit Bovy`_
+- Fixup ``da.asarray`` and ``da.asanyarray`` for datetime64 dtype and xarray objects (:pr:`5334`) `Stephan Hoyer`_
+- Add shape implementation (:pr:`5293`) `Tom Augspurger`_
+- Add chunktype to array text repr (:pr:`5289`) `James Bourbeau`_
+- Array.random.choice: handle array-like non-arrays (:pr:`5283`) `Gabe Joseph`_
+
+Core
+++++
+
+- Remove deprecated code (:pr:`5401`) `Jim Crist`_
+- Fix ``funcname`` when vectorized func has no ``__name__`` (:pr:`5399`) `James Bourbeau`_
+- Truncate ``funcname`` to avoid long key names (:pr:`5383`) `Matthew Rocklin`_
+- Add support for ``numpy.vectorize`` in ``funcname`` (:pr:`5396`) `James Bourbeau`_
+- Fixed HDFS upstream test (:pr:`5395`) `Tom Augspurger`_
+- Support numbers and None in ``parse_bytes``/``timedelta`` (:pr:`5384`) `Matthew Rocklin`_
+- Fix tokenizing of subindexes on memmapped numpy arrays (:pr:`5351`) `Henry Pinkard`_
+- Upstream fixups (:pr:`5300`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Allow pandas to cast type of statistics (:pr:`5402`) `Richard J Zamora`_
+- Preserve index dtype after applying ``dd.pivot_table`` (:pr:`5385`) `therhaag`_
+- Implement explode for Series and DataFrame (:pr:`5381`) `Arpit Solanki`_
+- ``set_index`` on categorical fails with less categories than partitions (:pr:`5354`) `Oliver Hofkens`_
+- Support output to a single CSV file (:pr:`5304`) `Hongjiu Zhang`_
+- Add ``groupby().transform()`` (:pr:`5327`) `Oliver Hofkens`_
+- Adding filter kwarg to pyarrow dataset call (:pr:`5348`) `Richard J Zamora`_
+- Implement and check compression defaults for parquet (:pr:`5335`) `Sarah Bird`_
+- Pass sqlalchemy params to delayed objects (:pr:`5332`) `Arpit Solanki`_
+- Fixing schema handling in arrow-parquet (:pr:`5307`) `Richard J Zamora`_
+- Add support for DF and Series ``groupby().idxmin/max()`` (:pr:`5273`) `Oliver Hofkens`_
+- Add correlation calculation and add test (:pr:`5296`) `Ben Zaitlen`_
+
+Documentation
++++++++++++++
+
+- Numpy docstring standard has moved (:pr:`5405`) `Wes Roach`_
+- Reference correct NumPy array name (:pr:`5403`) `Wes Roach`_
+- Minor edits to Array chunk documentation (:pr:`5372`) `Scott Sievert`_
+- Add methods to API docs (:pr:`5387`) `Tom Augspurger`_
+- Add namespacing to configuration example (:pr:`5374`) `Matthew Rocklin`_
+- Add get_task_stream and profile to the diagnostics page (:pr:`5375`) `Matthew Rocklin`_
+- Add best practice to load data with Dask (:pr:`5369`) `Matthew Rocklin`_
+- Update ``institutional-faq.rst`` (:pr:`5345`) `DomHudson`_
+- Add threads and processes note to the best practices (:pr:`5340`) `Matthew Rocklin`_
+- Update cuDF links (:pr:`5328`) `James Bourbeau`_
+- Fixed small typo with parentheses placement (:pr:`5311`) `Eugene Huang`_
+- Update link in reshape docstring (:pr:`5297`) `James Bourbeau`_
+
+
 2.3.0 / 2019-08-16
 ------------------
 
@@ -2436,3 +2496,14 @@ Other
 .. _`Nicolas Hug`: https://github.com/NicolasHug
 .. _`Blane`: https://github.com/BlaneG
 .. _`Ivars Geidans`: https://github.com/ivarsfg
+.. _`Scott Sievert`: https://github.com/stsievert
+.. _`estebanag`: https://github.com/estebanag
+.. _`Benoit Bovy`: https://github.com/benbovy
+.. _`Gabe Joseph`: https://github.com/gjoseph92
+.. _`therhaag`: https://github.com/therhaag
+.. _`Arpit Solanki`: https://github.com/arpit1997
+.. _`Oliver Hofkens`: https://github.com/OliverHofkens
+.. _`Hongjiu Zhang`: https://github.com/hongzmsft
+.. _`Wes Roach`: https://github.com/WesRoach
+.. _`DomHudson`: https://github.com/DomHudson
+.. _`Eugene Huang`: https://github.com/eugeneh101

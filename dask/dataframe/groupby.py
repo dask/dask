@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import collections
 import itertools as it
 import operator
@@ -30,7 +28,6 @@ from .utils import (
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
-from .. import compatibility
 
 
 # #############################################
@@ -171,6 +168,22 @@ def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
+
+
+def _groupby_slice_transform(df, grouper, key, func, *args, **kwargs):
+    # No need to use raise if unaligned here - this is only called after
+    # shuffling, which makes everything aligned already
+    group_keys = kwargs.pop("group_keys", True)
+
+    g = df.groupby(grouper, group_keys=group_keys)
+    if key:
+        g = g[key]
+
+    # Cannot call transform on an empty dataframe
+    if len(df) == 0:
+        return g.apply(func, *args, **kwargs)
+
+    return g.transform(func, *args, **kwargs)
 
 
 def _groupby_get_group(df, by_key, get_key, columns):
@@ -1147,6 +1160,54 @@ class _GroupBy(object):
         )
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
+    def _shuffle(self, meta):
+        df = self.obj
+
+        if isinstance(self.obj, Series):
+            # Temporarily convert series to dataframe for shuffle
+            df = df.to_frame("__series__")
+            convert_back_to_series = True
+        else:
+            convert_back_to_series = False
+
+        if isinstance(self.index, DataFrame):  # add index columns to dataframe
+            df2 = df.assign(
+                **{"_index_" + c: self.index[c] for c in self.index.columns}
+            )
+            index = self.index
+        elif isinstance(self.index, Series):
+            df2 = df.assign(_index=self.index)
+            index = self.index
+        else:
+            df2 = df
+            index = df._select_columns_or_index(self.index)
+
+        df3 = shuffle(df2, index)  # shuffle dataframe and index
+
+        if isinstance(self.index, DataFrame):
+            # extract index from dataframe
+            cols = ["_index_" + c for c in self.index.columns]
+            index2 = df3[cols]
+            if is_dataframe_like(meta):
+                df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
+            else:
+                df4 = df3.drop(cols, axis=1)
+        elif isinstance(self.index, Series):
+            index2 = df3["_index"]
+            index2.name = self.index.name
+            if is_dataframe_like(meta):
+                df4 = df3.map_partitions(drop_columns, "_index", meta.columns.dtype)
+            else:
+                df4 = df3.drop("_index", axis=1)
+        else:
+            df4 = df3
+            index2 = self.index
+
+        if convert_back_to_series:
+            df4 = df4["__series__"].rename(self.obj.name)
+
+        return df4, index2
+
     @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, axis=0):
         if axis:
@@ -1446,10 +1507,9 @@ class _GroupBy(object):
 
         This mimics the pandas version except for the following:
 
-        1.  The user should provide output metadata.
-        2.  If the grouper does not align with the index then this causes a full
+        1.  If the grouper does not align with the index then this causes a full
             shuffle.  The order of rows within each group may not be preserved.
-        3.  Dask's GroupBy.apply is not appropriate for aggregations. For custom
+        2.  Dask's GroupBy.apply is not appropriate for aggregations. For custom
             aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
 
         .. warning::
@@ -1507,59 +1567,17 @@ class _GroupBy(object):
         )
 
         if should_shuffle:
-            if isinstance(self.obj, Series):
-                # Temporarily convert series to dataframe for shuffle
-                df = df.to_frame("__series__")
-                convert_back_to_series = True
-            else:
-                convert_back_to_series = False
-
-            if isinstance(self.index, DataFrame):  # add index columns to dataframe
-                df2 = df.assign(
-                    **{"_index_" + c: self.index[c] for c in self.index.columns}
-                )
-                index = self.index
-            elif isinstance(self.index, Series):
-                df2 = df.assign(_index=self.index)
-                index = self.index
-            else:
-                df2 = df
-                index = df._select_columns_or_index(self.index)
-
-            df3 = shuffle(df2, index)  # shuffle dataframe and index
-
-            if isinstance(self.index, DataFrame):
-                # extract index from dataframe
-                cols = ["_index_" + c for c in self.index.columns]
-                index2 = df3[cols]
-                if is_dataframe_like(meta):
-                    df4 = df3.map_partitions(drop_columns, cols, meta.columns.dtype)
-                else:
-                    df4 = df3.drop(cols, axis=1)
-            elif isinstance(self.index, Series):
-                index2 = df3["_index"]
-                index2.name = self.index.name
-                if is_dataframe_like(meta):
-                    df4 = df3.map_partitions(drop_columns, "_index", meta.columns.dtype)
-                else:
-                    df4 = df3.drop("_index", axis=1)
-            else:
-                df4 = df3
-                index2 = self.index
-
-            if convert_back_to_series:
-                df4 = df4["__series__"].rename(self.obj.name)
-
+            df2, index = self._shuffle(meta)
         else:
-            df4 = df
-            index2 = self.index
+            df2 = df
+            index = self.index
 
         # Perform embarrassingly parallel groupby-apply
         kwargs["meta"] = meta
-        df5 = map_partitions(
+        df3 = map_partitions(
             _groupby_slice_apply,
-            df4,
-            index2,
+            df2,
+            index,
             self._slice,
             func,
             token=funcname(func),
@@ -1568,7 +1586,94 @@ class _GroupBy(object):
             **kwargs
         )
 
-        return df5
+        return df3
+
+    @insert_meta_param_description(pad=12)
+    def transform(self, func, *args, **kwargs):
+        """ Parallel version of pandas GroupBy.transform
+
+        This mimics the pandas version except for the following:
+
+        1.  If the grouper does not align with the index then this causes a full
+            shuffle.  The order of rows within each group may not be preserved.
+        2.  Dask's GroupBy.transform is not appropriate for aggregations. For custom
+            aggregations, use :class:`dask.dataframe.groupby.Aggregation`.
+
+        .. warning::
+
+           Pandas' groupby-transform can be used to to apply arbitrary functions,
+           including aggregations that result in one row per group. Dask's
+           groupby-transform will apply ``func`` once to each partition-group pair,
+           so when ``func`` is a reduction you'll end up with one row per
+           partition-group pair. To apply a custom aggregation with Dask,
+           use :class:`dask.dataframe.groupby.Aggregation`.
+
+        Parameters
+        ----------
+        func: function
+            Function to apply
+        args, kwargs : Scalar, Delayed or object
+            Arguments and keywords to pass to the function.
+        $META
+
+        Returns
+        -------
+        applied : Series or DataFrame depending on columns keyword
+        """
+        meta = kwargs.get("meta", no_default)
+
+        if meta is no_default:
+            with raise_on_meta_error(
+                "groupby.transform({0})".format(funcname(func)), udf=True
+            ):
+                meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
+                meta = self._meta_nonempty.transform(func, *meta_args, **meta_kwargs)
+
+            msg = (
+                "`meta` is not specified, inferred from partial data. "
+                "Please provide `meta` if the result is unexpected.\n"
+                "  Before: .transform(func)\n"
+                "  After:  .transform(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                "  or:     .transform(func, meta=('x', 'f8'))            for series result"
+            )
+            warnings.warn(msg, stacklevel=2)
+
+        meta = make_meta(meta)
+
+        # Validate self.index
+        if isinstance(self.index, list) and any(
+            isinstance(item, Series) for item in self.index
+        ):
+            raise NotImplementedError(
+                "groupby-transform with a multiple Series is currently not supported"
+            )
+
+        df = self.obj
+        should_shuffle = not (
+            df.known_divisions and df._contains_index_name(self.index)
+        )
+
+        if should_shuffle:
+            df2, index = self._shuffle(meta)
+        else:
+            df2 = df
+            index = self.index
+
+        # Perform embarrassingly parallel groupby-transform
+        kwargs["meta"] = meta
+        df3 = map_partitions(
+            _groupby_slice_transform,
+            df2,
+            index,
+            self._slice,
+            func,
+            token=funcname(func),
+            *args,
+            group_keys=self.group_keys,
+            **kwargs
+        )
+
+        return df3
 
 
 class DataFrameGroupBy(_GroupBy):
@@ -1590,7 +1695,7 @@ class DataFrameGroupBy(_GroupBy):
             set(
                 dir(type(self))
                 + list(self.__dict__)
-                + list(filter(compatibility.isidentifier, self.obj.columns))
+                + list(filter(M.isidentifier, self.obj.columns))
             )
         )
 

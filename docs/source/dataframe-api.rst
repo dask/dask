@@ -30,6 +30,7 @@ Dataframe
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.explode
     DataFrame.fillna
     DataFrame.floordiv
     DataFrame.get_partition
@@ -56,6 +57,7 @@ Dataframe
     DataFrame.nlargest
     DataFrame.npartitions
     DataFrame.partitions
+    DataFrame.pop
     DataFrame.pow
     DataFrame.prod
     DataFrame.quantile
@@ -132,6 +134,7 @@ Series
    Series.dt
    Series.dtype
    Series.eq
+   Series.explode
    Series.ffill
    Series.fillna
    Series.first
@@ -411,6 +414,12 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: utils.make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~

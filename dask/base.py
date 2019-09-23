@@ -1,6 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import OrderedDict
+from collections.abc import Mapping, Iterator
 from functools import partial
 from hashlib import md5
 from operator import getitem
@@ -13,20 +12,11 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import (
-    apply,
-    long,
-    unicode,
-    Iterator,
-    is_dataclass,
-    dataclass_fields,
-    Mapping,
-    cPickle,
-)
+from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict
+from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
 
 
@@ -663,20 +653,7 @@ def tokenize(*args, **kwargs):
 
 normalize_token = Dispatch()
 normalize_token.register(
-    (
-        int,
-        long,
-        float,
-        str,
-        unicode,
-        bytes,
-        type(None),
-        type,
-        slice,
-        complex,
-        type(Ellipsis),
-    ),
-    identity,
+    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
 )
 
 
@@ -832,9 +809,8 @@ def register_numpy():
                     # bytes fast-path
                     data = hash_buffer_hex(b"-".join(x.flat))
             except (TypeError, UnicodeDecodeError):
-                # object data w/o fast-path, use fast cPickle
                 try:
-                    data = hash_buffer_hex(cPickle.dumps(x, cPickle.HIGHEST_PROTOCOL))
+                    data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
                     data = uuid.uuid4().hex

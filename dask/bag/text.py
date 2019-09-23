@@ -1,11 +1,8 @@
-from __future__ import print_function, division, absolute_import
-
 import io
 import os
 
 from toolz import concat
 
-from ..compatibility import unicode
 from ..utils import system_encoding, parse_bytes
 from ..delayed import delayed
 from ..bytes import open_files, read_bytes
@@ -76,7 +73,7 @@ def read_text(
     """
     if blocksize is not None and files_per_partition is not None:
         raise ValueError("Only one of blocksize or files_per_partition can be set")
-    if isinstance(blocksize, (str, unicode)):
+    if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
 
     files = open_files(

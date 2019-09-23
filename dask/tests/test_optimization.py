@@ -6,7 +6,6 @@ from functools import partial
 import pytest
 
 from dask.utils_test import add, inc
-from dask.compatibility import apply
 from dask.core import get_dependencies
 from dask.local import get_sync
 from dask.optimization import (
@@ -20,7 +19,7 @@ from dask.optimization import (
     fuse_linear,
     SubgraphCallable,
 )
-from dask.utils import partial_by_order
+from dask.utils import partial_by_order, apply
 
 
 def double(x):
