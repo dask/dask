@@ -26,6 +26,7 @@ on the constituent Pandas DataFrames.
    <iframe width="560"
            height="315"
            src="https://www.youtube.com/embed/AT2XtFehFSQ"
+           style="margin: 0 auto 20px auto; display: block;"
            frameborder="0"
            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
            allowfullscreen></iframe>
