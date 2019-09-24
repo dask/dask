@@ -4,7 +4,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_GT_0250
 
 
 def test_make_timeseries():
@@ -91,7 +91,7 @@ def test_no_overlaps():
     )
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(not PANDAS_GT_0250, reason="datareader updates.")
 @pytest.mark.network
 def test_daily_stock():
     pytest.importorskip("pandas_datareader")
