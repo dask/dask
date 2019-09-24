@@ -1790,8 +1790,7 @@ class SeriesGroupBy(_GroupBy):
         return self._aca_agg(
             token="value_counts",
             func=M.value_counts,
-            aggfunc=lambda s:
-                pd.Series(pd.concat({k: v.sum(level=1) for k, v in s})),
+            aggfunc=lambda s: pd.Series(pd.concat({k: v.sum(level=1) for k, v in s})),
             split_every=split_every,
             split_out=split_out,
         )
