@@ -1949,26 +1949,37 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
             )
 
 
-def test_timeseries_nulls_in_schema_pyarrow(tmpdir):
+@pytest.mark.parametrize("numerical", [True, False])
+@pytest.mark.parametrize(
+    "timestamp", ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"]
+)
+def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
     check_pyarrow()
     tmp_path = str(tmpdir)
-    ddf2 = (
-        dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
-        .reset_index()
-        .map_partitions(lambda x: x.loc[:5])
-    )
-    ddf2 = ddf2.set_index("x").reset_index().persist()
-    ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
+    ddf2 = dd.from_pandas(
+        pd.DataFrame(
+            {
+                "timestamp": [
+                    pd.Timestamp("2000-01-01"),
+                    pd.Timestamp("2000-01-02"),
+                    pd.Timestamp("2000-01-03"),
+                    pd.Timestamp("2000-01-04"),
+                ],
+                "id": np.arange(4, dtype="float64"),
+                "name": ["cat", "dog", "bird", "cow"],
+            }
+        ),
+        npartitions=2,
+    ).persist()
+    if numerical:
+        ddf2.id = ddf2.id.where(ddf2.timestamp == timestamp, None)
+        ddf2.id = ddf2.id.astype("float64")
+    else:
+        ddf2.name = ddf2.name.where(ddf2.timestamp == timestamp, None)
 
     # There should be no schema error if you specify a schema on write
     schema = pa.schema(
-        [
-            ("x", pa.float64()),
-            ("timestamp", pa.timestamp("ns")),
-            ("id", pa.int64()),
-            ("name", pa.string()),
-            ("y", pa.float64()),
-        ]
+        [("timestamp", pa.timestamp("ns")), ("id", pa.float64()), ("name", pa.string())]
     )
     ddf2.to_parquet(tmp_path, schema=schema, write_index=False, engine="pyarrow")
     assert_eq(

@@ -214,7 +214,7 @@ class ArrowEngine(Engine):
                         if column.statistics:
                             cs_min = column.statistics.min
                             cs_max = column.statistics.max
-                            if None in [cs_min, cs_max] and ri == 0:
+                            if ri == 0 and not column.statistics.has_min_max:
                                 skip_cols.add(name)
                                 continue
                             cs_vals = pd.Series([cs_min, cs_max])
