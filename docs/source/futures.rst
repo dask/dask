@@ -12,6 +12,16 @@ These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/07EiCpdhtDE"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 .. currentmodule:: distributed
 
 Start Dask Client
