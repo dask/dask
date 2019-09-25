@@ -80,6 +80,14 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     because this also means we should avoid scanning every file in the
     dataset.  If _metadata is available, set `gather_statistics=True`
     (if `gather_statistics=None`).
+
+    The `fast_metadata` output specifies that ParquetFile metadata parsing
+    is fast enough for each worker to perform during `read_partition`. The
+    value will be set to True if: (1) The path is a directory containing
+    _metadta, (2) the path is a list of files containing _metadata, (3)
+    there is only one file to read, or (4) `gather_statistics` is False.
+    In other cases, the ParquetFile object will need to be stored in the
+    task graph, because metadata parsing is too expensive.
     """
     parts = []
     fast_metadata = True
@@ -310,6 +318,10 @@ class FastParquetEngine(Engine):
             pf = None
         parts = []
         for i, piece in enumerate(partsin):
+            if pf and not fast_metadata:
+                for col in piece.columns:
+                    col.meta_data.statistics = None
+                    col.meta_data.encoding_stats = None
             piece_item = i if pf else piece
             part = {
                 "piece": piece_item,
