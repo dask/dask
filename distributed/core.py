@@ -969,8 +969,9 @@ def error_message(e, status="error"):
     --------
     clean_exception: deserialize and unpack message into exception/traceback
     """
+    MAX_ERROR_LEN = dask.config.get("distributed.admin.max-error-length")
     tb = get_traceback()
-    e2 = truncate_exception(e, 1000)
+    e2 = truncate_exception(e, MAX_ERROR_LEN)
     try:
         e3 = protocol.pickle.dumps(e2)
         protocol.pickle.loads(e3)
@@ -982,7 +983,7 @@ def error_message(e, status="error"):
     except Exception:
         tb = tb2 = "".join(traceback.format_tb(tb))
 
-    if len(tb2) > 10000:
+    if len(tb2) > MAX_ERROR_LEN:
         tb_result = None
     else:
         tb_result = protocol.to_serialize(tb)
