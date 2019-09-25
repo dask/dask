@@ -1947,23 +1947,49 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
             ddf_read = dd.read_parquet(
                 tmp_path, dataset={"validate_schema": True}, engine=engine
             )
-        # There should be no error if you specify a schema on write
-        schema = pa.schema(
-            [
-                ("x", pa.float64()),
-                ("timestamp", pa.timestamp("ns")),
-                ("id", pa.int64()),
-                ("name", pa.string()),
-                ("y", pa.float64()),
-            ]
-        )
-        ddf2.to_parquet(tmp_path, schema=schema, engine=engine)
-        assert_eq(
-            dd.read_parquet(tmp_path, dataset={"validate_schema": True}, engine=engine),
-            ddf2,
-            check_divisions=False,
-            check_index=False,
-        )
+
+
+@pytest.mark.parametrize("numerical", [True, False])
+@pytest.mark.parametrize(
+    "timestamp", ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"]
+)
+def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
+    check_pyarrow()
+    tmp_path = str(tmpdir)
+    ddf2 = dd.from_pandas(
+        pd.DataFrame(
+            {
+                "timestamp": [
+                    pd.Timestamp("2000-01-01"),
+                    pd.Timestamp("2000-01-02"),
+                    pd.Timestamp("2000-01-03"),
+                    pd.Timestamp("2000-01-04"),
+                ],
+                "id": np.arange(4, dtype="float64"),
+                "name": ["cat", "dog", "bird", "cow"],
+            }
+        ),
+        npartitions=2,
+    ).persist()
+    if numerical:
+        ddf2.id = ddf2.id.where(ddf2.timestamp == timestamp, None)
+        ddf2.id = ddf2.id.astype("float64")
+    else:
+        ddf2.name = ddf2.name.where(ddf2.timestamp == timestamp, None)
+
+    # There should be no schema error if you specify a schema on write
+    schema = pa.schema(
+        [("timestamp", pa.timestamp("ns")), ("id", pa.float64()), ("name", pa.string())]
+    )
+    ddf2.to_parquet(tmp_path, schema=schema, write_index=False, engine="pyarrow")
+    assert_eq(
+        dd.read_parquet(
+            tmp_path, dataset={"validate_schema": True}, index=False, engine="pyarrow"
+        ),
+        ddf2,
+        check_divisions=False,
+        check_index=False,
+    )
 
 
 def test_graph_size_pyarrow(tmpdir, engine):

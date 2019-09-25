@@ -280,7 +280,7 @@ class FastParquetEngine(Engine):
                         if pf.statistics["min"][col][0] is not None:
                             cs_min = pf.statistics["min"][col][i]
                             cs_max = pf.statistics["max"][col][i]
-                            if None in [cs_min, cs_max]:
+                            if None in [cs_min, cs_max] and i == 0:
                                 skip_cols.add(col)
                                 continue
                             if isinstance(cs_min, np.datetime64):
