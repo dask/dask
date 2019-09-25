@@ -4075,3 +4075,14 @@ def test_series_explode():
     exploded_ds = ds.explode()
     assert_eq(exploded_ds, exploded_s)
     assert ds.divisions == exploded_ds.divisions
+
+
+def test_pop():
+    df = pd.DataFrame({"x": range(10), "y": range(10)})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    s = ddf.pop("y")
+    assert s.name == "y"
+    assert ddf.columns == ["x"]
+    assert_eq(ddf, df[["x"]])

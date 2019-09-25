@@ -22,6 +22,16 @@ Design
 Dask bags coordinate many Python lists or Iterators, each of which forms a
 partition of a larger collection.
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/-qIiJ1XtSv0"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 Common Uses
 -----------
 
