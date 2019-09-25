@@ -4,7 +4,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, PANDAS_GT_0250
+from dask.dataframe.utils import assert_eq
 
 
 def test_make_timeseries():
@@ -91,10 +91,9 @@ def test_no_overlaps():
     )
 
 
-@pytest.mark.xfail(not PANDAS_GT_0250, reason="datareader updates.")
 @pytest.mark.network
 def test_daily_stock():
-    pytest.importorskip("pandas_datareader")
+    pytest.importorskip("pandas_datareader", minversion="0.8.0")
     df = dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
     assert isinstance(df, dd.DataFrame)
     assert 10 < df.npartitions < 31
