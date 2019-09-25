@@ -1794,6 +1794,18 @@ def test_repartition_npartitions_same_limits():
     ddf.repartition(npartitions=10)
 
 
+def test_repartition_npartitions_numeric_edge_case():
+    """
+    Test that we cover numeric edge cases when
+    int(ddf.npartitions / npartitions) * npartitions) != ddf.npartitions
+    """
+    df = pd.DataFrame({"x": range(100)})
+    a = dd.from_pandas(df, npartitions=15)
+    assert a.npartitions == 15
+    b = a.repartition(npartitions=11)
+    assert_eq(a, b)
+
+
 def test_repartition_object_index():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6] * 10}, index=list("abdabd") * 10)
     a = dd.from_pandas(df, npartitions=5)
