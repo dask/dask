@@ -613,5 +613,5 @@ def test_check_meta_flag():
     da = delayed(lambda x: x)(a)
     db = delayed(lambda x: x)(b)
 
-    c = from_delayed([da, db])
+    c = from_delayed([da, db], verify_meta=False)
     assert_eq(c, c)
