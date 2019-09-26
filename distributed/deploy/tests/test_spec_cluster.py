@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 import dask
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
@@ -375,6 +376,8 @@ async def test_MultiWorker(cleanup):
             await client.wait_for_workers(4)
 
             assert "workers=4" in repr(cluster)
+            workers_line = re.search("(Workers.+)", cluster._widget_status()).group(1)
+            assert re.match("Workers.*<td>4</td>", workers_line)
 
             cluster.scale(1)
             await cluster
