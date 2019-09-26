@@ -524,8 +524,9 @@ def to_records(df):
 
 
 @insert_meta_param_description
-def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed", 
-                 verify_meta=True):
+def from_delayed(
+    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
+):
     """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -573,11 +574,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed",
             }
         )
     else:
-        dsk.update(
-            {
-                (name, i): (df.key,) for (i, df) in enumerate(dfs)
-            }
-        )
+        dsk.update({(name, i): (df.key,) for (i, df) in enumerate(dfs)})
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)

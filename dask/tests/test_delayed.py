@@ -608,8 +608,8 @@ def test_check_meta_flag():
     from dask.delayed import delayed
     from dask.dataframe import from_delayed
 
-    a = Series(['a', 'b', 'a'], dtype='category')
-    b = Series(['a', 'c', 'a'], dtype='category')
+    a = Series(["a", "b", "a"], dtype="category")
+    b = Series(["a", "c", "a"], dtype="category")
     da = delayed(lambda x: x)(a)
     db = delayed(lambda x: x)(b)
 
