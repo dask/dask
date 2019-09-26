@@ -75,8 +75,8 @@ class Nanny(ServerNode):
         resources=None,
         silence_logs=None,
         death_timeout=None,
-        preload=(),
-        preload_argv=[],
+        preload=None,
+        preload_argv=None,
         security=None,
         contact_address=None,
         listen_address=None,
@@ -116,7 +116,11 @@ class Nanny(ServerNode):
         self.resources = resources
         self.death_timeout = parse_timedelta(death_timeout)
         self.preload = preload
+        if self.preload is None:
+            self.preload = dask.config.get("distributed.worker.preload")
         self.preload_argv = preload_argv
+        if self.preload_argv is None:
+            self.preload_argv = dask.config.get("distributed.worker.preload-argv")
         self.Worker = Worker if worker_class is None else worker_class
         self.env = env or {}
         worker_kwargs.update(

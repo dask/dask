@@ -1,12 +1,14 @@
 import os
+import pytest
 import shutil
 import sys
 import tempfile
 import pytest
 
-from distributed import Client, Scheduler, Worker
+import dask
+from distributed import Client, Scheduler, Worker, Nanny
 from distributed.utils_test import cluster
-from distributed.utils_test import cleanup, loop  # noqa F401
+from distributed.utils_test import loop, cleanup  # noqa F401
 
 
 PRELOAD_TEXT = """
@@ -53,6 +55,20 @@ def dask_setup(worker):
         assert s.foo == "setup"
         async with Worker(s.address, preload=[text]) as w:
             assert w.foo == "setup"
+
+
+@pytest.mark.asyncio
+async def test_worker_preload_config(cleanup):
+    text = """
+def dask_setup(worker):
+    worker.foo = 'setup'
+"""
+    with dask.config.set({"distributed.worker.preload": text}):
+        async with Scheduler(port=0) as s:
+            async with Nanny(s.address) as w:
+                async with Client(s.address, asynchronous=True) as c:
+                    d = await c.run(lambda dask_worker: dask_worker.foo)
+                    assert d == {w.worker_address: "setup"}
 
 
 def test_worker_preload_module(loop):
