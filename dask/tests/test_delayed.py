@@ -613,4 +613,4 @@ def test_check_meta_flag():
     db = delayed(lambda x: x)(b)
 
     c = from_delayed([da, db])
-    c.compute()
+    assert_eq(c, c)
