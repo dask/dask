@@ -600,3 +600,17 @@ def test_attribute_of_attribute():
     assert isinstance(x.a, Delayed)
     assert isinstance(x.a.b, Delayed)
     assert isinstance(x.a.b.c, Delayed)
+
+
+def test_check_meta_flag():
+    from pandas import DataFrame, Series
+    from dask.delayed import delayed
+    from dask.dataframe import from_delayed
+
+    a = Series(['a', 'b', 'a'], dtype='category')
+    b = Series(['a', 'c', 'a'], dtype='category')
+    da = delayed(lambda x: x)(a)
+    db = delayed(lambda x: x)(b)
+
+    c = from_delayed([da, db])
+    c.compute()
