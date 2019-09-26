@@ -574,7 +574,7 @@ def from_delayed(
             }
         )
     else:
-        dsk.update({(name, i): (df.key,) for (i, df) in enumerate(dfs)})
+        dsk.update({(name, i): df.key for (i, df) in enumerate(dfs)})
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
