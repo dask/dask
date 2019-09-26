@@ -11,6 +11,7 @@ import dask
 from dask import compute
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
+from dask.dataframe.utils import assert_eq
 
 try:
     from operator import matmul
