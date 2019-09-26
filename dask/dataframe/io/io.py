@@ -524,7 +524,8 @@ def to_records(df):
 
 
 @insert_meta_param_description
-def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed"):
+def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed", 
+                 check_meta_flag=True):
     """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -542,6 +543,9 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed"):
         If None, then won't use index information
     prefix : str, optional
         Prefix to prepend to the keys.
+    check_meta_flag : bool, optional
+        If False don't check that the incoming dataframe metadata are the 
+        same as the outbound metadata, defaults to True
     """
     from dask.delayed import Delayed
 
@@ -562,12 +566,13 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed"):
 
     name = prefix + "-" + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)
-    dsk.update(
-        {
-            (name, i): (check_meta, df.key, meta, "from_delayed")
-            for (i, df) in enumerate(dfs)
-        }
-    )
+    if check_meta_flag:
+        dsk.update(
+            {
+                (name, i): (check_meta, df.key, meta, "from_delayed")
+                for (i, df) in enumerate(dfs)
+            }
+        )
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
