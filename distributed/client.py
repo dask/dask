@@ -3463,18 +3463,19 @@ class Client(Node):
 
         >>> c.get_versions(packages=['sklearn', 'geopandas'])  # doctest: +SKIP
         """
+        return self.sync(self._get_versions, check=check, packages=packages)
+
+    async def _get_versions(self, check=False, packages=[]):
         client = get_versions(packages=packages)
         try:
-            scheduler = sync(self.loop, self.scheduler.versions, packages=packages)
+            scheduler = await self.scheduler.versions(packages=packages)
         except KeyError:
             scheduler = None
         except TypeError:  # packages keyword not supported
-            scheduler = sync(self.loop, self.scheduler.versions)  # this raises
+            scheduler = await self.scheduler.versions()  # this raises
 
-        workers = sync(
-            self.loop,
-            self.scheduler.broadcast,
-            msg={"op": "versions", "packages": packages},
+        workers = await self.scheduler.broadcast(
+            msg={"op": "versions", "packages": packages}
         )
         result = {"scheduler": scheduler, "workers": workers, "client": client}
 

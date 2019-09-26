@@ -3725,6 +3725,11 @@ def test_get_versions(c):
     assert dict(v["client"]["packages"]["optional"])["requests"] == requests.__version__
 
 
+@gen_cluster(client=True)
+async def test_async_get_versions(c, s, a, b):
+    await c.get_versions(check=True)
+
+
 def test_threaded_get_within_distributed(c):
     import dask.multiprocessing
 
