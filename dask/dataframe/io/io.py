@@ -573,6 +573,13 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed",
                 for (i, df) in enumerate(dfs)
             }
         )
+    else:
+        dsk.update(
+            {
+                (name, i): (lambda x, *_: x, df.key, meta, "from_delayed")
+                for (i, df) in enumerate(dfs)
+            }
+        )
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
