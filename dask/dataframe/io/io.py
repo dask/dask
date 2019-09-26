@@ -575,8 +575,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed",
     else:
         dsk.update(
             {
-                (name, i): df.key,
-                for (i, df) in enumerate(dfs)
+                (name, i): (df.key,) for (i, df) in enumerate(dfs)
             }
         )
 
