@@ -604,7 +604,7 @@ def test_attribute_of_attribute():
 
 
 def test_check_meta_flag():
-    from pandas import DataFrame, Series
+    from pandas import Series
     from dask.delayed import delayed
     from dask.dataframe import from_delayed
 
