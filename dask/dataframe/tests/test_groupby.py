@@ -2103,18 +2103,8 @@ def test_groupby_unique():
 
     pd_gb = df.groupby("foo")["bar"].unique()
     dd_gb = ddf.groupby("foo")["bar"].unique().compute()
-
-    pd_gb = pd_gb.to_dict()
-    dd_gb = dd_gb.to_dict()
-
-    # These keys are unique values of column "bar"
-    assert set(pd_gb.keys()) == set(dd_gb.keys()) == {0, 1, 2}
-    assert (np.diff(pd_gb[0]) < 0).any() and (
-        np.diff(pd_gb[0]) > 0
-    ).any()  # Note: pandas not ordered
-    for k, v_dask in dd_gb.items():
-        v_pd = pd_gb[k]
-        assert set(v_dask) == set(v_pd)  # This ignores ordering
+    assert_eq(pd_gb.explode(), dd_gb.explode(), check_names=False)
+    #  assert_eq(pd_gb.explode(), dd_gb.explode(), check_names=True)
 
 
 def test_groupby_value_counts():
@@ -2125,8 +2115,9 @@ def test_groupby_value_counts():
     ddf = dd.from_pandas(df, npartitions=2)
 
     pd_gb = df.groupby("foo")["bar"].value_counts()
-    dd_gb = ddf.groupby("foo")["bar"].value_counts().compute()
-    assert (pd_gb == dd_gb).all()
+    dd_gb = ddf.groupby("foo")["bar"].value_counts()#.compute()
+    assert (pd_gb == dd_gb.compute()).all()
+    #  assert_eq(pd_gb, dd_gb)  # fails
 
 
 @pytest.mark.parametrize(
