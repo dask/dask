@@ -23,6 +23,7 @@ distributed:
     pickle: True            # Is the scheduler allowed to deserialize arbitrary bytestrings
     preload: []
     preload-argv: []
+    default-task-durations: {}  # How long we expect function names to run ("1h", "1s") (helps for long tasks)
     dashboard:
       status:
         task-stream-length: 1000

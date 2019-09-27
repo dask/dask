@@ -17,7 +17,7 @@ import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
 from distributed.core import connect, rpc
-from distributed.scheduler import Scheduler
+from distributed.scheduler import Scheduler, TaskState
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -1641,3 +1641,26 @@ async def test_retire_names_str(cleanup):
                     await s.retire_workers(names=[0])
                     assert all(f.done() for f in futures)
                     assert len(b.data) == 10
+
+
+def test_get_task_duration():
+    with dask.config.set(
+        {"distributed.scheduler.default-task-durations": {"prefix_1": 100}}
+    ):
+        s = Scheduler(port=0)
+        assert "prefix_1" in s.task_duration
+        assert s.task_duration["prefix_1"] == 100
+
+        ts_pref1 = TaskState("prefix_1-abcdefab", None)
+        assert s.get_task_duration(ts_pref1) == 100
+
+        # make sure get_task_duration adds TaskStates to unknown dict
+        assert len(s.unknown_durations) == 0
+        ts_pref2 = TaskState("prefix_2-abcdefab", None)
+        assert s.get_task_duration(ts_pref2) == 0.5  # default
+        assert len(s.unknown_durations) == 1
+        assert len(s.unknown_durations["prefix_2"]) == 1
+        ts_pref2_2 = TaskState("prefix_2-accdefab", None)
+        assert s.get_task_duration(ts_pref2_2) == 0.5  # default
+        assert len(s.unknown_durations) == 1
+        assert len(s.unknown_durations["prefix_2"]) == 2

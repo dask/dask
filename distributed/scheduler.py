@@ -964,6 +964,10 @@ class Scheduler(ServerNode):
 
         # Prefix-keyed containers
         self.task_duration = {prefix: 0.00001 for prefix in fast_tasks}
+        for k, v in dask.config.get(
+            "distributed.scheduler.default-task-durations", {}
+        ).items():
+            self.task_duration[k] = parse_timedelta(v)
         self.unknown_durations = defaultdict(set)
 
         # Client state
