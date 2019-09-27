@@ -4,9 +4,10 @@ co-released.  We may want to check their status while releasing
 
 Release per project:
 
-*   Raise an issue in the https://github.com/dask/dask issue tracker signalling
-    your intent to release and the motivation.  Let that issue collect comments
-    for a day to ensure that other maintainers are comfortable with releasing.
+*   Raise an issue in the https://github.com/dask/community issue tracker
+    signalling your intent to release and the motivation.  Let that issue
+    collect comments for a day to ensure that other maintainers are comfortable
+    with releasing.
 
 *   Update release notes in docs/source/changelog.rst
 

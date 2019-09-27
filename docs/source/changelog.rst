@@ -1,6 +1,36 @@
 Changelog
 =========
 
+2.5.0 / 2019-09-27
+------------------
+
+Core
+++++
+
+-  Add sentinel no_default to get_dependencies task (:pr:`5420`) `James Bourbeau`_
+-  Update fsspec version (:pr:`5415`) `Matthew Rocklin`_
+-  Remove PY2 checks (:pr:`5400`) `Jim Crist`_
+
+DataFrame
++++++++++
+
+-  Add option to not check meta in dd.from_delayed (:pr:`5436`) `Christopher J. Wright`_
+-  Fix test_timeseries_nulls_in_schema failures with pyarrow master (:pr:`5421`) `Richard J Zamora`_
+-  Reduce read_metadata output size in pyarrow/parquet (:pr:`5391`) `Richard J Zamora`_
+-  Test numeric edge case for repartition with npartitions. (:pr:`5433`) `amerkel2`_
+-  Unxfail pandas-datareader test (:pr:`5430`) `Tom Augspurger`_
+-  Add DataFrame.pop implementation (:pr:`5422`) `Matthew Rocklin`_
+-  Enable merge/set_index for cudf-based dataframes with cupy ``values`` (:pr:`5322`) `Richard J Zamora`_
+-  drop_duplicates support for positional subset parameter (:pr:`5410`) `Wes Roach`_
+
+Documentation
++++++++++++++
+
+-  Add screencasts to array, bag, dataframe, delayed, futures and setup  (:pr:`5429`) (:pr:`5424`) `Matthew Rocklin`_
+-  Fix delimeter parsing documentation (:pr:`5428`) `Mahmut Bulut`_
+-  Update overview image (:pr:`5404`) `James Bourbeau`_
+
+
 2.4.0 / 2019-09-13
 ------------------
 
@@ -2507,3 +2537,5 @@ Other
 .. _`Wes Roach`: https://github.com/WesRoach
 .. _`DomHudson`: https://github.com/DomHudson
 .. _`Eugene Huang`: https://github.com/eugeneh101
+.. _`Christopher J. Wright`: https://github.com/CJ-Wright
+.. _`Mahmut Bulut`: https://github.com/vertexclique
