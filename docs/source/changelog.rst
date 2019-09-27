@@ -1,6 +1,25 @@
 Changelog
 =========
 
+2.5.0 - 2019-09-27
+------------------
+
+-  Use the new UCX Python bindings (:pr:`3059`) `Mads R. B. Kristensen`_
+-  Fix worker preload config (:pr:`3027`) `byjott`_
+-  Fix widget with spec that generates multiple workers (:pr:`3067`) `Loïc Estève`_
+-  Make Client.get_versions async friendly (:pr:`3064`) `Jacob Tomlinson`_
+-  Add configuation option for longer error tracebacks (:pr:`3086`) `Daniel Farrell`_
+-  Have Client get Security from passed Cluster (:pr:`3079`) `Matthew Rocklin`_
+-  Respect Cluster.dashboard_link in Client._repr_html_ if it exists (:pr:`3077`) `Matthew Rocklin`_
+-  Add monitoring with dask cluster docs (:pr:`3072`) `Arpit Solanki`_
+-  Protocol of cupy and numba handles serialization exclusively  (:pr:`3047`) `Mads R. B. Kristensen`_
+-  Allow specification of worker type in SSHCLuster (:pr:`3061`) `Jacob Tomlinson`_
+-  Use Cluster.scheduler_info for workers= value in repr (:pr:`3058`) `Matthew Rocklin`_
+-  Allow SpecCluster to scale by memory and cores (:pr:`3057`) `Matthew Rocklin`_
+-  Allow full script in preload inputs (:pr:`3052`) `Matthew Rocklin`_
+-  Check multiple cgroups dirs, ceil fractional cpus (:pr:`3056`) `Jim Crist`_
+-  Add blurb about disabling work stealing (:pr:`3055`) `Chris White`_
+
 2.4.0 - 2019-09-13
 ------------------
 
@@ -1268,3 +1287,4 @@ significantly without many new features.
 .. _`byjott`: https://github.com/byjott
 .. _`Mohammad Noor`: https://github.com/MdSalih
 .. _`Richard J Zamora`: https://github.com/rjzamora
+.. _`Arpit Solanki`: https://github.com/arpit1997
