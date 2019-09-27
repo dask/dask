@@ -1,6 +1,13 @@
 Changelog
 =========
 
+
+2.5.1 - 2019-09-27
+------------------
+
+-   Support clusters that don't have .security or ._close methods (:pr:`3100`) `Matthew Rocklin`_
+
+
 2.5.0 - 2019-09-27
 ------------------
 
@@ -19,6 +26,7 @@ Changelog
 -  Allow full script in preload inputs (:pr:`3052`) `Matthew Rocklin`_
 -  Check multiple cgroups dirs, ceil fractional cpus (:pr:`3056`) `Jim Crist`_
 -  Add blurb about disabling work stealing (:pr:`3055`) `Chris White`_
+
 
 2.4.0 - 2019-09-13
 ------------------
