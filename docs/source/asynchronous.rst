@@ -108,7 +108,7 @@ Python 2/3 with Tornado
        future = client.submit(lambda x: x + 1, 10)
        result = yield future
        yield client.close()
-       raise gen.Result(result)
+       raise gen.Return(result)
 
    from tornado.ioloop import IOLoop
    IOLoop().run_sync(f)
