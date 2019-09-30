@@ -7,7 +7,7 @@ import dask
 from tornado import gen
 
 from ..metrics import time
-from ..utils import parse_timedelta
+from ..utils import parse_timedelta, ignoring
 from . import registry
 from .addressing import parse_address
 
@@ -188,6 +188,7 @@ async def connect(addr, timeout=None, deserialize=True, connection_args=None):
     scheme, loc = parse_address(addr)
     backend = registry.get_backend(scheme)
     connector = backend.get_connector()
+    comm = None
 
     start = time()
     deadline = start + timeout
@@ -205,14 +206,19 @@ async def connect(addr, timeout=None, deserialize=True, connection_args=None):
     # This starts a thread
     while True:
         try:
-            future = connector.connect(
-                loc, deserialize=deserialize, **(connection_args or {})
-            )
-            comm = await gen.with_timeout(
-                timedelta(seconds=deadline - time()),
-                future,
-                quiet_exceptions=EnvironmentError,
-            )
+            while deadline - time() > 0:
+                future = connector.connect(
+                    loc, deserialize=deserialize, **(connection_args or {})
+                )
+                with ignoring(gen.TimeoutError):
+                    comm = await gen.with_timeout(
+                        timedelta(seconds=min(deadline - time(), 1)),
+                        future,
+                        quiet_exceptions=EnvironmentError,
+                    )
+                    break
+            if not comm:
+                _raise(error)
         except FatalCommClosedError:
             raise
         except EnvironmentError as e:
@@ -222,8 +228,6 @@ async def connect(addr, timeout=None, deserialize=True, connection_args=None):
                 logger.debug("sleeping on connect")
             else:
                 _raise(error)
-        except gen.TimeoutError:
-            _raise(error)
         else:
             break
 
