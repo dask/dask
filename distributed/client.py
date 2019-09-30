@@ -27,7 +27,7 @@ from dask.base import tokenize, normalize_token, collections_to_dsk
 from dask.core import flatten, get_dependencies
 from dask.optimization import SubgraphCallable
 from dask.compatibility import apply
-from dask.utils import ensure_dict, format_bytes
+from dask.utils import ensure_dict, format_bytes, funcname
 
 try:
     from cytoolz import first, groupby, merge, valmap, keymap
@@ -69,7 +69,6 @@ from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (
     All,
     sync,
-    funcname,
     ignoring,
     tokey,
     log_errors,

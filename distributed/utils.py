@@ -10,7 +10,6 @@ import inspect
 import json
 import logging
 import multiprocessing
-from numbers import Number
 import os
 import re
 import shutil
@@ -37,7 +36,14 @@ import dask
 from dask import istask
 
 # provide format_bytes here for backwards compatibility
-from dask.utils import format_bytes  # noqa
+from dask.utils import (  # noqa
+    format_bytes,
+    funcname,
+    format_time,
+    parse_bytes,
+    parse_timedelta,
+)
+
 import toolz
 import tornado
 from tornado import gen
@@ -78,16 +84,6 @@ def _initialize_mp_context():
 
 
 mp_context = _initialize_mp_context()
-
-
-def funcname(func):
-    """Get the name of a function."""
-    while hasattr(func, "func"):
-        func = func.func
-    try:
-        return func.__name__
-    except AttributeError:
-        return str(func)
 
 
 def has_arg(func, argname):
@@ -1086,135 +1082,6 @@ class itemgetter(object):
         return (itemgetter, (self.index,))
 
 
-byte_sizes = {
-    "kB": 10 ** 3,
-    "MB": 10 ** 6,
-    "GB": 10 ** 9,
-    "TB": 10 ** 12,
-    "PB": 10 ** 15,
-    "KiB": 2 ** 10,
-    "MiB": 2 ** 20,
-    "GiB": 2 ** 30,
-    "TiB": 2 ** 40,
-    "PiB": 2 ** 50,
-    "B": 1,
-    "": 1,
-}
-byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
-byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and "i" not in k})
-byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
-
-
-def parse_bytes(s):
-    """ Parse byte string to numbers
-
-    >>> parse_bytes('100')
-    100
-    >>> parse_bytes('100 MB')
-    100000000
-    >>> parse_bytes('100M')
-    100000000
-    >>> parse_bytes('5kB')
-    5000
-    >>> parse_bytes('5.4 kB')
-    5400
-    >>> parse_bytes('1kiB')
-    1024
-    >>> parse_bytes('1e6')
-    1000000
-    >>> parse_bytes('1e6 kB')
-    1000000000
-    >>> parse_bytes('MB')
-    1000000
-    """
-    if isinstance(s, (int, float)):
-        return int(s)
-    s = s.replace(" ", "")
-    if not s[0].isdigit():
-        s = "1" + s
-
-    for i in range(len(s) - 1, -1, -1):
-        if not s[i].isalpha():
-            break
-    index = i + 1
-
-    prefix = s[:index]
-    suffix = s[index:]
-
-    n = float(prefix)
-
-    multiplier = byte_sizes[suffix.lower()]
-
-    result = n * multiplier
-    return int(result)
-
-
-timedelta_sizes = {
-    "s": 1,
-    "ms": 1e-3,
-    "us": 1e-6,
-    "ns": 1e-9,
-    "m": 60,
-    "h": 3600,
-    "d": 3600 * 24,
-}
-
-tds2 = {
-    "second": 1,
-    "minute": 60,
-    "hour": 60 * 60,
-    "day": 60 * 60 * 24,
-    "millisecond": 1e-3,
-    "microsecond": 1e-6,
-    "nanosecond": 1e-9,
-}
-tds2.update({k + "s": v for k, v in tds2.items()})
-timedelta_sizes.update(tds2)
-timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
-
-
-def parse_timedelta(s, default="seconds"):
-    """ Parse timedelta string to number of seconds
-
-    Examples
-    --------
-    >>> parse_timedelta('3s')
-    3
-    >>> parse_timedelta('3.5 seconds')
-    3.5
-    >>> parse_timedelta('300ms')
-    0.3
-    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
-    3.0
-    """
-    if s is None:
-        return None
-    if isinstance(s, timedelta):
-        return s.total_seconds()
-    if isinstance(s, Number):
-        s = str(s)
-    s = s.replace(" ", "")
-    if not s[0].isdigit():
-        s = "1" + s
-
-    for i in range(len(s) - 1, -1, -1):
-        if not s[i].isalpha():
-            break
-    index = i + 1
-
-    prefix = s[:index]
-    suffix = s[index:] or default
-
-    n = float(prefix)
-
-    multiplier = timedelta_sizes[suffix.lower()]
-
-    result = n * multiplier
-    if int(result) == result:
-        result = int(result)
-    return result
-
-
 def asciitable(columns, rows):
     """Formats an ascii table for given columns and rows.
 
@@ -1280,25 +1147,6 @@ def json_load_robust(fn, load=json.load):
         except (ValueError, KeyError):  # race with writing process
             pass
         sleep(0.1)
-
-
-def format_time(n):
-    """ format integers as time
-
-    >>> format_time(1)
-    '1.00 s'
-    >>> format_time(0.001234)
-    '1.23 ms'
-    >>> format_time(0.00012345)
-    '123.45 us'
-    >>> format_time(123.456)
-    '123.46 s'
-    """
-    if n >= 1:
-        return "%.2f s" % n
-    if n >= 1e-3:
-        return "%.2f ms" % (n * 1e3)
-    return "%.2f us" % (n * 1e6)
 
 
 class DequeHandler(logging.Handler):
