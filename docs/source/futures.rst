@@ -267,6 +267,15 @@ Or collect all futures in batches that had arrived since the last iteration:
       for future, result in batch:
           ...
 
+In all of the above mentioned cases, it may be advisable to also remove the
+reference to the future in the futures list, otherwise the scheduler will
+keep the results in memory.
+
+.. code-block:: python
+    for future in as_completed(futures):
+        result = future.result()
+        futures.remove(future)
+
 Additionally, for iterative algorithms, you can add more futures into the
 ``as_completed`` iterator *during* iteration:
 
