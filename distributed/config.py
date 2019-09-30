@@ -76,7 +76,7 @@ def _initialize_logging_old_style(config):
     loggers = {  # default values
         "distributed": "info",
         "distributed.client": "warning",
-        "bokeh": "critical",
+        "bokeh": "error",
         "tornado": "critical",
         "tornado.application": "error",
     }
