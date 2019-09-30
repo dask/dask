@@ -786,10 +786,12 @@ class Client(Node):
             return "<%s: not connected>" % (self.__class__.__name__,)
 
     def _repr_html_(self):
+        from .scheduler import Scheduler
+
         if (
             self.cluster
             and hasattr(self.cluster, "scheduler")
-            and self.cluster.scheduler
+            and isinstance(self.cluster.scheduler, Scheduler)
         ):
             info = self.cluster.scheduler.identity()
             scheduler = self.cluster.scheduler
