@@ -12,6 +12,8 @@ ns = {
     func.__name__: func for func in [format_bytes, format_time, datetime.fromtimestamp]
 }
 
+rel_path_statics = {"rel_path_statics": "../../"}
+
 
 class Workers(RequestHandler):
     def get(self):
@@ -20,7 +22,7 @@ class Workers(RequestHandler):
                 "workers.html",
                 title="Workers",
                 scheduler=self.server,
-                **toolz.merge(self.server.__dict__, ns, self.extra)
+                **toolz.merge(self.server.__dict__, ns, self.extra, rel_path_statics),
             )
 
 
@@ -36,7 +38,7 @@ class Worker(RequestHandler):
                 title="Worker: " + worker,
                 scheduler=self.server,
                 Worker=worker,
-                **toolz.merge(self.server.__dict__, ns, self.extra)
+                **toolz.merge(self.server.__dict__, ns, self.extra, rel_path_statics),
             )
 
 
@@ -52,7 +54,7 @@ class Task(RequestHandler):
                 title="Task: " + task,
                 Task=task,
                 scheduler=self.server,
-                **toolz.merge(self.server.__dict__, ns, self.extra)
+                **toolz.merge(self.server.__dict__, ns, self.extra, rel_path_statics),
             )
 
 
@@ -60,7 +62,12 @@ class Logs(RequestHandler):
     def get(self):
         with log_errors():
             logs = self.server.get_logs()
-            self.render("logs.html", title="Logs", logs=logs, **self.extra)
+            self.render(
+                "logs.html",
+                title="Logs",
+                logs=logs,
+                **toolz.merge(self.extra, rel_path_statics),
+            )
 
 
 class WorkerLogs(RequestHandler):
@@ -69,7 +76,12 @@ class WorkerLogs(RequestHandler):
             worker = escape.url_unescape(worker)
             logs = await self.server.get_worker_logs(workers=[worker])
             logs = logs[worker]
-            self.render("logs.html", title="Logs: " + worker, logs=logs, **self.extra)
+            self.render(
+                "logs.html",
+                title="Logs: " + worker,
+                logs=logs,
+                **toolz.merge(self.extra, rel_path_statics),
+            )
 
 
 class WorkerCallStacks(RequestHandler):
@@ -82,7 +94,7 @@ class WorkerCallStacks(RequestHandler):
                 "call-stack.html",
                 title="Call Stacks: " + worker,
                 call_stack=call_stack,
-                **self.extra
+                **toolz.merge(self.extra, rel_path_statics),
             )
 
 
@@ -101,7 +113,7 @@ class TaskCallStack(RequestHandler):
                     "call-stack.html",
                     title="Call Stack: " + key,
                     call_stack=call_stack,
-                    **self.extra
+                    **toolz.merge(self.extra, rel_path_statics),
                 )
 
 

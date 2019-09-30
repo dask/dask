@@ -4,6 +4,7 @@ recursive-include distributed *.coffee
 recursive-include distributed *.html
 recursive-include distributed *.css
 recursive-include distributed *.svg
+recursive-include distributed *.ico
 recursive-include distributed *.yaml
 recursive-include docs *.rst
 
