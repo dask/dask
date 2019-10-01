@@ -187,6 +187,7 @@ Top level user functions:
    tril
    triu
    trunc
+   unify_chunks
    unique
    unravel_index
    var

@@ -3074,6 +3074,10 @@ def unify_chunks(*args, **kwargs):
     """
     Unify chunks across a sequence of arrays
 
+    This utility function is used within other common operations like
+    ``map_blocks`` and ``blockwise``.  It is not commonly used by end-users
+    directly.
+
     Parameters
     ----------
     *args: sequence of Array, index pairs
