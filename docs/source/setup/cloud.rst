@@ -11,7 +11,7 @@ You may want to consider the following options:
 2.  A managed Yarn service,
     like `Amazon EMR <https://aws.amazon.com/emr/>`_
     or `Google Cloud DataProc <https://cloud.google.com/dataproc/>`_
-    and :doc:`Dask-Yarn <yarn.ask.org>`_.
+    and `Dask-Yarn <https://yarn.dask.org>`_.
 
     Specific documentation for the popular Amazon EMR service can be found
     `here <https://yarn.dask.org/en/latest/aws-emr.html>`_
