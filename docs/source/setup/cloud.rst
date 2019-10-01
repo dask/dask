@@ -16,7 +16,7 @@ You may want to consider the following options:
     Specific documentation for the popular Amazon EMR service can be found
     `here <https://yarn.dask.org/en/latest/aws-emr.html>`_
 3.  Vendor specific services, like Amazon ECS, and
-    `Dask Cloudprovider <https://cloudprovider.dask.org/en/latest/>`_
+    `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_
 
 Data Access
 -----------
