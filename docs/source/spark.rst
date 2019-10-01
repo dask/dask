@@ -18,153 +18,84 @@ has fewer features and, instead, is used in conjunction with other libraries,
 particularly those in the numeric Python ecosystem.  It couples with libraries
 like Pandas or Scikit-Learn to achieve high-level functionality.
 
-Language
-^^^^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Written in Python and only really supports    | Written in Scala with some support for Python and R.|
-| Python. It interoperates well with C/C++/     | It interoperates well with other JVM code.          |
-| Fortran/LLVM or other natively compiled       |                                                     |
-| code linked through Python.                   |                                                     |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Ecosystem
-^^^^^^^^^
-
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| A component of the larger Python ecosystem.   | An all-in-one project that has inspired its own     |
-|                                               | ecosystem.                                          |
-|                                               |                                                     |
-| It couples with and enhances other libraries  | It integrates well with many other Apache           |
-| like NumPy, Pandas, and Scikit-Learn          | projects.                                           |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Age and trust
-^^^^^^^^^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Dask is younger (since 2014) and is an        | Spark is older (since 2010) and has become a        |
-| extension of the well trusted NumPy/Pandas    | dominant and  well-trusted tool in the Big          |
-| /Scikit-learn/Jupyter stack.                  | Data enterprise world.                              |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Scope
-^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Applied more generally both to business       | More focused on traditional business intelligence   |
-| intelligence  applications, as well as a      | operations like SQL and lightweight machine         |
-| number of scientific and custom situations.   | learning.                                           |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Internal Design
-^^^^^^^^^^^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Lower level, and so lacks high level          | Higher level, providing good high level             |
-| optimizations, but is able to implement more  | optimizations on uniformly applied computations,    |
-| sophisticated algorithms and build more       | but lacking flexibility for more complex algorithms |
-| complex bespoke systems.                      | or ad-hoc systems.                                  |
-|                                               |                                                     |
-| It is fundamentally based on generic          | It is fundamentally an extension of the             |
-| task scheduling.                              | Map-Shuffle-Reduce paradigm.                        |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Scale
-^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Scales from a single node to thousand-node    | Scales from a single node to thousand-node          |
-| clusters.                                     | clusters.                                           |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Dataframe API
-^^^^^^^^^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Reuses the Pandas API and memory model.       | Has its own API and memory model.                   |
-| It implements neither SQL nor a query         | It also implements a large subset of the SQL        |
-| optimizer. It is able to do random access,    | language.  Spark includes a high-level query        |
-| efficient time series operations, and other   | optimizer for complex queries.                      |
-| Pandas-style indexed operations.              |                                                     |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Machine Learning
-^^^^^^^^^^^^^^^^
-
-+-----------------------------------------------+-----------------------------------------------------+
-|  *Dask*                                       |  *Spark*                                            |
-+-----------------------------------------------+-----------------------------------------------------+
-| Relies on and interoperates with existing     | Spark MLLib is a cohesive project with support for  |
-| libraries like Scikit-Learn and XGBoost.      | common operations that are easy to implement with   |
-| These can be more familiar or higher          | Spark's Map-Shuffle-Reduce style  system.  People   |
-| performance, but generally results in a       | considering MLLib might also want to consider       |
-| less-cohesive whole.  See the `dask-ml`_      | *other* JVM-based machine learning libraries like   |
-| project for integrations.                     | H2O, which may have better performance.             |
-+-----------------------------------------------+-----------------------------------------------------+
-
-Array API
-^^^^^^^^^
-
-+--------------------------------------------------+--------------------------------------------------------+
-|  *Dask*                                          |  *Spark*                                               |
-+--------------------------------------------------+--------------------------------------------------------+
-| Fully supports the NumPy model for               | Does not include support for multi-dimensional         |
-| :doc:`scalable multi-dimensional arrays <array>`.| arrays natively (this would be challenging given       |
-|                                                  | their computation model), although some support for    |
-|                                                  | two-dimensional matrices may be found in MLLib.        |
-|                                                  | People may also want to look at the                    |
-|                                                  | `Thunder <https://github.com/thunder-project/thunder>`_|
-|                                                  | project, which combines Apache Spark with NumPy arrays.|
-+--------------------------------------------------+--------------------------------------------------------+
-
-Streaming API
-^^^^^^^^^^^^^
-
-+--------------------------------------------------------+--------------------------------------------------------+
-|  *Dask*                                                |  *Spark*                                               |
-+--------------------------------------------------------+--------------------------------------------------------+
-| Provides a :doc:`real-time futures interface <futures>`| Support for streaming data is first-class and          |
-| that is lower-level than Spark streaming. This enables | integrates well into their other APIs. It follows      |
-| more creative and complex use-cases, but requires      | a mini-batch approach.  This provides decent           |
-| more work than Spark streaming.                        | performance on large uniform streaming operations.     |
-+--------------------------------------------------------+--------------------------------------------------------+
-
-Graphs / complex networks
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-+--------------------------------------------------------+--------------------------------------------------------+
-|  *Dask*                                                |  *Spark*                                               |
-+--------------------------------------------------------+--------------------------------------------------------+
-| Provides no such library.                              | Provides GraphX, a library for graph processing.       |
-+--------------------------------------------------------+--------------------------------------------------------+
-
-Custom parallelism
-^^^^^^^^^^^^^^^^^^
-
-+--------------------------------------------------------+--------------------------------------------------------+
-|  *Dask*                                                |  *Spark*                                               |
-+--------------------------------------------------------+--------------------------------------------------------+
-| Allows you to specify arbitrary task graphs for more   | Generally expects users to compose computations out    |
-| complex and custom systems that are not part of the    | of their high-level primitives (map, reduce, groupby,  |
-| standard set of collections.                           | join, ...).  It is also possible to extend Spark       |
-|                                                        | through subclassing RDDs, although this is rarely done.|
-+--------------------------------------------------------+--------------------------------------------------------+
+- Language
+    - Spark is written in Scala with some support for Python and R.  It
+      interoperates well with other JVM code.
+    - Dask is written in Python and only really supports Python.  It
+      interoperates well with C/C++/Fortran/LLVM or other natively compiled
+      code linked through Python.
+- Ecosystem
+    - Spark is an all-in-one project that has inspired its own ecosystem.  It
+      integrates well with many other Apache projects.
+    - Dask is a component of the larger Python ecosystem.  It couples with and
+      enhances other libraries like NumPy, Pandas, and Scikit-Learn.
+- Age and Trust
+    - Spark is older (since 2010) and has become a dominant and
+      well-trusted tool in the Big Data enterprise world.
+    - Dask is younger (since 2014) and is an extension of the
+      well trusted NumPy/Pandas/Scikit-learn/Jupyter stack.
+- Scope
+    - Spark is more focused on traditional business intelligence
+      operations like SQL and lightweight machine learning.
+    - Dask is applied more generally both to business intelligence
+      applications, as well as a number of scientific and custom situations.
+- Internal Design
+    - Spark's internal model is higher level, providing good high level
+      optimizations on uniformly applied computations, but lacking flexibility
+      for more complex algorithms or ad-hoc systems.  It is fundamentally an
+      extension of the Map-Shuffle-Reduce paradigm.
+    - Dask's internal model is lower level, and so lacks high level
+      optimizations, but is able to implement more sophisticated algorithms and
+      build more complex bespoke systems.  It is fundamentally based on generic
+      task scheduling.
+- Scale
+    - Spark scales from a single node to thousand-node clusters.
+    - Dask scales from a single node to thousand-node clusters.
+- APIs
+    - DataFrames
+        - Spark DataFrame has its own API and memory model.  It also
+          implements a large subset of the SQL language.  Spark includes a
+          high-level query optimizer for complex queries.
+        - Dask DataFrame reuses the Pandas API and memory model.  It implements
+          neither SQL nor a query optimizer.  It is able to do random access,
+          efficient time series operations, and other Pandas-style indexed
+          operations.
+    - Machine Learning
+        - Spark MLLib is a cohesive project with support for common operations
+          that are easy to implement with Spark's Map-Shuffle-Reduce style
+          system.  People considering MLLib might also want to consider *other*
+          JVM-based machine learning libraries like H2O, which may have better
+          performance.
+        - Dask relies on and interoperates with existing libraries like
+          Scikit-Learn and XGBoost.  These can be more familiar or higher
+          performance, but generally results in a less-cohesive whole.  See the
+          `dask-ml`_ project for integrations.
+    - Arrays
+        - Spark does not include support for multi-dimensional arrays natively
+          (this would be challenging given their computation model), although
+          some support for two-dimensional matrices may be found in MLLib.
+          People may also want to look at the `Thunder
+          <https://github.com/thunder-project/thunder>`_ project, which
+          combines Apache Spark with NumPy arrays.
+        - Dask fully supports the NumPy model for :doc:`scalable multi-dimensional
+          arrays <array>`.
+    - Streaming
+        - Spark's support for streaming data is first-class and integrates well
+          into their other APIs.  It follows a mini-batch approach.  This
+          provides decent performance on large uniform streaming operations.
+        - Dask provides a :doc:`real-time futures interface <futures>` that is
+          lower-level than Spark streaming.  This enables more creative and
+          complex use-cases, but requires more work than Spark streaming.
+    - Graphs / complex networks
+        - Spark provides GraphX, a library for graph processing.
+        - Dask provides no such library.
+    - Custom parallelism
+        - Spark generally expects users to compose computations out of their
+          high-level primitives (map, reduce, groupby, join, ...).  It is also
+          possible to extend Spark through subclassing RDDs, although this is
+          rarely done.
+        - Dask allows you to specify arbitrary task graphs for more complex and
+          custom systems that are not part of the standard set of collections.
 
 .. _dask-ml: https://ml.dask.org
 
