@@ -183,5 +183,12 @@ def gpu_utilization_doc(scheduler, extra, doc):
     doc.theme = BOKEH_THEME
 
 
-applications["/individual-gpu-memory"] = gpu_memory_doc
-applications["/individual-gpu-utilization"] = gpu_utilization_doc
+try:
+    import pynvml
+
+    pynvml.nvmlInit()
+except Exception:
+    pass
+else:
+    applications["/individual-gpu-memory"] = gpu_memory_doc
+    applications["/individual-gpu-utilization"] = gpu_utilization_doc

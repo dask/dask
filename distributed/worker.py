@@ -20,9 +20,9 @@ from dask.compatibility import apply
 from dask.utils import format_bytes, funcname
 
 try:
-    from cytoolz import pluck, partial, merge, first
+    from cytoolz import pluck, partial, merge, first, keymap
 except ImportError:
-    from toolz import pluck, partial, merge, first
+    from toolz import pluck, partial, merge, first, keymap
 from tornado import gen
 from tornado.ioloop import IOLoop
 
@@ -416,6 +416,10 @@ class Worker(ServerNode):
         self.outgoing_current_count = 0
         self.repetitively_busy = 0
         self.bandwidth = parse_bytes(dask.config.get("distributed.scheduler.bandwidth"))
+        self.bandwidth_workers = defaultdict(
+            lambda: (0, 0)
+        )  # bw/count recent transfers
+        self.bandwidth_types = defaultdict(lambda: (0, 0))  # bw/count recent transfers
         self.latency = 0.001
         self._client = None
 
@@ -728,7 +732,11 @@ class Worker(ServerNode):
             in_memory=len(self.data),
             ready=len(self.ready),
             in_flight=len(self.in_flight_tasks),
-            bandwidth=self.bandwidth,
+            bandwidth={
+                "total": self.bandwidth,
+                "workers": dict(self.bandwidth_workers),
+                "types": keymap(typename, self.bandwidth_types),
+            },
         )
         custom = {}
         for k, metric in self.metrics.items():
@@ -881,6 +889,8 @@ class Worker(ServerNode):
                 self.periodic_callbacks["heartbeat"].callback_time = (
                     response["heartbeat-interval"] * 1000
                 )
+                self.bandwidth_workers.clear()
+                self.bandwidth_types.clear()
             except CommClosedError:
                 logger.warning("Heartbeat to scheduler failed")
             finally:
@@ -1920,8 +1930,17 @@ class Worker(ServerNode):
                         "who": worker,
                     }
                 )
-                if total_bytes > 10000:
+                if total_bytes > 1000000:
                     self.bandwidth = self.bandwidth * 0.95 + bandwidth * 0.05
+                    bw, cnt = self.bandwidth_workers[worker]
+                    self.bandwidth_workers[worker] = (bw + bandwidth, cnt + 1)
+
+                    types = set(map(type, response["data"].values()))
+                    if len(types) == 1:
+                        [typ] = types
+                        bw, cnt = self.bandwidth_types[typ]
+                        self.bandwidth_types[typ] = (bw + bandwidth, cnt + 1)
+
                 if self.digests is not None:
                     self.digests["transfer-bandwidth"].add(total_bytes / duration)
                     self.digests["transfer-duration"].add(duration)

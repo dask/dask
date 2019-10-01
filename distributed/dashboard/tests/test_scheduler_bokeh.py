@@ -664,6 +664,11 @@ def test_https_support(c, s, a, b):
     ctx.load_verify_locations(get_cert("tls-ca-cert.pem"))
 
     http_client = AsyncHTTPClient()
+    response = yield http_client.fetch(
+        "https://localhost:%d/individual-plots.json" % port, ssl_options=ctx
+    )
+    response = json.loads(response.body.decode())
+
     for suffix in [
         "system",
         "counters",
@@ -672,13 +677,7 @@ def test_https_support(c, s, a, b):
         "tasks",
         "stealing",
         "graph",
-        "individual-task-stream",
-        "individual-progress",
-        "individual-graph",
-        "individual-nbytes",
-        "individual-nprocessing",
-        "individual-profile",
-    ]:
+    ] + [url.strip("/") for url in response.values()]:
         req = HTTPRequest(
             url="https://localhost:%d/%s" % (port, suffix), ssl_options=ctx
         )

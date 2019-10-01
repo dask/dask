@@ -22,7 +22,7 @@ from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
-from distributed.utils import tmpfile
+from distributed.utils import tmpfile, typename
 from distributed.utils_test import (  # noqa: F401
     captured_logger,
     cleanup,
@@ -1515,14 +1515,38 @@ def test_idle_timeout(c, s, a, b):
 
 
 @gen_cluster(client=True, config={"distributed.scheduler.bandwidth": "100 GB"})
-def test_bandwidth(c, s, a, b):
+async def test_bandwidth(c, s, a, b):
     start = s.bandwidth
-    x = c.submit(operator.mul, b"0", 20000, workers=a.address)
+    x = c.submit(operator.mul, b"0", 1000000, workers=a.address)
     y = c.submit(lambda x: x, x, workers=b.address)
-    yield y
-    yield b.heartbeat()
+    await y
+    await b.heartbeat()
     assert s.bandwidth < start  # we've learned that we're slower
     assert b.latency
+    assert typename(bytes) in s.bandwidth_types
+    assert (b.address, a.address) in s.bandwidth_workers
+
+    await a.close()
+    assert not s.bandwidth_workers
+
+
+@gen_cluster(client=True, Worker=Nanny)
+async def test_bandwidth_clear(c, s, a, b):
+    np = pytest.importorskip("numpy")
+    x = c.submit(np.arange, 1000000, workers=[a.worker_address], pure=False)
+    y = c.submit(np.arange, 1000000, workers=[b.worker_address], pure=False)
+    z = c.submit(operator.add, x, y)  # force communication
+    await z
+
+    async def f(dask_worker):
+        await dask_worker.heartbeat()
+
+    await c.run(f)
+
+    assert s.bandwidth_workers
+
+    await s.restart()
+    assert not s.bandwidth_workers
 
 
 @gen_cluster()
