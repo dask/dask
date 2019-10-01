@@ -182,11 +182,16 @@ def async_ssh(cmd_dict):
             )
             return True
 
+    # Get transport to current SSH client
+    transport = ssh.get_transport()
+
     # Wait for a message on the input_queue. Any message received signals this
     # thread to shut itself down.
     while cmd_dict["input_queue"].empty():
         # Kill some time so that this thread does not hog the CPU.
         time.sleep(1.0)
+        # Send noise down the pipe to keep connection active
+        transport.send_ignore()
         if communicate():
             break
 
