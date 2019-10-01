@@ -1,21 +1,22 @@
 Cloud Deployments
 =================
 
-To get started running Dask on common Cloud providers like Amazon,
-Google, or Microsoft, we currently recommend deploying
-:doc:`Dask with Kubernetes and Helm <kubernetes-helm>`.
+There are a variety of ways to deploy Dask on cloud providers.
+Cloud providers provide managed services,
+like Kubernetes, Yarn, or custom APIs with which Dask can connect easily.
+You may want to consider the following options:
 
-All three major cloud vendors now provide managed Kubernetes services.
-This allows us to reliably provide the same experience across all clouds,
-and ensures that solutions for any one provider remain up-to-date.
+1.  A managed Kubernetes service and Dask's
+    :doc:`Kubernetes and Helm integraation <kubernetes-helm>`.
+2.  A managed Yarn service,
+    like `Amazon EMR <https://aws.amazon.com/emr/>`_
+    or `Google Cloud DataProc <https://cloud.google.com/dataproc/>`_
+    and `Dask-Yarn <https://yarn.dask.org>`_.
 
-Alternatively, if you are deploying on a cloud-hosted Hadoop cluster like
-`Amazon EMR <https://aws.amazon.com/emr/>`_ or `Google Cloud DataProc
-<https://cloud.google.com/dataproc/>`_, you will want to use `Dask-Yarn
-<https://yarn.dask.org/>`_. Documentation on deploying on Amazon EMR
-specifically can be found `here
-<https://yarn.dask.org/en/latest/aws-emr.html>`_, the process is similar for
-Google Cloud DataProc.
+    Specific documentation for the popular Amazon EMR service can be found
+    `here <https://yarn.dask.org/en/latest/aws-emr.html>`_
+3.  Vendor specific services, like Amazon ECS, and
+    `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_
 
 Data Access
 -----------
@@ -30,8 +31,10 @@ to access the object stores of each cloud:
 Historical Libraries
 --------------------
 
-Dask previously maintained libraries for deploying Dask on Amazon's EC2.
-Due to sporadic interest, and churn both within the Dask library and EC2 itself,
+Dask previously maintained libraries for deploying Dask on
+Amazon's EC2 and Google GKE.
+Due to sporadic interest,
+and churn both within the Dask library and EC2 itself,
 these were not well maintained.
 They have since been deprecated in favor of the
 :doc:`Kubernetes and Helm <kubernetes-helm>` solution.
