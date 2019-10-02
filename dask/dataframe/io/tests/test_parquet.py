@@ -12,6 +12,8 @@ import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
+from dask.dataframe.optimize import optimize_read_parquet_getitem
+from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.utils import natural_sort_key
 
 try:
@@ -2005,3 +2007,38 @@ def test_graph_size_pyarrow(tmpdir, engine):
     ddf2 = dd.read_parquet(fn, engine=engine)
 
     assert len(pickle.dumps(ddf2.__dask_graph__())) < 10000
+
+
+def test_getitem_optimization(tmpdir, engine):
+    df = pd.DataFrame({"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    ddf = dd.read_parquet(fn, engine=engine)["B"]
+
+    dsk = optimize_read_parquet_getitem(ddf.dask)
+    get, read = list(dsk.layers)
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == ["B"]
+
+    assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
+
+
+def test_getitem_optimization_multi(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    a = dd.read_parquet(fn, engine=engine)["B"]
+    b = dd.read_parquet(fn, engine=engine)[["C"]]
+    c = dd.read_parquet(fn, engine=engine)[["C", "A"]]
+
+    a1, a2, a3 = dask.compute(a, b, c)
+    b1, b2, b3 = dask.compute(a, b, c, optimize_graph=False)
+
+    assert_eq(a1, b1)
+    assert_eq(a2, b2)
+    assert_eq(a3, b3)

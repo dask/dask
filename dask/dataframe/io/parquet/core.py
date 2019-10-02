@@ -44,7 +44,7 @@ class ParquetSubgraph(Mapping):
         (...)
         """
         name, i = key
-        assert name == self.name
+        # assert name == self.name
         part = self.parts[i]
         return (
             read_parquet_part,
