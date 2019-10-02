@@ -778,6 +778,37 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
 
 
 def fuse_roots(graph: HighLevelGraph, keys: list):
+    """
+    Fuse nearby layers if they don't have dependencies
+
+    Often Blockwise sections of the graph fill out all of the computation
+    except for the initial data access or data loading layers::
+
+      Large Blockwise Layer
+        |       |       |
+        X       Y       Z
+
+    This can be troublesome because X, Y, and Z tasks may be executed on
+    different machines, and then require communication to move around.
+
+    This optimization identifies this situation, lowers all of the graphs to
+    concrete dicts, and then calls ``fuse`` on them, with a width equal to the
+    number of layers like X, Y, and Z.
+
+    This is currently used within array and dataframe optimizations.
+
+    Parameters
+    ----------
+    graph: HighLevelGraph
+        The full graph of the computation
+    keys: list
+        The output keys of the comptuation, to be passed on to fuse
+
+    See Also
+    --------
+    Blockwise
+    fuse
+    """
     layers = graph.layers.copy()
     dependencies = graph.dependencies.copy()
 

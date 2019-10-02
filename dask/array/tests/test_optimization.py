@@ -398,3 +398,4 @@ def test_fuse_roots():
     (zz,) = dask.optimize(z)
     # assert len(zz.dask) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
+    assert_eq(zz, z)
