@@ -1229,9 +1229,14 @@ class _GroupBy(object):
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1, min_count=None):
+    def sum(self, split_every=None, split_out=1, min_count=None, sort=True):
         result = self._aca_agg(
-            token="sum", func=M.sum, split_every=split_every, split_out=split_out
+            token="sum",
+            func=M.sum,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs={"sort": False},
+            aggregate_kwargs={"sort": sort},
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1239,9 +1244,14 @@ class _GroupBy(object):
             return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def prod(self, split_every=None, split_out=1, min_count=None):
+    def prod(self, split_every=None, split_out=1, min_count=None, sort=True):
         result = self._aca_agg(
-            token="prod", func=M.prod, split_every=split_every, split_out=split_out
+            token="prod",
+            func=M.prod,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs={"sort": False},
+            aggregate_kwargs={"sort": sort},
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1249,15 +1259,25 @@ class _GroupBy(object):
             return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def min(self, split_every=None, split_out=1):
+    def min(self, split_every=None, split_out=1, sort=True):
         return self._aca_agg(
-            token="min", func=M.min, split_every=split_every, split_out=split_out
+            token="min",
+            func=M.min,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs={"sort": False},
+            aggregate_kwargs={"sort": sort},
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def max(self, split_every=None, split_out=1):
+    def max(self, split_every=None, split_out=1, sort=True):
         return self._aca_agg(
-            token="max", func=M.max, split_every=split_every, split_out=split_out
+            token="max",
+            func=M.max,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs={"sort": False},
+            aggregate_kwargs={"sort": sort},
         )
 
     @derived_from(pd.DataFrame)

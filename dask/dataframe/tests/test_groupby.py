@@ -8,6 +8,7 @@ import pandas.util.testing as tm
 import pytest
 
 import dask
+from dask.utils import M
 import dask.dataframe as dd
 from dask.dataframe.utils import (
     assert_eq,
@@ -2148,3 +2149,16 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
                 lambda series: series - series.mean()
             ),
         )
+
+
+@pytest.mark.parametrize("agg", [M.sum, M.prod, M.max, M.min])
+def test_groupby_sort_false(agg):
+    df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = agg(ddf.groupby("x"), sort=False)
+
+    assert_eq(result, result)
+    ind = list(result.compute(scheduler="sync").index)
+    assert ind != sorted(ind)
+    assert set(ind) == {1, 2, 3, 4}
