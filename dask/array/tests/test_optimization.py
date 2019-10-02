@@ -389,3 +389,12 @@ def test_double_dependencies():
     X = da.dot(X, X.T)
 
     assert_eq(X.compute(optimize_graph=False), X)
+
+
+def test_fuse_roots():
+    x = da.ones(10, chunks=(2,))
+    y = da.zeros(10, chunks=(2,))
+    z = (x + 1) + (2 * y ** 2)
+    (zz,) = dask.optimize(z)
+    # assert len(zz.dask) == 5
+    assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases

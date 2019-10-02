@@ -12,7 +12,7 @@ except ImportError:
 from .core import reverse_dict
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
-from .optimization import SubgraphCallable
+from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
@@ -775,3 +775,26 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)
+
+
+def fuse_roots(graph: HighLevelGraph, keys: list):
+    layers = graph.layers.copy()
+    dependencies = graph.dependencies.copy()
+
+    for name, layer in graph.layers.items():
+        deps = graph.dependencies[name]
+        if (
+            isinstance(layer, Blockwise)
+            and len(deps) > 1
+            and not any(dependencies[dep] for dep in deps)  # no need to fuse if 0 or 1
+        ):
+            new = toolz.merge(layer, *[layers[dep] for dep in deps])
+            new, _ = fuse(new, keys, ave_width=len(deps))
+
+            for dep in deps:
+                del layers[dep]
+
+            layers[name] = new
+            dependencies[name] = set()
+
+    return HighLevelGraph(layers, dependencies)

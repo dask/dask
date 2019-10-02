@@ -3,13 +3,14 @@ from ..optimization import cull, fuse_getitem, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
-from ..blockwise import optimize_blockwise
+from ..blockwise import optimize_blockwise, fuse_roots
 
 
 def optimize(dsk, keys, **kwargs):
 
     if isinstance(dsk, HighLevelGraph):
         dsk = optimize_blockwise(dsk, keys=list(core.flatten(keys)))
+        dsk = fuse_roots(dsk, keys=list(core.flatten(keys)))
 
     dsk = ensure_dict(dsk)
     from .io import dataframe_from_ctable
