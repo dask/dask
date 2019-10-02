@@ -9,6 +9,7 @@ from fsspec.utils import stringify_path
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....utils import import_required, natural_sort_key
+from collections.abc import Mapping
 
 
 try:
@@ -23,6 +24,45 @@ __all__ = ("read_parquet", "to_parquet")
 
 # ----------------------------------------------------------------------
 # User API
+
+
+class ParquetSubgraph(Mapping):
+    def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
+        self.name = name
+        self.engine = engine
+        self.fs = fs
+        self.meta = meta
+        self.columns = columns
+        self.index = index
+        self.parts = parts
+        self.kwargs = kwargs
+
+    def __getitem__(self, key):
+        """
+        >>> d = ParquetSubgraph(...)
+        >>> d[('name', 0)]
+        (...)
+        """
+        name, i = key
+        assert name == self.name
+        part = self.parts[i]
+        return (
+            read_parquet_part,
+            self.engine.read_partition,
+            self.fs,
+            self.meta,
+            part["piece"],
+            self.columns,
+            self.index,
+            toolz.merge(part["kwargs"], self.kwargs or {}),
+        )
+
+    def __len__(self):
+        return len(self.parts)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield (self.name, i)
 
 
 def read_parquet(
@@ -265,19 +305,7 @@ def read_parquet(
         z.update(y)
         return z
 
-    subgraph = {
-        (name, i): (
-            read_parquet_part,
-            engine.read_partition,
-            fs,
-            meta,
-            part["piece"],
-            columns,
-            index,
-            _merge_kwargs(part["kwargs"], kwargs or {}),
-        )
-        for i, part in enumerate(parts)
-    }
+    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
