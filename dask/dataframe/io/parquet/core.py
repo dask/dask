@@ -44,8 +44,12 @@ class ParquetSubgraph(Mapping):
         (...)
         """
         name, i = key
-        # assert name == self.name
+
+        if name != self.name:
+            raise KeyError(key)
+
         part = self.parts[i]
+
         return (
             read_parquet_part,
             self.engine.read_partition,

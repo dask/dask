@@ -24,6 +24,10 @@ def optimize(dsk, keys, **kwargs):
         dsk, dependencies = cull(dsk, [keys])
     dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
 
+    from .io.parquet import read_parquet_part
+
+    dsk = fuse_getitem(dsk, read_parquet_part, 4)
+
     dsk, dependencies = fuse(
         dsk,
         keys,
@@ -65,12 +69,20 @@ def optimize_read_parquet_getitem(dsk):
             columns |= block_columns
 
         old = layers_dict[k]
+
+        if columns:
+            columns = list(columns)
+            meta = old.meta[columns]
+        else:
+            meta = old.meta
+            columns = list(meta.columns)
+
         new = ParquetSubgraph(
             old.name,
             old.engine,
             old.fs,
-            old.meta[list(columns)],
-            list(columns),
+            meta,
+            columns,
             old.index,
             old.parts,
             old.kwargs,

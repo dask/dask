@@ -2036,8 +2036,8 @@ def test_getitem_optimization_multi(tmpdir, engine):
     b = dd.read_parquet(fn, engine=engine)[["C"]]
     c = dd.read_parquet(fn, engine=engine)[["C", "A"]]
 
-    a1, a2, a3 = dask.compute(a, b, c)
-    b1, b2, b3 = dask.compute(a, b, c, optimize_graph=False)
+    a1, a2, a3, = dask.compute(a, b, c)
+    b1, b2, b3, = dask.compute(a, b, c, optimize_graph=False)
 
     assert_eq(a1, b1)
     assert_eq(a2, b2)
