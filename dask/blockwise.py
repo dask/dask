@@ -811,6 +811,7 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
     """
     layers = graph.layers.copy()
     dependencies = graph.dependencies.copy()
+    dependents = reverse_dict(dependencies)
 
     for name, layer in graph.layers.items():
         deps = graph.dependencies[name]
@@ -818,6 +819,7 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             isinstance(layer, Blockwise)
             and len(deps) > 1
             and not any(dependencies[dep] for dep in deps)  # no need to fuse if 0 or 1
+            and all(len(dependents[dep]) == 1 for dep in deps)
         ):
             new = toolz.merge(layer, *[layers[dep] for dep in deps])
             new, _ = fuse(new, keys, ave_width=len(deps))
