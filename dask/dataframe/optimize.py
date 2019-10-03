@@ -44,31 +44,34 @@ def optimize_read_parquet_getitem(dsk):
 
     read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
 
-    layers_dict = dsk.layers.copy()
+    layers = dsk.layers.copy()
 
     for k in read_parquets:
         columns = set()
 
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
+
+            # Check if we're a read_parquet followed by a getitem
             if not isinstance(block, Blockwise):
+                # getitem are Blockwise...
                 return dsk
 
             if len(block.dsk) != 1:
-                # TODO
+                # ... with a single item...
                 return dsk
 
             if list(block.dsk.values())[0][0] != operator.getitem:
+                # ... where this value is __getitem__
                 return dsk
 
-            block_columns = block.indices[1][0]  # like ('B', None)
+            block_columns = block.indices[1][0]
             if isinstance(block_columns, str):
                 block_columns = [block_columns]
 
-            block_columns = set(block_columns)
-            columns |= block_columns
+            columns |= set(block_columns)
 
-        old = layers_dict[k]
+        old = layers[k]
 
         if columns:
             columns = list(columns)
@@ -87,6 +90,6 @@ def optimize_read_parquet_getitem(dsk):
             old.parts,
             old.kwargs,
         )
-        layers_dict[k] = new
+        layers[k] = new
 
-    return HighLevelGraph(layers_dict, dsk.dependencies)
+    return HighLevelGraph(layers, dsk.dependencies)

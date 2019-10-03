@@ -27,6 +27,13 @@ __all__ = ("read_parquet", "to_parquet")
 
 
 class ParquetSubgraph(Mapping):
+    """
+    Subgraph for reading Parquet files.
+
+    Enables optimiziations (see optimize_read_parquet_getitem).
+
+    """
+
     def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
         self.name = name
         self.engine = engine

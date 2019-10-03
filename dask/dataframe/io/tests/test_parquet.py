@@ -2026,6 +2026,20 @@ def test_getitem_optimization(tmpdir, engine):
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
 
+def test_getitem_optimization_empty(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    df2 = dd.read_parquet(fn, columns=[], engine=engine)
+    dsk = optimize_read_parquet_getitem(df2.dask)
+
+    subgraph = list(dsk.layers.values())[0]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == []
+
+
 def test_getitem_optimization_multi(tmpdir, engine):
     df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
     ddf = dd.from_pandas(df, 2)
