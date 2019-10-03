@@ -73,10 +73,12 @@ def optimize_read_parquet_getitem(dsk):
 
         old = layers[k]
 
-        if columns:
+        if columns and columns < set(old.meta.columns):
             columns = list(columns)
             meta = old.meta[columns]
         else:
+            # Things like df[df.A == 'a'], where the argument to
+            # getitem is not a column name
             meta = old.meta
             columns = list(meta.columns)
 
