@@ -511,25 +511,6 @@ def test_names(tmpdir, engine):
     assert set(read(fn, columns=("x",)).dask) == set(read(fn, columns=["x"]).dask)
 
 
-@pytest.mark.xfail(
-    reason="parquet column fusion is special cased today"
-    " we'll need to find a more general solution near-term"
-)
-@pytest.mark.parametrize("c", [["x"], "x", ["x", "y"], []])
-def test_optimize(tmpdir, c):
-    check_fastparquet()
-    fn = str(tmpdir)
-    ddf.to_parquet(fn)
-    ddf2 = dd.read_parquet(fn)
-    assert_eq(df[c], ddf2[c])
-    x = ddf2[c]
-
-    with dask.config.set(fuse_rename_keys=False):
-        dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
-    assert len(dsk) == x.npartitions
-    assert all(v[4] == c for v in dsk.values())
-
-
 @pytest.mark.skipif(
     PANDAS_VERSION < "0.22.0", reason="new pyarrow assumes new-ish pandas versions"
 )
@@ -2056,3 +2037,17 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a1, b1)
     assert_eq(a2, b2)
     assert_eq(a3, b3)
+
+
+def test_subgraph_getitem():
+    meta = pd.DataFrame(columns=["a"])
+    subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})
+
+    with pytest.raises(KeyError):
+        subgraph["foo"]
+
+    with pytest.raises(KeyError):
+        subgraph[("name", -1)]
+
+    with pytest.raises(KeyError):
+        subgraph[("name", 3)]

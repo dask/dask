@@ -31,7 +31,6 @@ class ParquetSubgraph(Mapping):
     Subgraph for reading Parquet files.
 
     Enables optimiziations (see optimize_read_parquet_getitem).
-
     """
 
     def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
@@ -44,15 +43,22 @@ class ParquetSubgraph(Mapping):
         self.parts = parts
         self.kwargs = kwargs
 
+    def __repr__(self):
+        return "ParquetSubgraph<name='{}', n_parts={}>".format(
+            self.name, len(self.parts)
+        )
+
     def __getitem__(self, key):
-        """
-        >>> d = ParquetSubgraph(...)
-        >>> d[('name', 0)]
-        (...)
-        """
-        name, i = key
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
 
         if name != self.name:
+            raise KeyError(key)
+
+        if i < 0 or i >= len(self.parts):
             raise KeyError(key)
 
         part = self.parts[i]
