@@ -1914,6 +1914,7 @@ def test_fillna():
 
     assert_eq(ddf.fillna(100), df.fillna(100))
     assert_eq(ddf.A.fillna(100), df.A.fillna(100))
+    assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
 
     assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"))
     assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"))
