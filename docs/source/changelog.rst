@@ -1,6 +1,28 @@
 Changelog
 =========
 
+2.5.2 / 2019-10-04
+------------------
+
+Array
++++++
+
+-  Correct chunk size logic for asymmetric overlaps (:pr:`5449`) `Ben Jeffery`_
+-  Make da.unify_chunks public API (:pr:`5443`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Fix dask.dataframe.fillna handling of Scalar object (:pr:`5463`) `Zhenqing Li`_
+
+Documentation
++++++++++++++
+
+-  Remove boxes in Spark comparison page (:pr:`5445`) `Matthew Rocklin`_
+-  Add latest presentations (:pr:`5446`) `Javad`_
+-  Update cloud documentation (:pr:`5444`) `Matthew Rocklin`_
+
+
 2.5.0 / 2019-09-27
 ------------------
 
@@ -2539,3 +2561,4 @@ Other
 .. _`Eugene Huang`: https://github.com/eugeneh101
 .. _`Christopher J. Wright`: https://github.com/CJ-Wright
 .. _`Mahmut Bulut`: https://github.com/vertexclique
+.. _`Ben Jeffery`: https://github.com/benjeffery
