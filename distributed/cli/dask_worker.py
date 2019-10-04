@@ -3,7 +3,8 @@ import atexit
 import logging
 import gc
 import os
-from sys import exit
+import signal
+import sys
 import warnings
 
 import click
@@ -267,34 +268,34 @@ def main(
         logger.error(
             "Failed to launch worker.  You cannot use the --port argument when nprocs > 1."
         )
-        exit(1)
+        sys.exit(1)
 
     if nprocs > 1 and not nanny:
         logger.error(
             "Failed to launch worker.  You cannot use the --no-nanny argument when nprocs > 1."
         )
-        exit(1)
+        sys.exit(1)
 
     if contact_address and not listen_address:
         logger.error(
             "Failed to launch worker. "
             "Must specify --listen-address when --contact-address is given"
         )
-        exit(1)
+        sys.exit(1)
 
     if nprocs > 1 and listen_address:
         logger.error(
             "Failed to launch worker. "
             "You cannot specify --listen-address when nprocs > 1."
         )
-        exit(1)
+        sys.exit(1)
 
     if (worker_port or host) and listen_address:
         logger.error(
             "Failed to launch worker. "
             "You cannot specify --listen-address when --worker-port or --host is given."
         )
-        exit(1)
+        sys.exit(1)
 
     try:
         if listen_address:
@@ -308,7 +309,7 @@ def main(
             contact_address = listen_address
     except ValueError as e:
         logger.error("Failed to launch worker. " + str(e))
-        exit(1)
+        sys.exit(1)
 
     if nanny:
         port = nanny_port
@@ -384,8 +385,13 @@ def main(
         if nanny:
             await asyncio.gather(*[n.close(timeout=2) for n in nannies])
 
+    signal_fired = False
+
     def on_signal(signum):
-        logger.info("Exiting on signal %d", signum)
+        nonlocal signal_fired
+        signal_fired = True
+        if signum != signal.SIGINT:
+            logger.info("Exiting on signal %d", signum)
         asyncio.ensure_future(close_all())
 
     async def run():
@@ -398,7 +404,9 @@ def main(
         loop.run_sync(run)
     except TimeoutError:
         # We already log the exception in nanny / worker. Don't do it again.
-        raise TimeoutError("Timed out starting worker.") from None
+        if not signal_fired:
+            logger.info("Timed out starting worker")
+        sys.exit(1)
     except KeyboardInterrupt:
         pass
     finally:

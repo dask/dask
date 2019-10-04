@@ -314,7 +314,7 @@ class Nanny(ServerNode):
                 )
             except gen.TimeoutError:
                 await self.close(timeout=self.death_timeout)
-                logger.exception(
+                logger.error(
                     "Timed out connecting Nanny '%s' to scheduler '%s'",
                     self,
                     self.scheduler_addr,

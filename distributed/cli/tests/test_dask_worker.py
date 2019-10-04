@@ -311,7 +311,6 @@ def test_worker_timeout(no_nanny):
         args.append("--no-nanny")
     result = runner.invoke(distributed.cli.dask_worker.main, args)
     assert result.exit_code != 0
-    assert str(result.exception).startswith("Timed out")
 
 
 def test_bokeh_deprecation():
