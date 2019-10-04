@@ -6097,7 +6097,7 @@ def mapseries(base_chunk, concat_map):
 
 
 def mapseries_combine(index, concat_result):
-    final_series = concat_result.take(index.argsort())
+    final_series = concat_result.sort_index().take(index.argsort())
     return final_series
 
 
