@@ -16,13 +16,12 @@ from ..utils import ensure_ip, get_ip, get_ipv6, nbytes, log_errors
 from tornado.ioloop import IOLoop
 import ucp
 import numpy as np
-import numba.cuda
 
 import os
 
 os.environ.setdefault("UCX_RNDV_SCHEME", "put_zcopy")
 os.environ.setdefault("UCX_MEMTYPE_CACHE", "n")
-os.environ.setdefault("UCX_TLS", "rc,cuda_copy,cuda_ipc")
+os.environ.setdefault("UCX_TLS", "tcp,rc,cuda_copy,cuda_ipc")
 
 logger = logging.getLogger(__name__)
 MAX_MSG_LOG = 23
@@ -31,6 +30,23 @@ MAX_MSG_LOG = 23
 # ----------------------------------------------------------------------------
 # Comm Interface
 # ----------------------------------------------------------------------------
+
+# Let's find the function, `cuda_array`, to use when allocating new CUDA arrays
+try:
+    import rmm
+
+    cuda_array = lambda n: rmm.device_array(n, dtype=np.uint8)
+except ImportError:
+    try:
+        import numba.cuda
+
+        cuda_array = lambda n: numba.cuda.device_array((n,), dtype=np.uint8)
+    except ImportError:
+
+        def cuda_array(n):
+            raise RuntimeError(
+                "In order to send/recv CUDA arrays, Numba or RMM is required"
+            )
 
 
 class UCX(Comm):
@@ -116,12 +132,7 @@ class UCX(Comm):
             # Send frames
             for frame in frames:
                 if nbytes(frame) > 0:
-                    if hasattr(frame, "__array_interface__") or hasattr(
-                        frame, "__cuda_array_interface__"
-                    ):
-                        await self.ep.send(frame)
-                    else:
-                        await self.ep.send(frame)
+                    await self.ep.send(frame)
             return sum(map(nbytes, frames))
 
     async def read(self, deserializers=("cuda", "dask", "pickle", "error")):
@@ -152,17 +163,14 @@ class UCX(Comm):
                 for is_cuda, size in zip(is_cudas.tolist(), sizes.tolist()):
                     if size > 0:
                         if is_cuda:
-                            frame = numba.cuda.device_array((size,), dtype=np.uint8)
+                            frame = cuda_array(size)
                         else:
                             frame = np.empty(size, dtype=np.uint8)
                         await self.ep.recv(frame)
-                        if is_cuda:
-                            frames.append(frame)
-                        else:
-                            frames.append(frame.data)
+                        frames.append(frame)
                     else:
                         if is_cuda:
-                            frames.append(numba.cuda.device_array((0,), dtype=np.uint8))
+                            frames.append(cuda_array(size))
                         else:
                             frames.append(b"")
                 msg = await from_frames(
