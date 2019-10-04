@@ -1128,6 +1128,8 @@ Dask Name: {name}, {task} tasks""".format(
             raise NotImplementedError("fillna with set limit and method=None")
         if isinstance(value, _Frame):
             test_value = value._meta_nonempty.values[0]
+        elif isinstance(value, Scalar):
+            test_value = value._meta_nonempty
         else:
             test_value = value
         meta = self._meta_nonempty.fillna(
