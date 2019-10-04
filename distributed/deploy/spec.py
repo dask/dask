@@ -77,6 +77,19 @@ class ProcessInterface:
         await self.close()
 
 
+class NoOpAwaitable(object):
+    """An awaitable object that always returns None.
+
+    Useful to return from a method that can be called in both asynchronous and
+    synchronous contexts"""
+
+    def __await__(self):
+        async def f():
+            return None
+
+        return f().__await__()
+
+
 class SpecCluster(Cluster):
     """ Cluster that requires a full specification of workers
 
@@ -418,14 +431,14 @@ class SpecCluster(Cluster):
         while len(self.worker_spec) > n:
             self.worker_spec.popitem()
 
-        if self.status in ("closing", "closed"):
-            self.loop.add_callback(self._correct_state)
-            return
-
-        while len(self.worker_spec) < n:
-            self.worker_spec.update(self.new_worker_spec())
+        if self.status not in ("closing", "closed"):
+            while len(self.worker_spec) < n:
+                self.worker_spec.update(self.new_worker_spec())
 
         self.loop.add_callback(self._correct_state)
+
+        if self.asynchronous:
+            return NoOpAwaitable()
 
     def new_worker_spec(self):
         """ Return name and spec for the next worker

@@ -125,6 +125,11 @@ async def test_scale(cleanup):
         await cluster
         assert len(cluster.workers) == 1
 
+        # Can use with await
+        await cluster.scale(2)
+        await cluster
+        assert len(cluster.workers) == 2
+
 
 @pytest.mark.asyncio
 async def test_unexpected_closed_worker(cleanup):
