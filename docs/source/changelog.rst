@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2.5.2 - 2019-10-04
+------------------
+
+-  Make dask-worker close quietly when given sigint signal (:pr:`3116`) `Matthew Rocklin`_
+-  Replace use of tornado.gen with asyncio in dask-worker (:pr:`3114`) `Matthew Rocklin`_
+-  UCX: allocate CUDA arrays using RMM and Numba (:pr:`3109`) `Mads R. B. Kristensen`_
+-  Support calling `cluster.scale` as async method (:pr:`3110`) `Jim Crist`_
+-  Identify lost workers in SpecCluster based on address not name (:pr:`3088`) `James Bourbeau`_
+-  Add Client.shutdown method (:pr:`3106`) `Matthew Rocklin`_
+-  Collect worker-worker and type bandwidth information (:pr:`3094`) `Matthew Rocklin`_
+-  Send noise over the wire to keep dask-ssh connection alive (:pr:`3105`) `Gil Forsyth`_
+-  Retry scheduler connect multiple times (:pr:`3104`) `Jacob Tomlinson`_
+-  Add favicon of logo to the dashboard (:pr:`3095`) `James Bourbeau`_
+-  Remove utils.py functions for their dask/utils.py equivalents (:pr:`3042`) `Matthew Rocklin`_
+-  Lower default bokeh log level (:pr:`3087`) `Philipp Rudiger`_
+-  Check if self.cluster.scheduler is a local scheduler (:pr:`3099`) `Jacob Tomlinson`_
+
 
 2.5.1 - 2019-09-27
 ------------------
@@ -1296,3 +1313,5 @@ significantly without many new features.
 .. _`Mohammad Noor`: https://github.com/MdSalih
 .. _`Richard J Zamora`: https://github.com/rjzamora
 .. _`Arpit Solanki`: https://github.com/arpit1997
+.. _`Gil Forsyth`: https://github.com/gforsyth
+.. _`Philipp Rudiger`: https://github.com/philippjfr
