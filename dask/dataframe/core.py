@@ -6098,7 +6098,7 @@ def mapseries(base_chunk, concat_map):
 
 def mapseries_combine(index, concat_result):
     final_series = concat_result.sort_index()
-    final_series = pd.Series(index, index=index).map(final_series)
+    final_series = index.to_series().map(final_series)
     return final_series
 
 
