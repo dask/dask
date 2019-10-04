@@ -1,3 +1,4 @@
+import asyncio
 import atexit
 import logging
 import gc
@@ -21,7 +22,6 @@ from distributed.proctitle import (
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
-from tornado import gen
 
 logger = logging.getLogger("distributed.dask_worker")
 
@@ -379,20 +379,18 @@ def main(
         for i in range(nprocs)
     ]
 
-    @gen.coroutine
-    def close_all():
+    async def close_all():
         # Unregister all workers from scheduler
         if nanny:
-            yield [n.close(timeout=2) for n in nannies]
+            await asyncio.gather(*[n.close(timeout=2) for n in nannies])
 
     def on_signal(signum):
         logger.info("Exiting on signal %d", signum)
-        close_all()
+        asyncio.ensure_future(close_all())
 
-    @gen.coroutine
-    def run():
-        yield nannies
-        yield [n.finished() for n in nannies]
+    async def run():
+        await asyncio.gather(*nannies)
+        await asyncio.gather(*[n.finished() for n in nannies])
 
     install_signal_handlers(loop, cleanup=on_signal)
 
