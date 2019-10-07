@@ -215,7 +215,7 @@ def text_blocks_to_pandas(
     """
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues
-    # in coerce_dtypes for non-uniform categories accross partitions.
+    # in coerce_dtypes for non-uniform categories across partitions.
     # We will modify `dtype` (which is inferred) to
     # 1. contain instances of CategoricalDtypes for user-provided types
     # 2. contain 'category' for data inferred types
@@ -440,7 +440,7 @@ def read_pandas(
 
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
-    # Use sample to infer dtypes and check for presense of include_path_column
+    # Use sample to infer dtypes and check for presence of include_path_column
     head = reader(BytesIO(b_sample), **kwargs)
     if include_path_column and (include_path_column in head.columns):
         raise ValueError(
