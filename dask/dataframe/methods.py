@@ -4,10 +4,9 @@ import numpy as np
 import pandas as pd
 from pandas.util import hash_pandas_object
 from pandas.api.types import is_categorical_dtype, union_categoricals
-from pandas._libs.algos import groupsort_indexer
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250
+from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250, hash_object_dispatch, group_split_dispatch
 from ..utils import Dispatch
 
 if PANDAS_VERSION >= "0.23":
@@ -480,32 +479,12 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
     return out
 
 
+# cuDF may try to import old dispatch functions
+hash_df = hash_object_dispatch
+group_split = group_split_dispatch
+
+
 def assign_index(df, ind):
     df = df.copy()
     df.index = ind
     return df
-
-
-# ---------------------------------
-# Shuffling/merging/sorting
-# ---------------------------------
-
-
-hash_df = Dispatch("hash_df")
-
-
-@hash_df.register((pd.DataFrame, pd.Series, pd.Index))
-def hash_df_pandas(dfs):
-    return hash_pandas_object(dfs, index=False)
-
-
-group_split = Dispatch("group_split")
-
-
-@group_split.register((pd.DataFrame, pd.Series, pd.Index))
-def group_split_pandas(df, c, k):
-    indexer, locations = groupsort_indexer(c, k)
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-    return dict(zip(range(k), parts))
