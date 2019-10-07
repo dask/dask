@@ -473,6 +473,8 @@ def read_hdf(
         paths = sorted(glob(pattern))
     else:
         paths = pattern
+    if len(paths) == 0:
+        raise FileNotFoundError("No matching file(s) found for path")
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     if chunksize <= 0:
