@@ -3,8 +3,6 @@ A threaded shared-memory scheduler
 
 See local.py
 """
-from __future__ import absolute_import, division, print_function
-
 import sys
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
@@ -55,8 +53,8 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
     (4, 2)
     """
     global default_pool
-    pool = pool or config.get('pool', None)
-    num_workers = num_workers or config.get('num_workers', None)
+    pool = pool or config.get("pool", None)
+    num_workers = num_workers or config.get("num_workers", None)
     thread = current_thread()
 
     with pools_lock:
@@ -71,9 +69,16 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
                 pool = ThreadPool(num_workers)
                 pools[thread][num_workers] = pool
 
-    results = get_async(pool.apply_async, len(pool._pool), dsk, result,
-                        cache=cache, get_id=_thread_get_id,
-                        pack_exception=pack_exception, **kwargs)
+    results = get_async(
+        pool.apply_async,
+        len(pool._pool),
+        dsk,
+        result,
+        cache=cache,
+        get_id=_thread_get_id,
+        pack_exception=pack_exception,
+        **kwargs
+    )
 
     # Cleanup pools associated to dead threads
     with pools_lock:

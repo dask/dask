@@ -6,6 +6,7 @@ Array
    :hidden:
 
    array-api.rst
+   array-best-practices.rst
    array-chunks.rst
    array-creation.rst
    array-overlap.rst
@@ -21,6 +22,16 @@ Dask Array implements a subset of the NumPy ndarray interface using blocked
 algorithms, cutting up the large array into many small arrays. This lets us
 compute on arrays larger than memory using all of our cores.  We coordinate
 these blocked algorithms using Dask graphs.
+
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/9h_61hXCDuI"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
 
 Design
 ------

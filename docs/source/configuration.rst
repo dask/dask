@@ -34,22 +34,29 @@ the ``config`` dictionary or the ``get`` function:
    >>> import dask.distributed  # populate config with distributed defaults
    >>> dask.config.config
    {
-     'logging': {
-       'distributed': 'info',
-       'bokeh': 'critical',
-       'tornado': 'critical',
-     }
-     'admin': {
-       'log-format': '%(name)s - %(levelname)s - %(message)s'
-     }
+       "array": {
+           "chunk-size": "128 MiB",
+       }
+       "distributed": {
+           "logging": {
+               "distributed": "info",
+               "bokeh": "critical",
+               "tornado": "critical"
+            },
+            "admin": {
+                "log-format": "%(name)s - %(levelname)s - %(message)s"
+            }
+       }
    }
 
-   >>> dask.config.get('logging')
-   {'distributed': 'info',
-    'bokeh': 'critical',
-    'tornado': 'critical'}
+   >>> dask.config.get("distributed.logging")
+   {
+       'distributed': 'info',
+       'bokeh': 'critical',
+       'tornado': 'critical'
+   }
 
-   >>> dask.config.get('logging.bokeh')  # use `.` for nested access
+   >>> dask.config.get('distributed.logging.bokeh')  # use `.` for nested access
    'critical'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
@@ -70,17 +77,21 @@ You can specify configuration values in YAML files like the following:
 
 .. code-block:: yaml
 
-   logging:
-     distributed: info
-     bokeh: critical
-     tornado: critical
+   array:
+      chunk-size: 128 MiB
 
-   scheduler:
-     work-stealing: True
-     allowed-failures: 5
+   distributed:
+     logging:
+       distributed: info
+       bokeh: critical
+       tornado: critical
 
-    admin:
-      log-format: '%(name)s - %(levelname)s - %(message)s'
+     scheduler:
+       work-stealing: True
+       allowed-failures: 5
+
+      admin:
+        log-format: '%(name)s - %(levelname)s - %(message)s'
 
 These files can live in any of the following locations:
 
@@ -118,16 +129,18 @@ resulting in configuration values like the following:
 
 .. code-block:: python
 
-   {'distributed':
-     {'scheduler':
-       {'work-stealing': True,
-        'allowed-failures': 5}
-     }
+   {
+       'distributed': {
+           'scheduler': {
+               'work-stealing': True,
+               'allowed-failures': 5
+           }
+       }
    }
 
 Dask searches for all environment variables that start with ``DASK_``, then
-transforms keys by converting to lower case, changing double-underscores to
-nested structures, and changing single underscores to hyphens.
+transforms keys by converting to lower case and changing double-underscores to
+nested structures.
 
 Dask tries to parse all values with `ast.literal_eval
 <https://docs.python.org/3/library/ast.html#ast.literal_eval>`_, letting users
@@ -153,9 +166,11 @@ or environment variables mentioned above:
 
    >>> import dask.distributed
    >>> dask.config.config  # New values have been added
-   {'scheduler': ...,
-    'worker': ...,
-    'tls': ...}
+   {
+       'scheduler': ...,
+       'worker': ...,
+       'tls': ...
+   }
 
 
 Directly within Python
@@ -367,7 +382,7 @@ Downstream projects typically follow the following convention:
               ...)
 
 This process keeps configuration in a central place, but also keeps it safe
-within namespaces.  It places config files in an easy to access location 
+within namespaces.  It places config files in an easy to access location
 by default (``~/.config/dask/\*.yaml``), so that users can easily discover what
 they can change, but maintains the actual defaults within the source code, so
 that they more closely track changes in the library.

@@ -1,13 +1,11 @@
 """ A set of NumPy functions to apply per chunk """
-from __future__ import absolute_import, division, print_function
-
+from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 
 from toolz import concat
 import numpy as np
 from . import numpy_compat as npcompat
 
-from ..compatibility import Container, Iterable, Sequence
 from ..core import flatten
 from ..utils import ignoring
 
@@ -67,11 +65,8 @@ all = np.all
 nansum = np.nansum
 nanprod = np.nanprod
 
-try:
-    from numpy import nancumprod, nancumsum
-except ImportError:  # pragma: no cover
-    nancumprod = npcompat.nancumprod
-    nancumsum = npcompat.nancumsum
+nancumprod = np.nancumprod
+nancumsum = np.nancumsum
 
 nanmin = np.nanmin
 nanmax = np.nanmax
@@ -136,14 +131,14 @@ def coarsen(reduction, x, axes, trim_excess=False):
             axes[i] = 1
 
     if trim_excess:
-        ind = tuple(slice(0, -(d % axes[i]))
-                    if d % axes[i] else
-                    slice(None, None) for i, d in enumerate(x.shape))
+        ind = tuple(
+            slice(0, -(d % axes[i])) if d % axes[i] else slice(None, None)
+            for i, d in enumerate(x.shape)
+        )
         x = x[ind]
 
     # (10, 10) -> (5, 2, 5, 2)
-    newshape = tuple(concat([(x.shape[i] // axes[i], axes[i])
-                             for i in range(x.ndim)]))
+    newshape = tuple(concat([(x.shape[i] // axes[i], axes[i]) for i in range(x.ndim)]))
 
     return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim * 2, 2)))
 
@@ -185,8 +180,7 @@ def topk(a, k, axis, keepdims):
 
     a = np.partition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
-    return a[tuple(k_slice if i == axis else slice(None)
-                   for i in range(a.ndim))]
+    return a[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
 
 
 def topk_aggregate(a, k, axis, keepdims):
@@ -200,8 +194,11 @@ def topk_aggregate(a, k, axis, keepdims):
     a = np.sort(a, axis=axis)
     if k < 0:
         return a
-    return a[tuple(slice(None, None, -1) if i == axis else slice(None)
-                   for i in range(a.ndim))]
+    return a[
+        tuple(
+            slice(None, None, -1) if i == axis else slice(None) for i in range(a.ndim)
+        )
+    ]
 
 
 def argtopk_preprocess(a, idx):
@@ -226,8 +223,9 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     if isinstance(a_plus_idx, list):
         a_plus_idx = list(flatten(a_plus_idx))
         a = np.concatenate([ai for ai, _ in a_plus_idx], axis)
-        idx = np.concatenate([np.broadcast_to(idxi, ai.shape)
-                              for ai, idxi in a_plus_idx], axis)
+        idx = np.concatenate(
+            [np.broadcast_to(idxi, ai.shape) for ai, idxi in a_plus_idx], axis
+        )
     else:
         a, idx = a_plus_idx
 
@@ -236,8 +234,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
 
     idx2 = np.argpartition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
-    idx2 = idx2[tuple(k_slice if i == axis else slice(None)
-                      for i in range(a.ndim))]
+    idx2 = idx2[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
     return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
 
 
@@ -255,8 +252,11 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     idx = take_along_axis(idx, idx2, axis)
     if k < 0:
         return idx
-    return idx[tuple(slice(None, None, -1) if i == axis else slice(None)
-                     for i in range(idx.ndim))]
+    return idx[
+        tuple(
+            slice(None, None, -1) if i == axis else slice(None) for i in range(idx.ndim)
+        )
+    ]
 
 
 def arange(start, stop, step, length, dtype):
@@ -268,8 +268,8 @@ def astype(x, astype_dtype=None, **kwargs):
     return x.astype(astype_dtype, **kwargs)
 
 
-def view(x, dtype, order='C'):
-    if order == 'C':
+def view(x, dtype, order="C"):
+    if order == "C":
         x = np.ascontiguousarray(x)
         return x.view(dtype)
     else:
@@ -316,10 +316,7 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
 
     # np.take does not support slice indices
     # return np.take(x, idx, axis)
-    return x[tuple(
-        idx if i == axis else slice(None)
-        for i in range(x.ndim)
-    )]
+    return x[tuple(idx if i == axis else slice(None) for i in range(x.ndim))]
 
 
 def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
@@ -371,7 +368,8 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
 
     # np.take does not support slice indices
     # return np.take(chunk_outputs, idx_final, axis)
-    return chunk_outputs[tuple(
-        idx_final if i == axis else slice(None)
-        for i in range(chunk_outputs.ndim)
-    )]
+    return chunk_outputs[
+        tuple(
+            idx_final if i == axis else slice(None) for i in range(chunk_outputs.ndim)
+        )
+    ]

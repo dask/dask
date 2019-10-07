@@ -30,6 +30,7 @@ Dataframe
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.explode
     DataFrame.fillna
     DataFrame.floordiv
     DataFrame.get_partition
@@ -56,6 +57,7 @@ Dataframe
     DataFrame.nlargest
     DataFrame.npartitions
     DataFrame.partitions
+    DataFrame.pop
     DataFrame.pow
     DataFrame.prod
     DataFrame.quantile
@@ -65,6 +67,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -131,6 +134,7 @@ Series
    Series.dt
    Series.dtype
    Series.eq
+   Series.explode
    Series.ffill
    Series.fillna
    Series.first
@@ -179,6 +183,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index
@@ -230,8 +235,12 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.cov
+   DataFrameGroupBy.corr
    DataFrameGroupBy.first
    DataFrameGroupBy.last
+   DataFrameGroupBy.idxmin
+   DataFrameGroupBy.idxmax
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -251,6 +260,8 @@ Groupby Operations
    SeriesGroupBy.var
    SeriesGroupBy.first
    SeriesGroupBy.last
+   SeriesGroupBy.idxmin
+   SeriesGroupBy.idxmax
 
 .. autosummary::
    Aggregation
@@ -315,13 +326,24 @@ Store DataFrames
    to_bag
    to_json
 
-Covert DataFrames
-~~~~~~~~~~~~~~~~~
+Convert DataFrames
+~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
 
    to_dask_array
    to_delayed
+
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -392,6 +414,12 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: utils.make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
@@ -400,8 +428,16 @@ Other functions
 
 .. autofunction:: compute
 .. autofunction:: map_partitions
+.. autofunction:: to_datetime
 
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
 .. autofunction:: merge
+.. autofunction:: merge_asof
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
+.. autofunction:: pivot_table
+.. autofunction:: melt

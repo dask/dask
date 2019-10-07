@@ -1,7 +1,12 @@
 .. _dataframe.performance:
 
-Dask DataFrame Performance Tips
-===============================
+Best Practices
+==============
+
+It is easy to get started with Dask DataFrame, but using it *well* does require
+some experience.  This page contains suggestions for best practices, and
+includes solutions to common problems.
+
 
 Use Pandas
 ----------
@@ -9,6 +14,22 @@ Use Pandas
 For data that fits into RAM, Pandas can often be faster and easier to use than
 Dask DataFrame.  While "Big Data" tools can be exciting, they are almost always
 worse than normal data tools while those remain appropriate.
+
+
+Reduce, and then use Pandas
+---------------------------
+
+Similar to above, even if you have a large dataset there may be a point in your
+computation where you've reduced things to a more manageable level.  You may
+want to switch to Pandas at this point.
+
+.. code-block:: python
+
+   df = dd.read_parquet('my-giant-file.parquet')
+   df = df[df.name == 'Alice']              # Select a subsection
+   result = df.groupby('id').value.mean()   # Reduce to a smaller size
+   result = result.compute()                # Convert to Pandas dataframe
+   result...                                # Continue working with Pandas
 
 Pandas Performance Tips Apply to Dask DataFrame
 -----------------------------------------------
@@ -36,8 +57,11 @@ it sparingly (see below):
    df.loc['2001-01-05':'2001-01-12']  # this is very fast if you have an index
    df.merge(df2, left_index=True, right_index=True)  # this is also very fast
 
-Avoid Shuffles
---------------
+For more information, see documentation on :ref:`dataframe partitions <dataframe-design-partitions>`.
+
+
+Avoid Full-Data Shuffling
+-------------------------
 
 Setting an index is an important but expensive operation (see above).  You
 should do it infrequently and you should persist afterwards (see below).
@@ -146,7 +170,7 @@ using the ``repartition`` method:
    df = df[df.name == 'Alice']  # only 1/100th of the data
    df = df.repartition(npartitions=df.npartitions // 100)
 
-   df = client.persist(df)  # if on a distributed system
+   df = df.persist()  # if on a distributed system
 
 This helps to reduce overhead and increase the effectiveness of vectorized
 Pandas operations.  You should aim for partitions that have around 100MB of
@@ -183,6 +207,8 @@ operation:
    dd.merge(a, b, left_index=True, right_on='id')  # half-fast, half-slow
    dd.merge(a, b, left_on='id', right_on='id')  # slow
 
+For more information see :doc:`Joins <dataframe-joins>`.
+
 
 Store Data in Apache Parquet Format
 -----------------------------------
@@ -202,7 +228,7 @@ systems:
    df.to_parquet('path/to/my-results/')
    df = dd.read_parquet('path/to/my-results/')
 
-Dask supports reading parquet files with different engine implementations of 
+Dask supports reading parquet files with different engine implementations of
 the Apache Parquet format for Python:
 
 .. code-block:: python
@@ -216,7 +242,7 @@ These libraries can be installed using:
 
    conda install fastparquet pyarrow -c conda-forge
 
-`fastparquet <https://github.com/dask/fastparquet/>`_ is a Python-based 
+`fastparquet <https://github.com/dask/fastparquet/>`_ is a Python-based
 implementation that uses the `Numba <https://numba.pydata.org/>`_
 Python-to-LLVM compiler. PyArrow is part of the
 `Apache Arrow <https://arrow.apache.org/>`_ project and uses the `C++

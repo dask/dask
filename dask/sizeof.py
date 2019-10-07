@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import sys
 
 from .utils import Dispatch
@@ -8,11 +6,12 @@ try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
+
     def getsizeof(x):
         return 100
 
 
-sizeof = Dispatch(name='sizeof')
+sizeof = Dispatch(name="sizeof")
 
 
 @sizeof.register(object)
@@ -26,6 +25,15 @@ def sizeof_default(o):
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
     return getsizeof(seq) + sum(map(sizeof, seq))
+
+
+@sizeof.register_lazy("cupy")
+def register_cupy():
+    import cupy
+
+    @sizeof.register(cupy.ndarray)
+    def sizeof_cupy_ndarray(x):
+        return int(x.nbytes)
 
 
 @sizeof.register_lazy("numpy")
@@ -74,6 +82,13 @@ def register_pandas():
             p += object_size(i)
         return int(p) + 1000
 
+    @sizeof.register(pd.MultiIndex)
+    def sizeof_pandas_multiindex(i):
+        p = int(sum(object_size(l) for l in i.levels))
+        for c in i.codes if hasattr(i, "codes") else i.labels:
+            p += c.nbytes
+        return int(p) + 1000
+
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
@@ -85,6 +100,4 @@ def register_spmatrix():
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
-        return sum(
-            sizeof(v) for v in s.__dict__.values()
-        )
+        return sum(sizeof(v) for v in s.__dict__.values())

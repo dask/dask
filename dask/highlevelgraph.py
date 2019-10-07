@@ -1,8 +1,9 @@
+from collections.abc import Mapping
+
 import toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .compatibility import Mapping
 
 
 class HighLevelGraph(Mapping):
@@ -68,13 +69,10 @@ class HighLevelGraph(Mapping):
     HighLevelGraph.from_collections :
         typically used by developers to make new HighLevelGraphs
     """
+
     def __init__(self, layers, dependencies):
-        for v in layers.values():
-            assert not isinstance(v, HighLevelGraph)
-        assert all(layers)
         self.layers = layers
         self.dependencies = dependencies
-        assert set(dependencies) == set(layers)
 
     @property
     def dicts(self):
@@ -147,15 +145,23 @@ class HighLevelGraph(Mapping):
         return sum(1 for _ in self)
 
     def items(self):
+        items = []
         seen = set()
         for d in self.layers.values():
             for key in d:
                 if key not in seen:
                     seen.add(key)
-                    yield (key, d[key])
+                    items.append((key, d[key]))
+        return items
 
     def __iter__(self):
         return toolz.unique(toolz.concat(self.layers.values()))
+
+    def keys(self):
+        return [key for key, _ in self.items()]
+
+    def values(self):
+        return [value for _, value in self.items()]
 
     @classmethod
     def merge(cls, *graphs):
@@ -172,14 +178,23 @@ class HighLevelGraph(Mapping):
                 raise TypeError(g)
         return cls(layers, dependencies)
 
-    def visualize(self, filename='dask.pdf', format=None, **kwargs):
+    def visualize(self, filename="dask.pdf", format=None, **kwargs):
         from .dot import graphviz_to_file
+
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
 
-def to_graphviz(hg, data_attributes=None, function_attributes=None,
-                rankdir='BT', graph_attr={}, node_attr=None, edge_attr=None, **kwargs):
+def to_graphviz(
+    hg,
+    data_attributes=None,
+    function_attributes=None,
+    rankdir="BT",
+    graph_attr={},
+    node_attr=None,
+    edge_attr=None,
+    **kwargs
+):
     from .dot import graphviz, name, label
 
     if data_attributes is None:
@@ -188,19 +203,19 @@ def to_graphviz(hg, data_attributes=None, function_attributes=None,
         function_attributes = {}
 
     graph_attr = graph_attr or {}
-    graph_attr['rankdir'] = rankdir
+    graph_attr["rankdir"] = rankdir
     graph_attr.update(kwargs)
-    g = graphviz.Digraph(graph_attr=graph_attr,
-                         node_attr=node_attr,
-                         edge_attr=edge_attr)
+    g = graphviz.Digraph(
+        graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
+    )
 
     cache = {}
 
     for k in hg.dependencies:
         k_name = name(k)
         attrs = data_attributes.get(k, {})
-        attrs.setdefault('label', label(k, cache=cache))
-        attrs.setdefault('shape', 'box')
+        attrs.setdefault("label", label(k, cache=cache))
+        attrs.setdefault("shape", "box")
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():

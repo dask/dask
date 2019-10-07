@@ -141,7 +141,7 @@ There are several ways to create a Dask array from a Dask DataFrame. Dask DataFr
 
    >>> df = dask.dataframes.from_pandas(...)
    >>> df.to_dask_array()
-   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
 This mirrors the `to_numpy
 <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_numpy.html>`_
@@ -150,7 +150,7 @@ function in Pandas. The ``values`` attribute is also supported:
 .. code-block:: python
 
    >>> df.values
-   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
 However, these arrays do not have known chunk sizes because dask.dataframe does
 not track the number of rows in each partition. This means that some operations
@@ -161,7 +161,7 @@ The chunk sizes can be computed:
 .. code-block:: python
 
    >>> df.to_dask_array(lengths=True)
-   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3)>
+   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3), chunktype=numpy.ndarray>
 
 Specifying ``lengths=True`` triggers immediate computation of the chunk sizes.
 This enables downstream computations that rely on having known chunk sizes
@@ -171,7 +171,7 @@ The Dask DataFrame ``to_records`` method also returns a Dask Array, but does not
 information:
 
    >>> df.to_records()
-   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,)>
+   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,), chunktype=numpy.ndarray>
 
 If you have a function that converts a Pandas DataFrame into a NumPy array,
 then calling ``map_partitions`` with that function on a Dask DataFrame will
@@ -180,7 +180,7 @@ produce a Dask array:
 .. code-block:: python
 
    >>> df.map_partitions(np.asarray)
-   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
 
 Interactions with NumPy arrays
@@ -205,7 +205,7 @@ chunk shape:
    >>> y = np.ones(10)
    >>> z = x + y
    >>> z
-   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,)>
+   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
 These interactions work not just for NumPy arrays but for any object that has
 shape and dtype attributes and implements NumPy slicing syntax.
@@ -325,6 +325,77 @@ or your own custom zarr Array:
 To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
 chunking of the resultant Dask array is defined by how the files were saved, unless
 otherwise specified.
+
+
+TileDB
+------
+
+`TileDB <https://docs.tiledb.io>`_  is a binary array format and storage manager with
+tunable chunking, layout, and compression options. The TileDB storage manager library
+includes support for scalable storage backends such as S3 API compatible object stores
+and HDFS, with automatic scaling, and supports multi-threaded and multi-process
+reads (consistent) and writes (eventually-consistent).
+
+To save data to a local TileDB array:
+
+.. code-block:: Python
+
+  >>> arr.to_tiledb('output.tdb')
+
+or to save to a bucket on S3:
+
+  >>> arr.to_tiledb('s3://mybucket/output.tdb',
+                    storage_options={'vfs.s3.aws_access_key_id': 'mykey',
+                                     'vfs.s3.aws_secret_access_key': 'mysecret'})
+
+Files may be retrieved by running `da.from_tiledb` with the same URI, and any
+necessary arguments.
+
+
+Intermediate storage
+--------------------
+
+.. autosummary::
+   store
+
+In some cases, one may wish to store an intermediate result in long term
+storage. This differs from ``persist``, which is mainly used to manage
+intermediate results within Dask that don't necessarily have longevity.
+Also it differs from storing final results as these mark the end of the Dask
+graph. Thus intermediate results are easier to reuse without reloading data.
+Intermediate storage is mainly useful in cases where the data is needed
+outside of Dask (e.g. on disk, in a database, in the cloud, etc.). It can
+be useful as a checkpoint for long running or error-prone computations.
+
+The intermediate storage use case differs from the typical storage use case as
+a Dask Array is returned to the user that represents the result of that
+storage operation. This is typically done by setting the ``store`` function's
+``return_stored`` flag to ``True``. 
+
+.. code-block:: python
+
+   x.store()  # stores data, returns nothing
+   x = x.store(return_stored=True)  # stores data, returns new dask array backed by that data
+
+The user can then decide whether the
+storage operation happens immediately (by setting the ``compute`` flag to
+``True``) or later (by setting the ``compute`` flag to ``False``). In all
+other ways, this behaves the same as a normal call to ``store``. Some examples
+are shown below.
+
+.. code-block:: Python
+
+   >>> import dask.array as da
+   >>> import zarr as zr
+   >>> c = (2, 2)
+   >>> d = da.ones((10, 11), chunks=c)
+   >>> z1 = zr.open_array('lazy.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> z2 = zr.open_array('eager.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> d1 = d.store(z1, compute=False, return_stored=True)
+   >>> d2 = d.store(z2, compute=True, return_stored=True)
+
+This can be combined with any other storage strategies either noted above, in
+the docs or for any specialized storage types.
 
 
 Plugins

@@ -12,6 +12,16 @@ These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/07EiCpdhtDE"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 .. currentmodule:: distributed
 
 Start Dask Client
@@ -257,7 +267,7 @@ Or collect all futures in batches that had arrived since the last iteration:
       for future, result in batch:
           ...
 
-Additionally, for iterative algorithms, you can add more futures into the 
+Additionally, for iterative algorithms, you can add more futures into the
 ``as_completed`` iterator *during* iteration:
 
 .. code-block:: python
@@ -380,7 +390,7 @@ thread that does not take up a slot within the Dask worker:
 If you intend to do more work in the same thread after waiting on client work,
 you may want to explicitly block until the thread is able to *rejoin* the
 thread pool.  This allows some control over the number of threads that are
-created and stops too many threads from being active at once, over-saturating 
+created and stops too many threads from being active at once, over-saturating
 your hardware:
 
 .. code-block:: python
@@ -468,7 +478,7 @@ themselves on remote clients if necessary:
 
    for filename in filenames:
        future = client.submit(load_and_submit, filename)
-       fire_and_forget(filename)
+       fire_and_forget(future)
 
    while True:
        future = queue.get()
@@ -575,7 +585,7 @@ Using a consistent name is convenient when you want to lock some known named res
 
    futures = client.map(load, filenames)
 
-Passing around a lock works as well and is easier when you want to create short-term 
+Passing around a lock works as well and is easier when you want to create short-term
 locks for a particular situation:
 
 .. code-block:: python
@@ -741,6 +751,7 @@ API
    Client.map
    Client.ncores
    Client.persist
+   Client.profile
    Client.publish_dataset
    Client.rebalance
    Client.replicate
@@ -792,7 +803,6 @@ API
 
 .. autoclass:: Future
    :members:
-
 
 .. autoclass:: Queue
    :members:

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
@@ -11,8 +9,9 @@ from ..utils import import_required
 
 
 # Stores execution data for each task
-TaskData = namedtuple('TaskData', ('key', 'task', 'start_time',
-                                   'end_time', 'worker_id'))
+TaskData = namedtuple(
+    "TaskData", ("key", "task", "start_time", "end_time", "worker_id")
+)
 
 
 class Profiler(Callback):
@@ -54,6 +53,7 @@ class Profiler(Callback):
     >>> prof.clear()
 
     """
+
     def __init__(self):
         self._results = {}
         self.results = []
@@ -81,6 +81,7 @@ class Profiler(Callback):
 
     def _plot(self, **kwargs):
         from .profile_visualize import plot_tasks
+
         return plot_tasks(self.results, self._dsk, **kwargs)
 
     def visualize(self, **kwargs):
@@ -91,6 +92,7 @@ class Profiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
+
         return visualize(self, **kwargs)
 
     def clear(self):
@@ -100,7 +102,7 @@ class Profiler(Callback):
         self._dsk = {}
 
 
-ResourceData = namedtuple('ResourceData', ('time', 'mem', 'cpu'))
+ResourceData = namedtuple("ResourceData", ("time", "mem", "cpu"))
 
 
 class ResourceProfiler(Callback):
@@ -139,6 +141,7 @@ class ResourceProfiler(Callback):
     the duration of the enclosed block. In contrast, when registered globally
     data will only be collected while a dask scheduler is active.
     """
+
     def __init__(self, dt=1):
         self._dt = dt
         self._entered = False
@@ -152,11 +155,11 @@ class ResourceProfiler(Callback):
         if not self._is_running():
             self._tracker = _Tracker(self._dt)
             self._tracker.start()
-        self._tracker.parent_conn.send('collect')
+        self._tracker.parent_conn.send("collect")
 
     def _stop_collect(self):
         if self._is_running():
-            self._tracker.parent_conn.send('send_data')
+            self._tracker.parent_conn.send("send_data")
             self.results.extend(starmap(ResourceData, self._tracker.parent_conn.recv()))
 
     def __enter__(self):
@@ -191,6 +194,7 @@ class ResourceProfiler(Callback):
 
     def _plot(self, **kwargs):
         from .profile_visualize import plot_resources
+
         return plot_resources(self.results, **kwargs)
 
     def visualize(self, **kwargs):
@@ -201,11 +205,13 @@ class ResourceProfiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
+
         return visualize(self, **kwargs)
 
 
 class _Tracker(Process):
     """Background process for tracking resource usage"""
+
     def __init__(self, dt=1):
         Process.__init__(self)
         self.daemon = True
@@ -215,18 +221,20 @@ class _Tracker(Process):
 
     def shutdown(self):
         if not self.parent_conn.closed:
-            self.parent_conn.send('shutdown')
+            self.parent_conn.send("shutdown")
             self.parent_conn.close()
         self.join()
 
     def _update_pids(self, pid):
-        return [self.parent] + [p for p in self.parent.children()
-                                if p.pid != pid and p.status() != 'zombie']
+        return [self.parent] + [
+            p for p in self.parent.children() if p.pid != pid and p.status() != "zombie"
+        ]
 
     def run(self):
 
-        psutil = import_required("psutil", "Tracking resource usage requires "
-                                           "`psutil` to be installed")
+        psutil = import_required(
+            "psutil", "Tracking resource usage requires `psutil` to be installed"
+        )
         self.parent = psutil.Process(self.parent_pid)
 
         pid = current_process()
@@ -236,9 +244,9 @@ class _Tracker(Process):
                 msg = self.child_conn.recv()
             except KeyboardInterrupt:
                 continue
-            if msg == 'shutdown':
+            if msg == "shutdown":
                 break
-            elif msg == 'collect':
+            elif msg == "collect":
                 ps = self._update_pids(pid)
                 while not data or not self.child_conn.poll():
                     tic = default_timer()
@@ -247,7 +255,7 @@ class _Tracker(Process):
                         try:
                             mem2 = p.memory_info().rss
                             cpu2 = p.cpu_percent()
-                        except Exception: # could be a few different exceptions
+                        except Exception:  # could be a few different exceptions
                             pass
                         else:
                             # Only increment if both were successful
@@ -255,14 +263,15 @@ class _Tracker(Process):
                             cpu += cpu2
                     data.append((tic, mem / 1e6, cpu))
                     sleep(self.dt)
-            elif msg == 'send_data':
+            elif msg == "send_data":
                 self.child_conn.send(data)
                 data = []
         self.child_conn.close()
 
 
-CacheData = namedtuple('CacheData', ('key', 'task', 'metric', 'cache_time',
-                                     'free_time'))
+CacheData = namedtuple(
+    "CacheData", ("key", "task", "metric", "cache_time", "free_time")
+)
 
 
 class CacheProfiler(Callback):
@@ -322,7 +331,7 @@ class CacheProfiler(Callback):
         elif metric:
             self._metric_name = metric.__name__
         else:
-            self._metric_name = 'count'
+            self._metric_name = "count"
 
     def __enter__(self):
         self.clear()
@@ -336,7 +345,7 @@ class CacheProfiler(Callback):
     def _posttask(self, key, value, dsk, state, id):
         t = default_timer()
         self._cache[key] = (self._metric(value), t)
-        for k in state['released'].intersection(self._cache):
+        for k in state["released"].intersection(self._cache):
             metric, start = self._cache.pop(k)
             self.results.append(CacheData(k, dsk[k], metric, start, t))
 
@@ -348,8 +357,10 @@ class CacheProfiler(Callback):
 
     def _plot(self, **kwargs):
         from .profile_visualize import plot_cache
-        return plot_cache(self.results, self._dsk, self._start_time,
-                          self._metric_name, **kwargs)
+
+        return plot_cache(
+            self.results, self._dsk, self._start_time, self._metric_name, **kwargs
+        )
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -359,6 +370,7 @@ class CacheProfiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
+
         return visualize(self, **kwargs)
 
     def clear(self):

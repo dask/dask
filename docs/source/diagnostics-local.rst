@@ -1,7 +1,7 @@
 Diagnostics (local)
 ====================
 
-Profiling parallel code can be challening, but ``dask.diagnostics`` provides
+Profiling parallel code can be challenging, but ``dask.diagnostics`` provides
 functionality to aid in profiling and inspecting execution with the
 :doc:`local task scheduler <scheduling>`.
 

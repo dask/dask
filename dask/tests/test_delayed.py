@@ -3,16 +3,15 @@ from operator import add, setitem
 import pickle
 from random import random
 import types
-import warnings
 
 from toolz import identity, partial, merge
 import pytest
 
 import dask
 from dask import compute
-from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
+from dask.dataframe.utils import assert_eq
 
 try:
     from operator import matmul
@@ -40,47 +39,46 @@ class Tuple(object):
         return tuple, ()
 
 
+@pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_to_task_dask():
-    with warnings.catch_warnings(record=True):
-        a = delayed(1, name='a')
-        b = delayed(2, name='b')
-        task, dask = to_task_dask([a, b, 3])
-        assert task == ['a', 'b', 3]
+    a = delayed(1, name="a")
+    b = delayed(2, name="b")
+    task, dask = to_task_dask([a, b, 3])
+    assert task == ["a", "b", 3]
 
-        task, dask = to_task_dask((a, b, 3))
-        assert task == (tuple, ['a', 'b', 3])
-        assert dict(dask) == merge(a.dask, b.dask)
+    task, dask = to_task_dask((a, b, 3))
+    assert task == (tuple, ["a", "b", 3])
+    assert dict(dask) == merge(a.dask, b.dask)
 
-        task, dask = to_task_dask({a: 1, b: 2})
-        assert (task == (dict, [['b', 2], ['a', 1]]) or
-                task == (dict, [['a', 1], ['b', 2]]))
-        assert dict(dask) == merge(a.dask, b.dask)
+    task, dask = to_task_dask({a: 1, b: 2})
+    assert task == (dict, [["b", 2], ["a", 1]]) or task == (dict, [["a", 1], ["b", 2]])
+    assert dict(dask) == merge(a.dask, b.dask)
 
-        f = namedtuple('f', ['x', 'y'])
-        x = f(1, 2)
-        task, dask = to_task_dask(x)
-        assert task == x
-        assert dict(dask) == {}
+    f = namedtuple("f", ["x", "y"])
+    x = f(1, 2)
+    task, dask = to_task_dask(x)
+    assert task == x
+    assert dict(dask) == {}
 
-        task, dask = to_task_dask(slice(a, b, 3))
-        assert task == (slice, 'a', 'b', 3)
-        assert dict(dask) == merge(a.dask, b.dask)
+    task, dask = to_task_dask(slice(a, b, 3))
+    assert task == (slice, "a", "b", 3)
+    assert dict(dask) == merge(a.dask, b.dask)
 
-        # Issue https://github.com/dask/dask/issues/2107
-        class MyClass(dict):
-            pass
+    # Issue https://github.com/dask/dask/issues/2107
+    class MyClass(dict):
+        pass
 
-        task, dask = to_task_dask(MyClass())
-        assert type(task) is MyClass
-        assert dict(dask) == {}
+    task, dask = to_task_dask(MyClass())
+    assert type(task) is MyClass
+    assert dict(dask) == {}
 
-        # Custom dask objects
-        x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
-        task, dask = to_task_dask(x)
-        assert task in dask
-        f = dask.pop(task)
-        assert f == (tuple, ['a', 'b', 'c'])
-        assert dask == x._dask
+    # Custom dask objects
+    x = Tuple({"a": 1, "b": 2, "c": (add, "a", "b")}, ["a", "b", "c"])
+    task, dask = to_task_dask(x)
+    assert task in dask
+    f = dask.pop(task)
+    assert f == (tuple, ["a", "b", "c"])
+    assert dask == x._dask
 
 
 def test_delayed():
@@ -100,7 +98,7 @@ def test_delayed_with_dataclass():
     dataclasses = pytest.importorskip("dataclasses")
 
     # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
 
     literal = dask.delayed(3)
     with_class = dask.delayed({"a": ADataClass(a=literal)})
@@ -128,22 +126,24 @@ def test_operators():
     assert (a ** 2).compute() == 100
 
     if matmul:
+
         class dummy:
             def __matmul__(self, other):
                 return 4
+
         c = delayed(dummy())  # noqa
         d = delayed(dummy())  # noqa
 
-        assert (eval('c @ d')).compute() == 4
+        assert (eval("c @ d")).compute() == 4
 
 
 def test_methods():
     a = delayed("a b c d e")
-    assert a.split(' ').compute() == ['a', 'b', 'c', 'd', 'e']
-    assert a.upper().replace('B', 'A').split().count('A').compute() == 2
-    assert a.split(' ', pure=True).key == a.split(' ', pure=True).key
-    o = a.split(' ', dask_key_name='test')
-    assert o.key == 'test'
+    assert a.split(" ").compute() == ["a", "b", "c", "d", "e"]
+    assert a.upper().replace("B", "A").split().count("A").compute() == 2
+    assert a.split(" ", pure=True).key == a.split(" ", pure=True).key
+    o = a.split(" ", dask_key_name="test")
+    assert o.key == "test"
 
 
 def test_attributes():
@@ -164,17 +164,17 @@ def test_method_getattr_call_same_task():
 def test_np_dtype_of_delayed():
     # This used to result in a segfault due to recursion, see
     # https://github.com/dask/dask/pull/4374#issuecomment-454381465
-    np = pytest.importorskip('numpy')
+    np = pytest.importorskip("numpy")
     x = delayed(1)
     with pytest.raises(TypeError):
         np.dtype(x)
-    assert delayed(np.array([1], dtype='f8')).dtype.compute() == np.dtype('f8')
+    assert delayed(np.array([1], dtype="f8")).dtype.compute() == np.dtype("f8")
 
 
 def test_delayed_errors():
     a = delayed([1, 2, 3])
     # Immutable
-    pytest.raises(TypeError, lambda: setattr(a, 'foo', 1))
+    pytest.raises(TypeError, lambda: setattr(a, "foo", 1))
     pytest.raises(TypeError, lambda: setitem(a, 1, 0))
     # Can't iterate, or check if contains
     pytest.raises(TypeError, lambda: 1 in a)
@@ -194,12 +194,10 @@ def test_common_subexpressions():
 
 
 def test_delayed_optimize():
-    x = Delayed('b', {'a': 1,
-                      'b': (inc, 'a'),
-                      'c': (inc, 'b')})
+    x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
     (x2,) = dask.optimize(x)
     # Delayed's __dask_optimize__ culls out 'c'
-    assert sorted(x2.dask.keys()) == ['a', 'b']
+    assert sorted(x2.dask.keys()) == ["a", "b"]
 
 
 def test_lists():
@@ -218,12 +216,12 @@ def test_literates():
     assert delayed(lit).compute() == [1, 2, 3]
     lit = set((a, b, 3))
     assert delayed(lit).compute() == set((1, 2, 3))
-    lit = {a: 'a', b: 'b', 3: 'c'}
-    assert delayed(lit).compute() == {1: 'a', 2: 'b', 3: 'c'}
-    assert delayed(lit)[a].compute() == 'a'
-    lit = {'a': a, 'b': b, 'c': 3}
-    assert delayed(lit).compute() == {'a': 1, 'b': 2, 'c': 3}
-    assert delayed(lit)['a'].compute() == 1
+    lit = {a: "a", b: "b", 3: "c"}
+    assert delayed(lit).compute() == {1: "a", 2: "b", 3: "c"}
+    assert delayed(lit)[a].compute() == "a"
+    lit = {"a": a, "b": b, "c": 3}
+    assert delayed(lit).compute() == {"a": 1, "b": 2, "c": 3}
+    assert delayed(lit)["a"].compute() == 1
 
 
 def test_literates_keys():
@@ -377,6 +375,7 @@ def test_nout():
 def test_kwargs():
     def mysum(a, b, c=(), **kwargs):
         return a + b + sum(c) + sum(kwargs.values())
+
     dmysum = delayed(mysum)
     ten = dmysum(1, 2, c=[delayed(3), 0], four=dmysum(2, 2))
     assert ten.compute() == 10
@@ -391,7 +390,7 @@ def test_kwargs():
 
 
 def test_custom_delayed():
-    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+    x = Tuple({"a": 1, "b": 2, "c": (add, "a", "b")}, ["a", "b", "c"])
     x2 = delayed(add, pure=True)(x, (4, 5, 6))
     n = delayed(len, pure=True)(x)
     assert delayed(len, pure=True)(x).key == n.key
@@ -399,9 +398,10 @@ def test_custom_delayed():
     assert compute(n, x2, x) == (3, (1, 2, 3, 4, 5, 6), (1, 2, 3))
 
 
+@pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_array_delayed():
-    np = pytest.importorskip('numpy')
-    da = pytest.importorskip('dask.array')
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5))
@@ -411,8 +411,7 @@ def test_array_delayed():
     assert val.sum().compute() == (arr + arr + 1).sum()
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
-    with warnings.catch_warnings(record=True):
-        task, dsk = to_task_dask(darr)
+    task, dsk = to_task_dask(darr)
     orig = set(darr.dask)
     final = set(dsk)
     assert orig.issubset(final)
@@ -424,9 +423,9 @@ def test_array_delayed():
 
 
 def test_array_bag_delayed():
-    db = pytest.importorskip('dask.bag')
-    da = pytest.importorskip('dask.array')
-    np = pytest.importorskip('numpy')
+    db = pytest.importorskip("dask.bag")
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
 
     arr1 = np.arange(100).reshape((10, 10))
     arr2 = arr1.dot(arr1.T)
@@ -467,7 +466,7 @@ def test_delayed_compute_forward_kwargs():
 
 
 def test_delayed_method_descriptor():
-    delayed(bytes.decode)(b'')  # does not err
+    delayed(bytes.decode)(b"")  # does not err
 
 
 def test_delayed_callable():
@@ -481,7 +480,7 @@ def test_delayed_callable():
 
 def test_delayed_name_on_call():
     f = delayed(add, pure=True)
-    assert f(1, 2, dask_key_name='foo')._key == 'foo'
+    assert f(1, 2, dask_key_name="foo")._key == "foo"
 
 
 def test_callable_obj():
@@ -502,39 +501,34 @@ def test_callable_obj():
 def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
-    data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
-    if PY2:
-        assert func(data)._key == 'identity-6700b857eea9a7d3079762c9a253ffbd'
-    if PY3:
-        assert func(data)._key == 'identity-84c5e2194036c17d1d97c4e3a2b90482'
+    data = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    assert func(data)._key == "identity-84c5e2194036c17d1d97c4e3a2b90482"
 
-    data = {'x': 1, 1: 'x'}
+    data = {"x": 1, 1: "x"}
     assert func(data)._key == func(data)._key
-
-    if PY2:
-        assert func(1)._key == 'identity-91f02358e13dca18cde218a63fee436a'
-    if PY3:
-        assert func(1)._key == 'identity-7126728842461bf3d2caecf7b954fa3b'
+    assert func(1)._key == "identity-7126728842461bf3d2caecf7b954fa3b"
 
 
 def test_sensitive_to_partials():
-    assert (delayed(partial(add, 10), pure=True)(2)._key !=
-            delayed(partial(add, 20), pure=True)(2)._key)
+    assert (
+        delayed(partial(add, 10), pure=True)(2)._key
+        != delayed(partial(add, 20), pure=True)(2)._key
+    )
 
 
 def test_delayed_name():
-    assert delayed(1)._key.startswith('int-')
-    assert delayed(1, pure=True)._key.startswith('int-')
-    assert delayed(1, name='X')._key == 'X'
+    assert delayed(1)._key.startswith("int-")
+    assert delayed(1, pure=True)._key.startswith("int-")
+    assert delayed(1, name="X")._key == "X"
 
     def myfunc(x):
         return x + 1
 
-    assert delayed(myfunc)(1).key.startswith('myfunc')
+    assert delayed(myfunc)(1).key.startswith("myfunc")
 
 
 def test_finalize_name():
-    da = pytest.importorskip('dask.array')
+    da = pytest.importorskip("dask.array")
 
     x = da.ones(10, chunks=5)
     v = delayed([x])
@@ -543,13 +537,13 @@ def test_finalize_name():
     def key(s):
         if isinstance(s, tuple):
             s = s[0]
-        return s.split('-')[0]
+        return s.split("-")[0]
 
     assert all(key(k).isalpha() for k in v.dask)
 
 
 def test_keys_from_array():
-    da = pytest.importorskip('dask.array')
+    da = pytest.importorskip("dask.array")
     from dask.array.utils import _check_dsk
 
     X = da.ones((10, 10), chunks=5).to_delayed().flatten()
@@ -607,3 +601,17 @@ def test_attribute_of_attribute():
     assert isinstance(x.a, Delayed)
     assert isinstance(x.a.b, Delayed)
     assert isinstance(x.a.b.c, Delayed)
+
+
+def test_check_meta_flag():
+    from pandas import Series
+    from dask.delayed import delayed
+    from dask.dataframe import from_delayed
+
+    a = Series(["a", "b", "a"], dtype="category")
+    b = Series(["a", "c", "a"], dtype="category")
+    da = delayed(lambda x: x)(a)
+    db = delayed(lambda x: x)(b)
+
+    c = from_delayed([da, db], verify_meta=False)
+    assert_eq(c, c)

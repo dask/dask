@@ -9,7 +9,20 @@ from ..highlevelgraph import HighLevelGraph
 from ..blockwise import blockwise as core_blockwise
 
 
-def blockwise(func, out_ind, *args, **kwargs):
+def blockwise(
+    func,
+    out_ind,
+    *args,
+    name=None,
+    token=None,
+    dtype=None,
+    adjust_chunks=None,
+    new_axes=None,
+    align_arrays=True,
+    concatenate=None,
+    meta=None,
+    **kwargs
+):
     """ Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
@@ -88,6 +101,13 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
 
+    New dimensions can also be multi-chunk by specifying a tuple of chunk
+    sizes.  This has limited utility as is (because the chunks are all the
+    same), but the resulting graph can be modified to achieve more useful
+    results (see ``da.map_blocks``).
+
+    >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)  # doctest: +SKIP
+
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
     that modifies the dimension size in that index.
@@ -101,39 +121,35 @@ def blockwise(func, out_ind, *args, **kwargs):
     Include literals by indexing with None
 
     >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
-
-    See Also
-    --------
-    top - dict formulation of this function, contains most logic
     """
-    out = kwargs.pop('name', None)      # May be None at this point
-    token = kwargs.pop('token', None)
-    dtype = kwargs.pop('dtype', None)
-    adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.pop('new_axes', {})
-    align_arrays = kwargs.pop('align_arrays', True)
+    out = name
+    new_axes = new_axes or {}
 
     # Input Validation
     if len(set(out_ind)) != len(out_ind):
-        raise ValueError("Repeated elements not allowed in output index",
-                         [k for k, v in toolz.frequencies(out_ind).items() if v > 1])
-    new = (set(out_ind)
-           - {a for arg in args[1::2] if arg is not None for a in arg}
-           - set(new_axes or ()))
+        raise ValueError(
+            "Repeated elements not allowed in output index",
+            [k for k, v in toolz.frequencies(out_ind).items() if v > 1],
+        )
+    new = (
+        set(out_ind)
+        - {a for arg in args[1::2] if arg is not None for a in arg}
+        - set(new_axes or ())
+    )
     if new:
         raise ValueError("Unknown dimension", new)
 
     from .core import Array, unify_chunks, normalize_arg
 
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
-
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        arg, ind = max([(a, i) for (a, i) in toolz.partition(2, args) if i is not None],
-                       key=lambda ai: len(ai[1]))
-        chunkss = dict(zip(ind, arg.chunks))
+        arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
+        if arginds:
+            arg, ind = max(arginds, key=lambda ai: len(ai[1]))
+            chunkss = dict(zip(ind, arg.chunks))
+        else:
+            chunkss = {}
         arrays = args[::2]
 
     for k, v in new_axes.items():
@@ -143,9 +159,10 @@ def blockwise(func, out_ind, *args, **kwargs):
     arginds = list(zip(arrays, args[1::2]))
 
     for arg, ind in arginds:
-        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
-            raise ValueError("Index string %s does not match array dimension %d"
-                             % (ind, arg.ndim))
+        if hasattr(arg, "ndim") and hasattr(ind, "__len__") and arg.ndim != len(ind):
+            raise ValueError(
+                "Index string %s does not match array dimension %d" % (ind, arg.ndim)
+            )
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
 
@@ -174,13 +191,25 @@ def blockwise(func, out_ind, *args, **kwargs):
 
     # Finish up the name
     if not out:
-        out = '%s-%s' % (token or utils.funcname(func).strip('_'),
-                         base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
+        out = "%s-%s" % (
+            token or utils.funcname(func).strip("_"),
+            base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
+        )
 
-    graph = core_blockwise(func, out, out_ind, *argindsstr, numblocks=numblocks,
-                           dependencies=dependencies, new_axes=new_axes, **kwargs2)
-    graph = HighLevelGraph.from_collections(out, graph,
-                                            dependencies=arrays + dependencies)
+    graph = core_blockwise(
+        func,
+        out,
+        out_ind,
+        *argindsstr,
+        numblocks=numblocks,
+        dependencies=dependencies,
+        new_axes=new_axes,
+        concatenate=concatenate,
+        **kwargs2
+    )
+    graph = HighLevelGraph.from_collections(
+        out, graph, dependencies=arrays + dependencies
+    )
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:
@@ -194,10 +223,18 @@ def blockwise(func, out_ind, *args, **kwargs):
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
                     raise NotImplementedError(
-                        "adjust_chunks values must be callable, int, or tuple")
+                        "adjust_chunks values must be callable, int, or tuple"
+                    )
     chunks = tuple(chunks)
 
-    return Array(graph, out, chunks, dtype=dtype)
+    if meta is None:
+        from .utils import compute_meta
+
+        meta = compute_meta(func, dtype, *args[::2], **kwargs)
+    if meta is not None:
+        return Array(graph, out, chunks, meta=meta)
+    else:
+        return Array(graph, out, chunks, dtype=dtype)
 
 
 def atop(*args, **kwargs):
