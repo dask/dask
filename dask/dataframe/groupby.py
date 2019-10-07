@@ -156,6 +156,8 @@ def _groupby_raise_unaligned(df, **kwargs):
         # since we're coming through apply, `by` will be a tuple.
         # Pandas treats tuples as a single key, and lists as multiple keys
         # We want multiple keys
+        if isinstance(by, str):
+            by = [by]
         kwargs.update(by=list(by))
     return df.groupby(**kwargs)
 
