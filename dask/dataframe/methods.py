@@ -2,7 +2,6 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from pandas.util import hash_pandas_object
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
