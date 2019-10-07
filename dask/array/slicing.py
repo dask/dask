@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from itertools import product
 import math
 from numbers import Integral, Number
@@ -277,11 +275,15 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
+    from .core import unknown_chunk_message
+
     shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
-            raise ValueError("Arrays chunk sizes are unknown: %s", shape)
+            raise ValueError(
+                "Arrays chunk sizes are unknown: %s%s" % (shape, unknown_chunk_message)
+            )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
     assert len(index) == len(blockdims)
@@ -1031,6 +1033,17 @@ def slice_with_bool_dask_array(x, index):
     ]
 
     if len(index) == 1 and index[0].ndim == x.ndim:
+        if not np.isnan(x.shape).any() and not np.isnan(index[0].shape).any():
+            x = x.ravel()
+            index = tuple(i.ravel() for i in index)
+        elif x.ndim > 1:
+            warnings.warn(
+                "When slicing a Dask array of unknown chunks with a boolean mask "
+                "Dask array, the output array may have a different ordering "
+                "compared to the equivalent NumPy operation. This will raise an "
+                "error in a future release of Dask.",
+                stacklevel=3,
+            )
         y = elemwise(getitem, x, *index, dtype=x.dtype)
         name = "getitem-" + tokenize(x, index)
         dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
@@ -1086,6 +1099,85 @@ def slice_with_bool_dask_array(x, index):
 
 def getitem_variadic(x, *index):
     return x[index]
+
+
+def make_block_sorted_slices(index, chunks):
+    """Generate blockwise-sorted index pairs for shuffling an array.
+
+    Parameters
+    ----------
+    index : ndarray
+        An array of index positions.
+    chunks : tuple
+        Chunks from the original dask array
+
+    Returns
+    -------
+    index2 : ndarray
+        Same values as `index`, but each block has been sorted
+    index3 : ndarray
+        The location of the values of `index` in `index2`
+
+    Examples
+    --------
+    >>> index = np.array([6, 0, 4, 2, 7, 1, 5, 3])
+    >>> chunks = ((4, 4),)
+    >>> a, b = make_block_sorted_slices(index, chunks)
+
+    Notice that the first set of 4 items are sorted, and the
+    second set of 4 items are sorted.
+
+    >>> a
+    array([0, 2, 4, 6, 1, 3, 5, 7])
+    >>> b
+    array([3, 0, 2, 1, 7, 4, 6, 5])
+    """
+    from .core import slices_from_chunks
+
+    slices = slices_from_chunks(chunks)
+
+    if len(slices[0]) > 1:
+        slices = [slice_[0] for slice_ in slices]
+
+    offsets = np.roll(np.cumsum(chunks[0]), 1)
+    offsets[0] = 0
+
+    index2 = np.empty_like(index)
+    index3 = np.empty_like(index)
+
+    for slice_, offset in zip(slices, offsets):
+        a = index[slice_]
+        b = np.sort(a)
+        c = offset + np.argsort(b.take(np.argsort(a)))
+        index2[slice_] = b
+        index3[slice_] = c
+
+    return index2, index3
+
+
+def shuffle_slice(x, index):
+    """A relatively efficient way to shuffle `x` according to `index`.
+
+    Parameters
+    ----------
+    x : Array
+    index : ndarray
+        This should be an ndarray the same length as `x` containing
+        each index position in ``range(0, len(x))``.
+
+    Returns
+    -------
+    Array
+    """
+    from .core import PerformanceWarning
+
+    chunks1 = chunks2 = x.chunks
+    if x.ndim > 1:
+        chunks1 = (chunks1[0],)
+    index2, index3 = make_block_sorted_slices(index, chunks1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", PerformanceWarning)
+        return x[index2].rechunk(chunks2)[index3]
 
 
 class _HashIdWrapper(object):

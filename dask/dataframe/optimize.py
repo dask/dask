@@ -1,6 +1,4 @@
 """ Dataframe optimizations """
-from __future__ import absolute_import, division, print_function
-
 from ..optimization import cull, fuse_getitem, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph

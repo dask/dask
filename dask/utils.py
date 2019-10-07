@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from datetime import timedelta
 import functools
 import inspect
@@ -9,6 +7,7 @@ import sys
 import tempfile
 import re
 from errno import ENOENT
+from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
@@ -16,14 +15,6 @@ from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import (
-    get_named_args,
-    getargspec,
-    PY3,
-    unicode,
-    bind_method,
-    Iterator,
-)
 from .core import get_deps
 from .optimization import key_split  # noqa: F401
 
@@ -31,6 +22,13 @@ from .optimization import key_split  # noqa: F401
 system_encoding = sys.getdefaultencoding()
 if system_encoding == "ascii":
     system_encoding = "utf-8"
+
+
+def apply(func, args, kwargs=None):
+    if kwargs:
+        return func(*args, **kwargs)
+    else:
+        return func(*args)
 
 
 def deepmap(func, *seqs):
@@ -308,6 +306,7 @@ ONE_ARITY_BUILTINS = set(
         abs,
         all,
         any,
+        ascii,
         bool,
         bytearray,
         bytes,
@@ -352,8 +351,6 @@ ONE_ARITY_BUILTINS = set(
         memoryview,
     ]
 )
-if PY3:
-    ONE_ARITY_BUILTINS.add(ascii)  # noqa: F821
 MULTI_ARITY_BUILTINS = set(
     [
         compile,
@@ -369,6 +366,18 @@ MULTI_ARITY_BUILTINS = set(
         setattr,
     ]
 )
+
+
+def getargspec(func):
+    """Version of inspect.getargspec that works with partial and warps."""
+    if isinstance(func, functools.partial):
+        return getargspec(func.func)
+
+    func = getattr(func, "__wrapped__", func)
+    if isinstance(func, type):
+        return inspect.getfullargspec(func.__init__)
+    else:
+        return inspect.getfullargspec(func)
 
 
 def takes_multiple_arguments(func, varargs=True):
@@ -416,6 +425,16 @@ def takes_multiple_arguments(func, varargs=True):
 
     ndefaults = 0 if spec.defaults is None else len(spec.defaults)
     return len(spec.args) - ndefaults - is_constructor > 1
+
+
+def get_named_args(func):
+    """Get all non ``*args/**kwargs`` arguments for a function"""
+    s = inspect.signature(func)
+    return [
+        n
+        for n, p in s.parameters.items()
+        if p.kind in [p.POSITIONAL_OR_KEYWORD, p.POSITIONAL_ONLY, p.KEYWORD_ONLY]
+    ]
 
 
 class Dispatch(object):
@@ -550,13 +569,13 @@ def ignore_warning(doc, cls, name, extra=""):
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s. \n\n" "" % (
+        l1 = "This docstring was copied from %s.%s.%s. \n\n" % (
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s. \n\n" "" % (cls.__name__, name)
+        l1 = "This docstring was copied from %s.%s. \n\n" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -675,26 +694,29 @@ def funcname(func):
         return funcname(func.func)
     # methodcaller
     if isinstance(func, methodcaller):
-        return func.method
+        return func.method[:50]
 
     module_name = getattr(func, "__module__", None) or ""
     type_name = getattr(type(func), "__name__", None) or ""
 
     # toolz.curry
     if "toolz" in module_name and "curry" == type_name:
-        return func.func_name
+        return func.func_name[:50]
     # multipledispatch objects
     if "multipledispatch" in module_name and "Dispatcher" == type_name:
-        return func.name
+        return func.name[:50]
+    # numpy.vectorize objects
+    if "numpy" in module_name and "vectorize" == type_name:
+        return ("vectorize_" + funcname(func.pyfunc))[:50]
 
     # All other callables
     try:
         name = func.__name__
         if name == "<lambda>":
             return "lambda"
-        return name
+        return name[:50]
     except AttributeError:
-        return str(func)
+        return str(func)[:50]
 
 
 def typename(typ):
@@ -744,7 +766,7 @@ def ensure_unicode(s):
     >>> ensure_unicode(b'123')
     '123'
     """
-    if isinstance(s, unicode):
+    if isinstance(s, str):
         return s
     if hasattr(s, "decode"):
         return s.decode()
@@ -823,8 +845,8 @@ def asciitable(columns, rows):
 
 
 def put_lines(buf, lines):
-    if any(not isinstance(x, unicode) for x in lines):
-        lines = [unicode(x) for x in lines]
+    if any(not isinstance(x, str) for x in lines):
+        lines = [str(x) for x in lines]
     buf.write("\n".join(lines))
 
 
@@ -1009,15 +1031,15 @@ class OperatorMethodMixin(object):
         meth = "__{0}__".format(name)
 
         if name in ("abs", "invert", "neg", "pos"):
-            bind_method(cls, meth, cls._get_unary_operator(op))
+            setattr(cls, meth, cls._get_unary_operator(op))
         else:
-            bind_method(cls, meth, cls._get_binary_operator(op))
+            setattr(cls, meth, cls._get_binary_operator(op))
 
             if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
             rmeth = "__r{0}__".format(name)
-            bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
+            setattr(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -1158,9 +1180,13 @@ def parse_bytes(s):
     1000000000
     >>> parse_bytes('MB')
     1000000
+    >>> parse_bytes(123)
+    123
     >>> parse_bytes('5 foos')  # doctest: +SKIP
     ValueError: Could not interpret 'foos' as a byte unit
     """
+    if isinstance(s, (int, float)):
+        return int(s)
     s = s.replace(" ", "")
     if not s[0].isdigit():
         s = "1" + s
@@ -1292,6 +1318,8 @@ def parse_timedelta(s, default="seconds"):
     >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
     3
     """
+    if s is None:
+        return None
     if isinstance(s, timedelta):
         s = s.total_seconds()
         return int(s) if int(s) == s else s
@@ -1321,13 +1349,7 @@ def parse_timedelta(s, default="seconds"):
 
 def has_keyword(func, keyword):
     try:
-        if PY3:
-            return keyword in inspect.signature(func).parameters
-        else:
-            if isinstance(func, functools.partial):
-                return keyword in inspect.getargspec(func.func).args
-            else:
-                return keyword in inspect.getargspec(func).args
+        return keyword in inspect.signature(func).parameters
     except Exception:
         return False
 

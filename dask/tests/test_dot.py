@@ -128,7 +128,9 @@ def test_aliases():
         pytest.param(
             "jpeg",
             Image,
-            marks=pytest.mark.xfail(reason="jpeg not always supported in dot"),
+            marks=pytest.mark.xfail(
+                reason="jpeg not always supported in dot", strict=False
+            ),
         ),
         ("dot", type(None)),
         ("pdf", type(None)),
@@ -159,7 +161,9 @@ def test_dot_graph(tmpdir, format, typ):
         pytest.param(
             "jpeg",
             Image,
-            marks=pytest.mark.xfail(reason="jpeg not always supported in dot"),
+            marks=pytest.mark.xfail(
+                reason="jpeg not always supported in dot", strict=False
+            ),
         ),
         ("dot", type(None)),
         ("pdf", type(None)),

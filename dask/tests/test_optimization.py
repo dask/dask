@@ -6,7 +6,6 @@ from functools import partial
 import pytest
 
 from dask.utils_test import add, inc
-from dask.compatibility import apply
 from dask.core import get_dependencies
 from dask.local import get_sync
 from dask.optimization import (
@@ -20,7 +19,7 @@ from dask.optimization import (
     fuse_linear,
     SubgraphCallable,
 )
-from dask.utils import partial_by_order
+from dask.utils import partial_by_order, apply
 
 
 def double(x):
@@ -1223,7 +1222,7 @@ def test_fuse_subgraphs():
     assert res == sol
 
     res = fuse(dsk, "inc-2", fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
@@ -1252,7 +1251,7 @@ def test_fuse_subgraphs():
     assert res in sols
 
     res = fuse(dsk, ["inc-2", "add-2"], fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(

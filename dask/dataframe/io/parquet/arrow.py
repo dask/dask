@@ -1,3 +1,4 @@
+from functools import partial
 import json
 
 import pandas as pd
@@ -32,7 +33,7 @@ def _get_md_row_groups(pieces):
     return row_groups
 
 
-def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
+def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
     """ Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
@@ -44,7 +45,7 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
         if gather_statistics is not False:
             # This scans all the files
             dataset = pq.ParquetDataset(
-                paths, filesystem=fs, **kwargs.get("dataset", {})
+                paths, filesystem=fs, filters=filters, **dataset_kwargs
             )
         else:
             base, fns = _analyze_paths(paths, fs)
@@ -54,25 +55,26 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
                 dataset = pq.ParquetDataset(
                     base + fs.sep + "_metadata",
                     filesystem=fs,
-                    **kwargs.get("dataset", {}),
+                    filters=filters,
+                    **dataset_kwargs,
                 )
             else:
                 # Rely on metadata for 0th file.
                 # Will need to pass a list of paths to read_partition
-                dataset = pq.ParquetDataset(
-                    paths[0], filesystem=fs, **kwargs.get("dataset", {})
-                )
+                dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
                 parts = [base + fs.sep + fn for fn in fns]
     else:
         if fs.isdir(paths[0]):
             # This is a directory, check for _metadata, then _common_metadata
             allpaths = fs.glob(paths[0] + fs.sep + "*")
-            base, fns = _analyze_paths(paths, fs)
+            base, fns = _analyze_paths(allpaths, fs)
             relpaths = [path.replace(base, "").lstrip("/") for path in allpaths]
+            if "_metadata" in relpaths and "validate_schema" not in dataset_kwargs:
+                dataset_kwargs["validate_schema"] = False
             if "_metadata" in relpaths or gather_statistics is not False:
                 # Let arrow do its thing (use _metadata or scan files)
                 dataset = pq.ParquetDataset(
-                    paths, filesystem=fs, **kwargs.get("dataset", {})
+                    paths, filesystem=fs, filters=filters, **dataset_kwargs
                 )
             else:
                 # Use _common_metadata file if it is available.
@@ -81,18 +83,16 @@ def _determine_dataset_parts(fs, paths, gather_statistics, **kwargs):
                     dataset = pq.ParquetDataset(
                         base + fs.sep + "_common_metadata",
                         filesystem=fs,
-                        **kwargs.get("dataset", {}),
+                        **dataset_kwargs,
                     )
                 else:
                     dataset = pq.ParquetDataset(
-                        allpaths[0], filesystem=fs, **kwargs.get("dataset", {})
+                        allpaths[0], filesystem=fs, **dataset_kwargs
                     )
                 parts = [base + fs.sep + fn for fn in fns]
         else:
             # There is only one file to read
-            dataset = pq.ParquetDataset(
-                paths, filesystem=fs, **kwargs.get("dataset", {})
-            )
+            dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
     return parts, dataset
 
 
@@ -112,9 +112,8 @@ class ArrowEngine(Engine):
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below)
         parts, dataset = _determine_dataset_parts(
-            fs, paths, gather_statistics, **kwargs
+            fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
-
         if dataset.partitions is not None:
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
@@ -122,7 +121,10 @@ class ArrowEngine(Engine):
         else:
             partitions = []
 
-        schema = dataset.schema.to_arrow_schema()
+        if dataset.metadata:
+            schema = dataset.metadata.schema.to_arrow_schema()
+        else:
+            schema = dataset.schema.to_arrow_schema()
         columns = None
 
         has_pandas_metadata = (
@@ -203,22 +205,30 @@ class ArrowEngine(Engine):
 
         if gather_statistics:
             stats = []
-            for row_group in row_groups:
+            skip_cols = set()  # Columns with min/max = None detected
+            for ri, row_group in enumerate(row_groups):
                 s = {"num-rows": row_group.num_rows, "columns": []}
                 for i, name in enumerate(names):
-                    column = row_group.column(i)
-                    d = {"name": name}
-                    if column.statistics:
-                        cs_min = column.statistics.min
-                        cs_max = column.statistics.max
-                        d.update(
-                            {
-                                "min": cs_min,
-                                "max": cs_max,
-                                "null_count": column.statistics.null_count,
-                            }
-                        )
-                    s["columns"].append(d)
+                    if name not in skip_cols:
+                        column = row_group.column(i)
+                        d = {"name": name}
+                        if column.statistics:
+                            cs_min = column.statistics.min
+                            cs_max = column.statistics.max
+                            if not column.statistics.has_min_max:
+                                cs_min, cs_max = None, None
+                            if None in [cs_min, cs_max] and ri == 0:
+                                skip_cols.add(name)
+                                continue
+                            cs_vals = pd.Series([cs_min, cs_max])
+                            d.update(
+                                {
+                                    "min": cs_vals[0],
+                                    "max": cs_vals[1],
+                                    "null_count": column.statistics.null_count,
+                                }
+                            )
+                        s["columns"].append(d)
                 stats.append(s)
         else:
             stats = None
@@ -242,7 +252,9 @@ class ArrowEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            parts = pieces
+            parts = [
+                (piece.path, piece.row_group, piece.partition_keys) for piece in pieces
+            ]
         parts = [
             {
                 "piece": piece,
@@ -260,30 +272,27 @@ class ArrowEngine(Engine):
         if isinstance(index, list):
             columns += index
         if isinstance(piece, str):
-            # `piece` is a file path
-            # TODO: What to do about partitions?
-            table = pq.read_table(
-                piece,
-                columns=columns,
-                use_pandas_metadata=True,
-                filesystem=fs,
-                use_threads=False,
-                **kwargs.get("read", {}),
+            # `piece` is a file-path string
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
             )
         else:
-            # `piece` is a row-group
-            with fs.open(piece.path, mode="rb") as f:
-                table = piece.read(
-                    columns=columns,
-                    partitions=partitions,
-                    use_pandas_metadata=True,
-                    file=f,
-                    use_threads=False,
-                    **kwargs.get("read", {}),
-                )
-        df = table.to_pandas(
-            categories=categories, use_threads=False, ignore_metadata=True
-        )[list(columns)]
+            # `piece` contains (path, row_group, partition_keys)
+            piece = pq.ParquetDatasetPiece(
+                piece[0],
+                row_group=piece[1],
+                partition_keys=piece[2],
+                open_file_func=partial(fs.open, mode="rb"),
+            )
+        df = piece.read(
+            columns=columns,
+            partitions=partitions,
+            use_pandas_metadata=True,
+            use_threads=False,
+            **kwargs.get("read", {}),
+        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
+            list(columns)
+        ]
 
         if index:
             df = df.set_index(index)

@@ -1,11 +1,13 @@
-# coding=utf-8
-from __future__ import absolute_import, division, print_function
-
-from itertools import repeat
-import multiprocessing
+import gc
 import math
+import multiprocessing
 import os
 import random
+import weakref
+from bz2 import BZ2File
+from collections.abc import Iterator
+from gzip import GzipFile
+from itertools import repeat
 
 import partd
 import pytest
@@ -27,7 +29,6 @@ from dask.bag.core import (
     from_delayed,
 )
 from dask.bag.utils import assert_eq
-from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
@@ -853,9 +854,7 @@ def test_to_dataframe():
         check_parts(df, sol)
 
 
-ext_open = [("gz", GzipFile), ("", open)]
-if not PY2:
-    ext_open.append(("bz2", BZ2File))
+ext_open = [("gz", GzipFile), ("bz2", BZ2File), ("", open)]
 
 
 @pytest.mark.parametrize("ext,myopen", ext_open)
@@ -933,9 +932,7 @@ def test_to_textfiles_name_function_warn():
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u"汽车", u"苹果", u"天气"], npartitions=2)
-    for ext, myopen in [("gz", GzipFile), ("bz2", BZ2File), ("", open)]:
-        if ext == "bz2" and PY2:
-            continue
+    for ext, myopen in ext_open:
         with tmpdir() as dir:
             c = b.to_textfiles(
                 os.path.join(dir, "*." + ext), encoding="gb18030", compute=False
@@ -1419,3 +1416,55 @@ def test_map_keynames():
     assert set(b.map(inc).__dask_graph__()) != set(
         b.map_partitions(inc).__dask_graph__()
     )
+
+
+def test_map_releases_element_references_as_soon_as_possible():
+    # Ensure that Bag.map doesn't keep *element* references longer than
+    # necessary. Previous map implementations used ``yield``, which would keep
+    # a reference to the yielded element until the yielded method resumed (this
+    # is just how generator functions work in CPython).
+    #
+    # See https://github.com/dask/dask/issues/5189
+    #
+    # We test 2 variant of potential extra references here:
+    # 1. Within an element of a partition:
+    #    At the time of the second `f_create` for each element, the `C` from
+    #    the first `f_create` should be dropped.
+    # 2. Within a partition:
+    #    When the second item within a partition is processed, `C` from the
+    #    first item should already be dropped.
+    class C:
+        def __init__(self, i):
+            self.i = i
+
+    # keep a weakref to all existing instances of `C`
+    in_memory = weakref.WeakSet()
+
+    def f_create(i):
+        # check that there are no instances of `C` left
+        assert len(in_memory) == 0
+
+        # create new instance
+        o = C(i)
+        in_memory.add(o)
+
+        return o
+
+    def f_drop(o):
+        # o reference dropped on return, should collect
+        return o.i + 100
+
+    b = (
+        db.from_sequence(range(2), npartitions=1)
+        .map(f_create)
+        .map(f_drop)
+        .map(f_create)
+        .map(f_drop)
+        .sum()
+    )
+    try:
+        # Disable gc to ensure refcycles don't matter here
+        gc.disable()
+        b.compute(scheduler="sync")
+    finally:
+        gc.enable()

@@ -1,16 +1,17 @@
-from __future__ import absolute_import, division, print_function
-
 import io
 import itertools
 import math
 import uuid
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from operator import getitem
 from random import Random
+from urllib.request import urlopen
 
+import toolz
 from toolz import (
     merge,
     take,
@@ -27,8 +28,6 @@ from toolz import (
     accumulate,
     peek,
 )
-from toolz.compatibility import iteritems, zip
-import toolz
 
 _implement_accumulate = LooseVersion(toolz.__version__) > "0.7.4"
 try:
@@ -66,7 +65,6 @@ from .. import config
 from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict, flatten
 from ..delayed import Delayed, unpack_collections
@@ -74,6 +72,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
 from ..optimization import fuse, cull, inline
 from ..utils import (
+    apply,
     system_encoding,
     takes_multiple_arguments,
     funcname,
@@ -1690,7 +1689,7 @@ class Bag(DaskMethodsMixin):
         """
         if not _implement_accumulate:
             raise NotImplementedError(
-                "accumulate requires `toolz` > 0.7.4" " or `cytoolz` > 0.7.3."
+                "accumulate requires `toolz` > 0.7.4 or `cytoolz` > 0.7.3."
             )
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)
@@ -1915,7 +1914,7 @@ def merge_frequencies(seqs):
     out = defaultdict(int)
     out.update(first)
     for d in rest:
-        for k, v in iteritems(d):
+        for k, v in d.items():
             out[k] += v
     return out
 
@@ -1993,43 +1992,63 @@ def bag_zip(*bags):
     return Bag(graph, name, npartitions)
 
 
-def map_chunk(f, args, bag_kwargs, kwargs):
+def map_chunk(f, iters, iter_kwarg_keys=None, kwargs=None):
+    """Map ``f`` across one or more iterables, maybe with keyword arguments.
+
+    Low-level function used in ``bag_map``, not user facing.
+
+    Arguments
+    ---------
+    f : callable
+    iters : List[Iterable]
+    iter_kwarg_keys : List[str] or None
+        Keyword names to use for pair with the tail end of ``iters``, allowing
+        keyword arguments to be passed in from iterators.
+    kwargs : dict or None
+        Additional constant keyword arguments to use on every call to ``f``.
+    """
     if kwargs:
         f = partial(f, **kwargs)
+    iters = [iter(a) for a in iters]
+    return _MapChunk(f, iters, kwarg_keys=iter_kwarg_keys)
 
-    args = [iter(a) for a in args]
-    iters = list(args)
-    if bag_kwargs:
-        keys = list(bag_kwargs)
-        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
-        iters.extend(kw_val_iters)
-        kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
-        if args:
-            for a, k in zip(zip(*args), kw_iter):
-                yield f(*a, **k)
-        else:
-            for k in kw_iter:
-                yield f(**k)
-    else:
-        for a in zip(*args):
-            yield f(*a)
 
-    # Check that all iterators are fully exhausted
-    if len(iters) > 1:
-        for i in iters:
-            if isinstance(i, itertools.repeat):
-                continue
-            try:
-                next(i)
-            except StopIteration:
-                pass
-            else:
-                msg = (
-                    "map called with multiple bags that aren't identically "
-                    "partitioned. Please ensure that all bag arguments "
-                    "have the same partition lengths"
-                )
-                raise ValueError(msg)
+class _MapChunk(Iterator):
+    def __init__(self, f, iters, kwarg_keys=None):
+        self.f = f
+        self.iters = iters
+        self.kwarg_keys = kwarg_keys or ()
+        self.nkws = len(self.kwarg_keys)
+
+    def __next__(self):
+        try:
+            vals = [next(i) for i in self.iters]
+        except StopIteration:
+            self.check_all_iterators_consumed()
+            raise
+
+        if self.nkws:
+            args = vals[: -self.nkws]
+            kwargs = dict(zip(self.kwarg_keys, vals[-self.nkws :]))
+            return self.f(*args, **kwargs)
+        return self.f(*vals)
+
+    def check_all_iterators_consumed(self):
+        if len(self.iters) > 1:
+            for i in self.iters:
+                if isinstance(i, itertools.repeat):
+                    continue
+                try:
+                    next(i)
+                except StopIteration:
+                    pass
+                else:
+                    msg = (
+                        "map called with multiple bags that aren't identically "
+                        "partitioned. Please ensure that all bag arguments "
+                        "have the same partition lengths"
+                    )
+                    raise ValueError(msg)
 
 
 def starmap_chunk(f, x, kwargs):
@@ -2151,21 +2170,21 @@ def bag_map(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_args(n):
-        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+    def build_iters(n):
+        args = [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+        if bag_kwargs:
+            args.extend((b.name, n) for b in bag_kwargs.values())
+        return args
 
-    def build_bag_kwargs(n):
-        if not bag_kwargs:
-            return None
-        return (
-            dict,
-            (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
-        )
+    if bag_kwargs:
+        iter_kwarg_keys = list(bag_kwargs)
+    else:
+        iter_kwarg_keys = None
 
     dsk = {
         (name, n): (
             reify,
-            (map_chunk, func, build_args(n), build_bag_kwargs(n), other_kwargs),
+            (map_chunk, func, build_iters(n), iter_kwarg_keys, other_kwargs),
         )
         for n in range(npartitions)
     }

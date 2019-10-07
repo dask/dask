@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+from collections.abc import Iterator
 from functools import wraps
 from numbers import Number
 
@@ -9,7 +8,6 @@ from toolz import merge, merge_sorted
 from .core import Array
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..compatibility import Iterator
 
 
 @wraps(np.percentile)
@@ -113,7 +111,7 @@ def percentile(a, q, interpolation="linear", method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest " "method."
+            "crick", "crick is a required dependency for using the t-digest method."
         )
 
         name = "percentile_tdigest_chunk-" + token

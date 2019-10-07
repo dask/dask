@@ -151,7 +151,7 @@ def to_tiledb(
             and (darray.ndim == tdb.ndim)
         ):
             raise ValueError(
-                "Target TileDB array layout is not compatible with " "source array"
+                "Target TileDB array layout is not compatible with source array"
             )
     else:
         raise ValueError(

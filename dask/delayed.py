@@ -1,9 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 import operator
 import types
 import uuid
 import warnings
+from collections.abc import Iterator
 
 try:
     from cytoolz import curry, concat, unique, merge
@@ -13,12 +12,12 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply, Iterator, is_dataclass, dataclass_fields
+from .compatibility import is_dataclass, dataclass_fields
 
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
+from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
 from .highlevelgraph import HighLevelGraph
 
 __all__ = ["Delayed", "delayed"]
@@ -418,7 +417,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
             raise ValueError(
-                "nout must be None or a non-negative integer," " got %s" % nout
+                "nout must be None or a non-negative integer, got %s" % nout
             )
         if not name:
             try:
@@ -525,13 +524,13 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __iter__(self):
         if getattr(self, "_length", None) is None:
-            raise TypeError("Delayed objects of unspecified length are " "not iterable")
+            raise TypeError("Delayed objects of unspecified length are not iterable")
         for i in range(self._length):
             yield self[i]
 
     def __len__(self):
         if getattr(self, "_length", None) is None:
-            raise TypeError("Delayed objects of unspecified length have " "no len()")
+            raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
     def __call__(self, *args, **kwargs):

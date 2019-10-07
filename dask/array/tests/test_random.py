@@ -237,14 +237,16 @@ def test_choice():
     assert res.dtype == np_dtype
     assert res.shape == size
 
-    np_a = np.array([1, 3, 5, 7, 9], dtype="f8")
+    py_a = [1, 3, 5, 7, 9]
+    np_a = np.array(py_a, dtype="f8")
     da_a = da.from_array(np_a, chunks=2)
 
-    for a in [np_a, da_a]:
+    for a in [py_a, np_a, da_a]:
         x = da.random.choice(a, size=size, chunks=chunks)
         res = x.compute()
-        assert x.dtype == np_a.dtype
-        assert res.dtype == np_a.dtype
+        expected_dtype = np.asarray(a).dtype
+        assert x.dtype == expected_dtype
+        assert res.dtype == expected_dtype
         assert set(np.unique(res)).issubset(np_a)
 
     np_p = np.array([0, 0.2, 0.2, 0.3, 0.3])
@@ -299,6 +301,25 @@ def test_names():
 
     assert name.startswith("normal")
     assert len(key_split(name)) < 10
+
+
+def test_permutation():
+    x = da.arange(12, chunks=3)
+    y = da.random.permutation(x)
+
+    assert y.shape == x.shape
+    assert y.dtype == x.dtype
+
+    y.compute()  # smoke test
+
+    a = da.random.RandomState(0)
+    b = da.random.RandomState(0)
+    r1 = a.permutation(x)
+    r2 = b.permutation(x)
+    assert_eq(r1, r2)
+
+    x = da.random.permutation(100)
+    assert x.shape == (100,)
 
 
 def test_external_randomstate_class():

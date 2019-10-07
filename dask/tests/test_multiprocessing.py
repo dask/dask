@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import sys
 import multiprocessing
 from operator import add
@@ -101,10 +99,10 @@ def test_unpicklable_args_generate_errors():
 
 
 def test_reuse_pool():
-    pool = multiprocessing.Pool()
-    with dask.config.set(pool=pool):
-        assert get({"x": (inc, 1)}, "x") == 2
-        assert get({"x": (inc, 1)}, "x") == 2
+    with multiprocessing.Pool() as pool:
+        with dask.config.set(pool=pool):
+            assert get({"x": (inc, 1)}, "x") == 2
+            assert get({"x": (inc, 1)}, "x") == 2
 
 
 def test_dumps_loads():
@@ -142,9 +140,6 @@ def test_random_seeds(random):
 @pytest.mark.skipif(
     sys.platform == "win32", reason="Windows doesn't support different contexts"
 )
-@pytest.mark.skipif(
-    sys.version_info.major == 2, reason="Python 2 doesn't support different contexts"
-)
 def test_custom_context_used_python3_posix():
     """ The 'multiprocessing.context' config is used to create the pool.
 
@@ -159,8 +154,6 @@ def test_custom_context_used_python3_posix():
 
         return "FAKE_MODULE_FOR_TEST" in sys.modules
 
-    import sys
-
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
         with dask.config.set({"multiprocessing.context": "spawn"}):
@@ -172,9 +165,6 @@ def test_custom_context_used_python3_posix():
 
 @pytest.mark.skipif(
     sys.platform == "win32", reason="Windows doesn't support different contexts"
-)
-@pytest.mark.skipif(
-    sys.version_info.major == 2, reason="Python 2 doesn't support different contexts"
 )
 def test_get_context_using_python3_posix():
     """ get_context() respects configuration.
@@ -188,12 +178,9 @@ def test_get_context_using_python3_posix():
         assert get_context() is multiprocessing.get_context("spawn")
 
 
-@pytest.mark.skipif(
-    sys.platform != "win32" and sys.version_info.major > 2,
-    reason="Python 3 POSIX supports different contexts",
-)
+@pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_custom_context_ignored_elsewhere():
-    """ On Python 2/Windows, setting 'multiprocessing.context' doesn't explode.
+    """ On Windows, setting 'multiprocessing.context' doesn't explode.
 
     Presumption is it's not used since unsupported, but mostly we care about
     not breaking anything.
@@ -204,10 +191,7 @@ def test_custom_context_ignored_elsewhere():
             assert get({"x": (inc, 1)}, "x") == 2
 
 
-@pytest.mark.skipif(
-    sys.platform != "win32" and sys.version_info.major > 2,
-    reason="Python 3 POSIX supports different contexts",
-)
+@pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_get_context_always_default():
     """ On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing

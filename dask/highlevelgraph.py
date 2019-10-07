@@ -1,8 +1,9 @@
+from collections.abc import Mapping
+
 import toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .compatibility import Mapping
 
 
 class HighLevelGraph(Mapping):

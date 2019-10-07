@@ -2,16 +2,17 @@ import pytest
 
 distributed = pytest.importorskip("distributed")
 
-import sys
+import asyncio
 from functools import partial
 from operator import add
+
 from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
-from dask.compatibility import get_named_args
 from dask.delayed import Delayed
-from dask.utils import tmpdir
+from dask.utils import tmpdir, get_named_args
+from distributed import futures_of
 from distributed.client import wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # noqa F401
 
@@ -121,8 +122,20 @@ def test_to_hdf_distributed(loop):
             test_to_hdf()
 
 
-@pytest.mark.xfail(reason="HDF not multi-process safe")
-@pytest.mark.parametrize("npartitions", [1, 4, 10])
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        1,
+        pytest.param(
+            4,
+            marks=pytest.mark.xfail(reason="HDF not multi-process safe", strict=False),
+        ),
+        pytest.param(
+            10,
+            marks=pytest.mark.xfail(reason="HDF not multi-process safe", strict=False),
+        ),
+    ],
+)
 def test_to_hdf_scheduler_distributed(npartitions, loop):
     from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 
@@ -197,5 +210,20 @@ def test_scheduler_equals_client(loop):
             )
 
 
-if sys.version_info >= (3, 5):
-    from dask.tests.py3_test_await import *  # noqa F401
+@gen_cluster(client=True)
+async def test_await(c, s, a, b):
+    x = dask.delayed(inc)(1)
+    x = await x.persist()
+    assert x.key in s.tasks
+    assert a.data or b.data
+    assert all(f.done() for f in futures_of(x))
+
+
+def test_local_scheduler():
+    async def f():
+        x = dask.delayed(inc)(1)
+        y = x + 1
+        z = await y.persist()
+        assert len(z.dask) == 1
+
+    asyncio.get_event_loop().run_until_complete(f())

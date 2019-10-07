@@ -93,7 +93,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
     from dask.bag import from_delayed
 
     import_required(
-        "fastavro", "fastavro is a required dependency for using " "bag.read_avro()."
+        "fastavro", "fastavro is a required dependency for using bag.read_avro()."
     )
 
     storage_options = storage_options or {}
@@ -198,7 +198,7 @@ def to_avro(
     b: dask.bag.Bag
     filename: list of str or str
         Filenames to write to. If a list, number must match the number of
-        partitions. If a string, must includ a glob character "*", which will
+        partitions. If a string, must include a glob character "*", which will
         be expanded using name_function
     schema: dict
         Avro schema dictionary, see above
@@ -237,7 +237,7 @@ def to_avro(
     from dask.bytes.core import open_files
 
     import_required(
-        "fastavro", "fastavro is a required dependency for using " "bag.to_avro()."
+        "fastavro", "fastavro is a required dependency for using bag.to_avro()."
     )
     _verify_schema(schema)
 

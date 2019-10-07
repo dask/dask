@@ -1,6 +1,5 @@
 import itertools
 import os
-import sys
 import pandas as pd
 import pytest
 import pickle
@@ -377,9 +376,6 @@ def test_set_index_divisions_sorted():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(
-    sys.version_info < (3, 4), reason="multiprocessing spawn only after Py3.4"
-)
 def test_set_index_consistent_divisions():
     # See https://github.com/dask/dask/issues/3867
     df = pd.DataFrame(
@@ -868,3 +864,22 @@ def test_set_index_errors_with_inplace_kwarg():
 
     with pytest.raises(NotImplementedError):
         ddf.set_index("a", inplace=True)
+
+
+def test_set_index_timestamp():
+    df = pd.DataFrame({"A": pd.date_range("2000", periods=12, tz="US/Central"), "B": 1})
+    ddf = dd.from_pandas(df, 2)
+    divisions = (
+        pd.Timestamp("2000-01-01 00:00:00-0600", tz="US/Central", freq="D"),
+        pd.Timestamp("2000-01-12 00:00:00-0600", tz="US/Central", freq="D"),
+    )
+
+    # Note: `freq` is lost during round trip
+    df2 = df.set_index("A")
+    ddf_new_div = ddf.set_index("A", divisions=divisions)
+    for (ts1, ts2) in zip(divisions, ddf_new_div.divisions):
+        assert ts1.value == ts2.value
+        assert ts1.tz == ts2.tz
+
+    assert_eq(df2, ddf_new_div)
+    assert_eq(df2, ddf.set_index("A"))

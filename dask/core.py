@@ -1,8 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 from itertools import chain
 
 from .utils_test import add, inc  # noqa: F401
+
+no_default = "__no_default__"
 
 
 def ishashable(x):
@@ -154,7 +154,7 @@ def get(dsk, out, cache=None):
     return result
 
 
-def get_dependencies(dsk, key=None, task=None, as_list=False):
+def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     """ Get the immediate tasks on which this task depends
 
     Examples
@@ -185,7 +185,7 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     """
     if key is not None:
         arg = dsk[key]
-    elif task is not None:
+    elif task is not no_default:
         arg = task
     else:
         raise ValueError("Provide either key or task")

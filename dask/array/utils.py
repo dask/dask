@@ -1,10 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 import difflib
 import functools
 import math
 import numbers
 import os
+import warnings
 
 import numpy as np
 from toolz import frequencies, concat
@@ -108,7 +107,9 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 
 def compute_meta(func, _dtype, *args, **kwargs):
-    with np.errstate(all="ignore"):
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+
         args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
         kwargs_meta = {
             k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()

@@ -1,4 +1,3 @@
-import textwrap
 import warnings
 from itertools import product
 from operator import add
@@ -11,9 +10,9 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
+from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (
@@ -27,13 +26,7 @@ from dask.dataframe.core import (
     total_mem_usage,
 )
 from dask.dataframe import methods
-from dask.dataframe.utils import (
-    assert_eq,
-    make_meta,
-    assert_max_deps,
-    PANDAS_VERSION,
-    PANDAS_GT_0250,
-)
+from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps, PANDAS_VERSION
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -245,7 +238,12 @@ def test_rename_series():
     ind.name = "renamed"
     dind.name = "renamed"
     assert ind.name == "renamed"
-    assert_eq(dind, ind)
+    with warnings.catch_warnings():
+        if _numpy_118:
+            # Catch DeprecationWarning from numpy from rewrite_blockwise
+            # where we attempt to do `'str' in ndarray`.
+            warnings.simplefilter("ignore", DeprecationWarning)
+        assert_eq(dind, ind)
 
 
 def test_rename_series_method():
@@ -403,7 +401,6 @@ def test_describe(include, exclude, percentiles, subset):
             )
 
 
-@pytest.mark.xfail(PANDAS_GT_0250, reason="Pandas change.")
 def test_describe_empty():
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(df_none, 2)
@@ -413,16 +410,9 @@ def test_describe_empty():
 
     # Pandas have different dtypes for resulting describe dataframe if there are only
     # None-values, pre-compute dask df to bypass _meta check
-    if PANDAS_GT_0250:
-        # https://github.com/pandas-dev/pandas/issues/27183
-        # may be fixed for pandas RC. If so, remove
-        expected = df_none.describe()
-        result = ddf_none.describe(percentiles_method="dask").compute()
-        assert_eq(expected, result)
-    else:
-        assert_eq(
-            df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
-        )
+    assert_eq(
+        df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
+    )
 
     with pytest.raises(ValueError):
         ddf_len0.describe(percentiles_method="dask").compute()
@@ -434,7 +424,6 @@ def test_describe_empty():
         ddf_nocols.describe(percentiles_method="dask").compute()
 
 
-@pytest.mark.xfail(PANDAS_GT_0250, reason="Pandas change.")
 def test_describe_empty_tdigest():
     pytest.importorskip("crick")
 
@@ -930,6 +919,7 @@ def test_drop_duplicates_subset():
                 df.drop_duplicates(subset=ss, **kwarg),
                 ddf.drop_duplicates(subset=ss, **kwarg),
             )
+            assert_eq(df.drop_duplicates(ss, **kwarg), ddf.drop_duplicates(ss, **kwarg))
 
 
 def test_get_partition():
@@ -1804,6 +1794,18 @@ def test_repartition_npartitions_same_limits():
     ddf.repartition(npartitions=10)
 
 
+def test_repartition_npartitions_numeric_edge_case():
+    """
+    Test that we cover numeric edge cases when
+    int(ddf.npartitions / npartitions) * npartitions) != ddf.npartitions
+    """
+    df = pd.DataFrame({"x": range(100)})
+    a = dd.from_pandas(df, npartitions=15)
+    assert a.npartitions == 15
+    b = a.repartition(npartitions=11)
+    assert_eq(a, b)
+
+
 def test_repartition_object_index():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6] * 10}, index=list("abdabd") * 10)
     a = dd.from_pandas(df, npartitions=5)
@@ -1912,6 +1914,7 @@ def test_fillna():
 
     assert_eq(ddf.fillna(100), df.fillna(100))
     assert_eq(ddf.A.fillna(100), df.A.fillna(100))
+    assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
 
     assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"))
     assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"))
@@ -2382,6 +2385,7 @@ def test_drop_axis_1():
         ddf.drop(["a", "x"], axis=1, errors="ignore"),
         df.drop(["a", "x"], axis=1, errors="ignore"),
     )
+    assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
 def test_gh580():
@@ -2530,10 +2534,6 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis="index")
 
 
-@pytest.mark.skipif(
-    PY2,
-    reason="Global filter is applied by another library, and " "not reset properly.",
-)
 def test_apply_warns():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2873,6 +2873,13 @@ def test_series_iteritems():
         assert a == b
 
 
+def test_series_iter():
+    s = pd.DataFrame({"x": [1, 2, 3, 4]})
+    ds = dd.from_pandas(s, npartitions=2)
+    for (a, b) in zip(s["x"], ds["x"]):
+        assert a == b
+
+
 def test_dataframe_iterrows():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3008,7 +3015,6 @@ def _assert_info(df, ddf, memory_usage=True):
 
 def test_info():
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3031,7 +3037,7 @@ def test_info():
 
     # Verbose=False
     ddf.info(buf=buf, verbose=False)
-    assert buf.getvalue() == unicode(
+    assert buf.getvalue() == (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Columns: 2 entries, x to y\n"
         "dtypes: int64(2)"
@@ -3044,7 +3050,6 @@ def test_info():
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3057,10 +3062,10 @@ def test_groupby_multilevel_info():
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    assert buf.getvalue() == unicode(
-        """<class 'dask.dataframe.core.DataFrame'>
-Columns: 1 entries, C to C
-dtypes: int64(1)"""
+    assert buf.getvalue() == (
+        "<class 'dask.dataframe.core.DataFrame'>\n"
+        "Columns: 1 entries, C to C\n"
+        "dtypes: int64(1)"
     )
 
     # multilevel
@@ -3069,13 +3074,10 @@ dtypes: int64(1)"""
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    expected = unicode(
-        textwrap.dedent(
-            """\
-    <class 'dask.dataframe.core.DataFrame'>
-    Columns: 2 entries, ('C', 'count') to ('C', 'sum')
-    dtypes: int64(2)"""
-        )
+    expected = (
+        "<class 'dask.dataframe.core.DataFrame'>\n"
+        "Columns: 2 entries, ('C', 'count') to ('C', 'sum')\n"
+        "dtypes: int64(2)"
     )
     assert buf.getvalue() == expected
 
@@ -3084,7 +3086,6 @@ def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
     from io import StringIO
-    from dask.compatibility import unicode
 
     pandas_format._put_lines = put_lines
 
@@ -3097,7 +3098,7 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
-    expected = unicode(
+    expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"
@@ -3883,7 +3884,7 @@ def test_mixed_dask_array_multi_dimensional():
 
 
 def test_meta_raises():
-    # Raise when we use a user defined fucntion
+    # Raise when we use a user defined function
     s = pd.Series(["abcd", "abcd"])
     ds = dd.from_pandas(s, npartitions=2)
     try:
@@ -4095,3 +4096,38 @@ def test_apply_and_enforce_error_message():
 
     assert "['x']" in str(info.value)
     assert "['x', 'y']" in str(info.value)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
+)
+def test_dataframe_explode():
+    df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
+    exploded_df = df.explode("A")
+    ddf = dd.from_pandas(df, npartitions=2)
+    exploded_ddf = ddf.explode("A")
+    assert ddf.divisions == exploded_ddf.divisions
+    assert_eq(exploded_ddf.compute(), exploded_df)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
+)
+def test_series_explode():
+    s = pd.Series([[1, 2, 3], "foo", [3, 4]])
+    exploded_s = s.explode()
+    ds = dd.from_pandas(s, npartitions=2)
+    exploded_ds = ds.explode()
+    assert_eq(exploded_ds, exploded_s)
+    assert ds.divisions == exploded_ds.divisions
+
+
+def test_pop():
+    df = pd.DataFrame({"x": range(10), "y": range(10)})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    s = ddf.pop("y")
+    assert s.name == "y"
+    assert ddf.columns == ["x"]
+    assert_eq(ddf, df[["x"]])

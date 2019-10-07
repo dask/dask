@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from distutils.version import LooseVersion
 
 import toolz
@@ -10,7 +8,6 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....compatibility import PY3, string_types
 from ....utils import import_required, natural_sort_key
 
 
@@ -162,7 +159,7 @@ def read_parquet(
         # User didn't specify columns, so ignore any intersection
         # of auto-detected values with the index (if necessary)
         ignore_index_column_intersection = True
-        columns = meta.columns
+        columns = [c for c in meta.columns]
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
@@ -201,9 +198,7 @@ def read_parquet(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError(
-                    "Specified index is invalid.\n" "index: {}".format(index)
-                )
+                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
         elif index is not False and len(out) > 1:
             if any(o["name"] == "index" for o in out):
                 # Use sorted column named "index" as the index
@@ -214,12 +209,16 @@ def read_parquet(
                     index_in_columns = True
                 elif index != [o["name"]]:
                     raise ValueError(
-                        "Specified index is invalid.\n" "index: {}".format(index)
+                        "Specified index is invalid.\nindex: {}".format(index)
                     )
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
-                    "Multiple sorted columns found, cannot autodetect index",
+                    "Multiple sorted columns found %s, cannot\n "
+                    "autodetect index. Will continue without an index.\n"
+                    "To pick an index column, use the index= keyword; to \n"
+                    "silence this warning use index=False."
+                    "" % [o["name"] for o in out],
                     RuntimeWarning,
                 )
                 index = False
@@ -299,7 +298,9 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
-    return df
+    columns = columns or []
+    index = index or []
+    return df[[c for c in columns if c not in index]]
 
 
 def to_parquet(
@@ -370,8 +371,14 @@ def to_parquet(
     """
     from dask import delayed
 
+    if compression == "default":
+        if snappy is not None:
+            compression = "snappy"
+        else:
+            compression = None
+
     partition_on = partition_on or []
-    if isinstance(partition_on, string_types):
+    if isinstance(partition_on, str):
         partition_on = [partition_on]
 
     if set(partition_on) - set(df.columns):
@@ -380,11 +387,6 @@ def to_parquet(
             "partition_on=%s ."
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
-
-    if compression != "default":
-        kwargs["compression"] = compression
-    elif snappy is not None:
-        kwargs["compression"] = "snappy"
 
     if isinstance(engine, str):
         engine = get_engine(engine)
@@ -462,6 +464,7 @@ def to_parquet(
             partition_on,
             write_metadata_file,
             fmd=meta,
+            compression=compression,
             index_cols=index_cols,
             **kwargs_pass
         )
@@ -561,6 +564,9 @@ def sorted_columns(statistics):
         success = True
         for stats in statistics[1:]:
             c = stats["columns"][i]
+            if c["min"] is None:
+                success = False
+                break
             if c["min"] >= max:
                 divisions.append(c["min"])
                 max = c["max"]
@@ -626,5 +632,4 @@ def apply_filters(parts, statistics, filters):
     return parts, statistics
 
 
-if PY3:
-    DataFrame.to_parquet.__doc__ = to_parquet.__doc__
+DataFrame.to_parquet.__doc__ = to_parquet.__doc__

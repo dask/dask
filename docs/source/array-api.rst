@@ -38,6 +38,7 @@ Top level user functions:
    bitwise_or
    bitwise_xor
    block
+   blockwise
    broadcast_arrays
    broadcast_to
    coarsen
@@ -116,8 +117,8 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   ~core.map_blocks
    map_overlap
+   map_blocks
    matmul
    max
    maximum
@@ -127,6 +128,7 @@ Top level user functions:
    minimum
    modf
    moment
+   moveaxis
    nanargmax
    nanargmin
    nancumprod
@@ -156,11 +158,13 @@ Top level user functions:
    ravel
    real
    rechunk
+   reduction
    repeat
    reshape
    result_type
    rint
    roll
+   rollaxis
    round
    sign
    signbit
@@ -183,6 +187,7 @@ Top level user functions:
    tril
    triu
    trunc
+   unify_chunks
    unique
    unravel_index
    var
@@ -279,6 +284,7 @@ Random
    random.noncentral_f
    random.normal
    random.pareto
+   random.permutation
    random.poisson
    random.power
    random.randint
@@ -410,6 +416,7 @@ Other functions
 .. autofunction:: bitwise_or
 .. autofunction:: bitwise_xor
 .. autofunction:: block
+.. autofunction:: blockwise
 .. autofunction:: broadcast_arrays
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
@@ -487,6 +494,7 @@ Other functions
 .. autofunction:: logical_not
 .. autofunction:: logical_or
 .. autofunction:: logical_xor
+.. autofunction:: map_blocks
 .. autofunction:: matmul
 .. autofunction:: max
 .. autofunction:: maximum
@@ -496,6 +504,7 @@ Other functions
 .. autofunction:: minimum
 .. autofunction:: modf
 .. autofunction:: moment
+.. autofunction:: moveaxis
 .. autofunction:: nanargmax
 .. autofunction:: nanargmin
 .. autofunction:: nancumprod
@@ -524,11 +533,13 @@ Other functions
 .. autofunction:: ravel
 .. autofunction:: real
 .. autofunction:: rechunk
+.. autofunction:: reduction
 .. autofunction:: repeat
 .. autofunction:: reshape
 .. autofunction:: result_type
 .. autofunction:: rint
 .. autofunction:: roll
+.. autofunction:: rollaxis
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
