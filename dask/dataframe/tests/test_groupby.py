@@ -1206,6 +1206,19 @@ def test_groupby_unaligned_index():
         assert_eq(res, sol)
 
 
+def test_groupby_string_label():
+    df = pd.DataFrame({"foo": [1, 1, 4], 'B': [2, 3, 4], 'C': [5, 6, 7]})
+    ddf = dd.from_pandas(pd.DataFrame(df), npartitions=1)
+    ddf_group = ddf.groupby("foo")
+    result = ddf_group.get_group(1).compute()
+
+    expected = pd.DataFrame({'foo': [1,1],
+                       'B': [2,3],
+                       'C': [5,6]}, index=pd.Index([0,1]))
+
+    tm.assert_frame_equal(result, expected)
+
+
 def test_groupby_dataframe_cum_caching():
     """Test caching behavior of cumulative operations on grouped dataframes.
 
