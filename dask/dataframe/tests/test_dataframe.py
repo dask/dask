@@ -4047,8 +4047,8 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
         np.random.shuffle(map_index)
         mapper.index = map_index
     expected = base.map(mapper)
-    dask_base = dd.from_pandas(base, npartitions=base_npart)
-    dask_map = dd.from_pandas(mapper, npartitions=map_npart)
+    dask_base = dd.from_pandas(base, npartitions=base_npart, sort=False)
+    dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
     result = dask_base.map(dask_map)
     dd.utils.assert_eq(expected, result)
 
