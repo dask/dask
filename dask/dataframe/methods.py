@@ -6,7 +6,14 @@ from pandas.util import hash_pandas_object
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250, hash_object_dispatch, group_split_dispatch
+from .utils import (
+    PANDAS_VERSION,
+    is_series_like,
+    is_dataframe_like,
+    PANDAS_GT_0250,
+    hash_object_dispatch,
+    group_split_dispatch,
+)
 from ..utils import Dispatch
 
 if PANDAS_VERSION >= "0.23":
