@@ -1026,7 +1026,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
     # Check datetime support
     tstamps_after_write = ddf_after_write.tstamps.values
     for i in range(len(df)):
-        # Need to test NaT seperately
+        # Need to test NaT separately
         if np.isnat(tstamps_after_write[i]):
             assert np.isnat(out_tstamps[i])
         else:
@@ -1035,7 +1035,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
     # Check timezone aware datetime support
     tz_tstamps_after_write = ddf_after_write.tz_tstamps.values
     for i in range(len(df)):
-        # Need to test NaT seperately
+        # Need to test NaT separately
         if np.isnat(tz_tstamps_after_write[i]):
             assert np.isnat(out_tz_tstamps[i])
         else:

@@ -3852,7 +3852,7 @@ def test_mixed_dask_array_multi_dimensional():
 
 
 def test_meta_raises():
-    # Raise when we use a user defined fucntion
+    # Raise when we use a user defined function
     s = pd.Series(["abcd", "abcd"])
     ds = dd.from_pandas(s, npartitions=2)
     try:
