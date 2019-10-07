@@ -50,7 +50,7 @@ from ..highlevelgraph import HighLevelGraph
 # corresponding support in ``apply_concat_apply``. Specifically, this function
 # operates on matching partitions of frame-like objects passed as varargs.
 #
-# After the inital chunk step, the passed index is implicitly passed along to
+# After the initial chunk step, the passed index is implicitly passed along to
 # subsequent operations as the index of the parittions. Groupby operations on
 # the individual partitions can then access the index via the ``levels``
 # parameter of the ``groupby`` function. The correct argument is determined by

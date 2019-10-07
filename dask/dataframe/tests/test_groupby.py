@@ -1048,7 +1048,7 @@ def test_aggregate__single_element_groups(agg_func):
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
     """Aggregate reuses intermediates. For example, with sum, count, and mean
-    the sums and counts are only calculated once accross the graph and reused to
+    the sums and counts are only calculated once across the graph and reused to
     compute the mean.
     """
     from dask.dataframe.groupby import _build_agg_args

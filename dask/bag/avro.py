@@ -198,7 +198,7 @@ def to_avro(
     b: dask.bag.Bag
     filename: list of str or str
         Filenames to write to. If a list, number must match the number of
-        partitions. If a string, must includ a glob character "*", which will
+        partitions. If a string, must include a glob character "*", which will
         be expanded using name_function
     schema: dict
         Avro schema dictionary, see above

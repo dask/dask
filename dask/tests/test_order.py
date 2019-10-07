@@ -337,7 +337,7 @@ def test_local_parents_of_reduction(abcde):
     |
     a3
 
-    Prefer to finish a1 stack before proceding to b2
+    Prefer to finish a1 stack before proceeding to b2
     """
     a, b, c, d, e = abcde
     a1, a2, a3 = [a + i for i in "123"]

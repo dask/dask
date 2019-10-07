@@ -1222,7 +1222,7 @@ def test_fuse_subgraphs():
     assert res == sol
 
     res = fuse(dsk, "inc-2", fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
@@ -1251,7 +1251,7 @@ def test_fuse_subgraphs():
     assert res in sols
 
     res = fuse(dsk, ["inc-2", "add-2"], fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(

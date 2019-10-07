@@ -519,7 +519,7 @@ def test_custom_collection():
     y = Tuple(dsk2, ["c", "d"])
     z = Tuple(dsk3, ["e", "f"])
 
-    # __slots__ defined on base mixin class propogates
+    # __slots__ defined on base mixin class propagates
     with pytest.raises(AttributeError):
         x.foo = 1
 

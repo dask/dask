@@ -331,7 +331,7 @@ accumulated experience, is Dask's :doc:`Diagnostic Dashboard
 The dashboard delivers a ton of visual feedback to users as they are running
 their computation to help them understand what is going on.  This both helps
 them to identify and resolve immediate bottlenecks, and also builds up that
-parallel performance intuition suprisingly quickly.
+parallel performance intuition surprisingly quickly.
 
 
 How much performance tuning does Dask require?

@@ -298,7 +298,7 @@ The `Zarr <https://zarr.readthedocs.io>`_ format is a chunk-wise binary array
 storage file format with a good selection of encoding and compression options.
 Due to each chunk being stored in a separate file, it is ideal for parallel
 access in both reading and writing (for the latter, if the Dask array
-chunks are alligned with the target). Furthermore, storage in
+chunks are aligned with the target). Furthermore, storage in
 :doc:`remote data services <remote-data-services>` such as S3 and GCS is
 supported.
 
