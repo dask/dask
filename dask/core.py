@@ -266,8 +266,7 @@ def reverse_dict(d):
     >>> reverse_dict(d)  # doctest: +SKIP
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
-    terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = {t: set() for t in terms}
+    result = {t: set() for t in d.keys() | chain.from_iterable(d.values())}
     for k, vals in d.items():
         for val in vals:
             result[val].add(k)
