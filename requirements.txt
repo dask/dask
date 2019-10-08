@@ -1,6 +1,6 @@
 click >= 6.6
 cloudpickle >= 0.2.2
-dask >= 2.3
+dask >= 2.5.2
 msgpack
 psutil >= 5.0
 sortedcontainers !=2.0.0, !=2.0.1
