@@ -267,9 +267,10 @@ def reverse_dict(d):
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
     result = {t: set() for t in d.keys() | chain.from_iterable(d.values())}
+    _add = set.add
     for k, vals in d.items():
         for val in vals:
-            result[val].add(k)
+            _add(result[val], k)
     return result
 
 
