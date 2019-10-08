@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
-from . import methods
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
@@ -16,7 +15,7 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
-from .utils import series_type_like_df
+from .utils import series_type_like_df, hash_object_dispatch, group_split_dispatch
 
 
 def set_index(
@@ -543,7 +542,7 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    return methods.hash_df(df) % int(npartitions)
+    return hash_object_dispatch(df, index=False) % int(npartitions)
 
 
 def barrier(args):
@@ -568,7 +567,7 @@ def shuffle_group_2(df, col):
         return {}, df
     ind = df[col].astype(np.int64)
     n = ind.max() + 1
-    result2 = methods.group_split(df, ind.values.view(np.int64), n)
+    result2 = group_split_dispatch(df, ind.values.view(np.int64), n)
     return result2, df.iloc[:0]
 
 
@@ -609,7 +608,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     if col == "_partitions":
         ind = df[col]
     else:
-        ind = methods.hash_df(df)
+        ind = hash_object_dispatch(df, index=False)
 
     c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
@@ -618,7 +617,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    return methods.group_split(df, c.astype(np.int64), k)
+    return group_split_dispatch(df, c.astype(np.int64), k)
 
 
 def shuffle_group_3(df, col, npartitions, p):
