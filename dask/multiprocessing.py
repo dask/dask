@@ -8,7 +8,7 @@ from warnings import warn
 import cloudpickle
 
 from . import config
-from .ssytem import CPU_COUNT
+from .system import CPU_COUNT
 from .local import reraise, get_async  # TODO: get better get
 from .optimization import fuse, cull
 
