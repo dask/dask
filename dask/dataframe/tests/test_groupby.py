@@ -2115,7 +2115,7 @@ def test_groupby_value_counts():
     ddf = dd.from_pandas(df, npartitions=2)
 
     pd_gb = df.groupby("foo")["bar"].value_counts()
-    dd_gb = ddf.groupby("foo")["bar"].value_counts()#.compute()
+    dd_gb = ddf.groupby("foo")["bar"].value_counts()  # .compute()
     assert (pd_gb == dd_gb.compute()).all()
     #  assert_eq(pd_gb, dd_gb)  # fails
 
