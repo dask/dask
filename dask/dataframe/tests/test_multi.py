@@ -1963,3 +1963,20 @@ def test_multi_duplicate_divisions():
     r2 = sf1.merge(sf2, how="left", left_index=True, right_index=True)
 
     assert_eq(r1, r2)
+
+
+def test_merge_outer_empty():
+    # Issue #5470 bug reproducer
+    k_clusters = 3
+    df = pd.DataFrame(
+        {"user": ["A", "B", "C", "D", "E", "F"], "cluster": [1, 1, 2, 2, 3, 3]}
+    )
+    df = dd.from_pandas(df, npartitions=10)
+    empty_df = dd.from_pandas(pd.DataFrame(), npartitions=10)
+
+    for x in range(0, k_clusters + 1):
+        assert_eq(
+            dd.merge(empty_df, df[df.cluster == x], how="outer").compute(),
+            df[df.cluster == x].compute(),
+            check_index=False,
+        )
