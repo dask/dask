@@ -73,3 +73,9 @@ the scheduler as so:
    def dask_setup(scheduler):
        plugin = MyPlugin(scheduler)
        scheduler.add_plugin(plugin)
+
+Worker Plugins
+=================
+
+.. autoclass:: distributed.diagnostics.plugin.WorkerPlugin
+   :members:

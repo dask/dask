@@ -1515,6 +1515,7 @@ class Worker(ServerNode):
         self.task_state[key] = state or finish
         if self.validate:
             self.validate_key(key)
+        self._notify_transition(key, start, finish, **kwargs)
 
     def transition_waiting_ready(self, key):
         try:
@@ -2293,15 +2294,16 @@ class Worker(ServerNode):
                 self.plugins[name] = plugin
 
                 logger.info("Starting Worker plugin %s" % name)
-                try:
-                    result = plugin.setup(worker=self)
-                    if hasattr(result, "__await__"):
-                        result = await result
-                except Exception as e:
-                    msg = error_message(e)
-                    return msg
-                else:
-                    return {"status": "OK"}
+                if hasattr(plugin, "setup"):
+                    try:
+                        result = plugin.setup(worker=self)
+                        if hasattr(result, "__await__"):
+                            result = await result
+                    except Exception as e:
+                        msg = error_message(e)
+                        return msg
+
+                return {"status": "OK"}
 
     async def actor_execute(
         self, comm=None, actor=None, function=None, args=(), kwargs={}
@@ -2711,6 +2713,16 @@ class Worker(ServerNode):
 
         result = {k: profile.call_stack(frame) for k, frame in frames.items()}
         return result
+
+    def _notify_transition(self, key, start, finish, **kwargs):
+        for name, plugin in self.plugins.items():
+            if hasattr(plugin, "transition"):
+                try:
+                    plugin.transition(key, start, finish, **kwargs)
+                except Exception:
+                    logger.info(
+                        "Plugin '%s' failed with exception" % name, exc_info=True
+                    )
 
     ##############
     # Validation #

@@ -1,6 +1,5 @@
-from distributed import Worker
+from distributed import Worker, SchedulerPlugin
 from distributed.utils_test import inc, gen_cluster
-from distributed.diagnostics.plugin import SchedulerPlugin
 
 
 @gen_cluster(client=True)

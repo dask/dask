@@ -66,6 +66,7 @@ from .security import Security
 from .sizeof import sizeof
 from .threadpoolexecutor import rejoin
 from .worker import dumps_task, get_client, get_worker, secede
+from .diagnostics.plugin import WorkerPlugin
 from .utils import (
     All,
     sync,
@@ -3908,13 +3909,15 @@ class Client(Node):
         """
         Registers a lifecycle worker plugin for all current and future workers.
 
-        This registers a new object to handle setup and teardown for workers in
-        this cluster. The plugin will instantiate itself on all currently
-        connected workers.  It will also be run on any worker that connects in
-        the future.
+        This registers a new object to handle setup, task state transitions and
+        teardown for workers in this cluster. The plugin will instantiate itself
+        on all currently connected workers. It will also be run on any worker
+        that connects in the future.
 
-        The plugin should be an object with ``setup`` and ``teardown`` methods.
-        It must be serializable with the pickle or cloudpickle modules.
+        The plugin may include methods ``setup``, ``teardown``, and
+        ``transition``.  See the ``dask.distributed.WorkerPlugin`` class or the
+        examples below for the interface and docstrings.  It must be
+        serializable with the pickle or cloudpickle modules.
 
         If the plugin has a ``name`` attribute, or if the ``name=`` keyword is
         used then that will control idempotency.  A a plugin with that name has
@@ -3925,7 +3928,7 @@ class Client(Node):
 
         Parameters
         ----------
-        plugin: object
+        plugin: WorkerPlugin
             The plugin object to pass to the workers
         name: str, optional
             A name for the plugin.
@@ -3933,12 +3936,14 @@ class Client(Node):
 
         Examples
         --------
-        >>> class MyPlugin:
+        >>> class MyPlugin(WorkerPlugin):
         ...     def __init__(self, *args, **kwargs):
         ...         pass  # the constructor is up to you
         ...     def setup(self, worker: dask.distributed.Worker):
         ...         pass
         ...     def teardown(self, worker: dask.distributed.Worker):
+        ...         pass
+        ...     def transition(self, key: str, start: str, finish: str, **kwargs):
         ...         pass
 
         >>> plugin = MyPlugin(1, 2, 3)
@@ -3953,11 +3958,15 @@ class Client(Node):
         ...    return plugin.my_state
 
         >>> future = client.run(f)
+
+        See Also
+        --------
+        distributed.WorkerPlugin
         """
         return self.sync(self._register_worker_plugin, plugin=plugin, name=name)
 
 
-class _WorkerSetupPlugin(object):
+class _WorkerSetupPlugin(WorkerPlugin):
     """ This is used to support older setup functions as callbacks """
 
     def __init__(self, setup):
