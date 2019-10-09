@@ -1990,11 +1990,16 @@ def test_graph_size_pyarrow(tmpdir, engine):
     assert len(pickle.dumps(ddf2.__dask_graph__())) < 10000
 
 
-def test_getitem_optimization(tmpdir, engine):
-    df = pd.DataFrame({"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000})
-    ddf = dd.from_pandas(df, 2)
+@pytest.mark.parametrize("preserve_index", [True, False])
+@pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
+def test_getitem_optimization(tmpdir, engine, preserve_index, index):
+    df = pd.DataFrame(
+        {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
+    )
+    df.index.name = "my_index"
+    ddf = dd.from_pandas(df, 2, sort=False)
     fn = os.path.join(str(tmpdir))
-    ddf.to_parquet(fn, engine=engine)
+    ddf.to_parquet(fn, engine=engine, write_index=preserve_index)
 
     ddf = dd.read_parquet(fn, engine=engine)["B"]
 
