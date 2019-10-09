@@ -679,13 +679,6 @@ def index_summary(idx, name=None):
     return "{}: {} entries{}".format(name, n, summary)
 
 
-def series_type_like_df(df):
-    """Get the concrete series type compatible with df."""
-    # TODO: https://github.com/pandas-dev/pandas/issues/27824
-    # Use a standard API, which will handle empty DataFrames.
-    return type(df._meta.iloc[:, 0])
-
-
 ###############################################################
 # Testing
 ###############################################################

@@ -15,7 +15,7 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
-from .utils import series_type_like_df, hash_object_dispatch, group_split_dispatch
+from .utils import hash_object_dispatch, group_split_dispatch
 
 
 def set_index(
@@ -170,8 +170,8 @@ def set_partition(
     shuffle
     partd
     """
-    divisions = series_type_like_df(df)(divisions)
-    meta = series_type_like_df(df)([0])
+    divisions = df._meta._constructor_sliced(divisions)
+    meta = df._meta._constructor_sliced([0])
     if np.isscalar(index):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
@@ -235,7 +235,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=series_type_like_df(df)([0]),
+        meta=df._meta._constructor_sliced([0]),
         transform_divisions=False,
     )
     df2 = df.assign(_partitions=partitions)
@@ -254,8 +254,8 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
 
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
     """ Shuffle dataframe so that column separates along divisions """
-    divisions = series_type_like_df(df)(divisions)
-    meta = series_type_like_df(df)([0])
+    divisions = df._meta._constructor_sliced(divisions)
+    meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
         set_partitions_pre, divisions=divisions, meta=meta
