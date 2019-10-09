@@ -5010,9 +5010,7 @@ def test_profile_keys(c, s, a, b):
 @gen_cluster()
 def test_client_with_name(s, a, b):
     with captured_logger("distributed.scheduler") as sio:
-        client = yield Client(
-            s.address, asynchronous=True, name="foo", silence_logs=False
-        )
+        client = yield Client(s.address, asynchronous=True, name="foo")
         assert "foo" in client.id
         yield client.close()
 
@@ -5356,7 +5354,7 @@ def test_de_serialization_none(s, a, b):
 
 @gen_cluster()
 def test_client_repr_closed(s, a, b):
-    c = yield Client(s.address, asynchronous=True, dashboard_address=None)
+    c = yield Client(s.address, asynchronous=True)
     yield c.close()
     c._repr_html_()
 

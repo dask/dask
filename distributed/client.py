@@ -643,6 +643,11 @@ class Client(Node):
             if address:
                 logger.info("Config value `scheduler-address` found: %s", address)
 
+        if address is not None and kwargs:
+            raise ValueError(
+                "Unexpected keyword arguments: {}".format(str(sorted(kwargs)))
+            )
+
         if isinstance(address, (rpc, PooledRPCCall)):
             self.scheduler = address
         elif hasattr(address, "scheduler_address"):

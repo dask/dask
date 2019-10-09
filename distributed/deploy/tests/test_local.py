@@ -219,6 +219,27 @@ def test_Client_kwargs(loop):
     assert c.cluster.status == "closed"
 
 
+def test_Client_unused_kwargs_with_cluster(loop):
+    with LocalCluster() as cluster:
+        with pytest.raises(Exception) as argexcept:
+            c = Client(cluster, n_workers=2, dashboard_port=8000, silence_logs=None)
+        assert (
+            str(argexcept.value)
+            == "Unexpected keyword arguments: ['dashboard_port', 'n_workers', 'silence_logs']"
+        )
+
+
+def test_Client_unused_kwargs_with_address(loop):
+    with pytest.raises(Exception) as argexcept:
+        c = Client(
+            "127.0.0.1:8786", n_workers=2, dashboard_port=8000, silence_logs=None
+        )
+    assert (
+        str(argexcept.value)
+        == "Unexpected keyword arguments: ['dashboard_port', 'n_workers', 'silence_logs']"
+    )
+
+
 def test_Client_twice(loop):
     with Client(loop=loop, silence_logs=False, dashboard_address=None) as c:
         with Client(loop=loop, silence_logs=False, dashboard_address=None) as f:
