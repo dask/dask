@@ -1,7 +1,7 @@
 """ Dataframe optimizations """
 import operator
 
-from ..optimization import cull, fuse_getitem, fuse
+from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
@@ -16,17 +16,11 @@ def optimize(dsk, keys, **kwargs):
         dsk = optimize_blockwise(dsk, keys=list(core.flatten(keys)))
 
     dsk = ensure_dict(dsk)
-    from .io import dataframe_from_ctable
 
     if isinstance(keys, list):
         dsk, dependencies = cull(dsk, list(core.flatten(keys)))
     else:
         dsk, dependencies = cull(dsk, [keys])
-    dsk = fuse_getitem(dsk, dataframe_from_ctable, 3)
-
-    from .io.parquet import read_parquet_part
-
-    dsk = fuse_getitem(dsk, read_parquet_part, 4)
 
     dsk, dependencies = fuse(
         dsk,

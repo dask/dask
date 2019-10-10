@@ -1,9 +1,4 @@
-import pytest
-from operator import getitem
-from toolz import merge
-
 import dask
-from dask.dataframe.io import dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd
 
@@ -13,29 +8,6 @@ dsk = {
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
 }
 dfs = list(dsk.values())
-
-
-def test_column_optimizations_with_bcolz_and_rewrite():
-    bcolz = pytest.importorskip("bcolz")
-
-    bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=["a", "b"])
-    for cols in [None, "abc", ["abc"]]:
-        dsk2 = merge(
-            dict(
-                (("x", i), (dataframe_from_ctable, bc, slice(0, 2), cols, {}))
-                for i in [1, 2, 3]
-            ),
-            dict((("y", i), (getitem, ("x", i), ["a", "b"])) for i in [1, 2, 3]),
-        )
-
-        expected = dict(
-            (("y", i), (dataframe_from_ctable, bc, slice(0, 2), ["a", "b"], {}))
-            for i in [1, 2, 3]
-        )
-
-        with dask.config.set(fuse_ave_width=0):
-            result = dd.optimize(dsk2, [("y", i) for i in [1, 2, 3]])
-        assert result == expected
 
 
 def test_fuse_ave_width():
