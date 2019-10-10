@@ -1,5 +1,5 @@
 Educational Resources
-=======
+=====================
 
 This is the curated list of resources for learning Dask:
 
