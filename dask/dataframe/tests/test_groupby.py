@@ -42,7 +42,7 @@ def agg_func(request):
     return request.param
 
 
-# @pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
+@pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
 def test_groupby_internal_repr_xfail():
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
