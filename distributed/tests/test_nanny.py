@@ -436,3 +436,12 @@ async def test_nanny_closes_cleanly(cleanup):
                         assert time() < start + 5
 
                     assert n.status == "closed"
+
+
+@pytest.mark.asyncio
+async def test_config(cleanup):
+    async with Scheduler() as s:
+        async with Nanny(s.address, config={"foo": "bar"}) as n:
+            async with Client(s.address, asynchronous=True) as client:
+                config = await client.run(dask.config.get, "foo")
+                assert config[n.worker_address] == "bar"

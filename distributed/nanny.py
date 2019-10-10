@@ -86,6 +86,7 @@ class Nanny(ServerNode):
         host=None,
         port=None,
         protocol=None,
+        config=None,
         **worker_kwargs
     ):
         self._setup_logging(logger)
@@ -123,6 +124,7 @@ class Nanny(ServerNode):
             self.preload_argv = dask.config.get("distributed.worker.preload-argv")
         self.Worker = Worker if worker_class is None else worker_class
         self.env = env or {}
+        self.config = config or {}
         worker_kwargs.update(
             {
                 "port": worker_port,
@@ -304,6 +306,7 @@ class Nanny(ServerNode):
                 on_exit=self._on_exit_sync,
                 worker=self.Worker,
                 env=self.env,
+                config=self.config,
             )
 
         self.auto_restart = True
@@ -437,7 +440,14 @@ class Nanny(ServerNode):
 
 class WorkerProcess(object):
     def __init__(
-        self, worker_kwargs, worker_start_args, silence_logs, on_exit, worker, env
+        self,
+        worker_kwargs,
+        worker_start_args,
+        silence_logs,
+        on_exit,
+        worker,
+        env,
+        config,
     ):
         self.status = "init"
         self.silence_logs = silence_logs
@@ -447,6 +457,7 @@ class WorkerProcess(object):
         self.process = None
         self.Worker = worker
         self.env = env
+        self.config = config
 
         # Initialized when worker is ready
         self.worker_dir = None
@@ -479,6 +490,7 @@ class WorkerProcess(object):
                 uid=uid,
                 Worker=self.Worker,
                 env=self.env,
+                config=self.config,
             ),
         )
         self.process.daemon = dask.config.get("distributed.worker.daemon", default=True)
@@ -621,9 +633,11 @@ class WorkerProcess(object):
         child_stop_q,
         uid,
         env,
+        config,
         Worker,
     ):  # pragma: no cover
         os.environ.update(env)
+        dask.config.set(config)
         try:
             from dask.multiprocessing import initialize_worker_process
         except ImportError:  # old Dask version
