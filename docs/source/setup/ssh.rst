@@ -1,6 +1,22 @@
 SSH
 ===
 
+It is easy to set up Dask on informally managed networks of machines using SSH.
+This can be done manually using SSH and the
+Dask :doc:`command line interface <cli>`,
+or automatically using either the ``SSHCluster`` Python command or the
+``dask-ssh`` command line tool. This document describes both of these options.
+
+Python Interface
+----------------
+
+.. currentmodule:: distributed.deploy.ssh
+
+.. autofunction:: SSHCluster
+
+Command Line
+------------
+
 The convenience script ``dask-ssh`` opens several SSH connections to your
 target computers and initializes the network accordingly. You can
 give it a list of hostnames or IP addresses::
@@ -24,10 +40,6 @@ Or you can specify a hostfile that includes a list of hosts::
 The ``dask-ssh`` utility depends on the ``paramiko``::
 
     pip install paramiko
-
-
-CLI Options
------------ 
 
 .. note::
 
