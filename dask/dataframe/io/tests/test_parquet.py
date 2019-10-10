@@ -2004,7 +2004,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     ddf = dd.read_parquet(fn, engine=engine)["B"]
 
     dsk = optimize_read_parquet_getitem(ddf.dask)
-    get, read = list(dsk.layers)
+    get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, ParquetSubgraph)
     assert subgraph.columns == ["B"]
