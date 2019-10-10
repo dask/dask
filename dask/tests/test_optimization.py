@@ -14,7 +14,6 @@ from dask.optimization import (
     inline,
     inline_functions,
     functions_of,
-    fuse_getitem,
     fuse_selections,
     fuse_linear,
     SubgraphCallable,
@@ -305,16 +304,6 @@ def test_functions_of():
     assert functions_of(1) == set()
     assert functions_of(a) == set()
     assert functions_of((a,)) == set([a])
-
-
-def test_fuse_getitem():
-    def load(*args):
-        pass
-
-    dsk = {"x": (load, "store", "part", ["a", "b"]), "y": (getitem, "x", "a")}
-    dsk2 = fuse_getitem(dsk, load, 3)
-    dsk2, dependencies = cull(dsk2, "y")
-    assert dsk2 == {"y": (load, "store", "part", "a")}
 
 
 def test_fuse_selections():
