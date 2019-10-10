@@ -4,6 +4,7 @@ import toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
+from .core import reverse_dict
 
 
 class HighLevelGraph(Mapping):
@@ -73,6 +74,10 @@ class HighLevelGraph(Mapping):
     def __init__(self, layers, dependencies):
         self.layers = layers
         self.dependencies = dependencies
+
+    @property
+    def dependents(self):
+        return reverse_dict(self.dependencies)
 
     @property
     def dicts(self):

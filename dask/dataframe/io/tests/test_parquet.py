@@ -12,6 +12,8 @@ import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
+from dask.dataframe.optimize import optimize_read_parquet_getitem
+from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.utils import natural_sort_key
 
 try:
@@ -507,25 +509,6 @@ def test_names(tmpdir, engine):
     assert set(read(fn).dask) != set(read(fn, columns=["x"]).dask)
 
     assert set(read(fn, columns=("x",)).dask) == set(read(fn, columns=["x"]).dask)
-
-
-@pytest.mark.xfail(
-    reason="parquet column fusion is special cased today"
-    " we'll need to find a more general solution near-term"
-)
-@pytest.mark.parametrize("c", [["x"], "x", ["x", "y"], []])
-def test_optimize(tmpdir, c):
-    check_fastparquet()
-    fn = str(tmpdir)
-    ddf.to_parquet(fn)
-    ddf2 = dd.read_parquet(fn)
-    assert_eq(df[c], ddf2[c])
-    x = ddf2[c]
-
-    with dask.config.set(fuse_rename_keys=False):
-        dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
-    assert len(dsk) == x.npartitions
-    assert all(v[4] == c for v in dsk.values())
 
 
 @pytest.mark.skipif(
@@ -2005,3 +1988,71 @@ def test_graph_size_pyarrow(tmpdir, engine):
     ddf2 = dd.read_parquet(fn, engine=engine)
 
     assert len(pickle.dumps(ddf2.__dask_graph__())) < 10000
+
+
+@pytest.mark.parametrize("preserve_index", [True, False])
+@pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
+def test_getitem_optimization(tmpdir, engine, preserve_index, index):
+    df = pd.DataFrame(
+        {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
+    )
+    df.index.name = "my_index"
+    ddf = dd.from_pandas(df, 2, sort=False)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine, write_index=preserve_index)
+
+    ddf = dd.read_parquet(fn, engine=engine)["B"]
+
+    dsk = optimize_read_parquet_getitem(ddf.dask)
+    get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == ["B"]
+
+    assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
+
+
+def test_getitem_optimization_empty(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    df2 = dd.read_parquet(fn, columns=[], engine=engine)
+    dsk = optimize_read_parquet_getitem(df2.dask)
+
+    subgraph = list(dsk.layers.values())[0]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == []
+
+
+def test_getitem_optimization_multi(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    a = dd.read_parquet(fn, engine=engine)["B"]
+    b = dd.read_parquet(fn, engine=engine)[["C"]]
+    c = dd.read_parquet(fn, engine=engine)[["C", "A"]]
+
+    a1, a2, a3, = dask.compute(a, b, c)
+    b1, b2, b3, = dask.compute(a, b, c, optimize_graph=False)
+
+    assert_eq(a1, b1)
+    assert_eq(a2, b2)
+    assert_eq(a3, b3)
+
+
+def test_subgraph_getitem():
+    meta = pd.DataFrame(columns=["a"])
+    subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})
+
+    with pytest.raises(KeyError):
+        subgraph["foo"]
+
+    with pytest.raises(KeyError):
+        subgraph[("name", -1)]
+
+    with pytest.raises(KeyError):
+        subgraph[("name", 3)]
