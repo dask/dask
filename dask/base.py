@@ -236,7 +236,7 @@ def _extract_graph_and_keys(vals):
     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
         graph = HighLevelGraph.merge(*graphs)
     else:
-        graph = merge(*graphs)
+        graph = merge(*map(ensure_dict, graphs))
 
     return graph, keys
 
