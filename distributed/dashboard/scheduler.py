@@ -1380,7 +1380,12 @@ class WorkerTable(DashboardComponent):
         ]
         workers = self.scheduler.workers.values()
         self.extra_names = sorted(
-            {m for ws in workers for m in ws.metrics if m not in self.names}
+            {
+                m
+                for ws in workers
+                for m, v in ws.metrics.items()
+                if m not in self.names and isinstance(v, (str, int, float))
+            }
             - self.excluded_names
         )
 
