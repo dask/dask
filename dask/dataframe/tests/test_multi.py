@@ -1980,3 +1980,14 @@ def test_merge_outer_empty():
             df[df.cluster == x].compute(),
             check_index=False,
         )
+
+
+def test_dtype_equality_warning():
+    # https://github.com/dask/dask/issues/5437
+    df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
+    df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
+
+    with pytest.warns(None) as r:
+        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+
+    assert len(r) == 0
