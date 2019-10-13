@@ -1812,7 +1812,7 @@ class SeriesGroupBy(_GroupBy):
         return ret
 
 
-def _unique_aggregate(series_gb, name=None):
+def _unique_aggregate(series_gb, name=None, aggfunc=None, levels=None, **kwargs):
     return pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
 
 

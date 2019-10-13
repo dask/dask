@@ -2102,9 +2102,12 @@ def test_groupby_unique():
     ddf = dd.from_pandas(df, npartitions=10)
 
     pd_gb = df.groupby("foo")["bar"].unique()
-    dd_gb = ddf.groupby("foo")["bar"].unique().compute()
-    assert_eq(pd_gb.explode(), dd_gb.explode(), check_names=False)  # passes
-    assert_eq(pd_gb.explode(), dd_gb.explode(), check_names=True)  # fails
+    dd_gb = ddf.groupby("foo")["bar"].unique()
+
+    assert pd_gb.index.name == dd_gb.index.name == "foo"
+    assert pd_gb.name == dd_gb.name == "bar"
+    # Use explode because each element is a list; equality fails
+    assert_eq(dd_gb.explode(), pd_gb.explode(), check_names=False)
 
 
 def test_groupby_value_counts():
@@ -2116,8 +2119,8 @@ def test_groupby_value_counts():
 
     pd_gb = df.groupby("foo")["bar"].value_counts()
     dd_gb = ddf.groupby("foo")["bar"].value_counts()
-    assert (pd_gb == dd_gb.compute()).all()  # passes
-    assert_eq(pd_gb, dd_gb)  # fails
+    assert_eq(dd_gb, pd_gb, check_names=False)  # passes
+    assert_eq(dd_gb, pd_gb, check_names=True)
 
 
 @pytest.mark.parametrize(
