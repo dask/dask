@@ -616,6 +616,12 @@ def _derived_from(cls, method, ua_args=[], extra=""):
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
+
+    if isinstance(original_method, property):
+        # some things like SeriesGroupBy.unique are generated.
+        original_method = original_method.fget
+
+
     doc = original_method.__doc__
     if doc is None:
         doc = ""

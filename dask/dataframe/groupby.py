@@ -1785,7 +1785,7 @@ class SeriesGroupBy(_GroupBy):
     def agg(self, arg, split_every=None, split_out=1):
         return self.aggregate(arg, split_every=split_every, split_out=split_out)
 
-    #  @derived_from(pd.core.groupby.SeriesGroupBy)
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def value_counts(self, split_every=None, split_out=1):
         name = self._meta.obj.name
         ret = self._aca_agg(
@@ -1798,7 +1798,7 @@ class SeriesGroupBy(_GroupBy):
         )
         return ret
 
-    #  @derived_from(pd.core.groupby.SeriesGroupBy)
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def unique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
         ret = self._aca_agg(
