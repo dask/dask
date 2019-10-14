@@ -1817,4 +1817,6 @@ def _unique_aggregate(series_gb, name=None, aggfunc=None, levels=None, **kwargs)
 
 
 def _value_counts_aggregate(series_gb, name=None):
-    return pd.Series(pd.concat({k: v.sum(level=1) for k, v in series_gb}))
+    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    names = list(series_gb.obj.index.names)
+    return pd.Series(pd.concat(to_concat, names=names))
