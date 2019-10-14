@@ -3021,7 +3021,7 @@ def test_cumulative():
     assert_eq(da.nancumsum(x, axis=0), nancumsum(np.arange(20)))
     assert_eq(da.nancumprod(x, axis=0), nancumprod(np.arange(20)))
 
-    a = np.random.random((20))
+    a = np.random.random(20)
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
@@ -3519,7 +3519,7 @@ def test_concatenate_errs():
 
 def test_stack_errs():
     with pytest.raises(ValueError) as e:
-        da.stack([da.zeros((2,), chunks=(2))] * 10 + [da.zeros((3,), chunks=(3))] * 10)
+        da.stack([da.zeros((2,), chunks=2)] * 10 + [da.zeros((3,), chunks=3)] * 10)
 
     assert "shape" in str(e.value).lower()
     assert "(2,)" in str(e.value)

@@ -92,7 +92,7 @@ csv_files = {
     "2014-01-01.csv": (
         b"name,amount,id\n" b"Alice,100,1\n" b"Bob,200,2\n" b"Charlie,300,3\n"
     ),
-    "2014-01-02.csv": (b"name,amount,id\n"),
+    "2014-01-02.csv": b"name,amount,id\n",
     "2014-01-03.csv": (
         b"name,amount,id\n" b"Dennis,400,4\n" b"Edith,500,5\n" b"Frank,600,6\n"
     ),
@@ -107,7 +107,7 @@ fwf_files = {
         b"     Bob     200   2\n"
         b" Charlie     300   3\n"
     ),
-    "2014-01-02.csv": (b"    name  amount  id\n"),
+    "2014-01-02.csv": b"    name  amount  id\n",
     "2014-01-03.csv": (
         b"    name  amount  id\n"
         b"  Dennis     400   4\n"
@@ -789,7 +789,7 @@ def test_head_partial_line_fix():
         ".overflow1.csv": (
             "a,b\n0,'abcdefghijklmnopqrstuvwxyz'\n1,'abcdefghijklmnopqrstuvwxyz'"
         ),
-        ".overflow2.csv": ("a,b\n111111,-11111\n222222,-22222\n333333,-33333\n"),
+        ".overflow2.csv": "a,b\n111111,-11111\n222222,-22222\n333333,-33333\n",
     }
     with filetexts(files):
         # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.

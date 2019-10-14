@@ -1804,7 +1804,7 @@ def test_groupby_agg_custom__mode():
     # results from pandas in apply use return results as single-item lists
     def agg_mode(s):
         def impl(s):
-            res, = s.iloc[0]
+            (res,) = s.iloc[0]
 
             for (i,) in s.iloc[1:]:
                 res = res.add(i, fill_value=0)

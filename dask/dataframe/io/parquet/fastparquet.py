@@ -14,7 +14,7 @@ try:
     from fastparquet.util import get_file_scheme
     from fastparquet.util import ex_from_sep, val_to_num, groupby_types
     from fastparquet.writer import partition_on_columns, make_part_file
-except ModuleNotFoundError:
+except ImportError:
     pass
 
 from .utils import _parse_pandas_metadata, _normalize_index_columns, _analyze_paths
