@@ -784,17 +784,6 @@ class Worker(ServerNode):
             self.contact_address = self.address
         logger.info("-" * 49)
         while True:
-            if self.death_timeout and time() > start + self.death_timeout:
-                logger.exception(
-                    "Timed out when connecting to scheduler '%s'",
-                    self.scheduler.address,
-                )
-                await self.close(timeout=1)
-                raise gen.TimeoutError(
-                    "Timed out connecting to scheduler '%s'" % self.scheduler.address
-                )
-            if self.status in ("closed", "closing"):
-                return
             try:
                 _start = time()
                 types = {k: typename(v) for k, v in self.data.items()}
@@ -826,11 +815,6 @@ class Worker(ServerNode):
                     serializers=["msgpack"],
                 )
                 future = comm.read(deserializers=["msgpack"])
-                if self.death_timeout:
-                    diff = self.death_timeout - (time() - start)
-                    if diff < 0:
-                        continue
-                    future = gen.with_timeout(timedelta(seconds=diff), future)
                 response = await future
                 _end = time()
                 middle = (_start + _end) / 2

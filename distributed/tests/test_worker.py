@@ -762,8 +762,11 @@ def test_worker_death_timeout(s):
         yield s.close()
         w = Worker(s.address, death_timeout=1)
 
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(gen.TimeoutError) as info:
         yield w
+
+    assert "Worker" in str(info.value)
+    assert "timed out" in str(info.value) or "failed to start" in str(info.value)
 
     assert w.status == "closed"
 
