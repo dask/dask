@@ -2104,10 +2104,8 @@ def test_groupby_unique():
     pd_gb = df.groupby("foo")["bar"].unique()
     dd_gb = ddf.groupby("foo")["bar"].unique()
 
-    assert pd_gb.index.name == dd_gb.index.name == "foo"
-    assert pd_gb.name == dd_gb.name == "bar"
-    # Use explode because each element is a list; equality fails
-    assert_eq(dd_gb.explode(), pd_gb.explode(), check_names=False)
+    # Use explode because each DataFrame row is a list; equality fails
+    assert_eq(dd_gb.explode(), pd_gb.explode())
 
 
 def test_groupby_value_counts():
@@ -2119,8 +2117,7 @@ def test_groupby_value_counts():
 
     pd_gb = df.groupby("foo")["bar"].value_counts()
     dd_gb = ddf.groupby("foo")["bar"].value_counts()
-    assert_eq(dd_gb, pd_gb, check_names=False)  # passes
-    assert_eq(dd_gb, pd_gb, check_names=True)
+    assert_eq(dd_gb, pd_gb)
 
 
 @pytest.mark.parametrize(
