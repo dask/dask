@@ -105,7 +105,7 @@ class ArrowEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        **kwargs,
+        **kwargs
     ):
         # Define the dataset object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
@@ -307,7 +307,7 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs,
+        **kwargs
     ):
         dataset = fmd = None
         i_offset = 0
@@ -406,7 +406,7 @@ class ArrowEngine(Engine):
         compression=None,
         index_cols=None,
         schema=None,
-        **kwargs,
+        **kwargs
     ):
         md_list = []
         preserve_index = False
