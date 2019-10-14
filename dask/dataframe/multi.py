@@ -59,6 +59,7 @@ import warnings
 from toolz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_dtype_equal
 
 from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
@@ -371,7 +372,7 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
         dtype_mism = [
             ((lo, ro), left.dtypes[lo], right.dtypes[ro])
             for lo, ro in zip(left_on, right_on)
-            if not left.dtypes[lo] is right.dtypes[ro]
+            if not is_dtype_equal(left.dtypes[lo], right.dtypes[ro])
         ]
 
         if dtype_mism:
