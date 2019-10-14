@@ -527,7 +527,7 @@ def numel(x, **kwargs):
 
 def nannumel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(~np.isnan(x), **kwargs)
+    return chunk.sum(~(np.isnan(x)), **kwargs)
 
 
 def mean_chunk(

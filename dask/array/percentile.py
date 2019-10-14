@@ -116,7 +116,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
         name = "percentile_tdigest_chunk-" + token
         dsk = dict(
-            ((name, i), (_tdigest_chunk, (key)))
+            ((name, i), (_tdigest_chunk, key))
             for i, key in enumerate(a.__dask_keys__())
         )
 
@@ -129,7 +129,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
         name = "percentile_chunk-" + token
         dsk = dict(
-            ((name, i), (_percentile, (key), q, interpolation))
+            ((name, i), (_percentile, key, q, interpolation))
             for i, key in enumerate(a.__dask_keys__())
         )
 

@@ -132,7 +132,7 @@ def test_random_seeds(random):
 
     N = 10
     with dask.config.set(scheduler="processes"):
-        results, = compute([delayed(f, pure=False)() for i in range(N)])
+        (results,) = compute([delayed(f, pure=False)() for i in range(N)])
 
     assert len(set(results)) == N
 

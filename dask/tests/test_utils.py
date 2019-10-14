@@ -558,7 +558,7 @@ def test_parse_timedelta():
 def test_is_arraylike():
     assert is_arraylike(0) is False
     assert is_arraylike(()) is False
-    assert is_arraylike((0)) is False
+    assert is_arraylike(0) is False
     assert is_arraylike([]) is False
     assert is_arraylike([0]) is False
 

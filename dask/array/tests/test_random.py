@@ -328,19 +328,19 @@ def test_external_randomstate_class():
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed))
     )
-    x = rs.normal(0, 1, size=(10), chunks=(5,))
+    x = rs.normal(0, 1, size=10, chunks=(5,))
     assert_eq(x, x)
 
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
         seed=123,
     )
-    a = rs.normal(0, 1, size=(10), chunks=(5,))
+    a = rs.normal(0, 1, size=10, chunks=(5,))
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
         seed=123,
     )
-    b = rs.normal(0, 1, size=(10), chunks=(5,))
+    b = rs.normal(0, 1, size=10, chunks=(5,))
     assert a.name == b.name
     assert_eq(a, b)
 

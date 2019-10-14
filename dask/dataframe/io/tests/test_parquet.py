@@ -943,7 +943,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
 
 
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual_schema(
-    tmpdir
+    tmpdir,
 ):
     check_pyarrow()
 
@@ -1579,9 +1579,12 @@ def test_parse_pandas_metadata_duplicate_index_columns():
         "index_columns": ["__index_level_0__"],
         "pandas_version": "0.21.0",
     }
-    index_names, column_names, storage_name_mapping, column_index_names = _parse_pandas_metadata(
-        md
-    )
+    (
+        index_names,
+        column_names,
+        storage_name_mapping,
+        column_index_names,
+    ) = _parse_pandas_metadata(md)
     assert index_names == ["A"]
     assert column_names == ["A"]
     assert storage_name_mapping == {"__index_level_0__": "A", "A": "A"}
@@ -1618,9 +1621,12 @@ def test_parse_pandas_metadata_column_with_index_name():
         "index_columns": ["__index_level_0__"],
         "pandas_version": "0.21.0",
     }
-    index_names, column_names, storage_name_mapping, column_index_names = _parse_pandas_metadata(
-        md
-    )
+    (
+        index_names,
+        column_names,
+        storage_name_mapping,
+        column_index_names,
+    ) = _parse_pandas_metadata(md)
     assert index_names == ["A"]
     assert column_names == ["A"]
     assert storage_name_mapping == {"__index_level_0__": "A", "A": "A"}
@@ -2036,8 +2042,8 @@ def test_getitem_optimization_multi(tmpdir, engine):
     b = dd.read_parquet(fn, engine=engine)[["C"]]
     c = dd.read_parquet(fn, engine=engine)[["C", "A"]]
 
-    a1, a2, a3, = dask.compute(a, b, c)
-    b1, b2, b3, = dask.compute(a, b, c, optimize_graph=False)
+    a1, a2, a3 = dask.compute(a, b, c)
+    b1, b2, b3 = dask.compute(a, b, c, optimize_graph=False)
 
     assert_eq(a1, b1)
     assert_eq(a2, b2)

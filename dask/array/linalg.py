@@ -218,7 +218,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             graph,
             name_r_stacked,
             shape=(sum(vchunks_rstacked), n),
-            chunks=(vchunks_rstacked, (n)),
+            chunks=(vchunks_rstacked, n),
             meta=r_stacked_meta,
         )
 
@@ -594,7 +594,7 @@ def sfqr(data, name=None):
             graph,
             name_A_rest,
             shape=(min(m, n), n - cc),
-            chunks=((cr), data.chunks[1][1:]),
+            chunks=(cr, data.chunks[1][1:]),
             meta=A_rest_meta,
         )
         Rs.append(Q.T.dot(A_rest))

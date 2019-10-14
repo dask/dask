@@ -120,7 +120,7 @@ def order(dsk, dependencies=None):
         return total_dependencies.get(x, 0), ReverseStrComparable(x)
 
     def dependents_key(x):
-        return (min_dependencies[x], -total_dependents.get(x, 0), StrComparable(x))
+        return (min_dependencies[x], -(total_dependents.get(x, 0)), StrComparable(x))
 
     result = dict()
     seen = set()  # tasks that should not be added again to the stack

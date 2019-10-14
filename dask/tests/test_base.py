@@ -867,8 +867,7 @@ def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
     x3 = delayed(inc)(x2)
-
-    xx, = persist(x3)
+    (xx,) = persist(x3)
     assert isinstance(xx, Delayed)
     assert xx.key == x3.key
     assert len(xx.dask) == 1

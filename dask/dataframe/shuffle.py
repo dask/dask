@@ -59,7 +59,7 @@ def set_index(
             parts = df.to_delayed(optimize_graph=False)
             sizes = [delayed(sizeof)(part) for part in parts]
         else:
-            index2, = base.optimize(index2)
+            (index2,) = base.optimize(index2)
             sizes = []
 
         divisions = index2._repartition_quantiles(npartitions, upsample=upsample)

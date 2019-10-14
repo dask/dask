@@ -361,7 +361,7 @@ def test_nout():
     func = delayed(lambda x: (x,), nout=1, pure=True)
     x = func(1)
     assert len(x) == 1
-    a, = x
+    (a,) = x
     assert a.compute() == 1
     assert a._length is None
     pytest.raises(TypeError, lambda: len(a))

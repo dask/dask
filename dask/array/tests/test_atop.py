@@ -490,8 +490,8 @@ def test_bag_array_conversion():
     import dask.bag as db
 
     b = db.range(10, npartitions=1)
-    x, = b.map_partitions(np.asarray).to_delayed()
-    x, = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
+    (x,) = b.map_partitions(np.asarray).to_delayed()
+    (x,) = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
     z = da.concatenate([x])
     assert_eq(z, np.arange(10), check_graph=False)
 

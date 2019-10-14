@@ -66,7 +66,7 @@ def estimate_count(Ms, b):
 
     # Estimate cardinality, no adjustments
     alpha = 0.7213 / (1 + 1.079 / m)
-    E = alpha * m / (2.0 ** -M.astype("f8")).sum() * m
+    E = alpha * m / (2.0 ** -(M.astype("f8"))).sum() * m
     #                        ^^^^ starts as unsigned, need a signed type for
     #                             negation operator to do something useful
 
@@ -76,5 +76,5 @@ def estimate_count(Ms, b):
         if V:
             return m * np.log(m / V)
     if E > 2 ** 32 / 30.0:
-        return -2 ** 32 * np.log1p(-E / 2 ** 32)
+        return -(2 ** 32) * np.log1p(-E / 2 ** 32)
     return E
