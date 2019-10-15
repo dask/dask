@@ -621,7 +621,6 @@ def _derived_from(cls, method, ua_args=[], extra=""):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
 
-
     doc = original_method.__doc__
     if doc is None:
         doc = ""
