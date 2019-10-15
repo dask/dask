@@ -7,7 +7,7 @@ class GraphLayout(SchedulerPlugin):
     This assigns (x, y) locations to all tasks quickly and dynamically as new
     tasks are added.  This scales to a few thousand nodes.
 
-    It is commonly used with distributed/bokeh/scheduler.py::GraphPlot, which
+    It is commonly used with distributed/bokeh/scheduler.py::TaskGraph, which
     is rendered at /graph on the diagnostic dashboard.
     """
 
@@ -113,7 +113,7 @@ class GraphLayout(SchedulerPlugin):
     def reset_index(self):
         """ Reset the index and refill new and new_edges
 
-        From time to time GraphPlot wants to remove invisible nodes and reset
+        From time to time TaskGraph wants to remove invisible nodes and reset
         all of its indices.  This helps.
         """
         self.new = []

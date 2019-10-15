@@ -1,6 +1,6 @@
 import math
 
-from .components import DashboardComponent, add_periodic_callback
+from distributed.dashboard.components import DashboardComponent, add_periodic_callback
 
 from bokeh.plotting import figure
 from bokeh.models import (
@@ -13,9 +13,17 @@ from bokeh.models import (
 )
 from tornado import escape
 from dask.utils import format_bytes
-from ..utils import log_errors
-from .scheduler import update, applications, BOKEH_THEME
-from .utils import without_property_validation
+from distributed.utils import log_errors
+from distributed.dashboard.components.scheduler import BOKEH_THEME
+from distributed.dashboard.utils import without_property_validation, update
+
+
+try:
+    import pynvml
+
+    pynvml.nvmlInit()
+except Exception:
+    pass
 
 
 class GPUCurrentLoad(DashboardComponent):
@@ -181,14 +189,3 @@ def gpu_utilization_doc(scheduler, extra, doc):
     add_periodic_callback(doc, gpu_load, 100)
     doc.add_root(gpu_load.utilization_figure)
     doc.theme = BOKEH_THEME
-
-
-try:
-    import pynvml
-
-    pynvml.nvmlInit()
-except Exception:
-    pass
-else:
-    applications["/individual-gpu-memory"] = gpu_memory_doc
-    applications["/individual-gpu-utilization"] = gpu_utilization_doc

@@ -3861,7 +3861,7 @@ class Client(Node):
             from .diagnostics.task_stream import rectangles
 
             rects = rectangles(msgs)
-            from .dashboard.components import task_stream_figure
+            from .dashboard.components.scheduler import task_stream_figure
 
             source, figure = task_stream_figure(sizing_mode="stretch_both")
             source.data.update(rects)
@@ -4424,7 +4424,7 @@ class get_task_stream(object):
 
     To share this file with others you may wish to upload and serve it online.
     A common way to do this is to upload the file as a gist, and then serve it
-    on https://rawgit.com ::
+    on https://raw.githack.com ::
 
        $ pip install gist
        $ gist task-stream.html
@@ -4432,7 +4432,7 @@ class get_task_stream(object):
 
     You can then navigate to that site, click the "Raw" button to the right of
     the ``task-stream.html`` file, and then provide that URL to
-    https://rawgit.com .  This process should provide a sharable link that
+    https://raw.githack.com .  This process should provide a sharable link that
     others can use to see your task stream plot.
 
     See Also
