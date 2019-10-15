@@ -2097,7 +2097,7 @@ def test_series_groupby_idxmax_skipna(skipna):
 
 @pytest.mark.skipif(
     version.parse(pd.__version__) < version.parse("0.25.0"),
-    reason="'explode' not implemented",
+    reason="'explode' is not implemented",
 )
 def test_groupby_unique():
     rng = np.random.RandomState(42)
