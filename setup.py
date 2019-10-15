@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 import versioneer
 
 requires = open("requirements.txt").read().strip().split("\n")
@@ -35,15 +35,7 @@ setup(
     include_package_data=True,
     install_requires=install_requires,
     extras_require=extras_require,
-    packages=[
-        "distributed",
-        "distributed.dashboard",
-        "distributed.cli",
-        "distributed.comm",
-        "distributed.deploy",
-        "distributed.diagnostics",
-        "distributed.protocol",
-    ],
+    packages=find_packages(exclude=["*tests*"]),
     long_description=(
         open("README.rst").read() if os.path.exists("README.rst") else ""
     ),
