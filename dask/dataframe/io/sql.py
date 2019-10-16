@@ -130,7 +130,6 @@ def read_sql_table(
     else:
         # function names get pandas auto-named
         kwargs["index_col"] = index_col.name
-<<<<<<< HEAD
 
     if meta is None:
         # derrive metadata from first few rows
@@ -144,21 +143,6 @@ def read_sql_table(
             head = pd.read_sql_table(name, uri, schema=schema, index_col=index_col)
             return from_pandas(head, npartitions=1)
 
-=======
-
-    if meta is None:
-        # derrive metadata from first few rows
-        q = sql.select(columns).limit(head_rows).select_from(table)
-        head = pd.read_sql(q, engine, **kwargs)
-
-        if head.empty:
-            # no results at all
-            name = table.name
-            schema = table.schema
-            head = pd.read_sql_table(name, uri, schema=schema, index_col=index_col)
-            return from_pandas(head, npartitions=1)
-
->>>>>>> dc7032413a5c17349bb9625126280b51aafeaa71
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
         meta = head[:0]
     else:
