@@ -1,0 +1,153 @@
+/* GLOBAL STYLES
+-------------------------------------------------- */
+/* Padding below the footer and lighter body text */
+
+body {
+  padding-bottom: 3rem;
+  color: #5a5a5a;
+}
+
+/* navbar
+ * ----------------------------------------*/
+
+.navbar {
+  background-color: #000000;
+}
+.navbar li {
+  transition: .3s background-color;
+  text-align: center;
+  background-color: transparent;
+  padding: 0rem 1rem;
+  text-decoration: none;
+  border-radius: 0.3rem;
+}
+.navbar li:hover {
+  background-color: #FDA061;
+}
+.navbar li .nav-link{
+  color: #FDA061;
+}
+.navbar li:hover .nav-link{
+  color: #212529;
+}
+
+.dropdown-menu {
+  background-color: #000000d0;
+}
+
+.dropdown-item {
+  color: #FDA061;
+}
+
+.dropdown-item:hover {
+  background-color: #FDA061D0;
+}
+
+.hero {
+  background-color: rgba(0,0,0,0.92);
+  text-color: white;
+}
+
+
+.top-image {
+  height: 10rem;
+  max-width: 20rem;
+}
+
+
+.outline-dask {
+  color: #FDA061;
+  background-color: transparent;
+  border-color: #FDA061;
+}
+
+
+.outline-dask:hover {
+  color: #212529;
+  background-color: #FDA061;
+  border-color: #FDA061;
+}
+
+.solid-dask {
+  color: #212529;
+  background-color: #FDA061;
+}
+
+.solid-dask:hover {
+  color: #212529;
+  background-color: #EC9050;
+}
+
+
+/* MARKETING CONTENT
+-------------------------------------------------- */
+
+/* Center align the text within the three columns below the carousel */
+.marketing .col-lg-4 {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+.marketing .col-lg-4 p {
+  margin-right: .75rem;
+  margin-left: .75rem;
+}
+
+
+/* Featurettes
+------------------------- */
+
+.featurette-divider {
+  margin: 3rem 0; /* Space out the Bootstrap <hr> more */
+}
+
+/* Thin out the marketing headings */
+.featurette-heading {
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -.05rem;
+}
+
+.featurette-subheading {
+  text-transform: uppercase;
+  font-size: 1.2rem;
+  display: block;
+  font-weight: 600;
+  margin: 1.2rem 0;
+}
+
+/* Supporters
+ * ----------------------------*/
+
+.supporters {
+  text-align: center;
+}
+
+.supporter {
+  margin: 0.5rem 0;
+  width: 100%;
+}
+
+.supporter img{
+  max-height: 100%;
+  max-width: 85%;
+  position: relative;
+  top: 50%;
+  transform: translateY(-50%);
+
+}
+
+
+/* RESPONSIVE CSS
+-------------------------------------------------- */
+
+@media (min-width: 40em) {
+  .featurette-heading {
+    font-size: 50px;
+  }
+}
+
+@media (min-width: 62em) {
+  .featurette-heading {
+    margin-top: 3rem;
+  }
+}

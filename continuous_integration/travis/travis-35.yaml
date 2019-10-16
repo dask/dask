@@ -1,0 +1,56 @@
+# This file intends to test the oldest supported versions
+# of dependencies
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.5.*
+  - numpy=1.13.*
+  - pandas=0.21.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  - fsspec>=0.5.1
+  - tiledb-py
+  - sqlalchemy
+  - pyarrow
+  # other -- IO
+  - bcolz
+  - blosc
+  - s3fs
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed==2.0.1
+  - graphviz
+  - ipython
+  - lz4
+  - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - pandas-datareader
+  - pip
+  - pip:
+      - cityhash
+      - mmh3
+      - xxhash

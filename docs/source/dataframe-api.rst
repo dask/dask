@@ -30,12 +30,16 @@ Dataframe
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.explode
     DataFrame.fillna
     DataFrame.floordiv
     DataFrame.get_partition
     DataFrame.groupby
     DataFrame.head
+    DataFrame.iloc
     DataFrame.index
+    DataFrame.isna
+    DataFrame.isnull
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
@@ -52,7 +56,10 @@ Dataframe
     DataFrame.ndim
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.partitions
+    DataFrame.pop
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
@@ -60,6 +67,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -69,14 +77,18 @@ Dataframe
     DataFrame.rtruediv
     DataFrame.sample
     DataFrame.set_index
+    DataFrame.shape
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
     DataFrame.tail
     DataFrame.to_bag
     DataFrame.to_csv
+    DataFrame.to_dask_array
     DataFrame.to_delayed
     DataFrame.to_hdf
+    DataFrame.to_json
+    DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -122,6 +134,7 @@ Series
    Series.dt
    Series.dtype
    Series.eq
+   Series.explode
    Series.ffill
    Series.fillna
    Series.first
@@ -134,6 +147,7 @@ Series
    Series.idxmax
    Series.idxmin
    Series.isin
+   Series.isna
    Series.isnull
    Series.iteritems
    Series.known_divisions
@@ -169,6 +183,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index
@@ -176,6 +191,7 @@ Series
    Series.round
    Series.sample
    Series.sem
+   Series.shape
    Series.shift
    Series.size
    Series.std
@@ -184,10 +200,10 @@ Series
    Series.sum
    Series.to_bag
    Series.to_csv
+   Series.to_dask_array
    Series.to_delayed
    Series.to_frame
    Series.to_hdf
-   Series.to_parquet
    Series.to_string
    Series.to_timestamp
    Series.truediv
@@ -219,6 +235,12 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.cov
+   DataFrameGroupBy.corr
+   DataFrameGroupBy.first
+   DataFrameGroupBy.last
+   DataFrameGroupBy.idxmin
+   DataFrameGroupBy.idxmax
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -236,6 +258,13 @@ Groupby Operations
    SeriesGroupBy.std
    SeriesGroupBy.sum
    SeriesGroupBy.var
+   SeriesGroupBy.first
+   SeriesGroupBy.last
+   SeriesGroupBy.idxmin
+   SeriesGroupBy.idxmax
+
+.. autosummary::
+   Aggregation
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
@@ -272,8 +301,11 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
+   read_json
+   read_orc
    read_sql_table
    from_array
    from_bcolz
@@ -287,12 +319,31 @@ Store DataFrames
 
 .. autosummary::
 
-    to_csv
-    to_parquet
-    to_hdf
-    to_records
-    to_bag
-    to_delayed
+   to_csv
+   to_parquet
+   to_hdf
+   to_records
+   to_bag
+   to_json
+
+Convert DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+
+   to_dask_array
+   to_delayed
+
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -326,6 +377,11 @@ SeriesGroupBy
    :members:
    :inherited-members:
 
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
+
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -333,20 +389,23 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
+.. autofunction:: read_orc
 .. autofunction:: read_hdf
+.. autofunction:: read_json
 .. autofunction:: read_sql_table
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
 .. autofunction:: from_dask_array
 .. autofunction:: from_delayed
-.. autofunction:: to_delayed
 .. autofunction:: to_records
 .. autofunction:: to_csv
 .. autofunction:: to_bag
 .. autofunction:: to_hdf
 .. autofunction:: to_parquet
+.. autofunction:: to_json
 
 Rolling
 ~~~~~~~
@@ -355,6 +414,12 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autofunction:: utils.make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
@@ -363,8 +428,16 @@ Other functions
 
 .. autofunction:: compute
 .. autofunction:: map_partitions
+.. autofunction:: to_datetime
 
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
 .. autofunction:: merge
+.. autofunction:: merge_asof
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
+.. autofunction:: pivot_table
+.. autofunction:: melt

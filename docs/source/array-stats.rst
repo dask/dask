@@ -6,7 +6,7 @@ Dask Array implements a subset of the `scipy.stats`_ package.
 Statistical Functions
 ---------------------
 
-You can calculate various measures of an array including skewnes, kurtosis, and arbitrary moments.
+You can calculate various measures of an array including skewness, kurtosis, and arbitrary moments.
 
 .. code-block:: python
 
@@ -20,7 +20,7 @@ You can calculate various measures of an array including skewnes, kurtosis, and 
 Statistical Tests
 -----------------
 
-You can perform basic statistical tests on dask arrays.
+You can perform basic statistical tests on Dask arrays.
 Each of these tests return a ``dask.delayed`` wrapping one of the scipy ``namedtuple``
 results.
 
@@ -29,7 +29,7 @@ results.
 
    >>> a = da.random.uniform(size=(50,), chunks=(25,))
    >>> b = a + da.random.uniform(low=-0.15, high=0.15, size=(50,), chunks=(25,))
-   >>> result = ttest_rel(a, b)
+   >>> result = stats.ttest_rel(a, b)
    >>> result.compute()
    Ttest_relResult(statistic=-1.5102104380013242, pvalue=0.13741197274874514)
 

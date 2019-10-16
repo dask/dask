@@ -1,30 +1,35 @@
-from __future__ import absolute_import, division, print_function
-
-from abc import ABCMeta
-from collections import OrderedDict, Iterator
+from collections import OrderedDict
+from collections.abc import Mapping, Iterator
 from functools import partial
 from hashlib import md5
+from operator import getitem
 import inspect
 import pickle
 import os
 import threading
 import uuid
-import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import long, unicode
-from .context import _globals, thread_state
-from .core import flatten
+from .compatibility import is_dataclass, dataclass_fields
+from .context import thread_state
+from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict
+from .utils import Dispatch, ensure_dict, apply
+from . import config, local, threaded
 
 
-__all__ = ("DaskMethodsMixin",
-           "is_dask_collection",
-           "compute", "persist", "visualize",
-           "tokenize", "normalize_token")
+__all__ = (
+    "DaskMethodsMixin",
+    "is_dask_collection",
+    "compute",
+    "persist",
+    "optimize",
+    "visualize",
+    "tokenize",
+    "normalize_token",
+)
 
 
 def is_dask_collection(x):
@@ -37,10 +42,10 @@ def is_dask_collection(x):
 
 class DaskMethodsMixin(object):
     """A mixin adding standard dask collection methods"""
+
     __slots__ = ()
 
-    def visualize(self, filename='mydask', format=None, optimize_graph=False,
-                  **kwargs):
+    def visualize(self, filename="mydask", format=None, optimize_graph=False, **kwargs):
         """Render the computation of this object's task graph using graphviz.
 
         Requires ``graphviz`` to be installed.
@@ -81,10 +86,15 @@ class DaskMethodsMixin(object):
         -----
         For more information on optimization see here:
 
-        http://dask.pydata.org/en/latest/optimize.html
+        https://docs.dask.org/en/latest/optimize.html
         """
-        return visualize(self, filename=filename, format=format,
-                         optimize_graph=optimize_graph, **kwargs)
+        return visualize(
+            self,
+            filename=filename,
+            format=format,
+            optimize_graph=optimize_graph,
+            **kwargs
+        )
 
     def persist(self, **kwargs):
         """Persist this dask collection into memory
@@ -93,17 +103,29 @@ class DaskMethodsMixin(object):
         metadata, but now with the results fully computed or actively computing
         in the background.
 
+        The action of function differs significantly depending on the active
+        task scheduler.  If the task scheduler supports asynchronous computing,
+        such as is the case of the dask.distributed scheduler, then persist
+        will return *immediately* and the return value's task graph will
+        contain Dask Future objects.  However if the task scheduler only
+        supports blocking computation then the call to persist will *block*
+        and the return value's task graph will contain concrete Python results.
+
+        This function is particularly useful when using distributed systems,
+        because the results will be kept in distributed memory, rather than
+        returned to the local process as with compute.
+
         Parameters
         ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
+        scheduler : string, optional
+            Which scheduler to use like "threads", "synchronous" or "processes".
+            If not provided, the default is to check the global settings first,
+            and then fall back to the collection defaults.
         optimize_graph : bool, optional
             If True [default], the graph is optimized before computation.
             Otherwise the graph is run as is. This can be useful for debugging.
         **kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
+            Extra keywords to forward to the scheduler function.
 
         Returns
         -------
@@ -113,7 +135,7 @@ class DaskMethodsMixin(object):
         --------
         dask.base.persist
         """
-        (result,) = persist(self, **kwargs)
+        (result,) = persist(self, traverse=False, **kwargs)
         return result
 
     def compute(self, **kwargs):
@@ -126,15 +148,15 @@ class DaskMethodsMixin(object):
 
         Parameters
         ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
+        scheduler : string, optional
+            Which scheduler to use like "threads", "synchronous" or "processes".
+            If not provided, the default is to check the global settings first,
+            and then fall back to the collection defaults.
         optimize_graph : bool, optional
             If True [default], the graph is optimized before computation.
             Otherwise the graph is run as is. This can be useful for debugging.
         kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
+            Extra keywords to forward to the scheduler function.
 
         See Also
         --------
@@ -143,81 +165,31 @@ class DaskMethodsMixin(object):
         (result,) = compute(self, traverse=False, **kwargs)
         return result
 
+    def __await__(self):
+        try:
+            from distributed import wait, futures_of
+        except ImportError:
+            raise ImportError(
+                "Using async/await with dask requires the `distributed` package"
+            )
+        from tornado import gen
 
-def call_finalize(finalize, args, results):
-    return finalize(results, *args)
+        @gen.coroutine
+        def f():
+            if futures_of(self):
+                yield wait(self)
+            raise gen.Return(self)
 
-
-def add_ABCMeta(cls):
-    """Use the metaclass ABCMeta for this class"""
-    return ABCMeta(cls.__name__, cls.__bases__, cls.__dict__.copy())
-
-
-# TODO: this class is deprecated and should be removed in a future release.
-@add_ABCMeta
-class Base(DaskMethodsMixin):
-    """DEPRECATED. The recommended way to create a custom dask object now is to
-    implement the dask collection interface (see the docs), and optionally
-    subclass from ``DaskMethodsMixin`` if desired.
-
-    See http://dask.pydata.org/en/latest/custom-collections.html for more
-    information"""
-    __slots__ = ()
-
-    @classmethod
-    def __subclasshook__(cls, other):
-        if cls is Base:
-            warnings.warn("DeprecationWarning: `dask.base.Base` is deprecated. "
-                          "To check if an object is a dask collection use "
-                          "dask.base.is_dask_collection.\n\nSee http://dask."
-                          "pydata.org/en/latest/custom-collections.html "
-                          " for more information")
-        return NotImplemented
-
-    def __dask_graph__(self):
-        # We issue a deprecation warning for the whole class here, as any
-        # non-instance check usage will end up calling `__dask_graph__`.
-        warnings.warn("DeprecationWarning: `dask.base.Base` is deprecated. "
-                      "To create a custom dask object implement the dask "
-                      "collection interface, and optionally subclass from "
-                      "``DaskMethodsMixin`` if desired.\n\nSee http://dask."
-                      "pydata.org/en/latest/custom-collections.html "
-                      " for more information")
-        return self.dask
-
-    def _keys(self):
-        warnings.warn("DeprecationWarning: the `_keys` method is deprecated, "
-                      "use `__dask_keys__` instead")
-        return self.__dask_keys__()
-
-    @property
-    def _finalize(self):
-        warnings.warn("DeprecationWarning: the `_finalize` method is "
-                      "deprecated, use `__dask_postcompute__` instead")
-        f, args = self.__dask_postcompute__()
-        return partial(call_finalize, f, args) if args else f
-
-    @classmethod
-    def _optimize(cls, *args, **kwargs):
-        warnings.warn("DeprecationWarning: the `_optimize` method is "
-                      "deprecated, use `__dask_optimize__` instead")
-        return cls.__dask_optimize__(*args, **kwargs)
-
-    @classmethod
-    def _get(cls, dsk, keys, **kwargs):
-        warnings.warn("DeprecationWarning: the `_get` method is "
-                      "deprecated, use ``dask.base.compute_as_if_collection`` "
-                      "instead")
-        return compute_as_if_collection(cls, dsk, keys, **kwargs)
+        return f().__await__()
 
 
-def compute_as_if_collection(cls, dsk, keys, get=None, **kwargs):
+def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs):
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
-    get = get or _globals['get'] or cls.__dask_scheduler__
+    schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
     dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
-    return get(dsk2, keys, **kwargs)
+    return schedule(dsk2, keys, **kwargs)
 
 
 def dont_optimize(dsk, keys, **kwargs):
@@ -225,27 +197,28 @@ def dont_optimize(dsk, keys, **kwargs):
 
 
 def optimization_function(x):
-    return getattr(x, '__dask_optimize__', dont_optimize)
+    return getattr(x, "__dask_optimize__", dont_optimize)
 
 
 def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
-    optimizations = (kwargs.pop('optimizations', None) or
-                     _globals.get('optimizations', []))
+    optimizations = kwargs.pop("optimizations", None) or config.get("optimizations", [])
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
-        groups = {opt: _extract_graph_and_keys(val)
-                  for opt, val in groups.items()}
+        groups = {opt: _extract_graph_and_keys(val) for opt, val in groups.items()}
 
         for opt in optimizations:
-            groups = {k: (opt(dsk, keys), keys)
-                      for k, (dsk, keys) in groups.items()}
+            groups = {k: (opt(dsk, keys), keys) for k, (dsk, keys) in groups.items()}
 
-        dsk = merge(*(opt(dsk, keys, **kwargs)
-                      for opt, (dsk, keys) in groups.items()))
+        dsk = merge(
+            *map(
+                ensure_dict,
+                [opt(dsk, keys, **kwargs) for opt, (dsk, keys) in groups.items()],
+            )
+        )
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -254,19 +227,155 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
-    that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
-    dsk = {}
-    keys = []
-    for v in vals:
-        d = v.__dask_graph__()
-        if hasattr(d, 'dicts'):
-            for dd in d.dicts.values():
-                dsk.update(dd)
-        else:
-            dsk.update(d)
-        keys.append(v.__dask_keys__())
+    that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
+    from .highlevelgraph import HighLevelGraph
 
-    return dsk, keys
+    graphs = [v.__dask_graph__() for v in vals]
+    keys = [v.__dask_keys__() for v in vals]
+
+    if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+        graph = HighLevelGraph.merge(*graphs)
+    else:
+        graph = merge(*map(ensure_dict, graphs))
+
+    return graph, keys
+
+
+def unpack_collections(*args, **kwargs):
+    """Extract collections in preparation for compute/persist/etc...
+
+    Intended use is to find all collections in a set of (possibly nested)
+    python objects, do something to them (compute, etc...), then repackage them
+    in equivalent python objects.
+
+    Parameters
+    ----------
+    *args
+        Any number of objects. If it is a dask collection, it's extracted and
+        added to the list of collections returned. By default, python builtin
+        collections are also traversed to look for dask collections (for more
+        information see the ``traverse`` keyword).
+    traverse : bool, optional
+        If True (default), builtin python collections are traversed looking for
+        any dask collections they might contain.
+
+    Returns
+    -------
+    collections : list
+        A list of all dask collections contained in ``args``
+    repack : callable
+        A function to call on the transformed collections to repackage them as
+        they were in the original ``args``.
+    """
+    traverse = kwargs.pop("traverse", True)
+
+    collections = []
+    repack_dsk = {}
+
+    collections_token = uuid.uuid4().hex
+
+    def _unpack(expr):
+        if is_dask_collection(expr):
+            tok = tokenize(expr)
+            if tok not in repack_dsk:
+                repack_dsk[tok] = (getitem, collections_token, len(collections))
+                collections.append(expr)
+            return tok
+
+        tok = uuid.uuid4().hex
+        if not traverse:
+            tsk = quote(expr)
+        else:
+            # Treat iterators like lists
+            typ = list if isinstance(expr, Iterator) else type(expr)
+            if typ in (list, tuple, set):
+                tsk = (typ, [_unpack(i) for i in expr])
+            elif typ in (dict, OrderedDict):
+                tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
+            elif is_dataclass(expr):
+                tsk = (
+                    apply,
+                    typ,
+                    (),
+                    (
+                        dict,
+                        [
+                            [f.name, _unpack(getattr(expr, f.name))]
+                            for f in dataclass_fields(expr)
+                        ],
+                    ),
+                )
+            else:
+                return expr
+
+        repack_dsk[tok] = tsk
+        return tok
+
+    out = uuid.uuid4().hex
+    repack_dsk[out] = (tuple, [_unpack(i) for i in args])
+
+    def repack(results):
+        dsk = repack_dsk.copy()
+        dsk[collections_token] = quote(results)
+        return simple_get(dsk, out)
+
+    return collections, repack
+
+
+def optimize(*args, **kwargs):
+    """Optimize several dask collections at once.
+
+    Returns equivalent dask collections that all share the same merged and
+    optimized underlying graph. This can be useful if converting multiple
+    collections to delayed objects, or to manually apply the optimizations at
+    strategic points.
+
+    Note that in most cases you shouldn't need to call this method directly.
+
+    Parameters
+    ----------
+    *args : objects
+        Any number of objects. If a dask object, its graph is optimized and
+        merged with all those of all other dask objects before returning an
+        equivalent dask collection. Non-dask arguments are passed through
+        unchanged.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``optimize``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
+    optimizations : list of callables, optional
+        Additional optimization passes to perform.
+    **kwargs
+        Extra keyword arguments to forward to the optimization passes.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> a = da.arange(10, chunks=2).sum()
+    >>> b = da.arange(10, chunks=2).mean()
+    >>> a2, b2 = optimize(a, b)
+
+    >>> a2.compute() == a.compute()
+    True
+    >>> b2.compute() == b.compute()
+    True
+    """
+    collections, repack = unpack_collections(*args, **kwargs)
+    if not collections:
+        return args
+
+    dsk = collections_to_dsk(collections, **kwargs)
+    postpersists = [
+        a.__dask_postpersist__() if is_dask_collection(a) else (None, a) for a in args
+    ]
+
+    keys, postpersists = [], []
+    for a in collections:
+        keys.extend(flatten(a.__dask_keys__()))
+        postpersists.append(a.__dask_postpersist__())
+
+    return repack([r(dsk, *s) for r, s in postpersists])
 
 
 def compute(*args, **kwargs):
@@ -284,16 +393,16 @@ def compute(*args, **kwargs):
         objects passed to ``compute``. For large collections this can be
         expensive. If none of the arguments contain any dask objects, set
         ``traverse=False`` to avoid doing this traversal.
-    get : callable, optional
-        A scheduler ``get`` function to use. If not provided, the default is
-        to check the global settings first, and then fall back to defaults for
-        the collections.
+    scheduler : string, optional
+        Which scheduler to use like "threads", "synchronous" or "processes".
+        If not provided, the default is to check the global settings first,
+        and then fall back to the collection defaults.
     optimize_graph : bool, optional
         If True [default], the optimizations for each collection are applied
         before computation. Otherwise the graph is run as is. This can be
         useful for debugging.
     kwargs
-        Extra keywords to forward to the scheduler ``get`` function.
+        Extra keywords to forward to the scheduler function.
 
     Examples
     --------
@@ -308,40 +417,24 @@ def compute(*args, **kwargs):
     >>> compute({'a': a, 'b': b, 'c': 1})  # doctest: +SKIP
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
-    from dask.delayed import delayed
-    traverse = kwargs.pop('traverse', True)
-    if traverse:
-        args = tuple(delayed(a)
-                     if isinstance(a, (list, set, tuple, dict, Iterator))
-                     else a for a in args)
+    traverse = kwargs.pop("traverse", True)
+    optimize_graph = kwargs.pop("optimize_graph", True)
 
-    optimize_graph = kwargs.pop('optimize_graph', True)
-    variables = [a for a in args if is_dask_collection(a)]
-    if not variables:
+    collections, repack = unpack_collections(*args, traverse=traverse)
+    if not collections:
         return args
 
-    get = kwargs.pop('get', None) or _globals['get']
+    schedule = get_scheduler(
+        scheduler=kwargs.pop("scheduler", None),
+        collections=collections,
+        get=kwargs.pop("get", None),
+    )
 
-    if get is None and getattr(thread_state, 'key', False):
-        from distributed.worker import get_worker
-        get = get_worker().client.get
-
-    if not get:
-        get = variables[0].__dask_scheduler__
-        if not all(a.__dask_scheduler__ == get for a in variables):
-            raise ValueError("Compute called on multiple collections with "
-                             "differing default schedulers. Please specify a "
-                             "scheduler `get` function using either "
-                             "the `get` kwarg or globally with `set_options`.")
-
-    dsk = collections_to_dsk(variables, optimize_graph, **kwargs)
-    keys = [var.__dask_keys__() for var in variables]
-    postcomputes = [a.__dask_postcompute__() if is_dask_collection(a)
-                    else (None, a) for a in args]
-    results = get(dsk, keys, **kwargs)
-    results_iter = iter(results)
-    return tuple(a if f is None else f(next(results_iter), *a)
-                 for f, a in postcomputes)
+    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+    keys = [x.__dask_keys__() for x in collections]
+    postcomputes = [x.__dask_postcompute__() for x in collections]
+    results = schedule(dsk, keys, **kwargs)
+    return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
 def visualize(*args, **kwargs):
@@ -388,36 +481,49 @@ def visualize(*args, **kwargs):
     -----
     For more information on optimization see here:
 
-    http://dask.pydata.org/en/latest/optimize.html
+    https://docs.dask.org/en/latest/optimize.html
     """
     from dask.dot import dot_graph
 
-    filename = kwargs.pop('filename', 'mydask')
-    optimize_graph = kwargs.pop('optimize_graph', False)
+    filename = kwargs.pop("filename", "mydask")
+    optimize_graph = kwargs.pop("optimize_graph", False)
 
-    dsks = [arg for arg in args if isinstance(arg, dict)]
-    args = [arg for arg in args if is_dask_collection(arg)]
+    args2 = []
+    for arg in args:
+        if isinstance(arg, (list, tuple, set)):
+            args2.extend(arg)
+        else:
+            args2.append(arg)
 
-    dsk = collections_to_dsk(args, optimize_graph=optimize_graph)
+    dsks = [arg for arg in args2 if isinstance(arg, Mapping)]
+    args3 = [arg for arg in args2 if is_dask_collection(arg)]
+
+    dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
     for d in dsks:
         dsk.update(d)
 
-    color = kwargs.get('color')
+    color = kwargs.get("color")
 
-    if color == 'order':
+    if color == "order":
         from .order import order
+        import matplotlib.pyplot as plt
+
         o = order(dsk)
         try:
-            cmap = kwargs.pop('cmap')
+            cmap = kwargs.pop("cmap")
         except KeyError:
+            cmap = plt.cm.RdBu
+        if isinstance(cmap, str):
             import matplotlib.pyplot as plt
-            cmap = plt.cm.viridis
-        mx = max(o.values())
+
+            cmap = getattr(plt.cm, cmap)
+        mx = max(o.values()) + 1
         colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
 
-        kwargs['function_attributes'] = {k: {'color': v, 'label': str(o[k])}
-                                         for k, v in colors.items()}
-        kwargs['data_attributes'] = {k: {'color': v} for k, v in colors.items()}
+        kwargs["function_attributes"] = {
+            k: {"color": v, "label": str(o[k])} for k, v in colors.items()
+        }
+        kwargs["data_attributes"] = {k: {"color": v} for k, v in colors.items()}
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
@@ -465,31 +571,37 @@ def persist(*args, **kwargs):
     Parameters
     ----------
     *args: Dask collections
-    get : callable, optional
-        A scheduler ``get`` function to use. If not provided, the default
-        is to check the global settings first, and then fall back to
-        the collection defaults.
+    scheduler : string, optional
+        Which scheduler to use like "threads", "synchronous" or "processes".
+        If not provided, the default is to check the global settings first,
+        and then fall back to the collection defaults.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``persist``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     optimize_graph : bool, optional
         If True [default], the graph is optimized before computation.
         Otherwise the graph is run as is. This can be useful for debugging.
     **kwargs
-        Extra keywords to forward to the scheduler ``get`` function.
+        Extra keywords to forward to the scheduler function.
 
     Returns
     -------
     New dask collections backed by in-memory data
     """
-    collections = [a for a in args if is_dask_collection(a)]
+    traverse = kwargs.pop("traverse", True)
+    optimize_graph = kwargs.pop("optimize_graph", True)
+
+    collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    get = kwargs.pop('get', None) or _globals['get']
+    schedule = get_scheduler(
+        scheduler=kwargs.pop("scheduler", None), collections=collections
+    )
 
-    if get is None and getattr(thread_state, 'key', False):
-        from distributed.worker import get_worker
-        get = get_worker().client.get
-
-    if inspect.ismethod(get):
+    if inspect.ismethod(schedule):
         try:
             from distributed.client import default_client
         except ImportError:
@@ -500,48 +612,30 @@ def persist(*args, **kwargs):
             except ValueError:
                 pass
             else:
-                if client.get == _globals['get']:
-                    collections = client.persist(collections, **kwargs)
-                    if isinstance(collections, list):  # distributed is inconsistent here
-                        collections = tuple(collections)
-                    else:
-                        collections = (collections,)
-                    results_iter = iter(collections)
-                    return tuple(a if not is_dask_collection(a)
-                                 else next(results_iter)
-                                 for a in args)
-
-    optimize_graph = kwargs.pop('optimize_graph', True)
-
-    if not get:
-        get = collections[0].__dask_scheduler__
-        if not all(a.__dask_scheduler__ == get for a in collections):
-            raise ValueError("Compute called on multiple collections with "
-                             "differing default schedulers. Please specify a "
-                             "scheduler `get` function using either "
-                             "the `get` kwarg or globally with `set_options`.")
+                if client.get == schedule:
+                    results = client.persist(
+                        collections, optimize_graph=optimize_graph, **kwargs
+                    )
+                    return repack(results)
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-
     keys, postpersists = [], []
-    for a in args:
-        if is_dask_collection(a):
-            a_keys = list(flatten(a.__dask_keys__()))
-            rebuild, state = a.__dask_postpersist__()
-            keys.extend(a_keys)
-            postpersists.append((rebuild, a_keys, state))
-        else:
-            postpersists.append((None, None, a))
+    for a in collections:
+        a_keys = list(flatten(a.__dask_keys__()))
+        rebuild, state = a.__dask_postpersist__()
+        keys.extend(a_keys)
+        postpersists.append((rebuild, a_keys, state))
 
-    results = get(dsk, keys, **kwargs)
+    results = schedule(dsk, keys, **kwargs)
     d = dict(zip(keys, results))
-    return tuple(s if r is None else r({k: d[k] for k in ks}, *s)
-                 for r, ks, s in postpersists)
+    results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
+    return repack(results2)
 
 
 ############
 # Tokenize #
 ############
+
 
 def tokenize(*args, **kwargs):
     """ Deterministic token
@@ -558,9 +652,9 @@ def tokenize(*args, **kwargs):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, long, float, str, unicode, bytes, type(None),
-                          type, slice, complex, type(Ellipsis)),
-                         identity)
+normalize_token.register(
+    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
+)
 
 
 @normalize_token.register(dict)
@@ -585,7 +679,7 @@ def normalize_seq(seq):
 
 @normalize_token.register(object)
 def normalize_object(o):
-    method = getattr(o, '__dask_tokenize__', None)
+    method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
     return normalize_function(o) if callable(o) else uuid.uuid4().hex
@@ -615,23 +709,28 @@ def _normalize_function(func):
     if isinstance(func, curry):
         func = func._partial
     if isinstance(func, Compose):
-        first = getattr(func, 'first', None)
+        first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
         return tuple(normalize_function(f) for f in funcs)
     elif isinstance(func, partial):
         args = tuple(normalize_token(i) for i in func.args)
-        kws = tuple((k, normalize_token(v))
-                    for k, v in sorted(func.keywords.items()))
+        if func.keywords:
+            kws = tuple(
+                (k, normalize_token(v)) for k, v in sorted(func.keywords.items())
+            )
+        else:
+            kws = None
         return (normalize_function(func.func), args, kws)
     else:
         try:
             result = pickle.dumps(func, protocol=0)
-            if b'__main__' not in result:  # abort on dynamic functions
+            if b"__main__" not in result:  # abort on dynamic functions
                 return result
         except Exception:
             pass
         try:
             import cloudpickle
+
             return cloudpickle.dumps(func, protocol=0)
         except Exception:
             return str(func)
@@ -647,15 +746,20 @@ def register_pandas():
 
     @normalize_token.register(pd.Categorical)
     def normalize_categorical(cat):
-        return [normalize_token(cat.codes),
-                normalize_token(cat.categories),
-                cat.ordered]
+        return [
+            normalize_token(cat.codes),
+            normalize_token(cat.categories),
+            cat.ordered,
+        ]
 
     @normalize_token.register(pd.Series)
     def normalize_series(s):
-        return [s.name, s.dtype,
-                normalize_token(s._data.blocks[0].values),
-                normalize_token(s.index)]
+        return [
+            s.name,
+            s.dtype,
+            normalize_token(s._data.blocks[0].values),
+            normalize_token(s.index),
+        ]
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
@@ -672,25 +776,49 @@ def register_numpy():
     def normalize_array(x):
         if not x.shape:
             return (str(x), x.dtype)
-        if hasattr(x, 'mode') and getattr(x, 'filename', None):
-            if hasattr(x.base, 'ctypes'):
-                offset = (x.ctypes.get_as_parameter().value -
-                          x.base.ctypes.get_as_parameter().value)
+        if hasattr(x, "mode") and getattr(x, "filename", None):
+            if hasattr(x.base, "ctypes"):
+                offset = (
+                    x.ctypes.get_as_parameter().value
+                    - x.base.ctypes.get_as_parameter().value
+                )
             else:
                 offset = 0  # root memmap's have mmap object as base
-            return (x.filename, os.path.getmtime(x.filename), x.dtype,
-                    x.shape, x.strides, offset)
+            if hasattr(
+                x, "offset"
+            ):  # offset numpy used while opening, and not the offset to the beginning of the file
+                offset += getattr(x, "offset")
+            return (
+                x.filename,
+                os.path.getmtime(x.filename),
+                x.dtype,
+                x.shape,
+                x.strides,
+                offset,
+            )
         if x.dtype.hasobject:
             try:
-                data = hash_buffer_hex('-'.join(x.flat).encode('utf-8'))
-            except TypeError:
-                data = hash_buffer_hex(b'-'.join([unicode(item).encode('utf-8') for item in
-                                                  x.flat]))
+                try:
+                    # string fast-path
+                    data = hash_buffer_hex(
+                        "-".join(x.flat).encode(
+                            encoding="utf-8", errors="surrogatepass"
+                        )
+                    )
+                except UnicodeDecodeError:
+                    # bytes fast-path
+                    data = hash_buffer_hex(b"-".join(x.flat))
+            except (TypeError, UnicodeDecodeError):
+                try:
+                    data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
+                except Exception:
+                    # pickling not supported, use UUID4-based fallback
+                    data = uuid.uuid4().hex
         else:
             try:
-                data = hash_buffer_hex(x.ravel(order='K').view('i1'))
+                data = hash_buffer_hex(x.ravel(order="K").view("i1"))
             except (BufferError, AttributeError, ValueError):
-                data = hash_buffer_hex(x.copy().ravel(order='K').view('i1'))
+                data = hash_buffer_hex(x.copy().ravel(order="K").view("i1"))
         return (data, x.dtype, x.shape, x.strides)
 
     @normalize_token.register(np.matrix)
@@ -705,7 +833,7 @@ def register_numpy():
         try:
             name = x.__name__
             if getattr(np, name) is x:
-                return 'np.' + name
+                return "np." + name
         except AttributeError:
             return normalize_function(x)
 
@@ -715,18 +843,20 @@ def register_scipy():
     import scipy.sparse as sp
 
     def normalize_sparse_matrix(x, attrs):
-        return type(x).__name__, normalize_seq((normalize_token(getattr(x, key))
-                                                for key in attrs))
+        return (
+            type(x).__name__,
+            normalize_seq((normalize_token(getattr(x, key)) for key in attrs)),
+        )
 
-    for cls, attrs in [(sp.dia_matrix, ('data', 'offsets', 'shape')),
-                       (sp.bsr_matrix, ('data', 'indices', 'indptr',
-                                        'blocksize', 'shape')),
-                       (sp.coo_matrix, ('data', 'row', 'col', 'shape')),
-                       (sp.csr_matrix, ('data', 'indices', 'indptr', 'shape')),
-                       (sp.csc_matrix, ('data', 'indices', 'indptr', 'shape')),
-                       (sp.lil_matrix, ('data', 'rows', 'shape'))]:
-        normalize_token.register(cls,
-                                 partial(normalize_sparse_matrix, attrs=attrs))
+    for cls, attrs in [
+        (sp.dia_matrix, ("data", "offsets", "shape")),
+        (sp.bsr_matrix, ("data", "indices", "indptr", "blocksize", "shape")),
+        (sp.coo_matrix, ("data", "row", "col", "shape")),
+        (sp.csr_matrix, ("data", "indices", "indptr", "shape")),
+        (sp.csc_matrix, ("data", "indices", "indptr", "shape")),
+        (sp.lil_matrix, ("data", "rows", "shape")),
+    ]:
+        normalize_token.register(cls, partial(normalize_sparse_matrix, attrs=attrs))
 
     @normalize_token.register(sp.dok_matrix)
     def normalize_dok_matrix(x):
@@ -742,7 +872,135 @@ def _colorize(t):
     --------
     >>> _colorize((255, 255, 255))
     '#FFFFFF'
+    >>> _colorize((0, 32, 128))
+    '#002080'
     """
     t = t[:3]
     i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
-    return "#" + hex(int(i))[2:].upper()
+    h = hex(int(i))[2:].upper()
+    h = "0" * (6 - len(h)) + h
+    return "#" + h
+
+
+named_schedulers = {
+    "sync": local.get_sync,
+    "synchronous": local.get_sync,
+    "single-threaded": local.get_sync,
+    "threads": threaded.get,
+    "threading": threaded.get,
+}
+
+try:
+    from dask import multiprocessing as dask_multiprocessing
+except ImportError:
+    pass
+else:
+    named_schedulers.update(
+        {
+            "processes": dask_multiprocessing.get,
+            "multiprocessing": dask_multiprocessing.get,
+        }
+    )
+
+
+get_err_msg = """
+The get= keyword has been removed.
+
+Please use the scheduler= keyword instead with the name of
+the desired scheduler like 'threads' or 'processes'
+
+    x.compute(scheduler='single-threaded')
+    x.compute(scheduler='threads')
+    x.compute(scheduler='processes')
+
+or with a function that takes the graph and keys
+
+    x.compute(scheduler=my_scheduler_function)
+
+or with a Dask client
+
+    x.compute(scheduler=client)
+""".strip()
+
+
+def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
+    """ Get scheduler function
+
+    There are various ways to specify the scheduler to use:
+
+    1.  Passing in scheduler= parameters
+    2.  Passing these into global confiuration
+    3.  Using defaults of a dask collection
+
+    This function centralizes the logic to determine the right scheduler to use
+    from those many options
+    """
+    if get:
+        raise TypeError(get_err_msg)
+
+    if scheduler is not None:
+        if callable(scheduler):
+            return scheduler
+        elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
+            return scheduler.get
+        elif scheduler.lower() in named_schedulers:
+            return named_schedulers[scheduler.lower()]
+        elif scheduler.lower() in ("dask.distributed", "distributed"):
+            from distributed.worker import get_client
+
+            return get_client().get
+        elif scheduler.lower() in ["processes", "multiprocessing"]:
+            raise ValueError(
+                "Please install cloudpickle to use the '%s' scheduler." % scheduler
+            )
+        else:
+            raise ValueError(
+                "Expected one of [distributed, %s]"
+                % ", ".join(sorted(named_schedulers))
+            )
+        # else:  # try to connect to remote scheduler with this name
+        #     return get_client(scheduler).get
+
+    if config.get("scheduler", None):
+        return get_scheduler(scheduler=config.get("scheduler", None))
+
+    if config.get("get", None):
+        raise ValueError(get_err_msg)
+
+    if getattr(thread_state, "key", False):
+        from distributed.worker import get_worker
+
+        return get_worker().client.get
+
+    if cls is not None:
+        return cls.__dask_scheduler__
+
+    if collections:
+        collections = [c for c in collections if c is not None]
+    if collections:
+        get = collections[0].__dask_scheduler__
+        if not all(c.__dask_scheduler__ == get for c in collections):
+            raise ValueError(
+                "Compute called on multiple collections with "
+                "differing default schedulers. Please specify a "
+                "scheduler=` parameter explicitly in compute or "
+                "globally with `dask.config.set`."
+            )
+        return get
+
+    return None
+
+
+def wait(x, timeout=None, return_when="ALL_COMPLETED"):
+    """ Wait until computation has finished
+
+    This is a compatibility alias for ``dask.distributed.wait``.
+    If it is applied onto Dask collections without Dask Futures or if Dask
+    distributed is not installed then it is a no-op
+    """
+    try:
+        from distributed import wait
+
+        return wait(x, timeout=timeout, return_when=return_when)
+    except (ImportError, ValueError):
+        return x

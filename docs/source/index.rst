@@ -2,41 +2,41 @@
 Dask
 ====
 
-*Dask is a flexible parallel computing library for analytic computing.*
+*Dask is a flexible library for parallel computing in Python.*
 
-Dask is composed of two components:
+Dask is composed of two parts:
 
-1.  **Dynamic task scheduling** optimized for computation.  This is similar to
+1.  **Dynamic task scheduling** optimized for computation. This is similar to
     *Airflow, Luigi, Celery, or Make*, but optimized for interactive
     computational workloads.
 2.  **"Big Data" collections** like parallel arrays, dataframes, and lists that
     extend common interfaces like *NumPy, Pandas, or Python iterators* to
-    larger-than-memory or distributed environments.  These parallel collections
-    run on top of the dynamic task schedulers.
+    larger-than-memory or distributed environments. These parallel collections
+    run on top of dynamic task schedulers.
 
 Dask emphasizes the following virtues:
 
 *  **Familiar**: Provides parallelized NumPy array and Pandas DataFrame objects
 *  **Flexible**: Provides a task scheduling interface for more custom workloads
    and integration with other projects.
-*  **Native**: Enables distributed computing in Pure Python with access to
+*  **Native**: Enables distributed computing in pure Python with access to
    the PyData stack.
 *  **Fast**: Operates with low overhead, low latency, and minimal serialization
    necessary for fast numerical algorithms
 *  **Scales up**: Runs resiliently on clusters with 1000s of cores
 *  **Scales down**: Trivial to set up and run on a laptop in a single process
-*  **Responsive**: Designed with interactive computing in mind it provides rapid
+*  **Responsive**: Designed with interactive computing in mind, it provides rapid
    feedback and diagnostics to aid humans
 
 
-.. image:: images/collections-schedulers.png
+.. image:: images/dask-overview.svg
    :alt: Dask collections and schedulers
-   :width: 80%
+   :width: 100%
    :align: center
 
 See the `dask.distributed documentation (separate website)
-<https://distributed.readthedocs.io/en/latest/>`_ for more technical information
-on Dask's distributed scheduler,
+<https://distributed.dask.org/en/latest/>`_ for more technical information
+on Dask's distributed scheduler.
 
 Familiar user interface
 -----------------------
@@ -105,17 +105,17 @@ Dask is convenient on a laptop.  It :doc:`installs <install>` trivially with
 memory" to "fits on disk".
 
 Dask can scale to a cluster of 100s of machines. It is resilient, elastic, data
-local, and low latency.  For more information see documentation on the
+local, and low latency.  For more information, see the documentation about the
 `distributed scheduler`_.
 
 This ease of transition between single-machine to moderate cluster enables
-users both to start simple and to grow when necessary.
+users to both start simple and grow when necessary.
 
 
 Complex Algorithms
 ------------------
 
-Dask represents parallel computations with :doc:`task graphs<graphs>`.  These
+Dask represents parallel computations with :doc:`task graphs<graphs>`. These
 directed acyclic graphs may have arbitrary structure, which enables both
 developers and users the freedom to build sophisticated algorithms and to
 handle messy situations not easily managed by the ``map/filter/groupby``
@@ -125,18 +125,6 @@ We originally needed this complexity to build complex algorithms for
 n-dimensional arrays but have found it to be equally valuable when dealing with
 messy situations in everyday problems.
 
-
-Index
------
-
-**Getting Started**
-
-* :doc:`install`
-* :doc:`setup`
-* :doc:`use-cases`
-* :doc:`examples-tutorials`
-* :doc:`support`
-
 .. toctree::
    :maxdepth: 1
    :hidden:
@@ -144,129 +132,64 @@ Index
 
    install.rst
    setup.rst
-   use-cases.rst
-   examples-tutorials.rst
+   Use Cases <https://stories.dask.org>
    support.rst
-
-**Collections**
-
-Dask collections are the main interaction point for users. They look like
-NumPy and pandas but generate dask graphs internally. If you are a dask *user*
-then you should start here.
-
-* :doc:`array`
-* :doc:`bag`
-* :doc:`dataframe`
-* :doc:`delayed`
-* :doc:`futures`
+   why.rst
+   institutional-faq.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Collections
+   :caption: User Interface
 
+   user-interfaces.rst
    array.rst
    bag.rst
    dataframe.rst
    delayed.rst
    futures.rst
-   machine-learning.rst
-
-**Scheduling**
-
-Schedulers execute task graphs.  Dask currently has two main schedulers, one
-for single machine processing using threads or processes, and one for
-distributed memory clusters.
-
-* :doc:`distributed`
-* :doc:`scheduler-overview`
-* :doc:`Single machine scheduler<shared>`
-* :doc:`scheduling-policy`
+   Machine Learning <https://ml.dask.org>
+   best-practices.rst
+   api.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Scheduling
 
-   distributed.rst
-   scheduler-overview.rst
-   shared.rst
-   scheduling-policy.rst
-
-**Inspecting and Diagnosing Graphs**
-
-Parallel code can be tricky to debug and profile. Dask provides a few tools to
-help make debugging and profiling graph execution easier.
-
-* :doc:`inspect`
-* :doc:`diagnostics`
+   scheduling.rst
+   Distributed Scheduling <https://distributed.dask.org/>
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Diagnostics
 
-   inspect.rst
-   diagnostics.rst
-
-**Graphs**
-
-Internally Dask encodes algorithms in a simple format involving Python dicts,
-tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  Working directly with dask graphs is rare unless you intend
-to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
-often a better choice.  If you are a *core developer*, then you should start here.
-
-* :doc:`graphs`
-* :doc:`spec`
-* :doc:`custom-graphs`
-* :doc:`optimize`
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Graphs
-
-   graphs.rst
-   spec.rst
-   custom-graphs.rst
-   optimize.rst
-
-**Help & reference**
-
-* :doc:`debugging`
-* :doc:`changelog`
-* :doc:`cheatsheet`
-* :doc:`presentations`
-* :doc:`develop`
-* :doc:`faq`
-* :doc:`spark`
-* :doc:`caching`
-* :doc:`bytes`
-* :doc:`remote-data-services`
-* :doc:`custom-collections`
-* :doc:`cite`
+   understanding-performance.rst
+   graphviz.rst
+   diagnostics-local.rst
+   diagnostics-distributed.rst
+   debugging.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Help & reference
 
-   debugging.rst
-   changelog.rst
-   cheatsheet.rst
-   presentations.rst
    develop.rst
-   faq.rst
+   changelog.rst
+   configuration.rst
+   educational-resources.rst
+   presentations.rst
+   cheatsheet.rst
    spark.rst
    caching.rst
-   bytes.rst
+   graphs.rst
    remote-data-services.rst
-   custom-collections.rst
+   gpu.rst
    cite.rst
    funding.rst
-
-Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license.
+   logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
@@ -274,8 +197,8 @@ Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
 .. _`gitter chat room`: https://gitter.im/dask/dask
-.. _`xarray`: https://xray.readthedocs.io/en/stable/
+.. _`xarray`: https://xarray.pydata.org/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: https://pandas.pydata.org/pandas-docs/version/0.17.0/
-.. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/
+.. _`distributed scheduler`: https://distributed.dask.org/en/latest/
