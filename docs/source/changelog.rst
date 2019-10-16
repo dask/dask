@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2.6.0 / 2019-10-15
+------------------
+
+Core
+++++
+
+- Call ``ensure_dict`` on graphs before entering ``toolz.merge`` (:pr:`5486`) `Matthew Rocklin`_
+- Consolidating hash dispatch functions (:pr:`5476`) `Richard J Zamora`_
+
+DataFrame
++++++++++
+
+- Support Python 3.5 in Parquet code (:pr:`5491`) `Ben Zaitlen`_
+- Avoid identity check in ``warn_dtype_mismatch`` (:pr:`5489`) `Tom Augspurger`_
+- Enable unused groupby tests (:pr:`3480`) `Jörg Dietrich`_
+- Remove old parquet and bcolz dataframe optimizations (:pr:`5484`) `Matthew Rocklin`_
+- Add getitem optimization for ``read_parquet`` (:pr:`5453`) `Tom Augspurger`_
+- Use ``_constructor_sliced`` method to determine Series type (:pr:`5480`) `Richard J Zamora`_
+- Fix map(series) for unsorted base series index (:pr:`5459`) `Justin Waugh`_
+- Fix ``KeyError`` with Groupby label (:pr:`5467`) `Ryan Nazareth`_
+
+Documentation
++++++++++++++
+
+- Use Zoom meeting instead of appear.in (:pr:`5494`) `Matthew Rocklin`_
+- Added curated list of resources (:pr:`5460`) `Javad`_
+- Update SSH docs to include ``SSHCluster`` (:pr:`5482`) `Matthew Rocklin`_
+- Update "Why Dask?" page (:pr:`5473`) `Matthew Rocklin`_
+- Fix typos in docstrings (:pr:`5469`) `garanews`_
+
+
 2.5.2 / 2019-10-04
 ------------------
 
@@ -2562,3 +2593,5 @@ Other
 .. _`Christopher J. Wright`: https://github.com/CJ-Wright
 .. _`Mahmut Bulut`: https://github.com/vertexclique
 .. _`Ben Jeffery`: https://github.com/benjeffery
+.. _`Ryan Nazareth`: https://github.com/ryankarlos
+.. _`garanews`: https://github.com/garanews
