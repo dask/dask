@@ -120,7 +120,7 @@ def test_dont_spawn_too_many_threads_CPU_COUNT():
 
     after = threading.active_count()
 
-    assert after <= before + CPU_COUNT*2
+    assert after <= before + CPU_COUNT * 2
 
 
 def test_thread_safety():
