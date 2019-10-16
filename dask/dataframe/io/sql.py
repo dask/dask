@@ -41,6 +41,12 @@ def read_sql_table(
         ``divisions=``.
         ``index_col`` could be a function to return a value, e.g.,
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
+        ``index_col=sql.func.abs(sql.column("value")).label("abs(value)")``, or
+        ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
+        the textfield ``id`` to ``BigInteger``.
+
+        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+
         Labeling columns created by functions or arithmetic operations is
         required.
     divisions: sequence
