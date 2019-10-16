@@ -1,6 +1,21 @@
 Changelog
 =========
 
+2.6.0 - 2019-10-15
+------------------
+
+- Refactor dashboard module (:pr:`3138`) `Jacob Tomlinson`_
+- Use ``setuptools.find_packages`` in ``setup.py`` (:pr:`3150`) `Matthew Rocklin`_
+- Move death timeout logic up to ``Node.start`` (:pr:`3115`) `Matthew Rocklin`_
+- Only include metric in ``WorkerTable`` if it is a scalar (:pr:`3140`) `Matthew Rocklin`_
+- Add ``Nanny(config={...})`` keyword (:pr:`3134`) `Matthew Rocklin`_
+- Xfail ``test_worksapce_concurrency`` on Python 3.6 (:pr:`3132`) `Matthew Rocklin`_
+- Extend Worker plugin API with transition method (:pr:`2994`) `matthieubulte`_
+- Raise exception if the user passes in unused keywords to ``Client`` (:pr:`3117`) `Jonathan De Troye`_
+- Move new ``SSHCluster`` to top level (:pr:`3128`) `Matthew Rocklin`_
+- Bump dask dependency (:pr:`3124`) `Jim Crist`_
+
+
 2.5.2 - 2019-10-04
 ------------------
 
@@ -1315,3 +1330,5 @@ significantly without many new features.
 .. _`Arpit Solanki`: https://github.com/arpit1997
 .. _`Gil Forsyth`: https://github.com/gforsyth
 .. _`Philipp Rudiger`: https://github.com/philippjfr
+.. _`Jonathan De Troye`: https://github.com/detroyejr
+.. _`matthieubulte`: https://github.com/matthieubulte
