@@ -1008,8 +1008,12 @@ def ensure_dict(d):
         return d
     elif hasattr(d, "dicts"):
         result = {}
+        seen = set()
         for dd in d.dicts.values():
-            result.update(dd)
+            dd_id = id(dd)
+            if dd_id not in seen:
+                result.update(dd)
+                seen.add(dd_id)
         return result
     return dict(d)
 
