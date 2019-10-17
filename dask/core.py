@@ -1,4 +1,3 @@
-from itertools import chain
 from collections import defaultdict
 
 from .utils_test import add, inc  # noqa: F401
