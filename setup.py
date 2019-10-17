@@ -8,14 +8,15 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-  'array': ['numpy >= 1.13.0', 'toolz >= 0.7.3'],
+  'array': ['numpy >= 1.13.0', 'toolz >= 0.7.3', 'psutil >= 0.5'],
   'bag': ['fsspec >= 0.5.1', 'cloudpickle >= 0.2.1', 'toolz >= 0.7.3',
-          'partd >= 0.3.10'],
+          'partd >= 0.3.10', 'psutil >= 0.5'],
   'dataframe': ['numpy >= 1.13.0', 'pandas >= 0.21.0', 'toolz >= 0.7.3',
-                'partd >= 0.3.10', 'cloudpickle >= 0.2.1', 'fsspec >= 0.5.1'],
+                'partd >= 0.3.10', 'cloudpickle >= 0.2.1', 'fsspec >= 0.5.1',
+                'psutil >= 0.5'],
   'distributed': ['distributed >= 2.0'],
   'diagnostics': ['bokeh >= 1.0.0'],
-  'delayed': ['toolz >= 0.7.3'],
+  'delayed': ['toolz >= 0.7.3', 'psutil >= 0.5'],
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
