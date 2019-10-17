@@ -90,6 +90,8 @@ These optional dependencies and their minimum supported versions are listed belo
 +-------------+----------+
 | cloudpickle | >=0.2.1  |
 +-------------+----------+
+|  cityhash   |          |
++-------------+----------+
 | distributed | >=2.0    |
 +-------------+----------+
 | fastparquet |          |
@@ -97,6 +99,8 @@ These optional dependencies and their minimum supported versions are listed belo
 |    fsspec   | >=0.5.1  |
 +-------------+----------+
 |    gcsfs    |          |
++-------------+----------+
+|  murmurhash |          |
 +-------------+----------+
 |    numpy    | >=1.13.0 |
 +-------------+----------+
@@ -111,6 +115,8 @@ These optional dependencies and their minimum supported versions are listed belo
 |  sqlalchemy |          |
 +-------------+----------+
 |    toolz    | >=0.7.3  |
++-------------+----------+
+|   xxhash    |          |
 +-------------+----------+
 
 Test
