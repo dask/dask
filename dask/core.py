@@ -222,7 +222,7 @@ def get_deps(dsk):
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
     {'a': set(), 'b': {'a'}, 'c': {'b'}}
-    >>> dependents
+    >>> dependents  # doctest: +SKIP
     {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dependencies = {k: get_dependencies(dsk, task=v) for k, v in dsk.items()}
