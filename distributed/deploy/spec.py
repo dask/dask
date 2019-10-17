@@ -29,7 +29,7 @@ class ProcessInterface:
     """
 
     def __init__(self, scheduler=None, name=None):
-        self.address = None
+        self.address = getattr(self, "address", None)
         self.external_address = None
         self.lock = asyncio.Lock()
         self.status = "created"
