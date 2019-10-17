@@ -1,4 +1,5 @@
 from itertools import chain
+from collections import defaultdict
 
 from .utils_test import add, inc  # noqa: F401
 
@@ -266,11 +267,13 @@ def reverse_dict(d):
     >>> reverse_dict(d)  # doctest: +SKIP
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
-    result = {t: set() for t in d.keys() | chain.from_iterable(d.values())}
+    result = defaultdict(set)
     _add = set.add
     for k, vals in d.items():
+        result[k]
         for val in vals:
             _add(result[val], k)
+    result.default_factory = None
     return result
 
 
