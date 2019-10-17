@@ -79,6 +79,10 @@ Dask is included by default in the `Anaconda distribution <https://www.anaconda.
 Optional dependencies
 ---------------------
 
+Specific functionality in Dask may require additional optional dependencies.
+For example, reading from Amazon S3 requires ``s3fs``.
+These optional dependencies and their minimum supported versions are listed below.
+
 +-------------+----------+
 | Dependency  | Version  |
 +=============+==========+
