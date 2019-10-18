@@ -91,6 +91,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
+    split_row_groups=True,
     **kwargs
 ):
     """
@@ -138,6 +139,11 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
+    split_row_groups : bool
+        If True (default) then output dataframe partitions will correspond
+        to parquet-file row-groups (when enough row-group metadata is
+        available). Otherwise, partitions correspond to distinct files.
+        Only the "pyarrow" engine currently supports this argument.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -206,6 +212,7 @@ def read_parquet(
         index=index,
         gather_statistics=gather_statistics,
         filters=filters,
+        split_row_groups=split_row_groups,
         **kwargs
     )
     if meta.index.name is not None:

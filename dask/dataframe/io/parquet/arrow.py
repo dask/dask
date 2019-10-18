@@ -132,6 +132,7 @@ class ArrowEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
+        split_row_groups=True,
         **kwargs
     ):
         # Define the dataset object to use for metadata,
@@ -220,7 +221,7 @@ class ArrowEngine(Engine):
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
-                if not partitions and len(dataset.paths) == 1:
+                if split_row_groups and not partitions and len(dataset.paths) == 1:
                     row_groups_per_piece = _get_row_groups_per_piece(
                         pieces, dataset.metadata, dataset.paths[0], fs
                     )
@@ -284,7 +285,7 @@ class ArrowEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            if row_groups_per_piece:
+            if split_row_groups and row_groups_per_piece:
                 parts = []
                 for i, piece in enumerate(pieces):
                     num_row_groups = row_groups_per_piece[i]
