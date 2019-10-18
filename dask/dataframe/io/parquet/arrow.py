@@ -23,14 +23,41 @@ def _get_md_row_groups(pieces):
     if any metadata or statistics are missing
     """
     row_groups = []
+    row_groups_per_piece = []
     for piece in pieces:
-        for rg in range(piece.get_metadata().num_row_groups):
+        num_row_groups = piece.get_metadata().num_row_groups
+        for rg in range(num_row_groups):
             row_group = piece.get_metadata().row_group(rg)
             for c in range(row_group.num_columns):
                 if not row_group.column(c).statistics:
                     return []
             row_groups.append(row_group)
-    return row_groups
+        row_groups_per_piece.append(num_row_groups)
+    if len(row_groups) == len(pieces):
+        row_groups_per_piece = None
+    return row_groups, row_groups_per_piece
+
+
+def _get_row_groups_per_piece(pieces, metadata, path, fs):
+    """ Determine number of row groups in each dataset piece.
+
+    This function requires access to ParquetDataset.metadata
+    """
+    if metadata.num_row_groups == len(pieces):
+        return None  # pieces already map to row-groups
+
+    from collections import OrderedDict
+
+    result = OrderedDict()
+    for piece in pieces:
+        result[piece.path] = 0
+    for rg in range(metadata.num_row_groups):
+        filename = metadata.row_group(rg).column(0).file_path
+        if filename:
+            result[fs.sep.join([path, filename])] += 1
+        else:
+            return None  # File path is missing, abort
+    return tuple(result.values())
 
 
 def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
@@ -185,17 +212,22 @@ class ArrowEngine(Engine):
         if not pieces:
             gather_statistics = False
 
+        row_groups_per_piece = None
         if gather_statistics:
             # Read from _metadata file
-            if dataset.metadata and dataset.metadata.num_row_groups == len(pieces):
+            if dataset.metadata:
                 row_groups = [
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
+                if not partitions and len(dataset.paths) == 1:
+                    row_groups_per_piece = _get_row_groups_per_piece(
+                        pieces, dataset.metadata, dataset.paths[0], fs
+                    )
                 names = dataset.metadata.schema.names
             else:
                 # Read from each individual piece (quite possibly slow).
-                row_groups = _get_md_row_groups(pieces)
+                row_groups, row_groups_per_piece = _get_md_row_groups(pieces)
                 if row_groups:
                     piece = pieces[0]
                     md = piece.get_metadata()
@@ -252,9 +284,17 @@ class ArrowEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            parts = [
-                (piece.path, piece.row_group, piece.partition_keys) for piece in pieces
-            ]
+            if row_groups_per_piece:
+                parts = []
+                for i, piece in enumerate(pieces):
+                    num_row_groups = row_groups_per_piece[i]
+                    for rg in range(num_row_groups):
+                        parts.append((piece.path, rg, piece.partition_keys))
+            else:
+                parts = [
+                    (piece.path, piece.row_group, piece.partition_keys)
+                    for piece in pieces
+                ]
         parts = [
             {
                 "piece": piece,
@@ -432,6 +472,7 @@ class ArrowEngine(Engine):
                     metadata_collector=md_list,
                     **kwargs,
                 )
+            md_list[0].set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"schema": t.schema, "meta": md_list[0]}]
