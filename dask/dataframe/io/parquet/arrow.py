@@ -146,6 +146,8 @@ class ArrowEngine(Engine):
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
             ]
+            if partitions:
+                split_row_groups = False
         else:
             partitions = []
 
@@ -216,12 +218,12 @@ class ArrowEngine(Engine):
         row_groups_per_piece = None
         if gather_statistics:
             # Read from _metadata file
-            if dataset.metadata:
+            if dataset.metadata and dataset.metadata.num_row_groups >= len(pieces):
                 row_groups = [
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
-                if split_row_groups and not partitions and len(dataset.paths) == 1:
+                if split_row_groups and len(dataset.paths) == 1:
                     row_groups_per_piece = _get_row_groups_per_piece(
                         pieces, dataset.metadata, dataset.paths[0], fs
                     )
