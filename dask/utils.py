@@ -549,7 +549,7 @@ def extra_titles(doc):
     titles = {
         i: lines[i].strip()
         for i in range(len(lines) - 1)
-        if lines[i + 1] and all(c == "-" for c in lines[i + 1].strip())
+        if lines[i + 1].strip() and all(c == "-" for c in lines[i + 1].strip())
     }
 
     seen = set()
