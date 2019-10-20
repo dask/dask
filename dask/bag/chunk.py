@@ -2,8 +2,19 @@ def barrier(*args):
     return None
 
 
+def getitem(x, key):
+    """Like :func:`operator.getitem`, but allows setting key using partial
+    ``partial(chunk.getitem, key=key)
+    """
+    return x[key]
+
+
 def foldby_combine2(combine, acc, x):
     return combine(acc, x[1])
+
+
+def groupby_tasks_group_hash(x, grouper, hash):
+    return hash(grouper(x)), x
 
 
 def var_chunk(seq):

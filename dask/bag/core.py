@@ -1879,10 +1879,9 @@ def from_delayed(values):
 
 
 def chunk_distinct(seq, key=None):
-    key2 = key
     if key is not None and not callable(key):
-        key2 = lambda x: x[key]
-    return list(unique(seq, key=key2))
+        key = partial(chunk.getitem, key=key)
+    return list(unique(seq, key=key))
 
 
 def merge_distinct(seqs, key=None):
@@ -2318,7 +2317,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
 
-    b2 = b.map(lambda x: (hash(grouper(x)), x))
+    b2 = b.map(chunk.groupby_tasks_group_hash)
 
     token = tokenize(b, grouper, hash, max_branch)
 
