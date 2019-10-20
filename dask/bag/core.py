@@ -2415,7 +2415,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
     # Barrier
     barrier_token = "groupby-barrier-" + token
 
-    dsk3 = {barrier_token: (chunk.barrier, ) + tuple(dsk2)}
+    dsk3 = {barrier_token: (chunk.barrier,) + tuple(dsk2)}
 
     # Collect groups
     name = "groupby-collect-" + token

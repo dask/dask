@@ -632,11 +632,12 @@ def modlevel_delayed2(x):
 
 
 @pytest.mark.parametrize(
-    "f", [
+    "f",
+    [
         delayed(modlevel_eager),
         pytest.param(modlevel_delayed1, marks=pytest.mark.xfail(reason="#3369")),
         pytest.param(modlevel_delayed2, marks=pytest.mark.xfail(reason="#3369")),
-    ]
+    ],
 )
 def test_pickle(f):
     d = f(2)
