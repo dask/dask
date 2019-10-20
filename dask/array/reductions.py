@@ -327,7 +327,7 @@ def partial_reduce(
 @wraps(chunk.sum)
 def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is None:
-        dtype = getattr(np.empty(0, dtype=a.dtype).sum(), "dtype", object)
+        dtype = getattr(np.zeros(1, dtype=a.dtype).sum(), "dtype", object)
     result = reduction(
         a,
         chunk.sum,
