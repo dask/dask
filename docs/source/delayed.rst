@@ -153,6 +153,24 @@ reproduction of our original problem as a parallel code:
     total = dask.delayed(sum)(output)
 
 
+.. note::
+
+   Functions decorated with ``@delayed`` can be serialized with cloudpickle_, but not
+   with pickle. If you have any such functions, you won't be able to use the
+   ``multiprocessing`` or ``distributed`` schedulers unless cloudpickle_ is installed.
+   The workaround is to leave the undecorated function accessible at module level:
+
+     .. code-block:: python
+
+        >>> import dask
+        >>> def inc(x):
+        ...     return x + 1
+        >>> dask.delayed(inc)(2).compute()
+        3
+
+    .. _cloudpickle: https://github.com/cloudpipe/cloudpickle
+
+
 Real time
 ---------
 
