@@ -145,7 +145,7 @@ def random_tuple():
 @pytest.mark.parametrize("random", [np.random, random])
 def test_random_seeds(random):
     N = 10
-    f = delayed(pure=False)(random_tuple)
+    f = delayed(random_tuple, pure=False)
     with dask.config.set(scheduler="processes"):
         (results,) = compute([f() for _ in range(N)])
 

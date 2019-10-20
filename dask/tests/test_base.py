@@ -1005,7 +1005,7 @@ def sleep_and_return(x):
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
     # Regression test for issue #4082
-    f = delayed(pure=False)(sleep_and_return)
+    f = delayed(sleep_and_return, pure=False)
     a = [f(i) for i in range(5)]
     num_workers = 3
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
