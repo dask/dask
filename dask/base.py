@@ -949,10 +949,6 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             from distributed.worker import get_client
 
             return get_client().get
-        elif scheduler.lower() in ["processes", "multiprocessing"]:
-            raise ValueError(
-                "Please install cloudpickle to use the '%s' scheduler." % scheduler
-            )
         else:
             raise ValueError(
                 "Expected one of [distributed, %s]"

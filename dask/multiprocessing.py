@@ -3,9 +3,8 @@ import multiprocessing
 import pickle
 import sys
 import traceback
+from functools import partial
 from warnings import warn
-
-import cloudpickle
 
 from . import config
 from .local import reraise, get_async  # TODO: get better get
@@ -20,11 +19,14 @@ def _reduce_method_descriptor(m):
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
 
-def _dumps(x):
-    return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+try:
+    import cloudpickle
 
-
-_loads = cloudpickle.loads
+    _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+    _loads = cloudpickle.loads
+except ImportError:
+    _dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+    _loads = pickle.loads
 
 
 def _process_get_id():
@@ -158,10 +160,10 @@ def get(
         Number of worker processes (defaults to number of cores)
     func_dumps : function
         Function to use for function serialization
-        (defaults to cloudpickle.dumps)
+        (defaults to cloudpickle.dumps if available, otherwise pickle.dumps)
     func_loads : function
         Function to use for function deserialization
-        (defaults to cloudpickle.loads)
+        (defaults to cloudpickle.loads if available, otherwise pickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """

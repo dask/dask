@@ -13,19 +13,37 @@ from dask.multiprocessing import get, _dumps, get_context, remote_exception
 from dask.utils_test import inc
 
 
+def unrelated_function_global(a):
+    return np.array([a])
+
+
+def my_small_function_global(a, b):
+    return a + b
+
+
 def test_pickle_globals():
     """ Unrelated globals should not be included in serialized bytes """
+    b = _dumps(my_small_function_global)
+    assert b"my_small_function_global" in b
+    assert b"unrelated_function_global" not in b
+    assert b"numpy" not in b
 
-    def unrelated_function(a):
+
+def test_pickle_locals():
+    """Unrelated locals should not be included in serialized bytes
+    """
+    pytest.importorskip("cloudpickle")
+
+    def unrelated_function_local(a):
         return np.array([a])
 
-    def my_small_function(a, b):
+    def my_small_function_local(a, b):
         return a + b
 
-    b = _dumps(my_small_function)
-    assert b"my_small_function" in b
-    assert b"unrelated_function" not in b
-    assert b"numpy" not in b
+    b = _dumps(my_small_function_local)
+    assert b"my_small_function_global" not in b
+    assert b"my_small_function_local" in b
+    assert b"unrelated_function_local" not in b
 
 
 def bad():
@@ -80,22 +98,15 @@ class NotUnpickleable(object):
 def test_unpicklable_args_generate_errors():
     a = NotUnpickleable()
 
-    def foo(a):
-        return 1
+    dsk = {"x": (bool, a)}
 
-    dsk = {"x": (foo, a)}
-
-    try:
+    with pytest.raises(ValueError):
         get(dsk, "x")
-    except Exception as e:
-        assert isinstance(e, ValueError)
 
-    dsk = {"x": (foo, "a"), "a": a}
+    dsk = {"x": (bool, "a"), "a": a}
 
-    try:
+    with pytest.raises(ValueError):
         get(dsk, "x")
-    except Exception as e:
-        assert isinstance(e, ValueError)
 
 
 def test_reuse_pool():
@@ -125,16 +136,27 @@ def test_optimize_graph_false():
     assert len(keys) == 2
 
 
+@delayed(pure=False)
+def random_tuple():
+    return tuple(random.randint(0, 10000) for i in range(5))
+
+
 @pytest.mark.parametrize("random", [np.random, random])
 def test_random_seeds(random):
-    def f():
-        return tuple(random.randint(0, 10000) for i in range(5))
-
     N = 10
     with dask.config.set(scheduler="processes"):
-        (results,) = compute([delayed(f, pure=False)() for i in range(N)])
+        (results,) = compute([random_tuple() for _ in range(N)])
 
     assert len(set(results)) == N
+
+
+def check_for_pytest():
+    """We check for spawn by ensuring subprocess doesn't have modules only
+    parent process should have:
+    """
+    import sys
+
+    return "FAKE_MODULE_FOR_TEST" in sys.modules
 
 
 @pytest.mark.skipif(
@@ -147,13 +169,6 @@ def test_custom_context_used_python3_posix():
     context is changed this test will need to be modified to be different than
     that.
     """
-    # We check for spawn by ensuring subprocess doesn't have modules only
-    # parent process should have:
-    def check_for_pytest():
-        import sys
-
-        return "FAKE_MODULE_FOR_TEST" in sys.modules
-
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
         with dask.config.set({"multiprocessing.context": "spawn"}):

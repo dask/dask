@@ -729,6 +729,7 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
+    pytest.importorskip("cloudpickle")
     from textwrap import dedent
 
     defn = dedent(
@@ -994,16 +995,16 @@ def test_callable_scheduler():
     assert called[0]
 
 
+@delayed(pure=False)
+def sleep_and_return(x):
+    time.sleep(0.5)
+    return x
+
+
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
     # Regression test for issue #4082
-
-    @delayed
-    def f(x):
-        time.sleep(0.5)
-        return x
-
-    a = [f(i) for i in range(5)]
+    a = [sleep_and_return(i) for i in range(5)]
     num_workers = 3
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
         a = compute(*a, scheduler=scheduler)
