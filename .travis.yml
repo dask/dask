@@ -54,6 +54,13 @@ jobs:
       os: osx
 
     - env:
+      - ENV_FILE=continuous_integration/travis/travis-reduced-deps.yaml
+      - *test
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
+
+    - env:
       - TEST_HDFS='true'
       if: type != pull_request OR commit_message =~ test-hdfs  # Skip on PRS unless the commit message contains "test-hdfs"
       sudo: true
