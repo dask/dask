@@ -427,4 +427,5 @@ def test_merge_None_to_dict():
 
 
 def test_core_file():
+    pytest.importorskip("yaml")
     assert "temporary-directory" in dask.config.config
