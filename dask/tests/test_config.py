@@ -1,4 +1,3 @@
-import yaml
 import os
 import stat
 import sys
@@ -61,6 +60,8 @@ def test_merge():
 
 
 def test_collect_yaml_paths():
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
@@ -78,6 +79,8 @@ def test_collect_yaml_paths():
 
 
 def test_collect_yaml_dir():
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
@@ -110,6 +113,8 @@ def no_read_permissions(path):
 )
 @pytest.mark.parametrize("kind", ["directory", "file"])
 def test_collect_yaml_permission_errors(tmpdir, kind):
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": 2}
     b = {"y": 3, "z": 4}
 
@@ -160,6 +165,8 @@ def test_env():
 
 
 def test_collect():
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
     env = {"DASK_W": 4}
@@ -197,6 +204,8 @@ def test_get():
 
 
 def test_ensure_file(tmpdir):
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 123}
 
@@ -294,6 +303,8 @@ def test_set_hard_to_copyables():
 
 @pytest.mark.parametrize("mkdir", [True, False])
 def test_ensure_file_directory(mkdir, tmpdir):
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": {"a": 1}}
 
     source = os.path.join(str(tmpdir), "source.yaml")
@@ -312,6 +323,8 @@ def test_ensure_file_directory(mkdir, tmpdir):
 
 
 def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
+    yaml = pytest.importorskip("yaml")
+
     a = {"x": 1, "y": {"a": 1}}
     source = os.path.join(str(tmpdir), "source.yaml")
     with open(source, "w") as f:
