@@ -60,7 +60,21 @@ great deal of inter-worker communication.  For common operations this is rarely
 an issue as most Dask Bag workflows are embarrassingly parallel or result in
 reductions with little data moving between workers.
 
+The ``dask.multiprocessing`` scheduler pickles all involved objects using cloudpickle_
+if it is installed, and falling back to pickle otherwise. Notably, cloudpickle can
+pickle lambda functions, but pickle can't, so the following syntax only works if
+cloudpickle if installed::
+
+  b.map(lamdba x: x + 1)
+
+Alternatives to using cloudpickle are globally-defined functions or a mix of
+:mod:`operator` and :mod:`functools.partial`. E.g. the above could be made serializable
+with pickle by rewriting it as follows::
+
+  b.map(partial(operator.add, 1))
+
 .. _GIL: https://docs.python.org/3/glossary.html#term-gil
+.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 
 
 Shuffle
