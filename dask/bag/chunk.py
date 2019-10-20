@@ -13,7 +13,7 @@ def foldby_combine2(combine, acc, x):
     return combine(acc, x[1])
 
 
-def groupby_tasks_group_hash(x, grouper, hash):
+def groupby_tasks_group_hash(x, hash, grouper):
     return hash(grouper(x)), x
 
 

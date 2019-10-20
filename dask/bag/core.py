@@ -2317,7 +2317,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
 
-    b2 = b.map(chunk.groupby_tasks_group_hash)
+    b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
     token = tokenize(b, grouper, hash, max_branch)
 
