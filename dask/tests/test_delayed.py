@@ -615,3 +615,36 @@ def test_check_meta_flag():
 
     c = from_delayed([da, db], verify_meta=False)
     assert_eq(c, c)
+
+
+def modlevel_eager(x):
+    return x + 1
+
+
+@delayed
+def modlevel_delayed1(x):
+    return x + 1
+
+
+@delayed(pure=False)
+def modlevel_delayed2(x):
+    return x + 1
+
+
+@pytest.mark.parametrize(
+    "f", [delayed(modlevel_eager), modlevel_delayed1, modlevel_delayed2]
+)
+def test_pickle(f):
+    d = f(2)
+    d = pickle.loads(pickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
+    assert d.compute() == 3
+
+
+@pytest.mark.parametrize(
+    "f", [delayed(modlevel_eager), modlevel_delayed1, modlevel_delayed2]
+)
+def test_cloudpickle(f):
+    cloudpickle = pytest.importorskip("cloudpickle")
+    d = f(2)
+    d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
+    assert d.compute() == 3
