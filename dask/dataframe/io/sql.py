@@ -144,7 +144,7 @@ def read_sql_table(
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
-        meta = head[:0]
+        meta = head.iloc[:0]
     else:
         if divisions is None and npartitions is None:
             raise ValueError(
