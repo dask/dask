@@ -62,6 +62,7 @@ from .utils import (
     is_categorical_dtype,
     has_known_categories,
     PANDAS_VERSION,
+    PANDAS_GT_100,
     index_summary,
     is_dataframe_like,
     is_series_like,
@@ -3955,15 +3956,14 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {
-            "axis": axis,
-            "broadcast": broadcast,
-            "raw": raw,
-            "reduce": None,
-        }
+        pandas_kwargs = {"axis": axis, "raw": raw}
 
         if PANDAS_VERSION >= "0.23.0":
             kwds.setdefault("result_type", None)
+
+        if not PANDAS_GT_100:
+            pandas_kwargs["broadcast"] = broadcast
+            pandas_kwargs["reduce"] = None
 
         kwds.update(pandas_kwargs)
 

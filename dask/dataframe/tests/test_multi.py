@@ -1252,11 +1252,17 @@ def test_cheap_single_partition_merge_on_index():
     actual = aa.merge(bb, left_index=True, right_on="x", how="inner")
     expected = a.merge(b, left_index=True, right_on="x", how="inner")
 
+    # Workaround https://github.com/pandas-dev/pandas/issues/26925
+    # actual has the correct dtype for the index (Int64). Pandas as object-dtype
+    # for empty joins.
+    expected.index = expected.index.astype("int64")
+
     assert actual.known_divisions
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
+    expected.index = expected.index.astype("int64")
 
     assert actual.known_divisions
     assert_eq(actual, expected)
