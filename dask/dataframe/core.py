@@ -3526,9 +3526,11 @@ class DataFrame(_Frame):
 
                 if len(v.shape) > 1:
                     raise ValueError("Array assignment only supports 1-D arrays")
-                if v.shape[0] != len(self):
+                if v.npartitions != self.npartitions:
                     raise ValueError(
-                        "Size mismatch ({0} != {1})".format(v.shape[0], len(self))
+                        "Number of partitions do not match ({0} != {1})".format(
+                            v.npartitions, self.npartitions
+                        )
                     )
                 kwargs[k] = from_dask_array(v, index=self.index)
 
