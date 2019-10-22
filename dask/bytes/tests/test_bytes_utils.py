@@ -66,6 +66,11 @@ def test_infer_storage_options():
     assert so.pop("path") == "/mnt/datasets/test.csv"
     assert not so
 
+    so = infer_storage_options("//mnt/datasets/test.csv")
+    assert so.pop("protocol") == "file"
+    assert so.pop("path") == "//mnt/datasets/test.csv"
+    assert not so
+
     assert infer_storage_options("./test.csv")["path"] == "./test.csv"
     assert infer_storage_options("../test.csv")["path"] == "../test.csv"
 
