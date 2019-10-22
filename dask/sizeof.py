@@ -101,3 +101,27 @@ def register_spmatrix():
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
         return sum(sizeof(v) for v in s.__dict__.values())
+
+
+@sizeof.register_lazy("pyarrow")
+def register_pyarrow():
+    import pyarrow as pa
+
+    def _get_col_size(col):
+        p = 0
+        for chunk in col.data.iterchunks():
+            for buffer in chunk.buffers():
+                if buffer:
+                    p += buffer.size
+        return p
+
+    @sizeof.register(pa.lib.Table)
+    def sizeof_pyarrow_table(table):
+        p = sizeof(table.schema.metadata)
+        for col in table.itercolumns():
+            p += _get_col_size(col)
+        return int(p) + 1000
+
+    @sizeof.register(pa.lib.Column)
+    def sizeof_pyarrow_column(col):
+        return int(_get_col_size(col)) + 1000
