@@ -3157,14 +3157,8 @@ def test_array_assignment():
         ddf["z"] = darr
 
     arr = np.array(np.random.normal(size=40))
-    darr = da.from_array(arr, chunks=25)
-    msg = "Size mismatch"
-    with pytest.raises(ValueError, match=msg):
-        ddf["z"] = darr
-
-    arr = np.array(np.random.normal(size=50))
     darr = da.from_array(arr, chunks=10)
-    msg = "The index and array have different numbers of blocks"
+    msg = "Number of partitions do not match"
     with pytest.raises(ValueError, match=msg):
         ddf["z"] = darr
 
