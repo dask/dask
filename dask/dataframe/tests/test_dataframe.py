@@ -3156,7 +3156,7 @@ def test_array_assignment():
     with pytest.raises(ValueError, match=msg):
         ddf["z"] = darr
 
-    arr = np.array(np.random.normal(size=40))
+    arr = np.array(np.random.normal(size=50))
     darr = da.from_array(arr, chunks=10)
     msg = "Number of partitions do not match"
     with pytest.raises(ValueError, match=msg):
