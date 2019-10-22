@@ -42,8 +42,23 @@ def agg_func(request):
     return request.param
 
 
-def groupby_internal_repr():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+@pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
+def test_groupby_internal_repr_xfail():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+    ddf = dd.from_pandas(pdf, 3)
+
+    gp = pdf.groupby("y")["x"]
+    dp = ddf.groupby("y")["x"]
+    assert isinstance(dp.obj, dd.Series)
+    assert_eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby(pdf.y)["x"]
+    dp = ddf.groupby(ddf.y)["x"]
+    assert isinstance(dp.obj, dd.Series)
+
+
+def test_groupby_internal_repr():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     gp = pdf.groupby("y")
@@ -57,9 +72,6 @@ def groupby_internal_repr():
     dp = ddf.groupby("y")["x"]
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby("y")[["x"]]
     dp = ddf.groupby("y")[["x"]]
@@ -73,9 +85,6 @@ def groupby_internal_repr():
     dp = ddf.groupby(ddf.y)["x"]
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby(pdf.y)[["x"]]
     dp = ddf.groupby(ddf.y)[["x"]]
@@ -86,8 +95,8 @@ def groupby_internal_repr():
     assert_eq(dp.obj, gp.obj)
 
 
-def groupby_error():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+def test_groupby_error():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     with pytest.raises(KeyError):
@@ -103,24 +112,10 @@ def groupby_error():
         dp["A"]
     assert msg in str(err.value)
 
+    msg = "Columns not found: "
     with pytest.raises(KeyError) as err:
         dp[["x", "A"]]
     assert msg in str(err.value)
-
-
-def groupby_internal_head():
-    pdf = pd.DataFrame(
-        {"A": [1, 2] * 10, "B": np.random.randn(20), "C": np.random.randn(20)}
-    )
-    ddf = dd.from_pandas(pdf, 3)
-
-    assert_eq(ddf.groupby("A")._head().sum(), pdf.head().groupby("A").sum())
-
-    assert_eq(ddf.groupby(ddf["A"])._head().sum(), pdf.head().groupby(pdf["A"]).sum())
-
-    assert_eq(
-        ddf.groupby(ddf["A"] + 1)._head().sum(), pdf.head().groupby(pdf["A"] + 1).sum()
-    )
 
 
 def test_full_groupby():
@@ -1809,7 +1804,7 @@ def test_groupby_agg_custom__mode():
     # results from pandas in apply use return results as single-item lists
     def agg_mode(s):
         def impl(s):
-            res, = s.iloc[0]
+            (res,) = s.iloc[0]
 
             for (i,) in s.iloc[1:]:
                 res = res.add(i, fill_value=0)

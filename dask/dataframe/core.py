@@ -62,6 +62,7 @@ from .utils import (
     is_categorical_dtype,
     has_known_categories,
     PANDAS_VERSION,
+    PANDAS_GT_100,
     index_summary,
     is_dataframe_like,
     is_series_like,
@@ -3969,15 +3970,14 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {
-            "axis": axis,
-            "broadcast": broadcast,
-            "raw": raw,
-            "reduce": None,
-        }
+        pandas_kwargs = {"axis": axis, "raw": raw}
 
         if PANDAS_VERSION >= "0.23.0":
             kwds.setdefault("result_type", None)
+
+        if not PANDAS_GT_100:
+            pandas_kwargs["broadcast"] = broadcast
+            pandas_kwargs["reduce"] = None
 
         kwds.update(pandas_kwargs)
 
@@ -6114,7 +6114,7 @@ def mapseries(base_chunk, concat_map):
 
 def mapseries_combine(index, concat_result):
     final_series = concat_result.sort_index()
-    final_series.index = index
+    final_series = index.to_series().map(final_series)
     return final_series
 
 

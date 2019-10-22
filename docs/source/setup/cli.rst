@@ -48,7 +48,7 @@ particular ports or tell Dask to listen on particular ports with the ``--port``
 and ``--worker-port`` keywords.::
 
    dask-scheduler --port 8000
-   dask-worker --bokeh-port 8000 --nanny-port 8001
+   dask-worker --dashboard-address 8000 --nanny-port 8001
 
 
 Nanny Processes
@@ -65,7 +65,7 @@ Additionally, Dask schedulers and workers host interactive diagnostic web
 servers using `Bokeh <https://bokeh.pydata.org>`_.  These are optional, but
 generally useful to users.  The diagnostic server on the scheduler is
 particularly valuable, and is served on port ``8787`` by default (configurable
-with the ``--bokeh-port`` keyword).
+with the ``--dashboard-address`` keyword).
 
 For more information about relevant ports, please take a look at the available
 :ref:`command line options <worker-scheduler-cli-options>`.

@@ -248,13 +248,13 @@ def test_rolling_partition_size():
 
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
-    assert repr(ddf.rolling(4)) == "Rolling [window=4,center=False,axis=0]"
+    res = repr(ddf.rolling(4))
+    assert res == "Rolling [window=4,center=False,axis=0]"
 
 
 def test_time_rolling_repr():
-    assert repr(dts.rolling("4s")) == (
-        "Rolling [window=4000000000,center=False,win_type=freq,axis=0]"
-    )
+    res = repr(dts.rolling("4s"))
+    assert res == "Rolling [window=4000000000,center=False,win_type=freq,axis=0]"
 
 
 def test_time_rolling_constructor():

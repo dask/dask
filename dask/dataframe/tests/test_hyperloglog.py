@@ -15,7 +15,7 @@ rs = np.random.RandomState(96)
             {
                 "x": [1, 2, 3] * 3,
                 "y": [1.2, 3.4, 5.6] * 3,
-                "z": -np.arange(9, dtype=np.int8),
+                "z": -(np.arange(9, dtype=np.int8)),
             }
         ),
         pd.DataFrame(
@@ -55,7 +55,7 @@ rs = np.random.RandomState(96)
                     "a": [1, 2, 3] * 3,
                     "b": [1.2, 3.4, 5.6] * 3,
                     "c": [1 + 2j, 3 + 4j, 5 + 6j] * 3,
-                    "d": -np.arange(9, dtype=np.int8),
+                    "d": -(np.arange(9, dtype=np.int8)),
                 }
             ),
             marks=[

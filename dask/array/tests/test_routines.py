@@ -23,6 +23,14 @@ def test_array():
     assert isinstance(y, da.Array)
 
 
+def test_array_return_type():
+    # Regression test for https://github.com/dask/dask/issues/5426
+    x = [0, 1, 2, 3]
+    dx = da.array(x)
+    assert isinstance(dx, da.Array)
+    assert_eq(x, dx)
+
+
 def test_derived_docstrings():
     assert "This docstring was copied from numpy.array" in da.routines.array.__doc__
     assert "Create an array." in da.routines.array.__doc__
@@ -1016,7 +1024,7 @@ def test_isnull():
     a = da.from_array(x, chunks=(2,))
     with ignoring(ImportError):
         assert_eq(da.isnull(a), np.isnan(x))
-        assert_eq(da.notnull(a), ~np.isnan(x))
+        assert_eq(da.notnull(a), ~(np.isnan(x)))
 
 
 def test_isnull_result_is_an_array():

@@ -266,12 +266,16 @@ def test_with_func(db):
 
     # now an arith op for one column too; it's name will be 'age'
     data = read_sql_table(
-        "test", db, npartitions=2, index_col=index, columns=[index, -sql.column("age")]
+        "test",
+        db,
+        npartitions=2,
+        index_col=index,
+        columns=[index, -(sql.column("age"))],
     )
     assert (data.age.compute() < 0).all()
 
     # a column that would have no name, give it a label
-    index = (-sql.column("negish")).label("index")
+    index = (-(sql.column("negish"))).label("index")
     data = read_sql_table(
         "test", db, npartitions=2, index_col=index, columns=["negish", "age"]
     )
@@ -282,7 +286,7 @@ def test_with_func(db):
 def test_no_nameless_index(db):
     from sqlalchemy import sql
 
-    index = -sql.column("negish")
+    index = -(sql.column("negish"))
     with pytest.raises(ValueError):
         read_sql_table(
             "test", db, npartitions=2, index_col=index, columns=["negish", "age", index]
