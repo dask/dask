@@ -3513,6 +3513,7 @@ class DataFrame(_Frame):
                 or callable(v)
                 or pd.api.types.is_scalar(v)
                 or is_index_like(v)
+                or isinstance(v, Array)
             ):
                 raise TypeError(
                     "Column assignment doesn't support type "
@@ -3520,6 +3521,19 @@ class DataFrame(_Frame):
                 )
             if callable(v):
                 kwargs[k] = v(self)
+
+            if isinstance(v, Array):
+                from .io import from_dask_array
+
+                if len(v.shape) > 1:
+                    raise ValueError("Array assignment only supports 1-D arrays")
+                if v.npartitions != self.npartitions:
+                    raise ValueError(
+                        "Number of partitions do not match ({0} != {1})".format(
+                            v.npartitions, self.npartitions
+                        )
+                    )
+                kwargs[k] = from_dask_array(v, index=self.index)
 
         pairs = list(sum(kwargs.items(), ()))
 
