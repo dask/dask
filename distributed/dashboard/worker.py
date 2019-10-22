@@ -53,6 +53,7 @@ class _PrometheusCollector(object):
             "dask_worker_tasks", "Number of tasks at worker.", labels=["state"]
         )
         tasks.add_metric(["stored"], len(self.worker.data))
+        tasks.add_metric(["executing"], len(self.worker.executing))
         tasks.add_metric(["ready"], len(self.worker.ready))
         tasks.add_metric(["waiting"], len(self.worker.waiting_for_data))
         tasks.add_metric(["serving"], len(self.worker._comms))
