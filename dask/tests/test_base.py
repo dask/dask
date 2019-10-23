@@ -130,6 +130,15 @@ def test_tokenize_numpy_scalar():
 
 
 @pytest.mark.skipif("not np")
+def test_tokenize_numpy_scalar_string_rep():
+    # Test tokenizing numpy scalars doesn't depend on their string representation
+    np.set_string_function(lambda x: "foo")
+    assert tokenize(np.array(1)) != tokenize(np.array(2))
+    # Reset back to default
+    np.set_string_function(None)
+
+
+@pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
         np.array(["a", "aa", "aaa"], dtype=object)
