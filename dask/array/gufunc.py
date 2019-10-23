@@ -351,11 +351,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
         shape = arg.shape
         iax = tuple(a if a < 0 else a - len(shape) for a in iax)
         tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax
-        if tidc == tuple(range(-arg.ndim, 0)):
-            # transpose not necessary
-            transposed_arg = arg
-        else:
-            transposed_arg = arg.transpose(tidc)
+        
+        transposed_arg = arg.transpose(tidc)
         transposed_args.append(transposed_arg)
     args = transposed_args
 

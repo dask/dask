@@ -128,6 +128,12 @@ def test_transpose_negative_axes():
     assert_eq(x.transpose([-1, -2, 0, 1]), y.transpose([-1, -2, 0, 1]))
 
 
+def test_transpose_skip_when_possible():
+    x = da.ones((2, 3, 4), chunks=3)
+    assert x.transpose((0, 1, 2)) is x
+    assert x.transpose((-3, -2, -1)) is x
+
+
 def test_swapaxes():
     x = np.random.normal(0, 10, size=(10, 12, 7))
     d = da.from_array(x, chunks=(4, 5, 2))
