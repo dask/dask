@@ -661,6 +661,7 @@ def test_read_text_large_gzip():
 
 @pytest.mark.slow
 @pytest.mark.network
+@pytest.mark.flaky(reruns=5)  # possible DNS issues on travis? See Dask-5524
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
     # aws_secret_key because these are not on travis-ci

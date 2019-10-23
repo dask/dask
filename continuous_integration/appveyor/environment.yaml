@@ -8,6 +8,7 @@ dependencies:
   - numpy>=1.13.0,<=1.16.4    # >= 1.17.0 breaks from https://github.com/pydata/sparse/issues/257
   - pandas>=0.21.0
   - pytest
+  - pytest-rerunfailures
   - cloudpickle
   - distributed
   - toolz

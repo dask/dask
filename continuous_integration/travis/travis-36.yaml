@@ -10,6 +10,7 @@ dependencies:
   # test dependencies
   - pytest
   - pytest-xdist
+  - pytest-rerunfailures
   - moto
   - coverage
   - codecov
