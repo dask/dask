@@ -1,4 +1,5 @@
 import sys
+from distutils.version import LooseVersion
 
 from .utils import Dispatch
 
@@ -107,9 +108,11 @@ def register_spmatrix():
 def register_pyarrow():
     import pyarrow as pa
 
-    def _get_col_size(col):
+    def _get_col_size(data):
         p = 0
-        for chunk in col.data.iterchunks():
+        if not isinstance(data, pa.ChunkedArray):
+            data = data.data  # pyarrow <0.15.0
+        for chunk in data.iterchunks():
             for buffer in chunk.buffers():
                 if buffer:
                     p += buffer.size
@@ -122,6 +125,13 @@ def register_pyarrow():
             p += _get_col_size(col)
         return int(p) + 1000
 
-    @sizeof.register(pa.Column)
-    def sizeof_pyarrow_column(col):
-        return int(_get_col_size(col)) + 1000
+    @sizeof.register(pa.ChunkedArray)
+    def sizeof_pyarrow_chunked_array(data):
+        return int(_get_col_size(data)) + 1000
+
+    # Handle pa.Column for pyarrow < 0.15
+    if pa.__version__ < LooseVersion("0.15.0"):
+
+        @sizeof.register(pa.Column)
+        def sizeof_pyarrow_column(col):
+            return int(_get_col_size(col)) + 1000
