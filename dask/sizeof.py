@@ -115,13 +115,13 @@ def register_pyarrow():
                     p += buffer.size
         return p
 
-    @sizeof.register(pa.lib.Table)
+    @sizeof.register(pa.Table)
     def sizeof_pyarrow_table(table):
         p = sizeof(table.schema.metadata)
         for col in table.itercolumns():
             p += _get_col_size(col)
         return int(p) + 1000
 
-    @sizeof.register(pa.lib.Column)
+    @sizeof.register(pa.Column)
     def sizeof_pyarrow_column(col):
         return int(_get_col_size(col)) + 1000
