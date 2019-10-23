@@ -1696,7 +1696,11 @@ class Array(DaskMethodsMixin):
             axes = None
         elif len(axes) == 1 and isinstance(axes[0], Iterable):
             axes = axes[0]
-        return transpose(self, axes=axes)
+        if (axes == tuple(range(self.ndim))) or (axes == tuple(range(-self.ndim, 0))):
+            # no transpose necessary
+            return self
+        else:
+            return transpose(self, axes=axes)
 
     @derived_from(np.ndarray)
     def ravel(self):
