@@ -232,3 +232,10 @@ def test_delayed_kwargs_apply():
     label = task_label(x.dask[x.key])
     assert "f" in label
     assert "apply" not in label
+
+
+def test_positive_labels():
+    graph = {"a": 1, "b": 2, "c": [1, 2], "d": ["a", "b", "c"]}
+    digraph = to_graphviz(graph)
+    assert digraph
+    # dot = pydot.graph_from_dot_data(digraph.source)
