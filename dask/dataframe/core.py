@@ -3737,8 +3737,9 @@ class DataFrame(_Frame):
             and "both" if the observation’s merge key is found in both.
         npartitions: int or None, optional
             The ideal number of output partitions. This is only utilised when
-            performing a hash_join (merging on columns only). If `None`
-            npartitions = max(lhs.npartitions, rhs.npartitions). Default is `None`.
+            performing a hash_join (merging on columns only). If ``None`` then
+            ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
+            Default is ``None``.
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
