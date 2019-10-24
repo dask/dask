@@ -15,7 +15,7 @@ from dask.utils_test import inc
 
 
 try:
-    import cloudpickle
+    import cloudpickle  # noqa: F401
     has_cloudpickle = True
 except ImportError:
     has_cloudpickle = False
