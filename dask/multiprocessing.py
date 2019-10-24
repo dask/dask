@@ -33,7 +33,7 @@ except ImportError:
             warn(
                 "pickle failed; install cloudpickle to allow more objects "
                 "(such as lambdas and locally defined functions) to be pickled",
-                UserWarning
+                UserWarning,
             )
             raise
 
