@@ -1,4 +1,5 @@
 from functools import partial
+from collections import OrderedDict
 import json
 
 import pandas as pd
@@ -35,6 +36,7 @@ def _get_md_row_groups(pieces):
         row_groups_per_piece.append(num_row_groups)
     if len(row_groups) == len(pieces):
         row_groups_per_piece = None
+    # TODO: Skip row_groups_per_piece after ARROW-2801
     return row_groups, row_groups_per_piece
 
 
@@ -43,10 +45,9 @@ def _get_row_groups_per_piece(pieces, metadata, path, fs):
 
     This function requires access to ParquetDataset.metadata
     """
+    # TODO: Remove this function after ARROW-2801
     if metadata.num_row_groups == len(pieces):
         return None  # pieces already map to row-groups
-
-    from collections import OrderedDict
 
     result = OrderedDict()
     for piece in pieces:
@@ -133,7 +134,7 @@ class ArrowEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=True,
-        **kwargs
+        **kwargs,
     ):
         # Define the dataset object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
@@ -142,6 +143,9 @@ class ArrowEngine(Engine):
         parts, dataset = _determine_dataset_parts(
             fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
+        # TODO: Call to `_determine_dataset_parts` uses `pq.ParquetDataset`
+        # to define the `dataset` object. `split_row_groups` should be passed
+        # to that constructor once it is supported (see ARROW-2801).
         if dataset.partitions is not None:
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
@@ -288,6 +292,7 @@ class ArrowEngine(Engine):
         # if we have a list of files and gather_statistics=False
         if not parts:
             if split_row_groups and row_groups_per_piece:
+                # TODO: This block can be removed after ARROW-2801
                 parts = []
                 for i, piece in enumerate(pieces):
                     num_row_groups = row_groups_per_piece[i]
@@ -350,7 +355,7 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs
+        **kwargs,
     ):
         dataset = fmd = None
         i_offset = 0
@@ -449,7 +454,7 @@ class ArrowEngine(Engine):
         compression=None,
         index_cols=None,
         schema=None,
-        **kwargs
+        **kwargs,
     ):
         md_list = []
         preserve_index = False
@@ -475,7 +480,8 @@ class ArrowEngine(Engine):
                     metadata_collector=md_list,
                     **kwargs,
                 )
-            md_list[0].set_file_path(filename)
+            if md_list:
+                md_list[0].set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"schema": t.schema, "meta": md_list[0]}]
