@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -o errexit
+set -o xtrace
 
 
 test_import () {
@@ -7,7 +8,7 @@ test_import () {
     conda create -y -n test-imports -c conda-forge python=$PYTHON $1
     source activate test-imports
     python -c "$2"
-    conda deactivate
+    source deactivate || conda deactivate
     conda env remove -n test-imports
 }
 
