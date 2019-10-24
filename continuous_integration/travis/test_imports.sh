@@ -1,36 +1,22 @@
 #!/usr/bin/env bash
+set -o errexit
+
+
 test_import () {
-    # Install dependencies
-    if [[ -n "$2" ]]; then
-        output=$(conda install -c conda-forge $2)
-        if [[ $? -eq 1 ]]; then
-            echo $output
-            echo "$1 install failed" >&2
-            exit 1
-        fi
-    fi
-    # Check import
-    python -c "$3"
-    if [[ $? -eq 1 ]]; then
-        echo "$1 import failed" >&2
-        exit 1
-    else
-        echo "$1 import succeeded"
-    fi
-    # Uninstall dependencies
-    if [[ -n "$2" ]]; then
-        output=$(conda uninstall $2)
-    fi
+    # Create an empty environment
+    conda create -y -n test-imports -c conda-forge python=$PYTHON $1
+    source activate test-imports
+    python -c "$2"
+    conda deactivate
+    conda env remove -n test-imports
 }
 
-# Create an empty environment
-conda create -n test-imports python=$PYTHON
-source activate test-imports
-
-(test_import "Core" "" "import dask, dask.threaded, dask.optimization") && \
-(test_import "Delayed" "toolz" "import dask.delayed") && \
-(test_import "Bag" "fsspec toolz partd cloudpickle" "import dask.bag") && \
-(test_import "Array" "toolz numpy" "import dask.array") && \
-(test_import "Dataframe" "fsspec numpy pandas toolz partd cloudpickle" "import dask.dataframe") && \
-(test_import "Diagnostics" "bokeh" "import dask.diagnostics") && \
-(test_import "Distributed" "distributed s3fs" "import dask.distributed")
+# Note: in setup.py, bag and delayed require cloudpickle, but it's omitted here and in
+# travis-reduced-deps.yaml as it is only a dependency for real-life usage
+test_import ""                                "import dask, dask.multiprocessing, dask.threaded, dask.optimization"
+test_import "toolz"                           "import dask.delayed"
+test_import "fsspec toolz partd"              "import dask.bag"
+test_import "toolz numpy toolz"               "import dask.array"
+test_import "fsspec numpy pandas toolz partd" "import dask.dataframe"
+test_import "bokeh"                           "import dask.diagnostics"
+test_import "distributed"                     "import dask.distributed"
