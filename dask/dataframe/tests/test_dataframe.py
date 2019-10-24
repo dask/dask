@@ -3137,6 +3137,32 @@ def test_column_assignment():
     assert "z" not in orig.columns
 
 
+def test_array_assignment():
+    df = pd.DataFrame({"x": np.random.normal(size=50), "y": np.random.normal(size=50)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    orig = ddf.copy()
+
+    arr = np.array(np.random.normal(size=50))
+    darr = da.from_array(arr, chunks=25)
+
+    df["z"] = arr
+    ddf["z"] = darr
+    assert_eq(df, ddf)
+    assert "z" not in orig.columns
+
+    arr = np.array(np.random.normal(size=(50, 50)))
+    darr = da.from_array(arr, chunks=25)
+    msg = "Array assignment only supports 1-D arrays"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
+
+    arr = np.array(np.random.normal(size=50))
+    darr = da.from_array(arr, chunks=10)
+    msg = "Number of partitions do not match"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
+
+
 def test_columns_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
