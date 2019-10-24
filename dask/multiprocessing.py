@@ -25,7 +25,17 @@ try:
     _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
     _loads = cloudpickle.loads
 except ImportError:
-    _dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+    def _dumps(obj):
+        try:
+            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+        except (pickle.PicklingError, AttributeError):
+            warn(
+                "pickle failed; install cloudpickle to allow more objects "
+                "(such as lambdas and locally defined functions) to be pickled",
+                UserWarning
+            )
+            raise
+
     _loads = pickle.loads
 
 

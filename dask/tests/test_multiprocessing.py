@@ -3,6 +3,7 @@ import multiprocessing
 from operator import add
 import pickle
 import random
+import warnings
 
 import numpy as np
 
@@ -11,6 +12,20 @@ import dask
 from dask import compute, delayed
 from dask.multiprocessing import get, _dumps, get_context, remote_exception
 from dask.utils_test import inc
+
+
+try:
+    import cloudpickle
+    has_cloudpickle = True
+except ImportError:
+    has_cloudpickle = False
+
+requires_cloudpickle = pytest.mark.skipif(
+    not has_cloudpickle, reason="requires cloudpickle"
+)
+not_cloudpickle = pytest.mark.skipif(
+    has_cloudpickle, reason="cloudpickle is installed"
+)
 
 
 def unrelated_function_global(a):
@@ -29,11 +44,10 @@ def test_pickle_globals():
     assert b"numpy" not in b
 
 
+@requires_cloudpickle
 def test_pickle_locals():
     """Unrelated locals should not be included in serialized bytes
     """
-    pytest.importorskip("cloudpickle")
-
     def unrelated_function_local(a):
         return np.array([a])
 
@@ -72,19 +86,41 @@ def test_remote_exception():
     assert "traceback-body" in str(a)
 
 
-def make_bad_result():
+@requires_cloudpickle
+def test_lambda_with_cloudpickle():
+    dsk = {"x": 2, "y": (lambda x: x + 1, "x")}
+    assert get(dsk, "y") == 3
+
+
+@not_cloudpickle
+def test_lambda_without_cloudpickle():
+    dsk = {"x": 2, "y": (lambda x: x + 1, "x")}
+    with pytest.raises(UserWarning):
+        get(dsk, "y")
+    with warnings.catch_warnings(), pytest.raises(AttributeError):
+        warnings.filterwarnings("ignore")
+        get(dsk, "y")
+
+
+def lambda_result():
     return lambda x: x + 1
 
 
-def test_unpicklable_results_generate_errors():
+@requires_cloudpickle
+def test_lambda_results_with_cloudpickle():
+    dsk = {"x": (lambda_result,)}
+    f = get(dsk, "x")
+    assert f(2) == 3
 
-    dsk = {"x": (make_bad_result,)}
 
-    try:
+@not_cloudpickle
+def test_lambda_results_without_cloudpickle():
+    dsk = {"x": (lambda_result,)}
+    with pytest.raises(UserWarning):
         get(dsk, "x")
-    except Exception as e:
-        # can't use type because pickle / cPickle distinction
-        assert type(e).__name__ in ("PicklingError", "AttributeError")
+    with warnings.catch_warnings(), pytest.raises(AttributeError):
+        warnings.filterwarnings("ignore")
+        get(dsk, "x")
 
 
 class NotUnpickleable(object):
