@@ -69,6 +69,7 @@ from .utils import (
     is_index_like,
     valid_divisions,
     hash_object_dispatch,
+    check_matching_columns,
 )
 
 no_default = "__no_default__"
@@ -4843,19 +4844,8 @@ def apply_and_enforce(*args, **kwargs):
             return meta
         if is_dataframe_like(df):
             # Need nan_to_num otherwise nan comparison gives False
-            if not np.array_equal(
-                np.nan_to_num(meta.columns), np.nan_to_num(df.columns)
-            ):
-                extra = df.columns.difference(meta.columns).tolist()
-                missing = meta.columns.difference(df.columns).tolist()
-                raise ValueError(
-                    "The columns in the computed data do not match"
-                    " the columns in the provided metadata\n"
-                    "  Extra:   %s\n"
-                    "  Missing: %s" % (extra, missing)
-                )
-            else:
-                c = meta.columns
+            check_matching_columns(meta, df)
+            c = meta.columns
         else:
             c = meta.name
         return _rename(c, df)
