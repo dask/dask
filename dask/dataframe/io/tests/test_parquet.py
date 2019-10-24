@@ -134,7 +134,7 @@ fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
 fp_pandas_xfail = write_read_engines(xfail_fastparquet_pyarrow=fp_pandas_msg)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_local(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     data = pd.DataFrame(
@@ -254,7 +254,7 @@ def test_read_list(tmpdir, write_engine, read_engine):
     assert_eq(ddf, ddf2)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_columns_auto_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
@@ -283,7 +283,7 @@ def test_columns_auto_index(tmpdir, write_engine, read_engine):
     )
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_columns_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
@@ -355,7 +355,7 @@ def test_nonsense_column(tmpdir, engine):
         dd.read_parquet(fn, columns=["nonesense"] + list(ddf.columns), engine=engine)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_columns_no_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
@@ -477,7 +477,7 @@ def test_columns_index_with_multi_index(tmpdir, engine):
         assert_eq(d, sol_df[col])
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_no_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
@@ -524,7 +524,7 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     assert_eq(dfp, ddf)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
@@ -1126,7 +1126,7 @@ def test_filters_pyarrow(tmpdir):
     assert_eq(c, c)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
     if write_engine == "fastparquet" or read_engine == "fastparquet":
         pytest.importorskip("fastparquet", minversion="0.3.1")
@@ -2062,3 +2062,42 @@ def test_subgraph_getitem():
 
     with pytest.raises(KeyError):
         subgraph[("name", 3)]
+
+
+def test_split_row_groups_pyarrow(tmpdir):
+    """Test split_row_groups read_parquet kwarg"""
+    check_pyarrow()
+    tmp = str(tmpdir)
+    df = pd.DataFrame(
+        {"i32": np.arange(800, dtype=np.int32), "f": np.arange(800, dtype=np.float64)}
+    )
+    df.index.name = "index"
+
+    half = len(df) // 2
+    dd.from_pandas(df.iloc[:half], npartitions=2).to_parquet(
+        tmp, engine="pyarrow", row_group_size=100
+    )
+
+    ddf3 = dd.read_parquet(
+        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=True
+    )
+    assert ddf3.npartitions == 4
+
+    ddf3 = dd.read_parquet(
+        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
+    )
+    assert ddf3.npartitions == 2
+
+    dd.from_pandas(df.iloc[half:], npartitions=2).to_parquet(
+        tmp, append=True, engine="pyarrow", row_group_size=50
+    )
+
+    ddf3 = dd.read_parquet(
+        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=True
+    )
+    assert ddf3.npartitions == 12
+
+    ddf3 = dd.read_parquet(
+        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
+    )
+    assert ddf3.npartitions == 4
