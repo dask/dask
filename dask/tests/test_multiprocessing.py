@@ -16,6 +16,7 @@ from dask.utils_test import inc
 
 try:
     import cloudpickle  # noqa: F401
+
     has_cloudpickle = True
 except ImportError:
     has_cloudpickle = False
@@ -23,9 +24,7 @@ except ImportError:
 requires_cloudpickle = pytest.mark.skipif(
     not has_cloudpickle, reason="requires cloudpickle"
 )
-not_cloudpickle = pytest.mark.skipif(
-    has_cloudpickle, reason="cloudpickle is installed"
-)
+not_cloudpickle = pytest.mark.skipif(has_cloudpickle, reason="cloudpickle is installed")
 
 
 def unrelated_function_global(a):
@@ -48,6 +47,7 @@ def test_pickle_globals():
 def test_pickle_locals():
     """Unrelated locals should not be included in serialized bytes
     """
+
     def unrelated_function_local(a):
         return np.array([a])
 

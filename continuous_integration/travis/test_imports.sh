@@ -3,12 +3,14 @@ set -o errexit
 
 
 test_import () {
+    echo "Create environment: python=$PYTHON $1"
     # Create an empty environment
-    conda create -y -n test-imports -c conda-forge python=$PYTHON $1
-    source activate test-imports
+    conda create -y -n test-imports -c conda-forge python=$PYTHON $1 > /dev/null 2>&1
+    source activate test-imports > /dev/null 2>&1
+    echo "python -c '$2'"
     python -c "$2"
-    source deactivate || conda deactivate
-    conda env remove -n test-imports
+    source deactivate > /dev/null 2>&1 || conda deactivate > /dev/null 2>&1
+    conda env remove -n test-imports > /dev/null 2>&1
 }
 
 # Note: in setup.py, bag and delayed require cloudpickle, but it's omitted here and in

@@ -25,6 +25,7 @@ try:
     _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
     _loads = cloudpickle.loads
 except ImportError:
+
     def _dumps(obj):
         try:
             return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
