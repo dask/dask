@@ -3514,6 +3514,7 @@ class DataFrame(_Frame):
                 or callable(v)
                 or pd.api.types.is_scalar(v)
                 or is_index_like(v)
+                or isinstance(v, Array)
             ):
                 raise TypeError(
                     "Column assignment doesn't support type "
@@ -3521,6 +3522,19 @@ class DataFrame(_Frame):
                 )
             if callable(v):
                 kwargs[k] = v(self)
+
+            if isinstance(v, Array):
+                from .io import from_dask_array
+
+                if len(v.shape) > 1:
+                    raise ValueError("Array assignment only supports 1-D arrays")
+                if v.npartitions != self.npartitions:
+                    raise ValueError(
+                        "Number of partitions do not match ({0} != {1})".format(
+                            v.npartitions, self.npartitions
+                        )
+                    )
+                kwargs[k] = from_dask_array(v, index=self.index)
 
         pairs = list(sum(kwargs.items(), ()))
 
@@ -3722,10 +3736,11 @@ class DataFrame(_Frame):
             whose merge key only appears in `left` DataFrame, "right_only" for
             observations whose merge key only appears in `right` DataFrame,
             and "both" if the observation’s merge key is found in both.
-        npartitions: int, None, or 'auto'
+        npartitions: int or None, optional
             The ideal number of output partitions. This is only utilised when
-            performing a hash_join (merging on columns only). If `None`
-            npartitions = max(lhs.npartitions, rhs.npartitions)
+            performing a hash_join (merging on columns only). If ``None`` then
+            ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
+            Default is ``None``.
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.

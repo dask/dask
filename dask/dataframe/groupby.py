@@ -1786,3 +1786,37 @@ class SeriesGroupBy(_GroupBy):
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def agg(self, arg, split_every=None, split_out=1):
         return self.aggregate(arg, split_every=split_every, split_out=split_out)
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def value_counts(self, split_every=None, split_out=1):
+        return self._aca_agg(
+            token="value_counts",
+            func=M.value_counts,
+            aggfunc=_value_counts_aggregate,
+            split_every=split_every,
+            split_out=split_out,
+        )
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def unique(self, split_every=None, split_out=1):
+        name = self._meta.obj.name
+        return self._aca_agg(
+            token="unique",
+            func=M.unique,
+            aggfunc=_unique_aggregate,
+            aggregate_kwargs={"name": name},
+            split_every=split_every,
+            split_out=split_out,
+        )
+
+
+def _unique_aggregate(series_gb, name=None):
+    ret = pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
+    ret.index.names = series_gb.obj.index.names
+    return ret
+
+
+def _value_counts_aggregate(series_gb):
+    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    names = list(series_gb.obj.index.names)
+    return pd.Series(pd.concat(to_concat, names=names))

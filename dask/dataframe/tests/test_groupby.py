@@ -1,5 +1,6 @@
 import collections
 import warnings
+from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -2100,6 +2101,36 @@ def test_series_groupby_idxmax_skipna(skipna):
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
 
     assert_eq(result_pd, result_dd)
+
+
+@pytest.mark.skipif(
+    version.parse(pd.__version__) < version.parse("0.25.0"),
+    reason="'explode' is not implemented",
+)
+def test_groupby_unique():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    pd_gb = df.groupby("foo")["bar"].unique()
+    dd_gb = ddf.groupby("foo")["bar"].unique()
+
+    # Use explode because each DataFrame row is a list; equality fails
+    assert_eq(dd_gb.explode(), pd_gb.explode())
+
+
+def test_groupby_value_counts():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(4, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    pd_gb = df.groupby("foo")["bar"].value_counts()
+    dd_gb = ddf.groupby("foo")["bar"].value_counts()
+    assert_eq(dd_gb, pd_gb)
 
 
 @pytest.mark.parametrize(
