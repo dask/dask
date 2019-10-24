@@ -4846,11 +4846,13 @@ def apply_and_enforce(*args, **kwargs):
             if not np.array_equal(
                 np.nan_to_num(meta.columns), np.nan_to_num(df.columns)
             ):
+                extra = df.columns.difference(meta.columns).tolist()
+                missing = meta.columns.difference(df.columns).tolist()
                 raise ValueError(
                     "The columns in the computed data do not match"
                     " the columns in the provided metadata\n"
-                    "  Expected: %s\n"
-                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
+                    "  Extra:   %s\n"
+                    "  Missing: %s" % (extra, missing)
                 )
             else:
                 c = meta.columns
