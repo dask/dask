@@ -178,6 +178,7 @@ class AdaptiveCore:
         self._adapting = True
 
         try:
+
             target = await self.safe_target()
             recommendations = await self.recommendations(target)
 

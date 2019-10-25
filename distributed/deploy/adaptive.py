@@ -113,6 +113,14 @@ class Adaptive(AdaptiveCore):
             target_duration=self.target_duration
         )
 
+    async def recommendations(self, target: int) -> dict:
+        if len(self.plan) != len(self.requested):
+            # Ensure that the number of planned and requested workers
+            # are in sync before making recommendations.
+            await self.cluster
+
+        return await super(Adaptive, self).recommendations(target)
+
     async def workers_to_close(self, target: int):
         """
         Determine which, if any, workers should potentially be removed from
