@@ -16,7 +16,6 @@ from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (
-    apply_and_enforce,
     repartition_divisions,
     aca,
     _concat,
@@ -4077,19 +4076,6 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
     result = dask_base.map(dask_map)
     dd.utils.assert_eq(expected, result)
-
-
-def test_apply_and_enforce_error_message():
-    meta = pd.DataFrame({"x": [1]}).iloc[:0]
-
-    def func():
-        return pd.DataFrame({"x": [1.0], "y": [1]})
-
-    with pytest.raises(ValueError) as info:
-        apply_and_enforce(_func=func, _meta=meta)
-
-    assert "['x']" in str(info.value)
-    assert "['x', 'y']" in str(info.value)
 
 
 @pytest.mark.skipif(
