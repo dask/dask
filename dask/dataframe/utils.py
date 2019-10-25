@@ -660,6 +660,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
 
 
 def check_matching_columns(meta, actual):
+    # Need nan_to_num otherwise nan comparison gives False
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
         extra = actual.columns.difference(meta.columns).tolist()
         missing = meta.columns.difference(actual.columns).tolist()

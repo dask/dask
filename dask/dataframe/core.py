@@ -4858,7 +4858,6 @@ def apply_and_enforce(*args, **kwargs):
         if not len(df):
             return meta
         if is_dataframe_like(df):
-            # Need nan_to_num otherwise nan comparison gives False
             check_matching_columns(meta, df)
             c = meta.columns
         else:
