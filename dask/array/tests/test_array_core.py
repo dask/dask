@@ -206,6 +206,7 @@ def test_uneven_chunks():
     assert a.chunks == ((3, 3, 3, 1), (3, 3, 3, 1))
     assert a.chunksize == ((1, 3), (1, 3))
 
+
 def test_numblocks_suppoorts_singleton_block_dims():
     shape = (100, 10)
     chunks = (10, 10)
