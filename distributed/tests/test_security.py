@@ -379,3 +379,42 @@ def test_require_encryption():
                 handle_comm,
                 connection_args=sec2.get_listen_args("scheduler"),
             )
+
+
+def test_temporary_credentials():
+    sec = Security.temporary()
+    sec_repr = repr(sec)
+    fields = ["tls_ca_file"]
+    fields.extend(
+        "tls_%s_%s" % (role, kind)
+        for role in ["client", "scheduler", "worker"]
+        for kind in ["key", "cert"]
+    )
+    for f in fields:
+        val = getattr(sec, f)
+        assert "\n" in val
+        assert val not in sec_repr
+
+
+@gen_test()
+def test_tls_temporary_credentials_functional():
+    pytest.importorskip("cryptography")
+
+    @gen.coroutine
+    def handle_comm(comm):
+        peer_addr = comm.peer_address
+        assert peer_addr.startswith("tls://")
+        yield comm.write("hello")
+        yield comm.close()
+
+    sec = Security.temporary()
+
+    with listen(
+        "tls://", handle_comm, connection_args=sec.get_listen_args("scheduler")
+    ) as listener:
+        comm = yield connect(
+            listener.contact_address, connection_args=sec.get_connection_args("worker")
+        )
+        msg = yield comm.read()
+        assert msg == "hello"
+        comm.abort()

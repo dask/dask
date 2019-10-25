@@ -56,7 +56,10 @@ class LocalCluster(SpecCluster):
         like ``['feed', 'run_function']``
     service_kwargs: Dict[str, Dict]
         Extra keywords to hand to the running services
-    security : Security
+    security : Security or bool, optional
+        Configures communication security in this cluster. Can be a security
+        object, or True. If True, temporary self-signed credentials will
+        be created automatically.
     protocol: str (optional)
         Protocol to use like ``tcp://``, ``tls://``, ``inproc://``
         This defaults to sensible choice given other keyword arguments like
@@ -122,7 +125,15 @@ class LocalCluster(SpecCluster):
 
         self.status = None
         self.processes = processes
-        security = security or Security()
+
+        if security is None:
+            # Falsey values load the default configuration
+            security = Security()
+        elif security is True:
+            # True indicates self-signed temporary credentials should be used
+            security = Security.temporary()
+        elif not isinstance(security, Security):
+            raise TypeError("security must be a Security object")
 
         if protocol is None:
             if host and "://" in host:

@@ -247,6 +247,15 @@ def test_Client_twice(loop):
 
 
 @pytest.mark.asyncio
+async def test_client_constructor_with_temporary_security(cleanup):
+    async with Client(
+        security=True, silence_logs=False, dashboard_address=None, asynchronous=True
+    ) as c:
+        assert c.cluster.scheduler_address.startswith("tls")
+        assert c.security == c.cluster.security
+
+
+@pytest.mark.asyncio
 async def test_defaults(cleanup):
     async with LocalCluster(
         scheduler_port=0, silence_logs=False, dashboard_address=None, asynchronous=True
@@ -695,10 +704,12 @@ def test_adapt_then_manual(loop):
                 assert time() < start + 5
 
 
-def test_local_tls(loop):
-    from distributed.utils_test import tls_only_security
-
-    security = tls_only_security()
+@pytest.mark.parametrize("temporary", [True, False])
+def test_local_tls(loop, temporary):
+    if temporary:
+        security = True
+    else:
+        security = tls_only_security()
     with LocalCluster(
         n_workers=0,
         scheduler_port=8786,
@@ -712,7 +723,7 @@ def test_local_tls(loop):
             loop,
             assert_can_connect_from_everywhere_4,
             c.scheduler.port,
-            connection_args=security.get_connection_args("client"),
+            connection_args=c.security.get_connection_args("client"),
             protocol="tls",
             timeout=3,
         )
@@ -722,7 +733,7 @@ def test_local_tls(loop):
             loop,
             assert_cannot_connect,
             addr="tcp://127.0.0.1:%d" % c.scheduler.port,
-            connection_args=security.get_connection_args("client"),
+            connection_args=c.security.get_connection_args("client"),
             exception_class=RuntimeError,
         )
 
@@ -977,8 +988,12 @@ async def test_repr(cleanup):
 
 
 @pytest.mark.asyncio
-async def test_capture_security(cleanup):
-    security = tls_only_security()
+@pytest.mark.parametrize("temporary", [True, False])
+async def test_capture_security(cleanup, temporary):
+    if temporary:
+        security = True
+    else:
+        security = tls_only_security()
     async with LocalCluster(
         n_workers=0,
         silence_logs=False,

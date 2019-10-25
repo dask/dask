@@ -523,8 +523,10 @@ class Client(Node):
         Claim this scheduler as the global dask scheduler
     scheduler_file: string (optional)
         Path to a file with scheduler information if available
-    security: (optional)
-        Optional security information
+    security: Security or bool, optional
+        Optional security information. If creating a local cluster can also
+        pass in ``True``, in which case temporary self-signed credentials will
+        be created automatically.
     asynchronous: bool (False by default)
         Set to True if using this client within async/await functions or within
         Tornado gen.coroutines.  Otherwise this should remain False for normal
@@ -659,8 +661,15 @@ class Client(Node):
             if security is None:
                 security = getattr(self.cluster, "security", None)
 
-        self.security = security or Security()
-        assert isinstance(self.security, Security)
+        if security is None:
+            security = Security()
+        elif security is True:
+            security = Security.temporary()
+            self._startup_kwargs["security"] = security
+        elif not isinstance(security, Security):
+            raise TypeError("security must be a Security object")
+
+        self.security = security
 
         if name == "worker":
             self.connection_args = self.security.get_connection_args("worker")
