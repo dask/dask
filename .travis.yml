@@ -25,6 +25,7 @@ jobs:
       - *no_imports
 
     - env: &py36_env
+      - PYTHON_VERSION=3.6
       - ENV_FILE=continuous_integration/travis/travis-36.yaml
       - *test_and_lint
       - *coverage
@@ -32,6 +33,7 @@ jobs:
       - *imports
 
     - env: &py37_env
+      - PYTHON_VERSION=3.7
       - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
       - *no_coverage
