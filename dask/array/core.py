@@ -1139,7 +1139,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def chunksize(self):
-        return tuple(map(tuple, map(set, self.chunks)))
+        return tuple(map(lambda v: tuple(sorted(v)), map(set, self.chunks)))
 
     @property
     def dtype(self):
