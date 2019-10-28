@@ -17,6 +17,6 @@ from .json import read_json, to_json
 from . import demo
 
 try:
-    from .parquet import read_parquet, to_parquet
+    from .parquet import ParquetIterator, read_parquet, to_parquet
 except ImportError:
     pass

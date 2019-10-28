@@ -82,6 +82,138 @@ class ParquetSubgraph(Mapping):
             yield (self.name, i)
 
 
+class ParquetIterator:
+    """
+    Iterate through a Parquet dataset.
+
+    Allows iterative processing if larger-than memory (LTM datasets).
+    """
+
+    def __init__(
+        self,
+        path,
+        row_group_batch=None,
+        columns=None,
+        filters=None,
+        categories=None,
+        index=None,
+        storage_options=None,
+        engine="auto",
+        **kwargs,
+    ):
+
+        if isinstance(engine, str):
+            engine = get_engine(engine)
+
+        if hasattr(path, "name"):
+            path = stringify_path(path)
+        fs, _, paths = get_fs_token_paths(
+            path, mode="rb", storage_options=storage_options
+        )
+
+        paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
+
+        auto_index_allowed = False
+        if index is None:
+            # User is allowing auto-detected index
+            auto_index_allowed = True
+        if index and isinstance(index, str):
+            index = [index]
+
+        meta, statistics, parts = engine.read_metadata(
+            fs,
+            paths,
+            categories=categories,
+            index=index,
+            gather_statistics=True,
+            filters=filters,
+            split_row_groups=True,
+            **kwargs,
+        )
+        if meta.index.name is not None:
+            index = meta.index.name
+
+        # Parse dataset statistics from metadata (if available)
+        parts, divisions, index, index_in_columns = process_statistics(
+            parts, statistics, filters, index
+        )
+
+        # Account for index and columns arguments.
+        # Modify `meta` dataframe accordingly
+        meta, index, columns = set_index_columns(
+            meta, index, columns, index_in_columns, auto_index_allowed
+        )
+
+        self.fs = fs
+        self.engine = engine
+        self.path = path
+        self.filters = filters
+        self.categories = categories
+        self.storage_options = storage_options
+        self.parts = parts
+        self.divisions = divisions
+        self.meta = meta
+        self.index = index
+        self.index_in_columns = index_in_columns
+        self.columns = columns
+        self.row_groups_done = 0
+        self.row_groups_tot = len(parts)
+        self.row_group_batch = row_group_batch or self.row_groups_tot
+        self.row_group_batch = min(self.row_groups_tot, self.row_group_batch)
+        self.kwargs = kwargs
+
+    def __iter__(self):
+        self.row_groups_done = 0
+        return self
+
+    def __next__(self):
+        if self.row_groups_done >= self.row_groups_tot:
+            raise StopIteration
+
+        row_group_batch = min(
+            self.row_group_batch, self.row_groups_tot - self.row_groups_done
+        )
+
+        name = "itr-parquet-" + tokenize(
+            self.path,
+            self.columns,
+            self.filters,
+            self.categories,
+            self.index,
+            self.storage_options,
+            self.engine,
+            self.row_groups_done,
+        )
+
+        subgraph = ParquetSubgraph(
+            name,
+            self.engine,
+            self.fs,
+            self.meta,
+            self.columns,
+            self.index,
+            self.parts[self.row_groups_done : (self.row_groups_done + row_group_batch)],
+            self.kwargs,
+        )
+        meta = self.meta.copy()
+        divisions = self.divisions.copy()
+        if len(divisions) < 2:
+            # empty dataframe - just use meta
+            subgraph = {(name, 0): meta}
+            divisions = (None, None)
+
+        divisions = divisions[
+            self.row_groups_done : (self.row_groups_done + row_group_batch + 1)
+        ]
+
+        # Set the index that was previously treated as a column
+        if self.index_in_columns:
+            meta = meta.set_index(self.index)
+
+        self.row_groups_done += row_group_batch
+        return new_dd_object(subgraph, name, meta, divisions)
+
+
 def read_parquet(
     path,
     columns=None,
@@ -92,7 +224,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=True,
-    **kwargs
+    **kwargs,
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -213,7 +345,7 @@ def read_parquet(
         gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        **kwargs
+        **kwargs,
     )
     if meta.index.name is not None:
         index = meta.index.name
@@ -267,7 +399,7 @@ def to_parquet(
     storage_options=None,
     write_metadata_file=True,
     compute=True,
-    **kwargs
+    **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
 
@@ -399,7 +531,7 @@ def to_parquet(
         partition_on=partition_on,
         division_info=division_info,
         index_cols=index_cols,
-        **kwargs_pass
+        **kwargs_pass,
     )
 
     # Use i_offset and df.npartitions to define file-name list
@@ -418,7 +550,7 @@ def to_parquet(
             fmd=meta,
             compression=compression,
             index_cols=index_cols,
-            **kwargs_pass
+            **kwargs_pass,
         )
         for d, filename in zip(df.to_delayed(), filenames)
     ]

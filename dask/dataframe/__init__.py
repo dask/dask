@@ -38,7 +38,7 @@ try:
     from .io.orc import read_orc
 
     try:
-        from .io import read_parquet, to_parquet
+        from .io import ParquetIterator, read_parquet, to_parquet
     except ImportError:
         pass
     try:
