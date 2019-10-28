@@ -1,4 +1,5 @@
 import os
+import math
 import warnings
 from distutils.version import LooseVersion
 
@@ -2101,3 +2102,29 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
+
+
+@pytest.mark.parametrize("batch", [0, 1, 5])
+def test_iterator_timeseries(tmpdir, engine, batch):
+    check_pyarrow()
+    tmp_path = str(tmpdir)
+    df2 = dask.datasets.timeseries(
+        start="2000-01-01", end="2000-01-02", freq="600s", partition_freq="12H"
+    ).reset_index()
+    df2.to_parquet(tmp_path, engine="pyarrow", chunk_size=10)
+    df_read = dd.read_parquet(tmp_path, engine=engine)
+
+    df_read_itr = None
+    id_mean = []
+    for dd_chunk in dd.ParquetIterator(tmp_path, engine=engine, row_group_batch=batch):
+        wt = len(dd_chunk) / len(df_read)
+        id_mean.append(dd_chunk.id.mean().compute() * wt)
+        chunk = dd_chunk.compute()
+        df_read_itr = (
+            pd.concat([df_read_itr, chunk], axis=0)
+            if df_read_itr is not None
+            else chunk
+        )
+
+    assert math.isclose(sum(id_mean), df_read.id.mean().compute(), rel_tol=1e-3)
+    assert_eq(df_read.set_index("timestamp"), df_read_itr.set_index("timestamp"))
