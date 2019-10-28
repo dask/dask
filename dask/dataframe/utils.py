@@ -382,7 +382,12 @@ def meta_nonempty_object(x):
 @meta_nonempty.register(pd.DataFrame)
 def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
-    data = {i: _nonempty_series(x.iloc[:, i], idx=idx) for i, c in enumerate(x.columns)}
+    if x.values.dtype.kind in ("i", "f", "u"):
+        data = np.ones(shape=(2, len(x.columns)), dtype=x.values.dtype)
+    else:
+        data = {
+            i: _nonempty_series(x.iloc[:, i], idx=idx) for i, c in enumerate(x.columns)
+        }
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
     return res
