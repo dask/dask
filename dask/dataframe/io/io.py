@@ -2,7 +2,6 @@ from math import ceil
 from operator import getitem
 import os
 from threading import Lock
-import warnings
 
 import pandas as pd
 import numpy as np
@@ -190,19 +189,21 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     # Infer npartitions if npartions and chunksize is None
     if (npartitions is None) and (chunksize is None):
         default = config.get("array.chunk-size")
-        npartitions = _infer_npartitions(data, default)
+        partition_size = parse_bytes(default)
+        mem_usage = total_mem_usage(data)
+        npartitions = int(ceil(mem_usage / partition_size))
 
     if (npartitions is not None) and (chunksize is not None):
-        warnings.warn(
-            "Both 'npartitions' and 'chunksize' are defined. Using 'chunksize'."
-        )
+        raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     nrows = len(data)
 
     if chunksize is None:
         chunksize = int(ceil(nrows / npartitions))
     elif isinstance(chunksize, str):
-        npartitions = _infer_npartitions(data, chunksize)
+        partition_size = parse_bytes(chunksize)
+        mem_usage = total_mem_usage(data)
+        npartitions = int(ceil(mem_usage / partition_size))
         chunksize = int(ceil(nrows / npartitions))
 
     name = name or ("from_pandas-" + tokenize(data, chunksize))
