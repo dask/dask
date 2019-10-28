@@ -357,6 +357,7 @@ class Nanny(ServerNode):
         except (ProcessLookupError, psutil.NoSuchProcess, psutil.AccessDenied):
             return
         frac = memory / self.memory_limit
+
         if self.memory_terminate_fraction and frac > self.memory_terminate_fraction:
             logger.warning(
                 "Worker exceeded %d%% memory budget. Restarting",

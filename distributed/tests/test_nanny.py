@@ -15,7 +15,7 @@ from tornado.locks import Event
 
 import dask
 from distributed.diagnostics import SchedulerPlugin
-from distributed import Nanny, rpc, Scheduler, Worker, Client
+from distributed import Nanny, rpc, Scheduler, Worker, Client, wait
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -288,6 +288,60 @@ def test_nanny_terminate(c, s, a):
         out = logger.getvalue()
         assert "restart" in out.lower()
         assert "memory" in out.lower()
+
+
+@gen_cluster(
+    nthreads=[("127.0.0.1", 1)] * 8,
+    client=True,
+    Worker=Nanny,
+    worker_kwargs={"memory_limit": 2e8},
+    timeout=20,
+    clean_kwargs={"threads": False},
+)
+async def test_nanny_throttle(c, s, *workers):
+    # Verify that get_data requests are throttled when the worker
+    # with the data is at high-memory by
+    # 1. Allocation some data on a worker
+    # 2. Pausing that worker
+    # 3. Requesting data from that worker from many other workers
+    a = workers[0]
+    proc = a.process.pid
+    size = 1000
+
+    def data(size):
+        return b"0" * size
+
+    def patch(dask_worker):
+        # Patch paused and memory_monitor on the one worker
+        # This is is very fragile, since a refactor of memory_monitor to
+        # remove _memory_monitoring will break this test.
+        dask_worker._memory_monitoring = True
+        dask_worker.paused = True
+
+    def check(dask_worker):
+        return dask_worker.paused
+
+    futures = [
+        c.submit(data, size, workers=[a.worker_address], pure=False) for i in range(4)
+    ]
+    await wait(futures)
+    await c.run(patch, workers=[a.worker_address])
+    paused = await c.run(check, workers=[a.worker_address])
+    assert paused[a.worker_address]
+
+    await c.run(lambda: logging.getLogger("distributed.worker").setLevel(logging.DEBUG))
+    # Cluster is in the correct state, now for the test.
+    n = len(workers)
+    result = c.map(
+        lambda x, i: x[i],
+        [futures[0]] * n,
+        range(n),
+        workers=[w.worker_address for w in workers[1:]],
+    )
+    await result[0]
+    wlogs = await c.get_worker_logs(workers=[a.worker_address])
+    wlogs = "\n".join(x[1] for x in wlogs[a.worker_address])
+    assert "throttling" in wlogs.lower()
 
 
 @gen_cluster(nthreads=[], client=True)

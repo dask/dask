@@ -1156,10 +1156,24 @@ class Worker(ServerNode):
         ):
             max_connections = max_connections * 2
 
+        if self.paused:
+            max_connections = 1
+            throttle_msg = " Throttling outgoing connections because worker is paused."
+        else:
+            throttle_msg = ""
+
         if (
             max_connections is not False
-            and self.outgoing_current_count > max_connections
+            and self.outgoing_current_count >= max_connections
         ):
+            logger.debug(
+                "Worker %s has too many open connections to respond to data request from %s (%d/%d).%s",
+                self.address,
+                who,
+                self.outgoing_current_count,
+                max_connections,
+                throttle_msg,
+            )
             return {"status": "busy"}
 
         self.outgoing_current_count += 1
