@@ -224,7 +224,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=True,
-    **kwargs,
+    **kwargs
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -399,7 +399,7 @@ def to_parquet(
     storage_options=None,
     write_metadata_file=True,
     compute=True,
-    **kwargs,
+    **kwargs
 ):
     """Store Dask.dataframe to Parquet files
 
