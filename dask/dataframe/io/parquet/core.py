@@ -99,7 +99,7 @@ class ParquetIterator:
         index=None,
         storage_options=None,
         engine="auto",
-        **kwargs,
+        kwargs={},
     ):
 
         if isinstance(engine, str):
