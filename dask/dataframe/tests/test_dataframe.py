@@ -16,7 +16,6 @@ from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (
-    apply_and_enforce,
     repartition_divisions,
     aca,
     _concat,
@@ -3137,6 +3136,32 @@ def test_column_assignment():
     assert "z" not in orig.columns
 
 
+def test_array_assignment():
+    df = pd.DataFrame({"x": np.random.normal(size=50), "y": np.random.normal(size=50)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    orig = ddf.copy()
+
+    arr = np.array(np.random.normal(size=50))
+    darr = da.from_array(arr, chunks=25)
+
+    df["z"] = arr
+    ddf["z"] = darr
+    assert_eq(df, ddf)
+    assert "z" not in orig.columns
+
+    arr = np.array(np.random.normal(size=(50, 50)))
+    darr = da.from_array(arr, chunks=25)
+    msg = "Array assignment only supports 1-D arrays"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
+
+    arr = np.array(np.random.normal(size=50))
+    darr = da.from_array(arr, chunks=10)
+    msg = "Number of partitions do not match"
+    with pytest.raises(ValueError, match=msg):
+        ddf["z"] = darr
+
+
 def test_columns_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -4051,19 +4076,6 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
     result = dask_base.map(dask_map)
     dd.utils.assert_eq(expected, result)
-
-
-def test_apply_and_enforce_error_message():
-    meta = pd.DataFrame({"x": [1]}).iloc[:0]
-
-    def func():
-        return pd.DataFrame({"x": [1.0], "y": [1]})
-
-    with pytest.raises(ValueError) as info:
-        apply_and_enforce(_func=func, _meta=meta)
-
-    assert "['x']" in str(info.value)
-    assert "['x', 'y']" in str(info.value)
 
 
 @pytest.mark.skipif(

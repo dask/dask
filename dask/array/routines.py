@@ -42,6 +42,7 @@ from .numpy_compat import _unravel_index_keyword
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None):
+    x = asarray(x)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
     if dtype is not None and x.dtype != dtype:

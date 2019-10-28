@@ -549,7 +549,7 @@ def extra_titles(doc):
     titles = {
         i: lines[i].strip()
         for i in range(len(lines) - 1)
-        if lines[i + 1] and all(c == "-" for c in lines[i + 1].strip())
+        if lines[i + 1].strip() and all(c == "-" for c in lines[i + 1].strip())
     }
 
     seen = set()
@@ -616,6 +616,11 @@ def _derived_from(cls, method, ua_args=[], extra=""):
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
+
+    if isinstance(original_method, property):
+        # some things like SeriesGroupBy.unique are generated.
+        original_method = original_method.fget
+
     doc = original_method.__doc__
     if doc is None:
         doc = ""
@@ -1008,8 +1013,12 @@ def ensure_dict(d):
         return d
     elif hasattr(d, "dicts"):
         result = {}
+        seen = set()
         for dd in d.dicts.values():
-            result.update(dd)
+            dd_id = id(dd)
+            if dd_id not in seen:
+                result.update(dd)
+                seen.add(dd_id)
         return result
     return dict(d)
 

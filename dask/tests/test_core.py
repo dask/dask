@@ -145,7 +145,7 @@ def test_get_deps():
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
     {'a': set(), 'b': {'a'}, 'c': {'b'}}
-    >>> dependents
+    >>> dependents  # doctest: +SKIP
     {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dsk = {

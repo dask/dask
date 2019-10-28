@@ -35,6 +35,7 @@ PANDAS_VERSION = LooseVersion(pd.__version__)
 PANDAS_GT_0230 = PANDAS_VERSION >= LooseVersion("0.23.0")
 PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0rc1")
 PANDAS_GT_0250 = PANDAS_VERSION >= LooseVersion("0.25.0")
+PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("0.26.0.dev0")
 HAS_INT_NA = PANDAS_GT_0240
 
 
@@ -641,13 +642,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
                 typename(type(meta)),
                 asciitable(["Column", "Found", "Expected"], bad_dtypes),
             )
-        elif not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(x.columns)):
-            errmsg = (
-                "The columns in the computed data do not match"
-                " the columns in the provided metadata.\n"
-                " %s\n  :%s" % (meta.columns, x.columns)
-            )
         else:
+            check_matching_columns(meta, x)
             return x
     else:
         if equal_dtypes(x.dtype, meta.dtype):
@@ -661,6 +657,19 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         "Metadata mismatch found%s.\n\n"
         "%s" % ((" in `%s`" % funcname if funcname else ""), errmsg)
     )
+
+
+def check_matching_columns(meta, actual):
+    # Need nan_to_num otherwise nan comparison gives False
+    if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
+        extra = actual.columns.difference(meta.columns).tolist()
+        missing = meta.columns.difference(actual.columns).tolist()
+        raise ValueError(
+            "The columns in the computed data do not match"
+            " the columns in the provided metadata\n"
+            "  Extra:   %s\n"
+            "  Missing: %s" % (extra, missing)
+        )
 
 
 def index_summary(idx, name=None):
