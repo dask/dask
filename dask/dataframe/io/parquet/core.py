@@ -44,8 +44,8 @@ class ParquetSubgraph(Mapping):
         self.kwargs = kwargs
 
     def __repr__(self):
-        return "ParquetSubgraph<name='{}', n_parts={}>".format(
-            self.name, len(self.parts)
+        return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.parts), list(self.columns)
         )
 
     def __getitem__(self, key):

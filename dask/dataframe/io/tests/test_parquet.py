@@ -2101,3 +2101,26 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
+
+
+def test_optimize_and_not(tmpdir):
+    path = os.path.join(tmpdir, "path.parquet")
+    df = pd.DataFrame(
+        {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
+        index=["a", "b", "c"],
+    )
+    df.to_parquet(path)
+
+    df2 = dd.read_parquet(path)
+    df2a = df2["a"].groupby(df2["c"]).first().to_delayed()
+    df2b = df2["b"].groupby(df2["c"]).first().to_delayed()
+    df2c = df2.rename(columns=str.upper)[["D"]].to_delayed()
+    (result,) = dask.compute(df2a + df2b + df2c)
+
+    expected = [
+        dask.compute(df2a)[0][0],
+        dask.compute(df2b)[0][0],
+        dask.compute(df2c)[0][0],
+    ]
+    for a, b in zip(result, expected):
+        assert_eq(a, b)
