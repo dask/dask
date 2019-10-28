@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 try:
     from .blockwise import blockwise, atop
     from .core import (
@@ -21,8 +19,10 @@ try:
         broadcast_to,
         from_zarr,
         to_zarr,
+        unify_chunks,
     )
     from .tiledb_io import from_tiledb, to_tiledb
+    from .numpy_compat import rollaxis, moveaxis
     from .routines import (
         take,
         choose,
@@ -30,6 +30,8 @@ try:
         where,
         coarsen,
         insert,
+        shape,
+        union1d,
         ravel,
         roll,
         unique,

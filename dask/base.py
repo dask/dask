@@ -1,6 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import OrderedDict
+from collections.abc import Mapping, Iterator
 from functools import partial
 from hashlib import md5
 from operator import getitem
@@ -13,20 +12,11 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import (
-    apply,
-    long,
-    unicode,
-    Iterator,
-    is_dataclass,
-    dataclass_fields,
-    Mapping,
-    cPickle,
-)
+from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict
+from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
 
 
@@ -246,7 +236,7 @@ def _extract_graph_and_keys(vals):
     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
         graph = HighLevelGraph.merge(*graphs)
     else:
-        graph = merge(*graphs)
+        graph = merge(*map(ensure_dict, graphs))
 
     return graph, keys
 
@@ -663,20 +653,7 @@ def tokenize(*args, **kwargs):
 
 normalize_token = Dispatch()
 normalize_token.register(
-    (
-        int,
-        long,
-        float,
-        str,
-        unicode,
-        bytes,
-        type(None),
-        type,
-        slice,
-        complex,
-        type(Ellipsis),
-    ),
-    identity,
+    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
 )
 
 
@@ -798,17 +775,19 @@ def register_numpy():
     @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
-            return (str(x), x.dtype)
+            return (x.item(), x.dtype)
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (
                     x.ctypes.get_as_parameter().value
                     - x.base.ctypes.get_as_parameter().value
                 )
-            elif hasattr(x, "offset"):
-                offset = getattr(x, "offset")
             else:
                 offset = 0  # root memmap's have mmap object as base
+            if hasattr(
+                x, "offset"
+            ):  # offset numpy used while opening, and not the offset to the beginning of the file
+                offset += getattr(x, "offset")
             return (
                 x.filename,
                 os.path.getmtime(x.filename),
@@ -830,9 +809,8 @@ def register_numpy():
                     # bytes fast-path
                     data = hash_buffer_hex(b"-".join(x.flat))
             except (TypeError, UnicodeDecodeError):
-                # object data w/o fast-path, use fast cPickle
                 try:
-                    data = hash_buffer_hex(cPickle.dumps(x, cPickle.HIGHEST_PROTOCOL))
+                    data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
                     data = uuid.uuid4().hex

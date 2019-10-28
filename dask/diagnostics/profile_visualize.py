@@ -1,14 +1,11 @@
-from __future__ import absolute_import, division, print_function
-
 import random
 from bisect import bisect_left
 from distutils.version import LooseVersion
 from itertools import cycle
 from operator import itemgetter, add
 
-from ..utils import funcname, import_required
+from ..utils import funcname, import_required, apply
 from ..core import istask
-from ..compatibility import apply
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"

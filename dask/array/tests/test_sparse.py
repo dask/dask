@@ -165,6 +165,7 @@ def test_metadata():
     assert isinstance(y[:5, ::2]._meta, sparse.COO)
     assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
     assert isinstance((y - z)._meta, sparse.COO)
+    assert isinstance(y.persist()._meta, sparse.COO)
     if IS_NEP18_ACTIVE:
         assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
         assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
@@ -202,3 +203,16 @@ def test_from_array():
     assert isinstance(d._meta, sparse.COO)
     assert_eq(d, d)
     assert isinstance(d.compute(), sparse.COO)
+
+
+def test_map_blocks():
+    x = da.eye(10, chunks=5)
+    y = x.map_blocks(sparse.COO.from_numpy, meta=sparse.COO.from_numpy(np.eye(1)))
+    assert isinstance(y._meta, sparse.COO)
+    assert_eq(y, y)
+
+
+def test_meta_from_array():
+    x = sparse.COO.from_numpy(np.eye(1))
+    y = da.utils.meta_from_array(x, ndim=2)
+    assert isinstance(y, sparse.COO)

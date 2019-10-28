@@ -1,16 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
+import copyreg
 import multiprocessing
-import traceback
 import pickle
 import sys
+import traceback
 from warnings import warn
 
 import cloudpickle
 
 from . import config
-from .compatibility import copyreg
-from .local import get_async  # TODO: get better get
+from .local import reraise, get_async  # TODO: get better get
 from .optimization import fuse, cull
 
 
@@ -57,7 +55,7 @@ class RemoteException(Exception):
         self.traceback = traceback
 
     def __str__(self):
-        return str(self.exception) + "\n\n" "Traceback\n" "---------\n" + self.traceback
+        return str(self.exception) + "\n\nTraceback\n---------\n" + self.traceback
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) + dir(self.exception)))
@@ -94,7 +92,6 @@ try:
     import tblib.pickling_support
 
     tblib.pickling_support.install()
-    from dask.compatibility import reraise
 
     def _pack_traceback(tb):
         return tb
@@ -130,7 +127,7 @@ and on Windows, because they each only support a single context.
 
 def get_context():
     """ Return the current multiprocessing context."""
-    if sys.platform == "win32" or sys.version_info.major == 2:
+    if sys.platform == "win32":
         # Just do the default, since we can't change it:
         if config.get("multiprocessing.context", None) is not None:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)

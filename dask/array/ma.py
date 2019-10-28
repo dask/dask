@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from functools import wraps
 
 import numpy as np
@@ -30,7 +28,7 @@ def _concatenate(arrays, axis=0):
     fill_values = [i.fill_value for i in arrays if hasattr(i, "fill_value")]
     if any(isinstance(f, np.ndarray) for f in fill_values):
         raise ValueError(
-            "Dask doesn't support masked array's with " "non-scalar `fill_value`s"
+            "Dask doesn't support masked array's with non-scalar `fill_value`s"
         )
     if fill_values:
         # If all the fill_values are the same copy over the fill value

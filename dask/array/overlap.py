@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from operator import getitem
 from itertools import product
 from numbers import Integral
@@ -159,8 +157,8 @@ def overlap_internal(x, axes):
         if len(bds) == 1:
             chunks.append(bds)
         else:
-            left = [bds[0] + left_depth]
-            right = [bds[-1] + right_depth]
+            left = [bds[0] + right_depth]
+            right = [bds[-1] + left_depth]
             mid = []
             for bd in bds[1:-1]:
                 mid.append(bd + left_depth + right_depth)

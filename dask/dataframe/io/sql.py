@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 from ... import delayed
-from ...compatibility import string_types
 from .io import from_delayed, from_pandas
 
 
@@ -42,6 +41,12 @@ def read_sql_table(
         ``divisions=``.
         ``index_col`` could be a function to return a value, e.g.,
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
+        ``index_col=sql.func.abs(sql.column("value")).label("abs(value)")``, or
+        ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
+        the textfield ``id`` to ``BigInteger``.
+
+        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+
         Labeling columns created by functions or arithmetic operations is
         required.
     divisions: sequence
@@ -99,32 +104,28 @@ def read_sql_table(
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(uri, **engine_kwargs)
     m = sa.MetaData()
-    if isinstance(table, string_types):
+    if isinstance(table, str):
         table = sa.Table(table, m, autoload=True, autoload_with=engine, schema=schema)
 
-    index = (
-        table.columns[index_col] if isinstance(index_col, string_types) else index_col
-    )
-    if not isinstance(index_col, string_types + (elements.Label,)):
+    index = table.columns[index_col] if isinstance(index_col, str) else index_col
+    if not isinstance(index_col, (str, elements.Label)):
         raise ValueError(
-            "Use label when passing an SQLAlchemy instance" " as the index (%s)" % index
+            "Use label when passing an SQLAlchemy instance as the index (%s)" % index
         )
     if divisions and npartitions:
         raise TypeError("Must supply either divisions or npartitions, not both")
 
     columns = (
-        [(table.columns[c] if isinstance(c, string_types) else c) for c in columns]
+        [(table.columns[c] if isinstance(c, str) else c) for c in columns]
         if columns
         else list(table.columns)
     )
     if index_col not in columns:
         columns.append(
-            table.columns[index_col]
-            if isinstance(index_col, string_types)
-            else index_col
+            table.columns[index_col] if isinstance(index_col, str) else index_col
         )
 
-    if isinstance(index_col, string_types):
+    if isinstance(index_col, str):
         kwargs["index_col"] = index_col
     else:
         # function names get pandas auto-named
@@ -143,11 +144,11 @@ def read_sql_table(
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
-        meta = head[:0]
+        meta = head.iloc[:0]
     else:
         if divisions is None and npartitions is None:
             raise ValueError(
-                "Must provide divisions or npartitions when" "using explicit meta."
+                "Must provide divisions or npartitions when using explicit meta."
             )
 
     if divisions is None:
@@ -188,13 +189,21 @@ def read_sql_table(
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.select(columns).where(sql.and_(index >= lower, cond)).select_from(table)
-        parts.append(delayed(_read_sql_chunk)(q, uri, meta, **kwargs))
+        parts.append(
+            delayed(_read_sql_chunk)(
+                q, uri, meta, engine_kwargs=engine_kwargs, **kwargs
+            )
+        )
 
     return from_delayed(parts, meta, divisions=divisions)
 
 
-def _read_sql_chunk(q, uri, meta, **kwargs):
-    df = pd.read_sql(q, uri, **kwargs)
+def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
+    import sqlalchemy as sa
+
+    engine_kwargs = engine_kwargs or {}
+    conn = sa.create_engine(uri, **engine_kwargs)
+    df = pd.read_sql(q, conn, **kwargs)
     if df.empty:
         return meta
     else:

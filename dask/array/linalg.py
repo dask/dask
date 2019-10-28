@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import operator
 from numbers import Number
 
@@ -8,9 +6,8 @@ import toolz
 
 from ..base import tokenize, wait
 from ..blockwise import blockwise
-from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from
+from ..utils import derived_from, apply
 from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
@@ -221,7 +218,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             graph,
             name_r_stacked,
             shape=(sum(vchunks_rstacked), n),
-            chunks=(vchunks_rstacked, (n)),
+            chunks=(vchunks_rstacked, n),
             meta=r_stacked_meta,
         )
 
@@ -597,7 +594,7 @@ def sfqr(data, name=None):
             graph,
             name_A_rest,
             shape=(min(m, n), n - cc),
-            chunks=((cr), data.chunks[1][1:]),
+            chunks=(cr, data.chunks[1][1:]),
             meta=A_rest_meta,
         )
         Rs.append(Q.T.dot(A_rest))
@@ -759,7 +756,7 @@ def qr(a):
     See Also
     --------
 
-    np.linalg.qr : Equivalent NumPy Operation
+    np.linalg.qr: Equivalent NumPy Operation
     dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """

@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 import itertools
 from numbers import Number
 
@@ -9,9 +7,9 @@ from distutils.version import LooseVersion
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.compatibility import PY2
 from dask.utils import ignoring
-from dask.array.utils import assert_eq, same_keys, AxisError
+from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
+from dask.array.numpy_compat import _numpy_115
 
 
 def test_array():
@@ -25,7 +23,14 @@ def test_array():
     assert isinstance(y, da.Array)
 
 
-@pytest.mark.skipif(PY2, reason="Docstrings stripped in optimised Py2")
+def test_array_return_type():
+    # Regression test for https://github.com/dask/dask/issues/5426
+    x = [0, 1, 2, 3]
+    dx = da.array(x)
+    assert isinstance(dx, da.Array)
+    assert_eq(x, dx)
+
+
 def test_derived_docstrings():
     assert "This docstring was copied from numpy.array" in da.routines.array.__doc__
     assert "Create an array." in da.routines.array.__doc__
@@ -123,6 +128,12 @@ def test_transpose_negative_axes():
     assert_eq(x.transpose([-1, -2, 0, 1]), y.transpose([-1, -2, 0, 1]))
 
 
+def test_transpose_skip_when_possible():
+    x = da.ones((2, 3, 4), chunks=3)
+    assert x.transpose((0, 1, 2)) is x
+    assert x.transpose((-3, -2, -1)) is x
+
+
 def test_swapaxes():
     x = np.random.normal(0, 10, size=(10, 12, 7))
     d = da.from_array(x, chunks=(4, 5, 2))
@@ -137,6 +148,41 @@ def test_swapaxes():
 
     assert d.swapaxes(0, 1).name == d.swapaxes(0, 1).name
     assert d.swapaxes(0, 1).name != d.swapaxes(1, 0).name
+
+
+@pytest.mark.parametrize("funcname", ["moveaxis", "rollaxis"])
+@pytest.mark.parametrize("shape", [(), (5,), (3, 5, 7, 3)])
+def test_moveaxis_rollaxis(funcname, shape):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=(len(shape) * (2,)))
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+    for axis1 in range(-x.ndim, x.ndim):
+        assert isinstance(da_func(d, 0, axis1), da.Array)
+        for axis2 in range(-x.ndim, x.ndim):
+            assert_eq(np_func(x, axis1, axis2), da_func(d, axis1, axis2))
+
+
+def test_moveaxis_rollaxis_keyword():
+    x = np.random.random((10, 12, 7))
+    d = da.from_array(x, chunks=(4, 5, 2))
+    assert_eq(
+        np.moveaxis(x, destination=1, source=0), da.moveaxis(d, destination=1, source=0)
+    )
+    assert_eq(np.rollaxis(x, 2), da.rollaxis(d, 2))
+    assert isinstance(da.rollaxis(d, 1), da.Array)
+    assert_eq(np.rollaxis(x, start=1, axis=2), da.rollaxis(d, start=1, axis=2))
+
+
+def test_moveaxis_rollaxis_numpy_api():
+    a = da.random.random((4, 4, 4), chunks=2)
+    result = np.moveaxis(a, 2, 0)
+    assert isinstance(result, da.Array)
+    assert_eq(result, np.moveaxis(a.compute(), 2, 0))
+
+    result = np.rollaxis(a, 2, 0)
+    assert isinstance(result, da.Array)
+    assert_eq(result, np.rollaxis(a.compute(), 2, 0))
 
 
 @pytest.mark.parametrize(
@@ -244,7 +290,7 @@ def test_tensordot():
     assert same_keys(da.tensordot(a, b, axes=(1, 0)), da.tensordot(a, b, axes=(1, 0)))
 
     # Increasing number of chunks warning
-    with pytest.warns(None if PY2 else da.PerformanceWarning):
+    with pytest.warns(da.PerformanceWarning):
         assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
 
 
@@ -753,6 +799,39 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+@pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
+def test_shape(shape):
+    x = da.random.random(shape)
+    assert np.shape(x) == shape
+
+
+@pytest.mark.parametrize(
+    "shape", [((12,), (12,)), ((4, 3), (3, 4)), ((12,), (1, 6, 2))]
+)
+@pytest.mark.parametrize("reverse", [True, False])
+def test_union1d(shape, reverse):
+    if any(len(x) > 1 for x in shape) and not _numpy_115:
+        pytest.skip("NumPy-10563.")
+
+    s1, s2 = shape
+    x1 = np.arange(12).reshape(s1)
+    x2 = np.arange(6, 18).reshape(s2)
+
+    if reverse:
+        x1 = x1[::-1]
+
+    dx1 = da.from_array(x1)
+    dx2 = da.from_array(x2)
+
+    result = np.union1d(dx1, dx2)
+    expected = np.union1d(x1, x2)
+
+    if IS_NEP18_ACTIVE:
+        assert isinstance(result, da.Array)
+
+    assert_eq(result, expected)
+
+
 def test_ravel():
     x = np.random.randint(10, size=(4, 6))
 
@@ -951,7 +1030,7 @@ def test_isnull():
     a = da.from_array(x, chunks=(2,))
     with ignoring(ImportError):
         assert_eq(da.isnull(a), np.isnan(x))
-        assert_eq(da.notnull(a), ~np.isnan(x))
+        assert_eq(da.notnull(a), ~(np.isnan(x)))
 
 
 def test_isnull_result_is_an_array():

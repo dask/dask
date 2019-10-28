@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import warnings
 
 import numpy as np
@@ -7,7 +5,14 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
-from .utils import PANDAS_VERSION, is_series_like, is_dataframe_like, PANDAS_GT_0250
+from .utils import (
+    PANDAS_VERSION,
+    is_series_like,
+    is_dataframe_like,
+    PANDAS_GT_0250,
+    hash_object_dispatch,
+    group_split_dispatch,
+)
 from ..utils import Dispatch
 
 if PANDAS_VERSION >= "0.23":
@@ -478,6 +483,11 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
     if ind is not None:
         out.index = ind
     return out
+
+
+# cuDF may try to import old dispatch functions
+hash_df = hash_object_dispatch
+group_split = group_split_dispatch
 
 
 def assign_index(df, ind):

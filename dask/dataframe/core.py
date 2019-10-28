@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function
-
 import operator
 import warnings
+from collections.abc import Iterator, Sequence
 from functools import wraps, partial
 from numbers import Number, Integral
 from operator import getitem
@@ -10,7 +8,7 @@ from pprint import pformat
 
 import numpy as np
 import pandas as pd
-from pandas.util import cache_readonly, hash_pandas_object
+from pandas.util import cache_readonly
 from pandas.api.types import (
     is_bool_dtype,
     is_timedelta64_dtype,
@@ -27,17 +25,8 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable
+from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
 from .. import threaded
-from ..compatibility import (
-    apply,
-    operator_div,
-    bind_method,
-    string_types,
-    isidentifier,
-    Iterator,
-    Sequence,
-)
 from ..context import globalmethod
 from ..utils import (
     random_state_data,
@@ -73,11 +62,14 @@ from .utils import (
     is_categorical_dtype,
     has_known_categories,
     PANDAS_VERSION,
+    PANDAS_GT_100,
     index_summary,
     is_dataframe_like,
     is_series_like,
     is_index_like,
     valid_divisions,
+    hash_object_dispatch,
+    check_matching_columns,
 )
 
 no_default = "__no_default__"
@@ -481,13 +473,15 @@ Dask Name: {name}, {task} tasks""".format(
             raise ValueError(msg)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, split_every=None, split_out=1, **kwargs):
-        # Let pandas error on bad inputs
-        self._meta_nonempty.drop_duplicates(**kwargs)
-        if "subset" in kwargs and kwargs["subset"] is not None:
+    def drop_duplicates(self, subset=None, split_every=None, split_out=1, **kwargs):
+        if subset is not None:
+            # Let pandas error on bad inputs
+            self._meta_nonempty.drop_duplicates(subset=subset, **kwargs)
+            kwargs["subset"] = subset
             split_out_setup = split_out_on_cols
-            split_out_setup_kwargs = {"cols": kwargs["subset"]}
+            split_out_setup_kwargs = {"cols": subset}
         else:
+            self._meta_nonempty.drop_duplicates(**kwargs)
             split_out_setup = split_out_setup_kwargs = None
 
         if kwargs.get("keep", True) is False:
@@ -522,9 +516,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     def _scalarfunc(self, cast_type):
         def wrapper():
-            raise TypeError(
-                "cannot convert the series to " "{0}".format(str(cast_type))
-            )
+            raise TypeError("cannot convert the series to {0}".format(str(cast_type)))
 
         return wrapper
 
@@ -884,7 +876,7 @@ Dask Name: {name}, {task} tasks""".format(
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword " "argument" % target
+                    "%s is both the pipe target and a keyword argument" % target
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -1138,6 +1130,8 @@ Dask Name: {name}, {task} tasks""".format(
             raise NotImplementedError("fillna with set limit and method=None")
         if isinstance(value, _Frame):
             test_value = value._meta_nonempty.values[0]
+        elif isinstance(value, Scalar):
+            test_value = value._meta_nonempty
         else:
             test_value = value
         meta = self._meta_nonempty.fillna(
@@ -1340,9 +1334,7 @@ Dask Name: {name}, {task} tasks""".format(
         else:
             return lambda self, other: elemwise(op, self, other)
 
-    def rolling(
-        self, window, min_periods=None, freq=None, center=False, win_type=None, axis=0
-    ):
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
 
         Parameters
@@ -1371,10 +1363,6 @@ Dask Name: {name}, {task} tasks""".format(
         Returns
         -------
         a Rolling object on which to call a method to compute a statistic
-
-        Notes
-        -----
-        The `freq` argument is not supported.
         """
         from dask.dataframe.rolling import Rolling
 
@@ -1392,7 +1380,6 @@ Dask Name: {name}, {task} tasks""".format(
             self,
             window=window,
             min_periods=min_periods,
-            freq=freq,
             center=center,
             win_type=win_type,
             axis=axis,
@@ -2604,9 +2591,14 @@ Dask Name: {name}, {task} tasks""".format(
         --------
         pandas.Series.rename
         """
-        from pandas.api.types import is_scalar, is_list_like, is_dict_like
+        from pandas.api.types import is_scalar, is_dict_like, is_list_like
+        import dask.dataframe as dd
 
-        if is_scalar(index) or (is_list_like(index) and not is_dict_like(index)):
+        if is_scalar(index) or (
+            is_list_like(index)
+            and not is_dict_like(index)
+            and not isinstance(index, dd.Series)
+        ):
             res = self if inplace else self.copy()
             res.name = index
         else:
@@ -2685,6 +2677,13 @@ Dask Name: {name}, {task} tasks""".format(
             for item in s.iteritems():
                 yield item
 
+    @derived_from(pd.Series)
+    def __iter__(self):
+        for i in range(self.npartitions):
+            s = self.get_partition(i).compute()
+            for row in s:
+                yield row
+
     @classmethod
     def _validate_axis(cls, axis=0):
         if axis not in (0, "index", None):
@@ -2701,6 +2700,11 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.Series)
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
+
+    @derived_from(pd.Series, version="0.25.0")
+    def explode(self):
+        meta = self._meta.explode()
+        return self.map_partitions(M.explode, meta=meta)
 
     def unique(self, split_every=None, split_out=1):
         """
@@ -2868,7 +2872,7 @@ Dask Name: {name}, {task} tasks""".format(
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -2885,7 +2889,7 @@ Dask Name: {name}, {task} tasks""".format(
                 return elemwise(op, self, other, axis=axis)
 
         meth.__doc__ = skip_doctest(comparison.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
@@ -2974,9 +2978,7 @@ Dask Name: {name}, {task} tasks""".format(
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         df = concat([self, other], axis=1)
         return cov_corr(
             df, min_periods, corr=True, scalar=True, split_every=split_every
@@ -3222,7 +3224,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
-        if np.isscalar(key) or isinstance(key, (tuple, string_types)):
+        if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
@@ -3308,9 +3310,7 @@ class DataFrame(_Frame):
     def __dir__(self):
         o = set(dir(type(self)))
         o.update(self.__dict__)
-        o.update(
-            c for c in self.columns if (isinstance(c, string_types) and isidentifier(c))
-        )
+        o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
     def _ipython_key_completions_(self):
@@ -3460,6 +3460,12 @@ class DataFrame(_Frame):
             )
 
     @derived_from(pd.DataFrame)
+    def pop(self, item):
+        out = self[item]
+        del self[item]
+        return out
+
+    @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None, split_every=None):
         token = "dataframe-nlargest"
         return aca(
@@ -3508,6 +3514,7 @@ class DataFrame(_Frame):
                 or callable(v)
                 or pd.api.types.is_scalar(v)
                 or is_index_like(v)
+                or isinstance(v, Array)
             ):
                 raise TypeError(
                     "Column assignment doesn't support type "
@@ -3515,6 +3522,19 @@ class DataFrame(_Frame):
                 )
             if callable(v):
                 kwargs[k] = v(self)
+
+            if isinstance(v, Array):
+                from .io import from_dask_array
+
+                if len(v.shape) > 1:
+                    raise ValueError("Array assignment only supports 1-D arrays")
+                if v.npartitions != self.npartitions:
+                    raise ValueError(
+                        "Number of partitions do not match ({0} != {1})".format(
+                            v.npartitions, self.npartitions
+                        )
+                    )
+                kwargs[k] = from_dask_array(v, index=self.index)
 
         pairs = list(sum(kwargs.items(), ()))
 
@@ -3541,7 +3561,7 @@ class DataFrame(_Frame):
         single thread
 
             import numexpr
-            numexpr.set_nthreads(1)
+            numexpr.set_num_threads(1)
 
         See also
         --------
@@ -3555,7 +3575,7 @@ class DataFrame(_Frame):
             inplace = False
         if "=" in expr and inplace in (True, None):
             raise NotImplementedError(
-                "Inplace eval not supported." " Please use inplace=False"
+                "Inplace eval not supported. Please use inplace=False"
             )
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
@@ -3588,7 +3608,7 @@ class DataFrame(_Frame):
 
         elif axis == 0:
             raise NotImplementedError(
-                "{0} does not support " "squeeze along axis 0".format(type(self))
+                "{0} does not support squeeze along axis 0".format(type(self))
             )
 
         elif axis not in [0, 1, None]:
@@ -3599,6 +3619,11 @@ class DataFrame(_Frame):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
+
+    @derived_from(pd.DataFrame, version="0.25.0")
+    def explode(self, column):
+        meta = self._meta.explode(column)
+        return self.map_partitions(M.explode, column, meta=meta)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag of tuples of each row.
@@ -3643,11 +3668,15 @@ class DataFrame(_Frame):
         return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
 
     @derived_from(pd.DataFrame)
-    def drop(self, labels, axis=0, errors="raise"):
+    def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if axis == 1:
-            return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
-        raise NotImplementedError("Drop currently only works for axis=1")
+        if (axis == 1) or (columns is not None):
+            return self.map_partitions(
+                M.drop, labels=labels, axis=axis, columns=columns, errors=errors
+            )
+        raise NotImplementedError(
+            "Drop currently only works for axis=1 or when columns is not None"
+        )
 
     def merge(
         self,
@@ -3707,10 +3736,11 @@ class DataFrame(_Frame):
             whose merge key only appears in `left` DataFrame, "right_only" for
             observations whose merge key only appears in `right` DataFrame,
             and "both" if the observation’s merge key is found in both.
-        npartitions: int, None, or 'auto'
+        npartitions: int or None, optional
             The ideal number of output partitions. This is only utilised when
-            performing a hash_join (merging on columns only). If `None`
-            npartitions = max(lhs.npartitions, rhs.npartitions)
+            performing a hash_join (merging on columns only). If ``None`` then
+            ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
+            Default is ``None``.
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -3854,7 +3884,7 @@ class DataFrame(_Frame):
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -3867,7 +3897,7 @@ class DataFrame(_Frame):
             return elemwise(comparison, self, other, axis=axis)
 
         meth.__doc__ = skip_doctest(comparison.__doc__)
-        bind_method(cls, name, meth)
+        setattr(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
     def apply(
@@ -3942,15 +3972,14 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {
-            "axis": axis,
-            "broadcast": broadcast,
-            "raw": raw,
-            "reduce": None,
-        }
+        pandas_kwargs = {"axis": axis, "raw": raw}
 
         if PANDAS_VERSION >= "0.23.0":
             kwds.setdefault("result_type", None)
+
+        if not PANDAS_GT_100:
+            pandas_kwargs["broadcast"] = broadcast
+            pandas_kwargs["reduce"] = None
 
         kwds.update(pandas_kwargs)
 
@@ -3984,9 +4013,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def corr(self, method="pearson", min_periods=None, split_every=False):
         if method != "pearson":
-            raise NotImplementedError(
-                "Only Pearson correlation has been " "implemented"
-            )
+            raise NotImplementedError("Only Pearson correlation has been implemented")
         return cov_corr(self, min_periods, True, split_every=split_every)
 
     def info(self, buf=None, verbose=False, memory_usage=False):
@@ -4226,7 +4253,6 @@ for op in [
     operator.abs,
     operator.add,
     operator.and_,
-    operator_div,
     operator.eq,
     operator.gt,
     operator.ge,
@@ -4461,9 +4487,10 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
         h = df
-    h = hash_pandas_object(h, index=False)
+
+    h = hash_object_dispatch(h, index=False)
     if is_series_like(h):
-        h = h._values
+        h = h.values
     h %= nparts
     return {i: df.iloc[h == i] for i in range(nparts)}
 
@@ -4831,18 +4858,8 @@ def apply_and_enforce(*args, **kwargs):
         if not len(df):
             return meta
         if is_dataframe_like(df):
-            # Need nan_to_num otherwise nan comparison gives False
-            if not np.array_equal(
-                np.nan_to_num(meta.columns), np.nan_to_num(df.columns)
-            ):
-                raise ValueError(
-                    "The columns in the computed data do not match"
-                    " the columns in the provided metadata\n"
-                    "  Expected: %s\n"
-                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
-                )
-            else:
-                c = meta.columns
+            check_matching_columns(meta, df)
+            c = meta.columns
         else:
             c = meta.name
         return _rename(c, df)
@@ -4993,7 +5010,7 @@ def quantile(df, q, method="default"):
         from dask.utils import import_required
 
         import_required(
-            "crick", "crick is a required dependency for using the t-digest " "method."
+            "crick", "crick is a required dependency for using the t-digest method."
         )
 
         from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
@@ -5438,7 +5455,7 @@ def repartition_size(df, size):
     """
     Repartition dataframe so that new partitions have approximately `size` memory usage each
     """
-    if isinstance(size, string_types):
+    if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
 
@@ -6089,7 +6106,7 @@ def mapseries(base_chunk, concat_map):
 
 def mapseries_combine(index, concat_result):
     final_series = concat_result.sort_index()
-    final_series.index = index
+    final_series = index.to_series().map(final_series)
     return final_series
 
 

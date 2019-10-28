@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from distutils.version import LooseVersion
 
 import toolz
@@ -10,8 +8,8 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....compatibility import PY3, string_types
 from ....utils import import_required, natural_sort_key
+from collections.abc import Mapping
 
 
 try:
@@ -28,6 +26,62 @@ __all__ = ("read_parquet", "to_parquet")
 # User API
 
 
+class ParquetSubgraph(Mapping):
+    """
+    Subgraph for reading Parquet files.
+
+    Enables optimiziations (see optimize_read_parquet_getitem).
+    """
+
+    def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
+        self.name = name
+        self.engine = engine
+        self.fs = fs
+        self.meta = meta
+        self.columns = columns
+        self.index = index
+        self.parts = parts
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        return "ParquetSubgraph<name='{}', n_parts={}>".format(
+            self.name, len(self.parts)
+        )
+
+    def __getitem__(self, key):
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
+
+        if name != self.name:
+            raise KeyError(key)
+
+        if i < 0 or i >= len(self.parts):
+            raise KeyError(key)
+
+        part = self.parts[i]
+
+        return (
+            read_parquet_part,
+            self.engine.read_partition,
+            self.fs,
+            self.meta,
+            part["piece"],
+            self.columns,
+            self.index,
+            toolz.merge(part["kwargs"], self.kwargs or {}),
+        )
+
+    def __len__(self):
+        return len(self.parts)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield (self.name, i)
+
+
 def read_parquet(
     path,
     columns=None,
@@ -37,6 +91,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
+    split_row_groups=True,
     **kwargs
 ):
     """
@@ -84,6 +139,11 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
+    split_row_groups : bool
+        If True (default) then output dataframe partitions will correspond
+        to parquet-file row-groups (when enough row-group metadata is
+        available). Otherwise, partitions correspond to distinct files.
+        Only the "pyarrow" engine currently supports this argument.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -152,6 +212,7 @@ def read_parquet(
         index=index,
         gather_statistics=gather_statistics,
         filters=filters,
+        split_row_groups=split_row_groups,
         **kwargs
     )
     if meta.index.name is not None:
@@ -162,7 +223,7 @@ def read_parquet(
         # User didn't specify columns, so ignore any intersection
         # of auto-detected values with the index (if necessary)
         ignore_index_column_intersection = True
-        columns = meta.columns
+        columns = [c for c in meta.columns]
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
@@ -201,9 +262,7 @@ def read_parquet(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError(
-                    "Specified index is invalid.\n" "index: {}".format(index)
-                )
+                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
         elif index is not False and len(out) > 1:
             if any(o["name"] == "index" for o in out):
                 # Use sorted column named "index" as the index
@@ -214,12 +273,16 @@ def read_parquet(
                     index_in_columns = True
                 elif index != [o["name"]]:
                     raise ValueError(
-                        "Specified index is invalid.\n" "index: {}".format(index)
+                        "Specified index is invalid.\nindex: {}".format(index)
                     )
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
-                    "Multiple sorted columns found, cannot autodetect index",
+                    "Multiple sorted columns found %s, cannot\n "
+                    "autodetect index. Will continue without an index.\n"
+                    "To pick an index column, use the index= keyword; to \n"
+                    "silence this warning use index=False."
+                    "" % [o["name"] for o in out],
                     RuntimeWarning,
                 )
                 index = False
@@ -266,19 +329,7 @@ def read_parquet(
         z.update(y)
         return z
 
-    subgraph = {
-        (name, i): (
-            read_parquet_part,
-            engine.read_partition,
-            fs,
-            meta,
-            part["piece"],
-            columns,
-            index,
-            _merge_kwargs(part["kwargs"], kwargs or {}),
-        )
-        for i, part in enumerate(parts)
-    }
+    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
@@ -299,7 +350,9 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     df = func(fs, part, columns, index, **kwargs)
     if meta.columns.name:
         df.columns.name = meta.columns.name
-    return df
+    columns = columns or []
+    index = index or []
+    return df[[c for c in columns if c not in index]]
 
 
 def to_parquet(
@@ -370,8 +423,14 @@ def to_parquet(
     """
     from dask import delayed
 
+    if compression == "default":
+        if snappy is not None:
+            compression = "snappy"
+        else:
+            compression = None
+
     partition_on = partition_on or []
-    if isinstance(partition_on, string_types):
+    if isinstance(partition_on, str):
         partition_on = [partition_on]
 
     if set(partition_on) - set(df.columns):
@@ -380,11 +439,6 @@ def to_parquet(
             "partition_on=%s ."
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
-
-    if compression != "default":
-        kwargs["compression"] = compression
-    elif snappy is not None:
-        kwargs["compression"] = "snappy"
 
     if isinstance(engine, str):
         engine = get_engine(engine)
@@ -462,6 +516,7 @@ def to_parquet(
             partition_on,
             write_metadata_file,
             fmd=meta,
+            compression=compression,
             index_cols=index_cols,
             **kwargs_pass
         )
@@ -561,6 +616,9 @@ def sorted_columns(statistics):
         success = True
         for stats in statistics[1:]:
             c = stats["columns"][i]
+            if c["min"] is None:
+                success = False
+                break
             if c["min"] >= max:
                 divisions.append(c["min"])
                 max = c["max"]
@@ -626,5 +684,4 @@ def apply_filters(parts, statistics, filters):
     return parts, statistics
 
 
-if PY3:
-    DataFrame.to_parquet.__doc__ = to_parquet.__doc__
+DataFrame.to_parquet.__doc__ = to_parquet.__doc__

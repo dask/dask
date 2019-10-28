@@ -8,15 +8,13 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ....compatibility import string_types
-
 try:
     import fastparquet
     from fastparquet import ParquetFile
     from fastparquet.util import get_file_scheme
     from fastparquet.util import ex_from_sep, val_to_num, groupby_types
     from fastparquet.writer import partition_on_columns, make_part_file
-except ModuleNotFoundError:
+except ImportError:
     pass
 
 from .utils import _parse_pandas_metadata, _normalize_index_columns, _analyze_paths
@@ -80,18 +78,29 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     because this also means we should avoid scanning every file in the
     dataset.  If _metadata is available, set `gather_statistics=True`
     (if `gather_statistics=None`).
+
+    The `fast_metadata` output specifies that ParquetFile metadata parsing
+    is fast enough for each worker to perform during `read_partition`. The
+    value will be set to True if: (1) The path is a directory containing
+    _metadta, (2) the path is a list of files containing _metadata, (3)
+    there is only one file to read, or (4) `gather_statistics` is False.
+    In other cases, the ParquetFile object will need to be stored in the
+    task graph, because metadata parsing is too expensive.
     """
     parts = []
+    fast_metadata = True
     if len(paths) > 1:
+        base, fns = _analyze_paths(paths, fs)
+        relpaths = [path.replace(base, "").lstrip("/") for path in paths]
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
             pf = ParquetFile(
                 paths, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
             )
+            if "_metadata" not in relpaths:
+                fast_metadata = False
         else:
-            base, fns = _analyze_paths(paths, fs)
-            relpaths = [path.replace(base, "").lstrip("/") for path in paths]
             if "_metadata" in relpaths:
                 # We have a _metadata file, lets use it
                 pf = ParquetFile(
@@ -128,6 +137,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             elif gather_statistics is not False:
                 # Scan every file
                 pf = ParquetFile(paths, open_with=fs.open, **kwargs.get("file", {}))
+                fast_metadata = False
             else:
                 # Use _common_metadata file if it is available.
                 # Otherwise, just use 0th file
@@ -151,7 +161,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
                 paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
             )
 
-    return parts, pf, gather_statistics
+    return parts, pf, gather_statistics, fast_metadata
 
 
 class FastParquetEngine(Engine):
@@ -169,7 +179,7 @@ class FastParquetEngine(Engine):
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below).
-        parts, pf, gather_statistics = _determine_pf_parts(
+        parts, pf, gather_statistics, fast_metadata = _determine_pf_parts(
             fs, paths, gather_statistics, **kwargs
         )
 
@@ -220,7 +230,7 @@ class FastParquetEngine(Engine):
 
         if categories is None:
             categories = pf.categories
-        elif isinstance(categories, string_types):
+        elif isinstance(categories, str):
             categories = [categories]
         else:
             categories = list(categories)
@@ -259,25 +269,31 @@ class FastParquetEngine(Engine):
             stats = []
             if filters is None:
                 filters = []
+
+            skip_cols = set()  # Columns with min/max = None detected
             # make statistics conform in layout
             for (i, row_group) in enumerate(pf.row_groups):
                 s = {"num-rows": row_group.num_rows, "columns": []}
                 for col in pf.columns:
-                    d = {"name": col}
-                    if pf.statistics["min"][col][0] is not None:
-                        cs_min = pf.statistics["min"][col][i]
-                        cs_max = pf.statistics["max"][col][i]
-                        if isinstance(cs_min, np.datetime64):
-                            cs_min = pd.Timestamp(cs_min)
-                            cs_max = pd.Timestamp(cs_max)
-                        d.update(
-                            {
-                                "min": cs_min,
-                                "max": cs_max,
-                                "null_count": pf.statistics["null_count"][col][i],
-                            }
-                        )
-                    s["columns"].append(d)
+                    if col not in skip_cols:
+                        d = {"name": col}
+                        if pf.statistics["min"][col][0] is not None:
+                            cs_min = pf.statistics["min"][col][i]
+                            cs_max = pf.statistics["max"][col][i]
+                            if None in [cs_min, cs_max] and i == 0:
+                                skip_cols.add(col)
+                                continue
+                            if isinstance(cs_min, np.datetime64):
+                                cs_min = pd.Timestamp(cs_min)
+                                cs_max = pd.Timestamp(cs_max)
+                            d.update(
+                                {
+                                    "min": cs_min,
+                                    "max": cs_max,
+                                    "null_count": pf.statistics["null_count"][col][i],
+                                }
+                            )
+                        s["columns"].append(d)
                 # Need this to filter out partitioned-on categorical columns
                 s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)
                 stats.append(s)
@@ -292,16 +308,24 @@ class FastParquetEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            parts = pf.row_groups
+            partsin = pf.row_groups
+            if fast_metadata:
+                pf = (paths, gather_statistics)
         else:
+            partsin = parts
             pf = None
-        parts = [
-            {
-                "piece": piece,
+        parts = []
+        for i, piece in enumerate(partsin):
+            if pf and not fast_metadata:
+                for col in piece.columns:
+                    col.meta_data.statistics = None
+                    col.meta_data.encoding_stats = None
+            piece_item = i if pf else piece
+            part = {
+                "piece": piece_item,
                 "kwargs": {"pf": pf, "categories": categories_dict or categories},
             }
-            for piece in parts
-        ]
+            parts.append(part)
 
         return (meta, stats, parts)
 
@@ -310,11 +334,7 @@ class FastParquetEngine(Engine):
         if isinstance(index, list):
             columns += index
 
-        if pf:
-            df = pf.read_row_group_file(
-                piece, columns, categories, index=index, **kwargs.get("read", {})
-            )
-        else:
+        if pf is None:
             base, fns = _analyze_paths([piece], fs)
             scheme = get_file_scheme(fns)
             pf = ParquetFile(piece, open_with=fs.open)
@@ -326,6 +346,16 @@ class FastParquetEngine(Engine):
             pf.cats = _paths_to_cats(fns, scheme)
             pf.fn = base
             df = pf.to_pandas(columns, categories, index=index)
+        else:
+            if isinstance(pf, tuple):
+                pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
+                pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
+                pf.fmd.row_groups = None
+            piece = pf.row_groups[piece]
+            pf.fmd.key_value_metadata = None
+            df = pf.read_row_group_file(
+                piece, columns, categories, index=index, **kwargs.get("read", {})
+            )
 
         return df
 
@@ -364,7 +394,7 @@ class FastParquetEngine(Engine):
         if append:
             if pf.file_scheme not in ["hive", "empty", "flat"]:
                 raise ValueError(
-                    "Requested file scheme is hive, " "but existing file scheme is not."
+                    "Requested file scheme is hive, but existing file scheme is not."
                 )
             elif (set(pf.columns) != set(df.columns) - set(partition_on)) or (
                 set(partition_on) != set(pf.cats)

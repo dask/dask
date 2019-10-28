@@ -14,4 +14,4 @@ if fsspec is None or LooseVersion(fsspec.__version__) < LooseVersion("0.3.3"):
         "pip install 'fsspec>=0.3.3'"
     )
 
-from .core import read_bytes, open_files
+from .core import read_bytes, open_file, open_files

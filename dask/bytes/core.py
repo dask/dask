@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import copy
 
 from fsspec.core import (  # noqa: F401
@@ -10,6 +8,7 @@ from fsspec.core import (  # noqa: F401
     _expand_paths,  # noqa: F401
     get_compression,  # noqa: F401
 )
+from fsspec.core import open as open_file  # noqa: F401
 from fsspec.utils import (  # noqa: F401
     read_block,  # noqa: F401
     seek_delimiter,  # noqa: F401
@@ -20,7 +19,6 @@ from fsspec.utils import (  # noqa: F401
 from fsspec import get_mapper  # noqa: F401
 from fsspec.compression import compr  # noqa: F401
 
-from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
 from ..utils import is_integer, parse_bytes
@@ -98,7 +96,7 @@ def read_bytes(
         raise IOError("%s resolved to no files" % urlpath)
 
     if blocksize is not None:
-        if isinstance(blocksize, (str, unicode)):
+        if isinstance(blocksize, str):
             blocksize = parse_bytes(blocksize)
         if not is_integer(blocksize):
             raise TypeError("blocksize must be an integer")
@@ -117,10 +115,15 @@ def read_bytes(
                 comp = compression
             if comp is not None:
                 raise ValueError(
-                    "Cannot do chunked reads on compressed files."
+                    "Cannot do chunked reads on compressed files. "
                     "To read, set blocksize=None"
                 )
             size = fs.info(path)["size"]
+            if size is None:
+                raise ValueError(
+                    "Backing filesystem couldn't determine file size, cannot "
+                    "do chunked reads. To read, set blocksize=None."
+                )
             off = list(range(0, size, blocksize))
             length = [blocksize] * len(off)
             if not_zero:

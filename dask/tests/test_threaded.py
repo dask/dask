@@ -8,7 +8,6 @@ from time import time, sleep
 import pytest
 
 import dask
-from dask.compatibility import PY2
 from dask.threaded import get
 from dask.utils_test import inc, add
 
@@ -56,13 +55,12 @@ def test_exceptions_rise_to_top():
 
 
 def test_reuse_pool():
-    pool = ThreadPool()
-    with dask.config.set(pool=pool):
-        assert get({"x": (inc, 1)}, "x") == 2
-        assert get({"x": (inc, 1)}, "x") == 2
+    with ThreadPool() as pool:
+        with dask.config.set(pool=pool):
+            assert get({"x": (inc, 1)}, "x") == 2
+            assert get({"x": (inc, 1)}, "x") == 2
 
 
-@pytest.mark.skipif(PY2, reason="threading API changed")
 def test_pool_kwarg():
     def f():
         sleep(0.01)
@@ -137,15 +135,14 @@ def test_thread_safety():
 
 @pytest.mark.xfail(
     "xdist" in sys.modules,
-    reason=("This test fails intermittently when using " "pytest-xdist (maybe)"),
+    reason="This test fails intermittently when using pytest-xdist (maybe)",
+    strict=False,
 )
 def test_interrupt():
-    # Python 2 and windows 2 & 3 both implement `queue.get` using polling,
+    # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
     # Python 3 on other platforms requires sending SIGINT to the main thread.
-    if PY2:
-        from thread import interrupt_main
-    elif os.name == "nt":
+    if os.name == "nt":
         from _thread import interrupt_main
     else:
         main_thread = threading.get_ident()

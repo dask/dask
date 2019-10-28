@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 import numpy as np
 from numpy.compat import basestring
 
@@ -189,7 +187,7 @@ def parse_einsum_input(operands):
     # Make sure number operands is equivalent to the number of terms
     if len(input_subscripts.split(",")) != len(operands):
         raise ValueError(
-            "Number of einsum subscripts must be equal to the " "number of operands."
+            "Number of einsum subscripts must be equal to the number of operands."
         )
 
     return (input_subscripts, output_subscript, operands)

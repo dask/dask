@@ -79,9 +79,7 @@ class da_frompyfunc(object):
     def __getattr__(self, a):
         if not a.startswith("_"):
             return getattr(self._ufunc, a)
-        raise AttributeError(
-            "%r object has no attribute " "%r" % (type(self).__name__, a)
-        )
+        raise AttributeError("%r object has no attribute %r" % (type(self).__name__, a))
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -122,7 +120,7 @@ class ufunc(object):
         if key in self._forward_attrs:
             return getattr(self._ufunc, key)
         raise AttributeError(
-            "%r object has no attribute " "%r" % (type(self).__name__, key)
+            "%r object has no attribute %r" % (type(self).__name__, key)
         )
 
     def __dir__(self):
@@ -139,7 +137,7 @@ class ufunc(object):
                 if type(result) != type(NotImplemented):
                     return result
             raise TypeError(
-                "Parameters of such types " "are not supported by " + self.__name__
+                "Parameters of such types are not supported by " + self.__name__
             )
         else:
             return self._ufunc(*args, **kwargs)

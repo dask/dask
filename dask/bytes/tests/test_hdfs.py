@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import os
 import posixpath
 
@@ -8,7 +6,6 @@ from toolz import concat
 
 import dask
 from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
-from dask.compatibility import unicode
 
 
 try:
@@ -152,26 +149,27 @@ def test_read_text(hdfs):
 
     pool = mp.get_context("spawn").Pool(2)
 
-    with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
-        f.write("Alice 100\nBob 200\nCharlie 300".encode())
+    with pool:
+        with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
+            f.write("Alice 100\nBob 200\nCharlie 300".encode())
 
-    with hdfs.open("%s/text.2.txt" % basedir, "wb") as f:
-        f.write("Dan 400\nEdith 500\nFrank 600".encode())
+        with hdfs.open("%s/text.2.txt" % basedir, "wb") as f:
+            f.write("Dan 400\nEdith 500\nFrank 600".encode())
 
-    with hdfs.open("%s/other.txt" % basedir, "wb") as f:
-        f.write("a b\nc d".encode())
+        with hdfs.open("%s/other.txt" % basedir, "wb") as f:
+            f.write("a b\nc d".encode())
 
-    b = db.read_text("hdfs://%s/text.*.txt" % basedir)
-    with dask.config.set(pool=pool):
-        result = b.str.strip().str.split().map(len).compute()
+        b = db.read_text("hdfs://%s/text.*.txt" % basedir)
+        with dask.config.set(pool=pool):
+            result = b.str.strip().str.split().map(len).compute()
 
-    assert result == [2, 2, 2, 2, 2, 2]
+        assert result == [2, 2, 2, 2, 2, 2]
 
-    b = db.read_text("hdfs://%s/other.txt" % basedir)
-    with dask.config.set(pool=pool):
-        result = b.str.split().flatten().compute()
+        b = db.read_text("hdfs://%s/other.txt" % basedir)
+        with dask.config.set(pool=pool):
+            result = b.str.split().flatten().compute()
 
-    assert result == ["a", "b", "c", "d"]
+        assert result == ["a", "b", "c", "d"]
 
 
 def test_read_text_unicode(hdfs):
@@ -186,7 +184,7 @@ def test_read_text_unicode(hdfs):
 
     result = f[0].compute()
     assert len(result) == 2
-    assert list(map(unicode.strip, result)) == [data.decode("utf-8")] * 2
+    assert list(map(str.strip, result)) == [data.decode("utf-8")] * 2
     assert len(result[0].strip()) == 5
 
 
@@ -234,7 +232,9 @@ def test_glob(hdfs):
         basedir + p for p in ["/a", "/a1", "/a2", "/a3"]
     }
 
-    assert set(hdfs.glob(basedir + "/c/*")) == {basedir + p for p in ["/c/x1", "/c/x2"]}
+    assert set(hdfs.glob(basedir + "/c/*")) == {
+        basedir + p for p in ["/c/x1", "/c/x2", "/c/d"]
+    }
 
     assert set(hdfs.glob(basedir + "/*/x*")) == {
         basedir + p for p in ["/c/x1", "/c/x2", "/c2/x1", "/c2/x2"]
@@ -250,7 +250,7 @@ def test_glob(hdfs):
     assert hdfs.glob(basedir + "/*/missing") == []
 
     assert set(hdfs.glob(basedir + "/*")) == {
-        basedir + p for p in ["/a", "/a1", "/a2", "/a3", "/b1"]
+        basedir + p for p in ["/a", "/a1", "/a2", "/a3", "/b1", "/c", "/c2"]
     }
 
 

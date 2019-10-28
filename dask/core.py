@@ -1,8 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
-from itertools import chain
+from collections import defaultdict
 
 from .utils_test import add, inc  # noqa: F401
+
+no_default = "__no_default__"
 
 
 def ishashable(x):
@@ -154,7 +154,7 @@ def get(dsk, out, cache=None):
     return result
 
 
-def get_dependencies(dsk, key=None, task=None, as_list=False):
+def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     """ Get the immediate tasks on which this task depends
 
     Examples
@@ -185,7 +185,7 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     """
     if key is not None:
         arg = dsk[key]
-    elif task is not None:
+    elif task is not no_default:
         arg = task
     else:
         raise ValueError("Provide either key or task")
@@ -221,7 +221,7 @@ def get_deps(dsk):
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
     {'a': set(), 'b': {'a'}, 'c': {'b'}}
-    >>> dependents
+    >>> dependents  # doctest: +SKIP
     {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dependencies = {k: get_dependencies(dsk, task=v) for k, v in dsk.items()}
@@ -266,11 +266,13 @@ def reverse_dict(d):
     >>> reverse_dict(d)  # doctest: +SKIP
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
-    terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = {t: set() for t in terms}
+    result = defaultdict(set)
+    _add = set.add
     for k, vals in d.items():
+        result[k]
         for val in vals:
-            result[val].add(k)
+            _add(result[val], k)
+    result.default_factory = None
     return result
 
 

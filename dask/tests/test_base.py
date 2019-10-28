@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import os
 import pytest
 from operator import add, mul
@@ -30,7 +28,6 @@ from dask.base import (
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode, PY2
 from dask.diagnostics import Profiler
 
 
@@ -133,6 +130,17 @@ def test_tokenize_numpy_scalar():
 
 
 @pytest.mark.skipif("not np")
+def test_tokenize_numpy_scalar_string_rep():
+    # Test tokenizing numpy scalars doesn't depend on their string representation
+    try:
+        np.set_string_function(lambda x: "foo")
+        assert tokenize(np.array(1)) != tokenize(np.array(2))
+    finally:
+        # Reset back to default
+        np.set_string_function(None)
+
+
+@pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
         np.array(["a", "aa", "aaa"], dtype=object)
@@ -143,12 +151,6 @@ def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
-    if PY2:
-        assert tokenize(
-            np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)
-        ) == tokenize(
-            np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)
-        )
 
 
 @pytest.mark.skipif("not np")
@@ -164,6 +166,10 @@ def test_tokenize_numpy_memmap_offset(tmpdir):
         mmap2 = np.memmap(f, dtype=np.uint8, mode="r", offset=5, shape=5)
 
         assert tokenize(mmap1) != tokenize(mmap2)
+        # also make sure that they tokenize correctly when taking sub-arrays
+        sub1 = mmap1[1:-1]
+        sub2 = mmap2[1:-1]
+        assert tokenize(sub1) != tokenize(sub2)
 
 
 @pytest.mark.skipif("not np")
@@ -230,7 +236,7 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 
 
 def test_normalize_base():
-    for i in [1, long(1), 1.1, "1", slice(1, 2, 3)]:
+    for i in [1, 1.1, "1", slice(1, 2, 3)]:
         assert normalize_token(i) is i
 
 
@@ -337,15 +343,14 @@ def test_tokenize_set():
 
 
 def test_tokenize_ordered_dict():
-    with ignoring(ImportError):
-        from collections import OrderedDict
+    from collections import OrderedDict
 
-        a = OrderedDict([("a", 1), ("b", 2)])
-        b = OrderedDict([("a", 1), ("b", 2)])
-        c = OrderedDict([("b", 2), ("a", 1)])
+    a = OrderedDict([("a", 1), ("b", 2)])
+    b = OrderedDict([("a", 1), ("b", 2)])
+    c = OrderedDict([("b", 2), ("a", 1)])
 
-        assert tokenize(a) == tokenize(b)
-        assert tokenize(a) != tokenize(c)
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
 
 
 @pytest.mark.skipif("not np")
@@ -525,7 +530,7 @@ def test_custom_collection():
     y = Tuple(dsk2, ["c", "d"])
     z = Tuple(dsk3, ["e", "f"])
 
-    # __slots__ defined on base mixin class propogates
+    # __slots__ defined on base mixin class propagates
     with pytest.raises(AttributeError):
         x.foo = 1
 
@@ -873,8 +878,7 @@ def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
     x3 = delayed(inc)(x2)
-
-    xx, = persist(x3)
+    (xx,) = persist(x3)
     assert isinstance(xx, Delayed)
     assert xx.key == x3.key
     assert len(xx.dask) == 1

@@ -1,13 +1,11 @@
-from __future__ import print_function, division, absolute_import
-
 import io
 import os
-import sys
 from contextlib import contextmanager
 from distutils.version import LooseVersion
 
 import pytest
 import numpy as np
+
 
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
@@ -17,6 +15,7 @@ httpretty = pytest.importorskip("httpretty")
 from toolz import concat, valmap, partial
 
 from dask import compute
+from dask.compatibility import PY_VERSION
 from dask.bytes.core import read_bytes, open_files
 from s3fs import S3FileSystem as DaskS3FileSystem
 from dask.bytes.utils import compress
@@ -336,7 +335,7 @@ def test_read_bytes_delimited(s3, blocksize):
     "fmt,blocksize", [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 )
 def test_compression(s3, fmt, blocksize):
-    if fmt == "zip" and sys.version_info.minor == 5:
+    if fmt == "zip" and PY_VERSION < "3.6":
         pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")

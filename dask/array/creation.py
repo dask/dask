@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
@@ -10,7 +9,6 @@ from toolz import accumulate, sliding_window
 
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
-from ..compatibility import Sequence
 from ..utils import derived_from
 from . import chunk
 from .core import (
@@ -517,7 +515,7 @@ def diag(v):
         return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
         raise TypeError(
-            "v must be a dask array or numpy array, " "got {0}".format(type(v))
+            "v must be a dask array or numpy array, got {0}".format(type(v))
         )
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
@@ -528,7 +526,7 @@ def diag(v):
             return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
             raise NotImplementedError(
-                "Extracting diagonals from non-square " "chunked arrays"
+                "Extracting diagonals from non-square chunked arrays"
             )
     chunks_1d = v.chunks[0]
     blocks = v.__dask_keys__()

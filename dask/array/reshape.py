@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+from functools import reduce
 from itertools import product
 from operator import mul
 
@@ -9,7 +8,6 @@ from .core import Array
 from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
-from ..compatibility import reduce
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M
 
@@ -145,8 +143,7 @@ def reshape(x, shape):
     2.  It only allows for reshapings that collapse or merge dimensions like
         ``(1, 2, 3, 4) -> (1, 6, 4)`` or ``(64,) -> (4, 4, 4)``
 
-    .. _`column-major order`: https://en.wikipedia.org/wiki/
-                              Row-_and_column-major_order
+    .. _`row-major order`: https://en.wikipedia.org/wiki/Row-_and_column-major_order
 
     When communication is necessary this algorithm depends on the logic within
     rechunk.  It endeavors to keep chunk sizes roughly the same when possible.
@@ -172,7 +169,10 @@ def reshape(x, shape):
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
     if np.isnan(sum(x.shape)):
-        raise ValueError("Array chunk size or shape is unknown. shape: %s", x.shape)
+        raise ValueError(
+            "Array chunk size or shape is unknown. shape: %s\n\n"
+            "Possible solution with x.compute_chunk_sizes()" % x.shape
+        )
 
     if reduce(mul, shape, 1) != x.size:
         raise ValueError("total size of new array must be unchanged")

@@ -3,9 +3,11 @@ import pytest
 import subprocess
 import sys
 import time
+import fsspec
+from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
-from dask.compatibility import PY2
+from dask.bytes._compatibility import FSSPEC_042
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -19,10 +21,7 @@ def dir_server():
             with open(os.path.join(d, fn), "wb") as f:
                 f.write(b"a" * 10000)
 
-        if PY2:
-            cmd = [sys.executable, "-m", "SimpleHTTPServer", "8999"]
-        else:
-            cmd = [sys.executable, "-m", "http.server", "8999"]
+        cmd = [sys.executable, "-m", "http.server", "8999"]
         p = subprocess.Popen(cmd, cwd=d)
         timeout = 10
         while True:
@@ -106,7 +105,7 @@ def test_ops_blocksize(dir_server):
     fn = files[1]
     f = open_files(root + fn, block_size=2)[0]
     with f as f:
-        # fails becasue we want only 12 bytes
+        # fails because we want only 12 bytes
         with pytest.raises(ValueError):
             assert f.read(10) == data[:10]
 
@@ -117,7 +116,13 @@ def test_errors(dir_server):
         with f as f:
             f.read()
     f = open_files("http://nohost/")[0]
-    with pytest.raises(requests.exceptions.RequestException):
+
+    if FSSPEC_042:
+        expected = FileNotFoundError
+    else:
+        expected = requests.exceptions.RequestException
+
+    with pytest.raises(expected):
         with f as f:
             f.read()
     root = "http://localhost:8999/"
@@ -152,7 +157,7 @@ def test_open_glob(dir_server):
 def test_parquet():
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
-    pytest.importorskip("fastparquet")  # no pyarrow compatability FS yet
+    pytest.importorskip("fastparquet")  # no pyarrow compatibility FS yet
     df = dd.read_parquet(
         [
             "https://github.com/Parquet/parquet-compatibility/raw/"
@@ -164,7 +169,7 @@ def test_parquet():
     assert df.columns.tolist() == ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696")
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696", strict=False)
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts
@@ -176,4 +181,19 @@ def test_bag():
     ]
     b = db.read_text(urls)
     assert b.npartitions == 2
+    b.compute()
+
+
+@pytest.mark.xfail(
+    LooseVersion(fsspec.__version__) <= "0.4.1",
+    reason="https://github.com/dask/dask/pull/5231",
+)
+@pytest.mark.network
+def test_read_csv():
+    dd = pytest.importorskip("dask.dataframe")
+    url = (
+        "https://raw.githubusercontent.com/weierophinney/pastebin/"
+        "master/public/js-src/dojox/data/tests/stores/patterns.csv"
+    )
+    b = dd.read_csv(url)
     b.compute()

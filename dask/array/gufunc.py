@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 import re
 
@@ -353,7 +351,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
         shape = arg.shape
         iax = tuple(a if a < 0 else a - len(shape) for a in iax)
         tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax
-
         transposed_arg = arg.transpose(tidc)
         transposed_args.append(transposed_arg)
     args = transposed_args
@@ -463,9 +460,7 @@ significantly.".format(
 
     ## Split output
     leaf_arrs = []
-    for i, (ocd, odt, oax, meta) in enumerate(
-        zip(output_coredimss, output_dtypes, output_axes, metas)
-    ):
+    for i, (ocd, oax, meta) in enumerate(zip(output_coredimss, output_axes, metas)):
         core_output_shape = tuple(core_shapes[d] for d in ocd)
         core_chunkinds = len(ocd) * (0,)
         output_shape = loop_output_shape + core_output_shape
@@ -478,7 +473,7 @@ significantly.".format(
             for key in keys
         }
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
-        meta = meta_from_array(meta, len(output_shape), dtype=odt)
+        meta = meta_from_array(meta, len(output_shape))
         leaf_arr = Array(
             graph, leaf_name, chunks=output_chunks, shape=output_shape, meta=meta
         )

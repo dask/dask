@@ -1,10 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 import difflib
 import functools
 import math
 import numbers
 import os
+import warnings
 
 import numpy as np
 from toolz import frequencies, concat
@@ -108,7 +107,9 @@ def meta_from_array(x, ndim=None, dtype=None):
 
 
 def compute_meta(func, _dtype, *args, **kwargs):
-    with np.errstate(all="ignore"):
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+
         args_meta = [meta_from_array(x) if is_arraylike(x) else x for x in args]
         kwargs_meta = {
             k: meta_from_array(v) if is_arraylike(v) else v for k, v in kwargs.items()
@@ -192,50 +193,45 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
+def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
+    x_original = x
+    x_meta = None
+    x_computed = None
+
+    if isinstance(x, Array):
+        assert x.dtype is not None
+        adt = x.dtype
+        if check_graph:
+            _check_dsk(x.dask)
+        x_meta = getattr(x, "_meta", None)
+        x = x.compute(scheduler="sync")
+        x_computed = x
+        if hasattr(x, "todense"):
+            x = x.todense()
+        if not hasattr(x, "dtype"):
+            x = np.array(x, dtype="O")
+        if _not_empty(x):
+            assert x.dtype == x_original.dtype
+        if check_shape:
+            assert_eq_shape(x_original.shape, x.shape, check_nan=False)
+    else:
+        if not hasattr(x, "dtype"):
+            x = np.array(x, dtype="O")
+        adt = getattr(x, "dtype", None)
+
+    return x, adt, x_meta, x_computed
+
+
 def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwargs):
     a_original = a
     b_original = b
-    if isinstance(a, Array):
-        assert a.dtype is not None
-        adt = a.dtype
-        if check_graph:
-            _check_dsk(a.dask)
-        a_meta = getattr(a, "_meta", None)
-        a = a.compute(scheduler="sync")
-        a_computed = a
-        if hasattr(a, "todense"):
-            a = a.todense()
-        if not hasattr(a, "dtype"):
-            a = np.array(a, dtype="O")
-        if _not_empty(a):
-            assert a.dtype == a_original.dtype
-        if check_shape:
-            assert_eq_shape(a_original.shape, a.shape, check_nan=False)
-    else:
-        if not hasattr(a, "dtype"):
-            a = np.array(a, dtype="O")
-        adt = getattr(a, "dtype", None)
 
-    if isinstance(b, Array):
-        assert b.dtype is not None
-        bdt = b.dtype
-        if check_graph:
-            _check_dsk(b.dask)
-        b_meta = getattr(b, "_meta", None)
-        b = b.compute(scheduler="sync")
-        b_computed = b
-        if not hasattr(b, "dtype"):
-            b = np.array(b, dtype="O")
-        if hasattr(b, "todense"):
-            b = b.todense()
-        if _not_empty(b):
-            assert b.dtype == b_original.dtype
-        if check_shape:
-            assert_eq_shape(b_original.shape, b.shape, check_nan=False)
-    else:
-        if not hasattr(b, "dtype"):
-            b = np.array(b, dtype="O")
-        bdt = getattr(b, "dtype", None)
+    a, adt, a_meta, a_computed = _get_dt_meta_computed(
+        a, check_shape=check_shape, check_graph=check_graph
+    )
+    b, bdt, b_meta, b_computed = _get_dt_meta_computed(
+        b, check_shape=check_shape, check_graph=check_graph
+    )
 
     if str(adt) != str(bdt):
         # Ignore check for matching length of flexible dtypes, since Array._meta

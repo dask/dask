@@ -133,13 +133,19 @@ def test_get_dependencies_many():
     assert s == []
 
 
+def test_get_dependencies_task_none():
+    # Regression test for https://github.com/dask/distributed/issues/2756
+    dsk = {"foo": None}
+    assert get_dependencies(dsk, task=dsk["foo"]) == set()
+
+
 def test_get_deps():
     """
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
     {'a': set(), 'b': {'a'}, 'c': {'b'}}
-    >>> dependents
+    >>> dependents  # doctest: +SKIP
     {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dsk = {

@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+import builtins
 import operator
 from functools import partial, wraps
 from itertools import product, repeat
@@ -19,10 +18,9 @@ from .ufunc import sqrt
 from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
-from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch, deepmap
+from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec
 from .. import config
 
 # Generic functions to support chunks of different types
@@ -529,7 +527,7 @@ def numel(x, **kwargs):
 
 def nannumel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(~np.isnan(x), **kwargs)
+    return chunk.sum(~(np.isnan(x)), **kwargs)
 
 
 def mean_chunk(
@@ -946,15 +944,17 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
-        raise TypeError("axis must be either `None` or int, " "got '{0}'".format(axis))
+        raise TypeError("axis must be either `None` or int, got '{0}'".format(axis))
 
     for ax in axis:
         chunks = x.chunks[ax]
         if len(chunks) > 1 and np.isnan(chunks).any():
             raise ValueError(
                 "Arg-reductions do not work with arrays that have "
-                "unknown chunksizes.  At some point in your computation "
-                "this array lost chunking information"
+                "unknown chunksizes. At some point in your computation "
+                "this array lost chunking information.\n\n"
+                "A possible solution is with \n"
+                "  x.compute_chunk_sizes()"
             )
 
     # Map chunk across all blocks
