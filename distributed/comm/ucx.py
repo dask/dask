@@ -21,7 +21,8 @@ import os
 
 os.environ.setdefault("UCX_RNDV_SCHEME", "put_zcopy")
 os.environ.setdefault("UCX_MEMTYPE_CACHE", "n")
-os.environ.setdefault("UCX_TLS", "tcp,rc,cuda_copy,cuda_ipc")
+os.environ.setdefault("UCX_TLS", "tcp,sockcm,rc,cuda_copy,cuda_ipc")
+os.environ.setdefault("UCX_SOCKADDR_TLS_PRIORITY", "sockcm")
 
 logger = logging.getLogger(__name__)
 MAX_MSG_LOG = 23
