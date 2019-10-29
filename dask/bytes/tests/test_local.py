@@ -8,7 +8,6 @@ import pytest
 from toolz import concat, valmap, partial
 
 from dask import compute
-from dask.compatibility import PY_VERSION
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
@@ -258,8 +257,6 @@ fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_compression(fmt, blocksize):
-    if fmt == "zip" and PY_VERSION < "3.6":
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")
     files2 = valmap(compress[fmt], files)
@@ -311,8 +308,6 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize("mode", ["rt", "rb"])
 @pytest.mark.parametrize("fmt", list(compr))
 def test_open_files_compression(mode, fmt):
-    if fmt == "zip" and PY_VERSION < "3.6":
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")
     files2 = valmap(compress[fmt], files)
