@@ -140,7 +140,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     chunksize : int, str, optional
         If an integer is passed, it means the number of rows per index
         partition to use. If a str is passed, it's parsed with :func:`dask.utils.parse_bytes`.
-        Leaving chunksize and npartitions unspecifed will create partitions with 128MiB.
+        Leaving chunksize and npartitions unspecifed will create partitions with a size defined
+        in the Dask config file.
     sort: bool
         Sort input first to obtain cleanly divided partitions or don't sort and
         don't get cleanly divided partitions
@@ -226,13 +227,6 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
     }
     return new_dd_object(dsk, name, data, divisions)
-
-
-def _infer_npartitions(data, chunksize):
-    """ Return the number of partitions based on an estimate of data size and the provided chunksize"""
-    partition_size = parse_bytes(chunksize)
-    mem_usage = total_mem_usage(data)
-    return int(ceil(mem_usage / partition_size))
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
