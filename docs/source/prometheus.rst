@@ -23,9 +23,7 @@ Available metrics are as following
 +---------------------------------------------+------------------------------------------------+-----------+--------+
 | dask_scheduler_clients                      | Number of clients connected.                   |    Yes    |        |
 +---------------------------------------------+------------------------------------------------+-----------+--------+
-| dask_scheduler_received_tasks               | Number of tasks received at scheduler.         |    Yes    |        |
-+---------------------------------------------+------------------------------------------------+-----------+--------+
-| dask_scheduler_unrunnable_tasks             | Number of unrunnable tasks at scheduler.       |    Yes    |        |
+| dask_scheduler_tasks                        | Number of tasks at scheduler.                  |    Yes    |        |
 +---------------------------------------------+------------------------------------------------+-----------+--------+
 | dask_worker_tasks                           | Number of tasks at worker.                     |           |  Yes   |
 +---------------------------------------------+------------------------------------------------+-----------+--------+

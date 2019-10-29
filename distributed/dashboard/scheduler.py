@@ -240,25 +240,29 @@ class _PrometheusCollector(object):
         from prometheus_client.core import GaugeMetricFamily
 
         yield GaugeMetricFamily(
-            "dask_scheduler_workers",
-            "Number of workers connected.",
-            value=len(self.server.workers),
-        )
-        yield GaugeMetricFamily(
             "dask_scheduler_clients",
             "Number of clients connected.",
             value=len(self.server.clients),
         )
-        yield GaugeMetricFamily(
-            "dask_scheduler_received_tasks",
-            "Number of tasks received at scheduler",
-            value=len(self.server.tasks),
+
+        tasks = GaugeMetricFamily(
+            "dask_scheduler_workers",
+            "Number of workers known by scheduler.",
+            labels=["state"],
         )
-        yield GaugeMetricFamily(
-            "dask_scheduler_unrunnable_tasks",
-            "Number of unrunnable tasks at scheduler",
-            value=len(self.server.unrunnable),
+        tasks.add_metric(["connected"], len(self.server.workers))
+        tasks.add_metric(["saturated"], len(self.server.saturated))
+        tasks.add_metric(["idle"], len(self.server.idle))
+        yield tasks
+
+        tasks = GaugeMetricFamily(
+            "dask_scheduler_tasks",
+            "Number of tasks known by scheduler.",
+            labels=["state"],
         )
+        tasks.add_metric(["received"], len(self.server.tasks))
+        tasks.add_metric(["unrunnable"], len(self.server.unrunnable))
+        yield tasks
 
 
 class PrometheusHandler(RequestHandler):
