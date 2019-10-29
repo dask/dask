@@ -17,13 +17,6 @@ _base_envs:
 jobs:
   fast_finish: true
   include:
-    - env:
-      - ENV_FILE=continuous_integration/travis/travis-35.yaml
-      - *test
-      - *no_coverage
-      - *no_optimize
-      - *no_imports
-
     - env: &py36_env
       - PYTHON_VERSION=3.6
       - ENV_FILE=continuous_integration/travis/travis-36.yaml
