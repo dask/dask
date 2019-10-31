@@ -220,7 +220,7 @@ def test_from_bcolz_column_order():
 
 
 def test_from_pandas_dataframe():
-    from ....utils import M, ensure_dict, parse_bytes
+    from ....utils import parse_bytes
     from ...core import total_mem_usage
     from math import ceil
 
@@ -251,9 +251,9 @@ def test_from_pandas_dataframe():
 
     partition_size = parse_bytes("180")
     mem_usage = total_mem_usage(df)
-    print(f'partition_size : {partition_size}')
-    print(f'mem_usage : {mem_usage}')
-    print(f'npartitions : {int(ceil(mem_usage / partition_size))}')
+    print(f"partition_size : {partition_size}")
+    print(f"mem_usage : {mem_usage}")
+    print(f"npartitions : {int(ceil(mem_usage / partition_size))}")
 
     assert len(ddf.dask) == 11
     assert len(ddf.divisions) == len(ddf.dask) + 1
