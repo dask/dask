@@ -6,8 +6,9 @@ HAVE_PSUTIL = False
 
 try:
     import psutil
+
     HAVE_PSUTIL = True
-except ModuleNotFoundError:
+except ImportError:
     pass
 
 __all__ = ("cpu_count", "CPU_COUNT")
