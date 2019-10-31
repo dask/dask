@@ -165,9 +165,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         max = pd.to_timedelta(max)
         q = q.apply(lambda x: pd.to_timedelta(x))
 
-    part1 = typ(
-        [count, mean, std, min], index=["count", "mean", "std", "min"]
-    )
+    part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
     q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]
     if is_series_like(q) and typ != type(q):
