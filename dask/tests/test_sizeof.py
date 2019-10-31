@@ -121,3 +121,11 @@ def test_pyarrow_table():
     assert sizeof(empty.columns[0]) > 0
     assert sizeof(empty.columns[1]) > 0
     assert sizeof(empty.columns[2]) > 0
+
+
+def test_dict():
+    dct = {"level2": "long_value" * 100}
+    dct2 = {"level1": dct}
+    assert sizeof(dct) > sizeof({})
+    assert sizeof(dct2) > sizeof(dct)
+    assert sizeof(dct2) > sizeof(dct) + sizeof({})

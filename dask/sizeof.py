@@ -20,6 +20,11 @@ def sizeof_default(o):
     return getsizeof(o)
 
 
+@sizeof.register(dict)
+def sizeof_dict(o):
+    return getsizeof(o) + sum(map(sizeof, o.items()))
+
+
 @sizeof.register(list)
 @sizeof.register(tuple)
 @sizeof.register(set)
