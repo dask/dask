@@ -166,7 +166,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         q = q.apply(lambda x: pd.to_timedelta(x))
 
     part1 = typ(
-        [count.astype("float64"), mean, std, min], index=["count", "mean", "std", "min"]
+        [count, mean, std, min], index=["count", "mean", "std", "min"]
     )
 
     q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]

@@ -4951,8 +4951,7 @@ def quantile(df, q, method="default"):
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
-        series_typ = type(df._meta.to_series())
-        meta = series_typ(df._meta_nonempty).quantile(q)
+        meta = df._meta_nonempty.to_series().quantile(q)
     else:
         if is_series_like(df._meta):
             series_typ = type(df._meta)
