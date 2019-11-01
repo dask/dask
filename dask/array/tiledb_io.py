@@ -145,11 +145,7 @@ def to_tiledb(
     elif isinstance(uri, tiledb.Array):
         tdb = uri
         # sanity checks
-        if not (
-            (darray.shape == tdb.shape)
-            and (darray.dtype == tdb.dtype)
-            and (darray.ndim == tdb.ndim)
-        ):
+        if not ((darray.dtype == tdb.dtype) and (darray.ndim == tdb.ndim)):
             raise ValueError(
                 "Target TileDB array layout is not compatible with source array"
             )
