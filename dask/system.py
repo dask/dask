@@ -2,14 +2,10 @@ import math
 import os
 import sys
 
-HAVE_PSUTIL = False
-
 try:
     import psutil
-
-    HAVE_PSUTIL = True
 except ImportError:
-    pass
+    psutil = None
 
 __all__ = ("cpu_count", "CPU_COUNT")
 
@@ -26,7 +22,7 @@ def cpu_count():
     count = os.cpu_count()
 
     # Check CPU affinity if available
-    if HAVE_PSUTIL:
+    if psutil is not None:
         try:
             affinity_count = len(psutil.Process().cpu_affinity())
             if affinity_count > 0:
