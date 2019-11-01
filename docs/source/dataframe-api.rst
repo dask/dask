@@ -414,6 +414,15 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Resampling
+~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.tseries.resample
+
+.. autoclass:: Resampler
+   :members:
+   :inherited-members:
+
 Dask Metadata
 ~~~~~~~~~~~~~
 
