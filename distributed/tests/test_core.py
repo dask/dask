@@ -299,13 +299,14 @@ def test_rpc_inproc():
     yield check_rpc("inproc://", None)
 
 
-def test_rpc_inputs():
+@pytest.mark.asyncio
+async def test_rpc_inputs():
     L = [rpc("127.0.0.1:8884"), rpc(("127.0.0.1", 8884)), rpc("tcp://127.0.0.1:8884")]
 
     assert all(r.address == "tcp://127.0.0.1:8884" for r in L), L
 
     for r in L:
-        r.close_rpc()
+        await r.close_rpc()
 
 
 async def check_rpc_message_lifetime(*listen_args):

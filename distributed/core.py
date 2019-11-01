@@ -641,25 +641,29 @@ class rpc(object):
         return comm
 
     def close_comms(self):
-        @gen.coroutine
-        def _close_comm(comm):
+        async def _close_comm(comm):
             # Make sure we tell the peer to close
             try:
                 if not comm.closed():
-                    yield comm.write({"op": "close", "reply": False})
-                    yield comm.close()
+                    await comm.write({"op": "close", "reply": False})
+                    await comm.close()
             except EnvironmentError:
                 comm.abort()
 
+        tasks = []
         for comm in list(self.comms):
             if comm and not comm.closed():
                 # IOLoop.current().add_callback(_close_comm, comm)
                 task = asyncio.ensure_future(_close_comm(comm))
+                tasks.append(task)
         for comm in list(self._created):
             if comm and not comm.closed():
                 # IOLoop.current().add_callback(_close_comm, comm)
                 task = asyncio.ensure_future(_close_comm(comm))
+                tasks.append(task)
+
         self.comms.clear()
+        return tasks
 
     def __getattr__(self, key):
         async def send_recv_from_rpc(**kwargs):
@@ -685,13 +689,13 @@ class rpc(object):
         if self.status != "closed":
             rpc.active.discard(self)
         self.status = "closed"
-        self.close_comms()
+        return asyncio.gather(*self.close_comms())
 
     def __enter__(self):
         return self
 
     def __exit__(self, *args):
-        self.close_rpc()
+        asyncio.ensure_future(self.close_rpc())
 
     def __del__(self):
         if self.status != "closed":
@@ -744,7 +748,7 @@ class PooledRPCCall(object):
 
         return send_recv_from_rpc
 
-    def close_rpc(self):
+    async def close_rpc(self):
         pass
 
     # For compatibility with rpc()

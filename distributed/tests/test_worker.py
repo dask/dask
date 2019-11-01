@@ -173,7 +173,7 @@ def dont_test_delete_data_with_missing_worker(c, a, b):
     assert not c.has_what[bad]
     assert not c.has_what[a.address]
 
-    cc.close_rpc()
+    yield cc.close_rpc()
 
 
 @gen_cluster(client=True)
@@ -998,32 +998,27 @@ def test_worker_fds(s):
 
 
 @gen_cluster(nthreads=[])
-def test_service_hosts_match_worker(s):
+async def test_service_hosts_match_worker(s):
     pytest.importorskip("bokeh")
     from distributed.dashboard import BokehWorker
 
-    services = {("dashboard", ":0"): BokehWorker}
-
-    w = yield Worker(
+    async with Worker(
         s.address, services={("dashboard", ":0"): BokehWorker}, host="tcp://0.0.0.0"
-    )
-    sock = first(w.services["dashboard"].server._http._sockets.values())
-    assert sock.getsockname()[0] in ("::", "0.0.0.0")
-    yield w.close()
+    ) as w:
+        sock = first(w.services["dashboard"].server._http._sockets.values())
+        assert sock.getsockname()[0] in ("::", "0.0.0.0")
 
-    w = yield Worker(
+    async with Worker(
         s.address, services={("dashboard", ":0"): BokehWorker}, host="tcp://127.0.0.1"
-    )
-    sock = first(w.services["dashboard"].server._http._sockets.values())
-    assert sock.getsockname()[0] in ("::", "0.0.0.0")
-    yield w.close()
+    ) as w:
+        sock = first(w.services["dashboard"].server._http._sockets.values())
+        assert sock.getsockname()[0] in ("::", "0.0.0.0")
 
-    w = yield Worker(
+    async with Worker(
         s.address, services={("dashboard", 0): BokehWorker}, host="tcp://127.0.0.1"
-    )
-    sock = first(w.services["dashboard"].server._http._sockets.values())
-    assert sock.getsockname()[0] == "127.0.0.1"
-    yield w.close()
+    ) as w:
+        sock = first(w.services["dashboard"].server._http._sockets.values())
+        assert sock.getsockname()[0] == "127.0.0.1"
 
 
 @gen_cluster(nthreads=[])

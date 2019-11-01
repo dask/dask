@@ -221,7 +221,6 @@ class UCXConnector(Connector):
 
 
 class UCXListener(Listener):
-    # MAX_LISTENERS 256 in ucx-py
     prefix = UCXConnector.prefix
     comm_class = UCXConnector.comm_class
     encrypted = UCXConnector.encrypted
@@ -251,7 +250,7 @@ class UCXListener(Listener):
             ucx = UCX(
                 client_ep,
                 local_addr=self.address,
-                peer_addr=self.address,  # TODO: https://github.com/Akshay-Venkatesh/ucx-py/issues/111
+                peer_addr=self.address,
                 deserialize=self.deserialize,
             )
             if self.comm_handler:

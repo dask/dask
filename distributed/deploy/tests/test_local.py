@@ -1,3 +1,4 @@
+import asyncio
 from functools import partial
 import gc
 import subprocess
@@ -455,7 +456,7 @@ def test_silent_startup():
 
         if __name__ == "__main__":
             with LocalCluster(1, dashboard_address=None, scheduler_port=0):
-                sleep(1.5)
+                sleep(.1)
         """
 
     out = subprocess.check_output(
@@ -1004,3 +1005,16 @@ async def test_capture_security(cleanup, temporary):
     ) as cluster:
         async with Client(cluster, asynchronous=True) as client:
             assert client.security == cluster.security
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.version_info < (3, 7), reason="asyncio.all_tasks not implemented"
+)
+async def test_no_danglng_asyncio_tasks(cleanup):
+    start = asyncio.all_tasks()
+    async with LocalCluster(asynchronous=True, processes=False):
+        await asyncio.sleep(0.01)
+
+    tasks = asyncio.all_tasks()
+    assert tasks == start

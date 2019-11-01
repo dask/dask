@@ -2642,8 +2642,7 @@ class Scheduler(ServerNode):
                     "timeout.  Continuuing with restart process"
                 )
             finally:
-                for nanny in nannies:
-                    nanny.close_rpc()
+                await asyncio.gather(*[nanny.close_rpc() for nanny in nannies])
 
             await self.start()
 

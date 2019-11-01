@@ -74,7 +74,7 @@ class Cluster(object):
 
         for pc in self.periodic_callbacks.values():
             pc.stop()
-        self.scheduler_comm.close_rpc()
+        await self.scheduler_comm.close_rpc()
 
         self.status = "closed"
 

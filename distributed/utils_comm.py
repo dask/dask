@@ -84,7 +84,7 @@ async def gather_from_workers(who_has, rpc, close=True, serializers=None, who=No
                     response.update(r["data"])
         finally:
             for r in rpcs.values():
-                r.close_rpc()
+                await r.close_rpc()
 
         bad_addresses |= {v for k, v in rev.items() if k not in response}
         results.update(response)
@@ -148,7 +148,7 @@ async def scatter_to_workers(nthreads, data, rpc=rpc, report=True, serializers=N
         )
     finally:
         for r in rpcs.values():
-            r.close_rpc()
+            await r.close_rpc()
 
     nbytes = merge(o["nbytes"] for o in out)
 

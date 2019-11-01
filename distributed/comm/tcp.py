@@ -213,14 +213,13 @@ class TCP(Comm):
                 raise CommClosedError("aborted stream on truncated data")
             return msg
 
-    @gen.coroutine
-    def write(self, msg, serializers=None, on_error="message"):
+    async def write(self, msg, serializers=None, on_error="message"):
         stream = self.stream
         bytes_since_last_yield = 0
         if stream is None:
             raise CommClosedError
 
-        frames = yield to_frames(
+        frames = await to_frames(
             msg,
             serializers=serializers,
             on_error=on_error,
@@ -247,7 +246,7 @@ class TCP(Comm):
                     future = stream.write(frame)
                     bytes_since_last_yield += nbytes(frame)
                     if bytes_since_last_yield > 32e6:
-                        yield future
+                        await future
                         bytes_since_last_yield = 0
         except StreamClosedError as e:
             stream = None

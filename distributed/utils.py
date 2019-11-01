@@ -1365,6 +1365,6 @@ except TypeError:
 weakref.finalize(_offload_executor, _offload_executor.shutdown)
 
 
-@gen.coroutine
-def offload(fn, *args, **kwargs):
-    return (yield _offload_executor.submit(fn, *args, **kwargs))
+async def offload(fn, *args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_offload_executor, fn, *args, **kwargs)

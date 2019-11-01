@@ -1298,7 +1298,7 @@ class Client(Node):
                 with ignoring(TimeoutError):
                     await gen.with_timeout(timedelta(seconds=2), list(coroutines))
             with ignoring(AttributeError):
-                self.scheduler.close_rpc()
+                await self.scheduler.close_rpc()
             self.scheduler = None
 
         self.status = "closed"

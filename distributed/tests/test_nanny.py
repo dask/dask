@@ -115,7 +115,7 @@ def test_nanny_process_failure(c, s):
     assert not os.path.exists(second_dir)
     assert not os.path.exists(first_dir)
     assert first_dir != n.worker_dir
-    ww.close_rpc()
+    yield ww.close_rpc()
     s.stop()
 
 
