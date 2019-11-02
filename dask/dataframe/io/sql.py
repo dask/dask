@@ -132,7 +132,7 @@ def read_sql_table(
         kwargs["index_col"] = index_col.name
 
     if meta is None:
-        # derrive metadata from first few rows
+        # derive metadata from first few rows
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
 
