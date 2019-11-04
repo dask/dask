@@ -69,6 +69,7 @@ from .utils import (
     is_index_like,
     valid_divisions,
     hash_object_dispatch,
+    check_matching_columns,
 )
 
 no_default = "__no_default__"
@@ -3735,10 +3736,11 @@ class DataFrame(_Frame):
             whose merge key only appears in `left` DataFrame, "right_only" for
             observations whose merge key only appears in `right` DataFrame,
             and "both" if the observation’s merge key is found in both.
-        npartitions: int, None, or 'auto'
+        npartitions: int or None, optional
             The ideal number of output partitions. This is only utilised when
-            performing a hash_join (merging on columns only). If `None`
-            npartitions = max(lhs.npartitions, rhs.npartitions)
+            performing a hash_join (merging on columns only). If ``None`` then
+            ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
+            Default is ``None``.
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -4856,18 +4858,8 @@ def apply_and_enforce(*args, **kwargs):
         if not len(df):
             return meta
         if is_dataframe_like(df):
-            # Need nan_to_num otherwise nan comparison gives False
-            if not np.array_equal(
-                np.nan_to_num(meta.columns), np.nan_to_num(df.columns)
-            ):
-                raise ValueError(
-                    "The columns in the computed data do not match"
-                    " the columns in the provided metadata\n"
-                    "  Expected: %s\n"
-                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
-                )
-            else:
-                c = meta.columns
+            check_matching_columns(meta, df)
+            c = meta.columns
         else:
             c = meta.name
         return _rename(c, df)

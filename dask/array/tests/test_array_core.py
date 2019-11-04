@@ -20,7 +20,6 @@ import dask
 import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
-from dask.compatibility import PY_VERSION
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
@@ -3813,11 +3812,6 @@ def test_zarr_nocompute():
         assert a2.chunks == a.chunks
 
 
-@pytest.mark.skipif(
-    PY_VERSION < "3.6",
-    reason="Skipping TileDB with python 3.5 because the tiledb-py "
-    "conda-forge package is too old, and is not updatable.",
-)
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
@@ -3851,11 +3845,6 @@ def test_tiledb_roundtrip():
         assert a.chunks == tdb.chunks
 
 
-@pytest.mark.skipif(
-    PY_VERSION < "3.6",
-    reason="Skipping TileDB with python 3.5 because the tiledb-py "
-    "conda-forge package is too old, and is not updatable.",
-)
 def test_tiledb_multiattr():
     tiledb = pytest.importorskip("tiledb")
     dom = tiledb.Domain(

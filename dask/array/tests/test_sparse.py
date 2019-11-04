@@ -184,6 +184,7 @@ def test_html_repr():
 
     assert "COO" in text
     assert "sparse" in text
+    assert "Bytes" not in text
 
 
 def test_from_delayed_meta():
