@@ -137,9 +137,6 @@ class StringAccessor(Accessor):
     def cat(self, others=None, sep=None, na_rep=None):
         from .core import Series, Index
 
-        if others is None:
-            raise NotImplementedError("x.str.cat() with `others == None`")
-
         valid_types = (Series, Index, pd.Series, pd.Index)
         if isinstance(others, valid_types):
             others = [others]
