@@ -30,33 +30,30 @@ from distributed.utils_test import (  # noqa: F401
 
 
 @gen_cluster(nthreads=[])
-def test_nanny(s):
-    n = yield Nanny(s.address, nthreads=2, loop=s.loop)
+async def test_nanny(s):
+    async with Nanny(s.address, nthreads=2, loop=s.loop) as n:
+        async with rpc(n.address) as nn:
+            assert n.is_alive()
+            assert s.nthreads[n.worker_address] == 2
+            assert s.workers[n.worker_address].nanny == n.address
 
-    with rpc(n.address) as nn:
-        assert n.is_alive()
-        assert s.nthreads[n.worker_address] == 2
-        assert s.workers[n.worker_address].nanny == n.address
+            await nn.kill()
+            assert not n.is_alive()
+            assert n.worker_address not in s.nthreads
+            assert n.worker_address not in s.workers
 
-        yield nn.kill()
-        assert not n.is_alive()
-        assert n.worker_address not in s.nthreads
-        assert n.worker_address not in s.workers
+            await nn.kill()
+            assert not n.is_alive()
+            assert n.worker_address not in s.nthreads
+            assert n.worker_address not in s.workers
 
-        yield nn.kill()
-        assert not n.is_alive()
-        assert n.worker_address not in s.nthreads
-        assert n.worker_address not in s.workers
+            await nn.instantiate()
+            assert n.is_alive()
+            assert s.nthreads[n.worker_address] == 2
+            assert s.workers[n.worker_address].nanny == n.address
 
-        yield nn.instantiate()
-        assert n.is_alive()
-        assert s.nthreads[n.worker_address] == 2
-        assert s.workers[n.worker_address].nanny == n.address
-
-        yield nn.terminate()
-        assert not n.is_alive()
-
-    yield n.close()
+            await nn.terminate()
+            assert not n.is_alive()
 
 
 @gen_cluster(nthreads=[])

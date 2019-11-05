@@ -26,7 +26,7 @@ setup(
     url="https://distributed.dask.org",
     maintainer="Matthew Rocklin",
     maintainer_email="mrocklin@gmail.com",
-    python_requires=">=3.5",
+    python_requires=">=3.6",
     license="BSD",
     package_data={
         "": ["templates/index.html", "template.html"],
@@ -46,7 +46,6 @@ setup(
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Topic :: Scientific/Engineering",

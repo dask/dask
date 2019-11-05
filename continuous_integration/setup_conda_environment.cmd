@@ -24,7 +24,6 @@ call deactivate
     cloudpickle ^
     dask ^
     dill ^
-    futures ^
     lz4 ^
     ipykernel ^
     ipywidgets ^

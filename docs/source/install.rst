@@ -35,13 +35,9 @@ Notes
 -----
 
 **Note for Macports users:** There `is a known issue
-<https://trac.macports.org/ticket/50058>`_.  with python from macports that
+<https://trac.macports.org/ticket/50058>`_.  with Python from macports that
 makes executables be placed in a location that is not available by default. A
 simple solution is to extend the ``PATH`` environment variable to the location
-where python from macports install the binaries::
+where Python from macports install the binaries. For example, for Python 3.6::
 
-    $ export PATH=/opt/local/Library/Frameworks/Python.framework/Versions/3.5/bin:$PATH
-
-    or
-
-    $ export PATH=/opt/local/Library/Frameworks/Python.framework/Versions/2.7/bin:$PATH
+    $ export PATH=/opt/local/Library/Frameworks/Python.framework/Versions/3.6/bin:$PATH

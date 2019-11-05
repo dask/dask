@@ -697,6 +697,12 @@ class rpc(object):
     def __exit__(self, *args):
         asyncio.ensure_future(self.close_rpc())
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self.close_rpc()
+
     def __del__(self):
         if self.status != "closed":
             rpc.active.discard(self)

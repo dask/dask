@@ -865,7 +865,7 @@ def gen_cluster(
         nthreads = ncores
 
     worker_kwargs = merge(
-        {"memory_limit": system.MEMORY_LIMIT, "death_timeout": 5}, worker_kwargs
+        {"memory_limit": system.MEMORY_LIMIT, "death_timeout": 10}, worker_kwargs
     )
 
     def _(func):

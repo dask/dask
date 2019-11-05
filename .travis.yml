@@ -6,8 +6,7 @@ dist: trusty
 
 env:
   matrix:
-    - PYTHON=3.5.4 TESTS=true COVERAGE=true PACKAGES="python-blosc lz4" CRICK=true
-    - PYTHON=3.6 TESTS=true PACKAGES="scikit-learn lz4" TORNADO=5
+    - PYTHON=3.6 TESTS=true COVERAGE=true PACKAGES="scikit-learn lz4" TORNADO=5 CRICK=true
     - PYTHON=3.7 TESTS=true PACKAGES="scikit-learn python-snappy python-blosc" TORNADO=6
 
 matrix:

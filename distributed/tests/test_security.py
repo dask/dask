@@ -196,9 +196,9 @@ def test_connection_args():
     basic_checks(ctx)
     if sys.version_info >= (3, 6):
         supported_ciphers = ctx.get_ciphers()
-        tls_12_ciphers = [c for c in supported_ciphers if c["protocol"] == "TLSv1.2"]
+        tls_12_ciphers = [c for c in supported_ciphers if "TLSv1.2" in c["description"]]
         assert len(tls_12_ciphers) == 1
-        tls_13_ciphers = [c for c in supported_ciphers if c["protocol"] == "TLSv1.3"]
+        tls_13_ciphers = [c for c in supported_ciphers if "TLSv1.3" in c["description"]]
         if len(tls_13_ciphers):
             assert len(tls_13_ciphers) == 3
 
@@ -249,9 +249,9 @@ def test_listen_args():
     basic_checks(ctx)
     if sys.version_info >= (3, 6):
         supported_ciphers = ctx.get_ciphers()
-        tls_12_ciphers = [c for c in supported_ciphers if c["protocol"] == "TLSv1.2"]
+        tls_12_ciphers = [c for c in supported_ciphers if "TLSv1.2" in c["description"]]
         assert len(tls_12_ciphers) == 1
-        tls_13_ciphers = [c for c in supported_ciphers if c["protocol"] == "TLSv1.3"]
+        tls_13_ciphers = [c for c in supported_ciphers if "TLSv1.3" in c["description"]]
         if len(tls_13_ciphers):
             assert len(tls_13_ciphers) == 3
 

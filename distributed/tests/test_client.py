@@ -3322,10 +3322,7 @@ def test_get_foo_lost_keys(c, s, u, v, w):
 
 @pytest.mark.slow
 @gen_cluster(
-    client=True,
-    Worker=Nanny,
-    worker_kwargs={"death_timeout": "500ms"},
-    clean_kwargs={"threads": False, "processes": False},
+    client=True, Worker=Nanny, clean_kwargs={"threads": False, "processes": False}
 )
 def test_bad_tasks_fail(c, s, a, b):
     f = c.submit(sys.exit, 0)
