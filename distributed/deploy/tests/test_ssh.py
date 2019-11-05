@@ -2,6 +2,7 @@ import pytest
 
 pytest.importorskip("asyncssh")
 
+import dask
 from dask.distributed import Client
 from distributed.deploy.ssh import SSHCluster
 from distributed.utils_test import loop  # noqa: F401
@@ -55,3 +56,21 @@ def test_defer_to_old(loop):
             from distributed.deploy.old_ssh import SSHCluster as OldSSHCluster
 
             assert isinstance(c, OldSSHCluster)
+
+
+@pytest.mark.asyncio
+async def test_config_inherited_by_subprocess(loop):
+    def f(x):
+        return dask.config.get("foo") + 1
+
+    with dask.config.set(foo=100):
+        async with SSHCluster(
+            ["127.0.0.1"] * 2,
+            connect_options=dict(known_hosts=None),
+            asynchronous=True,
+            scheduler_options={"port": 0, "idle_timeout": "5s"},
+            worker_options={"death_timeout": "5s"},
+        ) as cluster:
+            async with Client(cluster, asynchronous=True) as client:
+                result = await client.submit(f, 1)
+                assert result == 101

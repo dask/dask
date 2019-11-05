@@ -20,6 +20,7 @@ from distributed.proctitle import (
     enable_proctitle_on_children,
     enable_proctitle_on_current,
 )
+from distributed.utils import deserialize_for_cli
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
@@ -358,6 +359,11 @@ def main(
 
     with ignoring(TypeError, ValueError):
         name = int(name)
+
+    if "DASK_INTERNAL_INHERIT_CONFIG" in os.environ:
+        config = deserialize_for_cli(os.environ["DASK_INTERNAL_INHERIT_CONFIG"])
+        # Update the global config given priority to the existing global config
+        dask.config.update(dask.config.global_config, config, priority="old")
 
     nannies = [
         t(

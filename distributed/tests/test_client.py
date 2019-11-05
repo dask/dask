@@ -5654,5 +5654,17 @@ async def test_shutdown_localcluster(cleanup):
         assert lc.scheduler.status == "closed"
 
 
+@pytest.mark.asyncio
+async def test_config_inherited_by_subprocess(cleanup):
+    def f(x):
+        return dask.config.get("foo") + 1
+
+    with dask.config.set(foo=100):
+        async with LocalCluster(n_workers=1, asynchronous=True, processes=True) as lc:
+            async with Client(lc, asynchronous=True) as c:
+                result = await c.submit(f, 1)
+                assert result == 101
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401

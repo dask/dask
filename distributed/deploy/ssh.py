@@ -4,10 +4,13 @@ from typing import List
 import warnings
 import weakref
 
+import dask
+
 from .spec import SpecCluster, ProcessInterface
 from ..utils import cli_keywords
 from ..scheduler import Scheduler as _Scheduler
 from ..worker import Worker as _Worker
+from ..utils import serialize_for_cli
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,8 @@ class Worker(Process):
         self.proc = await self.connection.create_process(
             " ".join(
                 [
+                    'DASK_INTERNAL_INHERIT_CONFIG="%s"'
+                    % serialize_for_cli(dask.config.global_config),
                     sys.executable,
                     "-m",
                     self.worker_module,
@@ -112,7 +117,7 @@ class Worker(Process):
 
 
 class Scheduler(Process):
-    """ A Remote Dask Scheduler controled by SSH
+    """ A Remote Dask Scheduler controlled by SSH
 
     Parameters
     ----------
@@ -141,7 +146,13 @@ class Scheduler(Process):
 
         self.proc = await self.connection.create_process(
             " ".join(
-                [sys.executable, "-m", "distributed.cli.dask_scheduler"]
+                [
+                    'DASK_INTERNAL_INHERIT_CONFIG="%s"'
+                    % serialize_for_cli(dask.config.global_config),
+                    sys.executable,
+                    "-m",
+                    "distributed.cli.dask_scheduler",
+                ]
                 + cli_keywords(self.kwargs, cls=_Scheduler)
             )
         )
@@ -191,7 +202,7 @@ def SSHCluster(
     The SSHCluster function deploys a Dask Scheduler and Workers for you on a
     set of machine addresses that you provide.  The first address will be used
     for the scheduler while the rest will be used for the workers (feel free to
-    repeat the first hostname if you want to have the scheudler and worker
+    repeat the first hostname if you want to have the scheduler and worker
     co-habitate one machine.)
 
     You may configure the scheduler and workers by passing
