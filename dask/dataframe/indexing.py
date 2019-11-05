@@ -7,7 +7,7 @@ import pandas as pd
 
 from .core import new_dd_object, Series
 from ..array.core import Array
-from .utils import is_index_like
+from .utils import is_index_like, meta_nonempty
 from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -127,9 +127,8 @@ class _LocIndexer(_IndexerBase):
         Convert index-indexer for partial time string slicing
         if obj.index is DatetimeIndex / PeriodIndex
         """
-        iindexer = _maybe_partial_time_string(
-            self.obj._meta_nonempty.index, iindexer, kind="loc"
-        )
+        idx = meta_nonempty(self.obj._meta.index)
+        iindexer = _maybe_partial_time_string(idx, iindexer, kind="loc")
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):

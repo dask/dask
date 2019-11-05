@@ -383,7 +383,14 @@ def meta_nonempty_object(x):
 @meta_nonempty.register(pd.DataFrame)
 def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
-    data = {i: _nonempty_series(x.iloc[:, i], idx=idx) for i, c in enumerate(x.columns)}
+    dt_s_dict = dict()
+    data = dict()
+    for i, c in enumerate(x.columns):
+        series = x.iloc[:, i]
+        dt = series.dtype
+        if dt not in dt_s_dict:
+            dt_s_dict[dt] = _nonempty_series(x.iloc[:, i], idx=idx)
+        data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
     return res
