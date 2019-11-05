@@ -17,7 +17,7 @@ dependencies:
   - tiledb-py
   - fsspec>=0.5.1
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
   # other -- IO
   - bcolz
   - blosc
