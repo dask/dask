@@ -20,7 +20,6 @@ import dask
 import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
-from dask.compatibility import PY_VERSION
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
@@ -3021,7 +3020,7 @@ def test_cumulative():
     assert_eq(da.nancumsum(x, axis=0), nancumsum(np.arange(20)))
     assert_eq(da.nancumprod(x, axis=0), nancumprod(np.arange(20)))
 
-    a = np.random.random((20))
+    a = np.random.random(20)
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
@@ -3519,7 +3518,7 @@ def test_concatenate_errs():
 
 def test_stack_errs():
     with pytest.raises(ValueError) as e:
-        da.stack([da.zeros((2,), chunks=(2))] * 10 + [da.zeros((3,), chunks=(3))] * 10)
+        da.stack([da.zeros((2,), chunks=2)] * 10 + [da.zeros((3,), chunks=3)] * 10)
 
     assert "shape" in str(e.value).lower()
     assert "(2,)" in str(e.value)
@@ -3813,11 +3812,6 @@ def test_zarr_nocompute():
         assert a2.chunks == a.chunks
 
 
-@pytest.mark.skipif(
-    PY_VERSION < "3.6",
-    reason="Skipping TileDB with python 3.5 because the tiledb-py "
-    "conda-forge package is too old, and is not updatable.",
-)
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
@@ -3851,11 +3845,6 @@ def test_tiledb_roundtrip():
         assert a.chunks == tdb.chunks
 
 
-@pytest.mark.skipif(
-    PY_VERSION < "3.6",
-    reason="Skipping TileDB with python 3.5 because the tiledb-py "
-    "conda-forge package is too old, and is not updatable.",
-)
 def test_tiledb_multiattr():
     tiledb = pytest.importorskip("tiledb")
     dom = tiledb.Domain(

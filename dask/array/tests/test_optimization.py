@@ -356,7 +356,7 @@ def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove)
         assert optimize_slices({"a": orig}) == {"a": final}
 
 
-@pytest.mark.xfail(reason="blockwise fusion doesnt respect this, which is ok")
+@pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")
 def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)

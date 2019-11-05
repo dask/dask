@@ -50,7 +50,7 @@ from ..highlevelgraph import HighLevelGraph
 # corresponding support in ``apply_concat_apply``. Specifically, this function
 # operates on matching partitions of frame-like objects passed as varargs.
 #
-# After the inital chunk step, the passed index is implicitly passed along to
+# After the initial chunk step, the passed index is implicitly passed along to
 # subsequent operations as the index of the parittions. Groupby operations on
 # the individual partitions can then access the index via the ``levels``
 # parameter of the ``groupby`` function. The correct argument is determined by
@@ -156,6 +156,8 @@ def _groupby_raise_unaligned(df, **kwargs):
         # since we're coming through apply, `by` will be a tuple.
         # Pandas treats tuples as a single key, and lists as multiple keys
         # We want multiple keys
+        if isinstance(by, str):
+            by = [by]
         kwargs.update(by=list(by))
     return df.groupby(**kwargs)
 
@@ -1784,3 +1786,37 @@ class SeriesGroupBy(_GroupBy):
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def agg(self, arg, split_every=None, split_out=1):
         return self.aggregate(arg, split_every=split_every, split_out=split_out)
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def value_counts(self, split_every=None, split_out=1):
+        return self._aca_agg(
+            token="value_counts",
+            func=M.value_counts,
+            aggfunc=_value_counts_aggregate,
+            split_every=split_every,
+            split_out=split_out,
+        )
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def unique(self, split_every=None, split_out=1):
+        name = self._meta.obj.name
+        return self._aca_agg(
+            token="unique",
+            func=M.unique,
+            aggfunc=_unique_aggregate,
+            aggregate_kwargs={"name": name},
+            split_every=split_every,
+            split_out=split_out,
+        )
+
+
+def _unique_aggregate(series_gb, name=None):
+    ret = pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
+    ret.index.names = series_gb.obj.index.names
+    return ret
+
+
+def _value_counts_aggregate(series_gb):
+    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    names = list(series_gb.obj.index.names)
+    return pd.Series(pd.concat(to_concat, names=names))

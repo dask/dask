@@ -130,6 +130,17 @@ def test_tokenize_numpy_scalar():
 
 
 @pytest.mark.skipif("not np")
+def test_tokenize_numpy_scalar_string_rep():
+    # Test tokenizing numpy scalars doesn't depend on their string representation
+    try:
+        np.set_string_function(lambda x: "foo")
+        assert tokenize(np.array(1)) != tokenize(np.array(2))
+    finally:
+        # Reset back to default
+        np.set_string_function(None)
+
+
+@pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
         np.array(["a", "aa", "aaa"], dtype=object)
@@ -519,7 +530,7 @@ def test_custom_collection():
     y = Tuple(dsk2, ["c", "d"])
     z = Tuple(dsk3, ["e", "f"])
 
-    # __slots__ defined on base mixin class propogates
+    # __slots__ defined on base mixin class propagates
     with pytest.raises(AttributeError):
         x.foo = 1
 
@@ -867,8 +878,7 @@ def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
     x3 = delayed(inc)(x2)
-
-    xx, = persist(x3)
+    (xx,) = persist(x3)
     assert isinstance(xx, Delayed)
     assert xx.key == x3.key
     assert len(xx.dask) == 1

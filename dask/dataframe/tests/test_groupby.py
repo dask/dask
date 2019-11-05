@@ -1,5 +1,6 @@
 import collections
 import warnings
+from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -42,8 +43,23 @@ def agg_func(request):
     return request.param
 
 
-def groupby_internal_repr():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+@pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
+def test_groupby_internal_repr_xfail():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+    ddf = dd.from_pandas(pdf, 3)
+
+    gp = pdf.groupby("y")["x"]
+    dp = ddf.groupby("y")["x"]
+    assert isinstance(dp.obj, dd.Series)
+    assert_eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby(pdf.y)["x"]
+    dp = ddf.groupby(ddf.y)["x"]
+    assert isinstance(dp.obj, dd.Series)
+
+
+def test_groupby_internal_repr():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     gp = pdf.groupby("y")
@@ -57,9 +73,6 @@ def groupby_internal_repr():
     dp = ddf.groupby("y")["x"]
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby("y")[["x"]]
     dp = ddf.groupby("y")[["x"]]
@@ -73,9 +86,6 @@ def groupby_internal_repr():
     dp = ddf.groupby(ddf.y)["x"]
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby(pdf.y)[["x"]]
     dp = ddf.groupby(ddf.y)[["x"]]
@@ -86,8 +96,8 @@ def groupby_internal_repr():
     assert_eq(dp.obj, gp.obj)
 
 
-def groupby_error():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+def test_groupby_error():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     with pytest.raises(KeyError):
@@ -103,24 +113,10 @@ def groupby_error():
         dp["A"]
     assert msg in str(err.value)
 
+    msg = "Columns not found: "
     with pytest.raises(KeyError) as err:
         dp[["x", "A"]]
     assert msg in str(err.value)
-
-
-def groupby_internal_head():
-    pdf = pd.DataFrame(
-        {"A": [1, 2] * 10, "B": np.random.randn(20), "C": np.random.randn(20)}
-    )
-    ddf = dd.from_pandas(pdf, 3)
-
-    assert_eq(ddf.groupby("A")._head().sum(), pdf.head().groupby("A").sum())
-
-    assert_eq(ddf.groupby(ddf["A"])._head().sum(), pdf.head().groupby(pdf["A"]).sum())
-
-    assert_eq(
-        ddf.groupby(ddf["A"] + 1)._head().sum(), pdf.head().groupby(pdf["A"] + 1).sum()
-    )
 
 
 def test_full_groupby():
@@ -1048,7 +1044,7 @@ def test_aggregate__single_element_groups(agg_func):
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
     """Aggregate reuses intermediates. For example, with sum, count, and mean
-    the sums and counts are only calculated once accross the graph and reused to
+    the sums and counts are only calculated once across the graph and reused to
     compute the mean.
     """
     from dask.dataframe.groupby import _build_agg_args
@@ -1496,6 +1492,19 @@ def test_groupby_unaligned_index():
         assert_eq(res, sol)
 
 
+def test_groupby_string_label():
+    df = pd.DataFrame({"foo": [1, 1, 4], "B": [2, 3, 4], "C": [5, 6, 7]})
+    ddf = dd.from_pandas(pd.DataFrame(df), npartitions=1)
+    ddf_group = ddf.groupby("foo")
+    result = ddf_group.get_group(1).compute()
+
+    expected = pd.DataFrame(
+        {"foo": [1, 1], "B": [2, 3], "C": [5, 6]}, index=pd.Index([0, 1])
+    )
+
+    tm.assert_frame_equal(result, expected)
+
+
 def test_groupby_dataframe_cum_caching():
     """Test caching behavior of cumulative operations on grouped dataframes.
 
@@ -1796,7 +1805,7 @@ def test_groupby_agg_custom__mode():
     # results from pandas in apply use return results as single-item lists
     def agg_mode(s):
         def impl(s):
-            res, = s.iloc[0]
+            (res,) = s.iloc[0]
 
             for (i,) in s.iloc[1:]:
                 res = res.add(i, fill_value=0)
@@ -2092,6 +2101,36 @@ def test_series_groupby_idxmax_skipna(skipna):
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
 
     assert_eq(result_pd, result_dd)
+
+
+@pytest.mark.skipif(
+    version.parse(pd.__version__) < version.parse("0.25.0"),
+    reason="'explode' is not implemented",
+)
+def test_groupby_unique():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    pd_gb = df.groupby("foo")["bar"].unique()
+    dd_gb = ddf.groupby("foo")["bar"].unique()
+
+    # Use explode because each DataFrame row is a list; equality fails
+    assert_eq(dd_gb.explode(), pd_gb.explode())
+
+
+def test_groupby_value_counts():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(4, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    pd_gb = df.groupby("foo")["bar"].value_counts()
+    dd_gb = ddf.groupby("foo")["bar"].value_counts()
+    assert_eq(dd_gb, pd_gb)
 
 
 @pytest.mark.parametrize(

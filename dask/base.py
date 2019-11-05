@@ -236,7 +236,7 @@ def _extract_graph_and_keys(vals):
     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
         graph = HighLevelGraph.merge(*graphs)
     else:
-        graph = merge(*graphs)
+        graph = merge(*map(ensure_dict, graphs))
 
     return graph, keys
 
@@ -775,7 +775,7 @@ def register_numpy():
     @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
-            return (str(x), x.dtype)
+            return (x.item(), x.dtype)
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (

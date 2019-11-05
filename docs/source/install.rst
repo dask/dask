@@ -76,6 +76,50 @@ Anaconda
 
 Dask is included by default in the `Anaconda distribution <https://www.anaconda.com/download>`_.
 
+Optional dependencies
+---------------------
+
+Specific functionality in Dask may require additional optional dependencies.
+For example, reading from Amazon S3 requires ``s3fs``.
+These optional dependencies and their minimum supported versions are listed below.
+
++-------------+----------+--------------------------------------------------------------+
+| Dependency  | Version  |                          Description                         |
++=============+==========+==============================================================+
+|    bokeh    | >=1.0.0  |                Visualizing dask diagnostics                  |
++-------------+----------+--------------------------------------------------------------+
+| cloudpickle | >=0.2.1  |              Pickling support for Python objects             |
++-------------+----------+--------------------------------------------------------------+
+|  cityhash   |          |                  Faster hashing of arrays                    |
++-------------+----------+--------------------------------------------------------------+
+| distributed | >=2.0    |               Distributed computing in Python                |
++-------------+----------+--------------------------------------------------------------+
+| fastparquet |          |         Storing and reading data from parquet files          |
++-------------+----------+--------------------------------------------------------------+
+|    fsspec   | >=0.5.1  |          Used for local, cluster and remote data IO          |
++-------------+----------+--------------------------------------------------------------+
+|    gcsfs    |          |        File-system interface to Google Cloud Storage         |
++-------------+----------+--------------------------------------------------------------+
+|  murmurhash |          |                   Faster hashing of arrays                   |
++-------------+----------+--------------------------------------------------------------+
+|    numpy    | >=1.13.0 |                   Required for dask.array                    |
++-------------+----------+--------------------------------------------------------------+
+|    pandas   | >=0.21.0 |                  Required for dask.dataframe                 |
++-------------+----------+--------------------------------------------------------------+
+|    partd    | >=0.3.10 |            Concurrent appendable key-value storage           |
++-------------+----------+--------------------------------------------------------------+
+|    psutil   |          |             Enables a more accurate CPU count                |
++-------------+----------+--------------------------------------------------------------+
+|    pyarrow  | >=0.14.0 |               Python library for Apache Arrow                |
++-------------+----------+--------------------------------------------------------------+
+|    s3fs     |          |                    Reading from Amazon S3                    |
++-------------+----------+--------------------------------------------------------------+
+|  sqlalchemy |          |            Writing and reading from SQL databases            |
++-------------+----------+--------------------------------------------------------------+
+|    toolz    | >=0.7.3  | Utility functions for iterators, functions, and dictionaries |
++-------------+----------+--------------------------------------------------------------+
+|   xxhash    |          |                  Faster hashing of arrays                    |
++-------------+----------+--------------------------------------------------------------+
 
 Test
 ----

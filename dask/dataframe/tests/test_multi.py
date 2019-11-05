@@ -1252,11 +1252,17 @@ def test_cheap_single_partition_merge_on_index():
     actual = aa.merge(bb, left_index=True, right_on="x", how="inner")
     expected = a.merge(b, left_index=True, right_on="x", how="inner")
 
+    # Workaround https://github.com/pandas-dev/pandas/issues/26925
+    # actual has the correct dtype for the index (Int64). Pandas as object-dtype
+    # for empty joins.
+    expected.index = expected.index.astype("int64")
+
     assert actual.known_divisions
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
+    expected.index = expected.index.astype("int64")
 
     assert actual.known_divisions
     assert_eq(actual, expected)
@@ -1963,3 +1969,31 @@ def test_multi_duplicate_divisions():
     r2 = sf1.merge(sf2, how="left", left_index=True, right_index=True)
 
     assert_eq(r1, r2)
+
+
+def test_merge_outer_empty():
+    # Issue #5470 bug reproducer
+    k_clusters = 3
+    df = pd.DataFrame(
+        {"user": ["A", "B", "C", "D", "E", "F"], "cluster": [1, 1, 2, 2, 3, 3]}
+    )
+    df = dd.from_pandas(df, npartitions=10)
+    empty_df = dd.from_pandas(pd.DataFrame(), npartitions=10)
+
+    for x in range(0, k_clusters + 1):
+        assert_eq(
+            dd.merge(empty_df, df[df.cluster == x], how="outer").compute(),
+            df[df.cluster == x].compute(),
+            check_index=False,
+        )
+
+
+def test_dtype_equality_warning():
+    # https://github.com/dask/dask/issues/5437
+    df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
+    df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
+
+    with pytest.warns(None) as r:
+        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+
+    assert len(r) == 0

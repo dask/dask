@@ -1,6 +1,5 @@
 import itertools
 import pickle
-from operator import getitem
 from functools import partial
 
 import pytest
@@ -14,8 +13,6 @@ from dask.optimization import (
     inline,
     inline_functions,
     functions_of,
-    fuse_getitem,
-    fuse_selections,
     fuse_linear,
     SubgraphCallable,
 )
@@ -305,27 +302,6 @@ def test_functions_of():
     assert functions_of(1) == set()
     assert functions_of(a) == set()
     assert functions_of((a,)) == set([a])
-
-
-def test_fuse_getitem():
-    def load(*args):
-        pass
-
-    dsk = {"x": (load, "store", "part", ["a", "b"]), "y": (getitem, "x", "a")}
-    dsk2 = fuse_getitem(dsk, load, 3)
-    dsk2, dependencies = cull(dsk2, "y")
-    assert dsk2 == {"y": (load, "store", "part", "a")}
-
-
-def test_fuse_selections():
-    def load(*args):
-        pass
-
-    dsk = {"x": (load, "store", "part", ["a", "b"]), "y": (getitem, "x", "a")}
-    merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
-    dsk2 = fuse_selections(dsk, getitem, load, merge)
-    dsk2, dependencies = cull(dsk2, "y")
-    assert dsk2 == {"y": (load, "store", "part", "a")}
 
 
 def test_inline_cull_dependencies():
@@ -1222,7 +1198,7 @@ def test_fuse_subgraphs():
     assert res == sol
 
     res = fuse(dsk, "inc-2", fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
@@ -1251,7 +1227,7 @@ def test_fuse_subgraphs():
     assert res in sols
 
     res = fuse(dsk, ["inc-2", "add-2"], fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(

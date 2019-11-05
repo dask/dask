@@ -8,6 +8,7 @@ from time import time, sleep
 import pytest
 
 import dask
+from dask.system import CPU_COUNT
 from dask.threaded import get
 from dask.utils_test import inc, add
 
@@ -107,6 +108,19 @@ def test_dont_spawn_too_many_threads():
     after = threading.active_count()
 
     assert after <= before + 8
+
+
+def test_dont_spawn_too_many_threads_CPU_COUNT():
+    before = threading.active_count()
+
+    dsk = {("x", i): (lambda: i,) for i in range(10)}
+    dsk["x"] = (sum, list(dsk))
+    for i in range(20):
+        get(dsk, "x")
+
+    after = threading.active_count()
+
+    assert after <= before + CPU_COUNT * 2
 
 
 def test_thread_safety():

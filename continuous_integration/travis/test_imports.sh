@@ -24,7 +24,7 @@ test_import () {
 }
 
 # Create an empty environment
-conda create -n test-imports python=$PYTHON
+conda create -n test-imports -c conda-forge python=$PYTHON_VERSION
 source activate test-imports
 
 (test_import "Core" "" "import dask, dask.threaded, dask.optimization") && \
