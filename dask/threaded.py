@@ -10,6 +10,7 @@ import threading
 from threading import current_thread, Lock
 
 from . import config
+from .system import CPU_COUNT
 from .local import get_async
 from .utils_test import inc, add  # noqa: F401
 
@@ -61,7 +62,7 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
         if pool is None:
             if num_workers is None and thread is main_thread:
                 if default_pool is None:
-                    default_pool = ThreadPool()
+                    default_pool = ThreadPool(CPU_COUNT)
                 pool = default_pool
             elif thread in pools and num_workers in pools[thread]:
                 pool = pools[thread][num_workers]
