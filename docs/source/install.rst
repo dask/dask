@@ -110,7 +110,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +-------------+----------+--------------------------------------------------------------+
 |    psutil   |          |             Enables a more accurate CPU count                |
 +-------------+----------+--------------------------------------------------------------+
-|    pyarrow  | >=0.9.0  |               Python library for Apache Arrow                |
+|    pyarrow  | >=0.14.0 |               Python library for Apache Arrow                |
 +-------------+----------+--------------------------------------------------------------+
 |    s3fs     |          |                    Reading from Amazon S3                    |
 +-------------+----------+--------------------------------------------------------------+

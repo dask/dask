@@ -18,7 +18,7 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
   # other -- IO
   - bcolz
   - blosc
