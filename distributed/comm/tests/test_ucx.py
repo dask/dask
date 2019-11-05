@@ -261,9 +261,6 @@ async def test_ping_pong_numba():
 
 @pytest.mark.parametrize("processes", [True, False])
 def test_ucx_localcluster(loop, processes):
-    if processes:
-        pytest.skip("Known bug, processes=True doesn't work currently")
-
     with LocalCluster(
         protocol="ucx",
         dashboard_address=None,

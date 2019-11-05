@@ -527,7 +527,7 @@ def check_client_server(
 @gen_test()
 def test_ucx_client_server():
     pytest.importorskip("distributed.comm.ucx")
-    import ucp
+    ucp = pytest.importorskip("ucp")
 
     addr = ucp.get_address()
     yield check_client_server("ucx://" + addr)
