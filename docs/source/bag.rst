@@ -62,7 +62,7 @@ reductions with little data moving between workers.
 
 Because the multiprocessing scheduler requires moving functions between multiple
 processes, we encourage that Dask Bag users also install the cloudpickle_ library to
-enable ths transfer of more complex functions.
+enable the transfer of more complex functions.
 
 .. _GIL: https://docs.python.org/3/glossary.html#term-gil
 .. _cloudpickle: https://github.com/cloudpipe/cloudpickle
