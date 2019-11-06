@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import weakref
+import warnings
 
 from tornado import locks
 from tornado.concurrent import Future
@@ -31,7 +32,11 @@ class Manager(object):
     def __init__(self):
         self.listeners = weakref.WeakValueDictionary()
         self.addr_suffixes = itertools.count(1)
-        self.ip = get_ip()
+        with warnings.catch_warnings():
+            # Avoid immediate warning for unreachable network
+            # (will still warn for other get_ip() calls when actually used)
+            warnings.simplefilter("ignore")
+            self.ip = get_ip()
         self.lock = threading.Lock()
 
     def add_listener(self, addr, listener):
