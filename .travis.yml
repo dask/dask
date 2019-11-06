@@ -54,6 +54,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *no_imports
+      if: type != pull_request OR commit_message =~ test-mindeps  # Skip on PRS unless the commit message contains "test-mindeps"
 
     - env:
       - ENV_FILE=continuous_integration/travis/travis-mindeps-bag-delayed.yaml
@@ -61,7 +62,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *no_imports
-
+      if: type != pull_request OR commit_message =~ test-mindeps  # Skip on PRS unless the commit message contains "test-mindeps"
 
     - env:
       - TEST_HDFS='true'
