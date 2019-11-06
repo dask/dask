@@ -49,11 +49,19 @@ jobs:
       os: osx
 
     - env:
-      - ENV_FILE=continuous_integration/travis/travis-reduced-deps.yaml
+      - ENV_FILE=continuous_integration/travis/travis-mindeps-array-dataframe.yaml
       - *test
       - *no_coverage
       - *no_optimize
       - *no_imports
+
+    - env:
+      - ENV_FILE=continuous_integration/travis/travis-mindeps-bag-delayed.yaml
+      - *test
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
+
 
     - env:
       - TEST_HDFS='true'
