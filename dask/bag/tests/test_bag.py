@@ -229,7 +229,9 @@ def test_fold():
     assert d.key == c.fold(binop, set.union, initial=set()).key
 
     d = db.from_sequence("hello")
-    assert set(d.fold(lambda a, b: a + b, initial="").compute()) == {"hello"}
+    assert set(d.fold(lambda a, b: "".join([a, b]), initial="").compute()) == set(
+        "hello"
+    )
 
     e = db.from_sequence([[1], [2], [3]], npartitions=2)
     assert set(e.fold(add, initial=[]).compute(scheduler="sync")) == {1, 2, 3}
