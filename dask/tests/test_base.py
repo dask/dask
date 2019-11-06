@@ -1006,17 +1006,16 @@ def test_callable_scheduler():
     assert called[0]
 
 
-# Don't apply the @delayed decorator here or it
-# will break when cloudpickle isn't installed
-def sleep_and_return(x):
-    time.sleep(0.5)
-    return x
-
-
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
+    pytest.importorskip("cloudpickle")
     # Regression test for issue #4082
-    f = delayed(sleep_and_return, pure=False)
+
+    @delayed
+    def f(x):
+        time.sleep(0.5)
+        return x
+
     a = [f(i) for i in range(5)]
     num_workers = 3
     with dask.config.set(num_workers=num_workers), Profiler() as prof:

@@ -13,8 +13,8 @@ test_import () {
     conda env remove -n test-imports > /dev/null 2>&1
 }
 
-# Note: in setup.py, bag and delayed require cloudpickle, but it's omitted here and in
-# travis-reduced-deps.yaml as it is only a dependency for real-life usage
+# Note: in setup.py, bag and delayed require cloudpickle, but it's omitted here as it is
+# only a dependency for real-life usage and unit tests
 test_import ""                                "import dask, dask.multiprocessing, dask.threaded, dask.optimization"
 test_import "toolz"                           "import dask.delayed"
 test_import "fsspec toolz partd"              "import dask.bag"

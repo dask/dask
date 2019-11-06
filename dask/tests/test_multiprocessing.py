@@ -172,16 +172,14 @@ def test_optimize_graph_false():
     assert len(keys) == 2
 
 
-# Don't apply the @delayed decorator here or it
-# will break when cloudpickle isn't installed
-def random_tuple():
-    return tuple(random.randint(0, 10000) for i in range(5))
-
-
+@requires_cloudpickle
 @pytest.mark.parametrize("random", [np.random, random])
 def test_random_seeds(random):
+    @delayed(pure=False)
+    def f():
+        return tuple(random.randint(0, 10000) for i in range(5))
+
     N = 10
-    f = delayed(random_tuple, pure=False)
     with dask.config.set(scheduler="processes"):
         (results,) = compute([f() for _ in range(N)])
 

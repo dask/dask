@@ -4,11 +4,10 @@ channels:
 dependencies:
   # required dependencies
   - python=3.6
-  # optional dependencies pulled in by pip install dask[array, bag, dataframe, delayed],
-  # minus cloudpickle which is a de facto dependency of bag and delayed but is not
-  # technically required.
+  # optional dependencies pulled in by pip install dask[array, bag, dataframe, delayed]
   - numpy=1.15
   - pandas=0.23
+  - cloudpickle
   - partd
   - fsspec
   - toolz

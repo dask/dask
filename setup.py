@@ -10,7 +10,6 @@ import versioneer
 extras_require = {
     "array": ["numpy >= 1.13.0", "toolz >= 0.7.3"],
     "bag": [
-        # Not strictly required, but any meaningful use of bag will de facto need it
         "cloudpickle >= 0.2.1",
         "fsspec >= 0.5.1",
         "toolz >= 0.7.3",
@@ -25,14 +24,10 @@ extras_require = {
     ],
     "distributed": ["distributed >= 2.0"],
     "diagnostics": ["bokeh >= 1.0.0"],
-    "delayed": [
-        "cloudpickle >= 0.2.1",  # Same as bag
-        "toolz >= 0.7.3"
-    ],
+    "delayed": ["cloudpickle >= 0.2.1", "toolz >= 0.7.3"],
 }
 extras_require["complete"] = sorted(
-    {"cloudpickle >= 0.2.1", "PyYaml"}
-    | {v for req in extras_require.values() for v in req}
+    {"PyYaml"} | {v for req in extras_require.values() for v in req}
 )
 
 packages = ['dask', 'dask.array', 'dask.bag', 'dask.bytes',

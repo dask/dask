@@ -38,11 +38,11 @@ maintainers::
 
 We also maintain other dependency sets for different subsets of functionality::
 
-   pip install "dask[array]"       # Install minimum requirements for dask array
-   pip install "dask[bag]"         # Install minimum requirements for dask bag
-   pip install "dask[dataframe]"   # Install minimum requirements for dask dataframe
-   pip install "dask[delayed]"     # Install minimum requirements for dask delayed
-   pip install "dask[distributed]" # Install minimum requirements for distributed dask
+   pip install "dask[array]"       # Install requirements for dask array
+   pip install "dask[bag]"         # Install requirements for dask bag
+   pip install "dask[dataframe]"   # Install requirements for dask dataframe
+   pip install "dask[delayed]"     # Install requirements for dask delayed
+   pip install "dask[distributed]" # Install requirements for distributed dask
 
 We have these options so that users of the lightweight core Dask scheduler
 aren't required to download the more exotic dependencies of the collections
