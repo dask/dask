@@ -7,6 +7,7 @@ from functools import partial
 from warnings import warn
 
 from . import config
+from .system import CPU_COUNT
 from .local import reraise, get_async  # TODO: get better get
 from .optimization import fuse, cull
 
@@ -179,7 +180,7 @@ def get(
         If True [default], `fuse` is applied to the graph before computation.
     """
     pool = pool or config.get("pool", None)
-    num_workers = num_workers or config.get("num_workers", None)
+    num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         context = get_context()
         pool = context.Pool(num_workers, initializer=initialize_worker_process)
