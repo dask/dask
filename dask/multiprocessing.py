@@ -32,7 +32,7 @@ except ImportError:
             return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
         except (pickle.PicklingError, AttributeError) as exc:
             raise ModuleNotFoundError(
-                "Please install cloudpickle to use the multiprocessing scheduler",
+                "Please install cloudpickle to use the multiprocessing scheduler"
             ) from exc
 
     _loads = pickle.loads
