@@ -15,4 +15,4 @@ from .utils import hash_object_dispatch, group_split_dispatch
 @meta_nonempty.register_lazy("cudf")
 @make_meta.register_lazy("cudf")
 def _register_cudf():
-    import dask_cudf  # noqa: F401
+    import cudf  # noqa: F401
