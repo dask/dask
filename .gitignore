@@ -10,6 +10,7 @@ continuous_integration/hdfs-initialized
 *.lock
 .#*
 .idea/
+.vscode/
 .pytest_cache/
 dask-worker-space/
 .vscode/

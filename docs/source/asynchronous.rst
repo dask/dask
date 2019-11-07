@@ -44,18 +44,24 @@ received information from the scheduler should now be ``await``'ed.
 
    result = await client.gather(future)
 
-If you want to reuse the same client in asynchronous and synchronous
-environments you can apply the ``asynchronous=True`` keyword at each method
-call.
+
+If you want to use an asynchronous function with a synchronous ``Client``
+(one made without the ``asynchronous=True`` keyword) then you can apply the
+``asynchronous=True`` keyword at each method call and use the ``Client.sync``
+function to run the asynchronous function:
 
 .. code-block:: python
+
+   from dask.distributed import Client
 
    client = Client()  # normal blocking client
 
    async def f():
-       futures = client.map(func, L)
-       results = await client.gather(futures, asynchronous=True)
-       return results
+       future = client.submit(lambda x: x + 1, 10)
+       result = await client.gather(future, asynchronous=True)
+       return result
+
+   client.sync(f)
 
 
 Python 2 Compatibility
