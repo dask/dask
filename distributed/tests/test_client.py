@@ -5437,6 +5437,15 @@ def test_tuple_keys(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_multiple_scatter(c, s, a, b):
+    for i in range(5):
+        x = c.scatter(1, direct=True)
+
+    x = yield x
+    x = yield x
+
+
+@gen_cluster(client=True)
 def test_map_large_kwargs_in_graph(c, s, a, b):
     np = pytest.importorskip("numpy")
     x = np.random.random(100000)
