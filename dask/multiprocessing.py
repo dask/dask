@@ -30,13 +30,10 @@ except ImportError:
     def _dumps(obj):
         try:
             return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
-        except (pickle.PicklingError, AttributeError):
-            warn(
-                "pickle failed; install cloudpickle to allow more objects "
-                "to be pickled",
-                UserWarning,
-            )
-            raise
+        except (pickle.PicklingError, AttributeError) as exc:
+            raise ModuleNotFoundError(
+                "Please install cloudpickle to use the multiprocessing scheduler",
+            ) from exc
 
     _loads = pickle.loads
 

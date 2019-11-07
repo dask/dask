@@ -3,7 +3,6 @@ import multiprocessing
 from operator import add
 import pickle
 import random
-import warnings
 
 import numpy as np
 
@@ -67,11 +66,9 @@ def bad():
 def test_errors_propagate():
     dsk = {"x": (bad,)}
 
-    try:
+    with pytest.raises(ValueError) as e:
         get(dsk, "x")
-    except Exception as e:
-        assert isinstance(e, ValueError)
-        assert "12345" in str(e)
+    assert "12345" in str(e.value)
 
 
 def test_remote_exception():
@@ -95,11 +92,9 @@ def test_lambda_with_cloudpickle():
 @not_cloudpickle
 def test_lambda_without_cloudpickle():
     dsk = {"x": 2, "y": (lambda x: x + 1, "x")}
-    with pytest.raises(UserWarning):
+    with pytest.raises(ModuleNotFoundError) as e:
         get(dsk, "y")
-    with warnings.catch_warnings(), pytest.raises(AttributeError):
-        warnings.filterwarnings("ignore")
-        get(dsk, "y")
+    assert "cloudpickle" in str(e.value)
 
 
 def lambda_result():
@@ -116,11 +111,9 @@ def test_lambda_results_with_cloudpickle():
 @not_cloudpickle
 def test_lambda_results_without_cloudpickle():
     dsk = {"x": (lambda_result,)}
-    with pytest.raises(UserWarning):
+    with pytest.raises(ModuleNotFoundError) as e:
         get(dsk, "x")
-    with warnings.catch_warnings(), pytest.raises(AttributeError):
-        warnings.filterwarnings("ignore")
-        get(dsk, "x")
+    assert "cloudpickle" in str(e.value)
 
 
 class NotUnpickleable(object):
