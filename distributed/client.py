@@ -1429,6 +1429,15 @@ class Client(Node):
             Higher priorities take precedence
         fifo_timeout: str timedelta (default '100ms')
             Allowed amount of time between calls to consider the same priority
+        resources: dict (defaults to {})
+            Defines the `resources` this job requires on the worker; e.g.
+            ``{'GPU': 2}``. See :doc:`worker resources <resources>` for details
+            on defining resources.
+        actor: bool (default False)
+            Whether this task should exist on the worker as a stateful actor.
+            See :doc:`actors` for additional details.
+        actors: bool (default False)
+            Alias for `actor`
 
         Examples
         --------
@@ -1531,6 +1540,9 @@ class Client(Node):
         workers: set, iterable of sets
             A set of worker hostnames on which computations may be performed.
             Leave empty to default to all workers (common case)
+        allow_other_workers: bool (defaults to False)
+            Used with `workers`. Indicates whether or not the computations
+            may be performed on workers that are not in the `workers` set(s).
         retries: int (default to 0)
             Number of allowed automatic retries if a task fails
         priority: Number
@@ -1538,6 +1550,16 @@ class Client(Node):
             Higher priorities take precedence
         fifo_timeout: str timedelta (default '100ms')
             Allowed amount of time between calls to consider the same priority
+        resources: dict (defaults to {})
+            Defines the `resources` each instance of this mapped task requires
+            on the worker; e.g. ``{'GPU': 2}``. See
+            :doc:`worker resources <resources>` for details on defining
+            resources.
+        actor: bool (default False)
+            Whether these tasks should exist on the worker as stateful actors.
+            See :doc:`actors` for additional details.
+        actors: bool (default False)
+            Alias for `actor`
         **kwargs: dict
             Extra keywords to send to the function.
             Large values will be included explicitly in the task graph.
@@ -2656,6 +2678,21 @@ class Client(Node):
             Higher priorities take precedence
         fifo_timeout: timedelta str (defaults to '60s')
             Allowed amount of time between calls to consider the same priority
+        traverse: bool (defaults to True)
+            By default dask traverses builtin python collections looking for
+            dask objects passed to ``compute``. For large collections this can
+            be expensive. If none of the arguments contain any dask objects,
+            set ``traverse=False`` to avoid doing this traversal.
+        resources: dict (defaults to {})
+            Defines the `resources` these tasks require on the worker. Can
+            specify global resources (``{'GPU': 2}``), or per-task resources
+            (``{'x': {'GPU': 1}, 'y': {'SSD': 4}}``), but not both.
+            See :doc:`worker resources <resources>` for details on defining
+            resources.
+        actors: bool or dict (default None)
+            Whether these tasks should exist on the worker as stateful actors.
+            Specified on a global (True/False) or per-task (``{'x': True,
+            'y': False}``) basis. See :doc:`actors` for additional details.
         **kwargs:
             Options to pass to the graph optimize calls
 
@@ -2791,7 +2828,17 @@ class Client(Node):
             Higher priorities take precedence
         fifo_timeout: timedelta str (defaults to '60s')
             Allowed amount of time between calls to consider the same priority
-        kwargs:
+        resources: dict (defaults to {})
+            Defines the `resources` these tasks require on the worker. Can
+            specify global resources (``{'GPU': 2}``), or per-task resources
+            (``{'x': {'GPU': 1}, 'y': {'SSD': 4}}``), but not both.
+            See :doc:`worker resources <resources>` for details on defining
+            resources.
+        actors: bool or dict (default None)
+            Whether these tasks should exist on the worker as stateful actors.
+            Specified on a global (True/False) or per-task (``{'x': True,
+            'y': False}``) basis. See :doc:`actors` for additional details.
+        **kwargs:
             Options to pass to the graph optimize calls
 
         Returns
