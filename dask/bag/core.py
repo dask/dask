@@ -81,6 +81,7 @@ from ..utils import (
     ensure_dict,
     ensure_bytes,
     ensure_unicode,
+    key_split,
 )
 from . import chunk
 
@@ -492,8 +493,7 @@ class Bag(DaskMethodsMixin):
         return type(self), (self.name, self.npartitions)
 
     def __str__(self):
-        name = self.name if len(self.name) < 10 else self.name[:7] + "..."
-        return "dask.bag<%s, npartitions=%d>" % (name, self.npartitions)
+        return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
 
     __repr__ = __str__
 

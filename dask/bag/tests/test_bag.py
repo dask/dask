@@ -180,6 +180,8 @@ def test_repr(func):
     assert str(b.npartitions) in func(b)
     assert b.name[:5] in func(b)
 
+    assert "from_sequence" in func(db.from_sequence(range(5)))
+
 
 def test_pluck():
     d = {("x", 0): [(1, 10), (2, 20)], ("x", 1): [(3, 30), (4, 40)]}
