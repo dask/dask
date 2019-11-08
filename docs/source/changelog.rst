@@ -1,6 +1,35 @@
 Changelog
 =========
 
+2.7.0 - 2019-11-08
+------------------
+
+This release drops support for Python 3.5
+
+-  Adds badges to README.rst [skip ci] (:pr:`3152`) `James Bourbeau`_
+-  Don't overwrite `self.address` if it is present (:pr:`3153`) `Gil Forsyth`_
+-  Remove outdated references to debug scheduler and worker bokeh pages. (:pr:`3160`) `darindf`_
+-  Update CONTRIBUTING.md (:pr:`3159`) `Jacob Tomlinson`_
+-  Add Prometheus metric for a worker's executing tasks count (:pr:`3163`) `darindf`_
+-  Update Prometheus documentation (:pr:`3165`) `darindf`_
+-  Fix Numba serialization when strides is None (:pr:`3166`) `Peter Andreas Entschev`_
+-  Await cluster in Adaptive.recommendations (:pr:`3168`) `Simon Boothroyd`_
+-  Support automatic TLS (:pr:`3164`) `Jim Crist`_
+-  Avoid swamping high-memory workers with data requests (:pr:`3071`) `Tom Augspurger`_
+-  Update UCX variables to use sockcm by default (:pr:`3177`) `Peter Andreas Entschev`_
+-  Get protocol in Nanny/Worker from scheduler address (:pr:`3175`) `Peter Andreas Entschev`_
+-  Add worker and tasks state for Prometheus data collection (:pr:`3174`) `darindf`_
+-  Use async def functions for offload to/from_frames (:pr:`3171`) `Mads R. B. Kristensen`_
+-  Subprocesses inherit the global dask config (:pr:`3192`) `Mads R. B. Kristensen`_
+-  XFail test_open_close_many_workers (:pr:`3194`) `Matthew Rocklin`_
+-  Drop Python 3.5 (:pr:`3179`) `James Bourbeau`_
+-  UCX: avoid double init after fork (:pr:`3178`) `Mads R. B. Kristensen`_
+-  Silence warning when importing while offline (:pr:`3203`) `James A. Bednar`_
+-  Adds docs to Client methods for resources, actors, and traverse (:pr:`2851`) `IPetrik`_
+-  Add test for concurrent scatter operations (:pr:`2244`) `Matthew Rocklin`_
+-  Expand async docs (:pr:`2293`) `Dave Hirschfeld`_
+-  Add PatchedDeviceArray to drop stride attribute for cupy<7.0 (:pr:`3198`) `Richard J Zamora`_
+
 2.6.0 - 2019-10-15
 ------------------
 
@@ -1332,3 +1361,7 @@ significantly without many new features.
 .. _`Philipp Rudiger`: https://github.com/philippjfr
 .. _`Jonathan De Troye`: https://github.com/detroyejr
 .. _`matthieubulte`: https://github.com/matthieubulte
+.. _`darindf`: https://github.com/darindf
+.. _`James A. Bednar`: https://github.com/jbednar
+.. _`IPetrik`: https://github.com/IPetrik
+.. _`Simon Boothroyd`: https://github.com/SimonBoothroyd
