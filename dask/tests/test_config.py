@@ -1,4 +1,3 @@
-import yaml
 import os
 import stat
 import sys
@@ -26,6 +25,8 @@ from dask.config import (
 )
 
 from dask.utils import tmpfile
+
+yaml = pytest.importorskip("yaml")
 
 
 def test_canonical_name():

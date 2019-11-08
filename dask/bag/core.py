@@ -1,13 +1,13 @@
 import io
 import itertools
 import math
+import operator
 import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from distutils.version import LooseVersion
 from functools import wraps, partial
-from operator import getitem
 from random import Random
 from urllib.request import urlopen
 
@@ -82,6 +82,7 @@ from ..utils import (
     ensure_bytes,
     ensure_unicode,
 )
+from . import chunk
 
 
 no_default = "__no__default__"
@@ -318,7 +319,7 @@ class StringAccessor(object):
         return sorted(set(dir(type(self)) + dir(str)))
 
     def _strmap(self, key, *args, **kwargs):
-        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
+        return self._bag.map(operator.methodcaller(key, *args, **kwargs))
 
     def __getattr__(self, key):
         try:
@@ -1085,22 +1086,9 @@ class Bag(DaskMethodsMixin):
 
     def var(self, ddof=0):
         """ Variance """
-
-        def var_chunk(seq):
-            squares, total, n = 0.0, 0.0, 0
-            for x in seq:
-                squares += x ** 2
-                total += x
-                n += 1
-            return squares, total, n
-
-        def var_aggregate(x):
-            squares, totals, counts = list(zip(*x))
-            x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
-            result = (x2 / n) - (x / n) ** 2
-            return result * n / (n - ddof)
-
-        return self.reduction(var_chunk, var_aggregate, split_every=False)
+        return self.reduction(
+            chunk.var_chunk, partial(chunk.var_aggregate, ddof=ddof), split_every=False
+        )
 
     def std(self, ddof=0):
         """ Standard deviation """
@@ -1328,9 +1316,7 @@ class Bag(DaskMethodsMixin):
                 for i in range(self.npartitions)
             }
 
-        def combine2(acc, x):
-            return combine(acc, x[1])
-
+        combine2 = partial(chunk.foldby_combine2, combine)
         depth = 0
         k = self.npartitions
         b = a
@@ -1661,7 +1647,7 @@ class Bag(DaskMethodsMixin):
                     k = int(new - last)
                 dsk[(split_name, i)] = (split, (self.name, i), k)
                 for jj in range(k):
-                    dsk[(new_name, j)] = (getitem, (split_name, i), jj)
+                    dsk[(new_name, j)] = (operator.getitem, (split_name, i), jj)
                     j += 1
                 last = new
 
@@ -1893,10 +1879,9 @@ def from_delayed(values):
 
 
 def chunk_distinct(seq, key=None):
-    key2 = key
     if key is not None and not callable(key):
-        key2 = lambda x: x[key]
-    return list(unique(seq, key=key2))
+        key = partial(chunk.getitem, key=key)
+    return list(unique(seq, key=key))
 
 
 def merge_distinct(seqs, key=None):
@@ -2332,7 +2317,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
 
-    b2 = b.map(lambda x: (hash(grouper(x)), x))
+    b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
     token = tokenize(b, grouper, hash, max_branch)
 
@@ -2430,10 +2415,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
     # Barrier
     barrier_token = "groupby-barrier-" + token
 
-    def barrier(args):
-        return 0
-
-    dsk3 = {barrier_token: (barrier, list(dsk2))}
+    dsk3 = {barrier_token: (chunk.barrier,) + tuple(dsk2)}
 
     # Collect groups
     name = "groupby-collect-" + token
