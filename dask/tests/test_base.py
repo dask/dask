@@ -583,7 +583,7 @@ def test_compute_no_opt():
     assert len([k for k in keys if "mul" in k[0]]) == 8
     assert len([k for k in keys if "add" in k[0]]) == 4
     assert (
-        len([k for k in keys if "add-from_sequence-mul" in k[0]]) == 4
+        len([k for k in keys if "add-mul" in k[0]]) == 4
     )  # See? Renamed
 
 
