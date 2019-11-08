@@ -1,6 +1,61 @@
 Changelog
 =========
 
+2.7.0 / 2019-11-08
+------------------
+
+This release drops support for Python 3.5
+
+Array
++++++
+
+-  Reuse code for assert_eq util method (:pr:`5496`) `Vijayant`_
+-  Update da.array to always return a dask array (:pr:`5510`) `James Bourbeau`_
+-  Skip transpose on trivial inputs (:pr:`5523`) `Ryan Abernathey`_
+-  Avoid NumPy scalar string representation in tokenize (:pr:`5527`) `James Bourbeau`_
+-  Remove unnecessary tiledb shape constraint (:pr:`5545`) `Norman Barker`_
+-  Removes bytes from sparse array HTML repr (:pr:`5556`) `James Bourbeau`_
+
+Core
+++++
+
+-  Drop Python 3.5 (:pr:`5528`) `James Bourbeau`_
+-  Update the use of fixtures in distributed tests (:pr:`5497`) `Matthew Rocklin`_
+-  Changed deprecated bokeh-port to dashboard-address (:pr:`5507`) `darindf`_
+-  Avoid updating with identical dicts in ensure_dict (:pr:`5501`) `James Bourbeau`_
+-  Test Upstream (:pr:`5516`) `Tom Augspurger`_
+-  Accelerate reverse_dict (:pr:`5479`) `Ryan Grout`_
+-  Update test_imports.sh (:pr:`5534`) `James Bourbeau`_
+-  Support cgroups limits on cpu count in multiprocess and threaded schedulers (:pr:`5499`) `Albert DeFusco`_
+-  Update minimum pyarrow version on CI (:pr:`5562`) `James Bourbeau`_
+-  Make cloudpickle optional (:pr:`5511`) `Guido Imperiale`_
+
+DataFrame
++++++++++
+
+-  Add an example of index_col usage (:pr:`3072`) `Bruno Bonfils`_
+-  Explicitly use iloc for row indexing (:pr:`5500`) `Krishan Bhasin`_
+-  Accept dask arrays on columns assignemnt (:pr:`5224`) `Henrique Ribeiro`-
+-  Implement unique and value_counts for SeriesGroupBy (:pr:`5358`) `Scott Sievert`_
+-  Add sizeof definition for pyarrow tables and columns (:pr:`5522`) `Richard J  Zamora`_
+-  Enable row-group task partitioning in pyarrow-based read_parquet (:pr:`5508`) `Richard J  Zamora`_
+-  Removes npartitions='auto' from dd.merge docstring (:pr:`5531`) `James Bourbeau`_
+-  Apply enforce error message shows non-overlapping columns. (:pr:`5530`) `Tom Augspurger`_
+-  Optimize meta_nonempty for repetitive dtypes (:pr:`5553`) `Petio Petrov`_
+-  Remove import of dask_cudf, which is now a part of cudf (:pr:`5568`) `Mads R. B. Kristensen`_
+
+Documentation
++++++++++++++
+
+-  Make capitalization more consistent in FAQ docs (:pr:`5512`) `Matthew Rocklin`_
+-  Add CONTRIBUTING.md (:pr:`5513`) `Jacob Tomlinson`_
+-  Document optional dependencies (:pr:`5456`) `Prithvi MK`_
+-  Update helm chart docs to reflect new chart repo (:pr:`5539`) `Jacob Tomlinson`_
+-  Add Resampler to API docs (:pr:`5551`) `James Bourbeau`_
+-  Fix typo in read_sql_table (:pr:`5554`) `Eric Dill`_
+-  Add adaptive deployments screencast [skip ci] (:pr:`5566`) `Matthew Rocklin`_
+
+
 2.6.0 / 2019-10-15
 ------------------
 
@@ -2595,3 +2650,15 @@ Other
 .. _`Ben Jeffery`: https://github.com/benjeffery
 .. _`Ryan Nazareth`: https://github.com/ryankarlos
 .. _`garanews`: https://github.com/garanews
+.. _`Vijayant`: https://github.com/VijayantSoni
+.. _`Ryan Abernathey`: https://github.com/rabernat
+.. _`Norman Barker`: https://github.com/normanb
+.. _`darindf`: https://github.com/darindf
+.. _`Ryan Grout`: https://github.com/groutr
+.. _`Krishan Bhasin`: https://github.com/KrishanBhasin
+.. _`Albert DeFusco`: https://github.com/AlbertDeFusco
+.. _`Bruno Bonfils`: https://github.com/asyd
+.. _`Petio Petrov`: https://github.com/petioptrv
+.. _`Mads R. B. Kristensen`: https://github.com/madsbk
+.. _`Prithvi MK`: https://github.com/pmk21
+.. _`Eric Dill`: https://github.com/ericdill
