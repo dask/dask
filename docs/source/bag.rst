@@ -60,7 +60,12 @@ great deal of inter-worker communication.  For common operations this is rarely
 an issue as most Dask Bag workflows are embarrassingly parallel or result in
 reductions with little data moving between workers.
 
+Because the multiprocessing scheduler requires moving functions between multiple
+processes, we encourage that Dask Bag users also install the cloudpickle_ library to
+enable the transfer of more complex functions.
+
 .. _GIL: https://docs.python.org/3/glossary.html#term-gil
+.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 
 
 Shuffle

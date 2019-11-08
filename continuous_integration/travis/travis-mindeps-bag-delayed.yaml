@@ -1,0 +1,16 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.6
+  # optional dependencies pulled in by pip install dask[bag, delayed]
+  - cloudpickle
+  - partd
+  - fsspec
+  - toolz
+  - numpy=1.15  # FIXME #5564
+  - pandas=0.23  # FIXME #5564
+  # test dependencies
+  - pytest
+  - pytest-xdist

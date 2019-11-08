@@ -3,10 +3,11 @@ import io
 import os
 import sys
 
-import psutil
 import pytest
 
 from dask.system import cpu_count
+
+psutil = pytest.importorskip("psutil")
 
 
 def test_cpu_count():
