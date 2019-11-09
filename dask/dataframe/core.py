@@ -717,7 +717,7 @@ Dask Name: {name}, {task} tasks""".format(
         2017-01-08    13.0
         2017-01-09    15.0
         2017-01-10    17.0
-        dtype: float64
+        Freq: D, dtype: float64
         """
         from .rolling import map_overlap
 
