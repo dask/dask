@@ -326,3 +326,10 @@ async def test_transpose(cleanup):
 
                 y = (x + x.T).sum()
                 await y
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("port", [0, 1234])
+async def test_ucx_protocol(cleanup, port):
+    async with Scheduler(protocol="ucx", port=port) as s:
+        assert s.address.startswith("ucx://")

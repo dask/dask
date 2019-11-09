@@ -241,7 +241,7 @@ def address_from_user_args(
     else:
         addr = ""
 
-    if protocol and "://" not in addr:
-        addr = protocol.rstrip("://") + "://" + addr
+    if protocol:
+        addr = protocol.rstrip("://") + "://" + addr.split("://")[-1]
 
     return addr
