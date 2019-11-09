@@ -21,7 +21,6 @@ import dask
 import ucp
 import numpy as np
 
-ucp.init(options=dask.config.get("ucx"), env_takes_precedence=True)
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +39,7 @@ def init_once():
     import ucp as _ucp
 
     ucp = _ucp
-    options = dask.config.get("ucx", default={})
-    ucp.init(options=options)
+    ucp.init(options=dask.config.get("ucx"), env_takes_precedence=True)
 
     # Find the function, `cuda_array()`, to use when allocating new CUDA arrays
     try:
