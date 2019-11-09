@@ -571,9 +571,15 @@ def test_repeat():
         assert all(concat(d.repeat(r).chunks))
 
 
+@pytest.mark.parametrize("a", [da.asarray([0, 1, 2]), [[1, 2], [3, 4]]])
+@pytest.mark.parametrize("reps", [2, (2, 2), (1, 2), (2, 1), (2, 3, 4, 0)])
+def test_tile_basic(a, reps):
+    assert_eq(np.tile(a, reps), da.tile(a, reps))
+
+
 @pytest.mark.parametrize("shape, chunks", [((10,), (1,)), ((10, 11, 13), (4, 5, 3))])
-@pytest.mark.parametrize("reps", [0, 1, 2, 3, 5])
-def test_tile(shape, chunks, reps):
+@pytest.mark.parametrize("reps", [0, 1, 2, 3, 5, (1,), (1, 2)])
+def test_tile_chunks(shape, chunks, reps):
     x = np.random.random(shape)
     d = da.from_array(x, chunks=chunks)
 
@@ -591,13 +597,29 @@ def test_tile_neg_reps(shape, chunks, reps):
 
 
 @pytest.mark.parametrize("shape, chunks", [((10,), (1,)), ((10, 11, 13), (4, 5, 3))])
-@pytest.mark.parametrize("reps", [[1], [1, 2]])
-def test_tile_array_reps(shape, chunks, reps):
+@pytest.mark.parametrize("reps", [0, (0,), (2, 0), (0, 3, 0, 4)])
+def test_tile_zero_reps(shape, chunks, reps):
     x = np.random.random(shape)
     d = da.from_array(x, chunks=chunks)
 
-    with pytest.raises(NotImplementedError):
-        da.tile(d, reps)
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
+
+
+@pytest.mark.parametrize("a", [da.asarray([[[]]]), da.asarray([[], []])])
+@pytest.mark.parametrize("reps", [2, (3, 2, 5)])
+def test_tile_empty_array(a, reps):
+    assert_eq(np.tile(a, reps), da.tile(a, reps))
+
+
+@pytest.mark.parametrize(
+    "shape", [(3,), (2, 3), (3, 4, 3), (3, 2, 3), (4, 3, 2, 4), (2, 2)]
+)
+@pytest.mark.parametrize("reps", [(2,), (1, 2), (2, 1), (2, 2), (2, 3, 2), (3, 2)])
+def test_tile_np_kroncompare_examples(shape, reps):
+    x = np.random.random(shape)
+    d = da.asarray(x)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
 skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
