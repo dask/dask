@@ -21,7 +21,7 @@ jobs:
       - PYTHON_VERSION=3.6
       - ENV_FILE=continuous_integration/travis/travis-36.yaml
       - *test_and_lint
-      - *coverage
+      - *no_coverage
       - *no_optimize
       - *imports
 
@@ -29,7 +29,7 @@ jobs:
       - PYTHON_VERSION=3.7
       - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
-      - *no_coverage
+      - *coverage
       - *no_optimize
       - *imports
       - *array_function
@@ -38,7 +38,7 @@ jobs:
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - ENV_FILE=continuous_integration/travis/travis-37-dev.yaml
       - *test_and_lint
-      - *no_coverage
+      - *coverage
       - *no_optimize
       - *no_imports
       - *array_function
