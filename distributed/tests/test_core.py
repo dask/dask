@@ -255,7 +255,7 @@ async def check_rpc(listen_addr, rpc_addr=None, listen_args=None, connection_arg
     if rpc_addr is None:
         rpc_addr = server.address
 
-    with rpc(rpc_addr, connection_args=connection_args) as remote:
+    async with rpc(rpc_addr, connection_args=connection_args) as remote:
         response = await remote.ping()
         assert response == b"pong"
         assert remote.comms
@@ -324,7 +324,7 @@ async def check_rpc_message_lifetime(*listen_args):
         await asyncio.sleep(0.01)
         assert time() < start + 1
 
-    with rpc(server.address) as remote:
+    async with rpc(server.address) as remote:
         obj = CountedObject()
         res = await remote.echo(x=to_serialize(obj))
         assert isinstance(res["result"], CountedObject)
@@ -366,7 +366,7 @@ async def check_rpc_with_many_connections(listen_arg):
     server = Server({"ping": pingpong})
     server.listen(listen_arg)
 
-    with rpc(server.address) as remote:
+    async with rpc(server.address) as remote:
         for i in range(10):
             await g()
 
@@ -392,15 +392,14 @@ async def check_large_packets(listen_arg):
     server.listen(listen_arg)
 
     data = b"0" * int(200e6)  # slightly more than 100MB
-    conn = rpc(server.address)
-    result = await conn.echo(x=data)
-    assert result == data
+    async with rpc(server.address) as conn:
+        result = await conn.echo(x=data)
+        assert result == data
 
-    d = {"x": data}
-    result = await conn.echo(x=d)
-    assert result == d
+        d = {"x": data}
+        result = await conn.echo(x=d)
+        assert result == d
 
-    conn.close_comms()
     server.stop()
 
 
@@ -419,7 +418,7 @@ async def check_identity(listen_arg):
     server = Server({})
     server.listen(listen_arg)
 
-    with rpc(server.address) as remote:
+    async with rpc(server.address) as remote:
         a = await remote.identity()
         b = await remote.identity()
         assert a["type"] == "Server"
@@ -707,11 +706,11 @@ def test_rpc_serialization(loop):
         server = Server({"echo": echo_serialize})
         server.listen("tcp://")
 
-        with rpc(server.address, serializers=["msgpack"]) as r:
+        async with rpc(server.address, serializers=["msgpack"]) as r:
             with pytest.raises(TypeError):
                 await r.echo(x=to_serialize(inc))
 
-        with rpc(server.address, serializers=["msgpack", "pickle"]) as r:
+        async with rpc(server.address, serializers=["msgpack", "pickle"]) as r:
             result = await r.echo(x=to_serialize(inc))
             assert result == {"result": inc}
 
