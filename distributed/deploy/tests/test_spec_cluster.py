@@ -430,7 +430,9 @@ async def test_MultiWorker(cleanup):
             assert len(cluster.worker_spec) == 2
             await client.wait_for_workers(4)
 
-            assert "workers=4" in repr(cluster)
+            while "workers=4" not in repr(cluster):
+                await asyncio.sleep(0.1)
+
             workers_line = re.search("(Workers.+)", cluster._widget_status()).group(1)
             assert re.match("Workers.*<td>4</td>", workers_line)
 
