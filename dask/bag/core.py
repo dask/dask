@@ -1543,10 +1543,10 @@ class Bag(DaskMethodsMixin):
         >>> df = b.to_dataframe()
 
         >>> df.compute()
-           balance     name
-        0      100    Alice
-        1      200      Bob
-        0      300  Charlie
+              name  balance
+        0    Alice      100
+        1      Bob      200
+        0  Charlie      300
         """
         import pandas as pd
         import dask.dataframe as dd
