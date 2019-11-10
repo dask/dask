@@ -149,12 +149,12 @@ def percentile(a, q, interpolation="linear", method="default"):
     return Array(graph, name2, chunks=((len(q),),), dtype=dtype)
 
 
-def median(x, interpolation='linear'):
+def median(x, interpolation="linear"):
     """
     Implements an approximate version of the median function.
     See :func:`percentile` for more detail.
     """
-    return percentile(x, 50, interpolation=interpolation)
+    return percentile(x, 50, interpolation=interpolation, method="tdigest")
 
 
 def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):

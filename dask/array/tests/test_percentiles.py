@@ -52,15 +52,19 @@ def test_percentile(method):
         )
 
 
+@pytest.mark.skipif(not crick, reason="Requires crick")
 def test_median():
     rng = np.random.RandomState(42)
-    n = 1000
+    n = int(10e3)
     x = rng.rand(n)
     d = da.from_array(x, chunks=n // 10)
 
     assert_eq(d.median(), da.median(d))
-    assert_eq(da.percentile(d, 50), da.median(d))
-    assert np.abs(da.median(d).compute() - np.median(x)) < 0.07
+    assert_eq(da.percentile(d, 50, method="tdigest"), da.median(d))
+    diff = np.abs(d.median().compute() - np.median(x))
+    rel_error = diff / np.median(x)
+    assert rel_error < 2e-3
+    assert diff < 1e-3
 
 
 @pytest.mark.skip
