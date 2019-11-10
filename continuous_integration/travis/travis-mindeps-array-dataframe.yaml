@@ -1,0 +1,15 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.6
+  # optional dependencies pulled in by pip install dask[array, dataframe]
+  - numpy=1.15
+  - pandas=0.23
+  - partd
+  - fsspec
+  - toolz
+  # test dependencies
+  - pytest
+  - pytest-xdist

@@ -1,6 +1,39 @@
 Presentations On Dask
 =====================
+
+* PyCon Korea 2019, August 2019
+
+  * `Adapting from Spark to Dask: what to expect (18 minutes)
+    <https://www.youtube.com/watch?v=tx7qTHSlHKw>`__
     
+* SciPy 2019, July 2019
+
+  * `Refactoring the SciPy Ecosystem for Heterogeneous Computing (29 minutes)
+    <https://www.youtube.com/watch?v=Q0DsdiY-jiw>`__
+  * `Renewable Power Forecast Generation with Dask & Visualization with Bokeh (31 minutes)
+    <https://www.youtube.com/watch?v=tYGcicSruck>`__
+  * `Efficient Atmospheric Analogue Selection with Xarray and Dask (18 minutes)
+    <https://www.youtube.com/watch?v=gdHiGsGUh3o>`__
+  * `Better and Faster Hyper Parameter Optimization with Dask (27 minutes)
+    <https://www.youtube.com/watch?v=x67K9FiPFBQ>`__
+  * `Dask image:A Library for Distributed Image Processing (22 minutes)
+    <https://www.youtube.com/watch?v=XGUS174vvLs>`__
+    
+* EuroPython 2019, July 2019
+
+  * `Distributed Multi-GPU Computing with Dask, CuPy and RAPIDS (29 minutes)
+    <https://www.youtube.com/watch?v=en2zdTT-Vwk>`__
+
+* SciPy 2018, July 2018
+
+  * `Scalable Machine Learning with Dask (30 minutes)
+    <https://www.youtube.com/watch?v=ccfsbuqsjgI>`__
+
+* PyCon 2018, May 2018
+
+  * `Democratizing Distributed Computing with Dask and JupyterHub (32 minutes)
+    <https://www.youtube.com/watch?v=Iq72dt1gO9c>`__
+
 * AMS & ESIP, January 2018
 
   * `Pangeo quick demo: Dask, XArray, Zarr on the cloud with JupyterHub (3 minutes)

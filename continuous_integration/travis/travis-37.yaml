@@ -1,0 +1,56 @@
+# This job includes coverage
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.7.*
+  - numpy=1.17.*
+  - pandas=0.25.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  - tiledb-py
+  - fsspec>=0.5.1
+  - sqlalchemy
+  - pyarrow>=0.14.0
+  - coverage
+  # other -- IO
+  - bcolz
+  - blosc
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - s3fs
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed==2.0.1
+  - graphviz
+  - ipython
+  - lz4
+  - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - pandas-datareader
+  - pip
+  - pip:
+      - cityhash
+      - mmh3
+      - xxhash
