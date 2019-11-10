@@ -571,10 +571,13 @@ def test_repeat():
         assert all(concat(d.repeat(r).chunks))
 
 
-@pytest.mark.parametrize("a", [da.asarray([0, 1, 2]), [[1, 2], [3, 4]]])
 @pytest.mark.parametrize("reps", [2, (2, 2), (1, 2), (2, 1), (2, 3, 4, 0)])
-def test_tile_basic(a, reps):
-    assert_eq(np.tile(a, reps), da.tile(a, reps))
+def test_tile_basic(reps):
+    a = da.asarray([0, 1, 2])
+    b = [[1, 2], [3, 4]]
+
+    assert_eq(np.tile(a.compute(), reps), da.tile(a, reps))
+    assert_eq(np.tile(b, reps), da.tile(b, reps))
 
 
 @pytest.mark.parametrize("shape, chunks", [((10,), (1,)), ((10, 11, 13), (4, 5, 3))])
@@ -605,10 +608,13 @@ def test_tile_zero_reps(shape, chunks, reps):
     assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
-@pytest.mark.parametrize("a", [da.asarray([[[]]]), da.asarray([[], []])])
+@pytest.mark.parametrize("shape, chunks", [((1, 1, 0), (1, 1, 0)), ((2, 0), (1, 0))])
 @pytest.mark.parametrize("reps", [2, (3, 2, 5)])
-def test_tile_empty_array(a, reps):
-    assert_eq(np.tile(a, reps), da.tile(a, reps))
+def test_tile_empty_array(shape, chunks, reps):
+    x = np.empty(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
 @pytest.mark.parametrize(
