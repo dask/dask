@@ -2755,6 +2755,9 @@ Dask Name: {name}, {task} tasks""".format(
             n=n,
         )
 
+    def median(self):
+        return da.median(self)
+
     @derived_from(pd.Series)
     def nsmallest(self, n=5, split_every=None):
         return aca(

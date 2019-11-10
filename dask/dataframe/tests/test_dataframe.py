@@ -4111,3 +4111,11 @@ def test_pop():
     assert s.name == "y"
     assert ddf.columns == ["x"]
     assert_eq(ddf, df[["x"]])
+
+
+def test_median():
+    N = int(10e3)
+    rng = np.random.RandomState(42)
+    s = pd.Series(rng.rand(N))
+    ds = dd.from_pandas(s, npartitions=N // 10)
+    assert ds.median().compute() == pytest.approx(s.median(), rel=0.002)
