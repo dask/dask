@@ -349,6 +349,19 @@ class Nanny(ServerNode):
         else:
             return "OK"
 
+    @property
+    def _psutil_process(self):
+        pid = self.process.process.pid
+        try:
+            proc = self._psutil_process_obj
+        except AttributeError:
+            self._psutil_process_obj = psutil.Process(pid)
+
+        if self._psutil_process_obj.pid != pid:
+            self._psutil_process_obj = psutil.Process(pid)
+
+        return self._psutil_process_obj
+
     def memory_monitor(self):
         """ Track worker's memory.  Restart if it goes above terminate fraction """
         if self.status != "running":
@@ -357,7 +370,7 @@ class Nanny(ServerNode):
         if process is None:
             return
         try:
-            proc = psutil.Process(process.pid)
+            proc = self._psutil_process
             memory = proc.memory_info().rss
         except (ProcessLookupError, psutil.NoSuchProcess, psutil.AccessDenied):
             return
