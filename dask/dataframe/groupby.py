@@ -2,7 +2,6 @@ import collections
 import itertools as it
 import operator
 import warnings
-import inspect
 
 import numpy as np
 import pandas as pd
@@ -290,7 +289,7 @@ def _groupby_aggregate(df, aggfunc=None, levels=None, **kwargs):
 def _apply_chunk(df, *index, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
-    dropna = kwargs.pop("dropna")
+    dropna = kwargs.pop("dropna", None)
     if dropna is not None:
         g = _groupby_raise_unaligned(df, by=index, dropna=dropna)
     else:
@@ -1035,14 +1034,16 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        # Set self.dropna to {"dropna": True/False} if the argument is supported
-        # (e.g cudf). Otherwise, set self.dropna={}
+        # Set self.dropna to {"dropna": True/False} if the argument was passed.
+        # Otherwise, set self.dropna={}
         dropna = kwargs.pop("dropna", None)
         self.dropna = {}
-        if dropna is not None and  "dropna" in inspect.getfullargspec(self.obj._meta.groupby)[0]:
+        if dropna is not None:
             self.dropna["dropna"] = dropna
 
-        self._meta = self.obj._meta.groupby(index_meta, group_keys=group_keys, **self.dropna)
+        self._meta = self.obj._meta.groupby(
+            index_meta, group_keys=group_keys, **self.dropna
+        )
 
     @property
     def _meta_nonempty(self):
@@ -1063,9 +1064,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(
-            index_meta, group_keys=self.group_keys, **self.dropna
-        )
+        grouped = sample.groupby(index_meta, group_keys=self.group_keys, **self.dropna)
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(
@@ -1092,12 +1091,16 @@ class _GroupBy(object):
             if not isinstance(self.index, list)
             else [self.obj] + self.index,
             chunk=_apply_chunk,
-            chunk_kwargs=dict(chunk=func, columns=columns, **chunk_kwargs, **self.dropna),
+            chunk_kwargs=dict(
+                chunk=func, columns=columns, **chunk_kwargs, **self.dropna
+            ),
             aggregate=_groupby_aggregate,
             meta=meta,
             token=token,
             split_every=split_every,
-            aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels, **aggregate_kwargs, **self.dropna),
+            aggregate_kwargs=dict(
+                aggfunc=aggfunc, levels=levels, **aggregate_kwargs, **self.dropna
+            ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
         )
