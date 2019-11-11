@@ -1,6 +1,8 @@
 import logging
 import socket
 
+from dask.sizeof import sizeof
+
 from .. import protocol
 from ..utils import get_ip, get_ipv6, nbytes, offload
 
@@ -31,9 +33,10 @@ async def to_frames(msg, serializers=None, on_error="message", context=None):
             logger.exception(e)
             raise
 
-    res = await offload(_to_frames)
-
-    return res
+    if sizeof(msg) > FRAME_OFFLOAD_THRESHOLD:
+        return await offload(_to_frames)
+    else:
+        return _to_frames()
 
 
 async def from_frames(frames, deserialize=True, deserializers=None):
