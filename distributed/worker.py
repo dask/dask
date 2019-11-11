@@ -829,7 +829,7 @@ class Worker(ServerNode):
                 break
             except EnvironmentError:
                 logger.info("Waiting to connect to: %26s", self.scheduler.address)
-                await gen.sleep(0.1)
+                await asyncio.sleep(0.1)
             except gen.TimeoutError:
                 logger.info("Timed out when connecting to scheduler")
         if response["status"] != "OK":
@@ -1997,7 +1997,7 @@ class Worker(ServerNode):
                 else:
                     # Exponential backoff to avoid hammering scheduler/worker
                     self.repetitively_busy += 1
-                    await gen.sleep(0.100 * 1.5 ** self.repetitively_busy)
+                    await asyncio.sleep(0.100 * 1.5 ** self.repetitively_busy)
 
                     # See if anyone new has the data
                     await self.query_who_has(dep)
@@ -2586,7 +2586,7 @@ class Worker(ServerNode):
                 del k, v
                 total += weight
                 count += 1
-                await gen.sleep(0)
+                await asyncio.sleep(0)
                 memory = proc.memory_info().rss
                 if total > need and memory > target:
                     # Issue a GC to ensure that the evicted data is actually

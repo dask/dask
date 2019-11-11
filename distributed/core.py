@@ -464,7 +464,7 @@ class Server(object):
                                 handler(**merge(extra, msg))
                         else:
                             logger.error("odd message %s", msg)
-                    await gen.sleep(0)
+                    await asyncio.sleep(0)
 
                 for func in every_cycle:
                     func()
@@ -492,7 +492,7 @@ class Server(object):
             if not self._comms:
                 break
             else:
-                yield gen.sleep(0.05)
+                yield asyncio.sleep(0.05)
         yield [comm.close() for comm in self._comms]  # then forcefully close
         for cb in self._ongoing_coroutines:
             cb.cancel()
@@ -500,7 +500,7 @@ class Server(object):
             if all(cb.cancelled() for c in self._ongoing_coroutines):
                 break
             else:
-                yield gen.sleep(0.01)
+                yield asyncio.sleep(0.01)
 
         self._event_finished.set()
 

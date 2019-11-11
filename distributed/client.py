@@ -942,7 +942,7 @@ class Client(Node):
             address = self.cluster.scheduler_address
         elif self.scheduler_file is not None:
             while not os.path.exists(self.scheduler_file):
-                await gen.sleep(0.01)
+                await asyncio.sleep(0.01)
             for i in range(10):
                 try:
                     with open(self.scheduler_file) as f:
@@ -950,7 +950,7 @@ class Client(Node):
                     address = cfg["address"]
                     break
                 except (ValueError, KeyError):  # JSON file not yet flushed
-                    await gen.sleep(0.01)
+                    await asyncio.sleep(0.01)
         elif self._start_arg is None:
             from .deploy import LocalCluster
 
@@ -976,7 +976,7 @@ class Client(Node):
             while not self.cluster.workers or len(self.cluster.scheduler.workers) < len(
                 self.cluster.workers
             ):
-                await gen.sleep(0.01)
+                await asyncio.sleep(0.01)
 
             address = self.cluster.scheduler_address
 
@@ -1017,7 +1017,7 @@ class Client(Node):
                     break
                 except EnvironmentError:
                     # Wait a bit before retrying
-                    await gen.sleep(0.1)
+                    await asyncio.sleep(0.1)
                     timeout = deadline - self.loop.time()
             else:
                 logger.error(
@@ -1092,7 +1092,7 @@ class Client(Node):
     async def _wait_for_workers(self, n_workers=0):
         info = await self.scheduler.identity()
         while n_workers and len(info["workers"]) < n_workers:
-            await gen.sleep(0.1)
+            await asyncio.sleep(0.1)
             info = await self.scheduler.identity()
 
     def wait_for_workers(self, n_workers=0):
@@ -1946,7 +1946,7 @@ class Client(Node):
                 start = time()
                 while not nthreads:
                     if nthreads is not None:
-                        await gen.sleep(0.1)
+                        await asyncio.sleep(0.1)
                     if time() > start + timeout:
                         raise gen.TimeoutError("No valid workers found")
                     nthreads = await self.scheduler.ncores(workers=workers)
@@ -2280,7 +2280,7 @@ class Client(Node):
         >>> async def print_state(dask_scheduler):  # doctest: +SKIP
         ...    while True:
         ...        print(dask_scheduler.status)
-        ...        await gen.sleep(1)
+        ...        await asyncio.sleep(1)
 
         >>> c.run(print_state, wait=False)  # doctest: +SKIP
 
@@ -2370,7 +2370,7 @@ class Client(Node):
         >>> async def print_state(dask_worker):  # doctest: +SKIP
         ...    while True:
         ...        print(dask_worker.status)
-        ...        await gen.sleep(1)
+        ...        await asyncio.sleep(1)
 
         >>> c.run(print_state, wait=False)  # doctest: +SKIP
         """

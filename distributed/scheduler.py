@@ -1271,7 +1271,7 @@ class Scheduler(ServerNode):
                 self.worker_send(worker, {"op": "close"})
             for i in range(20):  # wait a second for send signals to clear
                 if self.workers:
-                    await gen.sleep(0.05)
+                    await asyncio.sleep(0.05)
                 else:
                     break
 
@@ -2494,7 +2494,7 @@ class Scheduler(ServerNode):
         """
         start = time()
         while not self.workers:
-            await gen.sleep(0.2)
+            await asyncio.sleep(0.2)
             if time() > start + timeout:
                 raise gen.TimeoutError("No workers found")
 
@@ -2649,7 +2649,7 @@ class Scheduler(ServerNode):
             self.log_event([client, "all"], {"action": "restart", "client": client})
             start = time()
             while time() < start + 10 and len(self.workers) < n_workers:
-                await gen.sleep(0.01)
+                await asyncio.sleep(0.01)
 
             self.report({"op": "restart"})
 
@@ -3292,7 +3292,7 @@ class Scheduler(ServerNode):
                     else:
                         response = function(self, state)
                     await comm.write(response)
-                    await gen.sleep(interval)
+                    await asyncio.sleep(interval)
             except (EnvironmentError, CommClosedError):
                 pass
             finally:

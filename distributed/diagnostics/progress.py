@@ -1,9 +1,9 @@
+import asyncio
 from collections import defaultdict
 import logging
 from timeit import default_timer
 
 from toolz import groupby, valmap
-from tornado import gen
 
 from .plugin import SchedulerPlugin
 from ..utils import key_split, key_split_group, log_errors, tokey
@@ -76,7 +76,7 @@ class Progress(SchedulerPlugin):
         keys = self.keys
 
         while not keys.issubset(self.scheduler.tasks):
-            await gen.sleep(0.05)
+            await asyncio.sleep(0.05)
 
         tasks = [self.scheduler.tasks[k] for k in keys]
 
@@ -164,7 +164,7 @@ class MultiProgress(Progress):
         keys = self.keys
 
         while not keys.issubset(self.scheduler.tasks):
-            await gen.sleep(0.05)
+            await asyncio.sleep(0.05)
 
         tasks = [self.scheduler.tasks[k] for k in keys]
 

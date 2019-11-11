@@ -683,7 +683,7 @@ def test_tls_reject_certificate():
 
     # Sanity check
     comm = yield connect(
-        listener.contact_address, timeout=0.5, connection_args={"ssl_context": cli_ctx}
+        listener.contact_address, timeout=2, connection_args={"ssl_context": cli_ctx}
     )
     yield comm.close()
 
@@ -696,7 +696,7 @@ def test_tls_reject_certificate():
     with pytest.raises(EnvironmentError) as excinfo:
         yield connect(
             listener.contact_address,
-            timeout=0.5,
+            timeout=2,
             connection_args={"ssl_context": cli_ctx},
         )
     # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028

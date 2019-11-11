@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod, abstractproperty
+import asyncio
 from datetime import timedelta
 import logging
 import weakref
@@ -224,7 +225,7 @@ async def connect(addr, timeout=None, deserialize=True, connection_args=None):
         except EnvironmentError as e:
             error = str(e)
             if time() < deadline:
-                await gen.sleep(0.01)
+                await asyncio.sleep(0.01)
                 logger.debug("sleeping on connect")
             else:
                 _raise(error)

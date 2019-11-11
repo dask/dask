@@ -394,7 +394,7 @@ def map_varying(itemslists):
 
 
 async def geninc(x, delay=0.02):
-    await gen.sleep(delay)
+    await asyncio.sleep(delay)
     return x + 1
 
 
@@ -410,7 +410,7 @@ if sys.version_info >= (3, 5):
     compile_snippet(
         """
         async def asyncinc(x, delay=0.02):
-            await gen.sleep(delay)
+            await asyncio.sleep(delay)
             return x + 1
         """
     )
@@ -813,7 +813,7 @@ async def start_cluster(
     while len(s.workers) < len(nthreads) or any(
         comm.comm is None for comm in s.stream_comms.values()
     ):
-        await gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         if time() - start > 5:
             await asyncio.gather(*[w.close(timeout=1) for w in workers])
             await s.close(fast=True)
@@ -939,7 +939,7 @@ def gen_cluster(
                             if all(c.closed() for c in Comm._instances):
                                 break
                             else:
-                                await gen.sleep(0.05)
+                                await asyncio.sleep(0.05)
                         else:
                             L = [c for c in Comm._instances if not c.closed()]
                             Comm._instances.clear()
@@ -1063,7 +1063,7 @@ def wait_for(predicate, timeout, fail_func=None, period=0.001):
 async def async_wait_for(predicate, timeout, fail_func=None, period=0.001):
     deadline = time() + timeout
     while not predicate():
-        await gen.sleep(period)
+        await asyncio.sleep(period)
         if time() > deadline:
             if fail_func is not None:
                 fail_func()
