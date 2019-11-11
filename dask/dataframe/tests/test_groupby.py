@@ -2187,3 +2187,23 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
                 lambda series: series - series.mean()
             ),
         )
+
+
+def test_groupby_dropna_cudf():
+
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8, 9],
+            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]
+        },
+        index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
+    )
+    ddf = dask_cudf.from_cudf(df, npartitions=3)
+
+    assert_eq(
+        ddf.groupby("a", dropna=False).b.sum(),
+        df.groupby("a", dropna=False).b.sum()
+    )
