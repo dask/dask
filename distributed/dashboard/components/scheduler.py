@@ -113,7 +113,7 @@ class Occupancy(DashboardComponent):
                 tools="",
                 id="bk-occupancy-plot",
                 x_axis_type="datetime",
-                **kwargs
+                **kwargs,
             )
             rect = fig.rect(
                 source=self.source, x="x", width="ms", y="y", height=1, color="color"
@@ -193,7 +193,7 @@ class ProcessingHistogram(DashboardComponent):
                 name="processing_hist",
                 y_axis_label="frequency",
                 tools="",
-                **kwargs
+                **kwargs,
             )
 
             self.root.xaxis.minor_tick_line_alpha = 0
@@ -236,7 +236,7 @@ class NBytesHistogram(DashboardComponent):
                 id="bk-nbytes-histogram-plot",
                 y_axis_label="frequency",
                 tools="",
-                **kwargs
+                **kwargs,
             )
 
             self.root.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
@@ -290,7 +290,7 @@ class BandwidthTypes(DashboardComponent):
                 id="bk-bandwidth-type-plot",
                 name="bandwidth_type_histogram",
                 y_range=["a", "b"],
-                **kwargs
+                **kwargs,
             )
             rect = fig.rect(
                 source=self.source,
@@ -364,7 +364,7 @@ class BandwidthWorkers(DashboardComponent):
                 name="bandwidth_worker_heatmap",
                 x_range=["a", "b"],
                 y_range=["a", "b"],
-                **kwargs
+                **kwargs,
             )
             fig.xaxis.major_label_orientation = -math.pi / 12
             rect = fig.rect(
@@ -458,7 +458,7 @@ class CurrentLoad(DashboardComponent):
                 id="bk-nprocessing-plot",
                 name="processing_hist",
                 width=int(width / 2),
-                **kwargs
+                **kwargs,
             )
             rect = processing.rect(
                 source=self.source,
@@ -477,7 +477,7 @@ class CurrentLoad(DashboardComponent):
                 id="bk-nbytes-worker-plot",
                 width=int(width / 2),
                 name="nbytes_hist",
-                **kwargs
+                **kwargs,
             )
             rect = nbytes.rect(
                 source=self.source,
@@ -495,7 +495,7 @@ class CurrentLoad(DashboardComponent):
                 id="bk-cpu-worker-plot",
                 width=int(width / 2),
                 name="cpu_hist",
-                **kwargs
+                **kwargs,
             )
             rect = cpu.rect(
                 source=self.source,
@@ -637,7 +637,7 @@ class StealingTimeSeries(DashboardComponent):
             height=150,
             tools="",
             x_range=x_range,
-            **kwargs
+            **kwargs,
         )
         fig.line(source=self.source, x="time", y="idle", color="red")
         fig.line(source=self.source, x="time", y="saturated", color="green")
@@ -691,7 +691,7 @@ class StealingEvents(DashboardComponent):
             height=250,
             tools="",
             x_range=x_range,
-            **kwargs
+            **kwargs,
         )
 
         fig.circle(
@@ -787,7 +787,7 @@ class Events(DashboardComponent):
             height=height,
             tools="",
             x_range=x_range,
-            **kwargs
+            **kwargs,
         )
 
         fig.circle(
@@ -797,7 +797,7 @@ class Events(DashboardComponent):
             color="color",
             size=50,
             alpha=0.5,
-            legend="action",
+            **{"legend_field" if BOKEH_VERSION >= "1.4" else "legend": "action"},
         )
         fig.yaxis.axis_label = "Action"
         fig.legend.location = "top_left"
@@ -958,7 +958,7 @@ def task_stream_figure(clear_interval="20s", **kwargs):
         x_axis_type="datetime",
         min_border_right=35,
         tools="",
-        **kwargs
+        **kwargs,
     )
 
     rect = root.rect(
@@ -1058,7 +1058,7 @@ class TaskGraph(DashboardComponent):
             color=node_colors,
             source=self.node_source,
             view=node_view,
-            legend="state",
+            **{"legend_field" if BOKEH_VERSION >= "1.4" else "legend": "state"},
         )
         self.root.xgrid.grid_line_color = None
         self.root.ygrid.grid_line_color = None
@@ -1202,7 +1202,7 @@ class TaskProgress(DashboardComponent):
             y_range=y_range,
             toolbar_location=None,
             tools="",
-            **kwargs
+            **kwargs,
         )
         self.root.line(  # just to define early ranges
             x=[0, 0.9], y=[-1, 0], line_color="#FFFFFF", alpha=0.0
@@ -1368,7 +1368,7 @@ class MemoryUse(DashboardComponent):
             y_range=DataRange1d(),
             toolbar_location=None,
             outline_line_color=None,
-            **kwargs
+            **kwargs,
         )
 
         self.root.add_glyph(
@@ -1492,7 +1492,7 @@ class WorkerTable(DashboardComponent):
             reorderable=True,
             sortable=True,
             width=width,
-            **dt_kwargs
+            **dt_kwargs,
         )
 
         for name in table_names:
@@ -1511,7 +1511,7 @@ class WorkerTable(DashboardComponent):
             reorderable=True,
             sortable=True,
             width=width,
-            **dt_kwargs
+            **dt_kwargs,
         )
 
         hover = HoverTool(
@@ -1532,7 +1532,7 @@ class WorkerTable(DashboardComponent):
             height=60,
             width=width,
             tools="",
-            **kwargs
+            **kwargs,
         )
         mem_plot.circle(
             source=self.source, x="memory_percent", y=0, size=10, fill_alpha=0.5
@@ -1561,7 +1561,7 @@ class WorkerTable(DashboardComponent):
             height=60,
             width=width,
             tools="",
-            **kwargs
+            **kwargs,
         )
         cpu_plot.circle(
             source=self.source, x="cpu_fraction", y=0, size=10, fill_alpha=0.5
