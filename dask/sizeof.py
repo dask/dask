@@ -28,6 +28,13 @@ def sizeof_python_collection(seq):
     return getsizeof(seq) + sum(map(sizeof, seq))
 
 
+@sizeof.register(dict)
+def sizeof_python_dict(d):
+    if len(d) > 10:
+        return getsizeof(d) + 1000 * len(d)
+    else:
+        return getsizeof(d) + sum(map(sizeof, d.keys())) + sum(map(sizeof, d.values()))
+
 @sizeof.register_lazy("cupy")
 def register_cupy():
     import cupy
