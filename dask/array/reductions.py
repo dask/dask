@@ -21,7 +21,7 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec
+from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec, derived_from
 from .. import config
 
 # Generic functions to support chunks of different types
@@ -1254,8 +1254,12 @@ def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
     return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)
 
 
-@wraps(np.median)
+@derived_from(np)
 def median(a, axis=None, keepdims=False, out=None):
+    """
+    This works by automatically chunking the reduced axes to a single chunk
+    and then calling ``numpy.median`` function across the remaining dimensions
+    """
     if axis is None:
         raise NotImplementedError(
             "The da.median function only works along an axis.  "
