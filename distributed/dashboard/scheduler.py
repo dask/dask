@@ -171,6 +171,7 @@ class CountsJSON(RequestHandler):
         released = 0
         waiting = 0
         waiting_data = 0
+        desired_workers = scheduler.adaptive_target()
 
         for ts in scheduler.tasks.values():
             if ts.exception_blame is not None:
@@ -203,6 +204,7 @@ class CountsJSON(RequestHandler):
             "waiting": waiting,
             "waiting_data": waiting_data,
             "workers": len(scheduler.workers),
+            "desired_workers": desired_workers,
         }
         self.write(response)
 
@@ -243,6 +245,12 @@ class _PrometheusCollector(object):
             "dask_scheduler_clients",
             "Number of clients connected.",
             value=len(self.server.clients),
+        )
+
+        yield GaugeMetricFamily(
+            "dask_scheduler_desired_workers",
+            "Number of workers scheduler needs for task graph.",
+            value=self.server.adaptive_target(),
         )
 
         tasks = GaugeMetricFamily(

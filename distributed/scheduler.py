@@ -3062,7 +3062,7 @@ class Scheduler(ServerNode):
 
             result = [getattr(ws, attribute) for g in to_close for ws in groups[g]]
             if result:
-                logger.info("Suggest closing workers: %s", result)
+                logger.debug("Suggest closing workers: %s", result)
 
             return result
 
