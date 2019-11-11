@@ -673,5 +673,5 @@ def test_median(axis, keepdims):
 
     assert_eq(
         da.median(d, axis=axis, keepdims=keepdims),
-        np.median(x, axis=axis, keepdims=keepdims)
+        np.median(x, axis=axis, keepdims=keepdims),
     )
