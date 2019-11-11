@@ -994,9 +994,11 @@ class _GroupBy(object):
         The slice keys applied to GroupBy result
     group_keys: bool
         Passed to pandas.DataFrame.groupby()
+    dropna: bool
+        Whether to drop null values from groupby index
     """
 
-    def __init__(self, df, by=None, slice=None, group_keys=True, **kwargs):
+    def __init__(self, df, by=None, slice=None, group_keys=True, dropna=None):
 
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
@@ -1034,9 +1036,6 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        # Set self.dropna to {"dropna": True/False} if the argument was passed.
-        # Otherwise, set self.dropna={}
-        dropna = kwargs.pop("dropna", None)
         self.dropna = {}
         if dropna is not None:
             self.dropna["dropna"] = dropna
