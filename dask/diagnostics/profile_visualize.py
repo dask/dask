@@ -341,6 +341,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
+    import bokeh
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
@@ -365,7 +366,17 @@ def plot_resources(results, palette="Viridis", **kwargs):
         t = mem = cpu = []
         p = bp.figure(y_range=(0, 100), x_range=(0, 1), **defaults)
     colors = palettes.all_palettes[palette][6]
-    p.line(t, cpu, color=colors[0], line_width=4, legend="% CPU")
+    p.line(
+        t,
+        cpu,
+        color=colors[0],
+        line_width=4,
+        **{
+            "legend_label"
+            if LooseVersion(bokeh.__version__) >= "1.4"
+            else "legend": "% CPU"
+        }
+    )
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {
         "memory": Range1d(
@@ -373,7 +384,16 @@ def plot_resources(results, palette="Viridis", **kwargs):
         )
     }
     p.line(
-        t, mem, color=colors[2], y_range_name="memory", line_width=4, legend="Memory"
+        t,
+        mem,
+        color=colors[2],
+        y_range_name="memory",
+        line_width=4,
+        **{
+            "legend_label"
+            if LooseVersion(bokeh.__version__) >= "1.4"
+            else "legend": "Memory"
+        }
     )
     p.add_layout(LinearAxis(y_range_name="memory", axis_label="Memory (MB)"), "right")
     p.xaxis.axis_label = "Time (s)"
