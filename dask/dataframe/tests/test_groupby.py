@@ -2189,30 +2189,26 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
         )
 
 
-@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.xfail(reason="dropna kwarg not supported in pandas groupby.")
+@pytest.mark.parametrize("dropna", [False, True])
 def test_groupby_dropna_pandas(dropna):
 
     # The `dropna` arg is not currently supported by pandas
     # (See #https://github.com/pandas-dev/pandas/pull/21669)
     # Dask supports the argument for the cudf backend,
-    # but should raise an error for pandas.
+    # but passing it to the pandas backend will fail.
 
-    # TODO: Expand test when `dropna`is supported in pandas.
+    # TODO: Expand test when `dropna` is supported in pandas.
+    #       (See: `test_groupby_dropna_cudf`)
 
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
     )
     ddf = dd.from_pandas(df, npartitions=3)
 
-    if dropna is None:
-        dask_result = ddf.groupby("a").e.sum()
-        pd_result = df.groupby("a").e.sum()
-        assert_eq(dask_result, pd_result)
-    else:
-        with pytest.raises(TypeError):
-            ddf.groupby("a", dropna=dropna)
-        with pytest.raises(TypeError):
-            df.groupby("a", dropna=dropna)
+    dask_result = ddf.groupby("a", dropna=dropna)
+    pd_result = df.groupby("a", dropna=dropna)
+    assert_eq(dask_result, pd_result)
 
 
 @pytest.mark.parametrize("dropna", [False, True, None])

@@ -162,29 +162,25 @@ def _groupby_raise_unaligned(df, **kwargs):
     return df.groupby(**kwargs)
 
 
-def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
+def _groupby_slice_apply(
+    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    group_keys = kwargs.pop("group_keys", True)
-    dropna = kwargs.pop("dropna", None)
-    if dropna is not None:
-        g = df.groupby(grouper, group_keys=group_keys, dropna=dropna)
-    else:
-        g = df.groupby(grouper, group_keys=group_keys)
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **dropna)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
 
 
-def _groupby_slice_transform(df, grouper, key, func, *args, **kwargs):
+def _groupby_slice_transform(
+    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    group_keys = kwargs.pop("group_keys", True)
-    dropna = kwargs.pop("dropna", None)
-    if dropna is not None:
-        g = df.groupby(grouper, group_keys=group_keys, dropna=dropna)
-    else:
-        g = df.groupby(grouper, group_keys=group_keys)
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **dropna)
     if key:
         g = g[key]
 
@@ -278,22 +274,16 @@ class Aggregation(object):
         self.__name__ = name
 
 
-def _groupby_aggregate(df, aggfunc=None, levels=None, **kwargs):
-    dropna = kwargs.pop("dropna", None)
-    if dropna is not None:
-        return aggfunc(df.groupby(level=levels, sort=False, dropna=dropna), **kwargs)
-    else:
-        return aggfunc(df.groupby(level=levels, sort=False), **kwargs)
+def _groupby_aggregate(df, aggfunc=None, levels=None, dropna=None, **kwargs):
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    return aggfunc(df.groupby(level=levels, sort=False, **dropna), **kwargs)
 
 
-def _apply_chunk(df, *index, **kwargs):
+def _apply_chunk(df, *index, dropna=None, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
-    dropna = kwargs.pop("dropna", None)
-    if dropna is not None:
-        g = _groupby_raise_unaligned(df, by=index, dropna=dropna)
-    else:
-        g = _groupby_raise_unaligned(df, by=index)
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    g = _groupby_raise_unaligned(df, by=index, **dropna)
 
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
