@@ -1,4 +1,5 @@
 import builtins
+from collections.abc import Iterable
 import operator
 from functools import partial, wraps
 from itertools import product, repeat
@@ -20,7 +21,7 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec
+from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec, derived_from
 from .. import config
 
 # Generic functions to support chunks of different types
@@ -1251,3 +1252,36 @@ def argtopk(a, k, axis=-1, split_every=None):
 @wraps(np.trace)
 def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
     return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)
+
+
+@derived_from(np)
+def median(a, axis=None, keepdims=False, out=None):
+    """
+    This works by automatically chunking the reduced axes to a single chunk
+    and then calling ``numpy.median`` function across the remaining dimensions
+    """
+    if axis is None:
+        raise NotImplementedError(
+            "The da.median function only works along an axis.  "
+            "The full algorithm is difficult to do in parallel"
+        )
+
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+
+    axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+
+    result = a.map_blocks(
+        np.median,
+        axis=axis,
+        keepdims=keepdims,
+        drop_axis=axis if not keepdims else None,
+        chunks=[1 if ax in axis else c for ax, c in enumerate(a.chunks)]
+        if keepdims
+        else None,
+    )
+
+    result = handle_out(out, result)
+    return result

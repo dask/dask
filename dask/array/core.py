@@ -45,7 +45,6 @@ from ..utils import (
     is_integer,
     IndexCallable,
     funcname,
-    derived_from,
     SerializableLock,
     Dispatch,
     factors,
