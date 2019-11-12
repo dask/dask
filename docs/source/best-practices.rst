@@ -334,3 +334,28 @@ Delayed
    for item in L:
        result = process(item, df)  # include pointer to df in every delayed call
        results.append(result)
+
+
+Avoid calling compute repeatedly
+--------------------------------
+
+Compute related results with shared computations in a single :func:`dask.compute` call
+
+.. code-block:: python
+
+   # Don't repeatedly call compute
+
+   df = dd.read_csv("...")
+   xmin = df.x.min().compute()
+   xmax = df.x.max().compute()
+
+.. code-block:: python
+
+   # Do compute multiple results at the same time
+
+   df = dd.read_csv("...")
+
+   xmin, xmax = dask.compute(df.x.min(), df.x.max())
+
+This allows Dask to compute the shared parts of the computation (like the
+``dd.read_csv`` call above) only once, rather than once per ``compute`` call.
