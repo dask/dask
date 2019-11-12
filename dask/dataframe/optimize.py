@@ -5,7 +5,7 @@ from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
-from ..blockwise import optimize_blockwise, Blockwise
+from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
 
 
 def optimize(dsk, keys, **kwargs):
@@ -14,6 +14,7 @@ def optimize(dsk, keys, **kwargs):
         # Think about an API for this.
         dsk = optimize_read_parquet_getitem(dsk)
         dsk = optimize_blockwise(dsk, keys=list(core.flatten(keys)))
+        dsk = fuse_roots(dsk, keys=list(core.flatten(keys)))
 
     dsk = ensure_dict(dsk)
 
