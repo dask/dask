@@ -35,6 +35,7 @@ def sizeof_python_dict(d):
     else:
         return getsizeof(d) + sum(map(sizeof, d.keys())) + sum(map(sizeof, d.values()))
 
+
 @sizeof.register_lazy("cupy")
 def register_cupy():
     import cupy
