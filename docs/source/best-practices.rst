@@ -339,23 +339,23 @@ Delayed
 Avoid calling compute repeatedly
 --------------------------------
 
-Compute related results with shared computations in a single compute call
+Compute related results with shared computations in a single :func:`dask.compute` call
 
 .. code-block:: python
 
    # Don't repeatedly call compute
 
    df = dd.read_csv("...")
-   min = df.x.min().compute()
-   max = df.x.max().compute()
+   xmin = df.x.min().compute()
+   xmax = df.x.max().compute()
 
 .. code-block:: python
 
-   # Do call compute on multiple results at the same time
+   # Do compute multiple results at the same time
 
    df = dd.read_csv("...")
 
-   min, max = dask.compute(df.x.min(), df.x.max())
+   xmin, xmax = dask.compute(df.x.min(), df.x.max())
 
 This allows Dask to compute the shared parts of the computation (like the
-``dd.read_csv`` call once, rather than once per compute call.
+``dd.read_csv`` call above) only once, rather than once per ``compute`` call.
