@@ -1285,3 +1285,15 @@ def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
         }
     )
     assert res == sol
+
+
+def test_dont_fuse_numpy_arrays():
+    """
+    Some types should stay in the graph bare
+
+    This helps with things like serialization
+    """
+    np = pytest.importorskip("numpy")
+    dsk = {"x": np.arange(5), "y": (inc, "x")}
+
+    assert fuse(dsk, "y")[0] == dsk

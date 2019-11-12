@@ -1,4 +1,5 @@
 import math
+import numbers
 import re
 
 from . import config, core
@@ -516,6 +517,11 @@ def fuse(
     reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
     if keys:
         reducible -= keys
+
+    for k, v in dsk.items():
+        if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
+            reducible.discard(k)
+
     if not reducible and (
         not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
     ):

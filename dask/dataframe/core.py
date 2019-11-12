@@ -2079,7 +2079,7 @@ Dask Name: {name}, {task} tasks""".format(
                     )
                 layer[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
             graph = HighLevelGraph.from_collections(
-                cname, layer, dependencies=[cumpart, cumlast]
+                name, layer, dependencies=[cumpart, cumlast]
             )
             result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
             return handle_out(out, result)
