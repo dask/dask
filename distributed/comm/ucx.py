@@ -5,6 +5,8 @@ See :ref:`communications` for more.
 
 .. _UCX: https://github.com/openucx/ucx
 """
+import ucp
+
 import logging
 import concurrent
 
@@ -18,7 +20,6 @@ from .utils import ensure_concrete_host, to_frames, from_frames
 from ..utils import ensure_ip, get_ip, get_ipv6, nbytes, log_errors
 
 import dask
-import ucp
 import numpy as np
 
 
