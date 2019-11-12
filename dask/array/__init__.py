@@ -190,6 +190,7 @@ try:
         all,
         min,
         max,
+        median,
         moment,
         trace,
         argmin,
