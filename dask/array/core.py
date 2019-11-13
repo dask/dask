@@ -3671,7 +3671,7 @@ def asarray(a, **kwargs):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
-    return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
+    return from_array(a, getitem=getter_inline, **kwargs)
 
 
 def asanyarray(a):

@@ -2372,6 +2372,13 @@ def test_asarray_h5py():
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
 
 
+def test_asarray_chunks():
+    with dask.config.set({"array.chunk-size": "100 B"}):
+        x = np.ones(1000)
+        d = da.asarray(x)
+        assert d.npartitions > 1
+
+
 @pytest.mark.filterwarnings("ignore:the matrix subclass")
 def test_asanyarray():
     x = np.matrix([1, 2, 3])
