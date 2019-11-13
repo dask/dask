@@ -334,12 +334,21 @@ def test_retries_dask_array(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_future_repr(c, s, a, b):
+async def test_future_repr(c, s, a, b):
+    pd = pytest.importorskip("pandas")
     x = c.submit(inc, 10)
+    y = c.submit(pd.DataFrame, {"x": [1, 2, 3]})
+    await x
+    await y
+
     for func in [repr, lambda x: x._repr_html_()]:
         assert str(x.key) in func(x)
         assert str(x.status) in func(x)
         assert str(x.status) in repr(c.futures[x.key])
+
+        assert "int" in func(x)
+        assert "pandas" in func(y)
+        assert "DataFrame" in func(y)
 
 
 @gen_cluster(client=True)

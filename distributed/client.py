@@ -383,16 +383,12 @@ class Future(WrappedKey):
     def __repr__(self):
         if self.type:
             try:
-                typ = self.type.__name__
+                typ = self.type.__module__.split(".")[0] + "." + self.type.__name__
             except AttributeError:
                 typ = str(self.type)
-            return "<Future: status: %s, type: %s, key: %s>" % (
-                self.status,
-                typ,
-                self.key,
-            )
+            return "<Future: %s, type: %s, key: %s>" % (self.status, typ, self.key)
         else:
-            return "<Future: status: %s, key: %s>" % (self.status, self.key)
+            return "<Future: %s, key: %s>" % (self.status, self.key)
 
     def _repr_html_(self):
         text = "<b>Future: %s</b> " % html.escape(key_split(self.key))
@@ -405,7 +401,7 @@ class Future(WrappedKey):
         }
         if self.type:
             try:
-                typ = self.type.__name__
+                typ = self.type.__module__.split(".")[0] + "." + self.type.__name__
             except AttributeError:
                 typ = str(self.type)
             text += '<font color="gray">type: </font>%s, ' % typ
