@@ -16,7 +16,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
-  - fsspec>=0.5.1
+  - fsspec>=0.6.0
   - sqlalchemy
   - pyarrow>=0.14.0
   - coverage

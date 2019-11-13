@@ -11,7 +11,7 @@ extras_require = {
     "array": ["numpy >= 1.13.0", "toolz >= 0.7.3"],
     "bag": [
         "cloudpickle >= 0.2.1",
-        "fsspec >= 0.5.1",
+        "fsspec >= 0.6.0",
         "toolz >= 0.7.3",
         "partd >= 0.3.10"
     ],
@@ -20,7 +20,7 @@ extras_require = {
         "pandas >= 0.21.0",
         "toolz >= 0.7.3",
         "partd >= 0.3.10",
-        "fsspec >= 0.5.1",
+        "fsspec >= 0.6.0",
     ],
     "distributed": ["distributed >= 2.0"],
     "diagnostics": ["bokeh >= 1.0.0"],
