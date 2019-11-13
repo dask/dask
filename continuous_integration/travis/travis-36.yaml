@@ -17,7 +17,7 @@ dependencies:
   # - fastparquet
   - h5py
   - pytables
-  - fsspec>=0.5.1
+  - fsspec==0.6.0
   - zarr
   - tiledb-py
   - sqlalchemy

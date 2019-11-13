@@ -96,9 +96,9 @@ These optional dependencies and their minimum supported versions are listed belo
 +-------------+----------+--------------------------------------------------------------+
 | fastparquet |          |         Storing and reading data from parquet files          |
 +-------------+----------+--------------------------------------------------------------+
-|    fsspec   | >=0.5.1  |          Used for local, cluster and remote data IO          |
+|    fsspec   | >=0.6.0  |          Used for local, cluster and remote data IO          |
 +-------------+----------+--------------------------------------------------------------+
-|    gcsfs    |          |        File-system interface to Google Cloud Storage         |
+|    gcsfs    | >=0.4.0  |        File-system interface to Google Cloud Storage         |
 +-------------+----------+--------------------------------------------------------------+
 |  murmurhash |          |                   Faster hashing of arrays                   |
 +-------------+----------+--------------------------------------------------------------+
@@ -112,7 +112,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +-------------+----------+--------------------------------------------------------------+
 |    pyarrow  | >=0.14.0 |               Python library for Apache Arrow                |
 +-------------+----------+--------------------------------------------------------------+
-|    s3fs     |          |                    Reading from Amazon S3                    |
+|    s3fs     | >=0.4.0  |                    Reading from Amazon S3                    |
 +-------------+----------+--------------------------------------------------------------+
 |  sqlalchemy |          |            Writing and reading from SQL databases            |
 +-------------+----------+--------------------------------------------------------------+
