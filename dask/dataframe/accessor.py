@@ -140,11 +140,9 @@ class StringAccessor(Accessor):
         valid_types = (Series, Index, pd.Series, pd.Index)
 
         if others is None:
-            if not isinstance(self, valid_types):
-                raise TypeError("self must be Series/Index")
-            return self._series.map_partitions(
+            return delayed(self._series.map_partitions(
             str_cat, meta=self._series._meta
-        ).compute().str.cat(sep=sep, na_rep=na_rep)
+        ).str.cat(sep=sep, na_rep=na_rep))
 
         else:
 
