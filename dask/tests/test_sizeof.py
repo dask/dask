@@ -121,3 +121,11 @@ def test_pyarrow_table():
     assert sizeof(empty.columns[0]) > 0
     assert sizeof(empty.columns[1]) > 0
     assert sizeof(empty.columns[2]) > 0
+
+
+def test_dict():
+    np = pytest.importorskip("numpy")
+    x = np.ones(10000)
+    assert sizeof({"x": x}) > x.nbytes
+    assert sizeof({"x": [x]}) > x.nbytes
+    assert sizeof({"x": [{"y": x}]}) > x.nbytes
