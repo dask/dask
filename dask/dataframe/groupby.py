@@ -162,22 +162,25 @@ def _groupby_raise_unaligned(df, **kwargs):
     return df.groupby(**kwargs)
 
 
-def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
+def _groupby_slice_apply(
+    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    group_keys = kwargs.pop("group_keys", True)
-    g = df.groupby(grouper, group_keys=group_keys)
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **dropna)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
 
 
-def _groupby_slice_transform(df, grouper, key, func, *args, **kwargs):
+def _groupby_slice_transform(
+    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    group_keys = kwargs.pop("group_keys", True)
-
-    g = df.groupby(grouper, group_keys=group_keys)
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **dropna)
     if key:
         g = g[key]
 
@@ -271,15 +274,16 @@ class Aggregation(object):
         self.__name__ = name
 
 
-def _groupby_aggregate(df, aggfunc=None, levels=None, **kwargs):
-    return aggfunc(df.groupby(level=levels, sort=False), **kwargs)
+def _groupby_aggregate(df, aggfunc=None, levels=None, dropna=None, **kwargs):
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    return aggfunc(df.groupby(level=levels, sort=False, **dropna), **kwargs)
 
 
-def _apply_chunk(df, *index, **kwargs):
+def _apply_chunk(df, *index, dropna=None, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
-
-    g = _groupby_raise_unaligned(df, by=index)
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    g = _groupby_raise_unaligned(df, by=index, **dropna)
 
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
@@ -980,9 +984,11 @@ class _GroupBy(object):
         The slice keys applied to GroupBy result
     group_keys: bool
         Passed to pandas.DataFrame.groupby()
+    dropna: bool
+        Whether to drop null values from groupby index
     """
 
-    def __init__(self, df, by=None, slice=None, group_keys=True):
+    def __init__(self, df, by=None, slice=None, group_keys=True, dropna=None):
 
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
@@ -1020,7 +1026,13 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        self._meta = self.obj._meta.groupby(index_meta, group_keys=group_keys)
+        self.dropna = {}
+        if dropna is not None:
+            self.dropna["dropna"] = dropna
+
+        self._meta = self.obj._meta.groupby(
+            index_meta, group_keys=group_keys, **self.dropna
+        )
 
     @property
     def _meta_nonempty(self):
@@ -1041,7 +1053,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(index_meta, group_keys=self.group_keys)
+        grouped = sample.groupby(index_meta, group_keys=self.group_keys, **self.dropna)
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(
@@ -1068,12 +1080,16 @@ class _GroupBy(object):
             if not isinstance(self.index, list)
             else [self.obj] + self.index,
             chunk=_apply_chunk,
-            chunk_kwargs=dict(chunk=func, columns=columns, **chunk_kwargs),
+            chunk_kwargs=dict(
+                chunk=func, columns=columns, **chunk_kwargs, **self.dropna
+            ),
             aggregate=_groupby_aggregate,
             meta=meta,
             token=token,
             split_every=split_every,
-            aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels, **aggregate_kwargs),
+            aggregate_kwargs=dict(
+                aggfunc=aggfunc, levels=levels, **aggregate_kwargs, **self.dropna
+            ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
         )
@@ -1097,7 +1113,8 @@ class _GroupBy(object):
             chunk=chunk,
             columns=columns,
             token=name_part,
-            meta=meta
+            meta=meta,
+            **self.dropna
         )
 
         cumpart_raw_frame = (
@@ -1125,7 +1142,8 @@ class _GroupBy(object):
             columns=0 if columns is None else columns,
             chunk=M.last,
             meta=meta,
-            token=name_last
+            token=name_last,
+            **self.dropna
         )
 
         # aggregate cumulated partitions and its previous last element
@@ -1585,6 +1603,7 @@ class _GroupBy(object):
             token=funcname(func),
             *args,
             group_keys=self.group_keys,
+            **self.dropna,
             **kwargs
         )
 
@@ -1672,6 +1691,7 @@ class _GroupBy(object):
             token=funcname(func),
             *args,
             group_keys=self.group_keys,
+            **self.dropna,
             **kwargs
         )
 
@@ -1684,9 +1704,9 @@ class DataFrameGroupBy(_GroupBy):
 
     def __getitem__(self, key):
         if isinstance(key, list):
-            g = DataFrameGroupBy(self.obj, by=self.index, slice=key)
+            g = DataFrameGroupBy(self.obj, by=self.index, slice=key, **self.dropna)
         else:
-            g = SeriesGroupBy(self.obj, by=self.index, slice=key)
+            g = SeriesGroupBy(self.obj, by=self.index, slice=key, **self.dropna)
 
         # error is raised from pandas
         g._meta = g._meta[key]
