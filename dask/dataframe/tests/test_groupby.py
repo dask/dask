@@ -2187,3 +2187,60 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
                 lambda series: series - series.mean()
             ),
         )
+
+
+@pytest.mark.xfail(reason="dropna kwarg not supported in pandas groupby.")
+@pytest.mark.parametrize("dropna", [False, True])
+def test_groupby_dropna_pandas(dropna):
+
+    # The `dropna` arg is not currently supported by pandas
+    # (See #https://github.com/pandas-dev/pandas/pull/21669)
+    # Dask supports the argument for the cudf backend,
+    # but passing it to the pandas backend will fail.
+
+    # TODO: Expand test when `dropna` is supported in pandas.
+    #       (See: `test_groupby_dropna_cudf`)
+
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    dask_result = ddf.groupby("a", dropna=dropna)
+    pd_result = df.groupby("a", dropna=dropna)
+    assert_eq(dask_result, pd_result)
+
+
+@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
+def test_groupby_dropna_cudf(dropna, by):
+
+    # NOTE: This test requires cudf/dask_cudf, and will
+    # be skipped by non-GPU CI
+
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, 0] * 4,
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    df["d"] = df["c"].astype("category")
+    ddf = dask_cudf.from_cudf(df, npartitions=3)
+
+    if dropna is None:
+        dask_result = ddf.groupby(by).e.sum()
+        cudf_result = df.groupby(by).e.sum()
+    else:
+        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+    if by in ["c", "d"]:
+        # Loose string/category index name in cudf...
+        dask_result = dask_result.compute()
+        dask_result.index.name = cudf_result.index.name
+
+    assert_eq(dask_result, cudf_result)
