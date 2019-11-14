@@ -1,7 +1,7 @@
 import logging
 import math
 from numbers import Number
-from operator import add
+import operator
 import os
 
 from bokeh.layouts import column, row
@@ -873,6 +873,7 @@ class TaskStream(DashboardComponent):
         clear_interval = parse_timedelta(clear_interval, default="ms")
         self.clear_interval = clear_interval
         self.last = 0
+        self.last_seen = 0
 
         self.source, self.root = task_stream_figure(clear_interval, **kwargs)
 
@@ -899,16 +900,31 @@ class TaskStream(DashboardComponent):
             if not rectangles["start"]:
                 return
 
-            # If there has been a significant delay then clear old rectangles
-            first_end = min(map(add, rectangles["start"], rectangles["duration"]))
-            if first_end > self.last:
-                last = self.last
-                self.last = first_end
-                if first_end > last + self.clear_interval * 1000:
-                    self.offset = min(rectangles["start"])
-                    self.source.data.update({k: [] for k in rectangles})
+            # If it has been a while since we've updated the plot
+            if time() > self.last_seen + self.clear_interval:
+                new_start = min(rectangles["start"]) - self.offset
+                old_start = min(self.source.data["start"])
+                old_end = max(
+                    map(
+                        operator.add,
+                        self.source.data["start"],
+                        self.source.data["duration"],
+                    )
+                )
+
+                density = (
+                    sum(self.source.data["duration"])
+                    / len(self.workers)
+                    / (old_end - old_start)
+                )
+
+                # If whitespace is more than 3x the old width
+                if (new_start - old_end) > (old_end - old_start) * 2 or density < 0.05:
+                    self.source.data.update({k: [] for k in rectangles})  # clear
+                    self.offset = min(rectangles["start"])  # redefine offset
 
             rectangles["start"] = [x - self.offset for x in rectangles["start"]]
+            self.last_seen = time()
 
             # Convert to numpy for serialization speed
             if n >= 10 and np:
@@ -1707,7 +1723,7 @@ def status_doc(scheduler, extra, doc):
             n_rectangles=dask.config.get(
                 "distributed.scheduler.dashboard.status.task-stream-length"
             ),
-            clear_interval="10s",
+            clear_interval="5s",
             sizing_mode="stretch_both",
         )
         task_stream.update()
