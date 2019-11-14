@@ -5125,8 +5125,8 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation
     """
     shape = (df.shape[1], df.shape[1])
-    sums = np.zeros(shape)
-    counts = np.zeros(shape)
+    sums = np.zeros_like(None, shape=shape)
+    counts = np.zeros_like(None, shape=shape)
     df = df.astype("float64", copy=False)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
@@ -5148,7 +5148,7 @@ def cov_corr_chunk(df, corr=False):
         m = m.T
         dtype.append(("m", m.dtype))
 
-    out = np.empty(counts.shape, dtype=dtype)
+    out = {}  # np.empty(counts.shape, dtype=dtype)
     out["sum"] = sums
     out["count"] = counts
     out["cov"] = cov * (counts - 1)
@@ -5157,8 +5157,19 @@ def cov_corr_chunk(df, corr=False):
     return out
 
 
-def cov_corr_combine(data, corr=False):
-    data = np.concatenate(data).reshape((len(data),) + data[0].shape)
+def cov_corr_combine(data_in, corr=False):
+
+    items = ["sum", "count", "cov"]
+    if corr:
+        items.append("m")
+
+    data = {}
+    for k in items:
+        data[k] = []
+        for d in data_in:
+            data[k].append(d[k])
+        data[k] = np.concatenate(data[k]).reshape((len(data[k]),) + data[k][0].shape)
+
     sums = np.nan_to_num(data["sum"])
     counts = data["count"]
 
@@ -5175,7 +5186,11 @@ def cov_corr_combine(data, corr=False):
             (n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0
         ) + np.nansum(data["cov"], 0)
 
-    out = np.empty(C.shape, dtype=data.dtype)
+    dtype = []
+    for name in items:
+        dtype.append((name, data[name].dtype))
+
+    out = np.empty(C.shape, dtype=dtype)
     out["sum"] = cum_sums[-1]
     out["count"] = cum_counts[-1]
     out["cov"] = C
