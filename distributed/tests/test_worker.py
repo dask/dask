@@ -14,6 +14,7 @@ import traceback
 import dask
 from dask import delayed
 from dask.utils import format_bytes
+from dask.system import CPU_COUNT
 import pytest
 from toolz import pluck, sliding_window, first
 import tornado
@@ -29,7 +30,6 @@ from distributed import (
     get_worker,
     Reschedule,
     wait,
-    system,
 )
 from distributed.compatibility import WINDOWS
 from distributed.core import rpc
@@ -62,7 +62,7 @@ from distributed.utils_test import (  # noqa: F401
 def test_worker_nthreads():
     w = Worker("127.0.0.1", 8019)
     try:
-        assert w.executor._max_workers == system.CPU_COUNT
+        assert w.executor._max_workers == CPU_COUNT
     finally:
         shutil.rmtree(w.local_directory)
 
@@ -516,7 +516,7 @@ def test_memory_limit_auto():
     assert isinstance(a.memory_limit, Number)
     assert isinstance(b.memory_limit, Number)
 
-    if system.CPU_COUNT > 1:
+    if CPU_COUNT > 1:
         assert a.memory_limit < b.memory_limit
 
     assert c.memory_limit == d.memory_limit

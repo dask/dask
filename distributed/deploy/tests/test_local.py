@@ -12,10 +12,11 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 import pytest
 
+from dask.system import CPU_COUNT
 from distributed import Client, Worker, Nanny, get_client
 from distributed.deploy.local import LocalCluster, nprocesses_nthreads
 from distributed.metrics import time
-from distributed.system import CPU_COUNT, MEMORY_LIMIT
+from distributed.system import MEMORY_LIMIT
 from distributed.utils_test import (  # noqa: F401
     clean,
     cleanup,

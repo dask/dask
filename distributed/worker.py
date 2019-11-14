@@ -18,6 +18,7 @@ import dask
 from dask.core import istask
 from dask.compatibility import apply
 from dask.utils import format_bytes, funcname
+from dask.system import CPU_COUNT
 
 try:
     from cytoolz import pluck, partial, merge, first, keymap
@@ -462,7 +463,7 @@ class Worker(ServerNode):
             warnings.warn("the ncores= parameter has moved to nthreads=")
             nthreads = ncores
 
-        self.nthreads = nthreads or system.CPU_COUNT
+        self.nthreads = nthreads or CPU_COUNT
         self.total_resources = resources or {}
         self.available_resources = (resources or {}).copy()
         self.death_timeout = parse_timedelta(death_timeout)
@@ -3071,7 +3072,7 @@ class Reschedule(Exception):
     pass
 
 
-def parse_memory_limit(memory_limit, nthreads, total_cores=system.CPU_COUNT):
+def parse_memory_limit(memory_limit, nthreads, total_cores=CPU_COUNT):
     if memory_limit is None:
         return None
 
