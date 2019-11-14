@@ -71,6 +71,7 @@ def test_serialize():
         np.zeros((1, 1000, 1000)),
         np.arange(12)[::2],  # non-contiguous array
         np.ones(shape=(5, 6)).astype(dtype=[("total", "<f8"), ("n", "<f8")]),
+        np.broadcast_to(np.arange(3), shape=(10, 3)),  # zero-strided array
     ],
 )
 def test_dumps_serialize_numpy(x):
@@ -259,3 +260,31 @@ def test_large_numpy_array():
     x = np.ones((100000000,), dtype="u4")
     header, frames = serialize(x)
     assert sum(header["lengths"]) == sum(map(nbytes, frames))
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        np.broadcast_to(np.arange(10), (20, 10)),  # Some strides are 0
+        np.broadcast_to(1, (3, 4, 2)),  # All strides are 0
+        np.broadcast_to(np.arange(100)[:1], 5),  # x.base is larger than x
+    ],
+)
+@pytest.mark.parametrize("writeable", [True, False])
+def test_zero_strided_numpy_array(x, writeable):
+    assert 0 in x.strides
+    x.setflags(write=writeable)
+    header, frames = serialize(x)
+    y = deserialize(header, frames)
+    np.testing.assert_equal(x, y)
+    # Ensure we transmit fewer bytes than the full array
+    assert sum(map(nbytes, frames)) < x.nbytes
+    # Ensure both x and y are have same write flag
+    assert x.flags.writeable == y.flags.writeable
+
+
+def test_non_zero_strided_array():
+    x = np.arange(10)
+    header, frames = serialize(x)
+    assert "broadcast_to" not in header
+    assert sum(map(nbytes, frames)) == x.nbytes
