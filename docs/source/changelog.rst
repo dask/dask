@@ -1,6 +1,31 @@
 Changelog
 =========
 
+2.8.0 - 2019-11-14
+------------------
+
+-  Add UCX config values (:pr:`3135`) `Matthew Rocklin`_
+-  Relax test_MultiWorker (:pr:`3210`) `Matthew Rocklin`_
+-  Avoid ucp.init at import time (:pr:`3211`) `Matthew Rocklin`_
+-  Clean up rpc to avoid intermittent test failure (:pr:`3215`) `Matthew Rocklin`_
+-  Respect protocol if given to Scheduler (:pr:`3212`) `Matthew Rocklin`_
+-  Use legend_field= keyword in bokeh plots (:pr:`3218`) `Matthew Rocklin`_
+-  Cache psutil.Process object in Nanny (:pr:`3207`) `Matthew Rocklin`_
+-  Replace gen.sleep with asyncio.sleep (:pr:`3208`) `Matthew Rocklin`_
+-  Avoid offloading serialization for small messages (:pr:`3224`) `Matthew Rocklin`_
+-  Add desired_workers metric (:pr:`3221`) `Gabriel Sailer`_
+-  Fail fast when importing distributed.comm.ucx (:pr:`3228`) `Matthew Rocklin`_
+-  Add module name to Future repr (:pr:`3231`) `Matthew Rocklin`_
+-  Add name to Pub/Sub repr (:pr:`3235`) `Matthew Rocklin`_
+-  Import CPU_COUNT from dask.system (:pr:`3199`) `James Bourbeau`_
+-  Efficiently serialize zero strided NumPy arrays (:pr:`3180`) `James Bourbeau`_
+-  Cache function deserialization in workers (:pr:`3234`) `Matthew Rocklin`_
+-  Respect ordering of futures in futures_of (:pr:`3236`) `Matthew Rocklin`_
+-  Bump dask dependency to 2.7.0 (:pr:`3237`) `James Bourbeau`_
+-  Avoid setting inf x_range (:pr:`3229`) `rockwellw`_
+-  Clear task stream based on recent behavior (:pr:`3200`) `Matthew Rocklin`_
+-  Use the percentage field for profile plots (:pr:`3238`) `Matthew Rocklin`_
+
 2.7.0 - 2019-11-08
 ------------------
 
@@ -1365,3 +1390,4 @@ significantly without many new features.
 .. _`James A. Bednar`: https://github.com/jbednar
 .. _`IPetrik`: https://github.com/IPetrik
 .. _`Simon Boothroyd`: https://github.com/SimonBoothroyd
+.. _`rockwellw`: https://github.com/rockwellw
