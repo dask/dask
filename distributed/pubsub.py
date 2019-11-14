@@ -343,6 +343,11 @@ class Pub(object):
         """ Publish a message to all subscribers of this topic """
         self.loop.add_callback(self._put, msg)
 
+    def __repr__(self):
+        return "<Pub: {}>".format(self.name)
+
+    __str__ = __repr__
+
 
 class Sub(object):
     """ Subscribe to a Publish/Subscribe topic
@@ -426,3 +431,8 @@ class Sub(object):
     def _put(self, msg):
         self.buffer.append(msg)
         self.condition.notify()
+
+    def __repr__(self):
+        return "<Sub: {}>".format(self.name)
+
+    __str__ = __repr__

@@ -125,5 +125,15 @@ def test_timeouts(c, s, a, b):
     assert stop - start < 1
 
 
+@gen_cluster(client=True)
+async def test_repr(c, s, a, b):
+    pub = Pub("my-topic")
+    sub = Sub("my-topic")
+    assert "my-topic" in str(pub)
+    assert "Pub" in str(pub)
+    assert "my-topic" in str(sub)
+    assert "Sub" in str(sub)
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_pubsub import *  # noqa: F401, F403
