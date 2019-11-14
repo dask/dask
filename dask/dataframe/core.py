@@ -5190,7 +5190,7 @@ def cov_corr_combine(data_in, corr=False):
     for name in items:
         dtype.append((name, data[name].dtype))
 
-    out = np.empty(C.shape, dtype=dtype)
+    out = {}
     out["sum"] = cum_sums[-1]
     out["count"] = cum_counts[-1]
     out["cov"] = C
