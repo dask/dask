@@ -585,7 +585,7 @@ class CurrentLoad(DashboardComponent):
                     or inf
                 )
 
-                if limit > max_limit:
+                if limit > max_limit and limit != inf:
                     max_limit = limit
 
                 if nb > limit:
