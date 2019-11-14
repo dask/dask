@@ -4385,9 +4385,27 @@ def redict_collection(c, dsk):
 
 
 def futures_of(o, client=None):
-    """ Future objects in a collection """
+    """ Future objects in a collection
+
+    Parameters
+    ----------
+    o: collection
+        A possibly nested collection of Dask objects
+
+    Examples
+    --------
+    >>> futures_of(my_dask_dataframe)
+    [<Future: finished key: ...>,
+     <Future: pending  key: ...>]
+
+    Returns
+    -------
+    futures : List[Future]
+        A list of futures held by those collections
+    """
     stack = [o]
-    futures = set()
+    seen = set()
+    futures = list()
     while stack:
         x = stack.pop()
         if type(x) in (tuple, set, list):
@@ -4397,7 +4415,9 @@ def futures_of(o, client=None):
         elif type(x) is SubgraphCallable:
             stack.extend(x.dsk.values())
         elif isinstance(x, Future):
-            futures.add(x)
+            if x not in seen:
+                seen.add(x)
+                futures.append(x)
         elif dask.is_dask_collection(x):
             stack.extend(x.__dask_graph__().values())
 
@@ -4406,7 +4426,7 @@ def futures_of(o, client=None):
         if bad:
             raise CancelledError(bad)
 
-    return list(futures)
+    return futures[::-1]
 
 
 def fire_and_forget(obj):

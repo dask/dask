@@ -5678,5 +5678,14 @@ async def test_config_inherited_by_subprocess(cleanup):
                 assert result == 101
 
 
+@gen_cluster(client=True)
+async def test_futures_of_sorted(c, s, a, b):
+    pytest.importorskip("dask.dataframe")
+    df = await dask.datasets.timeseries(dtypes={"x": int}).persist()
+    futures = futures_of(df)
+    for k, f in zip(df.__dask_keys__(), futures):
+        assert str(k) in str(f)
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
