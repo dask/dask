@@ -5125,8 +5125,8 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation
     """
     shape = (df.shape[1], df.shape[1])
-    sums = np.zeros_like(None, shape=shape)
-    counts = np.zeros_like(None, shape=shape)
+    sums = np.zeros(shape)
+    counts = np.zeros(shape)
     df = df.astype("float64", copy=False)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
@@ -5148,7 +5148,7 @@ def cov_corr_chunk(df, corr=False):
         m = m.T
         dtype.append(("m", m.dtype))
 
-    out = {}  # np.empty(counts.shape, dtype=dtype)
+    out = {}
     out["sum"] = sums
     out["count"] = counts
     out["cov"] = cov * (counts - 1)
