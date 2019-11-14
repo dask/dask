@@ -3143,11 +3143,18 @@ async def get_data_from_worker(
 
 job_counter = [0]
 
+import functools
+
+
+@functools.lru_cache(100)
+def cached_function_deserialization(func):
+    return pickle.loads(func)
+
 
 def _deserialize(function=None, args=None, kwargs=None, task=no_value):
     """ Deserialize task inputs and regularize to func, args, kwargs """
     if function is not None:
-        function = pickle.loads(function)
+        function = cached_function_deserialization(function)
     if args:
         args = pickle.loads(args)
     if kwargs:
