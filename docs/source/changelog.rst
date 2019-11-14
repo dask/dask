@@ -1,6 +1,43 @@
 Changelog
 =========
 
+2.8.0 / 2019-11-14
+------------------
+
+Array
++++++
+-  Implement complete dask.array.tile function (:pr:`5574`) `Bouwe Andela`_
+-  Add median along an axis with automatic rechunking (:pr:`5575`) `Matthew Rocklin`_
+-  Allow da.asarray to chunk inputs (:pr:`5586`) `Matthew Rocklin`_
+
+Bag
++++
+
+-  Use key_split in Bag name (:pr:`5571`) `Matthew Rocklin`_
+
+Core
+++++
+-  Switch Doctests to Py3.7 (:pr:`5573`) `Ryan Nazareth`_
+-  Relax get_colors test to adapt to new Bokeh release (:pr:`5576`) `Matthew Rocklin`_
+-  Add dask.blockwise.fuse_roots optimization (:pr:`5451`) `Matthew Rocklin`_
+-  Add sizeof implementation for small dicts (:pr:`5578`) `Matthew Rocklin`_
+-  Update fsspec, gcsfs, s3fs (:pr:`5588`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+-  Add dropna argument to groupby (:pr:`5579`) `Richard J Zamora`_
+-  Revert "Remove import of dask_cudf, which is now a part of cudf (:pr:`5568`)" (:pr:`5590`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Add best practice for dask.compute function (:pr:`5583`) `Matthew Rocklin`_
+-  Create FUNDING.yml (:pr:`5587`) `Gina Helfrich`_
+-  Add screencast for coordination primitives (:pr:`5593`) `Matthew Rocklin`_
+-  Move funding to .github repo (:pr:`5589`) `Tom Augspurger`_
+-  Update calendar link (:pr:`5569`) `Tom Augspurger`_
+
+
 2.7.0 / 2019-11-08
 ------------------
 
@@ -37,8 +74,8 @@ DataFrame
 -  Explicitly use iloc for row indexing (:pr:`5500`) `Krishan Bhasin`_
 -  Accept dask arrays on columns assignemnt (:pr:`5224`) `Henrique Ribeiro`-
 -  Implement unique and value_counts for SeriesGroupBy (:pr:`5358`) `Scott Sievert`_
--  Add sizeof definition for pyarrow tables and columns (:pr:`5522`) `Richard J  Zamora`_
--  Enable row-group task partitioning in pyarrow-based read_parquet (:pr:`5508`) `Richard J  Zamora`_
+-  Add sizeof definition for pyarrow tables and columns (:pr:`5522`) `Richard J Zamora`_
+-  Enable row-group task partitioning in pyarrow-based read_parquet (:pr:`5508`) `Richard J Zamora`_
 -  Removes npartitions='auto' from dd.merge docstring (:pr:`5531`) `James Bourbeau`_
 -  Apply enforce error message shows non-overlapping columns. (:pr:`5530`) `Tom Augspurger`_
 -  Optimize meta_nonempty for repetitive dtypes (:pr:`5553`) `Petio Petrov`_
@@ -2662,3 +2699,4 @@ Other
 .. _`Mads R. B. Kristensen`: https://github.com/madsbk
 .. _`Prithvi MK`: https://github.com/pmk21
 .. _`Eric Dill`: https://github.com/ericdill
+.. _`Gina Helfrich`: https://github.com/Dr-G
