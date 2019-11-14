@@ -230,7 +230,7 @@ def plot_data(state, profile_interval=0.010):
             x += width
 
     traverse(state, 0, 1, 0)
-    percentages = ["{:.2f}%".format(100 * w) for w in widths]
+    percentages = ["{:.1f}%".format(100 * w) for w in widths]
     return {
         "left": starts,
         "right": stops,
@@ -423,7 +423,7 @@ def plot_figure(data, **kwargs):
             </div>
             <div>
                 <span style="font-size: 14px; font-weight: bold;">Percentage:</span>&nbsp;
-                <span style="font-size: 10px; font-family: Monaco, monospace;">@width</span>
+                <span style="font-size: 10px; font-family: Monaco, monospace;">@percentage</span>
             </div>
             """,
     )
