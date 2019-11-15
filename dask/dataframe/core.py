@@ -5128,18 +5128,16 @@ def cov_corr_chunk(df, corr=False):
     df = df.astype("float64", copy=False)
     sums = np.zeros_like(df.values, shape=shape)
     counts = np.zeros_like(df.values, shape=shape)
-    cov = np.zeros_like(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
-        # Build cov by column, since df.cov() not supported in cudf
-        for idx2, col2 in enumerate(df):
-            # TODO: Implement correct logic (replace try block)
-            try:
-                cov[idx, idx2] = df[col].cov(df[col2])
-            except (RuntimeWarning, TypeError):
-                cov[idx, idx2] = np.nan
+    try:
+        cov = df.cov().values
+    except NotImplementedError:
+        # Numpy version of covariance is slightly different from pandas
+        cov = np.cov(df.values, rowvar=False)
+
     dtype = [("sum", sums.dtype), ("count", counts.dtype), ("cov", cov.dtype)]
     if corr:
         with warnings.catch_warnings(record=True):
