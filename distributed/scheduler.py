@@ -3,6 +3,7 @@ from collections import defaultdict, deque, OrderedDict
 from collections.abc import Mapping, Set
 from datetime import timedelta
 from functools import partial
+from inspect import isawaitable
 import itertools
 import json
 import logging
@@ -3283,7 +3284,7 @@ class Scheduler(ServerNode):
             if teardown:
                 teardown = pickle.loads(teardown)
             state = setup(self) if setup else None
-            if hasattr(state, "__await__"):
+            if isawaitable(state):
                 state = await state
             try:
                 while self.status == "running":

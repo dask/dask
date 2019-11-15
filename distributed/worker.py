@@ -4,6 +4,7 @@ from collections import defaultdict, deque, namedtuple
 from collections.abc import MutableMapping
 from datetime import timedelta
 import heapq
+from inspect import isawaitable
 import logging
 import os
 from pickle import PicklingError
@@ -748,7 +749,7 @@ class Worker(ServerNode):
         for k, metric in self.metrics.items():
             try:
                 result = metric(self)
-                if hasattr(result, "__await__"):
+                if isawaitable(result):
                     result = await result
                 custom[k] = result
             except Exception:  # TODO: log error once
@@ -761,7 +762,7 @@ class Worker(ServerNode):
         for k, f in self.startup_information.items():
             try:
                 v = f(self)
-                if hasattr(v, "__await__"):
+                if isawaitable(v):
                     v = await v
                 result[k] = v
             except Exception:  # TODO: log error once
@@ -1057,7 +1058,7 @@ class Worker(ServerNode):
                 if hasattr(plugin, "teardown")
             ]
 
-            await asyncio.gather(*[td for td in teardowns if hasattr(td, "__await__")])
+            await asyncio.gather(*[td for td in teardowns if isawaitable(td)])
 
             for pc in self.periodic_callbacks.values():
                 pc.stop()
@@ -2301,7 +2302,7 @@ class Worker(ServerNode):
                 if hasattr(plugin, "setup"):
                     try:
                         result = plugin.setup(worker=self)
-                        if hasattr(result, "__await__"):
+                        if isawaitable(result):
                             result = await result
                     except Exception as e:
                         msg = error_message(e)

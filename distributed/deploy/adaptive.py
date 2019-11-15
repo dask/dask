@@ -1,3 +1,4 @@
+from inspect import isawaitable
 import logging
 import math
 
@@ -158,7 +159,7 @@ class Adaptive(AdaptiveCore):
             # close workers more forcefully
             logger.info("Retiring workers %s", workers)
             f = self.cluster.scale_down(workers)
-            if hasattr(f, "__await__"):
+            if isawaitable(f):
                 await f
 
     async def scale_up(self, n):

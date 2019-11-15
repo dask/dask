@@ -2,6 +2,7 @@ import asyncio
 from collections import defaultdict, deque
 from concurrent.futures import CancelledError
 from functools import partial
+from inspect import isawaitable
 import logging
 import threading
 import traceback
@@ -397,7 +398,7 @@ class Server(object):
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
                         result = handler(comm, **msg)
-                        if hasattr(result, "__await__"):
+                        if isawaitable(result):
                             result = asyncio.ensure_future(result)
                             self._ongoing_coroutines.add(result)
                             result = await result
