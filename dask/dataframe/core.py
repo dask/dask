@@ -5132,12 +5132,7 @@ def cov_corr_chunk(df, corr=False):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
-    try:
-        cov = df.cov().values
-    except NotImplementedError:
-        # Numpy version of covariance is slightly different from pandas
-        cov = np.cov(df.values, rowvar=False)
-
+    cov = df.cov().values
     dtype = [("sum", sums.dtype), ("count", counts.dtype), ("cov", cov.dtype)]
     if corr:
         with warnings.catch_warnings(record=True):
