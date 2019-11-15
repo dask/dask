@@ -5141,20 +5141,16 @@ def cov_corr_chunk(df, corr=False):
         m = zeros_like_safe(df.values, shape=shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            # Avoid using ufunc.outer, since it is not supported by cupy
-            mu_discrepancy = zeros_like_safe(df.values, shape=(len(df), len(mu)))
-            for j in range(len(mu)):
-                mu_discrepancy[:, j] = np.subtract(df.iloc[:, idx].values, mu[idx, j])
-            mu_discrepancy = mu_discrepancy ** 2
+            # Avoid using ufunc.outer (not supported by cupy)
+            mu_discrepancy = (
+                np.subtract(df.iloc[:, idx].values[:, None], mu[idx][None, :]) ** 2
+            )
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
         dtype.append(("m", m.dtype))
 
-    out = {}
-    out["sum"] = sums
-    out["count"] = counts
-    out["cov"] = cov * (counts - 1)
+    out = {"sum": sums, "count": counts, "cov": cov * (counts - 1)}
     if corr:
         out["m"] = m
     return out
@@ -5193,10 +5189,7 @@ def cov_corr_combine(data_in, corr=False):
     for name in items:
         dtype.append((name, data[name].dtype))
 
-    out = {}
-    out["sum"] = cum_sums[-1]
-    out["count"] = cum_counts[-1]
-    out["cov"] = C
+    out = {"sum": cum_sums[-1], "count": cum_counts[-1], "cov": C}
 
     if corr:
         nobs = np.where(cum_counts[-1], cum_counts[-1], np.nan)
