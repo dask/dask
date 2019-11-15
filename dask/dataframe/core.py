@@ -43,7 +43,7 @@ from ..utils import (
     skip_doctest,
 )
 from ..array.core import Array, normalize_arg
-from ..array.utils import empty_like_safe
+from ..array.utils import empty_like_safe, zeros_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -5126,9 +5126,8 @@ def cov_corr_chunk(df, corr=False):
     """
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
-    ref = np.empty(shape, dtype="float64")
-    sums = np.zeros_like(ref)
-    counts = np.zeros_like(ref)
+    sums = zeros_like_safe(df.values, shape=shape)
+    counts = zeros_like_safe(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
@@ -5139,12 +5138,11 @@ def cov_corr_chunk(df, corr=False):
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = np.zeros_like(ref)
+        m = zeros_like_safe(df.values, shape=shape)
         mask = df.isnull().values
-        r = np.empty((len(df), len(mu)), dtype="float64")
         for idx, x in enumerate(df):
             # Avoid using ufunc.outer, since it is not supported by cupy
-            mu_discrepancy = np.zeros_like(r)
+            mu_discrepancy = zeros_like_safe(df.values, shape=(len(df), len(mu)))
             for j in range(len(mu)):
                 mu_discrepancy[:, j] = np.subtract(df.iloc[:, idx].values, mu[idx, j])
             mu_discrepancy = mu_discrepancy ** 2
