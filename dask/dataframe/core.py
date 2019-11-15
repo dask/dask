@@ -5126,8 +5126,9 @@ def cov_corr_chunk(df, corr=False):
     """
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
-    sums = np.zeros_like(df.values, shape=shape)
-    counts = np.zeros_like(df.values, shape=shape)
+    ref = np.empty(shape, dtype="float64")
+    sums = np.zeros_like(ref)
+    counts = np.zeros_like(ref)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
@@ -5138,11 +5139,12 @@ def cov_corr_chunk(df, corr=False):
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = np.zeros_like(df.values, shape=shape)
+        m = np.zeros_like(ref)
         mask = df.isnull().values
+        r = np.empty((len(df), len(mu)), dtype="float64")
         for idx, x in enumerate(df):
             # Avoid using ufunc.outer, since it is not supported by cupy
-            mu_discrepancy = np.zeros_like(df.values, shape=(len(df), len(mu)))
+            mu_discrepancy = np.zeros_like(r)
             for j in range(len(mu)):
                 mu_discrepancy[:, j] = np.subtract(df.iloc[:, idx].values, mu[idx, j])
             mu_discrepancy = mu_discrepancy ** 2
