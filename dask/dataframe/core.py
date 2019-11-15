@@ -5125,26 +5125,34 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation
     """
     shape = (df.shape[1], df.shape[1])
-    # sums = np.zeros(shape)
-    # counts = np.zeros(shape)
+    df = df.astype("float64", copy=False)
     sums = np.zeros_like(df.values, shape=shape)
     counts = np.zeros_like(df.values, shape=shape)
-    df = df.astype("float64", copy=False)
+    cov = np.zeros_like(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
         counts[idx] = df[mask].count().values
-    cov = df.cov().values
+        # Build cov by column, since df.cov() not supported in cudf
+        for idx2, col2 in enumerate(df):
+            # TODO: Implement correct logic (replace try block)
+            try:
+                cov[idx, idx2] = df[col].cov(df[col2])
+            except (RuntimeWarning, TypeError):
+                cov[idx, idx2] = np.nan
     dtype = [("sum", sums.dtype), ("count", counts.dtype), ("cov", cov.dtype)]
     if corr:
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = np.zeros(shape)
+        m = np.zeros_like(df.values, shape=shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            # Use .values to get the ndarray for the ufunc.
-            mu_discrepancy = np.subtract.outer(df.iloc[:, idx].values, mu[idx]) ** 2
+            # Avoid using ufunc.outer, since it is not supported by cupy
+            mu_discrepancy = np.zeros_like(df.values, shape=(len(df), len(mu)))
+            for j in range(len(mu)):
+                mu_discrepancy[:, j] = np.subtract(df.iloc[:, idx].values, mu[idx, j])
+            mu_discrepancy = mu_discrepancy ** 2
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
@@ -5219,7 +5227,10 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     with np.errstate(invalid="ignore", divide="ignore"):
         mat = C / den
     if scalar:
-        return mat[0, 1]
+        result = mat[0, 1]
+        if hasattr(result, "get"):
+            return np.asscalar(result.get())
+        return result
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
