@@ -5183,10 +5183,6 @@ def cov_corr_combine(data_in, corr=False):
             (n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0
         ) + np.nansum(data["cov"], 0)
 
-    dtype = []
-    for name in items:
-        dtype.append((name, data[name].dtype))
-
     out = {"sum": cum_sums[-1], "count": cum_counts[-1], "cov": C}
 
     if corr:
