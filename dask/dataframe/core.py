@@ -5158,12 +5158,11 @@ def cov_corr_chunk(df, corr=False):
 
 def cov_corr_combine(data_in, corr=False):
 
-    items = ["sum", "count", "cov"]
+    data = {"sum": None, "count": None, "cov": None}
     if corr:
-        items.append("m")
+        data["m"] = None
 
-    data = {}
-    for k in items:
+    for k in data.keys():
         data[k] = [d[k] for d in data_in]
         data[k] = np.concatenate(data[k]).reshape((len(data[k]),) + data[k][0].shape)
 
