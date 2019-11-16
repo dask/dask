@@ -37,10 +37,9 @@ packages = ['dask', 'dask.array', 'dask.bag', 'dask.bytes',
 tests = [p + '.tests' for p in packages]
 
 # Only include pytest-runner in setup_requires if we're invoking tests
+setup_requires = ['wheel']
 if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
-    setup_requires = ['pytest-runner']
-else:
-    setup_requires = []
+    setup_requires += ['pytest-runner']
 
 setup(name='dask',
       version=versioneer.get_version(),
