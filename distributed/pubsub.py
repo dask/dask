@@ -74,7 +74,7 @@ class PubSubSchedulerExtension(object):
 
     def remove_subscriber(self, comm=None, name=None, worker=None, client=None):
         if worker:
-            logger.debug("Add worker subscriber: %s %s", name, worker)
+            logger.debug("Remove worker subscriber: %s %s", name, worker)
             self.subscribers[name].remove(worker)
             for pub in self.publishers[name]:
                 self.scheduler.worker_send(
@@ -82,7 +82,7 @@ class PubSubSchedulerExtension(object):
                     {"op": "pubsub-remove-subscriber", "address": worker, "name": name},
                 )
         elif client:
-            logger.debug("Add client subscriber: %s %s", name, client)
+            logger.debug("Remove client subscriber: %s %s", name, client)
             self.client_subscribers[name].remove(client)
             if not self.client_subscribers[name]:
                 del self.client_subscribers[name]
