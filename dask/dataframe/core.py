@@ -5206,10 +5206,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     with np.errstate(invalid="ignore", divide="ignore"):
         mat = C / den
     if scalar:
-        result = mat[0, 1]
-        if hasattr(result, "get"):
-            return np.asscalar(result.get())
-        return result
+        return float(mat[0, 1])
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
