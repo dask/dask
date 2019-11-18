@@ -43,7 +43,7 @@ from ..utils import (
     skip_doctest,
 )
 from ..array.core import Array, normalize_arg
-from ..array.utils import empty_like_safe
+from ..array.utils import empty_like_safe, zeros_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -5125,9 +5125,9 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation
     """
     shape = (df.shape[1], df.shape[1])
-    sums = np.zeros(shape)
-    counts = np.zeros(shape)
     df = df.astype("float64", copy=False)
+    sums = zeros_like_safe(df.values, shape=shape)
+    counts = zeros_like_safe(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
@@ -5138,27 +5138,34 @@ def cov_corr_chunk(df, corr=False):
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = np.zeros(shape)
+        m = zeros_like_safe(df.values, shape=shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            # Use .values to get the ndarray for the ufunc.
-            mu_discrepancy = np.subtract.outer(df.iloc[:, idx].values, mu[idx]) ** 2
+            # Avoid using ufunc.outer (not supported by cupy)
+            mu_discrepancy = (
+                np.subtract(df.iloc[:, idx].values[:, None], mu[idx][None, :]) ** 2
+            )
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
         dtype.append(("m", m.dtype))
 
-    out = np.empty(counts.shape, dtype=dtype)
-    out["sum"] = sums
-    out["count"] = counts
-    out["cov"] = cov * (counts - 1)
+    out = {"sum": sums, "count": counts, "cov": cov * (counts - 1)}
     if corr:
         out["m"] = m
     return out
 
 
-def cov_corr_combine(data, corr=False):
-    data = np.concatenate(data).reshape((len(data),) + data[0].shape)
+def cov_corr_combine(data_in, corr=False):
+
+    data = {"sum": None, "count": None, "cov": None}
+    if corr:
+        data["m"] = None
+
+    for k in data.keys():
+        data[k] = [d[k] for d in data_in]
+        data[k] = np.concatenate(data[k]).reshape((len(data[k]),) + data[k][0].shape)
+
     sums = np.nan_to_num(data["sum"])
     counts = data["count"]
 
@@ -5175,10 +5182,7 @@ def cov_corr_combine(data, corr=False):
             (n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0
         ) + np.nansum(data["cov"], 0)
 
-    out = np.empty(C.shape, dtype=data.dtype)
-    out["sum"] = cum_sums[-1]
-    out["count"] = cum_counts[-1]
-    out["cov"] = C
+    out = {"sum": cum_sums[-1], "count": cum_counts[-1], "cov": C}
 
     if corr:
         nobs = np.where(cum_counts[-1], cum_counts[-1], np.nan)
@@ -5202,7 +5206,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     with np.errstate(invalid="ignore", divide="ignore"):
         mat = C / den
     if scalar:
-        return mat[0, 1]
+        return float(mat[0, 1])
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
