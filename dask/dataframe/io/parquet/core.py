@@ -92,6 +92,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=True,
+    chunksize=None,
     **kwargs
 ):
     """
@@ -144,6 +145,10 @@ def read_parquet(
         to parquet-file row-groups (when enough row-group metadata is
         available). Otherwise, partitions correspond to distinct files.
         Only the "pyarrow" engine currently supports this argument.
+    chunksize : int
+        The target task partition size.  If split_row_groups is `True` the
+        row-groups will be aggregated (if consecutive groups are in the same
+        file) until the aggregate data size reach this value (default 250MB).
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -217,6 +222,25 @@ def read_parquet(
     )
     if meta.index.name is not None:
         index = meta.index.name
+
+    # Aggregate parts/statistics if we are splitting by row-group
+    if split_row_groups and gather_statistics:
+
+        row_size = 0
+        for column in statistics[0]["columns"]:
+            name = column["name"]
+            if name in meta.columns:
+                dtype = meta[name].dtype
+            else:
+                dtype = meta.index.dtype
+            if dtype == "object":
+                row_size += len(column["max"]) * dtype.itemsize
+            else:
+                row_size += dtype.itemsize
+
+        parts_agg, statistics_agg = engine.aggregate_row_groups(
+            parts, statistics, (chunksize or 250000000) // row_size
+        )
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(

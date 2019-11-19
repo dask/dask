@@ -2101,3 +2101,34 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
+
+
+@pytest.mark.parametrize("chunksize", [None, 16])
+def test_chunksize(tmpdir, chunksize):
+    # from math import ceil
+    check_pyarrow()
+
+    df = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=25),
+            "b": np.random.random(size=25),
+            "c": np.random.randint(1, 5, size=25),
+            "index": np.arange(0, 25),
+        }
+    ).set_index("index")
+
+    nparts = 2
+    row_group_size = 6
+    ddf1 = dd.from_pandas(df, npartitions=nparts)
+    ddf1.to_parquet(str(tmpdir), engine="pyarrow", row_group_size=row_group_size)
+
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        chunksize=chunksize,
+        split_row_groups=True,
+        gather_statistics=True,
+        index="index",
+    )
+
+    assert_eq(ddf1, ddf2, check_divisions=False)

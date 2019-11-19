@@ -360,6 +360,10 @@ class FastParquetEngine(Engine):
         return df
 
     @staticmethod
+    def aggregate_row_groups(parts, stats, batch_size):
+        return parts, stats
+
+    @staticmethod
     def initialize_write(
         df,
         fs,

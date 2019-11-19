@@ -193,6 +193,24 @@ class Engine:
         """
         raise NotImplementedError()
 
+    @staticmethod
+    def aggregate_row_groups(parts, stats, batch_size):
+        """
+        Aggregate row-groups, and produce new parts and stats objects.
+
+        Parameters
+        ----------
+        parts: List
+            Contains metadata objects to write, of the type undrestood by
+            the specific implementation.
+        statistics: List[Dict]
+            A list of dictionaries of statistics data, one dict for every
+            partition.
+        batch_size: int
+            The ideal number of rows to use for a single task/paritition.
+        """
+        raise NotImplementedError()
+
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
