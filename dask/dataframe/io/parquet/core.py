@@ -225,29 +225,8 @@ def read_parquet(
 
     # Aggregate parts/statistics if we are splitting by row-group
     if split_row_groups and gather_statistics:
-
-        row_size = 0
-        for column in statistics[0]["columns"]:
-            name = column["name"]
-            if name in meta.columns:
-                dtype = meta[name].dtype
-            else:
-                dtype = meta.index.dtype
-            if dtype == "object":
-                item_size = dtype.itemsize
-                if "max" in column:
-                    item_size *= len(column["max"])
-                else:
-                    item_size *= 10
-                row_size += item_size
-            else:
-                row_size += dtype.itemsize
-
-        target_batch_size = (chunksize or 250000000) // row_size
-        if target_batch_size > 1:
-            parts, statistics = engine.aggregate_row_groups(
-                parts, statistics, target_batch_size
-            )
+        chunksize = chunksize or 250000000
+        parts, statistics = engine.aggregate_row_groups(parts, statistics, chunksize)
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(

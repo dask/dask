@@ -220,6 +220,7 @@ class ArrowEngine(Engine):
             gather_statistics = False
 
         row_groups_per_piece = None
+        row_group_sizes = None
         if gather_statistics:
             # Read from _metadata file
             if dataset.metadata and dataset.metadata.num_row_groups >= len(pieces):
@@ -232,6 +233,10 @@ class ArrowEngine(Engine):
                         pieces, dataset.metadata, dataset.paths[0], fs
                     )
                 names = dataset.metadata.schema.names
+                row_group_sizes = [
+                    dataset.metadata.row_group(i).total_byte_size
+                    for i in range(len(row_groups))
+                ]
             else:
                 # Read from each individual piece (quite possibly slow).
                 row_groups, row_groups_per_piece = _get_md_row_groups(pieces)
@@ -239,6 +244,9 @@ class ArrowEngine(Engine):
                     piece = pieces[0]
                     md = piece.get_metadata()
                     names = md.schema.names
+                    row_group_sizes = [
+                        row_group.total_byte_size for row_group in row_groups
+                    ]
                 else:
                     gather_statistics = False
 
@@ -297,7 +305,9 @@ class ArrowEngine(Engine):
                 for i, piece in enumerate(pieces):
                     num_row_groups = row_groups_per_piece[i]
                     for rg in range(num_row_groups):
-                        parts.append((piece.path, rg, piece.partition_keys))
+                        parts.append(
+                            (piece.path, rg, piece.partition_keys, row_group_sizes[rg])
+                        )
             else:
                 parts = [
                     (piece.path, piece.row_group, piece.partition_keys)
@@ -314,9 +324,14 @@ class ArrowEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def aggregate_row_groups(parts, stats, batch_size):
+    def aggregate_row_groups(parts, stats, chunksize):
         def _init_piece(part, stat):
-            piece = [part["piece"][0], [part["piece"][1]], part["piece"][2]]
+            piece = [
+                part["piece"][0],
+                [part["piece"][1]],
+                part["piece"][2],
+                part["piece"][3],
+            ]
             new_part = {"piece": piece, "kwargs": part["kwargs"]}
             new_stat = stat.copy()
             return new_part, new_stat
@@ -329,6 +344,7 @@ class ArrowEngine(Engine):
         def _update_piece(part, next_part, stat, next_stat):
             row_group = part["piece"][1]
             next_part["piece"][1].append(row_group)
+            next_part["piece"][3] += part["piece"][3]
 
             # Update Statistics
             next_stat["num-rows"] += stat["num-rows"]
@@ -345,8 +361,8 @@ class ArrowEngine(Engine):
         for i in range(1, len(parts)):
             stat, part = stats[i], parts[i]
             path = part["piece"][0]
-            if path == next_part["piece"][0] and next_stat["num-rows"] <= (
-                batch_size + stat["num-rows"]
+            if (path == next_part["piece"][0]) and (
+                (next_part["piece"][3] + part["piece"][3]) <= chunksize
             ):
                 _update_piece(part, next_part, stat, next_stat)
             else:
@@ -371,8 +387,8 @@ class ArrowEngine(Engine):
                 )
             ]
         else:
-            # `piece` contains (path, row_group, partition_keys)
-            (path, row_groups, partition_keys) = piece
+            # `piece` contains (path, row_group, partition_keys, row_group_size)
+            (path, row_groups, partition_keys, row_group_size) = piece
             if not isinstance(row_groups, list):
                 row_groups = [row_groups]
             pieces = [
