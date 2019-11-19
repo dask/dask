@@ -11,6 +11,7 @@ from toolz import first
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
+import dask
 from dask.core import flatten
 from distributed.utils import tokey, format_dashboard_link
 from distributed.client import wait
@@ -34,6 +35,7 @@ from distributed.dashboard.components.scheduler import (
     WorkerTable,
     TaskGraph,
     ProfileServer,
+    MemoryByKey,
 )
 
 from distributed.dashboard import scheduler
@@ -690,3 +692,20 @@ def test_https_support(c, s, a, b):
         body = response.body.decode()
         assert "bokeh" in body.lower()
         assert not re.search("href=./", body)  # no absolute links
+
+
+@gen_cluster(
+    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
+)
+async def test_memory_by_key(c, s, a, b):
+    mbk = MemoryByKey(s)
+
+    da = pytest.importorskip("dask.array")
+    x = (da.random.random((20, 20), chunks=(10, 10)) + 1).persist(optimize_graph=False)
+    await x
+
+    y = await dask.delayed(inc)(1).persist()
+
+    mbk.update()
+    assert mbk.source.data["name"] == ["add", "inc"]
+    assert mbk.source.data["nbytes"] == [x.nbytes, sys.getsizeof(1)]

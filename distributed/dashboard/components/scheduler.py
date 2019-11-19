@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 import math
 from numbers import Number
@@ -36,7 +37,7 @@ from bokeh.themes import Theme
 from bokeh.transform import factor_cmap, linear_cmap
 from bokeh.io import curdoc
 import dask
-from dask.utils import format_bytes
+from dask.utils import format_bytes, key_split
 from toolz import pipe
 from tornado import escape
 
@@ -424,6 +425,82 @@ class BandwidthWorkers(DashboardComponent):
                 "bandwidth_text": list(map(format_bytes, value)),
             }
             self.fig.title.text = "Bandwidth: " + format_bytes(self.scheduler.bandwidth)
+
+            update(self.source, result)
+
+
+class MemoryByKey(DashboardComponent):
+    """ Bar chart showing memory use by key prefix"""
+
+    def __init__(self, scheduler, **kwargs):
+        with log_errors():
+            self.last = 0
+            self.scheduler = scheduler
+            self.source = ColumnDataSource(
+                {
+                    "name": ["a", "b"],
+                    "nbytes": [100, 1000],
+                    "count": [1, 2],
+                    "color": ["blue", "blue"],
+                }
+            )
+
+            fig = figure(
+                title="Memory Use",
+                tools="",
+                id="bk-memory-by-key-plot",
+                name="memory_by_key",
+                x_range=["a", "b"],
+                **kwargs,
+            )
+            rect = fig.vbar(
+                source=self.source, x="name", top="nbytes", width=0.9, color="color"
+            )
+            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
+            fig.xaxis.major_label_orientation = -math.pi / 12
+            rect.nonselection_glyph = None
+
+            fig.xaxis.minor_tick_line_alpha = 0
+            fig.ygrid.visible = False
+
+            fig.toolbar.logo = None
+            fig.toolbar_location = None
+
+            hover = HoverTool()
+            hover.tooltips = "@name: @nbytes_text"
+            hover.tooltips = """
+            <div>
+                <p><b>Name:</b> @name</p>
+                <p><b>Bytes:</b> @nbytes_text </p>
+                <p><b>Count:</b> @count objects </p>
+            </div>
+            """
+            hover.point_policy = "follow_mouse"
+            fig.add_tools(hover)
+
+            self.fig = fig
+
+    @without_property_validation
+    def update(self):
+        with log_errors():
+            counts = defaultdict(int)
+            nbytes = defaultdict(int)
+            for ws in self.scheduler.workers.values():
+                for ts in ws.has_what:
+                    ks = key_split(ts.key)
+                    counts[ks] += 1
+                    nbytes[ks] += ts.nbytes
+
+            names = list(sorted(counts))
+            self.fig.x_range.factors = names
+            result = {
+                "name": names,
+                "count": [counts[name] for name in names],
+                "nbytes": [nbytes[name] for name in names],
+                "nbytes_text": [format_bytes(nbytes[name]) for name in names],
+                "color": [color_of(name) for name in names],
+            }
+            self.fig.title.text = "Total Use: " + format_bytes(sum(nbytes.values()))
 
             update(self.source, result)
 
@@ -1862,6 +1939,15 @@ def individual_bandwidth_workers_doc(scheduler, extra, doc):
         bw.update()
         add_periodic_callback(doc, bw, 500)
         doc.add_root(bw.fig)
+        doc.theme = BOKEH_THEME
+
+
+def individual_memory_by_key_doc(scheduler, extra, doc):
+    with log_errors():
+        component = MemoryByKey(scheduler, sizing_mode="stretch_both")
+        component.update()
+        add_periodic_callback(doc, component, 500)
+        doc.add_root(component.fig)
         doc.theme = BOKEH_THEME
 
 
