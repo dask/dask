@@ -238,9 +238,11 @@ def read_parquet(
             else:
                 row_size += dtype.itemsize
 
-        parts_agg, statistics_agg = engine.aggregate_row_groups(
-            parts, statistics, (chunksize or 250000000) // row_size
-        )
+        target_batch_size = (chunksize or 250000000) // row_size
+        if target_batch_size > 1:
+            parts, statistics = engine.aggregate_row_groups(
+                parts, statistics, target_batch_size
+            )
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(

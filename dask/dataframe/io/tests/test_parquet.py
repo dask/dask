@@ -2103,17 +2103,16 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
 
-@pytest.mark.parametrize("chunksize", [None, 16])
+@pytest.mark.parametrize("chunksize", [None, 16, 1024, 4096])
 def test_chunksize(tmpdir, chunksize):
-    # from math import ceil
     check_pyarrow()
 
     df = pd.DataFrame(
         {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=25),
-            "b": np.random.random(size=25),
-            "c": np.random.randint(1, 5, size=25),
-            "index": np.arange(0, 25),
+            "a": np.random.choice(["apple", "banana", "carrot"], size=100),
+            "b": np.random.random(size=100),
+            "c": np.random.randint(1, 5, size=100),
+            "index": np.arange(0, 100),
         }
     ).set_index("index")
 
@@ -2132,3 +2131,7 @@ def test_chunksize(tmpdir, chunksize):
     )
 
     assert_eq(ddf1, ddf2, check_divisions=False)
+
+    for df_part in ddf2.partitions:
+        if chunksize and len(df_part) > row_group_size:
+            assert df_part.compute().memory_usage().sum() <= chunksize
