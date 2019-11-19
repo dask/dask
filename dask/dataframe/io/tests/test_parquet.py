@@ -2104,7 +2104,7 @@ def test_split_row_groups_pyarrow(tmpdir):
 
 
 @pytest.mark.parametrize("chunksize", [None, 16, 1024, 4096])
-def test_chunksize(tmpdir, chunksize):
+def test_chunksize(tmpdir, chunksize, engine):
     check_pyarrow()
 
     df = pd.DataFrame(
@@ -2123,7 +2123,7 @@ def test_chunksize(tmpdir, chunksize):
 
     ddf2 = dd.read_parquet(
         str(tmpdir),
-        engine="pyarrow",
+        engine=engine,
         chunksize=chunksize,
         split_row_groups=True,
         gather_statistics=True,

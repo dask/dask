@@ -234,7 +234,12 @@ def read_parquet(
             else:
                 dtype = meta.index.dtype
             if dtype == "object":
-                row_size += len(column["max"]) * dtype.itemsize
+                item_size = dtype.itemsize
+                if "max" in column:
+                    item_size *= len(column["max"])
+                else:
+                    item_size *= 10
+                row_size += item_size
             else:
                 row_size += dtype.itemsize
 
