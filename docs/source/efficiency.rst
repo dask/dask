@@ -31,7 +31,7 @@ shape we might choose one of the following options:
 
 .. code-block:: python
 
-   >>> x.result().shape()  # Slow from lots of data transfer
+   >>> x.result().shape  # Slow from lots of data transfer
    (1000, 1000)
 
 **Fast**
