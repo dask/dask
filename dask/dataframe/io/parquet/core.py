@@ -218,116 +218,16 @@ def read_parquet(
     if meta.index.name is not None:
         index = meta.index.name
 
-    ignore_index_column_intersection = False
-    if columns is None:
-        # User didn't specify columns, so ignore any intersection
-        # of auto-detected values with the index (if necessary)
-        ignore_index_column_intersection = True
-        columns = [c for c in meta.columns]
-
-    if not set(columns).issubset(set(meta.columns)):
-        raise ValueError(
-            "The following columns were not found in the dataset %s\n"
-            "The following columns were found %s"
-            % (set(columns) - set(meta.columns), meta.columns)
-        )
-
     # Parse dataset statistics from metadata (if available)
-    index_in_columns = False
-    if statistics:
-        result = list(
-            zip(
-                *[
-                    (part, stats)
-                    for part, stats in zip(parts, statistics)
-                    if stats["num-rows"] > 0
-                ]
-            )
-        )
-        parts, statistics = result or [[], []]
-        if filters:
-            parts, statistics = apply_filters(parts, statistics, filters)
+    parts, divisions, index, index_in_columns = process_statistics(
+        parts, statistics, filters, index
+    )
 
-        out = sorted_columns(statistics)
-
-        if index and isinstance(index, str):
-            index = [index]
-        if index and out:
-            # Only one valid column
-            out = [o for o in out if o["name"] in index]
-        if index is not False and len(out) == 1:
-            # Use only sorted column with statistics as the index
-            divisions = out[0]["divisions"]
-            if index is None:
-                index_in_columns = True
-                index = [out[0]["name"]]
-            elif index != [out[0]["name"]]:
-                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
-        elif index is not False and len(out) > 1:
-            if any(o["name"] == "index" for o in out):
-                # Use sorted column named "index" as the index
-                [o] = [o for o in out if o["name"] == "index"]
-                divisions = o["divisions"]
-                if index is None:
-                    index = [o["name"]]
-                    index_in_columns = True
-                elif index != [o["name"]]:
-                    raise ValueError(
-                        "Specified index is invalid.\nindex: {}".format(index)
-                    )
-            else:
-                # Multiple sorted columns found, cannot autodetect the index
-                warnings.warn(
-                    "Multiple sorted columns found %s, cannot\n "
-                    "autodetect index. Will continue without an index.\n"
-                    "To pick an index column, use the index= keyword; to \n"
-                    "silence this warning use index=False."
-                    "" % [o["name"] for o in out],
-                    RuntimeWarning,
-                )
-                index = False
-                divisions = [None] * (len(parts) + 1)
-        else:
-            divisions = [None] * (len(parts) + 1)
-    else:
-        divisions = [None] * (len(parts) + 1)
-
-    if index:
-        if isinstance(index, str):
-            index = [index]
-        if isinstance(columns, str):
-            columns = [columns]
-
-        if ignore_index_column_intersection:
-            columns = [col for col in columns if col not in index]
-        if set(index).intersection(columns):
-            if auto_index_allowed:
-                raise ValueError(
-                    "Specified index and column arguments must not intersect"
-                    " (set index=False or remove the detected index from columns).\n"
-                    "index: {} | column: {}".format(index, columns)
-                )
-            else:
-                raise ValueError(
-                    "Specified index and column arguments must not intersect.\n"
-                    "index: {} | column: {}".format(index, columns)
-                )
-
-        # Leaving index as a column in `meta`, because the index
-        # will be reset below (in case the index was detected after
-        # meta was created)
-        if index_in_columns:
-            meta = meta[columns + index]
-        else:
-            meta = meta[columns]
-
-    else:
-        meta = meta[list(columns)]
-
-    def _merge_kwargs(x, y):
-        z = x.copy()
-        z.update(y)
-        return z
+    # Account for index and columns arguments.
+    # Modify `meta` dataframe accordingly
+    meta, index, columns = set_index_columns(
+        meta, index, columns, index_in_columns, auto_index_allowed
+    )
 
     subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
@@ -682,6 +582,125 @@ def apply_filters(parts, statistics, filters):
         parts, statistics = out_parts, out_statistics
 
     return parts, statistics
+
+
+def process_statistics(parts, statistics, filters, index):
+    """Process row-group column statistics in metadata
+    Used in read_parquet.
+    """
+    index_in_columns = False
+    if statistics:
+        result = list(
+            zip(
+                *[
+                    (part, stats)
+                    for part, stats in zip(parts, statistics)
+                    if stats["num-rows"] > 0
+                ]
+            )
+        )
+        parts, statistics = result or [[], []]
+        if filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
+
+        out = sorted_columns(statistics)
+
+        if index and isinstance(index, str):
+            index = [index]
+        if index and out:
+            # Only one valid column
+            out = [o for o in out if o["name"] in index]
+        if index is not False and len(out) == 1:
+            # Use only sorted column with statistics as the index
+            divisions = out[0]["divisions"]
+            if index is None:
+                index_in_columns = True
+                index = [out[0]["name"]]
+            elif index != [out[0]["name"]]:
+                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
+        elif index is not False and len(out) > 1:
+            if any(o["name"] == "index" for o in out):
+                # Use sorted column named "index" as the index
+                [o] = [o for o in out if o["name"] == "index"]
+                divisions = o["divisions"]
+                if index is None:
+                    index = [o["name"]]
+                    index_in_columns = True
+                elif index != [o["name"]]:
+                    raise ValueError(
+                        "Specified index is invalid.\nindex: {}".format(index)
+                    )
+            else:
+                # Multiple sorted columns found, cannot autodetect the index
+                warnings.warn(
+                    "Multiple sorted columns found %s, cannot\n "
+                    "autodetect index. Will continue without an index.\n"
+                    "To pick an index column, use the index= keyword; to \n"
+                    "silence this warning use index=False."
+                    "" % [o["name"] for o in out],
+                    RuntimeWarning,
+                )
+                index = False
+                divisions = [None] * (len(parts) + 1)
+        else:
+            divisions = [None] * (len(parts) + 1)
+    else:
+        divisions = [None] * (len(parts) + 1)
+
+    return parts, divisions, index, index_in_columns
+
+
+def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
+    """Handle index/column arguments, and modify `meta`
+    Used in read_parquet.
+    """
+    ignore_index_column_intersection = False
+    if columns is None:
+        # User didn't specify columns, so ignore any intersection
+        # of auto-detected values with the index (if necessary)
+        ignore_index_column_intersection = True
+        columns = [c for c in meta.columns]
+
+    if not set(columns).issubset(set(meta.columns)):
+        raise ValueError(
+            "The following columns were not found in the dataset %s\n"
+            "The following columns were found %s"
+            % (set(columns) - set(meta.columns), meta.columns)
+        )
+
+    if index:
+        if isinstance(index, str):
+            index = [index]
+        if isinstance(columns, str):
+            columns = [columns]
+
+        if ignore_index_column_intersection:
+            columns = [col for col in columns if col not in index]
+        if set(index).intersection(columns):
+            if auto_index_allowed:
+                raise ValueError(
+                    "Specified index and column arguments must not intersect"
+                    " (set index=False or remove the detected index from columns).\n"
+                    "index: {} | column: {}".format(index, columns)
+                )
+            else:
+                raise ValueError(
+                    "Specified index and column arguments must not intersect.\n"
+                    "index: {} | column: {}".format(index, columns)
+                )
+
+        # Leaving index as a column in `meta`, because the index
+        # will be reset below (in case the index was detected after
+        # meta was created)
+        if index_in_columns:
+            meta = meta[columns + index]
+        else:
+            meta = meta[columns]
+
+    else:
+        meta = meta[list(columns)]
+
+    return meta, index, columns
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__
