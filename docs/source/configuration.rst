@@ -66,6 +66,8 @@ Note that the ``get`` function treats underscores and hyphens identically.
 For example, ``dask.config.get('num_workers')`` is equivalent to
 ``dask.config.get('num-workers')``.
 
+The values in the like ``"128 MiB"`` and ``"10s"`` are parsed using the
+functions in :ref:`api.utilities`.
 
 Specify Configuration
 ---------------------

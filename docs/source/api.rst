@@ -62,6 +62,8 @@ Dask has a few helpers for generating demo datasets
 .. autofunction:: make_people
 .. autofunction:: timeseries
 
+.. _api.utilities:
+
 Utilities
 ---------
 
