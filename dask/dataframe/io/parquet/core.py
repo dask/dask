@@ -254,14 +254,18 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-    import pandas as pd
+    concat_func = kwargs.pop("concat_func", False)
+    if not concat_func:
+        import pandas as pd
+
+        concat_func = pd.concat
 
     if isinstance(part, list):
         dfs = []
         for rg in part:
             df = func(fs, rg, columns.copy(), index, **kwargs)
             dfs.append(df)
-        df = pd.concat(dfs, axis=0)
+        df = concat_func(dfs, axis=0)
     else:
         df = func(fs, part, columns, index, **kwargs)
 
