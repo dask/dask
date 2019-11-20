@@ -265,6 +265,7 @@ class FastParquetEngine(Engine):
             elif meta.index.name == catcol:
                 meta.index = meta.index.set_categories(pf.cats[catcol])
 
+        row_group_sizes = []
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
@@ -297,6 +298,7 @@ class FastParquetEngine(Engine):
                 # Need this to filter out partitioned-on categorical columns
                 s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)
                 stats.append(s)
+                row_group_sizes.append(row_group.total_byte_size)
 
         else:
             stats = None
@@ -321,16 +323,23 @@ class FastParquetEngine(Engine):
                     col.meta_data.statistics = None
                     col.meta_data.encoding_stats = None
             piece_item = i if pf else piece
+            row_group_size = None
+            if row_group_sizes:
+                row_group_size = row_group_sizes[i]
             part = {
                 "piece": piece_item,
-                "kwargs": {"pf": pf, "categories": categories_dict or categories},
+                "kwargs": {
+                    "pf": pf,
+                    "categories": categories_dict or categories,
+                    "row_group_size": row_group_size,
+                },
             }
             parts.append(part)
 
         return (meta, stats, parts)
 
     @staticmethod
-    def aggregate_row_groups(parts, stats, batch_size):
+    def aggregate_row_groups(parts, stats, chunksize):
         def _init_piece(part, stat):
             new_part = part.copy()
             new_part["piece"] = [new_part["piece"]]
@@ -343,6 +352,7 @@ class FastParquetEngine(Engine):
         def _update_piece(part, next_part, stat, next_stat):
             row_group = part["piece"]
             next_part["piece"].append(row_group)
+            next_part["kwargs"]["row_group_size"] += part["kwargs"]["row_group_size"]
 
             # Update Statistics
             next_stat["num-rows"] += stat["num-rows"]
@@ -361,7 +371,9 @@ class FastParquetEngine(Engine):
         next_part, next_stat = _init_piece(parts[0], stats[0])
         for i in range(1, len(parts)):
             stat, part = stats[i], parts[i]
-            if next_stat["num-rows"] <= (batch_size + stat["num-rows"]):
+            if (
+                next_part["kwargs"]["row_group_size"] + part["kwargs"]["row_group_size"]
+            ) <= chunksize:
                 _update_piece(part, next_part, stat, next_stat)
             else:
                 _add_piece(next_part, parts_agg, next_stat, stats_agg)
