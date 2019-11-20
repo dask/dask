@@ -106,7 +106,7 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
             # Otherwise, just use 0th file
             if "_common_metadata" in fns:
                 dataset = pq.ParquetDataset(
-                    base + fs.sep + "_common_metadata", filesystem=fs, **dataset_kwargs,
+                    base + fs.sep + "_common_metadata", filesystem=fs, **dataset_kwargs
                 )
             else:
                 dataset = pq.ParquetDataset(
