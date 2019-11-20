@@ -7,7 +7,7 @@ storage systems including local disk, network file systems (NFS), the Hadoop
 File System (HDFS), and Amazon's S3 (excepting HDF, which is only available on
 POSIX like file systems).
 
-See the :doc:`Overview section <dataframe-overview>` for an in depth
+See the :doc:`DataFrame overview page <dataframe>` for an in depth
 discussion of ``dask.dataframe`` scope, use, and limitations.
 
 API
