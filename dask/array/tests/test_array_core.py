@@ -4224,3 +4224,10 @@ def test_compute_chunk_sizes_warning_fixes_slicing():
         y[:3, :]
     y.compute_chunk_sizes()
     y[:3, :]
+
+
+def test_rechunk_auto():
+    x = da.ones(10, chunks=(1,))
+    y = x.rechunk()
+
+    assert y.npartitions == 1
