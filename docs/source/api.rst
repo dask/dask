@@ -52,7 +52,23 @@ This more advanced API is available in the `Dask distributed documentation
 .. autofunction:: persist
 .. autofunction:: visualize
 
-Finally, Dask has a few helpers for generating demo datasets
+Datasets
+--------
 
-.. autofunction:: datasets.make_people
-.. autofunction:: datasets.timeseries
+Dask has a few helpers for generating demo datasets
+
+.. currentmodule:: dask.datasets
+
+.. autofunction:: make_people
+.. autofunction:: timeseries
+
+Utilities
+---------
+
+Dask has some public utility methods. These are primarily used for parsing
+configuration values.
+
+.. currentmodule:: dask.utils
+
+.. autofunction:: parse_bytes
+.. autofunction:: parse_timedelta
