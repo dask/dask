@@ -324,7 +324,10 @@ class ArrowEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def aggregate_row_groups(parts, stats, chunksize):
+    def aggregate_row_groups(parts, stats, chunksize, split_row_groups=True, **kwargs):
+        if not split_row_groups:
+            return parts, stats
+
         def _init_piece(part, stat):
             piece = [
                 part["piece"][0],

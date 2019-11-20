@@ -2111,8 +2111,9 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
 
+@pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 16, 1024, 4096])
-def test_chunksize(tmpdir, chunksize, engine):
+def test_chunksize(tmpdir, chunksize, engine, metadata):
     check_pyarrow()
 
     df = pd.DataFrame(
@@ -2127,10 +2128,23 @@ def test_chunksize(tmpdir, chunksize, engine):
     nparts = 2
     row_group_size = 6
     ddf1 = dd.from_pandas(df, npartitions=nparts)
-    ddf1.to_parquet(str(tmpdir), engine="pyarrow", row_group_size=row_group_size)
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        row_group_size=row_group_size,
+        write_metadata_file=metadata,
+    )
+
+    if metadata:
+        path = str(tmpdir)
+    else:
+        dirname = str(tmpdir)
+        files = os.listdir(dirname)
+        assert "_metadata" not in files
+        path = os.path.join(dirname, "*.parquet")
 
     ddf2 = dd.read_parquet(
-        str(tmpdir),
+        path,
         engine=engine,
         chunksize=chunksize,
         split_row_groups=True,

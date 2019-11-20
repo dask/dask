@@ -224,9 +224,11 @@ def read_parquet(
         index = meta.index.name
 
     # Aggregate parts/statistics if we are splitting by row-group
-    if split_row_groups and gather_statistics:
+    if statistics:
         chunksize = chunksize or 250000000
-        parts, statistics = engine.aggregate_row_groups(parts, statistics, chunksize)
+        parts, statistics = engine.aggregate_row_groups(
+            parts, statistics, chunksize, split_row_groups=split_row_groups
+        )
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(

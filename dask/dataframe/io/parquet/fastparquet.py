@@ -266,6 +266,7 @@ class FastParquetEngine(Engine):
                 meta.index = meta.index.set_categories(pf.cats[catcol])
 
         row_group_sizes = []
+        row_group_file_paths = []
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
@@ -299,6 +300,7 @@ class FastParquetEngine(Engine):
                 s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)
                 stats.append(s)
                 row_group_sizes.append(row_group.total_byte_size)
+                row_group_file_paths.append(row_group.columns[0].file_path)
 
         else:
             stats = None
@@ -323,15 +325,17 @@ class FastParquetEngine(Engine):
                     col.meta_data.statistics = None
                     col.meta_data.encoding_stats = None
             piece_item = i if pf else piece
-            row_group_size = None
+            row_group_size, row_group_file_path = None, None
             if row_group_sizes:
                 row_group_size = row_group_sizes[i]
+                row_group_file_path = row_group_file_paths[i]
             part = {
                 "piece": piece_item,
                 "kwargs": {
                     "pf": pf,
                     "categories": categories_dict or categories,
                     "row_group_size": row_group_size,
+                    "file_path": row_group_file_path,
                 },
             }
             parts.append(part)
@@ -339,7 +343,7 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def aggregate_row_groups(parts, stats, chunksize):
+    def aggregate_row_groups(parts, stats, chunksize, **kwargs):
         def _init_piece(part, stat):
             new_part = part.copy()
             new_part["piece"] = [new_part["piece"]]
@@ -371,7 +375,8 @@ class FastParquetEngine(Engine):
         next_part, next_stat = _init_piece(parts[0], stats[0])
         for i in range(1, len(parts)):
             stat, part = stats[i], parts[i]
-            if (
+            path = part["kwargs"]["file_path"]
+            if (path == next_part["kwargs"]["file_path"]) and (
                 next_part["kwargs"]["row_group_size"] + part["kwargs"]["row_group_size"]
             ) <= chunksize:
                 _update_piece(part, next_part, stat, next_stat)
