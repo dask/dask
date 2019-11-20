@@ -2193,7 +2193,8 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
     reason=(
         "Should work starting from pandas 1.0.0: "
         "https://github.com/dask/dask/pull/5423"
-    ), strict=False
+    ),
+    strict=False,
 )
 @pytest.mark.parametrize(
     "grouping",
