@@ -17,24 +17,19 @@ _base_envs:
 jobs:
   fast_finish: true
   include:
-    - env:
-      - ENV_FILE=continuous_integration/travis/travis-35.yaml
-      - *test
-      - *no_coverage
-      - *no_optimize
-      - *no_imports
-
     - env: &py36_env
+      - PYTHON_VERSION=3.6
       - ENV_FILE=continuous_integration/travis/travis-36.yaml
       - *test_and_lint
-      - *coverage
+      - *no_coverage
       - *no_optimize
       - *imports
 
     - env: &py37_env
+      - PYTHON_VERSION=3.7
       - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
-      - *no_coverage
+      - *coverage
       - *no_optimize
       - *imports
       - *array_function
@@ -52,6 +47,22 @@ jobs:
     - env: *py36_env
       if: type != pull_request
       os: osx
+
+    - env:
+      - ENV_FILE=continuous_integration/travis/travis-mindeps-array-dataframe.yaml
+      - *test
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
+      if: type != pull_request OR commit_message =~ test-mindeps  # Skip on PRS unless the commit message contains "test-mindeps"
+
+    - env:
+      - ENV_FILE=continuous_integration/travis/travis-mindeps-bag-delayed.yaml
+      - *test
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
+      if: type != pull_request OR commit_message =~ test-mindeps  # Skip on PRS unless the commit message contains "test-mindeps"
 
     - env:
       - TEST_HDFS='true'
@@ -75,8 +86,8 @@ script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
   - if [[ $LINT == 'true' ]]; then pip install flake8 ; flake8 dask; fi
-  - if [[ $LINT == 'true' ]]; then pip install black ; black dask --check; fi
-  - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
+  - if [[ $LINT == 'true' ]]; then pip install git+https://github.com/psf/black@73bd7038fbefdb1c6a61fa1edf16ff61613050a5; black dask --check; fi
+  - if [[ $TEST_IMPORTS == 'true' ]]; then bash continuous_integration/travis/test_imports.sh; fi
 
 after_success:
   - codecov

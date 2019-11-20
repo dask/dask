@@ -43,7 +43,7 @@ from ..utils import (
     skip_doctest,
 )
 from ..array.core import Array, normalize_arg
-from ..array.utils import empty_like_safe
+from ..array.utils import empty_like_safe, zeros_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -62,12 +62,14 @@ from .utils import (
     is_categorical_dtype,
     has_known_categories,
     PANDAS_VERSION,
+    PANDAS_GT_100,
     index_summary,
     is_dataframe_like,
     is_series_like,
     is_index_like,
     valid_divisions,
     hash_object_dispatch,
+    check_matching_columns,
 )
 
 no_default = "__no_default__"
@@ -715,7 +717,7 @@ Dask Name: {name}, {task} tasks""".format(
         2017-01-08    13.0
         2017-01-09    15.0
         2017-01-10    17.0
-        dtype: float64
+        Freq: D, dtype: float64
         """
         from .rolling import map_overlap
 
@@ -1128,6 +1130,8 @@ Dask Name: {name}, {task} tasks""".format(
             raise NotImplementedError("fillna with set limit and method=None")
         if isinstance(value, _Frame):
             test_value = value._meta_nonempty.values[0]
+        elif isinstance(value, Scalar):
+            test_value = value._meta_nonempty
         else:
             test_value = value
         meta = self._meta_nonempty.fillna(
@@ -2075,7 +2079,7 @@ Dask Name: {name}, {task} tasks""".format(
                     )
                 layer[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
             graph = HighLevelGraph.from_collections(
-                cname, layer, dependencies=[cumpart, cumlast]
+                name, layer, dependencies=[cumpart, cumlast]
             )
             result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
             return handle_out(out, result)
@@ -3510,6 +3514,7 @@ class DataFrame(_Frame):
                 or callable(v)
                 or pd.api.types.is_scalar(v)
                 or is_index_like(v)
+                or isinstance(v, Array)
             ):
                 raise TypeError(
                     "Column assignment doesn't support type "
@@ -3517,6 +3522,19 @@ class DataFrame(_Frame):
                 )
             if callable(v):
                 kwargs[k] = v(self)
+
+            if isinstance(v, Array):
+                from .io import from_dask_array
+
+                if len(v.shape) > 1:
+                    raise ValueError("Array assignment only supports 1-D arrays")
+                if v.npartitions != self.npartitions:
+                    raise ValueError(
+                        "Number of partitions do not match ({0} != {1})".format(
+                            v.npartitions, self.npartitions
+                        )
+                    )
+                kwargs[k] = from_dask_array(v, index=self.index)
 
         pairs = list(sum(kwargs.items(), ()))
 
@@ -3718,10 +3736,11 @@ class DataFrame(_Frame):
             whose merge key only appears in `left` DataFrame, "right_only" for
             observations whose merge key only appears in `right` DataFrame,
             and "both" if the observation’s merge key is found in both.
-        npartitions: int, None, or 'auto'
+        npartitions: int or None, optional
             The ideal number of output partitions. This is only utilised when
-            performing a hash_join (merging on columns only). If `None`
-            npartitions = max(lhs.npartitions, rhs.npartitions)
+            performing a hash_join (merging on columns only). If ``None`` then
+            ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
+            Default is ``None``.
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
@@ -3953,15 +3972,14 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {
-            "axis": axis,
-            "broadcast": broadcast,
-            "raw": raw,
-            "reduce": None,
-        }
+        pandas_kwargs = {"axis": axis, "raw": raw}
 
         if PANDAS_VERSION >= "0.23.0":
             kwds.setdefault("result_type", None)
+
+        if not PANDAS_GT_100:
+            pandas_kwargs["broadcast"] = broadcast
+            pandas_kwargs["reduce"] = None
 
         kwds.update(pandas_kwargs)
 
@@ -4840,18 +4858,8 @@ def apply_and_enforce(*args, **kwargs):
         if not len(df):
             return meta
         if is_dataframe_like(df):
-            # Need nan_to_num otherwise nan comparison gives False
-            if not np.array_equal(
-                np.nan_to_num(meta.columns), np.nan_to_num(df.columns)
-            ):
-                raise ValueError(
-                    "The columns in the computed data do not match"
-                    " the columns in the provided metadata\n"
-                    "  Expected: %s\n"
-                    "  Actual:   %s" % (str(list(meta.columns)), str(list(df.columns)))
-                )
-            else:
-                c = meta.columns
+            check_matching_columns(meta, df)
+            c = meta.columns
         else:
             c = meta.name
         return _rename(c, df)
@@ -5117,9 +5125,9 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation
     """
     shape = (df.shape[1], df.shape[1])
-    sums = np.zeros(shape)
-    counts = np.zeros(shape)
     df = df.astype("float64", copy=False)
+    sums = zeros_like_safe(df.values, shape=shape)
+    counts = zeros_like_safe(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
@@ -5130,27 +5138,34 @@ def cov_corr_chunk(df, corr=False):
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = np.zeros(shape)
+        m = zeros_like_safe(df.values, shape=shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
-            # Use .values to get the ndarray for the ufunc.
-            mu_discrepancy = np.subtract.outer(df.iloc[:, idx].values, mu[idx]) ** 2
+            # Avoid using ufunc.outer (not supported by cupy)
+            mu_discrepancy = (
+                np.subtract(df.iloc[:, idx].values[:, None], mu[idx][None, :]) ** 2
+            )
             mu_discrepancy[mask] = np.nan
             m[idx] = np.nansum(mu_discrepancy, axis=0)
         m = m.T
         dtype.append(("m", m.dtype))
 
-    out = np.empty(counts.shape, dtype=dtype)
-    out["sum"] = sums
-    out["count"] = counts
-    out["cov"] = cov * (counts - 1)
+    out = {"sum": sums, "count": counts, "cov": cov * (counts - 1)}
     if corr:
         out["m"] = m
     return out
 
 
-def cov_corr_combine(data, corr=False):
-    data = np.concatenate(data).reshape((len(data),) + data[0].shape)
+def cov_corr_combine(data_in, corr=False):
+
+    data = {"sum": None, "count": None, "cov": None}
+    if corr:
+        data["m"] = None
+
+    for k in data.keys():
+        data[k] = [d[k] for d in data_in]
+        data[k] = np.concatenate(data[k]).reshape((len(data[k]),) + data[k][0].shape)
+
     sums = np.nan_to_num(data["sum"])
     counts = data["count"]
 
@@ -5167,10 +5182,7 @@ def cov_corr_combine(data, corr=False):
             (n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0
         ) + np.nansum(data["cov"], 0)
 
-    out = np.empty(C.shape, dtype=data.dtype)
-    out["sum"] = cum_sums[-1]
-    out["count"] = cum_counts[-1]
-    out["cov"] = C
+    out = {"sum": cum_sums[-1], "count": cum_counts[-1], "cov": C}
 
     if corr:
         nobs = np.where(cum_counts[-1], cum_counts[-1], np.nan)
@@ -5194,7 +5206,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     with np.errstate(invalid="ignore", divide="ignore"):
         mat = C / den
     if scalar:
-        return mat[0, 1]
+        return float(mat[0, 1])
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
@@ -6098,7 +6110,7 @@ def mapseries(base_chunk, concat_map):
 
 def mapseries_combine(index, concat_result):
     final_series = concat_result.sort_index()
-    final_series.index = index
+    final_series = index.to_series().map(final_series)
     return final_series
 
 

@@ -79,6 +79,25 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
 
 
 class Resampler(object):
+    """ Class for resampling timeseries data.
+
+    This class is commonly encountered when using ``obj.resample(...)`` which
+    return ``Resampler`` objects.
+
+    Parameters
+    ----------
+    obj : Dask DataFrame or Series
+        Data to be resampled.
+    rule : str, tuple, datetime.timedelta, DateOffset or None
+        The offset string or object representing the target conversion.
+    kwargs : optional
+        Keyword arguments passed to underlying pandas resampling function.
+
+    Returns
+    -------
+    Resampler instance of the appropriate type
+    """
+
     def __init__(self, obj, rule, **kwargs):
         if not obj.known_divisions:
             msg = (
@@ -101,6 +120,24 @@ class Resampler(object):
         self._kwargs = kwargs
 
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
+        """ Aggregate using one or more operations
+
+        Parameters
+        ----------
+        how : str
+            Name of aggregation operation
+        fill_value : scalar, optional
+            Value to use for missing values, applied during upsampling.
+            Default is NaN.
+        how_args : optional
+            Positional arguments for aggregation operation.
+        how_kwargs : optional
+            Keyword arguments for aggregation operation.
+
+        Returns
+        -------
+        Dask DataFrame or Series
+        """
         rule = self._rule
         kwargs = self._kwargs
         name = "resample-" + tokenize(

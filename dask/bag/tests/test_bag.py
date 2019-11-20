@@ -34,6 +34,9 @@ from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
 
+# Needed to pickle the lambda functions used in this test suite
+pytest.importorskip("cloudpickle")
+
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3
@@ -177,13 +180,15 @@ def test_repr(func):
     assert str(b.npartitions) in func(b)
     assert b.name[:5] in func(b)
 
+    assert "from_sequence" in func(db.from_sequence(range(5)))
+
 
 def test_pluck():
     d = {("x", 0): [(1, 10), (2, 20)], ("x", 1): [(3, 30), (4, 40)]}
     b = Bag(d, "x", 2)
-    assert set(b.pluck(0)) == set([1, 2, 3, 4])
-    assert set(b.pluck(1)) == set([10, 20, 30, 40])
-    assert set(b.pluck([1, 0])) == set([(10, 1), (20, 2), (30, 3), (40, 4)])
+    assert set(b.pluck(0)) == {1, 2, 3, 4}
+    assert set(b.pluck(1)) == {10, 20, 30, 40}
+    assert set(b.pluck([1, 0])) == {(10, 1), (20, 2), (30, 3), (40, 4)}
     assert b.pluck([1, 0]).name == b.pluck([1, 0]).name
 
 
@@ -231,7 +236,7 @@ def test_fold():
     )
 
     e = db.from_sequence([[1], [2], [3]], npartitions=2)
-    assert set(e.fold(add, initial=[]).compute(scheduler="sync")) == set([1, 2, 3])
+    assert set(e.fold(add, initial=[]).compute(scheduler="sync")) == {1, 2, 3}
 
 
 def test_fold_bag():
@@ -635,9 +640,9 @@ def test_read_text_encoding():
         b = db.read_text(fn, blocksize=100, encoding="gb18030")
         c = db.read_text(fn, encoding="gb18030")
         assert len(b.dask) > 5
-        assert list(b.str.strip().map(lambda x: x.encode("utf-8"))) == list(
-            c.str.strip().map(lambda x: x.encode("utf-8"))
-        )
+        b_enc = b.str.strip().map(lambda x: x.encode("utf-8"))
+        c_enc = c.str.strip().map(lambda x: x.encode("utf-8"))
+        assert list(b_enc) == list(c_enc)
 
         d = db.read_text([fn], blocksize=100, encoding="gb18030")
         assert list(b) == list(d)
@@ -689,7 +694,7 @@ def test_from_s3():
 def test_from_sequence():
     b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
-    assert set(b) == set([1, 2, 3, 4, 5])
+    assert set(b) == {1, 2, 3, 4, 5}
 
 
 def test_from_long_sequence():
@@ -708,12 +713,12 @@ def test_from_empty_sequence():
 def test_product():
     b2 = b.product(b)
     assert b2.npartitions == b.npartitions ** 2
-    assert set(b2) == set([(i, j) for i in L for j in L])
+    assert set(b2) == {(i, j) for i in L for j in L}
 
     x = db.from_sequence([1, 2, 3, 4])
     y = db.from_sequence([10, 20, 30])
     z = x.product(y)
-    assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
+    assert set(z) == {(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]}
 
     assert z.name != b2.name
     assert z.name == x.product(y).name
@@ -722,9 +727,9 @@ def test_product():
 def test_partition_collect():
     with partd.Pickle() as p:
         partition(identity, range(6), 3, p)
-        assert set(p.get(0)) == set([0, 3])
-        assert set(p.get(1)) == set([1, 4])
-        assert set(p.get(2)) == set([2, 5])
+        assert set(p.get(0)) == {0, 3}
+        assert set(p.get(1)) == {1, 4}
+        assert set(p.get(2)) == {2, 5}
 
         assert sorted(collect(identity, 0, p, "")) == [(0, [0]), (3, [3])]
 
@@ -1108,7 +1113,7 @@ def test_from_delayed():
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-    asum_value = delayed(lambda X: sum(X))(a)
+    asum_value = delayed(sum)(a)
     asum_item = db.Item.from_delayed(asum_value)
     assert asum_value.compute() == asum_item.compute() == 6
 
@@ -1333,7 +1338,7 @@ def test_optimize_fuse_keys():
     z = y.map(inc)
 
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert not set(y.dask) & set(dsk)
+    assert not y.dask.keys() & dsk.keys()
 
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(), fuse_keys=y.__dask_keys__())
     assert all(k in dsk for k in y.__dask_keys__())

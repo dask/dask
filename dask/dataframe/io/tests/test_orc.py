@@ -35,7 +35,7 @@ columns = ["time", "date"]
 def test_orc_with_backend():
     pytest.importorskip("requests")
     d = read_orc(url)
-    assert set(d.columns) == {"time", "date"}  # order is not guranteed
+    assert set(d.columns) == {"time", "date"}  # order is not guaranteed
     assert len(d) == 70000
 
 

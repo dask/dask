@@ -45,7 +45,6 @@ from ..utils import (
     is_integer,
     IndexCallable,
     funcname,
-    derived_from,
     SerializableLock,
     Dispatch,
     factors,
@@ -54,6 +53,7 @@ from ..utils import (
     M,
     ndimlist,
     format_bytes,
+    typename,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -1244,7 +1244,10 @@ class Array(DaskMethodsMixin):
         return "\n".join(both)
 
     def _repr_html_table(self):
-        if not math.isnan(self.nbytes):
+        if "sparse" in typename(type(self._meta)):
+            nbytes = None
+            cbytes = None
+        elif not math.isnan(self.nbytes):
             nbytes = format_bytes(self.nbytes)
             cbytes = format_bytes(np.prod(self.chunksize) * self.dtype.itemsize)
         else:
@@ -1258,7 +1261,9 @@ class Array(DaskMethodsMixin):
             "  </thead>",
             "  <tbody>",
             "    <tr><th> Bytes </th><td> %s </td> <td> %s </td></tr>"
-            % (nbytes, cbytes),
+            % (nbytes, cbytes)
+            if nbytes is not None
+            else "",
             "    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>"
             % (str(self.shape), str(self.chunksize)),
             "    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>"
@@ -1696,7 +1701,11 @@ class Array(DaskMethodsMixin):
             axes = None
         elif len(axes) == 1 and isinstance(axes[0], Iterable):
             axes = axes[0]
-        return transpose(self, axes=axes)
+        if (axes == tuple(range(self.ndim))) or (axes == tuple(range(-self.ndim, 0))):
+            # no transpose necessary
+            return self
+        else:
+            return transpose(self, axes=axes)
 
     @derived_from(np.ndarray)
     def ravel(self):
@@ -2155,7 +2164,7 @@ class Array(DaskMethodsMixin):
 
         return squeeze(self, axis)
 
-    def rechunk(self, chunks, threshold=None, block_size_limit=None):
+    def rechunk(self, chunks="auto", threshold=None, block_size_limit=None):
         """ See da.rechunk for docstring """
         from . import rechunk  # avoid circular import
 
@@ -3074,6 +3083,10 @@ def unify_chunks(*args, **kwargs):
     """
     Unify chunks across a sequence of arrays
 
+    This utility function is used within other common operations like
+    ``map_blocks`` and ``blockwise``.  It is not commonly used by end-users
+    directly.
+
     Parameters
     ----------
     *args: sequence of Array, index pairs
@@ -3658,7 +3671,7 @@ def asarray(a, **kwargs):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
-    return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
+    return from_array(a, getitem=getter_inline, **kwargs)
 
 
 def asanyarray(a):

@@ -16,7 +16,6 @@ import pandas.util.testing as tm
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.compatibility import PY_VERSION
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
     pandas_read_text,
@@ -92,7 +91,7 @@ csv_files = {
     "2014-01-01.csv": (
         b"name,amount,id\n" b"Alice,100,1\n" b"Bob,200,2\n" b"Charlie,300,3\n"
     ),
-    "2014-01-02.csv": (b"name,amount,id\n"),
+    "2014-01-02.csv": b"name,amount,id\n",
     "2014-01-03.csv": (
         b"name,amount,id\n" b"Dennis,400,4\n" b"Edith,500,5\n" b"Frank,600,6\n"
     ),
@@ -107,7 +106,7 @@ fwf_files = {
         b"     Bob     200   2\n"
         b" Charlie     300   3\n"
     ),
-    "2014-01-02.csv": (b"    name  amount  id\n"),
+    "2014-01-02.csv": b"    name  amount  id\n",
     "2014-01-03.csv": (
         b"    name  amount  id\n"
         b"  Dennis     400   4\n"
@@ -702,8 +701,6 @@ def test_read_csv_sensitive_to_enforce():
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt == "zip" and PY_VERSION < "3.6":
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
     files2 = valmap(compress[fmt], csv_files)
@@ -789,7 +786,7 @@ def test_head_partial_line_fix():
         ".overflow1.csv": (
             "a,b\n0,'abcdefghijklmnopqrstuvwxyz'\n1,'abcdefghijklmnopqrstuvwxyz'"
         ),
-        ".overflow2.csv": ("a,b\n111111,-11111\n222222,-22222\n333333,-33333\n"),
+        ".overflow2.csv": "a,b\n111111,-11111\n222222,-22222\n333333,-33333\n",
     }
     with filetexts(files):
         # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.

@@ -8,16 +8,27 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-  'array': ['numpy >= 1.13.0', 'toolz >= 0.7.3'],
-  'bag': ['fsspec >= 0.5.1', 'cloudpickle >= 0.2.1', 'toolz >= 0.7.3',
-          'partd >= 0.3.10'],
-  'dataframe': ['numpy >= 1.13.0', 'pandas >= 0.21.0', 'toolz >= 0.7.3',
-                'partd >= 0.3.10', 'cloudpickle >= 0.2.1', 'fsspec >= 0.5.1'],
-  'distributed': ['distributed >= 2.0'],
-  'diagnostics': ['bokeh >= 1.0.0'],
-  'delayed': ['toolz >= 0.7.3'],
+    "array": ["numpy >= 1.13.0", "toolz >= 0.7.3"],
+    "bag": [
+        "cloudpickle >= 0.2.1",
+        "fsspec >= 0.6.0",
+        "toolz >= 0.7.3",
+        "partd >= 0.3.10"
+    ],
+    "dataframe": [
+        "numpy >= 1.13.0",
+        "pandas >= 0.21.0",
+        "toolz >= 0.7.3",
+        "partd >= 0.3.10",
+        "fsspec >= 0.6.0",
+    ],
+    "distributed": ["distributed >= 2.0"],
+    "diagnostics": ["bokeh >= 1.0.0"],
+    "delayed": ["cloudpickle >= 0.2.1", "toolz >= 0.7.3"],
 }
-extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
+extras_require["complete"] = sorted(
+    {"PyYaml"} | {v for req in extras_require.values() for v in req}
+)
 
 packages = ['dask', 'dask.array', 'dask.bag', 'dask.bytes',
             'dask.dataframe', 'dask.dataframe.io', 'dask.dataframe.tseries',
@@ -42,13 +53,12 @@ setup(name='dask',
       keywords='task-scheduling parallel numpy pandas pydata',
       classifiers=[
           "Programming Language :: Python :: 3",
-          "Programming Language :: Python :: 3.5",
           "Programming Language :: Python :: 3.6",
           "Programming Language :: Python :: 3.7",
       ],
       packages=packages + tests,
       long_description=open('README.rst').read() if exists('README.rst') else '',
-      python_requires=">=3.5",
+      python_requires=">=3.6",
       install_requires=[],
       setup_requires=setup_requires,
       tests_require=['pytest'],

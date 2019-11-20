@@ -18,12 +18,12 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
   # other -- IO
   - bcolz
   - blosc
   - s3fs
-  - fsspec>=0.5.1
+  - fsspec>=0.6.0
   - boto3
   - botocore
   - bokeh

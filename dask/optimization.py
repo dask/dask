@@ -1,6 +1,6 @@
 import math
+import numbers
 import re
-from operator import getitem
 
 from . import config, core
 from .core import (
@@ -377,83 +377,6 @@ def functions_of(task):
     return funcs
 
 
-def fuse_selections(dsk, head1, head2, merge):
-    """Fuse selections with lower operation.
-
-    Handles graphs of the form:
-    ``{key1: (head1, key2, ...), key2: (head2, ...)}``
-
-    Parameters
-    ----------
-    dsk : dict
-        dask graph
-    head1 : function
-        The first element of task1
-    head2 : function
-        The first element of task2
-    merge : function
-        Takes ``task1`` and ``task2`` and returns a merged task to
-        replace ``task1``.
-
-    Examples
-    --------
-    >>> def load(store, partition, columns):
-    ...     pass
-    >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
-    ...        'y': (getitem, 'x', 'a')}
-    >>> merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
-    >>> dsk2 = fuse_selections(dsk, getitem, load, merge)
-    >>> cull(dsk2, 'y')[0]
-    {'y': (<function load at ...>, 'store', 'part', 'a')}
-    """
-    dsk2 = dict()
-    for k, v in dsk.items():
-        try:
-            if (
-                istask(v)
-                and v[0] == head1
-                and v[1] in dsk
-                and istask(dsk[v[1]])
-                and dsk[v[1]][0] == head2
-            ):
-                dsk2[k] = merge(v, dsk[v[1]])
-            else:
-                dsk2[k] = v
-        except TypeError:
-            dsk2[k] = v
-    return dsk2
-
-
-def fuse_getitem(dsk, func, place):
-    """ Fuse getitem with lower operation
-
-    Parameters
-    ----------
-    dsk: dict
-        dask graph
-    func: function
-        A function in a task to merge
-    place: int
-        Location in task to insert the getitem key
-
-    Examples
-    --------
-    >>> def load(store, partition, columns):
-    ...     pass
-    >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
-    ...        'y': (getitem, 'x', 'a')}
-    >>> dsk2 = fuse_getitem(dsk, load, 3)  # columns in arg place 3
-    >>> cull(dsk2, 'y')[0]
-    {'y': (<function load at ...>, 'store', 'part', 'a')}
-    """
-    return fuse_selections(
-        dsk,
-        getitem,
-        func,
-        lambda a, b: tuple(b[:place]) + (a[2],) + tuple(b[place + 1 :]),
-    )
-
-
 def default_fused_keys_renamer(keys):
     """Create new keys for ``fuse`` tasks"""
     it = reversed(keys)
@@ -594,6 +517,11 @@ def fuse(
     reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
     if keys:
         reducible -= keys
+
+    for k, v in dsk.items():
+        if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
+            reducible.discard(k)
+
     if not reducible and (
         not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
     ):

@@ -260,7 +260,7 @@ Chunks also includes three special values:
 
 1.  ``-1``: no chunking along this dimension
 2.  ``None``: no change to the chunking along this dimension (useful for rechunk)
-3.  ``"auto"``: allow the chunking in this dimension to accomodate ideal chunk sizes
+3.  ``"auto"``: allow the chunking in this dimension to accommodate ideal chunk sizes
 
 So, for example, one could rechunk a 3D array to have no chunking along the zeroth
 dimension, but still have sensible chunk sizes as follows:
@@ -287,7 +287,7 @@ change in your :doc:`configuration <configuration>`.
    '128MiB'
 
 Automatic rechunking tries to respect the median chunk shape of the
-auto-rescaled dimensions, but will modify this to accomodate the shape of the
+auto-rescaled dimensions, but will modify this to accommodate the shape of the
 full array (can't have larger chunks than the array itself) and to find
 chunk shapes that nicely divide the shape.
 

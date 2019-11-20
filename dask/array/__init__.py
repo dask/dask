@@ -19,6 +19,7 @@ try:
         broadcast_to,
         from_zarr,
         to_zarr,
+        unify_chunks,
     )
     from .tiledb_io import from_tiledb, to_tiledb
     from .numpy_compat import rollaxis, moveaxis
@@ -189,6 +190,7 @@ try:
         all,
         min,
         max,
+        median,
         moment,
         trace,
         argmin,

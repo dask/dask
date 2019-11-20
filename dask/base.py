@@ -236,7 +236,7 @@ def _extract_graph_and_keys(vals):
     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
         graph = HighLevelGraph.merge(*graphs)
     else:
-        graph = merge(*graphs)
+        graph = merge(*map(ensure_dict, graphs))
 
     return graph, keys
 
@@ -775,7 +775,7 @@ def register_numpy():
     @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
-            return (str(x), x.dtype)
+            return (x.item(), x.dtype)
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (
@@ -949,10 +949,6 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             from distributed.worker import get_client
 
             return get_client().get
-        elif scheduler.lower() in ["processes", "multiprocessing"]:
-            raise ValueError(
-                "Please install cloudpickle to use the '%s' scheduler." % scheduler
-            )
         else:
             raise ValueError(
                 "Expected one of [distributed, %s]"

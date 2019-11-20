@@ -796,17 +796,28 @@ def repeat(a, repeats, axis=None):
 
 @derived_from(np)
 def tile(A, reps):
-    if not isinstance(reps, Integral):
-        raise NotImplementedError("Only integer valued `reps` supported.")
-
-    if reps < 0:
+    try:
+        tup = tuple(reps)
+    except TypeError:
+        tup = (reps,)
+    if any(i < 0 for i in tup):
         raise ValueError("Negative `reps` are not allowed.")
-    elif reps == 0:
-        return A[..., :0]
-    elif reps == 1:
-        return A
+    c = asarray(A)
 
-    return concatenate(reps * [A], axis=-1)
+    if all(tup):
+        for nrep in tup[::-1]:
+            c = nrep * [c]
+        return block(c)
+
+    d = len(tup)
+    if d < c.ndim:
+        tup = (1,) * (c.ndim - d) + tup
+    if c.ndim < d:
+        shape = (1,) * (d - c.ndim) + c.shape
+    else:
+        shape = c.shape
+    shape_out = tuple(s * t for s, t in zip(shape, tup))
+    return empty(shape=shape_out, dtype=c.dtype)
 
 
 def expand_pad_value(array, pad_value):

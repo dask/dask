@@ -3,7 +3,6 @@ from toolz import partial
 
 import dask
 from dask import compute
-from dask.compatibility import PY_VERSION
 from dask.utils import filetexts
 from dask.bytes import utils
 from dask.bag.text import read_text
@@ -38,8 +37,6 @@ fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs for encoding in encoding
 
 @pytest.mark.parametrize("fmt,bs,encoding", fmt_bs_enc)
 def test_read_text(fmt, bs, encoding):
-    if fmt == "zip" and PY_VERSION < "3.6":
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in utils.compress:
         pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
@@ -48,11 +45,11 @@ def test_read_text(fmt, bs, encoding):
         b = read_text(
             ".test.accounts.*.json", compression=fmt, blocksize=bs, encoding=encoding
         )
-        L, = compute(b)
+        (L,) = compute(b)
         assert "".join(L) == expected
 
         b = read_text(sorted(files), compression=fmt, blocksize=bs, encoding=encoding)
-        L, = compute(b)
+        (L,) = compute(b)
         assert "".join(L) == expected
 
         blocks = read_text(

@@ -9,6 +9,7 @@ from fsspec.utils import stringify_path
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....utils import import_required, natural_sort_key
+from collections.abc import Mapping
 
 
 try:
@@ -25,6 +26,62 @@ __all__ = ("read_parquet", "to_parquet")
 # User API
 
 
+class ParquetSubgraph(Mapping):
+    """
+    Subgraph for reading Parquet files.
+
+    Enables optimiziations (see optimize_read_parquet_getitem).
+    """
+
+    def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
+        self.name = name
+        self.engine = engine
+        self.fs = fs
+        self.meta = meta
+        self.columns = columns
+        self.index = index
+        self.parts = parts
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        return "ParquetSubgraph<name='{}', n_parts={}>".format(
+            self.name, len(self.parts)
+        )
+
+    def __getitem__(self, key):
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
+
+        if name != self.name:
+            raise KeyError(key)
+
+        if i < 0 or i >= len(self.parts):
+            raise KeyError(key)
+
+        part = self.parts[i]
+
+        return (
+            read_parquet_part,
+            self.engine.read_partition,
+            self.fs,
+            self.meta,
+            part["piece"],
+            self.columns,
+            self.index,
+            toolz.merge(part["kwargs"], self.kwargs or {}),
+        )
+
+    def __len__(self):
+        return len(self.parts)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield (self.name, i)
+
+
 def read_parquet(
     path,
     columns=None,
@@ -34,6 +91,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
+    split_row_groups=True,
     **kwargs
 ):
     """
@@ -81,6 +139,11 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
+    split_row_groups : bool
+        If True (default) then output dataframe partitions will correspond
+        to parquet-file row-groups (when enough row-group metadata is
+        available). Otherwise, partitions correspond to distinct files.
+        Only the "pyarrow" engine currently supports this argument.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -149,6 +212,7 @@ def read_parquet(
         index=index,
         gather_statistics=gather_statistics,
         filters=filters,
+        split_row_groups=split_row_groups,
         **kwargs
     )
     if meta.index.name is not None:
@@ -265,19 +329,7 @@ def read_parquet(
         z.update(y)
         return z
 
-    subgraph = {
-        (name, i): (
-            read_parquet_part,
-            engine.read_partition,
-            fs,
-            meta,
-            part["piece"],
-            columns,
-            index,
-            _merge_kwargs(part["kwargs"], kwargs or {}),
-        )
-        for i, part in enumerate(parts)
-    }
+    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
@@ -564,6 +616,9 @@ def sorted_columns(statistics):
         success = True
         for stats in statistics[1:]:
             c = stats["columns"][i]
+            if c["min"] is None:
+                success = False
+                break
             if c["min"] >= max:
                 divisions.append(c["min"])
                 max = c["max"]

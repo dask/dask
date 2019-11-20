@@ -4,7 +4,7 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
-from ..blockwise import optimize_blockwise
+from ..blockwise import optimize_blockwise, fuse_roots
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
@@ -40,6 +40,7 @@ def optimize(
     # High level stage optimization
     if isinstance(dsk, HighLevelGraph):
         dsk = optimize_blockwise(dsk, keys=keys)
+        dsk = fuse_roots(dsk, keys=keys)
 
     # Low level task optimizations
     dsk = ensure_dict(dsk)

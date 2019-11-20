@@ -37,7 +37,7 @@ to computing resources in a way that is native to both the users and IT.
 institutions today, and it is a common entry point for Dask usage.
 
 
-Is Dask Mature?  Why should we trust it?
+Is Dask mature?  Why should we trust it?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Yes.  While Dask itself is relatively new (it began in 2015) it is built by the
@@ -176,7 +176,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     For more information see :doc:`setup/kubernetes`
 
 
-Is Dask Secure?
+Is Dask secure?
 ~~~~~~~~~~~~~~~
 
 Dask is deployed today within highly secure institutions,
@@ -189,7 +189,7 @@ your institution likely already does this and uses standard technologies like
 SSL/TLS, Kerberos, and other systems with which Dask can integrate.
 
 
-Do I need to purchase a new Cluster?
+Do I need to purchase a new cluster?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 No.  It is easy to run Dask today on most clusters.
@@ -234,7 +234,7 @@ In each case Dask integrates with existing processes and technologies
 that are well understood and familiar to the institution.
 
 
-How Does Dask communicate data between machines?
+How does Dask communicate data between machines?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Dask usually communicates over TCP, using msgpack for small administrative
@@ -294,7 +294,7 @@ The *vast majority* of institutional users though do not reach this limit.
 For more information you may want to peruse our :doc:`best practices
 <best-practices>`
 
-Is Dask Resilient?  What happens when a machine goes down?
+Is Dask resilient?  What happens when a machine goes down?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Yes, Dask is resilient to the failure of worker nodes.  It knows how it came to
@@ -331,7 +331,7 @@ accumulated experience, is Dask's :doc:`Diagnostic Dashboard
 The dashboard delivers a ton of visual feedback to users as they are running
 their computation to help them understand what is going on.  This both helps
 them to identify and resolve immediate bottlenecks, and also builds up that
-parallel performance intuition suprisingly quickly.
+parallel performance intuition surprisingly quickly.
 
 
 How much performance tuning does Dask require?

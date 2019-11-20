@@ -1,3 +1,5 @@
+from functools import partial
+from collections import OrderedDict
 import json
 
 import pandas as pd
@@ -22,14 +24,41 @@ def _get_md_row_groups(pieces):
     if any metadata or statistics are missing
     """
     row_groups = []
+    row_groups_per_piece = []
     for piece in pieces:
-        for rg in range(piece.get_metadata().num_row_groups):
+        num_row_groups = piece.get_metadata().num_row_groups
+        for rg in range(num_row_groups):
             row_group = piece.get_metadata().row_group(rg)
             for c in range(row_group.num_columns):
                 if not row_group.column(c).statistics:
                     return []
             row_groups.append(row_group)
-    return row_groups
+        row_groups_per_piece.append(num_row_groups)
+    if len(row_groups) == len(pieces):
+        row_groups_per_piece = None
+    # TODO: Skip row_groups_per_piece after ARROW-2801
+    return row_groups, row_groups_per_piece
+
+
+def _get_row_groups_per_piece(pieces, metadata, path, fs):
+    """ Determine number of row groups in each dataset piece.
+
+    This function requires access to ParquetDataset.metadata
+    """
+    # TODO: Remove this function after ARROW-2801
+    if metadata.num_row_groups == len(pieces):
+        return None  # pieces already map to row-groups
+
+    result = OrderedDict()
+    for piece in pieces:
+        result[piece.path] = 0
+    for rg in range(metadata.num_row_groups):
+        filename = metadata.row_group(rg).column(0).file_path
+        if filename:
+            result[fs.sep.join([path, filename])] += 1
+        else:
+            return None  # File path is missing, abort
+    return tuple(result.values())
 
 
 def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
@@ -104,6 +133,7 @@ class ArrowEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
+        split_row_groups=True,
         **kwargs,
     ):
         # Define the dataset object to use for metadata,
@@ -113,10 +143,15 @@ class ArrowEngine(Engine):
         parts, dataset = _determine_dataset_parts(
             fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
+        # TODO: Call to `_determine_dataset_parts` uses `pq.ParquetDataset`
+        # to define the `dataset` object. `split_row_groups` should be passed
+        # to that constructor once it is supported (see ARROW-2801).
         if dataset.partitions is not None:
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
             ]
+            if partitions:
+                split_row_groups = False
         else:
             partitions = []
 
@@ -184,17 +219,22 @@ class ArrowEngine(Engine):
         if not pieces:
             gather_statistics = False
 
+        row_groups_per_piece = None
         if gather_statistics:
             # Read from _metadata file
-            if dataset.metadata and dataset.metadata.num_row_groups == len(pieces):
+            if dataset.metadata and dataset.metadata.num_row_groups >= len(pieces):
                 row_groups = [
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
+                if split_row_groups and len(dataset.paths) == 1:
+                    row_groups_per_piece = _get_row_groups_per_piece(
+                        pieces, dataset.metadata, dataset.paths[0], fs
+                    )
                 names = dataset.metadata.schema.names
             else:
                 # Read from each individual piece (quite possibly slow).
-                row_groups = _get_md_row_groups(pieces)
+                row_groups, row_groups_per_piece = _get_md_row_groups(pieces)
                 if row_groups:
                     piece = pieces[0]
                     md = piece.get_metadata()
@@ -205,7 +245,7 @@ class ArrowEngine(Engine):
         if gather_statistics:
             stats = []
             skip_cols = set()  # Columns with min/max = None detected
-            for row_group in row_groups:
+            for ri, row_group in enumerate(row_groups):
                 s = {"num-rows": row_group.num_rows, "columns": []}
                 for i, name in enumerate(names):
                     if name not in skip_cols:
@@ -214,7 +254,9 @@ class ArrowEngine(Engine):
                         if column.statistics:
                             cs_min = column.statistics.min
                             cs_max = column.statistics.max
-                            if None in [cs_min, cs_max]:
+                            if not column.statistics.has_min_max:
+                                cs_min, cs_max = None, None
+                            if None in [cs_min, cs_max] and ri == 0:
                                 skip_cols.add(name)
                                 continue
                             cs_vals = pd.Series([cs_min, cs_max])
@@ -249,7 +291,18 @@ class ArrowEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
-            parts = pieces
+            if split_row_groups and row_groups_per_piece:
+                # TODO: This block can be removed after ARROW-2801
+                parts = []
+                for i, piece in enumerate(pieces):
+                    num_row_groups = row_groups_per_piece[i]
+                    for rg in range(num_row_groups):
+                        parts.append((piece.path, rg, piece.partition_keys))
+            else:
+                parts = [
+                    (piece.path, piece.row_group, piece.partition_keys)
+                    for piece in pieces
+                ]
         parts = [
             {
                 "piece": piece,
@@ -267,30 +320,27 @@ class ArrowEngine(Engine):
         if isinstance(index, list):
             columns += index
         if isinstance(piece, str):
-            # `piece` is a file path
-            # TODO: What to do about partitions?
-            table = pq.read_table(
-                piece,
-                columns=columns,
-                use_pandas_metadata=True,
-                filesystem=fs,
-                use_threads=False,
-                **kwargs.get("read", {}),
+            # `piece` is a file-path string
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
             )
         else:
-            # `piece` is a row-group
-            with fs.open(piece.path, mode="rb") as f:
-                table = piece.read(
-                    columns=columns,
-                    partitions=partitions,
-                    use_pandas_metadata=True,
-                    file=f,
-                    use_threads=False,
-                    **kwargs.get("read", {}),
-                )
-        df = table.to_pandas(
-            categories=categories, use_threads=False, ignore_metadata=True
-        )[list(columns)]
+            # `piece` contains (path, row_group, partition_keys)
+            piece = pq.ParquetDatasetPiece(
+                piece[0],
+                row_group=piece[1],
+                partition_keys=piece[2],
+                open_file_func=partial(fs.open, mode="rb"),
+            )
+        df = piece.read(
+            columns=columns,
+            partitions=partitions,
+            use_pandas_metadata=True,
+            use_threads=False,
+            **kwargs.get("read", {}),
+        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
+            list(columns)
+        ]
 
         if index:
             df = df.set_index(index)
@@ -430,6 +480,8 @@ class ArrowEngine(Engine):
                     metadata_collector=md_list,
                     **kwargs,
                 )
+            if md_list:
+                md_list[0].set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"schema": t.schema, "meta": md_list[0]}]

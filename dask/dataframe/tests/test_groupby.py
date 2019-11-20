@@ -1,5 +1,6 @@
 import collections
 import warnings
+from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -42,8 +43,23 @@ def agg_func(request):
     return request.param
 
 
-def groupby_internal_repr():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+@pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
+def test_groupby_internal_repr_xfail():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+    ddf = dd.from_pandas(pdf, 3)
+
+    gp = pdf.groupby("y")["x"]
+    dp = ddf.groupby("y")["x"]
+    assert isinstance(dp.obj, dd.Series)
+    assert_eq(dp.obj, gp.obj)
+
+    gp = pdf.groupby(pdf.y)["x"]
+    dp = ddf.groupby(ddf.y)["x"]
+    assert isinstance(dp.obj, dd.Series)
+
+
+def test_groupby_internal_repr():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     gp = pdf.groupby("y")
@@ -57,9 +73,6 @@ def groupby_internal_repr():
     dp = ddf.groupby("y")["x"]
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby("y")[["x"]]
     dp = ddf.groupby("y")[["x"]]
@@ -73,9 +86,6 @@ def groupby_internal_repr():
     dp = ddf.groupby(ddf.y)["x"]
     assert isinstance(dp, dd.groupby.SeriesGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.Series)
-    assert_eq(dp.obj, gp.obj)
 
     gp = pdf.groupby(pdf.y)[["x"]]
     dp = ddf.groupby(ddf.y)[["x"]]
@@ -86,8 +96,8 @@ def groupby_internal_repr():
     assert_eq(dp.obj, gp.obj)
 
 
-def groupby_error():
-    pdf = pd.DataFrame({"x": [1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
+def test_groupby_error():
+    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
     with pytest.raises(KeyError):
@@ -103,24 +113,10 @@ def groupby_error():
         dp["A"]
     assert msg in str(err.value)
 
+    msg = "Columns not found: "
     with pytest.raises(KeyError) as err:
         dp[["x", "A"]]
     assert msg in str(err.value)
-
-
-def groupby_internal_head():
-    pdf = pd.DataFrame(
-        {"A": [1, 2] * 10, "B": np.random.randn(20), "C": np.random.randn(20)}
-    )
-    ddf = dd.from_pandas(pdf, 3)
-
-    assert_eq(ddf.groupby("A")._head().sum(), pdf.head().groupby("A").sum())
-
-    assert_eq(ddf.groupby(ddf["A"])._head().sum(), pdf.head().groupby(pdf["A"]).sum())
-
-    assert_eq(
-        ddf.groupby(ddf["A"] + 1)._head().sum(), pdf.head().groupby(pdf["A"] + 1).sum()
-    )
 
 
 def test_full_groupby():
@@ -1048,7 +1044,7 @@ def test_aggregate__single_element_groups(agg_func):
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
     """Aggregate reuses intermediates. For example, with sum, count, and mean
-    the sums and counts are only calculated once accross the graph and reused to
+    the sums and counts are only calculated once across the graph and reused to
     compute the mean.
     """
     from dask.dataframe.groupby import _build_agg_args
@@ -1496,6 +1492,19 @@ def test_groupby_unaligned_index():
         assert_eq(res, sol)
 
 
+def test_groupby_string_label():
+    df = pd.DataFrame({"foo": [1, 1, 4], "B": [2, 3, 4], "C": [5, 6, 7]})
+    ddf = dd.from_pandas(pd.DataFrame(df), npartitions=1)
+    ddf_group = ddf.groupby("foo")
+    result = ddf_group.get_group(1).compute()
+
+    expected = pd.DataFrame(
+        {"foo": [1, 1], "B": [2, 3], "C": [5, 6]}, index=pd.Index([0, 1])
+    )
+
+    tm.assert_frame_equal(result, expected)
+
+
 def test_groupby_dataframe_cum_caching():
     """Test caching behavior of cumulative operations on grouped dataframes.
 
@@ -1796,7 +1805,7 @@ def test_groupby_agg_custom__mode():
     # results from pandas in apply use return results as single-item lists
     def agg_mode(s):
         def impl(s):
-            res, = s.iloc[0]
+            (res,) = s.iloc[0]
 
             for (i,) in s.iloc[1:]:
                 res = res.add(i, fill_value=0)
@@ -2094,6 +2103,36 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
+@pytest.mark.skipif(
+    version.parse(pd.__version__) < version.parse("0.25.0"),
+    reason="'explode' is not implemented",
+)
+def test_groupby_unique():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    pd_gb = df.groupby("foo")["bar"].unique()
+    dd_gb = ddf.groupby("foo")["bar"].unique()
+
+    # Use explode because each DataFrame row is a list; equality fails
+    assert_eq(dd_gb.explode(), pd_gb.explode())
+
+
+def test_groupby_value_counts():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {"foo": rng.randint(3, size=100), "bar": rng.randint(4, size=100)}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    pd_gb = df.groupby("foo")["bar"].value_counts()
+    dd_gb = ddf.groupby("foo")["bar"].value_counts()
+    assert_eq(dd_gb, pd_gb)
+
+
 @pytest.mark.parametrize(
     "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
@@ -2173,3 +2212,60 @@ def test_groupby_aggregate_categoricals(grouping, agg):
 
     # SeriesGroupBy
     assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
+
+
+@pytest.mark.xfail(reason="dropna kwarg not supported in pandas groupby.")
+@pytest.mark.parametrize("dropna", [False, True])
+def test_groupby_dropna_pandas(dropna):
+
+    # The `dropna` arg is not currently supported by pandas
+    # (See #https://github.com/pandas-dev/pandas/pull/21669)
+    # Dask supports the argument for the cudf backend,
+    # but passing it to the pandas backend will fail.
+
+    # TODO: Expand test when `dropna` is supported in pandas.
+    #       (See: `test_groupby_dropna_cudf`)
+
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    dask_result = ddf.groupby("a", dropna=dropna)
+    pd_result = df.groupby("a", dropna=dropna)
+    assert_eq(dask_result, pd_result)
+
+
+@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
+def test_groupby_dropna_cudf(dropna, by):
+
+    # NOTE: This test requires cudf/dask_cudf, and will
+    # be skipped by non-GPU CI
+
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, 0] * 4,
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    df["d"] = df["c"].astype("category")
+    ddf = dask_cudf.from_cudf(df, npartitions=3)
+
+    if dropna is None:
+        dask_result = ddf.groupby(by).e.sum()
+        cudf_result = df.groupby(by).e.sum()
+    else:
+        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+    if by in ["c", "d"]:
+        # Loose string/category index name in cudf...
+        dask_result = dask_result.compute()
+        dask_result.index.name = cudf_result.index.name
+
+    assert_eq(dask_result, cudf_result)

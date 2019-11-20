@@ -179,6 +179,7 @@ messy situations in everyday problems.
    develop.rst
    changelog.rst
    configuration.rst
+   educational-resources.rst
    presentations.rst
    cheatsheet.rst
    spark.rst

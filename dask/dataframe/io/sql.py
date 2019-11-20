@@ -41,6 +41,12 @@ def read_sql_table(
         ``divisions=``.
         ``index_col`` could be a function to return a value, e.g.,
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
+        ``index_col=sql.func.abs(sql.column("value")).label("abs(value)")``, or
+        ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
+        the textfield ``id`` to ``BigInteger``.
+
+        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+
         Labeling columns created by functions or arithmetic operations is
         required.
     divisions: sequence
@@ -126,7 +132,7 @@ def read_sql_table(
         kwargs["index_col"] = index_col.name
 
     if meta is None:
-        # derrive metadata from first few rows
+        # derive metadata from first few rows
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
 
@@ -138,7 +144,7 @@ def read_sql_table(
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
-        meta = head[:0]
+        meta = head.iloc[:0]
     else:
         if divisions is None and npartitions is None:
             raise ValueError(

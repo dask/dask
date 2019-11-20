@@ -1,3 +1,4 @@
+# This job includes coverage
 name: test-environment
 channels:
   - conda-forge
@@ -15,9 +16,10 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
-  - fsspec>=0.5.1
+  - fsspec>=0.6.0
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
+  - coverage
   # other -- IO
   - bcolz
   - blosc

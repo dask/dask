@@ -74,7 +74,7 @@ def test_overlap_internal_asymmetric():
     d = da.from_array(x, chunks=(4, 4))
 
     result = overlap_internal(d, {0: (2, 0), 1: (1, 0)})
-    assert result.chunks == ((6, 4), (5, 4))
+    assert result.chunks == ((4, 6), (4, 5))
 
     expected = np.array(
         [

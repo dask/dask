@@ -1,6 +1,181 @@
 Changelog
 =========
 
+2.8.0 / 2019-11-14
+------------------
+
+Array
++++++
+-  Implement complete dask.array.tile function (:pr:`5574`) `Bouwe Andela`_
+-  Add median along an axis with automatic rechunking (:pr:`5575`) `Matthew Rocklin`_
+-  Allow da.asarray to chunk inputs (:pr:`5586`) `Matthew Rocklin`_
+
+Bag
++++
+
+-  Use key_split in Bag name (:pr:`5571`) `Matthew Rocklin`_
+
+Core
+++++
+-  Switch Doctests to Py3.7 (:pr:`5573`) `Ryan Nazareth`_
+-  Relax get_colors test to adapt to new Bokeh release (:pr:`5576`) `Matthew Rocklin`_
+-  Add dask.blockwise.fuse_roots optimization (:pr:`5451`) `Matthew Rocklin`_
+-  Add sizeof implementation for small dicts (:pr:`5578`) `Matthew Rocklin`_
+-  Update fsspec, gcsfs, s3fs (:pr:`5588`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+-  Add dropna argument to groupby (:pr:`5579`) `Richard J Zamora`_
+-  Revert "Remove import of dask_cudf, which is now a part of cudf (:pr:`5568`)" (:pr:`5590`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Add best practice for dask.compute function (:pr:`5583`) `Matthew Rocklin`_
+-  Create FUNDING.yml (:pr:`5587`) `Gina Helfrich`_
+-  Add screencast for coordination primitives (:pr:`5593`) `Matthew Rocklin`_
+-  Move funding to .github repo (:pr:`5589`) `Tom Augspurger`_
+-  Update calendar link (:pr:`5569`) `Tom Augspurger`_
+
+
+2.7.0 / 2019-11-08
+------------------
+
+This release drops support for Python 3.5
+
+Array
++++++
+
+-  Reuse code for assert_eq util method (:pr:`5496`) `Vijayant`_
+-  Update da.array to always return a dask array (:pr:`5510`) `James Bourbeau`_
+-  Skip transpose on trivial inputs (:pr:`5523`) `Ryan Abernathey`_
+-  Avoid NumPy scalar string representation in tokenize (:pr:`5527`) `James Bourbeau`_
+-  Remove unnecessary tiledb shape constraint (:pr:`5545`) `Norman Barker`_
+-  Removes bytes from sparse array HTML repr (:pr:`5556`) `James Bourbeau`_
+
+Core
+++++
+
+-  Drop Python 3.5 (:pr:`5528`) `James Bourbeau`_
+-  Update the use of fixtures in distributed tests (:pr:`5497`) `Matthew Rocklin`_
+-  Changed deprecated bokeh-port to dashboard-address (:pr:`5507`) `darindf`_
+-  Avoid updating with identical dicts in ensure_dict (:pr:`5501`) `James Bourbeau`_
+-  Test Upstream (:pr:`5516`) `Tom Augspurger`_
+-  Accelerate reverse_dict (:pr:`5479`) `Ryan Grout`_
+-  Update test_imports.sh (:pr:`5534`) `James Bourbeau`_
+-  Support cgroups limits on cpu count in multiprocess and threaded schedulers (:pr:`5499`) `Albert DeFusco`_
+-  Update minimum pyarrow version on CI (:pr:`5562`) `James Bourbeau`_
+-  Make cloudpickle optional (:pr:`5511`) `Guido Imperiale`_
+
+DataFrame
++++++++++
+
+-  Add an example of index_col usage (:pr:`3072`) `Bruno Bonfils`_
+-  Explicitly use iloc for row indexing (:pr:`5500`) `Krishan Bhasin`_
+-  Accept dask arrays on columns assignemnt (:pr:`5224`) `Henrique Ribeiro`-
+-  Implement unique and value_counts for SeriesGroupBy (:pr:`5358`) `Scott Sievert`_
+-  Add sizeof definition for pyarrow tables and columns (:pr:`5522`) `Richard J Zamora`_
+-  Enable row-group task partitioning in pyarrow-based read_parquet (:pr:`5508`) `Richard J Zamora`_
+-  Removes npartitions='auto' from dd.merge docstring (:pr:`5531`) `James Bourbeau`_
+-  Apply enforce error message shows non-overlapping columns. (:pr:`5530`) `Tom Augspurger`_
+-  Optimize meta_nonempty for repetitive dtypes (:pr:`5553`) `Petio Petrov`_
+-  Remove import of dask_cudf, which is now a part of cudf (:pr:`5568`) `Mads R. B. Kristensen`_
+
+Documentation
++++++++++++++
+
+-  Make capitalization more consistent in FAQ docs (:pr:`5512`) `Matthew Rocklin`_
+-  Add CONTRIBUTING.md (:pr:`5513`) `Jacob Tomlinson`_
+-  Document optional dependencies (:pr:`5456`) `Prithvi MK`_
+-  Update helm chart docs to reflect new chart repo (:pr:`5539`) `Jacob Tomlinson`_
+-  Add Resampler to API docs (:pr:`5551`) `James Bourbeau`_
+-  Fix typo in read_sql_table (:pr:`5554`) `Eric Dill`_
+-  Add adaptive deployments screencast [skip ci] (:pr:`5566`) `Matthew Rocklin`_
+
+
+2.6.0 / 2019-10-15
+------------------
+
+Core
+++++
+
+- Call ``ensure_dict`` on graphs before entering ``toolz.merge`` (:pr:`5486`) `Matthew Rocklin`_
+- Consolidating hash dispatch functions (:pr:`5476`) `Richard J Zamora`_
+
+DataFrame
++++++++++
+
+- Support Python 3.5 in Parquet code (:pr:`5491`) `Ben Zaitlen`_
+- Avoid identity check in ``warn_dtype_mismatch`` (:pr:`5489`) `Tom Augspurger`_
+- Enable unused groupby tests (:pr:`3480`) `Jörg Dietrich`_
+- Remove old parquet and bcolz dataframe optimizations (:pr:`5484`) `Matthew Rocklin`_
+- Add getitem optimization for ``read_parquet`` (:pr:`5453`) `Tom Augspurger`_
+- Use ``_constructor_sliced`` method to determine Series type (:pr:`5480`) `Richard J Zamora`_
+- Fix map(series) for unsorted base series index (:pr:`5459`) `Justin Waugh`_
+- Fix ``KeyError`` with Groupby label (:pr:`5467`) `Ryan Nazareth`_
+
+Documentation
++++++++++++++
+
+- Use Zoom meeting instead of appear.in (:pr:`5494`) `Matthew Rocklin`_
+- Added curated list of resources (:pr:`5460`) `Javad`_
+- Update SSH docs to include ``SSHCluster`` (:pr:`5482`) `Matthew Rocklin`_
+- Update "Why Dask?" page (:pr:`5473`) `Matthew Rocklin`_
+- Fix typos in docstrings (:pr:`5469`) `garanews`_
+
+
+2.5.2 / 2019-10-04
+------------------
+
+Array
++++++
+
+-  Correct chunk size logic for asymmetric overlaps (:pr:`5449`) `Ben Jeffery`_
+-  Make da.unify_chunks public API (:pr:`5443`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Fix dask.dataframe.fillna handling of Scalar object (:pr:`5463`) `Zhenqing Li`_
+
+Documentation
++++++++++++++
+
+-  Remove boxes in Spark comparison page (:pr:`5445`) `Matthew Rocklin`_
+-  Add latest presentations (:pr:`5446`) `Javad`_
+-  Update cloud documentation (:pr:`5444`) `Matthew Rocklin`_
+
+
+2.5.0 / 2019-09-27
+------------------
+
+Core
+++++
+
+-  Add sentinel no_default to get_dependencies task (:pr:`5420`) `James Bourbeau`_
+-  Update fsspec version (:pr:`5415`) `Matthew Rocklin`_
+-  Remove PY2 checks (:pr:`5400`) `Jim Crist`_
+
+DataFrame
++++++++++
+
+-  Add option to not check meta in dd.from_delayed (:pr:`5436`) `Christopher J. Wright`_
+-  Fix test_timeseries_nulls_in_schema failures with pyarrow master (:pr:`5421`) `Richard J Zamora`_
+-  Reduce read_metadata output size in pyarrow/parquet (:pr:`5391`) `Richard J Zamora`_
+-  Test numeric edge case for repartition with npartitions. (:pr:`5433`) `amerkel2`_
+-  Unxfail pandas-datareader test (:pr:`5430`) `Tom Augspurger`_
+-  Add DataFrame.pop implementation (:pr:`5422`) `Matthew Rocklin`_
+-  Enable merge/set_index for cudf-based dataframes with cupy ``values`` (:pr:`5322`) `Richard J Zamora`_
+-  drop_duplicates support for positional subset parameter (:pr:`5410`) `Wes Roach`_
+
+Documentation
++++++++++++++
+
+-  Add screencasts to array, bag, dataframe, delayed, futures and setup  (:pr:`5429`) (:pr:`5424`) `Matthew Rocklin`_
+-  Fix delimeter parsing documentation (:pr:`5428`) `Mahmut Bulut`_
+-  Update overview image (:pr:`5404`) `James Bourbeau`_
+
+
 2.4.0 / 2019-09-13
 ------------------
 
@@ -1421,7 +1596,7 @@ DataFrame
 Bag
 +++
 
-- Document ``bag.map_paritions`` function may recieve either a list or generator. (:pr:`3150`) `Nir`_
+- Document ``bag.map_paritions`` function may receive either a list or generator. (:pr:`3150`) `Nir`_
 
 Core
 ++++
@@ -1478,7 +1653,7 @@ DataFrame
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
 - ``DataFrame.merge()`` now supports merging on a combination of columns and the index (:pr:`2960`) `Jon Mease`_
-- Removed the deprecated ``dd.rolling*`` methods, in preperation for their removal in the next pandas release (:pr:`2995`) `Tom Augspurger`_
+- Removed the deprecated ``dd.rolling*`` methods, in preparation for their removal in the next pandas release (:pr:`2995`) `Tom Augspurger`_
 - Fix metadata inference bug in which single-partition series were mistakenly special cased (:pr:`3035`) `Jim Crist`_
 - Add support for ``Series.str.cat`` (:pr:`3028`) `Jim Crist`_
 
@@ -2507,3 +2682,21 @@ Other
 .. _`Wes Roach`: https://github.com/WesRoach
 .. _`DomHudson`: https://github.com/DomHudson
 .. _`Eugene Huang`: https://github.com/eugeneh101
+.. _`Christopher J. Wright`: https://github.com/CJ-Wright
+.. _`Mahmut Bulut`: https://github.com/vertexclique
+.. _`Ben Jeffery`: https://github.com/benjeffery
+.. _`Ryan Nazareth`: https://github.com/ryankarlos
+.. _`garanews`: https://github.com/garanews
+.. _`Vijayant`: https://github.com/VijayantSoni
+.. _`Ryan Abernathey`: https://github.com/rabernat
+.. _`Norman Barker`: https://github.com/normanb
+.. _`darindf`: https://github.com/darindf
+.. _`Ryan Grout`: https://github.com/groutr
+.. _`Krishan Bhasin`: https://github.com/KrishanBhasin
+.. _`Albert DeFusco`: https://github.com/AlbertDeFusco
+.. _`Bruno Bonfils`: https://github.com/asyd
+.. _`Petio Petrov`: https://github.com/petioptrv
+.. _`Mads R. B. Kristensen`: https://github.com/madsbk
+.. _`Prithvi MK`: https://github.com/pmk21
+.. _`Eric Dill`: https://github.com/ericdill
+.. _`Gina Helfrich`: https://github.com/Dr-G
