@@ -147,7 +147,7 @@ def read_parquet(
         to parquet-file row-groups (when enough row-group metadata is
         available). Otherwise, partitions correspond to distinct files.
         Only the "pyarrow" engine currently supports this argument.
-    chunksize : int
+    chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
         partition until the aggregate size reaches this value.
@@ -254,13 +254,13 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-    concat_func = kwargs.pop("concat_func", False)
-    if not concat_func:
-        import pandas as pd
-
-        concat_func = pd.concat
-
     if isinstance(part, list):
+        concat_func = kwargs.pop("concat_func", False)
+        if not concat_func:
+            import pandas as pd
+
+            concat_func = pd.concat
+
         dfs = []
         for rg in part:
             df = func(fs, rg, columns.copy(), index, **kwargs)
