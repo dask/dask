@@ -77,8 +77,7 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
             )
         else:
             base, fns = _analyze_paths(paths, fs)
-            relpaths = [path.replace(base, "").lstrip("/") for path in paths]
-            if "_metadata" in relpaths:
+            if "_metadata" in fns:
                 # We have a _metadata file, lets use it
                 dataset = pq.ParquetDataset(
                     base + fs.sep + "_metadata",
@@ -91,36 +90,32 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
                 # Will need to pass a list of paths to read_partition
                 dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
                 parts = [base + fs.sep + fn for fn in fns]
-    else:
-        if fs.isdir(paths[0]):
-            # This is a directory, check for _metadata, then _common_metadata
-            allpaths = fs.glob(paths[0] + fs.sep + "*")
-            base, fns = _analyze_paths(allpaths, fs)
-            relpaths = [path.replace(base, "").lstrip("/") for path in allpaths]
-            if "_metadata" in relpaths and "validate_schema" not in dataset_kwargs:
-                dataset_kwargs["validate_schema"] = False
-            if "_metadata" in relpaths or gather_statistics is not False:
-                # Let arrow do its thing (use _metadata or scan files)
+    elif fs.isdir(paths[0]):
+        # This is a directory, check for _metadata, then _common_metadata
+        allpaths = fs.glob(paths[0] + fs.sep + "*")
+        base, fns = _analyze_paths(allpaths, fs)
+        if "_metadata" in fns and "validate_schema" not in dataset_kwargs:
+            dataset_kwargs["validate_schema"] = False
+        if "_metadata" in fns or gather_statistics is not False:
+            # Let arrow do its thing (use _metadata or scan files)
+            dataset = pq.ParquetDataset(
+                paths, filesystem=fs, filters=filters, **dataset_kwargs
+            )
+        else:
+            # Use _common_metadata file if it is available.
+            # Otherwise, just use 0th file
+            if "_common_metadata" in fns:
                 dataset = pq.ParquetDataset(
-                    paths, filesystem=fs, filters=filters, **dataset_kwargs
+                    base + fs.sep + "_common_metadata", filesystem=fs, **dataset_kwargs,
                 )
             else:
-                # Use _common_metadata file if it is available.
-                # Otherwise, just use 0th file
-                if "_common_metadata" in relpaths:
-                    dataset = pq.ParquetDataset(
-                        base + fs.sep + "_common_metadata",
-                        filesystem=fs,
-                        **dataset_kwargs,
-                    )
-                else:
-                    dataset = pq.ParquetDataset(
-                        allpaths[0], filesystem=fs, **dataset_kwargs
-                    )
-                parts = [base + fs.sep + fn for fn in fns]
-        else:
-            # There is only one file to read
-            dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
+                dataset = pq.ParquetDataset(
+                    allpaths[0], filesystem=fs, **dataset_kwargs
+                )
+            parts = [base + fs.sep + fn for fn in fns]
+    else:
+        # There is only one file to read
+        dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
     return parts, dataset
 
 
