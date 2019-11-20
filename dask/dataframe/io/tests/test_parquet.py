@@ -2112,7 +2112,7 @@ def test_split_row_groups_pyarrow(tmpdir):
 
 
 @pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("chunksize", [None, 16, 1024, 4096])
+@pytest.mark.parametrize("chunksize", [None, 0, 1024, 4096])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
     check_pyarrow()
 

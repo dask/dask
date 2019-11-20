@@ -146,9 +146,9 @@ def read_parquet(
         available). Otherwise, partitions correspond to distinct files.
         Only the "pyarrow" engine currently supports this argument.
     chunksize : int
-        The target task partition size.  If split_row_groups is `True` the
-        row-groups will be aggregated (if consecutive groups are in the same
-        file) until the aggregate data size reach this value (default 250MB).
+        The target task partition size.  If consecutive row-groups are stored
+        in the same file, they will be aggregated into the same output
+        partition until the aggregate size reaches this value (default 250MB).
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -225,7 +225,9 @@ def read_parquet(
 
     # Aggregate parts/statistics if we are splitting by row-group
     if statistics:
-        chunksize = chunksize or 250000000
+        if chunksize is None:
+            chunksize = 250000000
+
         parts, statistics = engine.aggregate_row_groups(
             parts, statistics, chunksize, split_row_groups=split_row_groups
         )
