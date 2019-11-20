@@ -265,8 +265,6 @@ class FastParquetEngine(Engine):
             elif meta.index.name == catcol:
                 meta.index = meta.index.set_categories(pf.cats[catcol])
 
-        row_group_sizes = []
-        row_group_file_paths = []
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
@@ -298,9 +296,9 @@ class FastParquetEngine(Engine):
                         s["columns"].append(d)
                 # Need this to filter out partitioned-on categorical columns
                 s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)
+                s["total_byte_size"] = row_group.total_byte_size
+                s["file_path_0"] = row_group.columns[0].file_path  # 0th column only
                 stats.append(s)
-                row_group_sizes.append(row_group.total_byte_size)
-                row_group_file_paths.append(row_group.columns[0].file_path)
 
         else:
             stats = None
@@ -325,18 +323,9 @@ class FastParquetEngine(Engine):
                     col.meta_data.statistics = None
                     col.meta_data.encoding_stats = None
             piece_item = i if pf else piece
-            row_group_size, row_group_file_path = None, None
-            if row_group_sizes:
-                row_group_size = row_group_sizes[i]
-                row_group_file_path = row_group_file_paths[i]
             part = {
                 "piece": piece_item,
-                "kwargs": {
-                    "pf": pf,
-                    "categories": categories_dict or categories,
-                    "row_group_size": row_group_size,
-                    "file_path": row_group_file_path,
-                },
+                "kwargs": {"pf": pf, "categories": categories_dict or categories},
             }
             parts.append(part)
 
@@ -344,6 +333,9 @@ class FastParquetEngine(Engine):
 
     @staticmethod
     def aggregate_row_groups(parts, stats, chunksize, **kwargs):
+        if not (stats[0]["file_path_0"] and stats[0]["total_byte_size"]):
+            return parts, stats
+
         def _init_piece(part, stat):
             new_part = part.copy()
             new_part["piece"] = [new_part["piece"]]
@@ -355,10 +347,8 @@ class FastParquetEngine(Engine):
 
         def _update_piece(part, next_part, stat, next_stat):
             row_group = part["piece"]
-            next_part["piece"].append(row_group)
-            next_part["kwargs"]["row_group_size"] += part["kwargs"]["row_group_size"]
-
-            # Update Statistics
+            next_part["piece"].append(row_group)  # Engine Specific #
+            next_stat["total_byte_size"] += stat["total_byte_size"]
             next_stat["num-rows"] += stat["num-rows"]
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
@@ -375,10 +365,9 @@ class FastParquetEngine(Engine):
         next_part, next_stat = _init_piece(parts[0], stats[0])
         for i in range(1, len(parts)):
             stat, part = stats[i], parts[i]
-            path = part["kwargs"]["file_path"]
-            if (path == next_part["kwargs"]["file_path"]) and (
-                next_part["kwargs"]["row_group_size"] + part["kwargs"]["row_group_size"]
-            ) <= chunksize:
+            if (stat["file_path_0"] == next_stat["file_path_0"]) and (
+                (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
+            ):
                 _update_piece(part, next_part, stat, next_stat)
             else:
                 _add_piece(next_part, parts_agg, next_stat, stats_agg)
