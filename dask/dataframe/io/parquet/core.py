@@ -10,6 +10,7 @@ from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....utils import import_required, natural_sort_key, parse_bytes
 from collections.abc import Mapping
+from ...methods import concat
 
 
 try:
@@ -255,14 +256,8 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
 
     This function is used by `read_parquet`."""
     if isinstance(part, list):
-        concat_func = kwargs.pop("concat_func", False)
-        if not concat_func:
-            import pandas as pd
-
-            concat_func = pd.concat
-
         dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
-        df = concat_func(dfs, axis=0)
+        df = concat(dfs, axis=0)
     else:
         df = func(fs, part, columns, index, **kwargs)
 
