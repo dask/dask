@@ -310,7 +310,7 @@ class ArrowEngine(Engine):
                         )
             else:
                 parts = [
-                    (piece.path, piece.row_group, piece.partition_keys)
+                    (piece.path, piece.row_group, piece.partition_keys, None)
                     for piece in pieces
                 ]
         parts = [
