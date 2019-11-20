@@ -261,10 +261,7 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
 
             concat_func = pd.concat
 
-        dfs = []
-        for rg in part:
-            df = func(fs, rg, columns.copy(), index, **kwargs)
-            dfs.append(df)
+        dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
         df = concat_func(dfs, axis=0)
     else:
         df = func(fs, part, columns, index, **kwargs)
@@ -729,46 +726,40 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 
 
 def aggregate_row_groups(parts, stats, chunksize):
-    if not (stats[0]["file_path_0"] and stats[0]["total_byte_size"]):
+    if not stats[0]["file_path_0"]:
         return parts, stats
-
-    chunksize = parse_bytes(chunksize)
-
-    def _add_piece(part, part_list, stat, stat_list):
-        part_list.append(part)
-        stat_list.append(stat)
-
-    def _update_piece(part, next_part, stat, next_stat):
-        # Update part list
-        next_part.append(part)
-
-        # Update Statistics
-        next_stat["total_byte_size"] += stat["total_byte_size"]
-        next_stat["num-rows"] += stat["num-rows"]
-        for col, col_add in zip(next_stat["columns"], stat["columns"]):
-            if col["name"] != col_add["name"]:
-                raise ValueError("Columns are different!!")
-            if "null_count" in col:
-                col["null_count"] += col_add["null_count"]
-            if "min" in col:
-                col["min"] = min(col["min"], col_add["min"])
-            if "max" in col:
-                col["max"] = max(col["max"], col_add["max"])
 
     parts_agg = []
     stats_agg = []
+    chunksize = parse_bytes(chunksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
         if (stat["file_path_0"] == next_stat["file_path_0"]) and (
             (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
         ):
-            _update_piece(part, next_part, stat, next_stat)
+            # Update part list
+            next_part.append(part)
+
+            # Update Statistics
+            next_stat["total_byte_size"] += stat["total_byte_size"]
+            next_stat["num-rows"] += stat["num-rows"]
+            for col, col_add in zip(next_stat["columns"], stat["columns"]):
+                if col["name"] != col_add["name"]:
+                    raise ValueError("Columns are different!!")
+                if "null_count" in col:
+                    col["null_count"] += col_add["null_count"]
+                if "min" in col:
+                    col["min"] = min(col["min"], col_add["min"])
+                if "max" in col:
+                    col["max"] = max(col["max"], col_add["max"])
         else:
-            _add_piece(next_part, parts_agg, next_stat, stats_agg)
+            parts_agg.append(next_part)
+            stats_agg.append(next_stat)
             next_part, next_stat = [part.copy()], stat.copy()
 
-    _add_piece(next_part, parts_agg, next_stat, stats_agg)
+    parts_agg.append(next_part)
+    stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
 

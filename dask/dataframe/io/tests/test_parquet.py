@@ -2114,19 +2114,20 @@ def test_split_row_groups_pyarrow(tmpdir):
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
-    check_pyarrow()
+    nparts = 2
+    df_size = 100
+    row_group_size = 5
+    row_group_byte_size = 451  # Empirically measured
 
     df = pd.DataFrame(
         {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=100),
-            "b": np.random.random(size=100),
-            "c": np.random.randint(1, 5, size=100),
-            "index": np.arange(0, 100),
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "index": np.arange(0, df_size),
         }
     ).set_index("index")
 
-    nparts = 2
-    row_group_size = 6
     ddf1 = dd.from_pandas(df, npartitions=nparts)
     ddf1.to_parquet(
         str(tmpdir),
@@ -2154,6 +2155,13 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
 
     assert_eq(ddf1, ddf2, check_divisions=False)
 
-    for df_part in ddf2.partitions:
-        if chunksize and len(df_part) > row_group_size:
-            assert df_part.compute().memory_usage().sum() <= parse_bytes(chunksize)
+    num_row_groups = df_size // row_group_size
+    if not chunksize:
+        assert ddf2.npartitions == num_row_groups
+    else:
+        # Check that we are really aggregating
+        df_byte_size = row_group_byte_size * num_row_groups
+        expected = df_byte_size // parse_bytes(chunksize)
+        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
+        expected += int(remainder) * nparts
+        assert ddf2.npartitions == max(nparts, expected)
