@@ -8,7 +8,7 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....utils import import_required, natural_sort_key
+from ....utils import import_required, natural_sort_key, parse_bytes
 from collections.abc import Mapping
 
 
@@ -731,6 +731,8 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 def aggregate_row_groups(parts, stats, chunksize):
     if not (stats[0]["file_path_0"] and stats[0]["total_byte_size"]):
         return parts, stats
+
+    chunksize = parse_bytes(chunksize)
 
     def _add_piece(part, part_list, stat, stat_list):
         part_list.append(part)

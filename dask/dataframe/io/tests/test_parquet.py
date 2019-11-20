@@ -14,7 +14,7 @@ from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import ParquetSubgraph
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 try:
     import fastparquet
@@ -2112,7 +2112,7 @@ def test_split_row_groups_pyarrow(tmpdir):
 
 
 @pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("chunksize", [None, 1024, 4096, 40960])
+@pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
     check_pyarrow()
 
@@ -2156,4 +2156,4 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
 
     for df_part in ddf2.partitions:
         if chunksize and len(df_part) > row_group_size:
-            assert df_part.compute().memory_usage().sum() <= chunksize
+            assert df_part.compute().memory_usage().sum() <= parse_bytes(chunksize)
