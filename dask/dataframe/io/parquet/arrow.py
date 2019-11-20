@@ -320,60 +320,6 @@ class ArrowEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def aggregate_row_groups(parts, stats, chunksize, split_row_groups=True, **kwargs):
-        if (
-            (not split_row_groups)
-            or (not stats[0]["file_path_0"])
-            or (not stats[0]["total_byte_size"])
-        ):
-            return parts, stats
-
-        def _init_piece(part, stat):
-            piece = [part["piece"][0], [part["piece"][1]], part["piece"][2]]
-            new_part = {"piece": piece, "kwargs": part["kwargs"]}
-            new_stat = stat.copy()
-            return new_part, new_stat
-
-        def _add_piece(part, part_list, stat, stat_list):
-            part["piece"] = tuple(part["piece"])
-            part_list.append(part)
-            stat_list.append(stat)
-
-        def _update_piece(part, next_part, stat, next_stat):
-            row_group = part["piece"][1]
-            next_part["piece"][1].append(row_group)  # Engine Specific #
-            next_stat["total_byte_size"] += stat["total_byte_size"]
-            next_stat["num-rows"] += stat["num-rows"]
-            for col, col_add in zip(next_stat["columns"], stat["columns"]):
-                if col["name"] != col_add["name"]:
-                    raise ValueError("Columns are different!!")
-                if "null_count" in col:
-                    col["null_count"] += col_add["null_count"]
-                if "min" in col:
-                    col["min"] = min(col["min"], col_add["min"])
-                if "max" in col:
-                    col["max"] = max(col["max"], col_add["max"])
-
-        parts_agg = []
-        stats_agg = []
-        next_part, next_stat = _init_piece(parts[0], stats[0])
-        for i in range(1, len(parts)):
-            stat, part = stats[i], parts[i]
-            print("stat[file_path_0]", stat["file_path_0"])
-            print("stat[total_byte_size]", stat["total_byte_size"])
-            if (stat["file_path_0"] == next_stat["file_path_0"]) and (
-                (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
-            ):
-                _update_piece(part, next_part, stat, next_stat)
-            else:
-                _add_piece(next_part, parts_agg, next_stat, stats_agg)
-                next_part, next_stat = _init_piece(part, stat)
-
-        _add_piece(next_part, parts_agg, next_stat, stats_agg)
-
-        return parts_agg, stats_agg
-
-    @staticmethod
     def read_partition(
         fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
@@ -381,47 +327,32 @@ class ArrowEngine(Engine):
             columns += index
         if isinstance(piece, str):
             # `piece` is a file-path string
-            pieces = [
-                pq.ParquetDatasetPiece(
-                    piece, open_file_func=partial(fs.open, mode="rb")
-                )
-            ]
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
+            )
         else:
             # `piece` contains (path, row_group, partition_keys)
-            (path, row_groups, partition_keys) = piece
-            if not isinstance(row_groups, list):
-                row_groups = [row_groups]
-            pieces = [
-                pq.ParquetDatasetPiece(
-                    path,
-                    row_group=row_group,
-                    partition_keys=partition_keys,
-                    open_file_func=partial(fs.open, mode="rb"),
-                )
-                for row_group in row_groups
-            ]
+            (path, row_group, partition_keys) = piece
+            piece = pq.ParquetDatasetPiece(
+                path,
+                row_group=row_group,
+                partition_keys=partition_keys,
+                open_file_func=partial(fs.open, mode="rb"),
+            )
 
-        dfs = []
-        for piece in pieces:
-            df = piece.read(
-                columns=columns,
-                partitions=partitions,
-                use_pandas_metadata=True,
-                use_threads=False,
-                **kwargs.get("read", {}),
-            ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
-                list(columns)
-            ]
+        df = piece.read(
+            columns=columns,
+            partitions=partitions,
+            use_pandas_metadata=True,
+            use_threads=False,
+            **kwargs.get("read", {}),
+        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
+            list(columns)
+        ]
 
-            if index:
-                df = df.set_index(index)
-
-            if len(pieces) == 1:
-                return df
-
-            dfs.append(df)
-
-        return pd.concat(dfs, axis=0)
+        if index:
+            df = df.set_index(index)
+        return df
 
     @staticmethod
     def initialize_write(

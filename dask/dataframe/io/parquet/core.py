@@ -62,16 +62,18 @@ class ParquetSubgraph(Mapping):
             raise KeyError(key)
 
         part = self.parts[i]
+        if not isinstance(part, list):
+            part = [part]
 
         return (
             read_parquet_part,
             self.engine.read_partition,
             self.fs,
             self.meta,
-            part["piece"],
+            [p["piece"] for p in part],
             self.columns,
             self.index,
-            toolz.merge(part["kwargs"], self.kwargs or {}),
+            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
         )
 
     def __len__(self):
@@ -223,15 +225,9 @@ def read_parquet(
     if meta.index.name is not None:
         index = meta.index.name
 
-    # Aggregate parts/statistics if we are splitting by row-group
-    if statistics and chunksize:
-        parts, statistics = engine.aggregate_row_groups(
-            parts, statistics, chunksize, split_row_groups=split_row_groups
-        )
-
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index
+        parts, statistics, filters, index, chunksize
     )
 
     # Account for index and columns arguments.
@@ -258,7 +254,17 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-    df = func(fs, part, columns, index, **kwargs)
+    import pandas as pd
+
+    if isinstance(part, list):
+        dfs = []
+        for rg in part:
+            df = func(fs, rg, columns.copy(), index, **kwargs)
+            dfs.append(df)
+        df = pd.concat(dfs, axis=0)
+    else:
+        df = func(fs, part, columns, index, **kwargs)
+
     if meta.columns.name:
         df.columns.name = meta.columns.name
     columns = columns or []
@@ -595,7 +601,7 @@ def apply_filters(parts, statistics, filters):
     return parts, statistics
 
 
-def process_statistics(parts, statistics, filters, index):
+def process_statistics(parts, statistics, filters, index, chunksize):
     """Process row-group column statistics in metadata
     Used in read_parquet.
     """
@@ -613,6 +619,10 @@ def process_statistics(parts, statistics, filters, index):
         parts, statistics = result or [[], []]
         if filters:
             parts, statistics = apply_filters(parts, statistics, filters)
+
+        # Aggregate parts/statistics if we are splitting by row-group
+        if chunksize:
+            parts, statistics = aggregate_row_groups(parts, statistics, chunksize)
 
         out = sorted_columns(statistics)
 
@@ -712,6 +722,49 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
         meta = meta[list(columns)]
 
     return meta, index, columns
+
+
+def aggregate_row_groups(parts, stats, chunksize):
+    if not (stats[0]["file_path_0"] and stats[0]["total_byte_size"]):
+        return parts, stats
+
+    def _add_piece(part, part_list, stat, stat_list):
+        part_list.append(part)
+        stat_list.append(stat)
+
+    def _update_piece(part, next_part, stat, next_stat):
+        # Update part list
+        next_part.append(part)
+
+        # Update Statistics
+        next_stat["total_byte_size"] += stat["total_byte_size"]
+        next_stat["num-rows"] += stat["num-rows"]
+        for col, col_add in zip(next_stat["columns"], stat["columns"]):
+            if col["name"] != col_add["name"]:
+                raise ValueError("Columns are different!!")
+            if "null_count" in col:
+                col["null_count"] += col_add["null_count"]
+            if "min" in col:
+                col["min"] = min(col["min"], col_add["min"])
+            if "max" in col:
+                col["max"] = max(col["max"], col_add["max"])
+
+    parts_agg = []
+    stats_agg = []
+    next_part, next_stat = [parts[0].copy()], stats[0].copy()
+    for i in range(1, len(parts)):
+        stat, part = stats[i], parts[i]
+        if (stat["file_path_0"] == next_stat["file_path_0"]) and (
+            (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
+        ):
+            _update_piece(part, next_part, stat, next_stat)
+        else:
+            _add_piece(next_part, parts_agg, next_stat, stats_agg)
+            next_part, next_stat = [part.copy()], stat.copy()
+
+    _add_piece(next_part, parts_agg, next_stat, stats_agg)
+
+    return parts_agg, stats_agg
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

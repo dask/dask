@@ -332,52 +332,6 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts)
 
     @staticmethod
-    def aggregate_row_groups(parts, stats, chunksize, **kwargs):
-        if not (stats[0]["file_path_0"] and stats[0]["total_byte_size"]):
-            return parts, stats
-
-        def _init_piece(part, stat):
-            new_part = part.copy()
-            new_part["piece"] = [new_part["piece"]]
-            return new_part, stat.copy()
-
-        def _add_piece(part, part_list, stat, stat_list):
-            part_list.append(part)
-            stat_list.append(stat)
-
-        def _update_piece(part, next_part, stat, next_stat):
-            row_group = part["piece"]
-            next_part["piece"].append(row_group)  # Engine Specific #
-            next_stat["total_byte_size"] += stat["total_byte_size"]
-            next_stat["num-rows"] += stat["num-rows"]
-            for col, col_add in zip(next_stat["columns"], stat["columns"]):
-                if col["name"] != col_add["name"]:
-                    raise ValueError("Columns are different!!")
-                if "null_count" in col:
-                    col["null_count"] += col_add["null_count"]
-                if "min" in col:
-                    col["min"] = min(col["min"], col_add["min"])
-                if "max" in col:
-                    col["max"] = max(col["max"], col_add["max"])
-
-        parts_agg = []
-        stats_agg = []
-        next_part, next_stat = _init_piece(parts[0], stats[0])
-        for i in range(1, len(parts)):
-            stat, part = stats[i], parts[i]
-            if (stat["file_path_0"] == next_stat["file_path_0"]) and (
-                (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
-            ):
-                _update_piece(part, next_part, stat, next_stat)
-            else:
-                _add_piece(next_part, parts_agg, next_stat, stats_agg)
-                next_part, next_stat = _init_piece(part, stat)
-
-        _add_piece(next_part, parts_agg, next_stat, stats_agg)
-
-        return parts_agg, stats_agg
-
-    @staticmethod
     def read_partition(fs, piece, columns, index, categories=(), pf=None, **kwargs):
         if isinstance(index, list):
             columns += index
@@ -395,28 +349,15 @@ class FastParquetEngine(Engine):
             pf.fn = base
             return pf.to_pandas(columns, categories, index=index)
         else:
-            pieces = piece
-            if not isinstance(pieces, list):
-                pieces = [piece]
-
-            dfs = []
-            for piece in pieces:
-                if isinstance(pf, tuple):
-                    pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
-                    pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
-                    pf.fmd.row_groups = None
-                rg_piece = pf.row_groups[piece]
-                pf.fmd.key_value_metadata = None
-                df = pf.read_row_group_file(
-                    rg_piece, columns, categories, index=index, **kwargs.get("read", {})
-                )
-
-                if len(pieces) == 1:
-                    return df
-
-                dfs.append(df)
-
-            return pd.concat(dfs, axis=0)
+            if isinstance(pf, tuple):
+                pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
+                pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
+                pf.fmd.row_groups = None
+            rg_piece = pf.row_groups[piece]
+            pf.fmd.key_value_metadata = None
+            return pf.read_row_group_file(
+                rg_piece, columns, categories, index=index, **kwargs.get("read", {})
+            )
 
     @staticmethod
     def initialize_write(
