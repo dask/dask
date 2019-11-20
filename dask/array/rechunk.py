@@ -189,13 +189,14 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     ----------
     x: dask array
         Array to be rechunked.
-    chunks:  int, tuple or dict
+    chunks:  int, tuple, dict or str, optional
         The new block dimensions to create. -1 indicates the full size of the
-        corresponding dimension.
-    threshold: int
+        corresponding dimension. Default is "auto" which automatically
+        determines chunk sizes.
+    threshold: int, optional
         The graph growth factor under which we don't bother introducing an
         intermediate step.
-    block_size_limit: int
+    block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
 
