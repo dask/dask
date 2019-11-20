@@ -28,7 +28,8 @@ initialization.
 
 
 As an example, consider the following file that creates a
-:doc:`scheduler plugin <plugins>` and registers it with the scheduler
+`scheduler plugin <https://distributed.dask.org/en/latest/plugins.html>`_
+and registers it with the scheduler
 
 .. code-block:: python
 

@@ -154,10 +154,10 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     SLLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
     users can launch Dask on these systems today using either:
 
-    -  `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
+    - `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
       ``qsub``, ``sbatch``, ``bsub`` or other submission tools in interactive
       settings.
-    -  `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
+    - `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
       batch settings
 
     For more information see :doc:`setup/hpc`
@@ -167,10 +167,10 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     all of which provide hosted Kubernetes as a service.  People today use Dask
     on Kubernetes using either of the following:
 
-    -  **Helm**: an easy way to stand up a long-running Dask cluster and
+    - **Helm**: an easy way to stand up a long-running Dask cluster and
       Jupyter notebook
 
-    -  **Dask-Kubernetes**: for native Kubernetes integration for fast moving
+    - **Dask-Kubernetes**: for native Kubernetes integration for fast moving
       or ephemeral deployments.
 
     For more information see :doc:`setup/kubernetes`
