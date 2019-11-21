@@ -24,15 +24,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-      if: true
 
     - name: Install doc dependencies
-      run: |
-        pip install -r docs/requirements-docs.txt
-      if: true
+      run: pip install -r docs/requirements-docs.txt
 
     - name: Build docs
       run: |
         cd docs
         make html
-      if: true
