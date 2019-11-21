@@ -2189,21 +2189,31 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
         )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Should work starting from pandas 1.0.0: "
-        "https://github.com/dask/dask/pull/5423"
-    ),
-    strict=False,
-)
 @pytest.mark.parametrize(
-    "grouping",
+    "grouping,agg",
     [
-        lambda df: df.drop(columns="category_2").groupby("category_1"),
-        lambda df: df.groupby(["category_1", "category_2"]),
+        (
+            lambda df: df.drop(columns="category_2").groupby("category_1"),
+            lambda grp: grp.mean(),
+        ),
+        (
+            lambda df: df.drop(columns="category_2").groupby("category_1"),
+            lambda grp: grp.agg("mean"),
+        ),
+        (lambda df: df.groupby(["category_1", "category_2"]), lambda grp: grp.mean()),
+        pytest.param(
+            lambda df: df.groupby(["category_1", "category_2"]),
+            lambda grp: grp.agg("mean"),
+            marks=pytest.mark.xfail(
+                not dask.dataframe.utils.PANDAS_GT_100,
+                reason=(
+                    "Should work starting from pandas 1.0.0: "
+                    "https://github.com/dask/dask/pull/5423"
+                ),
+            ),
+        ),
     ],
 )
-@pytest.mark.parametrize("agg", [lambda grp: grp.mean(), lambda grp: grp.agg("mean")])
 def test_groupby_aggregate_categoricals(grouping, agg):
     pdf = pd.DataFrame(
         {
