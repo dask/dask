@@ -1734,7 +1734,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype),
+        index=pd.Series([1, 2, 3, 4, 5, 6] * 10, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
