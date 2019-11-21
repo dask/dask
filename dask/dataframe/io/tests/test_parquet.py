@@ -1915,7 +1915,10 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
 
 def test_timeseries_nulls_in_schema(tmpdir, engine):
-    tmp_path = str(tmpdir)
+    # GH#5608: relative path failing _metadata/_common_metadata detection.
+    tmp_path = str(tmpdir.mkdir("files"))
+    tmp_path = os.path.join(tmp_path, "../", "files")
+
     ddf2 = (
         dask.datasets.timeseries(start="2000-01-01", end="2000-01-03", freq="1h")
         .reset_index()
