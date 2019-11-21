@@ -2114,6 +2114,8 @@ def test_split_row_groups_pyarrow(tmpdir):
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
+    check_pyarrow()  # Need pyarrow for write phase in this test
+
     nparts = 2
     df_size = 100
     row_group_size = 5
