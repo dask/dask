@@ -1,3 +1,4 @@
+import asyncio
 import gc
 import logging
 import os
@@ -127,6 +128,20 @@ def test_run(s):
         assert response["result"] == 1
 
     yield n.close()
+
+
+@pytest.mark.slow
+@gen_cluster(config={"distributed.comm.timeouts.connect": "1s"})
+async def test_no_hang_when_scheduler_closes(s, a, b):
+    # https://github.com/dask/distributed/issues/2880
+    with captured_logger("tornado.application", logging.ERROR) as logger:
+        await s.close()
+        await asyncio.sleep(1.2)
+        assert a.status == "closed"
+        assert b.status == "closed"
+
+    out = logger.getvalue()
+    assert "Timed out trying to connect" not in out
 
 
 @pytest.mark.slow
