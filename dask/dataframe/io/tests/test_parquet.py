@@ -14,7 +14,7 @@ from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import ParquetSubgraph
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 try:
     import fastparquet
@@ -2082,7 +2082,11 @@ def test_split_row_groups_pyarrow(tmpdir):
     )
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=True
+        tmp,
+        engine="pyarrow",
+        gather_statistics=True,
+        split_row_groups=True,
+        chunksize=1,
     )
     assert ddf3.npartitions == 4
 
@@ -2096,7 +2100,11 @@ def test_split_row_groups_pyarrow(tmpdir):
     )
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=True
+        tmp,
+        engine="pyarrow",
+        gather_statistics=True,
+        split_row_groups=True,
+        chunksize=1,
     )
     assert ddf3.npartitions == 12
 
@@ -2104,3 +2112,61 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
+
+
+@pytest.mark.parametrize("metadata", [True, False])
+@pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
+def test_chunksize(tmpdir, chunksize, engine, metadata):
+    check_pyarrow()  # Need pyarrow for write phase in this test
+
+    nparts = 2
+    df_size = 100
+    row_group_size = 5
+    row_group_byte_size = 451  # Empirically measured
+
+    df = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "index": np.arange(0, df_size),
+        }
+    ).set_index("index")
+
+    ddf1 = dd.from_pandas(df, npartitions=nparts)
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        row_group_size=row_group_size,
+        write_metadata_file=metadata,
+    )
+
+    if metadata:
+        path = str(tmpdir)
+    else:
+        dirname = str(tmpdir)
+        files = os.listdir(dirname)
+        assert "_metadata" not in files
+        path = os.path.join(dirname, "*.parquet")
+
+    ddf2 = dd.read_parquet(
+        path,
+        engine=engine,
+        chunksize=chunksize,
+        split_row_groups=True,
+        gather_statistics=True,
+        index="index",
+    )
+
+    assert_eq(ddf1, ddf2, check_divisions=False)
+
+    num_row_groups = df_size // row_group_size
+    if not chunksize:
+        assert ddf2.npartitions == num_row_groups
+    else:
+        # Check that we are really aggregating
+        df_byte_size = row_group_byte_size * num_row_groups
+        expected = df_byte_size // parse_bytes(chunksize)
+        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
+        expected += int(remainder) * nparts
+        assert ddf2.npartitions == max(nparts, expected)

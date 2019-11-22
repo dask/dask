@@ -291,6 +291,8 @@ class FastParquetEngine(Engine):
                         s["columns"].append(d)
                 # Need this to filter out partitioned-on categorical columns
                 s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)
+                s["total_byte_size"] = row_group.total_byte_size
+                s["file_path_0"] = row_group.columns[0].file_path  # 0th column only
                 stats.append(s)
 
         else:
@@ -340,19 +342,17 @@ class FastParquetEngine(Engine):
             pf.file_scheme = scheme
             pf.cats = _paths_to_cats(fns, scheme)
             pf.fn = base
-            df = pf.to_pandas(columns, categories, index=index)
+            return pf.to_pandas(columns, categories, index=index)
         else:
             if isinstance(pf, tuple):
                 pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
                 pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
                 pf.fmd.row_groups = None
-            piece = pf.row_groups[piece]
+            rg_piece = pf.row_groups[piece]
             pf.fmd.key_value_metadata = None
-            df = pf.read_row_group_file(
-                piece, columns, categories, index=index, **kwargs.get("read", {})
+            return pf.read_row_group_file(
+                rg_piece, columns, categories, index=index, **kwargs.get("read", {})
             )
-
-        return df
 
     @staticmethod
     def initialize_write(
