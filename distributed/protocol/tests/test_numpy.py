@@ -288,3 +288,22 @@ def test_non_zero_strided_array():
     header, frames = serialize(x)
     assert "broadcast_to" not in header
     assert sum(map(nbytes, frames)) == x.nbytes
+
+
+def test_serialize_writeable_array_readonly_base_object():
+    # Regression test for https://github.com/dask/distributed/issues/3252
+
+    x = np.arange(3)
+    # Create array which doesn't own it's own memory
+    y = np.broadcast_to(x, (3, 3))
+
+    # Make y writeable and it's base object (x) read-only
+    y.setflags(write=True)
+    x.setflags(write=False)
+
+    # Serialize / deserialize y
+    z = deserialize(*serialize(y))
+    np.testing.assert_equal(z, y)
+
+    # Ensure z and y have the same flags (including WRITEABLE)
+    assert z.flags == y.flags
