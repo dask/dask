@@ -1,6 +1,34 @@
 Changelog
 =========
 
+2.8.1 / 2019-11-22
+------------------
+
+Array
++++++
+- Use auto rechunking in ``da.rechunk`` if no value given (:pr:`5605`) `Matthew Rocklin`_
+
+Core
+++++
+- Add simple action to activate GH actions (:pr:`5619`) `James Bourbeau`_
+
+DataFrame
++++++++++
+- Fix "file_path_0" bug in ``aggregate_row_groups`` (:pr:`5627`) `Richard J Zamora`_
+- Add ``chunksize`` argument to ``read_parquet`` (:pr:`5607`) `Richard J Zamora`_
+- Change ``test_repartition_npartitions`` to support arch64 architecture (:pr:`5620`) `ossdev07`_
+- Categories lost after groupby + agg (:pr:`5423`) `Oliver Hofkens`_
+- Fixed relative path issue with parquet metadata file (:pr:`5608`) `Nuno Gomes Silva`_
+- Enable gpu-backed covariance/correlation in dataframes (:pr:`5597`) `Richard J Zamora`_
+
+Documentation
++++++++++++++
+- Fix institutional faq and unknown doc warnings (:pr:`5616`) `James Bourbeau`_
+- Add doc for some utils (:pr:`5609`) `Tom Augspurger`_
+- Removes ``html_extra_path`` (:pr:`5614`) `James Bourbeau`_
+- Fixed See Also referencence (:pr:`5612`) `Tom Augspurger`_
+
+
 2.8.0 / 2019-11-14
 ------------------
 
@@ -2700,3 +2728,5 @@ Other
 .. _`Prithvi MK`: https://github.com/pmk21
 .. _`Eric Dill`: https://github.com/ericdill
 .. _`Gina Helfrich`: https://github.com/Dr-G
+.. _`ossdev07`: https://github.com/ossdev07
+.. _`Nuno Gomes Silva`: https://github.com/mgsnuno
