@@ -721,7 +721,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 
 
 def aggregate_row_groups(parts, stats, chunksize):
-    if ("file_path_0" not in stats[0]) or (stats[0]["file_path_0"] is None):
+    if not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []
