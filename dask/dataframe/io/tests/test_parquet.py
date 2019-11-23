@@ -2170,3 +2170,22 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         remainder = (df_byte_size % parse_bytes(chunksize)) > 0
         expected += int(remainder) * nparts
         assert ddf2.npartitions == max(nparts, expected)
+
+
+@write_read_engines()
+def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
+    path = str(tmpdir.join("test.parquet"))
+    pdf = df.copy()
+    pdf.index.name = "index"
+    pdf.to_parquet(path, engine=write_engine)
+
+    ddf_read = dd.read_parquet(
+        path,
+        engine=read_engine,
+        chunksize="10 kiB",
+        gather_statistics=True,
+        split_row_groups=True,
+        index="index",
+    )
+
+    assert_eq(pdf, ddf_read)
