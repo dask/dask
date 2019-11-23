@@ -840,7 +840,7 @@ class Scheduler(ServerNode):
         service_kwargs=None,
         allowed_failures=None,
         extensions=None,
-        validate=False,
+        validate=None,
         scheduler_file=None,
         security=None,
         worker_ttl=None,
@@ -860,6 +860,8 @@ class Scheduler(ServerNode):
         if allowed_failures is None:
             allowed_failures = dask.config.get("distributed.scheduler.allowed-failures")
         self.allowed_failures = allowed_failures
+        if validate is None:
+            validate = dask.config.get("distributed.scheduler.validate")
         self.validate = validate
         self.status = None
         self.proc = psutil.Process()

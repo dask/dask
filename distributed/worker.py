@@ -320,7 +320,7 @@ class Worker(ServerNode):
         nanny=None,
         plugins=(),
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
-        validate=False,
+        validate=None,
         profile_cycle_interval=None,
         lifetime=None,
         lifetime_stagger=None,
@@ -386,6 +386,8 @@ class Worker(ServerNode):
         self.target_message_size = 50e6  # 50 MB
 
         self.log = deque(maxlen=100000)
+        if validate is None:
+            validate = dask.config.get("distributed.scheduler.validate")
         self.validate = validate
 
         self._transitions = {

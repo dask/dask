@@ -24,6 +24,7 @@ distributed:
     preload: []
     preload-argv: []
     default-task-durations: {}  # How long we expect function names to run ("1h", "1s") (helps for long tasks)
+    validate: False         # Check scheduler state at every step for debugging
     dashboard:
       status:
         task-stream-length: 1000
@@ -44,6 +45,7 @@ distributed:
     preload: []
     preload-argv: []
     daemon: True
+    validate: False         # Check worker state at every step for debugging
     lifetime:
       duration: null        # Time after which to gracefully shutdown the worker
       stagger: 0 seconds    # Random amount by which to stagger lifetimes
