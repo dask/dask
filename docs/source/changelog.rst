@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2.8.1 - 2019-11-22
+------------------
+
+- Fix hanging worker when the scheduler leaves (:pr:`3250`) `Tom Augspurger`_
+- Fix NumPy writeable serialization bug (:pr:`3253`) `James Bourbeau`_
+- Skip ``numba.cuda`` tests if CUDA is not available (:pr:`3255`) `Peter Andreas Entschev`_
+- Add new dashboard plot for memory use by key (:pr:`3243`) `Matthew Rocklin`_
+- Fix ``array.shape()`` -> ``array.shape`` (:pr:`3247`) `Jed Brown`_
+- Fixed typos in ``pubsub.py`` (:pr:`3244`) `He Jia`_
+- Fixed cupy array going out of scope (:pr:`3240`) `Mads R. B. Kristensen`_
+- Remove ``gen.coroutine`` usage in scheduler (:pr:`3242`) `Jim Crist-Harif`_
+- Use ``inspect.isawaitable`` where relevant (:pr:`3241`) `Jim Crist-Harif`_
+
+
 2.8.0 - 2019-11-14
 ------------------
 
@@ -1391,3 +1405,6 @@ significantly without many new features.
 .. _`IPetrik`: https://github.com/IPetrik
 .. _`Simon Boothroyd`: https://github.com/SimonBoothroyd
 .. _`rockwellw`: https://github.com/rockwellw
+.. _`Jed Brown`: https://github.com/jedbrown
+.. _`He Jia`: https://github.com/HerculesJack
+.. _`Jim Crist-Harif`: https://github.com/jcrist
