@@ -24,6 +24,7 @@ from dask.base import (
     unpack_collections,
     named_schedulers,
     get_scheduler,
+    NormalizeTokenWarning,
 )
 from dask.core import literal
 from dask.delayed import Delayed
@@ -93,6 +94,16 @@ def test_normalize_function():
     assert normalize_function(tz.curry(f2, b=1)) != normalize_function(
         tz.curry(f2, b=2)
     )
+
+
+def test_tokenize_warn_time():
+    test_tuple = (1,) * 100
+    with pytest.warns(NormalizeTokenWarning):
+        with dask.config.set({"tokenize.warn_time_secs": 1e-10}):
+            tokenize(test_tuple)
+
+    with dask.config.set({"tokenize.warn_time_secs": -1}):
+        tokenize(test_tuple)
 
 
 def test_tokenize():

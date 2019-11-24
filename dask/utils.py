@@ -15,6 +15,7 @@ from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
+from timeit import default_timer
 
 from .core import get_deps
 
