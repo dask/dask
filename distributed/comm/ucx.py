@@ -46,7 +46,10 @@ def init_once():
     try:
         import rmm
 
-        cuda_array = lambda n: rmm.device_array(n, dtype=np.uint8)
+        if hasattr(rmm, "DeviceBuffer"):
+            cuda_array = lambda n: rmm.DeviceBuffer(size=n)
+        else:  # pre-0.12.0
+            cuda_array = lambda n: rmm.device_array(n, dtype=np.uint8)
     except ImportError:
         try:
             import numba.cuda
