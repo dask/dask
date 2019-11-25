@@ -104,19 +104,15 @@ def test_resample_index_name():
     assert ddf.resample("D").mean().head().index.name == "date"
 
 
-
 @pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size"])
 def test_common_aggs(agg):
-    ddf = dask.datasets.timeseries(start='2000-01-01', end='2000-01-04')
-    df = ddf.compute()
-
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
 
     f = lambda df: getattr(df, agg)()
 
-    res = f(ddf.resample('1d'))
-    expected = f(df.resample('1d'))
+    res = f(ps.resample("1d"))
+    expected = f(ds.resample("1d"))
 
-    # resample generates extra row
-    result = res.loc["2000-01-01":"2000-01-03"]
-
-    assert_eq(result, expected, check_dtype=False)
+    assert_eq(res, expected, check_dtype=False)
