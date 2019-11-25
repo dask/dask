@@ -3222,6 +3222,14 @@ class DataFrame(_Frame):
 
         return _iLocIndexer(self)
 
+    def __len__(self):
+        try:
+            s = self[self.columns[0]]
+        except IndexError:
+            return super().__len__()
+        else:
+            return len(s)
+
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
