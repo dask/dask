@@ -594,10 +594,7 @@ def map_blocks(
 
     if dtype is None and meta is None:
         try:
-            meta = func(
-                *[getattr(arg, "_meta", arg) for arg in args],
-                **{k: getattr(v, "_meta", v) for k, v in original_kwargs.items()}
-            )
+            meta = compute_meta(func, dtype, *args, **kwargs)
         except Exception:
             dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
@@ -4744,4 +4741,4 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
         return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
 
 
-from .utils import meta_from_array
+from .utils import meta_from_array, compute_meta
