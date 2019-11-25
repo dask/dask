@@ -7,6 +7,6 @@ pyzmq >= 16.0.2
 ipython >= 5.0.0
 jupyter_client >= 4.4.0
 ipykernel >= 4.5.2
-pytest >= 3.0.5
+pytest >= 3.2
 prometheus_client >= 0.6.0
 jupyter-server-proxy >= 1.1.0
