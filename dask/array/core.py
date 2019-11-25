@@ -4730,7 +4730,7 @@ def from_npy_stack(dirname, mmap_mode="r"):
 
 
 def new_da_object(dsk, name, chunks, meta=None, dtype=None):
-    """Generic constructor for dask.dataframe objects.
+    """Generic constructor for dask.array or dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
