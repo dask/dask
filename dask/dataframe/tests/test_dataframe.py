@@ -1018,6 +1018,8 @@ def test_isin():
 def test_len():
     assert len(d) == len(full)
     assert len(d.a) == len(full.a)
+    assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
+    assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
 
 
 def test_size():
