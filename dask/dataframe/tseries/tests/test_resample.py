@@ -1,5 +1,6 @@
 from itertools import product
 
+import dask
 import pandas as pd
 import pytest
 
@@ -16,7 +17,7 @@ def resample(df, freq, how="mean", **kwargs):
     list(
         product(
             ["series", "frame"],
-            ["count", "mean", "ohlc"],
+            ["count", "mean", "ohlc", ""],
             [2, 5],
             ["30T", "h", "d", "w", "M"],
             ["right", "left"],
@@ -36,6 +37,7 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
 
     result = resample(ds, freq, how=method, closed=closed, label=label)
     expected = resample(ps, freq, how=method, closed=closed, label=label)
+    breakpoint()
     assert_eq(result, expected, check_dtype=False)
 
     divisions = result.divisions
@@ -100,3 +102,21 @@ def test_resample_index_name():
     ddf = dd.from_pandas(df, npartitions=4)
 
     assert ddf.resample("D").mean().head().index.name == "date"
+
+
+
+@pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size"])
+def test_common_aggs(agg):
+    ddf = dask.datasets.timeseries(start='2000-01-01', end='2000-01-04')
+    df = ddf.compute()
+
+
+    f = lambda df: getattr(df, agg)()
+
+    res = f(ddf.resample('1d'))
+    expected = f(df.resample('1d'))
+
+    # resample generates extra row
+    result = res.loc["2000-01-01":"2000-01-03"]
+
+    assert_eq(result, expected, check_dtype=False)
