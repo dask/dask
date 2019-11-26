@@ -2655,12 +2655,15 @@ class Worker(ServerNode):
         if self.digests is not None:
             self.digests["profile-duration"].add(stop - start)
 
-    def get_profile(self, comm=None, start=None, stop=None, key=None):
+    def get_profile(self, comm=None, start=None, stop=None, key=None, server=False):
         now = time() + self.scheduler_delay
-        if key is None:
+        if server:
+            history = self.io_loop.profile
+        elif key is None:
             history = self.profile_history
         else:
             history = [(t, d[key]) for t, d in self.profile_keys_history if key in d]
+
         if start is None:
             istart = 0
         else:
