@@ -17,7 +17,7 @@ def resample(df, freq, how="mean", **kwargs):
     list(
         product(
             ["series", "frame"],
-            ["count", "mean", "ohlc", ""],
+            ["count", "mean", "ohlc"],
             [2, 5],
             ["30T", "h", "d", "w", "M"],
             ["right", "left"],
