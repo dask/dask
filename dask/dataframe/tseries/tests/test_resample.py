@@ -37,7 +37,7 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
 
     result = resample(ds, freq, how=method, closed=closed, label=label)
     expected = resample(ps, freq, how=method, closed=closed, label=label)
-    breakpoint()
+
     assert_eq(result, expected, check_dtype=False)
 
     divisions = result.divisions
