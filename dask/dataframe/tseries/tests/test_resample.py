@@ -3,7 +3,7 @@ from itertools import product
 import pandas as pd
 import pytest
 
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 import dask.dataframe as dd
 
 
@@ -102,7 +102,7 @@ def test_resample_index_name():
 
     assert ddf.resample("D").mean().head().index.name == "date"
 
-
+@pytest.mark.skipif(PANDAS_VERSION  <= "0.23.4", reason="quantile not in 0.23")
 @pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])
 def test_common_aggs(agg):
     index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
