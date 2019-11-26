@@ -4,12 +4,9 @@ import weakref
 from bokeh.layouts import row, column
 from bokeh.models import (
     ColumnDataSource,
-    Plot,
     DataRange1d,
-    LinearAxis,
     HoverTool,
     Range1d,
-    Quad,
     Button,
     Select,
     NumeralTickFormatter,
@@ -26,7 +23,6 @@ from distributed.dashboard.utils import (
     BOKEH_VERSION,
     update,
 )
-from distributed.diagnostics.progress_stream import nbytes_bar
 from distributed import profile
 from distributed.utils import log_errors, parse_timedelta
 from distributed.compatibility import WINDOWS
@@ -39,79 +35,6 @@ else:
 
 profile_interval = dask.config.get("distributed.worker.profile.interval")
 profile_interval = parse_timedelta(profile_interval, default="ms")
-
-
-class MemoryUsage(DashboardComponent):
-    """ The memory usage across the cluster, grouped by task type """
-
-    def __init__(self, **kwargs):
-        self.source = ColumnDataSource(
-            data=dict(
-                name=[],
-                left=[],
-                right=[],
-                center=[],
-                color=[],
-                percent=[],
-                MB=[],
-                text=[],
-            )
-        )
-
-        self.root = Plot(
-            id="bk-nbytes-plot",
-            x_range=DataRange1d(),
-            y_range=DataRange1d(),
-            toolbar_location=None,
-            outline_line_color=None,
-            **kwargs
-        )
-
-        self.root.add_glyph(
-            self.source,
-            Quad(
-                top=1,
-                bottom=0,
-                left="left",
-                right="right",
-                fill_color="color",
-                fill_alpha=1,
-            ),
-        )
-
-        self.root.add_layout(LinearAxis(), "left")
-        self.root.add_layout(LinearAxis(), "below")
-
-        hover = HoverTool(
-            point_policy="follow_mouse",
-            tooltips="""
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Percent:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@percent</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">MB:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@MB</span>
-                </div>
-                """,
-        )
-        self.root.add_tools(hover)
-
-    @without_property_validation
-    def update(self, messages):
-        with log_errors():
-            msg = messages["progress"]
-            if not msg:
-                return
-            nb = nbytes_bar(msg["nbytes"])
-            update(self.source, nb)
-            self.root.title.text = "Memory Use: %0.2f MB" % (
-                sum(msg["nbytes"].values()) / 1e6
-            )
 
 
 class Processing(DashboardComponent):

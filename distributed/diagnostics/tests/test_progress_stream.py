@@ -4,11 +4,7 @@ pytest.importorskip("bokeh")
 
 from dask import delayed
 from distributed.client import wait
-from distributed.diagnostics.progress_stream import (
-    progress_quads,
-    nbytes_bar,
-    progress_stream,
-)
+from distributed.diagnostics.progress_stream import progress_quads, progress_stream
 from distributed.utils_test import div, gen_cluster, inc
 
 
@@ -86,24 +82,6 @@ def test_progress_stream(c, s, a, b):
     assert progress_quads(msg)
 
     yield comm.close()
-
-
-def test_nbytes_bar():
-    nbytes = {"inc": 1000, "dec": 3000}
-    expected = {
-        "name": ["dec", "inc"],
-        "left": [0, 0.75],
-        "center": [0.375, 0.875],
-        "right": [0.75, 1.0],
-        "percent": [75, 25],
-        "MB": [0.003, 0.001],
-        "text": ["dec", "inc"],
-    }
-
-    result = nbytes_bar(nbytes)
-    color = result.pop("color")
-    assert len(set(color)) == 2
-    assert result == expected
 
 
 def test_progress_quads_many_functions():

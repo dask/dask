@@ -17,10 +17,7 @@ from bokeh.models import (
     TapTool,
     OpenURL,
     Range1d,
-    Plot,
-    Quad,
     value,
-    LinearAxis,
     NumeralTickFormatter,
     BoxZoomTool,
     AdaptiveTicker,
@@ -62,7 +59,7 @@ from distributed.dashboard.utils import (
 )
 from distributed.metrics import time
 from distributed.utils import log_errors, format_time, parse_timedelta
-from distributed.diagnostics.progress_stream import color_of, progress_quads, nbytes_bar
+from distributed.diagnostics.progress_stream import color_of, progress_quads
 from distributed.diagnostics.progress import AllProgress
 from distributed.diagnostics.graph_layout import GraphLayout
 from distributed.diagnostics.task_stream import TaskStreamPlugin
@@ -1434,83 +1431,6 @@ class TaskProgress(DashboardComponent):
             )
 
 
-class MemoryUse(DashboardComponent):
-    """ The memory usage across the cluster, grouped by task type """
-
-    def __init__(self, scheduler, **kwargs):
-        self.scheduler = scheduler
-        ps = [p for p in scheduler.plugins if isinstance(p, AllProgress)]
-        if ps:
-            self.plugin = ps[0]
-        else:
-            self.plugin = AllProgress(scheduler)
-
-        self.source = ColumnDataSource(
-            data=dict(
-                name=[],
-                left=[],
-                right=[],
-                center=[],
-                color=[],
-                percent=[],
-                MB=[],
-                text=[],
-            )
-        )
-
-        self.root = Plot(
-            id="bk-nbytes-plot",
-            x_range=DataRange1d(),
-            y_range=DataRange1d(),
-            toolbar_location=None,
-            outline_line_color=None,
-            **kwargs,
-        )
-
-        self.root.add_glyph(
-            self.source,
-            Quad(
-                top=1,
-                bottom=0,
-                left="left",
-                right="right",
-                fill_color="color",
-                fill_alpha=1,
-            ),
-        )
-
-        self.root.add_layout(LinearAxis(), "left")
-        self.root.add_layout(LinearAxis(), "below")
-
-        hover = HoverTool(
-            point_policy="follow_mouse",
-            tooltips="""
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Percent:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@percent</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">MB:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@MB</span>
-                </div>
-                """,
-        )
-        self.root.add_tools(hover)
-
-    @without_property_validation
-    def update(self):
-        with log_errors():
-            nb = nbytes_bar(self.plugin.nbytes)
-            update(self.source, nb)
-            self.root.title.text = "Memory Use: %0.2f MB" % (
-                sum(self.plugin.nbytes.values()) / 1e6
-            )
-
-
 class WorkerTable(DashboardComponent):
     """ Status of the current workers
 
@@ -1857,14 +1777,6 @@ def individual_nbytes_doc(scheduler, extra, doc):
     current_load.update()
     add_periodic_callback(doc, current_load, 100)
     doc.add_root(current_load.nbytes_figure)
-    doc.theme = BOKEH_THEME
-
-
-def individual_memory_use_doc(scheduler, extra, doc):
-    memory_use = MemoryUse(scheduler, sizing_mode="stretch_both")
-    memory_use.update()
-    add_periodic_callback(doc, memory_use, 100)
-    doc.add_root(memory_use.root)
     doc.theme = BOKEH_THEME
 
 

@@ -7,14 +7,13 @@ from tornado import gen
 
 from distributed.utils_test import slowinc, gen_cluster
 from distributed.dashboard.components.shared import (
-    MemoryUsage,
     Processing,
     ProfilePlot,
     ProfileTimePlot,
 )
 
 
-@pytest.mark.parametrize("Component", [MemoryUsage, Processing])
+@pytest.mark.parametrize("Component", [Processing])
 def test_basic(Component):
     c = Component()
     assert isinstance(c.source, ColumnDataSource)
