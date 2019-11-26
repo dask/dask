@@ -312,12 +312,12 @@ class ProfileTimePlot(DashboardComponent):
         self.ts_source = ColumnDataSource({"time": [], "count": []})
         self.ts_plot = figure(
             title="Activity over time",
-            height=100,
+            height=150,
             x_axis_type="datetime",
             active_drag="xbox_select",
             y_range=[0, 1 / profile_interval],
             tools="xpan,xwheel_zoom,xbox_select,reset",
-            **kwargs
+            sizing_mode="stretch_width",
         )
         self.ts_plot.line("time", "count", source=self.ts_source)
         self.ts_plot.circle(
@@ -367,6 +367,7 @@ class ProfileTimePlot(DashboardComponent):
                 self.reset_button,
                 self.update_button,
                 sizing_mode="scale_width",
+                height=250,
             ),
             self.profile_plot,
             self.ts_plot,
@@ -464,12 +465,12 @@ class ProfileServer(DashboardComponent):
         self.ts_source = ColumnDataSource({"time": [], "count": []})
         self.ts_plot = figure(
             title="Activity over time",
-            height=100,
+            height=150,
             x_axis_type="datetime",
             active_drag="xbox_select",
             y_range=[0, 1 / profile_interval],
             tools="xpan,xwheel_zoom,xbox_select,reset",
-            **kwargs
+            sizing_mode="stretch_width",
         )
         self.ts_plot.line("time", "count", source=self.ts_source)
         self.ts_plot.circle(

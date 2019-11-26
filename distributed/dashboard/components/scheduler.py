@@ -1957,7 +1957,7 @@ def individual_memory_by_key_doc(scheduler, extra, doc):
 def profile_doc(scheduler, extra, doc):
     with log_errors():
         doc.title = "Dask: Profile"
-        prof = ProfileTimePlot(scheduler, sizing_mode="scale_width", doc=doc)
+        prof = ProfileTimePlot(scheduler, sizing_mode="stretch_both", doc=doc)
         doc.add_root(prof.root)
         doc.template = env.get_template("simple.html")
         doc.template_variables.update(extra)
@@ -1969,7 +1969,7 @@ def profile_doc(scheduler, extra, doc):
 def profile_server_doc(scheduler, extra, doc):
     with log_errors():
         doc.title = "Dask: Profile of Event Loop"
-        prof = ProfileServer(scheduler, sizing_mode="scale_width", doc=doc)
+        prof = ProfileServer(scheduler, sizing_mode="stretch_both", doc=doc)
         doc.add_root(prof.root)
         doc.template = env.get_template("simple.html")
         doc.template_variables.update(extra)
