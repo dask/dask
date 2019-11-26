@@ -24,6 +24,7 @@ from bokeh.models import (
     LinearAxis,
     NumeralTickFormatter,
     BoxZoomTool,
+    AdaptiveTicker,
     BasicTicker,
     NumberFormatter,
     BoxSelectTool,
@@ -241,6 +242,7 @@ class NBytesHistogram(DashboardComponent):
             )
 
             self.root.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
+            self.root.xaxis.ticker = AdaptiveTicker(mantissas=[1, 256, 512], base=1024)
             self.root.xaxis.major_label_orientation = -math.pi / 12
 
             self.root.xaxis.minor_tick_line_alpha = 0
@@ -303,6 +305,7 @@ class BandwidthTypes(DashboardComponent):
             )
             fig.x_range.start = 0
             fig.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
+            fig.xaxis.ticker = AdaptiveTicker(mantissas=[1, 256, 512], base=1024)
             rect.nonselection_glyph = None
 
             fig.xaxis.minor_tick_line_alpha = 0
@@ -457,6 +460,7 @@ class MemoryByKey(DashboardComponent):
                 source=self.source, x="name", top="nbytes", width=0.9, color="color"
             )
             fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
+            fig.yaxis.ticker = AdaptiveTicker(mantissas=[1, 256, 512], base=1024)
             fig.xaxis.major_label_orientation = -math.pi / 12
             rect.nonselection_glyph = None
 
