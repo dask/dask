@@ -3125,27 +3125,46 @@ async def get_data_from_worker(
     if deserializers is None:
         deserializers = rpc.deserializers
 
-    comm = await rpc.connect(worker)
-    comm.name = "Ephemeral Worker->Worker for gather"
-    try:
-        response = await send_recv(
-            comm,
-            serializers=serializers,
-            deserializers=deserializers,
-            op="get_data",
-            keys=keys,
-            who=who,
-            max_connections=max_connections,
-        )
+    retry_count = 0
+    max_retries = 3
+
+    while True:
+        comm = await rpc.connect(worker)
+        comm.name = "Ephemeral Worker->Worker for gather"
         try:
-            status = response["status"]
-        except KeyError:
-            raise ValueError("Unexpected response", response)
-        else:
-            if status == "OK":
-                await comm.write("OK")
-    finally:
-        rpc.reuse(worker, comm)
+            response = await send_recv(
+                comm,
+                serializers=serializers,
+                deserializers=deserializers,
+                op="get_data",
+                keys=keys,
+                who=who,
+                max_connections=max_connections,
+            )
+            try:
+                status = response["status"]
+            except KeyError:
+                raise ValueError("Unexpected response", response)
+            else:
+                if status == "OK":
+                    await comm.write("OK")
+            break
+        except (EnvironmentError, CommClosedError):
+            if retry_count < max_retries:
+                await asyncio.sleep(0.1 * (2 ** retry_count))
+                retry_count += 1
+                logger.info(
+                    "Encountered connection issue during data collection of keys %s on worker %s. Retrying (%s / %s)",
+                    keys,
+                    worker,
+                    retry_count,
+                    max_retries,
+                )
+                continue
+            else:
+                raise
+        finally:
+            rpc.reuse(worker, comm)
 
     return response
 

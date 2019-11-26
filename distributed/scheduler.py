@@ -2547,7 +2547,7 @@ class Scheduler(ServerNode):
                 (self.tasks[key].state if key in self.tasks else None)
                 for key in missing_keys
             ]
-            logger.debug(
+            logger.exception(
                 "Couldn't gather keys %s state: %s workers: %s",
                 missing_keys,
                 missing_states,
@@ -2555,17 +2555,21 @@ class Scheduler(ServerNode):
             )
             result = {"status": "error", "keys": missing_keys}
             with log_errors():
+                # Remove suspicious workers from the scheduler but allow them to
+                # reconnect.
                 for worker in missing_workers:
-                    self.remove_worker(address=worker)  # this is extreme
+                    self.remove_worker(address=worker, close=False)
                 for key, workers in missing_keys.items():
-                    if not workers:
-                        continue
-                    ts = self.tasks[key]
+                    # Task may already be gone if it was held by a
+                    # `missing_worker`
+                    ts = self.tasks.get(key)
                     logger.exception(
                         "Workers don't have promised key: %s, %s",
                         str(workers),
                         str(key),
                     )
+                    if not workers or ts is None:
+                        continue
                     for worker in workers:
                         ws = self.workers.get(worker)
                         if ws is not None and ts in ws.has_what:

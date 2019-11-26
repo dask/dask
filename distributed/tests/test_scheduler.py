@@ -17,7 +17,8 @@ from tornado import gen
 import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
-from distributed.core import connect, rpc
+from distributed.comm import Comm
+from distributed.core import connect, rpc, ConnectionPool
 from distributed.scheduler import Scheduler, TaskState
 from distributed.client import wait
 from distributed.metrics import time
@@ -1704,3 +1705,145 @@ async def test_no_danglng_asyncio_tasks(cleanup):
 
     tasks = asyncio.all_tasks()
     assert tasks == start
+
+
+class BrokenComm(Comm):
+    peer_address = None
+    local_address = None
+
+    def close(self):
+        pass
+
+    def closed(self):
+        pass
+
+    def abort(self):
+        pass
+
+    def read(self, deserializers=None):
+        raise EnvironmentError
+
+    def write(self, msg, serializers=None, on_error=None):
+        raise EnvironmentError
+
+
+class FlakyConnectionPool(ConnectionPool):
+    def __init__(self, *args, failing_connections=0, **kwargs):
+        self.cnn_count = 0
+        self.failing_connections = failing_connections
+        super(FlakyConnectionPool, self).__init__(*args, **kwargs)
+
+    async def connect(self, *args, **kwargs):
+        self.cnn_count += 1
+        if self.cnn_count > self.failing_connections:
+            return await super(FlakyConnectionPool, self).connect(*args, **kwargs)
+        else:
+            return BrokenComm()
+
+
+@gen_cluster(client=True)
+async def test_gather_failing_cnn_recover(c, s, a, b):
+    orig_rpc = s.rpc
+    x = await c.scatter({"x": 1}, workers=a.address)
+
+    s.rpc = FlakyConnectionPool(failing_connections=1)
+    res = await s.gather(keys=["x"])
+    assert res["status"] == "OK"
+
+
+@gen_cluster(client=True)
+async def test_gather_failing_cnn_error(c, s, a, b):
+    orig_rpc = s.rpc
+    x = await c.scatter({"x": 1}, workers=a.address)
+
+    s.rpc = FlakyConnectionPool(failing_connections=10)
+    res = await s.gather(keys=["x"])
+    assert res["status"] == "error"
+    assert list(res["keys"]) == ["x"]
+
+
+@gen_cluster(client=True)
+async def test_gather_no_workers(c, s, a, b):
+    await asyncio.sleep(1)
+    x = await c.scatter({"x": 1}, workers=a.address)
+
+    await a.close()
+    await b.close()
+
+    res = await s.gather(keys=["x"])
+    assert res["status"] == "error"
+    assert list(res["keys"]) == ["x"]
+
+
+@gen_cluster(client=True, client_kwargs={"direct_to_workers": False})
+async def test_gather_allow_worker_reconnect(c, s, a, b):
+    """
+    Test that client resubmissions allow failed workers to reconnect and re-use
+    their results. Failure scenario would be a connection issue during result
+    gathering.
+    Upon connection failure, the worker is flagged as suspicious and removed
+    from the scheduler. If the worker is healthy and reconnencts we want to use
+    its results instead of recomputing them.
+    """
+    # GH3246
+    ALREADY_CALCULATED = []
+
+    import time
+
+    def inc_slow(x):
+        # Once the graph below is rescheduled this computation runs again. We
+        # need to sleep for at least 0.5 seconds to give the worker a chance to
+        # reconnect (Heartbeat timing)
+        if x in ALREADY_CALCULATED:
+            time.sleep(0.5)
+        ALREADY_CALCULATED.append(x)
+        return x + 1
+
+    x = c.submit(inc_slow, 1)
+    y = c.submit(inc_slow, 2)
+
+    def reducer(x, y):
+        return x + y
+
+    z = c.submit(reducer, x, y)
+
+    s.rpc = FlakyConnectionPool(failing_connections=4)
+
+    with captured_logger(logging.getLogger("distributed.scheduler")) as sched_logger:
+        with captured_logger(logging.getLogger("distributed.client")) as client_logger:
+            with captured_logger(
+                logging.getLogger("distributed.worker")
+            ) as worker_logger:
+                # Gather using the client (as an ordinary user would)
+                # Upon a missing key, the client will reschedule the computations
+                res = await c.gather(z)
+
+    assert res == 5
+
+    sched_logger = sched_logger.getvalue()
+    client_logger = client_logger.getvalue()
+    worker_logger = worker_logger.getvalue()
+
+    # Ensure that the communication was done via the scheduler, i.e. we actually hit a bad connection
+    assert s.rpc.cnn_count > 0
+
+    assert "Encountered connection issue during data collection" in worker_logger
+
+    # The reducer task was actually not found upon first collection. The client will reschedule the graph
+    assert "Couldn't gather 1 keys, rescheduling" in client_logger
+    # There will also be a `Unexpected worker completed task` message but this
+    # is rather an artifact and not the intention
+    assert "Workers don't have promised key" in sched_logger
+
+    # Once the worker reconnects, it will also submit the keys it holds such
+    # that the scheduler again knows about the result.
+    # The final reduce step should then be used from the re-connected worker
+    # instead of recomputing it.
+
+    starts = []
+    finish_processing_transitions = 0
+    for transition in s.transition_log:
+        key, start, finish, recommendations, timestamp = transition
+        if "reducer" in key and finish == "processing":
+            finish_processing_transitions += 1
+    assert finish_processing_transitions == 1

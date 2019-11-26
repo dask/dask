@@ -59,7 +59,7 @@ class Comm(ABC):
         """
 
     @abstractmethod
-    def write(self, msg, on_error=None):
+    def write(self, msg, serializers=None, on_error=None):
         """
         Write a message (a Python object).
 
