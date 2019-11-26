@@ -1,6 +1,5 @@
 from itertools import product
 
-import dask
 import pandas as pd
 import pytest
 
