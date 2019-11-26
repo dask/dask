@@ -243,3 +243,7 @@ class Resampler(object):
     @derived_from(pd_Resampler)
     def var(self):
         return self._agg("var")
+
+    @derived_from(pd_Resampler)
+    def quantile(self):
+        return self._agg("quantile")

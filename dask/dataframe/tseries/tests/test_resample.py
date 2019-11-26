@@ -104,7 +104,7 @@ def test_resample_index_name():
     assert ddf.resample("D").mean().head().index.name == "date"
 
 
-@pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size"])
+@pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])
 def test_common_aggs(agg):
     index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
     ps = pd.Series(range(len(index)), index=index)
