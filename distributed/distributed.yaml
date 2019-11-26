@@ -73,6 +73,7 @@ distributed:
 
   comm:
     compression: auto
+    offload: 10MiB # Size after which we choose to offload serialization to another thread
     default-scheme: tcp
     socket-backlog: 2048
     recent-messages-log-length: 0  # number of messages to keep for debugging

@@ -1,7 +1,9 @@
 import logging
 import socket
 
+import dask
 from dask.sizeof import sizeof
+from dask.utils import parse_bytes
 
 from .. import protocol
 from ..utils import get_ip, get_ipv6, nbytes, offload
@@ -13,7 +15,9 @@ logger = logging.getLogger(__name__)
 # Offload (de)serializing large frames to improve event loop responsiveness.
 # We use at most 4 threads to allow for parallel processing of large messages.
 
-FRAME_OFFLOAD_THRESHOLD = 10 * 1024 ** 2  # 10 MB
+FRAME_OFFLOAD_THRESHOLD = dask.config.get("distributed.comm.offload")
+if isinstance(FRAME_OFFLOAD_THRESHOLD, str):
+    FRAME_OFFLOAD_THRESHOLD = parse_bytes(FRAME_OFFLOAD_THRESHOLD)
 
 
 async def to_frames(msg, serializers=None, on_error="message", context=None):
@@ -33,7 +37,7 @@ async def to_frames(msg, serializers=None, on_error="message", context=None):
             logger.exception(e)
             raise
 
-    if sizeof(msg) > FRAME_OFFLOAD_THRESHOLD:
+    if FRAME_OFFLOAD_THRESHOLD and sizeof(msg) > FRAME_OFFLOAD_THRESHOLD:
         return await offload(_to_frames)
     else:
         return _to_frames()
@@ -59,7 +63,7 @@ async def from_frames(frames, deserialize=True, deserializers=None):
             logger.error("truncated data stream (%d bytes): %s", size, datastr)
             raise
 
-    if deserialize and size > FRAME_OFFLOAD_THRESHOLD:
+    if deserialize and FRAME_OFFLOAD_THRESHOLD and size > FRAME_OFFLOAD_THRESHOLD:
         res = await offload(_from_frames)
     else:
         res = _from_frames()
