@@ -274,6 +274,8 @@ def test_CurrentLoad(c, s, a, b):
     assert all(len(L) == 2 for L in d.values())
     assert all(d["nbytes"])
 
+    assert cl.cpu_figure.x_range.end == 200
+
 
 @gen_cluster(client=True)
 def test_ProcessingHistogram(c, s, a, b):
