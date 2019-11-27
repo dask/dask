@@ -321,11 +321,11 @@ class ProfileTimePlot(DashboardComponent):
     def trigger_update(self, update_metadata=True):
         async def cb():
             with log_errors():
-                prof = self.server.get_profile(
+                prof = await self.server.get_profile(
                     key=self.key, start=self.start, stop=self.stop
                 )
                 if update_metadata:
-                    metadata = self.server.get_profile_metadata()
+                    metadata = await self.server.get_profile_metadata()
                 else:
                     metadata = None
                 if isinstance(prof, gen.Future):

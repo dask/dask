@@ -2655,7 +2655,9 @@ class Worker(ServerNode):
         if self.digests is not None:
             self.digests["profile-duration"].add(stop - start)
 
-    def get_profile(self, comm=None, start=None, stop=None, key=None, server=False):
+    async def get_profile(
+        self, comm=None, start=None, stop=None, key=None, server=False
+    ):
         now = time() + self.scheduler_delay
         if server:
             history = self.io_loop.profile
@@ -2696,7 +2698,7 @@ class Worker(ServerNode):
 
         return prof
 
-    def get_profile_metadata(self, comm=None, start=0, stop=None):
+    async def get_profile_metadata(self, comm=None, start=0, stop=None):
         if stop is None:
             add_recent = True
         now = time() + self.scheduler_delay

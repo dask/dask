@@ -1079,7 +1079,7 @@ def test_statistical_profiling_2(c, s, a, b):
         y = (x + x * 2) - x.sum().persist()
         yield wait(y)
 
-        profile = a.get_profile()
+        profile = yield a.get_profile()
         text = str(profile)
         if profile["count"] and "sum" in text and "random" in text:
             break
@@ -1165,15 +1165,15 @@ def test_statistical_profiling_cycle(c, s, a, b):
     end = time()
     assert len(a.profile_history) > 3
 
-    x = a.get_profile(start=time() + 10, stop=time() + 20)
+    x = yield a.get_profile(start=time() + 10, stop=time() + 20)
     assert not x["count"]
 
-    x = a.get_profile(start=0, stop=time())
+    x = yield a.get_profile(start=0, stop=time())
     actual = sum(p["count"] for _, p in a.profile_history) + a.profile_recent["count"]
-    x2 = a.get_profile(start=0, stop=time())
+    x2 = yield a.get_profile(start=0, stop=time())
     assert x["count"] <= actual <= x2["count"]
 
-    y = a.get_profile(start=end - 0.300, stop=time())
+    y = yield a.get_profile(start=end - 0.300, stop=time())
     assert 0 < y["count"] <= x["count"]
 
 
