@@ -116,7 +116,6 @@ Contents
    publish
    queues
    resources
-   submitting-applications
    task-launch
    tls
    web

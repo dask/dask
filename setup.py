@@ -54,8 +54,6 @@ setup(
     entry_points="""
         [console_scripts]
         dask-ssh=distributed.cli.dask_ssh:go
-        dask-submit=distributed.cli.dask_submit:go
-        dask-remote=distributed.cli.dask_remote:go
         dask-scheduler=distributed.cli.dask_scheduler:go
         dask-worker=distributed.cli.dask_worker:go
       """,
