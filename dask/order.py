@@ -118,20 +118,19 @@ def order(dsk, dependencies=None):
         First prioritize large, tall groups, then prioritize the same as `dependents_key`.
         """
         num_dependents = len(dependents[x])
-        total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[x]
+        total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[
+            x
+        ]
         return (
             # at a high-level, work towards a large goal (and prefer tall and narrow)
             -max_dependencies,
             num_dependents - max_heights,
-
             # tactically, finish small connected jobs first
             min_dependencies,
             num_dependents - min_heights,  # prefer tall and narrow
             -total_dependents,  # take a big step
-
             # try to be memory efficient
             num_dependents,
-
             # tie-breaker
             StrComparable(x),
         )
@@ -148,11 +147,9 @@ def order(dsk, dependencies=None):
             min_dependencies,
             num_dependents - min_heights,  # prefer tall and narrow
             -total_dependents,  # take a big step
-
             # try to be memory efficient
             num_dependents - len(dependencies[x]) + num_needed[x],
             num_dependents,
-
             # tie-breaker
             StrComparable(x),
         )
@@ -163,21 +160,20 @@ def order(dsk, dependencies=None):
         This is very similar to both `initial_stack_key` and `dependents_key`.
         """
         num_dependents = len(dependents[x])
-        total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[x]
+        total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[
+            x
+        ]
         return (
             # at a high-level, work towards a large goal (and prefer tall and narrow)
             -max_dependencies,
             num_dependents - max_heights,
-
             # tactically, finish small connected jobs first
             min_dependencies,
             num_dependents - min_heights,  # prefer tall and narrow
             -total_dependents,  # stay where the work is
-
             # try to be memory efficient
             num_dependents - len(dependencies[x]) + num_needed[x],
             num_dependents,
-
             # tie-breaker
             StrComparable(x),
         )
@@ -227,10 +223,14 @@ def order(dsk, dependencies=None):
                         inner_stack_append(item)
                         deps = dependencies[item].difference(result)
                         if len(deps) < 1000:
-                            inner_stack_extend(sorted(deps, key=dependencies_key, reverse=True))
+                            inner_stack_extend(
+                                sorted(deps, key=dependencies_key, reverse=True)
+                            )
                         else:
                             inner_stack_extend(deps)
-                            inner_stack_append(min(deps, key=dependencies_key))  # one good one
+                            inner_stack_append(
+                                min(deps, key=dependencies_key)  # one good one
+                            )
                         continue
 
                     result[item] = i
@@ -251,7 +251,9 @@ def order(dsk, dependencies=None):
             while not outer_stack and outer_stack_seeds_index < len(outer_stack_seeds):
                 outer_stack_extend(
                     sorted(
-                        dependents[outer_stack_seeds[outer_stack_seeds_index]].difference(result),
+                        dependents[
+                            outer_stack_seeds[outer_stack_seeds_index]
+                        ].difference(result),
                         key=dependents_key,
                         reverse=True,
                     )
@@ -271,7 +273,8 @@ def order(dsk, dependencies=None):
             init_stack = init_stack.difference(result)
             N = len(init_stack)
             m = prev_len - N
-            if m >= N or N + (N - m) * log(N - m) < N * log(N):  # is `min` likely better than `sort`?
+            # is `min` likely better than `sort`?
+            if m >= N or N + (N - m) * log(N - m) < N * log(N):
                 item = min(init_stack, key=initial_stack_key)
                 continue
 
