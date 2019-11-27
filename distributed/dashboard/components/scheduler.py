@@ -383,7 +383,10 @@ class BandwidthWorkers(DashboardComponent):
                 border_line_color=None,
                 location=(0, 0),
             )
-            color_bar.formatter = NumeralTickFormatter(format="0 b")
+            color_bar.formatter = NumeralTickFormatter(format="0.0 b")
+            color_bar.ticker = AdaptiveTicker(
+                mantissas=[1, 64, 128, 256, 512], base=1024
+            )
             fig.add_layout(color_bar, "right")
 
             fig.toolbar.logo = None
@@ -408,14 +411,21 @@ class BandwidthWorkers(DashboardComponent):
             bw = self.scheduler.bandwidth_workers
             if not bw:
                 return
-            x, y, value = zip(*[(a, b, c) for (a, b), c in bw.items()])
 
-            if self.color_map.high < max(value):
-                self.color_map.high = max(value)
+            def name(address):
+                ws = self.scheduler.workers[address]
+                if ws.name is not None:
+                    return str(ws.name)
+                else:
+                    return address
+
+            x, y, value = zip(*[(name(a), name(b), c) for (a, b), c in bw.items()])
+
+            self.color_map.high = max(value)
 
             factors = list(sorted(set(x + y)))
             self.fig.x_range.factors = factors
-            self.fig.y_range.factors = factors
+            self.fig.y_range.factors = factors[::-1]
 
             result = {
                 "source": x,
