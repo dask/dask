@@ -30,7 +30,9 @@ env = Environment(
 
 BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), "theme.yaml"))
 
-template_variables = {"pages": ["status", "system", "profile", "crossfilter"]}
+template_variables = {
+    "pages": ["status", "system", "profile", "crossfilter", "profile-server"]
+}
 
 
 class _PrometheusCollector(object):

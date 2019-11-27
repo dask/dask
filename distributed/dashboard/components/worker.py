@@ -638,7 +638,7 @@ def counters_doc(server, extra, doc):
 def profile_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask Worker Profile"
-        profile = ProfileTimePlot(server, sizing_mode="scale_width", doc=doc)
+        profile = ProfileTimePlot(server, sizing_mode="stretch_both", doc=doc)
         profile.trigger_update()
 
         doc.add_root(profile.root)
@@ -651,7 +651,7 @@ def profile_doc(server, extra, doc):
 def profile_server_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask: Profile of Event Loop"
-        prof = ProfileServer(server, sizing_mode="scale_width", doc=doc)
+        prof = ProfileServer(server, sizing_mode="stretch_both", doc=doc)
         doc.add_root(prof.root)
         doc.template = env.get_template("simple.html")
         # doc.template_variables['active_page'] = ''
