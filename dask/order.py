@@ -74,6 +74,7 @@ Work towards *small goals* with *big steps*.
     This relies on the regularity of graph constructors like dask.array to be a
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
+from math import log
 from .core import get_dependencies, reverse_dict, get_deps  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
 
@@ -108,61 +109,182 @@ def order(dsk, dependencies=None):
         deps.discard(k)
 
     dependents = reverse_dict(dependencies)
+    num_needed, total_dependencies = ndependencies(dependencies, dependents)
+    metrics = ndependents(dependencies, dependents, total_dependencies)
 
-    total_dependencies = ndependencies(dependencies, dependents)
-    total_dependents, min_dependencies = ndependents(
-        dependencies, dependents, total_dependencies
-    )
+    def initial_stack_key(x):
+        """ Choose which task to run at the very beginning
 
-    waiting = {k: set(v) for k, v in dependencies.items()}
+        First prioritize large, tall groups, then prioritize the same as `dependents_key`.
+        """
+        num_dependents = len(dependents[x])
+        total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[x]
+        return (
+            # at a high-level, work towards a large goal (and prefer tall and narrow)
+            -max_dependencies,
+            num_dependents - max_heights,
 
-    def dependencies_key(x):
-        return total_dependencies.get(x, 0), ReverseStrComparable(x)
+            # tactically, finish small connected jobs first
+            min_dependencies,
+            num_dependents - min_heights,  # prefer tall and narrow
+            -total_dependents,  # take a big step
+
+            # try to be memory efficient
+            num_dependents,
+
+            # tie-breaker
+            StrComparable(x),
+        )
 
     def dependents_key(x):
-        return (min_dependencies[x], -(total_dependents.get(x, 0)), StrComparable(x))
+        """ Choose a path from our starting task to our tactical goal
 
-    result = dict()
-    seen = set()  # tasks that should not be added again to the stack
+        This path is connected to a large goal, but focuses on completing a small goal.
+        """
+        num_dependents = len(dependents[x])
+        total_dependents, min_dependencies, _, min_heights, _ = metrics[x]
+        return (
+            # tactically, finish small connected jobs first
+            min_dependencies,
+            num_dependents - min_heights,  # prefer tall and narrow
+            -total_dependents,  # take a big step
+
+            # try to be memory efficient
+            num_dependents - len(dependencies[x]) + num_needed[x],
+            num_dependents,
+
+            # tie-breaker
+            StrComparable(x),
+        )
+
+    def dependencies_key(x):
+        """ Choose which dependency to run as part of a reverse DFS
+
+        This is very similar to both `initial_stack_key` and `dependents_key`.
+        """
+        num_dependents = len(dependents[x])
+        total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[x]
+        return (
+            # at a high-level, work towards a large goal (and prefer tall and narrow)
+            -max_dependencies,
+            num_dependents - max_heights,
+
+            # tactically, finish small connected jobs first
+            min_dependencies,
+            num_dependents - min_heights,  # prefer tall and narrow
+            -total_dependents,  # stay where the work is
+
+            # try to be memory efficient
+            num_dependents - len(dependencies[x]) + num_needed[x],
+            num_dependents,
+
+            # tie-breaker
+            StrComparable(x),
+        )
+
+    result = {}
     i = 0
 
-    stack = [k for k, v in dependents.items() if not v]
-    if len(stack) < 10000:
-        stack = sorted(stack, key=dependencies_key)
-    else:
-        stack = stack[::-1]
+    init_stack = {k for k, v in dependencies.items() if not v}
+    outer_stack = []
+    outer_stack_seeds = []
+    outer_stack_seeds_index = 0
+    inner_stack = []
 
-    while stack:
-        item = stack.pop()
+    # aliases for speed
+    outer_stack_append = outer_stack.append
+    outer_stack_pop = outer_stack.pop
+    outer_stack_extend = outer_stack.extend
+    outer_stack_seeds_append = outer_stack_seeds.append
+    inner_stack_append = inner_stack.append
+    inner_stack_pop = inner_stack.pop
+    inner_stack_extend = inner_stack.extend
+    inner_stack_reverse = inner_stack.reverse
 
-        if item in result:
-            continue
+    is_init_sorted = False
+    item = min(init_stack, key=initial_stack_key)
+    while True:
+        outer_stack_append(item)
+        while outer_stack:
+            item = outer_stack_pop()
+            if item not in result:
+                # Pre-populate the inner stack with a path down to our tactical goal
+                inner_stack_append(item)
+                deps = dependents[item]
+                while deps:
+                    item = min(deps, key=dependents_key)
+                    inner_stack_append(item)
+                    deps = dependents[item]
+                inner_stack_reverse()
 
-        deps = waiting[item]
+                while inner_stack:
+                    # Perform a DFS along dependencies
+                    item = inner_stack_pop()
+                    if item in result:
+                        continue
 
-        if deps:
-            stack.append(item)
-            seen.add(item)
-            if len(deps) < 1000:
-                deps = sorted(deps, key=dependencies_key)
-            stack.extend(deps)
-            continue
+                    if num_needed[item]:
+                        inner_stack_append(item)
+                        deps = dependencies[item].difference(result)
+                        if len(deps) < 1000:
+                            inner_stack_extend(sorted(deps, key=dependencies_key, reverse=True))
+                        else:
+                            inner_stack_extend(deps)
+                            inner_stack_append(min(deps, key=dependencies_key))  # one good one
+                        continue
 
-        result[item] = i
-        i += 1
+                    result[item] = i
+                    i += 1
+                    for dep in dependents[item]:
+                        num_needed[dep] -= 1
 
-        for dep in dependents[item]:
-            waiting[dep].discard(item)
+                    # Our next starting point will be "seeded" by a completed task in a FIFO manner.
+                    # When our DFS with `inner_stack` is finished--which means we computed our tactical
+                    # goal--we will choose our next starting point from the dependents of completed tasks.
+                    # However, it is too expensive to consider all dependents of all completed tasks, so
+                    # we consider the dependents of tasks in the order they complete.
+                    #
+                    # Instead of always using a FIFO policy with the seeds, a reasonable variant would be
+                    # to use a LIFO policy of seeds collected until `inner_stack` is empty.
+                    outer_stack_seeds_append(item)
 
-        deps = [
-            d
-            for d in dependents[item]
-            if d not in result and not (d in seen and len(waiting[d]) > 1)
-        ]
-        if len(deps) < 1000:
-            deps = sorted(deps, key=dependents_key, reverse=True)
+            while not outer_stack and outer_stack_seeds_index < len(outer_stack_seeds):
+                outer_stack_extend(
+                    sorted(
+                        dependents[outer_stack_seeds[outer_stack_seeds_index]].difference(result),
+                        key=dependents_key,
+                        reverse=True,
+                    )
+                )
+                outer_stack_seeds_index += 1
 
-        stack.extend(deps)
+        if len(dependencies) == len(result):
+            break  # all done!
+
+        # We just finished computing a connected group.
+        # Let's choose the first `item` in the next group to compute.
+        # If we have few large groups left, then it's best to find `item` by taking a minimum.
+        # If we have many small groups left, then it's best to sort.
+        # If we have many tiny groups left, then it's best to simply iterate.
+        if not is_init_sorted:
+            prev_len = len(init_stack)
+            init_stack = init_stack.difference(result)
+            N = len(init_stack)
+            m = prev_len - N
+            if m >= N or N + (N - m) * log(N - m) < N * log(N):  # is `min` likely better than `sort`?
+                item = min(init_stack, key=initial_stack_key)
+                continue
+
+            if len(init_stack) < 10000:
+                init_stack = sorted(init_stack, key=initial_stack_key, reverse=True)
+            else:
+                init_stack = list(init_stack)
+            init_stack_pop = init_stack.pop
+            is_init_sorted = True
+
+        item = init_stack_pop()
+        while item in result:
+            item = init_stack_pop()
 
     return result
 
@@ -182,34 +304,48 @@ def ndependents(dependencies, dependents, total_dependencies):
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
 
-    >>> total_dependencies = ndependencies(dependencies, dependents)
-    >>> total_dependents, min_dependencies = ndependents(dependencies,
-    ...                                                  dependents,
-    ...                                                  total_dependencies)
+    >>> _, total_dependencies = ndependencies(dependencies, dependents)
+    >>> total_dependents, _, _, _, _= ndependents(dependencies,
+    ...                                           dependents,
+    ...                                           total_dependencies)
     >>> sorted(total_dependents.items())
     [('a', 3), ('b', 2), ('c', 1)]
 
     Returns
     -------
-    total_dependendents: Dict[key, int]
+    total_dependents: Dict[key, int]
     min_dependencies: Dict[key, int]
+    max_dependencies: Dict[key, int]
+    min_heights: Dict[key, int]
+    max_heights: Dict[key, int]
     """
-    result = dict()
-    min_result = dict()
+    result = {}
     num_needed = {k: len(v) for k, v in dependents.items()}
     current = {k for k, v in num_needed.items() if v == 0}
+    current_pop = current.pop
+    current_add = current.add
     while current:
-        key = current.pop()
-        result[key] = 1 + sum(result[parent] for parent in dependents[key])
-        try:
-            min_result[key] = min(min_result[parent] for parent in dependents[key])
-        except ValueError:
-            min_result[key] = total_dependencies[key]
+        key = current_pop()
+        parents = dependents[key]
+        if parents:
+            total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = zip(
+                *(result[parent] for parent in parents)
+            )
+            result[key] = (
+                1 + sum(total_dependents),
+                min(min_dependencies),
+                max(max_dependencies),
+                1 + min(min_heights),
+                1 + max(max_heights),
+            )
+        else:
+            val = total_dependencies[key]
+            result[key] = (1, val, val, 1, 1)
         for child in dependencies[key]:
             num_needed[child] -= 1
             if num_needed[child] == 0:
-                current.add(child)
-    return result, min_result
+                current_add(child)
+    return result
 
 
 def ndependencies(dependencies, dependents):
@@ -222,20 +358,29 @@ def ndependencies(dependencies, dependents):
     --------
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> sorted(ndependencies(dependencies, dependents).items())
+    >>> num_dependencies, total_dependencies = ndependencies(dependencies, dependents).items())
+    >>> sorted(total_dependencies.items())
     [('a', 1), ('b', 2), ('c', 3)]
+
+    Returns
+    -------
+    num_dependencies: Dict[key, int]
+    total_dependencies: Dict[key, int]
     """
-    result = dict()
+    result = {}
     num_needed = {k: len(v) for k, v in dependencies.items()}
+    num_dependencies = num_needed.copy()
     current = {k for k, v in num_needed.items() if v == 0}
+    current_pop = current.pop
+    current_add = current.add
     while current:
-        key = current.pop()
+        key = current_pop()
         result[key] = 1 + sum(result[child] for child in dependencies[key])
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if num_needed[parent] == 0:
-                current.add(parent)
-    return result
+                current_add(parent)
+    return num_dependencies, result
 
 
 class StrComparable(object):
@@ -265,22 +410,3 @@ class StrComparable(object):
             return self.obj < other.obj
         except Exception:
             return str(self.obj) < str(other.obj)
-
-
-class ReverseStrComparable(object):
-    """ Wrap object so that it defaults to string comparison
-
-    Used when sorting in reverse direction.  See StrComparable for normal
-    documentation.
-    """
-
-    __slots__ = ("obj",)
-
-    def __init__(self, obj):
-        self.obj = obj
-
-    def __lt__(self, other):
-        try:
-            return self.obj > other.obj
-        except Exception:
-            return str(self.obj) > str(other.obj)

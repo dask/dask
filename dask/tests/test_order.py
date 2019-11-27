@@ -53,9 +53,7 @@ def test_avoid_broker_nodes(abcde):
         (b, 1): (f, (a, 1)),
         (b, 2): (f, (a, 1)),
     }
-
     o = order(dsk)
-
     assert o[(a, 0)] < o[(a, 1)]
 
     # Switch name of 0, 1 to ensure that this isn't due to string comparison
@@ -66,10 +64,19 @@ def test_avoid_broker_nodes(abcde):
         (b, 1): (f, (a, 0)),
         (b, 2): (f, (a, 0)),
     }
-
     o = order(dsk)
-
     assert o[(a, 0)] > o[(a, 1)]
+
+    # Switch name of 0, 1 for "b"s too
+    dsk = {
+        (a, 0): (f,),
+        (a, 1): (f,),
+        (b, 1): (f, (a, 0)),
+        (b, 0): (f, (a, 1)),
+        (b, 2): (f, (a, 1)),
+    }
+    o = order(dsk)
+    assert o[(a, 0)] < o[(a, 1)]
 
 
 def test_base_of_reduce_preferred(abcde):
@@ -168,11 +175,10 @@ def test_avoid_upwards_branching_complex(abcde):
     }
 
     o = order(dsk)
-
     assert o[(c, 1)] < o[(b, 1)]
 
 
-@pytest.mark.xfail(reason="this case is ambiguous", strict=False)
+# @pytest.mark.xfail(reason="this case is ambiguous", strict=False)  # this now passes
 def test_deep_bases_win_over_dependents(abcde):
     r"""
     It's not clear who should run first, e or d
@@ -219,7 +225,6 @@ def test_stacklimit(abcde):
     ndependencies(dependencies, dependents)
 
 
-@pytest.mark.xfail(reason="Can't please 'em all")
 def test_break_ties_by_str(abcde):
     a, b, c, d, e = abcde
     dsk = {("x", i): (inc, i) for i in range(10)}
@@ -227,8 +232,8 @@ def test_break_ties_by_str(abcde):
     dsk["y"] = list(x_keys)
 
     o = order(dsk)
-    expected = {"y": 0}
-    expected.update({k: i + 1 for i, k in enumerate(x_keys)})
+    expected = {"y": 10}
+    expected.update({k: i for i, k in enumerate(x_keys)})
 
     assert o == expected
 
@@ -494,6 +499,7 @@ def test_prefer_short_ancestor(abcde):
     }
     o = order(dsk)
 
+    assert o[(a, 0)] < o[(a, 1)]
     assert o[(b, 0)] < o[(b, 1)]
     assert o[(b, 0)] < o[(c, 2)]
     assert o[(c, 1)] < o[(c, 2)]
@@ -535,3 +541,43 @@ def test_map_overlap(abcde):
     o = order(dsk)
 
     assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]
+
+
+def test_use_structure_not_keys(abcde):
+    """ See https://github.com/dask/dask/issues/5584#issuecomment-554963958
+
+    We were using key names to infer structure, which could result in funny behavior.
+    """
+    a, b, _, _, _ = abcde
+    dsk = {
+        (a, 0): (f,),
+        (a, 1): (f,),
+        (a, 2): (f,),
+        (a, 3): (f,),
+        (a, 4): (f,),
+        (a, 5): (f,),
+        (a, 6): (f,),
+        (a, 7): (f,),
+        (a, 8): (f,),
+        (a, 9): (f,),
+        (b, 5): (f, (a, 2)),
+        (b, 7): (f, (a, 0), (a, 2)),
+        (b, 9): (f, (a, 7), (a, 0), (a, 2)),
+        (b, 1): (f, (a, 4), (a, 7), (a, 0)),
+        (b, 2): (f, (a, 9), (a, 4), (a, 7)),
+        (b, 4): (f, (a, 6), (a, 9), (a, 4)),
+        (b, 3): (f, (a, 5), (a, 6), (a, 9)),
+        (b, 8): (f, (a, 1), (a, 5), (a, 6)),
+        (b, 6): (f, (a, 8), (a, 1), (a, 5)),
+        (b, 0): (f, (a, 3), (a, 8), (a, 1)),
+    }
+    o = order(dsk)
+    As = sorted(val for (letter, _), val in o.items() if letter == a)
+    Bs = sorted(val for (letter, _), val in o.items() if letter == b)
+    assert Bs[0] in {1, 3}
+    if Bs[0] == 3:
+        assert As == [0, 1, 2, 4, 6, 8, 10, 12, 14, 16]
+        assert Bs == [3, 5, 7, 9, 11, 13, 15, 17, 18, 19]
+    else:
+        assert As == [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+        assert Bs == [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
