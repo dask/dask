@@ -244,7 +244,7 @@ class Nanny(ServerNode):
 
     async def start(self):
         """ Start nanny, start local process, start watching """
-        self.listen(self._start_address, listen_args=self.listen_args)
+        await self.listen(self._start_address, listen_args=self.listen_args)
         self.ip = get_address_host(self.address)
 
         logger.info("        Start Nanny at: %r", self.address)

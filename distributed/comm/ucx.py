@@ -261,7 +261,7 @@ class UCXListener(Listener):
     def address(self):
         return "ucx://" + self.ip + ":" + str(self.port)
 
-    def start(self):
+    async def start(self):
         async def serve_forever(client_ep):
             ucx = UCX(
                 client_ep,

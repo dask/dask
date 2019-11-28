@@ -295,7 +295,7 @@ class Server(object):
     def identity(self, comm=None):
         return {"type": type(self).__name__, "id": self.id}
 
-    def listen(self, port_or_addr=None, listen_args=None):
+    async def listen(self, port_or_addr=None, listen_args=None):
         if port_or_addr is None:
             port_or_addr = self.default_port
         if isinstance(port_or_addr, int):
@@ -311,7 +311,7 @@ class Server(object):
             deserialize=self.deserialize,
             connection_args=listen_args,
         )
-        self.listener.start()
+        await self.listener.start()
 
     async def handle_comm(self, comm, shutting_down=shutting_down):
         """ Dispatch new communications to coroutine-handlers

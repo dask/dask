@@ -1213,7 +1213,7 @@ class Scheduler(ServerNode):
                 c.cancel()
 
         if self.status != "running":
-            self.listen(self._start_address, listen_args=self.listen_args)
+            await self.listen(self._start_address, listen_args=self.listen_args)
             self.ip = get_address_host(self.listen_address)
             listen_ip = self.ip
 

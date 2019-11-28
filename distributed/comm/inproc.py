@@ -1,3 +1,4 @@
+import asyncio
 from collections import deque, namedtuple
 import itertools
 import logging
@@ -265,9 +266,9 @@ class InProcListener(Listener):
     def connect_threadsafe(self, conn_req):
         self.loop.add_callback(self.listen_q.put_nowait, conn_req)
 
-    def start(self):
+    async def start(self):
         self.loop = IOLoop.current()
-        self.loop.add_callback(self._listen)
+        self._listen_future = asyncio.ensure_future(self._listen())
         self.manager.add_listener(self.address, self)
 
     def stop(self):

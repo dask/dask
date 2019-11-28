@@ -986,7 +986,7 @@ class Worker(ServerNode):
         enable_gc_diagnosis()
         thread_state.on_event_loop_thread = True
 
-        self.listen(self._start_address, listen_args=self.listen_args)
+        await self.listen(self._start_address, listen_args=self.listen_args)
         self.ip = get_address_host(self.address)
 
         if self.name is None:

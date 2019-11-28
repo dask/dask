@@ -1,3 +1,4 @@
+import asyncio
 from functools import partial
 import os
 import sys
@@ -6,13 +7,12 @@ import warnings
 
 import pytest
 
-from tornado import gen, ioloop, locks, queues
+from tornado import ioloop, locks, queues
 from tornado.concurrent import Future
 
 from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (
-    gen_test,
     requires_ipv6,
     has_ipv6,
     get_cert,
@@ -73,21 +73,21 @@ tls_kwargs = dict(
 )
 
 
-@gen.coroutine
-def get_comm_pair(listen_addr, listen_args=None, connect_args=None, **kwargs):
+@pytest.mark.asyncio
+async def get_comm_pair(listen_addr, listen_args=None, connect_args=None, **kwargs):
     q = queues.Queue()
 
     def handle_comm(comm):
         q.put(comm)
 
     listener = listen(listen_addr, handle_comm, connection_args=listen_args, **kwargs)
-    listener.start()
+    await listener.start()
 
-    comm = yield connect(
+    comm = await connect(
         listener.contact_address, connection_args=connect_args, **kwargs
     )
-    serv_comm = yield q.get()
-    raise gen.Return((comm, serv_comm))
+    serv_comm = await q.get()
+    return (comm, serv_comm)
 
 
 def get_tcp_comm_pair(**kwargs):
@@ -103,15 +103,14 @@ def get_inproc_comm_pair(**kwargs):
     return get_comm_pair("inproc://", **kwargs)
 
 
-@gen.coroutine
-def debug_loop():
+async def debug_loop():
     """
     Debug helper
     """
     while True:
         loop = ioloop.IOLoop.current()
         print(".", loop, loop._handlers)
-        yield gen.sleep(0.50)
+        await asyncio.sleep(0.50)
 
 
 #
@@ -205,23 +204,22 @@ def test_get_local_address_for():
 #
 
 
-@gen_test()
-def test_tcp_specific():
+@pytest.mark.asyncio
+async def test_tcp_specific():
     """
     Test concrete TCP API.
     """
 
-    @gen.coroutine
-    def handle_comm(comm):
+    async def handle_comm(comm):
         assert comm.peer_address.startswith("tcp://" + host)
         assert comm.extra_info == {}
-        msg = yield comm.read()
+        msg = await comm.read()
         msg["op"] = "pong"
-        yield comm.write(msg)
-        yield comm.close()
+        await comm.write(msg)
+        await comm.close()
 
     listener = tcp.TCPListener("localhost", handle_comm)
-    listener.start()
+    await listener.start()
     host, port = listener.get_host_port()
     assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
@@ -229,49 +227,47 @@ def test_tcp_specific():
     connector = tcp.TCPConnector()
     l = []
 
-    @gen.coroutine
-    def client_communicate(key, delay=0):
+    async def client_communicate(key, delay=0):
         addr = "%s:%d" % (host, port)
-        comm = yield connector.connect(addr)
+        comm = await connector.connect(addr)
         assert comm.peer_address == "tcp://" + addr
         assert comm.extra_info == {}
-        yield comm.write({"op": "ping", "data": key})
+        await comm.write({"op": "ping", "data": key})
         if delay:
-            yield gen.sleep(delay)
-        msg = yield comm.read()
+            await asyncio.sleep(delay)
+        msg = await comm.read()
         assert msg == {"op": "pong", "data": key}
         l.append(key)
-        yield comm.close()
+        await comm.close()
 
-    yield client_communicate(key=1234)
+    await client_communicate(key=1234)
 
     # Many clients at once
     N = 100
     futures = [client_communicate(key=i, delay=0.05) for i in range(N)]
-    yield futures
+    await asyncio.gather(*futures)
     assert set(l) == {1234} | set(range(N))
 
 
-@gen_test()
-def test_tls_specific():
+@pytest.mark.asyncio
+async def test_tls_specific():
     """
     Test concrete TLS API.
     """
 
-    @gen.coroutine
-    def handle_comm(comm):
+    async def handle_comm(comm):
         assert comm.peer_address.startswith("tls://" + host)
         check_tls_extra(comm.extra_info)
-        msg = yield comm.read()
+        msg = await comm.read()
         msg["op"] = "pong"
-        yield comm.write(msg)
-        yield comm.close()
+        await comm.write(msg)
+        await comm.close()
 
     server_ctx = get_server_ssl_context()
     client_ctx = get_client_ssl_context()
 
     listener = tcp.TLSListener("localhost", handle_comm, ssl_context=server_ctx)
-    listener.start()
+    await listener.start()
     host, port = listener.get_host_port()
     assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
@@ -279,31 +275,30 @@ def test_tls_specific():
     connector = tcp.TLSConnector()
     l = []
 
-    @gen.coroutine
-    def client_communicate(key, delay=0):
+    async def client_communicate(key, delay=0):
         addr = "%s:%d" % (host, port)
-        comm = yield connector.connect(addr, ssl_context=client_ctx)
+        comm = await connector.connect(addr, ssl_context=client_ctx)
         assert comm.peer_address == "tls://" + addr
         check_tls_extra(comm.extra_info)
-        yield comm.write({"op": "ping", "data": key})
+        await comm.write({"op": "ping", "data": key})
         if delay:
-            yield gen.sleep(delay)
-        msg = yield comm.read()
+            await asyncio.sleep(delay)
+        msg = await comm.read()
         assert msg == {"op": "pong", "data": key}
         l.append(key)
-        yield comm.close()
+        await comm.close()
 
-    yield client_communicate(key=1234)
+    await client_communicate(key=1234)
 
     # Many clients at once
     N = 100
     futures = [client_communicate(key=i, delay=0.05) for i in range(N)]
-    yield futures
+    await asyncio.gather(*futures)
     assert set(l) == {1234} | set(range(N))
 
 
-@gen_test()
-def test_comm_failure_threading():
+@pytest.mark.asyncio
+async def test_comm_failure_threading():
     """
     When we fail to connect, make sure we don't make a lot
     of threads.
@@ -312,40 +307,38 @@ def test_comm_failure_threading():
     set for python 3.  See github PR #2403 discussion for info.
     """
 
-    @gen.coroutine
-    def sleep_for_60ms():
+    async def sleep_for_60ms():
         max_thread_count = 0
         for x in range(60):
-            yield gen.sleep(0.001)
+            await asyncio.sleep(0.001)
             thread_count = threading.active_count()
             if thread_count > max_thread_count:
                 max_thread_count = thread_count
-        raise gen.Return(max_thread_count)
+        return max_thread_count
 
     original_thread_count = threading.active_count()
 
     # tcp.TCPConnector()
     sleep_future = sleep_for_60ms()
     with pytest.raises(IOError):
-        yield connect("tcp://localhost:28400", 0.052)
-    max_thread_count = yield sleep_future
+        await connect("tcp://localhost:28400", 0.052)
+    max_thread_count = await sleep_future
     # 2 is the number set by BaseTCPConnector.executor (ThreadPoolExecutor)
     assert max_thread_count <= 2 + original_thread_count
 
     # tcp.TLSConnector()
     sleep_future = sleep_for_60ms()
     with pytest.raises(IOError):
-        yield connect(
+        await connect(
             "tls://localhost:28400",
             0.052,
             connection_args={"ssl_context": get_client_ssl_context()},
         )
-    max_thread_count = yield sleep_future
+    max_thread_count = await sleep_future
     assert max_thread_count <= 2 + original_thread_count
 
 
-@gen.coroutine
-def check_inproc_specific(run_client):
+async def check_inproc_specific(run_client):
     """
     Test concrete InProc API.
     """
@@ -356,18 +349,17 @@ def check_inproc_specific(run_client):
 
     N_MSGS = 3
 
-    @gen.coroutine
-    def handle_comm(comm):
+    async def handle_comm(comm):
         assert comm.peer_address.startswith("inproc://" + addr_head)
         client_addresses.add(comm.peer_address)
         for i in range(N_MSGS):
-            msg = yield comm.read()
+            msg = await comm.read()
             msg["op"] = "pong"
-            yield comm.write(msg)
-        yield comm.close()
+            await comm.write(msg)
+        await comm.close()
 
     listener = inproc.InProcListener(listener_addr, handle_comm)
-    listener.start()
+    await listener.start()
     assert (
         listener.listen_address
         == listener.contact_address
@@ -377,29 +369,28 @@ def check_inproc_specific(run_client):
     connector = inproc.InProcConnector(inproc.global_manager)
     l = []
 
-    @gen.coroutine
-    def client_communicate(key, delay=0):
-        comm = yield connector.connect(listener_addr)
+    async def client_communicate(key, delay=0):
+        comm = await connector.connect(listener_addr)
         assert comm.peer_address == "inproc://" + listener_addr
         for i in range(N_MSGS):
-            yield comm.write({"op": "ping", "data": key})
+            await comm.write({"op": "ping", "data": key})
             if delay:
-                yield gen.sleep(delay)
-            msg = yield comm.read()
+                await asyncio.sleep(delay)
+            msg = await comm.read()
         assert msg == {"op": "pong", "data": key}
         l.append(key)
         with pytest.raises(CommClosedError):
-            yield comm.read()
-        yield comm.close()
+            await comm.read()
+        await comm.close()
 
     client_communicate = partial(run_client, client_communicate)
 
-    yield client_communicate(key=1234)
+    await client_communicate(key=1234)
 
     # Many clients at once
     N = 20
     futures = [client_communicate(key=i, delay=0.001) for i in range(N)]
-    yield futures
+    await asyncio.gather(*futures)
     assert set(l) == {1234} | set(range(N))
 
     assert len(client_addresses) == N + 1
@@ -430,14 +421,14 @@ def run_coro_in_thread(func, *args, **kwargs):
     return fut
 
 
-@gen_test()
-def test_inproc_specific_same_thread():
-    yield check_inproc_specific(run_coro)
+@pytest.mark.asyncio
+async def test_inproc_specific_same_thread():
+    await check_inproc_specific(run_coro)
 
 
-@gen_test()
-def test_inproc_specific_different_threads():
-    yield check_inproc_specific(run_coro_in_thread)
+@pytest.mark.asyncio
+async def test_inproc_specific_different_threads():
+    await check_inproc_specific(run_coro_in_thread)
 
 
 #
@@ -445,8 +436,7 @@ def test_inproc_specific_different_threads():
 #
 
 
-@gen.coroutine
-def check_client_server(
+async def check_client_server(
     addr,
     check_listen_addr=None,
     check_contact_addr=None,
@@ -457,27 +447,26 @@ def check_client_server(
     Abstract client / server test.
     """
 
-    @gen.coroutine
-    def handle_comm(comm):
+    async def handle_comm(comm):
         scheme, loc = parse_address(comm.peer_address)
         assert scheme == bound_scheme
 
-        msg = yield comm.read()
+        msg = await comm.read()
         assert msg["op"] == "ping"
         msg["op"] = "pong"
-        yield comm.write(msg)
+        await comm.write(msg)
 
-        msg = yield comm.read()
+        msg = await comm.read()
         assert msg["op"] == "foobar"
 
-        yield comm.close()
+        await comm.close()
 
     # Arbitrary connection args should be ignored
     listen_args = listen_args or {"xxx": "bar"}
     connect_args = connect_args or {"xxx": "foo"}
 
     listener = listen(addr, handle_comm, connection_args=listen_args)
-    listener.start()
+    await listener.start()
 
     # Check listener properties
     bound_addr = listener.listen_address
@@ -500,37 +489,36 @@ def check_client_server(
     # Check client <-> server comms
     l = []
 
-    @gen.coroutine
-    def client_communicate(key, delay=0):
-        comm = yield connect(listener.contact_address, connection_args=connect_args)
+    async def client_communicate(key, delay=0):
+        comm = await connect(listener.contact_address, connection_args=connect_args)
         assert comm.peer_address == listener.contact_address
 
-        yield comm.write({"op": "ping", "data": key})
-        yield comm.write({"op": "foobar"})
+        await comm.write({"op": "ping", "data": key})
+        await comm.write({"op": "foobar"})
         if delay:
-            yield gen.sleep(delay)
-        msg = yield comm.read()
+            await asyncio.sleep(delay)
+        msg = await comm.read()
         assert msg == {"op": "pong", "data": key}
         l.append(key)
-        yield comm.close()
+        await comm.close()
 
-    yield client_communicate(key=1234)
+    await client_communicate(key=1234)
 
     # Many clients at once
     futures = [client_communicate(key=i, delay=0.05) for i in range(20)]
-    yield futures
+    await asyncio.gather(*futures)
     assert set(l) == {1234} | set(range(20))
 
     listener.stop()
 
 
-@gen_test()
-def test_ucx_client_server():
+@pytest.mark.asyncio
+async def test_ucx_client_server():
     pytest.importorskip("distributed.comm.ucx")
     ucp = pytest.importorskip("ucp")
 
     addr = ucp.get_address()
-    yield check_client_server("ucx://" + addr)
+    await check_client_server("ucx://" + addr)
 
 
 def tcp_eq(expected_host, expected_port=None):
@@ -560,79 +548,79 @@ def inproc_check():
     return checker
 
 
-@gen_test()
-def test_default_client_server_ipv4():
+@pytest.mark.asyncio
+async def test_default_client_server_ipv4():
     # Default scheme is (currently) TCP
-    yield check_client_server("127.0.0.1", tcp_eq("127.0.0.1"))
-    yield check_client_server("127.0.0.1:3201", tcp_eq("127.0.0.1", 3201))
-    yield check_client_server("0.0.0.0", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server(
+    await check_client_server("127.0.0.1", tcp_eq("127.0.0.1"))
+    await check_client_server("127.0.0.1:3201", tcp_eq("127.0.0.1", 3201))
+    await check_client_server("0.0.0.0", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    await check_client_server(
         "0.0.0.0:3202", tcp_eq("0.0.0.0", 3202), tcp_eq(EXTERNAL_IP4, 3202)
     )
     # IPv4 is preferred for the bound address
-    yield check_client_server("", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server(
+    await check_client_server("", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    await check_client_server(
         ":3203", tcp_eq("0.0.0.0", 3203), tcp_eq(EXTERNAL_IP4, 3203)
     )
 
 
 @requires_ipv6
-@gen_test()
-def test_default_client_server_ipv6():
-    yield check_client_server("[::1]", tcp_eq("::1"))
-    yield check_client_server("[::1]:3211", tcp_eq("::1", 3211))
-    yield check_client_server("[::]", tcp_eq("::"), tcp_eq(EXTERNAL_IP6))
-    yield check_client_server(
+@pytest.mark.asyncio
+async def test_default_client_server_ipv6():
+    await check_client_server("[::1]", tcp_eq("::1"))
+    await check_client_server("[::1]:3211", tcp_eq("::1", 3211))
+    await check_client_server("[::]", tcp_eq("::"), tcp_eq(EXTERNAL_IP6))
+    await check_client_server(
         "[::]:3212", tcp_eq("::", 3212), tcp_eq(EXTERNAL_IP6, 3212)
     )
 
 
-@gen_test()
-def test_tcp_client_server_ipv4():
-    yield check_client_server("tcp://127.0.0.1", tcp_eq("127.0.0.1"))
-    yield check_client_server("tcp://127.0.0.1:3221", tcp_eq("127.0.0.1", 3221))
-    yield check_client_server("tcp://0.0.0.0", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server(
+@pytest.mark.asyncio
+async def test_tcp_client_server_ipv4():
+    await check_client_server("tcp://127.0.0.1", tcp_eq("127.0.0.1"))
+    await check_client_server("tcp://127.0.0.1:3221", tcp_eq("127.0.0.1", 3221))
+    await check_client_server("tcp://0.0.0.0", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    await check_client_server(
         "tcp://0.0.0.0:3222", tcp_eq("0.0.0.0", 3222), tcp_eq(EXTERNAL_IP4, 3222)
     )
-    yield check_client_server("tcp://", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
-    yield check_client_server(
+    await check_client_server("tcp://", tcp_eq("0.0.0.0"), tcp_eq(EXTERNAL_IP4))
+    await check_client_server(
         "tcp://:3223", tcp_eq("0.0.0.0", 3223), tcp_eq(EXTERNAL_IP4, 3223)
     )
 
 
 @requires_ipv6
-@gen_test()
-def test_tcp_client_server_ipv6():
-    yield check_client_server("tcp://[::1]", tcp_eq("::1"))
-    yield check_client_server("tcp://[::1]:3231", tcp_eq("::1", 3231))
-    yield check_client_server("tcp://[::]", tcp_eq("::"), tcp_eq(EXTERNAL_IP6))
-    yield check_client_server(
+@pytest.mark.asyncio
+async def test_tcp_client_server_ipv6():
+    await check_client_server("tcp://[::1]", tcp_eq("::1"))
+    await check_client_server("tcp://[::1]:3231", tcp_eq("::1", 3231))
+    await check_client_server("tcp://[::]", tcp_eq("::"), tcp_eq(EXTERNAL_IP6))
+    await check_client_server(
         "tcp://[::]:3232", tcp_eq("::", 3232), tcp_eq(EXTERNAL_IP6, 3232)
     )
 
 
-@gen_test()
-def test_tls_client_server_ipv4():
-    yield check_client_server("tls://127.0.0.1", tls_eq("127.0.0.1"), **tls_kwargs)
-    yield check_client_server(
+@pytest.mark.asyncio
+async def test_tls_client_server_ipv4():
+    await check_client_server("tls://127.0.0.1", tls_eq("127.0.0.1"), **tls_kwargs)
+    await check_client_server(
         "tls://127.0.0.1:3221", tls_eq("127.0.0.1", 3221), **tls_kwargs
     )
-    yield check_client_server(
+    await check_client_server(
         "tls://", tls_eq("0.0.0.0"), tls_eq(EXTERNAL_IP4), **tls_kwargs
     )
 
 
 @requires_ipv6
-@gen_test()
-def test_tls_client_server_ipv6():
-    yield check_client_server("tls://[::1]", tls_eq("::1"), **tls_kwargs)
+@pytest.mark.asyncio
+async def test_tls_client_server_ipv6():
+    await check_client_server("tls://[::1]", tls_eq("::1"), **tls_kwargs)
 
 
-@gen_test()
-def test_inproc_client_server():
-    yield check_client_server("inproc://", inproc_check())
-    yield check_client_server(inproc.new_address(), inproc_check())
+@pytest.mark.asyncio
+async def test_inproc_client_server():
+    await check_client_server("inproc://", inproc_check())
+    await check_client_server(inproc.new_address(), inproc_check())
 
 
 #
@@ -640,8 +628,8 @@ def test_inproc_client_server():
 #
 
 
-@gen_test()
-def test_tls_reject_certificate():
+@pytest.mark.asyncio
+async def test_tls_reject_certificate():
     cli_ctx = get_client_ssl_context()
     serv_ctx = get_server_ssl_context()
 
@@ -650,23 +638,22 @@ def test_tls_reject_certificate():
     bad_cli_ctx = get_client_ssl_context(*bad_cert_key)
     bad_serv_ctx = get_server_ssl_context(*bad_cert_key)
 
-    @gen.coroutine
-    def handle_comm(comm):
+    async def handle_comm(comm):
         scheme, loc = parse_address(comm.peer_address)
         assert scheme == "tls"
-        yield comm.close()
+        await comm.close()
 
     # Listener refuses a connector not signed by the CA
     listener = listen("tls://", handle_comm, connection_args={"ssl_context": serv_ctx})
-    listener.start()
+    await listener.start()
 
     with pytest.raises(EnvironmentError) as excinfo:
-        comm = yield connect(
+        comm = await connect(
             listener.contact_address,
             timeout=0.5,
             connection_args={"ssl_context": bad_cli_ctx},
         )
-        yield comm.write({"x": "foo"})  # TODO: why is this necessary in Tornado 6 ?
+        await comm.write({"x": "foo"})  # TODO: why is this necessary in Tornado 6 ?
 
     # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
     if sys.version_info >= (3,) and os.name != "nt":
@@ -682,19 +669,19 @@ def test_tls_reject_certificate():
                 raise
 
     # Sanity check
-    comm = yield connect(
+    comm = await connect(
         listener.contact_address, timeout=2, connection_args={"ssl_context": cli_ctx}
     )
-    yield comm.close()
+    await comm.close()
 
     # Connector refuses a listener not signed by the CA
     listener = listen(
         "tls://", handle_comm, connection_args={"ssl_context": bad_serv_ctx}
     )
-    listener.start()
+    await listener.start()
 
     with pytest.raises(EnvironmentError) as excinfo:
-        yield connect(
+        await connect(
             listener.contact_address,
             timeout=2,
             connection_args={"ssl_context": cli_ctx},
@@ -709,130 +696,128 @@ def test_tls_reject_certificate():
 #
 
 
-@gen.coroutine
-def check_comm_closed_implicit(addr, delay=None, listen_args=None, connect_args=None):
-    @gen.coroutine
-    def handle_comm(comm):
-        yield comm.close()
+async def check_comm_closed_implicit(
+    addr, delay=None, listen_args=None, connect_args=None
+):
+    async def handle_comm(comm):
+        await comm.close()
 
     listener = listen(addr, handle_comm, connection_args=listen_args)
-    listener.start()
+    await listener.start()
     contact_addr = listener.contact_address
 
-    comm = yield connect(contact_addr, connection_args=connect_args)
+    comm = await connect(contact_addr, connection_args=connect_args)
     with pytest.raises(CommClosedError):
-        yield comm.write({})
+        await comm.write({})
 
-    comm = yield connect(contact_addr, connection_args=connect_args)
+    comm = await connect(contact_addr, connection_args=connect_args)
     with pytest.raises(CommClosedError):
-        yield comm.read()
+        await comm.read()
 
 
-@gen_test()
-def test_tcp_comm_closed_implicit():
-    yield check_comm_closed_implicit("tcp://127.0.0.1")
+@pytest.mark.asyncio
+async def test_tcp_comm_closed_implicit():
+    await check_comm_closed_implicit("tcp://127.0.0.1")
 
 
-@gen_test()
-def test_tls_comm_closed_implicit():
-    yield check_comm_closed_implicit("tls://127.0.0.1", **tls_kwargs)
+@pytest.mark.asyncio
+async def test_tls_comm_closed_implicit():
+    await check_comm_closed_implicit("tls://127.0.0.1", **tls_kwargs)
 
 
-@gen_test()
-def test_inproc_comm_closed_implicit():
-    yield check_comm_closed_implicit(inproc.new_address())
+@pytest.mark.asyncio
+async def test_inproc_comm_closed_implicit():
+    await check_comm_closed_implicit(inproc.new_address())
 
 
-@gen.coroutine
-def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
-    a, b = yield get_comm_pair(addr, listen_args=listen_args, connect_args=connect_args)
+async def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
+    a, b = await get_comm_pair(addr, listen_args=listen_args, connect_args=connect_args)
     a_read = a.read()
     b_read = b.read()
-    yield a.close()
+    await a.close()
     # In-flight reads should abort with CommClosedError
     with pytest.raises(CommClosedError):
-        yield a_read
+        await a_read
     with pytest.raises(CommClosedError):
-        yield b_read
+        await b_read
     # New reads as well
     with pytest.raises(CommClosedError):
-        yield a.read()
+        await a.read()
     with pytest.raises(CommClosedError):
-        yield b.read()
+        await b.read()
     # And writes
     with pytest.raises(CommClosedError):
-        yield a.write({})
+        await a.write({})
     with pytest.raises(CommClosedError):
-        yield b.write({})
-    yield b.close()
+        await b.write({})
+    await b.close()
 
 
-@gen_test()
-def test_tcp_comm_closed_explicit():
-    yield check_comm_closed_explicit("tcp://127.0.0.1")
+@pytest.mark.asyncio
+async def test_tcp_comm_closed_explicit():
+    await check_comm_closed_explicit("tcp://127.0.0.1")
 
 
-@gen_test()
-def test_tls_comm_closed_explicit():
-    yield check_comm_closed_explicit("tls://127.0.0.1", **tls_kwargs)
+@pytest.mark.asyncio
+async def test_tls_comm_closed_explicit():
+    await check_comm_closed_explicit("tls://127.0.0.1", **tls_kwargs)
 
 
-@gen_test()
-def test_inproc_comm_closed_explicit():
-    yield check_comm_closed_explicit(inproc.new_address())
+@pytest.mark.asyncio
+async def test_inproc_comm_closed_explicit():
+    await check_comm_closed_explicit(inproc.new_address())
 
 
-@gen_test()
-def test_inproc_comm_closed_explicit_2():
+@pytest.mark.asyncio
+async def test_inproc_comm_closed_explicit_2():
     listener_errors = []
 
-    @gen.coroutine
-    def handle_comm(comm):
+    async def handle_comm(comm):
         # Wait
         try:
-            yield comm.read()
+            await comm.read()
         except CommClosedError:
             assert comm.closed()
             listener_errors.append(True)
         else:
-            yield comm.close()
+            await comm.close()
 
     listener = listen("inproc://", handle_comm)
-    listener.start()
+    await listener.start()
     contact_addr = listener.contact_address
 
-    comm = yield connect(contact_addr)
-    yield comm.close()
+    comm = await connect(contact_addr)
+    await comm.close()
     assert comm.closed()
     start = time()
     while len(listener_errors) < 1:
         assert time() < start + 1
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
     assert len(listener_errors) == 1
 
     with pytest.raises(CommClosedError):
-        yield comm.read()
+        await comm.read()
     with pytest.raises(CommClosedError):
-        yield comm.write("foo")
+        await comm.write("foo")
 
-    comm = yield connect(contact_addr)
-    yield comm.write("foo")
+    comm = await connect(contact_addr)
+    await comm.write("foo")
     with pytest.raises(CommClosedError):
-        yield comm.read()
+        await comm.read()
     with pytest.raises(CommClosedError):
-        yield comm.write("foo")
+        await comm.write("foo")
     assert comm.closed()
 
-    comm = yield connect(contact_addr)
-    yield comm.write("foo")
+    comm = await connect(contact_addr)
+    await comm.write("foo")
 
     start = time()
     while not comm.closed():
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 2
 
-    yield comm.close()
-    yield comm.close()
+    await comm.close()
+    await comm.close()
 
 
 #
@@ -840,28 +825,26 @@ def test_inproc_comm_closed_explicit_2():
 #
 
 
-@gen.coroutine
-def check_connect_timeout(addr):
+async def check_connect_timeout(addr):
     t1 = time()
     with pytest.raises(IOError):
-        yield connect(addr, timeout=0.15)
+        await connect(addr, timeout=0.15)
     dt = time() - t1
     assert 1 >= dt >= 0.1
 
 
-@gen_test()
-def test_tcp_connect_timeout():
-    yield check_connect_timeout("tcp://127.0.0.1:44444")
+@pytest.mark.asyncio
+async def test_tcp_connect_timeout():
+    await check_connect_timeout("tcp://127.0.0.1:44444")
 
 
-@gen_test()
-def test_inproc_connect_timeout():
-    yield check_connect_timeout(inproc.new_address())
+@pytest.mark.asyncio
+async def test_inproc_connect_timeout():
+    await check_connect_timeout(inproc.new_address())
 
 
-def check_many_listeners(addr):
-    @gen.coroutine
-    def handle_comm(comm):
+async def check_many_listeners(addr):
+    async def handle_comm(comm):
         pass
 
     listeners = []
@@ -869,7 +852,7 @@ def check_many_listeners(addr):
 
     for i in range(N):
         listener = listen(addr, handle_comm)
-        listener.start()
+        await listener.start()
         listeners.append(listener)
 
     assert len(set(l.listen_address for l in listeners)) == N
@@ -879,16 +862,16 @@ def check_many_listeners(addr):
         listener.stop()
 
 
-@gen_test()
-def test_tcp_many_listeners():
-    check_many_listeners("tcp://127.0.0.1")
-    check_many_listeners("tcp://0.0.0.0")
-    check_many_listeners("tcp://")
+@pytest.mark.asyncio
+async def test_tcp_many_listeners():
+    await check_many_listeners("tcp://127.0.0.1")
+    await check_many_listeners("tcp://0.0.0.0")
+    await check_many_listeners("tcp://")
 
 
-@gen_test()
-def test_inproc_many_listeners():
-    check_many_listeners("inproc://")
+@pytest.mark.asyncio
+async def test_inproc_many_listeners():
+    await check_many_listeners("inproc://")
 
 
 #
@@ -896,47 +879,42 @@ def test_inproc_many_listeners():
 #
 
 
-@gen.coroutine
-def check_listener_deserialize(addr, deserialize, in_value, check_out):
+async def check_listener_deserialize(addr, deserialize, in_value, check_out):
     q = queues.Queue()
 
-    @gen.coroutine
-    def handle_comm(comm):
-        msg = yield comm.read()
+    async def handle_comm(comm):
+        msg = await comm.read()
         q.put_nowait(msg)
-        yield comm.close()
+        await comm.close()
 
-    with listen(addr, handle_comm, deserialize=deserialize) as listener:
-        comm = yield connect(listener.contact_address)
+    async with listen(addr, handle_comm, deserialize=deserialize) as listener:
+        comm = await connect(listener.contact_address)
 
-    yield comm.write(in_value)
+    await comm.write(in_value)
 
-    out_value = yield q.get()
+    out_value = await q.get()
     check_out(out_value)
-    yield comm.close()
+    await comm.close()
 
 
-@gen.coroutine
-def check_connector_deserialize(addr, deserialize, in_value, check_out):
+async def check_connector_deserialize(addr, deserialize, in_value, check_out):
     done = locks.Event()
 
-    @gen.coroutine
-    def handle_comm(comm):
-        yield comm.write(in_value)
-        yield done.wait()
-        yield comm.close()
+    async def handle_comm(comm):
+        await comm.write(in_value)
+        await done.wait()
+        await comm.close()
 
-    with listen(addr, handle_comm) as listener:
-        comm = yield connect(listener.contact_address, deserialize=deserialize)
+    async with listen(addr, handle_comm) as listener:
+        comm = await connect(listener.contact_address, deserialize=deserialize)
 
-    out_value = yield comm.read()
+    out_value = await comm.read()
     done.set()
-    yield comm.close()
+    await comm.close()
     check_out(out_value)
 
 
-@gen.coroutine
-def check_deserialize(addr):
+async def check_deserialize(addr):
     """
     Check the "deserialize" flag on connect() and listen().
     """
@@ -979,11 +957,11 @@ def check_deserialize(addr):
         expected_msg["to_ser"] = [123]
         assert out_value == expected_msg
 
-    yield check_listener_deserialize(addr, False, msg, check_out_false)
-    yield check_connector_deserialize(addr, False, msg, check_out_false)
+    await check_listener_deserialize(addr, False, msg, check_out_false)
+    await check_connector_deserialize(addr, False, msg, check_out_false)
 
-    yield check_listener_deserialize(addr, True, msg, check_out_true)
-    yield check_connector_deserialize(addr, True, msg, check_out_true)
+    await check_listener_deserialize(addr, True, msg, check_out_true)
+    await check_connector_deserialize(addr, True, msg, check_out_true)
 
     # Test with long bytestrings, large enough to be transferred
     # as a separate payload
@@ -1024,26 +1002,25 @@ def check_deserialize(addr):
             else:
                 assert to_ser == to_serialize(_uncompressible)
 
-    yield check_listener_deserialize(addr, False, msg, partial(check_out, False))
-    yield check_connector_deserialize(addr, False, msg, partial(check_out, False))
+    await check_listener_deserialize(addr, False, msg, partial(check_out, False))
+    await check_connector_deserialize(addr, False, msg, partial(check_out, False))
 
-    yield check_listener_deserialize(addr, True, msg, partial(check_out, True))
-    yield check_connector_deserialize(addr, True, msg, partial(check_out, True))
+    await check_listener_deserialize(addr, True, msg, partial(check_out, True))
+    await check_connector_deserialize(addr, True, msg, partial(check_out, True))
 
 
 @pytest.mark.xfail(reason="intermittent failure on windows")
-@gen_test()
-def test_tcp_deserialize():
-    yield check_deserialize("tcp://")
+@pytest.mark.asyncio
+async def test_tcp_deserialize():
+    await check_deserialize("tcp://")
 
 
-@gen_test()
-def test_inproc_deserialize():
-    yield check_deserialize("inproc://")
+@pytest.mark.asyncio
+async def test_inproc_deserialize():
+    await check_deserialize("inproc://")
 
 
-@gen.coroutine
-def check_deserialize_roundtrip(addr):
+async def check_deserialize_roundtrip(addr):
     """
     Sanity check round-tripping with "deserialize" on and off.
     """
@@ -1059,11 +1036,11 @@ def check_deserialize_roundtrip(addr):
     }
 
     for should_deserialize in (True, False):
-        a, b = yield get_comm_pair(addr, deserialize=should_deserialize)
-        yield a.write(msg)
-        got = yield b.read()
-        yield b.write(got)
-        got = yield a.read()
+        a, b = await get_comm_pair(addr, deserialize=should_deserialize)
+        await a.write(msg)
+        got = await b.read()
+        await b.write(got)
+        got = await a.read()
 
         assert sorted(got) == sorted(msg)
         for k in ("op", "x"):
@@ -1076,14 +1053,14 @@ def check_deserialize_roundtrip(addr):
             assert isinstance(got["ser"], Serialized)
 
 
-@gen_test()
-def test_inproc_deserialize_roundtrip():
-    yield check_deserialize_roundtrip("inproc://")
+@pytest.mark.asyncio
+async def test_inproc_deserialize_roundtrip():
+    await check_deserialize_roundtrip("inproc://")
 
 
-@gen_test()
-def test_tcp_deserialize_roundtrip():
-    yield check_deserialize_roundtrip("tcp://")
+@pytest.mark.asyncio
+async def test_tcp_deserialize_roundtrip():
+    await check_deserialize_roundtrip("tcp://")
 
 
 def _raise_eoferror():
@@ -1095,27 +1072,25 @@ class _EOFRaising(object):
         return _raise_eoferror, ()
 
 
-@gen.coroutine
-def check_deserialize_eoferror(addr):
+async def check_deserialize_eoferror(addr):
     """
     EOFError when deserializing should close the comm.
     """
 
-    @gen.coroutine
-    def handle_comm(comm):
-        yield comm.write({"data": to_serialize(_EOFRaising())})
+    async def handle_comm(comm):
+        await comm.write({"data": to_serialize(_EOFRaising())})
         with pytest.raises(CommClosedError):
-            yield comm.read()
+            await comm.read()
 
-    with listen(addr, handle_comm) as listener:
-        comm = yield connect(listener.contact_address, deserialize=deserialize)
+    async with listen(addr, handle_comm) as listener:
+        comm = await connect(listener.contact_address, deserialize=deserialize)
         with pytest.raises(CommClosedError):
-            yield comm.read()
+            await comm.read()
 
 
-@gen_test()
-def test_tcp_deserialize_eoferror():
-    yield check_deserialize_eoferror("tcp://")
+@pytest.mark.asyncio
+async def test_tcp_deserialize_eoferror():
+    await check_deserialize_eoferror("tcp://")
 
 
 #
@@ -1123,61 +1098,59 @@ def test_tcp_deserialize_eoferror():
 #
 
 
-@gen.coroutine
-def check_repr(a, b):
+async def check_repr(a, b):
     assert "closed" not in repr(a)
     assert "closed" not in repr(b)
-    yield a.close()
+    await a.close()
     assert "closed" in repr(a)
-    yield b.close()
+    await b.close()
     assert "closed" in repr(b)
 
 
-@gen_test()
-def test_tcp_repr():
-    a, b = yield get_tcp_comm_pair()
+@pytest.mark.asyncio
+async def test_tcp_repr():
+    a, b = await get_tcp_comm_pair()
     assert a.local_address in repr(b)
     assert b.local_address in repr(a)
-    yield check_repr(a, b)
+    await check_repr(a, b)
 
 
-@gen_test()
-def test_tls_repr():
-    a, b = yield get_tls_comm_pair()
+@pytest.mark.asyncio
+async def test_tls_repr():
+    a, b = await get_tls_comm_pair()
     assert a.local_address in repr(b)
     assert b.local_address in repr(a)
-    yield check_repr(a, b)
+    await check_repr(a, b)
 
 
-@gen_test()
-def test_inproc_repr():
-    a, b = yield get_inproc_comm_pair()
+@pytest.mark.asyncio
+async def test_inproc_repr():
+    a, b = await get_inproc_comm_pair()
     assert a.local_address in repr(b)
     assert b.local_address in repr(a)
-    yield check_repr(a, b)
+    await check_repr(a, b)
 
 
-@gen.coroutine
-def check_addresses(a, b):
+async def check_addresses(a, b):
     assert a.peer_address == b.local_address
     assert a.local_address == b.peer_address
     a.abort()
     b.abort()
 
 
-@gen_test()
-def test_tcp_adresses():
-    a, b = yield get_tcp_comm_pair()
-    yield check_addresses(a, b)
+@pytest.mark.asyncio
+async def test_tcp_adresses():
+    a, b = await get_tcp_comm_pair()
+    await check_addresses(a, b)
 
 
-@gen_test()
-def test_tls_adresses():
-    a, b = yield get_tls_comm_pair()
-    yield check_addresses(a, b)
+@pytest.mark.asyncio
+async def test_tls_adresses():
+    a, b = await get_tls_comm_pair()
+    await check_addresses(a, b)
 
 
-@gen_test()
-def test_inproc_adresses():
-    a, b = yield get_inproc_comm_pair()
-    yield check_addresses(a, b)
+@pytest.mark.asyncio
+async def test_inproc_adresses():
+    a, b = await get_inproc_comm_pair()
+    await check_addresses(a, b)

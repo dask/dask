@@ -395,7 +395,7 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
         self.tcp_server = None
         self.bound_address = None
 
-    def start(self):
+    async def start(self):
         self.tcp_server = TCPServer(max_buffer_size=MAX_BUFFER_SIZE, **self.server_args)
         self.tcp_server.handle_stream = self._handle_stream
         backlog = int(dask.config.get("distributed.comm.socket-backlog"))
