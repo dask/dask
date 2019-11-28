@@ -3291,9 +3291,6 @@ class Client(Node):
         >>> client.profile()  # call on collections
         >>> client.profile(filename='dask-profile.html')  # save to html file
         """
-        if isinstance(workers, (str, Number)):
-            workers = [workers]
-
         return self.sync(
             self._profile,
             key=key,
@@ -4558,6 +4555,44 @@ class get_task_stream(object):
         if self._plot:
             L, self.figure = L
         self.data.extend(L)
+
+
+class performance_report:
+    """ Gather performance report
+
+    This creates a static HTML file that includes many of the same plots of the
+    dashboard for later viewing.
+
+    The resulting file uses JavaScript, and so must be viewed with a web
+    browser.  Locally we recommend using ``python -m http.server`` or hosting
+    the file live online.
+
+    Examples
+    --------
+    >>> with performance_report(filename="myfile.html"):
+    ...     x.compute()
+
+    $ python -m http.server
+    $ open myfile.html
+    """
+
+    def __init__(self, filename="dask-report.html"):
+        self.filename = filename
+
+    async def __aenter__(self):
+        self.start = time()
+        await get_client().get_task_stream(start=0, stop=0)  # ensure plugin
+
+    async def __aexit__(self, typ, value, traceback):
+        data = await get_client().scheduler.performance_report(start=self.start)
+        with open(self.filename, "w") as f:
+            f.write(data)
+
+    def __enter__(self):
+        get_client().sync(self.__aenter__)
+
+    def __exit__(self, typ, value, traceback):
+        get_client().sync(self.__aexit__, type, value, traceback)
 
 
 @contextmanager

@@ -16,6 +16,7 @@ from .client import (
     Future,
     futures_of,
     get_task_stream,
+    performance_report,
 )
 from .lock import Lock
 from .nanny import Nanny

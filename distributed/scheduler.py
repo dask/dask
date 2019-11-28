@@ -57,6 +57,7 @@ from .utils import (
     parse_bytes,
     PeriodicCallback,
     shutting_down,
+    tmpfile,
 )
 from .utils_comm import scatter_to_workers, gather_from_workers
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
@@ -1073,6 +1074,7 @@ class Scheduler(ServerNode):
             "processing": self.get_processing,
             "call_stack": self.get_call_stack,
             "profile": self.get_profile,
+            "performance_report": self.performance_report,
             "logs": self.get_logs,
             "worker_logs": self.get_worker_logs,
             "nbytes": self.get_nbytes,
@@ -4698,6 +4700,77 @@ class Scheduler(ServerNode):
                 keys[k][-1][1] += v
 
         return {"counts": counts, "keys": keys}
+
+    async def performance_report(self, comm=None, start=None):
+        # Profiles
+        compute, scheduler, workers = await asyncio.gather(
+            *[
+                self.get_profile(start=start),
+                self.get_profile(scheduler=True, start=start),
+                self.get_profile(server=True, start=start),
+            ]
+        )
+        from . import profile
+
+        def profile_to_figure(state):
+            data = profile.plot_data(state)
+            figure, source = profile.plot_figure(data, sizing_mode="stretch_both")
+            return figure
+
+        compute, scheduler, workers = map(
+            profile_to_figure, (compute, scheduler, workers)
+        )
+
+        # Task stream
+        task_stream = self.get_task_stream(start=start)
+        from .diagnostics.task_stream import rectangles
+        from .dashboard.components.scheduler import task_stream_figure
+
+        rects = rectangles(task_stream)
+        source, task_stream = task_stream_figure(sizing_mode="stretch_both")
+        source.data.update(rects)
+
+        from distributed.dashboard.components.scheduler import (
+            BandwidthWorkers,
+            BandwidthTypes,
+        )
+
+        bandwidth_workers = BandwidthWorkers(self, sizing_mode="stretch_both")
+        bandwidth_workers.update()
+        bandwidth_types = BandwidthTypes(self, sizing_mode="stretch_both")
+        bandwidth_types.update()
+
+        from bokeh.models import Panel, Tabs
+
+        compute = Panel(child=compute, title="Worker Profile (compute)")
+        workers = Panel(child=workers, title="Worker Profile (administrative)")
+        scheduler = Panel(child=scheduler, title="Scheduler Profile (administrative)")
+        task_stream = Panel(child=task_stream, title="Task Stream")
+        bandwidth_workers = Panel(
+            child=bandwidth_workers.fig, title="Bandwidth (Workers)"
+        )
+        bandwidth_types = Panel(child=bandwidth_types.fig, title="Bandwidth (Types)")
+
+        tabs = Tabs(
+            tabs=[
+                task_stream,
+                compute,
+                workers,
+                scheduler,
+                bandwidth_workers,
+                bandwidth_types,
+            ]
+        )
+
+        from bokeh.plotting import save
+
+        with tmpfile(extension=".html") as fn:
+            save(tabs, filename=fn)
+
+            with open(fn) as f:
+                data = f.read()
+
+        return data
 
     async def get_worker_logs(self, comm=None, n=None, workers=None, nanny=False):
         results = await self.broadcast(
