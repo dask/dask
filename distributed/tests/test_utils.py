@@ -42,6 +42,7 @@ from distributed.utils import (
     parse_timedelta,
     warn_on_duration,
     format_dashboard_link,
+    LRU,
 )
 from distributed.utils_test import loop, loop_in_thread  # noqa: F401
 from distributed.utils_test import div, has_ipv6, inc, throws, gen_test, captured_logger
@@ -598,3 +599,21 @@ def test_format_dashboard_link():
         assert "hello" not in format_dashboard_link("host", 1234)
     finally:
         del os.environ["host"]
+
+
+def test_lru():
+
+    l = LRU(maxsize=3)
+    l["a"] = 1
+    l["b"] = 2
+    l["c"] = 3
+    assert list(l.keys()) == ["a", "b", "c"]
+
+    # Use "a" and ensure it becomes the most recently used item
+    l["a"]
+    assert list(l.keys()) == ["b", "c", "a"]
+
+    # Ensure maxsize is respected
+    l["d"] = 4
+    assert len(l) == 3
+    assert list(l.keys()) == ["c", "a", "d"]
