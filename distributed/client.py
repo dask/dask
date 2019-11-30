@@ -4102,6 +4102,10 @@ def wait(fs, timeout=None, return_when=ALL_COMPLETED):
     fs: list of futures
     timeout: number, optional
         Time in seconds after which to raise a ``dask.distributed.TimeoutError``
+    return_when: str, optional
+        One of `ALL_COMPLETED` or `FIRST_COMPLETED`
+
+    Returns
     -------
     Named tuple of completed, not completed
     """
