@@ -898,10 +898,6 @@ async def test_worker_class_nanny_async(cleanup):
         assert all(isinstance(w, MyNanny) for w in cluster.workers.values())
 
 
-if sys.version_info >= (3, 5):
-    from distributed.deploy.tests.py3_test_deploy import *  # noqa F401
-
-
 def test_starts_up_sync(loop):
     cluster = LocalCluster(
         n_workers=2,
@@ -1019,3 +1015,12 @@ async def test_no_danglng_asyncio_tasks(cleanup):
 
     tasks = asyncio.all_tasks()
     assert tasks == start
+
+
+@pytest.mark.asyncio
+async def test_async_with():
+    async with LocalCluster(processes=False, asynchronous=True) as cluster:
+        w = cluster.workers
+        assert w
+
+    assert not w

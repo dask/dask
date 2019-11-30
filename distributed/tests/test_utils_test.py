@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 import socket
-import sys
 import threading
 from time import sleep
 
@@ -180,5 +179,14 @@ async def test_tls_scheduler(security, cleanup):
         assert s.address.startswith("tls")
 
 
-if sys.version_info >= (3, 5):
-    from distributed.tests.py3_test_utils_tst import *  # noqa: F401, F403
+@gen_cluster()
+async def test_gen_cluster_async(s, a, b):  # flake8: noqa
+    async with Client(s.address, asynchronous=True) as c:
+        future = c.submit(lambda x: x + 1, 1)
+        result = await future
+        assert result == 2
+
+
+@gen_test()
+async def test_gen_test_async():  # flake8: noqa
+    await gen.sleep(0.001)
