@@ -1,11 +1,12 @@
 """ Dataframe optimizations """
 import operator
 
-from ..optimization import cull, fuse
+from ..optimization import cull, fuse, SubgraphCallable
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ensure_dict
+from ..utils import ensure_dict, M
 from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
+from ..core import get_deps
 
 
 def optimize(dsk, keys, **kwargs):
@@ -88,5 +89,36 @@ def optimize_read_parquet_getitem(dsk):
             old.kwargs,
         )
         layers[k] = new
+
+    return HighLevelGraph(layers, dsk.dependencies)
+
+
+def optimize_drop(dsk):
+
+    layers = dsk.layers.copy()
+
+    for k, v in dsk.layers.items():
+
+        if not isinstance(v, Blockwise):
+            continue
+
+        for value in v.values():
+            sgc = value[0]
+            if not isinstance(sgc, SubgraphCallable):
+                continue
+
+            sub_graph = sgc.dsk
+            deps = get_deps(sub_graph)
+            for dk, dv in sub_graph.items():
+                if dv[0] == M.drop and deps[0][dk]:
+                    import pdb
+
+                    pdb.set_trace()
+                    pass
+
+                    # We need to add the `inplace` kwarg to the drop call here
+
+                    # We also need to make sure that only one sub-task task
+                    # depends on the output of the drop operation..
 
     return HighLevelGraph(layers, dsk.dependencies)

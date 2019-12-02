@@ -1,6 +1,7 @@
 import dask
 import dask.dataframe as dd
 import pandas as pd
+import numpy as np
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -37,3 +38,25 @@ def test_optimize_blockwise():
     graph = optimize_blockwise(ddf.dask)
 
     assert len(graph) <= 4
+
+
+def test_optimize_drop():
+    from dask.array.optimization import optimize_blockwise
+    from dask.dataframe.optimize import optimize_drop
+
+    size = 4
+    df = pd.DataFrame(
+        {
+            "a": np.random.permutation(np.arange(size)),
+            "b": np.random.permutation(np.arange(size)),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf["a"] = ddf["a"] + ddf["b"]
+    ddf = ddf.drop(columns=["b"])
+    ddf["a"] = ddf.a + 1
+    graph_before = ddf.dask
+    graph_after = optimize_blockwise(ddf.dask)
+    graph_after_2 = optimize_drop(graph_after)
+
+    assert len(graph_after_2) < len(graph_before)

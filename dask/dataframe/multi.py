@@ -305,6 +305,10 @@ def hash_join(
     token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
     name = "hash-join-" + token
 
+    import pdb
+
+    pdb.set_trace()
+
     kwargs["empty_index_dtype"] = meta.index.dtype
     dsk = {
         (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
