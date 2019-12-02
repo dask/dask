@@ -3680,7 +3680,12 @@ class DataFrame(_Frame):
         axis = self._validate_axis(axis)
         if (axis == 1) or (columns is not None):
             return self.map_partitions(
-                M.drop, labels=labels, axis=axis, columns=columns, errors=errors
+                M.drop,
+                labels=labels,
+                axis=axis,
+                columns=columns,
+                errors=errors,
+                _enforce=False,
             )
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
@@ -4750,7 +4755,9 @@ def _emulate(func, *args, **kwargs):
 
 
 @insert_meta_param_description
-def map_partitions(func, *args, **kwargs):
+def map_partitions(
+    func, *args, meta=no_default, _enforce=True, transform_divisions=True, **kwargs
+):
     """ Apply Python function on each DataFrame partition.
 
     Parameters
@@ -4765,9 +4772,7 @@ def map_partitions(func, *args, **kwargs):
         before applying the function.
     $META
     """
-    meta = kwargs.pop("meta", no_default)
     name = kwargs.pop("token", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
 
     assert callable(func)
     if name is not None:
@@ -4827,15 +4832,20 @@ def map_partitions(func, *args, **kwargs):
         dependencies.extend(collections)
         kwargs3[k] = v
 
-    dsk = partitionwise_graph(
-        apply_and_enforce,
-        name,
-        *args2,
-        dependencies=dependencies,
-        _func=func,
-        _meta=meta,
-        **kwargs3
-    )
+    if _enforce:
+        dsk = partitionwise_graph(
+            apply_and_enforce,
+            name,
+            *args2,
+            dependencies=dependencies,
+            _func=func,
+            _meta=meta,
+            **kwargs3
+        )
+    else:
+        dsk = partitionwise_graph(
+            func, name, *args2, kwargs3, dependencies=dependencies
+        )
 
     divisions = dfs[0].divisions
     if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
