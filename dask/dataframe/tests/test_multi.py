@@ -2044,4 +2044,4 @@ def test_groupby_concat_cudf(engine):
         warnings.simplefilter("ignore", UserWarning)
         res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
 
-    assert_eq(res_dd.compute(), res)
+    assert_eq(res_dd.compute().sort_index(), res.sort_index())
