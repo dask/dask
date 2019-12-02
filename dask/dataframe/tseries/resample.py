@@ -213,6 +213,10 @@ class Resampler(object):
         return self._agg("max")
 
     @derived_from(pd_Resampler)
+    def nunique(self):
+        return self._agg("nunique")
+
+    @derived_from(pd_Resampler)
     def ohlc(self):
         return self._agg("ohlc")
 
@@ -229,9 +233,17 @@ class Resampler(object):
         return self._agg("std")
 
     @derived_from(pd_Resampler)
+    def size(self):
+        return self._agg("size")
+
+    @derived_from(pd_Resampler)
     def sum(self):
         return self._agg("sum")
 
     @derived_from(pd_Resampler)
     def var(self):
         return self._agg("var")
+
+    @derived_from(pd_Resampler)
+    def quantile(self):
+        return self._agg("quantile")
