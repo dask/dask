@@ -1125,6 +1125,18 @@ def test_filters_pyarrow(tmpdir):
     assert not len(c)
     assert_eq(c, c)
 
+    d = dd.read_parquet(
+        tmp_path,
+        engine="pyarrow",
+        filters=[
+            # Select two overlapping ranges
+            [("x", ">", 1), ("x", "<", 6)],
+            [("x", ">", 3), ("x", "<", 8)],
+        ],
+    )
+    assert d.npartitions == 3
+    assert ((d.x > 1) & (d.x < 8)).all().compute()
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):

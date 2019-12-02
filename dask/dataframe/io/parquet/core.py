@@ -556,45 +556,58 @@ def apply_filters(parts, statistics, filters):
         Tokens corresponding to row groups to read in the future
     statistics: List[dict]
         List of statistics for each part, including min and max values
-    filters: List[Tuple[str, str, Any]]
-        List like [('x', '>', 5), ('y', '==', 'Alice')]
+    filters: Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
+        List of filters to apply, like [[('x', '=', 0), ...], ...]
 
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset
     """
-    for column, operator, value in filters:
-        out_parts = []
-        out_statistics = []
-        for part, stats in zip(parts, statistics):
-            if "filter" in stats and stats["filter"]:
-                continue  # Filtered by engine
-            try:
-                c = toolz.groupby("name", stats["columns"])[column][0]
-                min = c["min"]
-                max = c["max"]
-            except KeyError:
-                out_parts.append(part)
-                out_statistics.append(stats)
-            else:
-                if (
-                    operator == "=="
-                    and min <= value <= max
-                    or operator == "<"
-                    and min < value
-                    or operator == "<="
-                    and min <= value
-                    or operator == ">"
-                    and max > value
-                    or operator == ">="
-                    and max >= value
-                ):
+
+    def apply_conjunction(parts, statistics, conjunction):
+        for column, operator, value in conjunction:
+            out_parts = []
+            out_statistics = []
+            for part, stats in zip(parts, statistics):
+                if "filter" in stats and stats["filter"]:
+                    continue  # Filtered by engine
+                try:
+                    c = toolz.groupby("name", stats["columns"])[column][0]
+                    min = c["min"]
+                    max = c["max"]
+                except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
+                else:
+                    if (
+                        operator == "=="
+                        and min <= value <= max
+                        or operator == "<"
+                        and min < value
+                        or operator == "<="
+                        and min <= value
+                        or operator == ">"
+                        and max > value
+                        or operator == ">="
+                        and max >= value
+                    ):
+                        out_parts.append(part)
+                        out_statistics.append(stats)
 
-        parts, statistics = out_parts, out_statistics
+            parts, statistics = out_parts, out_statistics
 
-    return parts, statistics
+        return parts, statistics
+
+    conjunction, *disjunction = filters if isinstance(filters[0], list) else [filters]
+
+    out_parts, out_statistics = apply_conjunction(parts, statistics, conjunction)
+    for conjunction in disjunction:
+        for part, stats in zip(*apply_conjunction(parts, statistics, conjunction)):
+            if part not in out_parts:
+                out_parts.append(part)
+                out_statistics.append(stats)
+
+    return out_parts, out_statistics
 
 
 def process_statistics(parts, statistics, filters, index, chunksize):
