@@ -421,13 +421,15 @@ Dask Name: {name}, {task} tasks""".format(
             "index",
             token=self._name + "-index",
             meta=self._meta.index,
-            _enforce=False,
+            enforce_metadata=False,
         )
 
     @index.setter
     def index(self, value):
         self.divisions = value.divisions
-        result = map_partitions(methods.assign_index, self, value, _enforce=False)
+        result = map_partitions(
+            methods.assign_index, self, value, enforce_metadata=False
+        )
         self.dask = result.dask
         self._name = result._name
         self._meta = result._meta
@@ -453,7 +455,7 @@ Dask Name: {name}, {task} tasks""".format(
             Do not try to insert index into dataframe columns.
         """
         return self.map_partitions(
-            M.reset_index, drop=drop, _enforce=False
+            M.reset_index, drop=drop, enforce_metadata=False
         ).clear_divisions()
 
     @property
@@ -1161,7 +1163,7 @@ Dask Name: {name}, {task} tasks""".format(
                 limit=limit,
                 axis=axis,
                 meta=meta,
-                _enforce=False,
+                enforce_metadata=False,
                 **kwargs
             )
 
@@ -1254,7 +1256,11 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.DataFrame)
     def replace(self, to_replace=None, value=None, regex=False):
         return self.map_partitions(
-            M.replace, to_replace=to_replace, value=value, regex=regex, _enforce=False
+            M.replace,
+            to_replace=to_replace,
+            value=value,
+            regex=regex,
+            enforce_metadata=False,
         )
 
     def to_dask_array(self, lengths=None):
@@ -1278,7 +1284,7 @@ Dask Name: {name}, {task} tasks""".format(
         -------
         """
         if lengths is True:
-            lengths = tuple(self.map_partitions(len, _enforce=False).compute())
+            lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
 
         arr = self.values
 
@@ -1409,7 +1415,7 @@ Dask Name: {name}, {task} tasks""".format(
 
         if axis == 1:
             return self.map_partitions(
-                M.diff, token="diff", periods=periods, axis=1, _enforce=False
+                M.diff, token="diff", periods=periods, axis=1, enforce_metadata=False
             )
 
         before, after = (periods, 0) if periods > 0 else (0, -periods)
@@ -1428,7 +1434,7 @@ Dask Name: {name}, {task} tasks""".format(
                 periods=periods,
                 freq=freq,
                 axis=1,
-                _enforce=False,
+                enforce_metadata=False,
             )
 
         if freq is None:
@@ -1445,7 +1451,7 @@ Dask Name: {name}, {task} tasks""".format(
             periods=periods,
             freq=freq,
             meta=meta,
-            _enforce=False,
+            enforce_metadata=False,
             transform_divisions=False,
         )
         return maybe_shift_divisions(out, periods, freq=freq)
@@ -1479,7 +1485,7 @@ Dask Name: {name}, {task} tasks""".format(
     def abs(self):
         _raise_if_object_series(self, "abs")
         meta = self._meta_nonempty.abs()
-        return self.map_partitions(M.abs, meta=meta, _enforce=False)
+        return self.map_partitions(M.abs, meta=meta, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def all(self, axis=None, skipna=True, split_every=False, out=None):
@@ -1558,7 +1564,7 @@ Dask Name: {name}, {task} tasks""".format(
                 token=self._token_prefix + fn,
                 skipna=skipna,
                 axis=axis,
-                _enforce=False,
+                enforce_metadata=False,
             )
         else:
             scalar = not is_series_like(meta)
@@ -1591,7 +1597,7 @@ Dask Name: {name}, {task} tasks""".format(
                 token=self._token_prefix + fn,
                 skipna=skipna,
                 axis=axis,
-                _enforce=False,
+                enforce_metadata=False,
             )
         else:
             scalar = not is_series_like(meta)
@@ -1618,7 +1624,7 @@ Dask Name: {name}, {task} tasks""".format(
         if axis == 1:
             meta = self._meta_nonempty.count(axis=axis)
             return self.map_partitions(
-                M.count, meta=meta, token=token, axis=axis, _enforce=False
+                M.count, meta=meta, token=token, axis=axis, enforce_metadata=False
             )
         else:
             meta = self._meta_nonempty.count()
@@ -1646,7 +1652,7 @@ Dask Name: {name}, {task} tasks""".format(
                 token=self._token_prefix + "mean",
                 axis=axis,
                 skipna=skipna,
-                _enforce=False,
+                enforce_metadata=False,
             )
             return handle_out(out, result)
         else:
@@ -1655,7 +1661,12 @@ Dask Name: {name}, {task} tasks""".format(
             n = num.count(split_every=split_every)
             name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
             result = map_partitions(
-                methods.mean_aggregate, s, n, token=name, meta=meta, _enforce=False
+                methods.mean_aggregate,
+                s,
+                n,
+                token=name,
+                meta=meta,
+                enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
@@ -1677,7 +1688,7 @@ Dask Name: {name}, {task} tasks""".format(
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
-                _enforce=False,
+                enforce_metadata=False,
             )
             return handle_out(out, result)
         else:
@@ -1823,13 +1834,15 @@ Dask Name: {name}, {task} tasks""".format(
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
-                _enforce=False,
+                enforce_metadata=False,
             )
             return handle_out(out, result)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
-            result = map_partitions(np.sqrt, v, meta=meta, token=name, _enforce=False)
+            result = map_partitions(
+                np.sqrt, v, meta=meta, token=name, enforce_metadata=False
+            )
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1853,7 +1866,7 @@ Dask Name: {name}, {task} tasks""".format(
             n = num.count(split_every=split_every)
             name = self._token_prefix + "sem"
             result = map_partitions(
-                np.sqrt, v / n, meta=meta, token=name, _enforce=False
+                np.sqrt, v / n, meta=meta, token=name, enforce_metadata=False
             )
 
             if isinstance(self, DataFrame):
@@ -1882,7 +1895,13 @@ Dask Name: {name}, {task} tasks""".format(
                 # Not supported, the result will have current index as columns
                 raise ValueError("'q' must be scalar when axis=1 is specified")
             return map_partitions(
-                M.quantile, self, q, axis, token=keyname, _enforce=False, meta=(q, "f8")
+                M.quantile,
+                self,
+                q,
+                axis,
+                token=keyname,
+                enforce_metadata=False,
+                meta=(q, "f8"),
             )
         else:
             _raise_if_object_series(self, "quantile")
@@ -2162,24 +2181,24 @@ Dask Name: {name}, {task} tasks""".format(
     def where(self, cond, other=np.nan):
         # cond and other may be dask instance,
         # passing map_partitions via keyword will not be aligned
-        return map_partitions(M.where, self, cond, other, _enforce=False)
+        return map_partitions(M.where, self, cond, other, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def mask(self, cond, other=np.nan):
-        return map_partitions(M.mask, self, cond, other, _enforce=False)
+        return map_partitions(M.mask, self, cond, other, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def notnull(self):
-        return self.map_partitions(M.notnull, _enforce=False)
+        return self.map_partitions(M.notnull, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def isnull(self):
-        return self.map_partitions(M.isnull, _enforce=False)
+        return self.map_partitions(M.isnull, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def isna(self):
         if hasattr(pd, "isna"):
-            return self.map_partitions(M.isna, _enforce=False)
+            return self.map_partitions(M.isna, enforce_metadata=False)
         else:
             raise NotImplementedError(
                 "Need more recent version of Pandas "
@@ -2200,7 +2219,9 @@ Dask Name: {name}, {task} tasks""".format(
         # We wrap values in a delayed for two reasons:
         # - avoid serializing data in every task
         # - avoid cost of traversal of large list in optimizations
-        return self.map_partitions(M.isin, delayed(values), meta=meta, _enforce=False)
+        return self.map_partitions(
+            M.isin, delayed(values), meta=meta, enforce_metadata=False
+        )
 
     @derived_from(pd.DataFrame)
     def astype(self, dtype):
@@ -2221,7 +2242,9 @@ Dask Name: {name}, {task} tasks""".format(
             meta = clear_known_categories(meta, cols=set_unknown)
         elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
-        return self.map_partitions(M.astype, dtype=dtype, meta=meta, _enforce=False)
+        return self.map_partitions(
+            M.astype, dtype=dtype, meta=meta, enforce_metadata=False
+        )
 
     @derived_from(pd.Series)
     def append(self, other, interleave_partitions=False):
@@ -2243,7 +2266,12 @@ Dask Name: {name}, {task} tasks""".format(
             M.align, self, other, join, axis=axis, fill_value=fill_value
         )
         aligned = self.map_partitions(
-            M.align, other, join=join, axis=axis, fill_value=fill_value, _enforce=False
+            M.align,
+            other,
+            join=join,
+            axis=axis,
+            fill_value=fill_value,
+            enforce_metadata=False,
         )
 
         token = tokenize(self, other, join, axis, fill_value)
@@ -2628,7 +2656,7 @@ Dask Name: {name}, {task} tasks""".format(
             res = self if inplace else self.copy()
             res.name = index
         else:
-            res = self.map_partitions(M.rename, index, _enforce=False)
+            res = self.map_partitions(M.rename, index, enforce_metadata=False)
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
                     old = pd.Series(range(self.npartitions + 1), index=self.divisions)
@@ -2730,7 +2758,7 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.Series, version="0.25.0")
     def explode(self):
         meta = self._meta.explode()
-        return self.map_partitions(M.explode, meta=meta, _enforce=False)
+        return self.map_partitions(M.explode, meta=meta, enforce_metadata=False)
 
     def unique(self, split_every=None, split_out=1):
         """
@@ -2828,7 +2856,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def dropna(self):
-        return self.map_partitions(M.dropna, _enforce=False)
+        return self.map_partitions(M.dropna, enforce_metadata=False)
 
     @derived_from(pd.Series)
     def between(self, left, right, inclusive=True):
@@ -2841,15 +2869,21 @@ Dask Name: {name}, {task} tasks""".format(
         if out is not None:
             raise ValueError("'out' must be None")
         # np.clip may pass out
-        return self.map_partitions(M.clip, lower=lower, upper=upper, _enforce=False)
+        return self.map_partitions(
+            M.clip, lower=lower, upper=upper, enforce_metadata=False
+        )
 
     @derived_from(pd.Series)
     def clip_lower(self, threshold):
-        return self.map_partitions(M.clip_lower, threshold=threshold, _enforce=False)
+        return self.map_partitions(
+            M.clip_lower, threshold=threshold, enforce_metadata=False
+        )
 
     @derived_from(pd.Series)
     def clip_upper(self, threshold):
-        return self.map_partitions(M.clip_upper, threshold=threshold, _enforce=False)
+        return self.map_partitions(
+            M.clip_upper, threshold=threshold, enforce_metadata=False
+        )
 
     @derived_from(pd.Series)
     def align(self, other, join="outer", axis=None, fill_value=None):
@@ -3019,7 +3053,7 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.Series)
     def memory_usage(self, index=True, deep=False):
         result = self.map_partitions(
-            M.memory_usage, index=index, deep=deep, _enforce=False
+            M.memory_usage, index=index, deep=deep, enforce_metadata=False
         )
         return delayed(sum)(result.to_delayed())
 
@@ -3619,22 +3653,28 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def dropna(self, how="any", subset=None, thresh=None):
         return self.map_partitions(
-            M.dropna, how=how, subset=subset, thresh=thresh, _enforce=False
+            M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
         )
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):
         if out is not None:
             raise ValueError("'out' must be None")
-        return self.map_partitions(M.clip, lower=lower, upper=upper, _enforce=False)
+        return self.map_partitions(
+            M.clip, lower=lower, upper=upper, enforce_metadata=False
+        )
 
     @derived_from(pd.DataFrame)
     def clip_lower(self, threshold):
-        return self.map_partitions(M.clip_lower, threshold=threshold, _enforce=False)
+        return self.map_partitions(
+            M.clip_lower, threshold=threshold, enforce_metadata=False
+        )
 
     @derived_from(pd.DataFrame)
     def clip_upper(self, threshold):
-        return self.map_partitions(M.clip_upper, threshold=threshold, _enforce=False)
+        return self.map_partitions(
+            M.clip_upper, threshold=threshold, enforce_metadata=False
+        )
 
     @derived_from(pd.DataFrame)
     def squeeze(self, axis=None):
@@ -3661,7 +3701,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame, version="0.25.0")
     def explode(self, column):
         meta = self._meta.explode(column)
-        return self.map_partitions(M.explode, column, meta=meta, _enforce=False)
+        return self.map_partitions(M.explode, column, meta=meta, enforce_metadata=False)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag of tuples of each row.
@@ -3715,7 +3755,7 @@ class DataFrame(_Frame):
                 axis=axis,
                 columns=columns,
                 errors=errors,
-                _enforce=False,
+                enforce_metadata=False,
             )
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
@@ -3919,7 +3959,7 @@ class DataFrame(_Frame):
                         meta=meta,
                         axis=axis,
                         fill_value=fill_value,
-                        _enforce=False,
+                        enforce_metadata=False,
                     )
 
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
@@ -3930,7 +3970,7 @@ class DataFrame(_Frame):
                 meta=meta,
                 axis=axis,
                 fill_value=fill_value,
-                _enforce=False,
+                enforce_metadata=False,
             )
 
         meth.__doc__ = skip_doctest(op.__doc__)
@@ -4793,7 +4833,12 @@ def _emulate(func, *args, **kwargs):
 
 @insert_meta_param_description
 def map_partitions(
-    func, *args, meta=no_default, _enforce=True, transform_divisions=True, **kwargs
+    func,
+    *args,
+    meta=no_default,
+    enforce_metadata=True,
+    transform_divisions=True,
+    **kwargs
 ):
     """ Apply Python function on each DataFrame partition.
 
@@ -4807,6 +4852,10 @@ def map_partitions(
         ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
         (both dask and pandas) will be repartitioned to align (if necessary)
         before applying the function.
+    enforce_metadata : bool
+        Whether or not to enforce the structure of the metadata at runtime.
+        This will rename and reorder columns for each partition,
+        and will raise an error if this doesn't work or types don't match.
     $META
     """
     name = kwargs.pop("token", None)
@@ -4872,7 +4921,7 @@ def map_partitions(
         if collections:
             simple = False
 
-    if _enforce or not simple:
+    if enforce_metadata or not simple:
         dsk = partitionwise_graph(
             apply_and_enforce,
             name,
