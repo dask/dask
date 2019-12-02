@@ -1997,3 +1997,51 @@ def test_dtype_equality_warning():
         dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
 
     assert len(r) == 0
+
+
+@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+def test_groupby_concat_cudf(engine):
+
+    # NOTE: Issue #5643 Reproducer
+
+    size = 6
+    npartitions = 3
+    d1 = pd.DataFrame(
+        {
+            "a": np.random.permutation(np.arange(size)),
+            "b": np.random.randint(100, size=size),
+        }
+    )
+    d2 = pd.DataFrame(
+        {
+            "c": np.random.permutation(np.arange(size)),
+            "d": np.random.randint(100, size=size),
+        }
+    )
+
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+        d1 = cudf.from_pandas(d1)
+        d2 = cudf.from_pandas(d2)
+        dd1 = dask_cudf.from_cudf(d1, npartitions)
+        dd2 = dask_cudf.from_cudf(d2, npartitions)
+    else:
+        dd1 = dd.from_pandas(d1, npartitions)
+        dd2 = dd.from_pandas(d2, npartitions)
+
+    grouped_d1 = d1.groupby(["a"]).sum()
+    grouped_d2 = d2.groupby(["c"]).sum()
+    res = concat([grouped_d1, grouped_d2], axis=1)
+
+    grouped_dd1 = dd1.groupby(["a"]).sum()
+    grouped_dd2 = dd2.groupby(["c"]).sum()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
+
+    assert_eq(res_dd.compute().sort_index(), res.sort_index())

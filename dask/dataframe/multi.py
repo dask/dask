@@ -862,7 +862,7 @@ def merge_asof(
 def concat_and_check(dfs):
     if len(set(map(len, dfs))) != 1:
         raise ValueError("Concatenated DataFrames of different lengths")
-    return pd.concat(dfs, axis=1)
+    return methods.concat(dfs, axis=1)
 
 
 def concat_unindexed_dataframes(dfs):
@@ -873,7 +873,7 @@ def concat_unindexed_dataframes(dfs):
         for i in range(dfs[0].npartitions)
     }
 
-    meta = pd.concat([df._meta for df in dfs], axis=1)
+    meta = methods.concat([df._meta for df in dfs], axis=1)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
