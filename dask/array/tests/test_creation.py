@@ -385,32 +385,33 @@ def test_eye():
         assert 4 < x.npartitions < 32
 
 
-def test_diag():
+@pytest.mark.parametrize("k", [0, 3, -3])
+def test_diag(k):
     v = np.arange(11)
-    assert_eq(da.diag(v), np.diag(v))
+    assert_eq(da.diag(v, k), np.diag(v, k))
 
     v = da.arange(11, chunks=3)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
     v = v + v + 3
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
 
     v = da.arange(11, chunks=11)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
     x = np.arange(64).reshape((8, 8))
-    assert_eq(da.diag(x), np.diag(x))
+    assert_eq(da.diag(x, k), np.diag(x, k))
 
     d = da.from_array(x, chunks=(4, 4))
-    assert_eq(da.diag(d), np.diag(x))
+    assert_eq(da.diag(d, k), np.diag(x, k))
 
 
 def test_diagonal():

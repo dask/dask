@@ -505,11 +505,11 @@ def diag(v, k=0):
         hasattr(v, "__array_function__") and not isinstance(v, Array)
     ):
         if v.ndim == 1:
-            chunks = ((v.shape[0],), (v.shape[0],))
-            dsk = {(name, 0, 0): (np.diag, v)}
+            chunks = ((v.shape[0] + abs(k),), (v.shape[0] + abs(k),))
+            dsk = {(name, 0, 0): (np.diag, v, k)}
         elif v.ndim == 2:
-            chunks = ((min(v.shape),),)
-            dsk = {(name, 0): (np.diag, v)}
+            chunks = ((min(v.shape) - abs(k),),)
+            dsk = {(name, 0): (np.diag, v, k)}
         else:
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
@@ -517,26 +517,28 @@ def diag(v, k=0):
         raise TypeError(
             "v must be a dask array or numpy array, got {0}".format(type(v))
         )
+
     if v.ndim != 1:
         return diagonal(v, offset=k)
 
-    chunks_1d = v.chunks[0]
-    #    blocks = v.__dask_keys__()
-    dsk = {}
-    for i, m in enumerate(chunks_1d):
-        for j, n in enumerate(chunks_1d):
-            key = (name, i, j)
-            # if i == j:
-            #     dsk[key] = (np.diag, blocks[i], k)
-            if n * (j - i - 1) < k <= n * (j - i + 1):
-                print("DEBUG", n, m, k - (n * (j - i)))
-                dsk[key] = (np.diag, (v.name, j), k - (n * (j - i)))
-            else:
-                dsk[key] = (np.zeros, (m, n))
-                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
-
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-    return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
+    if k == 0:
+        chunks_1d = v.chunks[0]
+        blocks = v.__dask_keys__()
+        dsk = {}
+        for i, m in enumerate(chunks_1d):
+            for j, n in enumerate(chunks_1d):
+                key = (name, i, j)
+                if i == j:
+                    dsk[key] = (np.diag, blocks[i])
+                else:
+                    dsk[key] = (np.zeros, (m, n))
+                    dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
+        return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
+    elif k > 0:
+        return pad(diag(v), [[0, k], [k, 0]], mode="constant")
+    elif k < 0:
+        return pad(diag(v), [[-k, 0], [0, -k]], mode="constant")
 
 
 @derived_from(np)
