@@ -200,7 +200,7 @@ def test_str_accessor_cat(df_ddf):
         df.str_col.str.cat([df.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
     )
 
-    for o in ["foo", ["foo"]]:
+    for o in ["foo", ["foo"], df, ddf]:
         with pytest.raises(TypeError):
             ddf.str_col.str.cat(o)
 

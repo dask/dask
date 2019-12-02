@@ -135,15 +135,23 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
-        from .core import Series, Index
+        from .core import DataFrame, Series, Index
 
         if others is None:
             raise NotImplementedError("x.str.cat() with `others == None`")
 
-        valid_types = (Series, Index, pd.Series, pd.Index)
-        if isinstance(others, valid_types):
+        is_dataframe_like = (DataFrame, pd.DataFrame)
+        is_series_like = (Series, pd.Series)
+        is_index_like = (Index, pd.Index)
+
+        if isinstance(others, is_series_like) or isinstance(others, is_index_like):
             others = [others]
-        elif not all(isinstance(a, valid_types) for a in others):
+        elif isinstance(others, is_dataframe_like):
+            raise TypeError("others must be Series/Index and not dataframe")
+        elif not all(
+            isinstance(a, is_series_like) or isinstance(a, is_index_like)
+            for a in others
+        ):
             raise TypeError("others must be Series/Index")
 
         return self._series.map_partitions(
