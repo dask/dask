@@ -4921,7 +4921,7 @@ def map_partitions(
         if collections:
             simple = False
 
-    if enforce_metadata or not simple:
+    if enforce_metadata:
         dsk = partitionwise_graph(
             apply_and_enforce,
             name,
@@ -4930,6 +4930,10 @@ def map_partitions(
             _func=func,
             _meta=meta,
             **kwargs3
+        )
+    elif not simple:
+        dsk = partitionwise_graph(
+            apply, name, func, *args2, **kwargs3, dependencies=dependencies
         )
     else:
         dsk = partitionwise_graph(
