@@ -1608,7 +1608,7 @@ class Scheduler(ServerNode):
                     else:
                         child_deps = self.dependencies[dep]
                     if all(d in done for d in child_deps):
-                        if dep in self.tasks:
+                        if dep in self.tasks and dep not in done:
                             done.add(dep)
                             stack.append(dep)
 
