@@ -3295,7 +3295,7 @@ class DataFrame(_Frame):
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
         self.dask = result.dask
-        self._name = result._name
+        self.name = result._name
         self._meta = result._meta
 
     def __setattr__(self, key, value):
