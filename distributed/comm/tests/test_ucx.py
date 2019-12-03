@@ -303,7 +303,11 @@ async def test_stress(cleanup):
     chunksize = "10 MB"
 
     async with LocalCluster(
-        protocol="ucx", dashboard_address=None, asynchronous=True, processes=False
+        protocol="ucx",
+        dashboard_address=None,
+        asynchronous=True,
+        processes=False,
+        host=HOST,
     ) as cluster:
         async with Client(cluster, asynchronous=True) as client:
             rs = da.random.RandomState()
