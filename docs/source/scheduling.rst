@@ -47,7 +47,7 @@ and, because everything occurs in the same process,
 it incurs no costs to transfer data between tasks.
 However, due to Python's Global Interpreter Lock (GIL),
 this scheduler only provides parallelism when your computation is dominated by non-Python code,
-such as is the case when operating on numeric data in NumPy arrays, Pandas DataFrames,
+as is primarily the case when operating on numeric data in NumPy arrays, Pandas DataFrames,
 or using any of the other C/C++/Cython based projects in the ecosystem.
 
 The threaded scheduler is the default choice for
