@@ -4762,9 +4762,10 @@ class Scheduler(ServerNode):
             ]
         )
 
-        from bokeh.plotting import save
+        from bokeh.plotting import save, output_file
 
         with tmpfile(extension=".html") as fn:
+            output_file(filename=fn, title="Dask Performance Report")
             save(tabs, filename=fn)
 
             with open(fn) as f:

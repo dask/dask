@@ -5904,3 +5904,4 @@ async def test_performance_report(c, s, a, b):
 
         assert "bokeh" in data
         assert "random" in data
+        assert "Dask Performance Report" in data
