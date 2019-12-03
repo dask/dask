@@ -273,18 +273,29 @@ class Aggregation(object):
 
 
 def _groupby_aggregate(
-    df, aggfunc=None, levels=None, dropna=None, sort=False, **kwargs
+    df, aggfunc=None, levels=None, dropna=None, observed=False, **kwargs
 ):
     dropna = {"dropna": dropna} if dropna is not None else {}
-    return aggfunc(df.groupby(level=levels, sort=sort, **dropna), **kwargs)
+
+    # This is a workaround for https://github.com/pandas-dev/pandas/issues/27075
+    if (
+        isinstance(levels, list)
+        and isinstance(df.index, pd.MultiIndex)
+        and any(pd.api.types.is_categorical(lvl) for lvl in df.index.levels)
+    ):
+        idx_names = df.index.names
+        df = df.reset_index()
+        grouped = df.groupby(idx_names, sort=False, observed=observed, **dropna)
+    else:
+        grouped = df.groupby(level=levels, sort=False, observed=observed, **dropna)
+    return aggfunc(grouped, **kwargs)
 
 
-def _apply_chunk(df, *index, dropna=None, **kwargs):
+def _apply_chunk(df, *index, dropna=None, observed=False, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
     dropna = {"dropna": dropna} if dropna is not None else {}
-    g = _groupby_raise_unaligned(df, by=index, **dropna)
-
+    g = _groupby_raise_unaligned(df, by=index, observed=observed, **dropna)
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
     else:
@@ -1029,10 +1040,21 @@ class _GroupBy(object):
     sort: bool, defult None
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
+    observed: bool, default False
+        This only applies if any of the groupers are Categoricals.
+        If True: only show observed values for categorical groupers.
+        If False: show all values for categorical groupers.
     """
 
     def __init__(
-        self, df, by=None, slice=None, group_keys=True, dropna=None, sort=None
+        self,
+        df,
+        by=None,
+        slice=None,
+        group_keys=True,
+        dropna=None,
+        sort=None,
+        observed=False,
     ):
 
         assert isinstance(df, (DataFrame, Series))
@@ -1076,8 +1098,10 @@ class _GroupBy(object):
         if dropna is not None:
             self.dropna["dropna"] = dropna
 
+        self.observed = observed
+
         self._meta = self.obj._meta.groupby(
-            index_meta, group_keys=group_keys, **self.dropna
+            index_meta, group_keys=group_keys, observed=observed, **self.dropna
         )
 
     @property
@@ -1127,14 +1151,22 @@ class _GroupBy(object):
             else [self.obj] + self.index,
             chunk=_apply_chunk,
             chunk_kwargs=dict(
-                chunk=func, columns=columns, **chunk_kwargs, **self.dropna
+                chunk=func,
+                columns=columns,
+                observed=True,
+                **chunk_kwargs,
+                **self.dropna
             ),
             aggregate=_groupby_aggregate,
             meta=meta,
             token=token,
             split_every=split_every,
             aggregate_kwargs=dict(
-                aggfunc=aggfunc, levels=levels, **aggregate_kwargs, **self.dropna
+                aggfunc=aggfunc,
+                levels=levels,
+                observed=self.observed,
+                **aggregate_kwargs,
+                **self.dropna
             ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
