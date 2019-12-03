@@ -178,7 +178,6 @@ def test_avoid_upwards_branching_complex(abcde):
     assert o[(c, 1)] < o[(b, 1)]
 
 
-# @pytest.mark.xfail(reason="this case is ambiguous", strict=False)  # this now passes
 def test_deep_bases_win_over_dependents(abcde):
     r"""
     It's not clear who should run first, e or d
@@ -186,6 +185,8 @@ def test_deep_bases_win_over_dependents(abcde):
     1.  d is nicer because it exposes parallelism
     2.  e is nicer (hypothetically) because it will be sooner released
         (though in this case we need d to run first regardless)
+
+    Regardless of e or d first, we should run b before c.
 
             a
           / | \   .
@@ -197,8 +198,8 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
-    assert o[e] < o[d]
-    assert o[d] < o[b] or o[d] < o[c]
+    assert o[e] < o[d]  # ambiguous, but this is what we currently expect
+    assert o[b] < o[c]
 
 
 def test_prefer_deep(abcde):
