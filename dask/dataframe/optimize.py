@@ -4,7 +4,7 @@ import operator
 from ..optimization import cull, fuse, SubgraphCallable
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ensure_dict, M
+from ..utils import ensure_dict, M, apply
 from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
 from ..core import get_deps
 
@@ -102,61 +102,31 @@ def optimize_drop(dsk):
         if not isinstance(v, Blockwise):
             continue
 
-        for value in v.values():
-            sgc = value[0]
-            if not isinstance(sgc, SubgraphCallable):
-                continue
+        sub_graph = v.dsk 
+        for ki, vi in sub_graph.items():
 
-            sub_graph = sgc.dsk
-            deps = get_deps(sub_graph)
-            for dk, dv in sub_graph.items():
-                if dv[0] == M.drop and deps[0][dk]:
+            deps = get_deps(sub_graph)[0][ki]
+            if vi[0] == apply and vi[1] == M.drop:
 
-                    v_old = layers[k]
+                if not deps:
+                    print("WARNING -- We have a drop call, but no deps...")
+                    # continue
 
-                    # Add the `inplace` kwarg to the drop call here
-                    new_drop = [val for val in v_old.dsk[dk]]
-                    new_drop.append("inplace=True")
-                    v_old.dsk[dk] = tuple(new_drop)
+                v_old = layers[k]
 
-                    # import pdb; pdb.set_trace()
+                # Add the `inplace` kwarg to the drop call here
+                new_drop = [val for val in v_old.dsk[ki]]
+                new_drop[3][1].append(["inplace", "True"])
+                v_old.dsk[ki] = tuple(new_drop)
 
-                    layers[k] = Blockwise(
-                        v_old.output,
-                        v_old.output_indices,
-                        v_old.dsk,
-                        v_old.indices,
-                        v_old.numblocks,
-                        concatenate=v_old.concatenate,
-                        new_axes=v_old.new_axes,
-                    )
-
-                    # # We also need to make sure that only one sub-task task
-                    # # depends on the output of the drop operation...
-                    # # If 2+ sub task try to use the same data, the in-place
-                    # # drop can be a problem...
-                    # # Perhaps we also need to remove "assign" items after the inplace drop?
-                    # count = 0
-                    # depset = set()
-                    # for sk, sv in get_deps(sub_graph)[0].items():
-                    #     if sk != dk and sv:
-                    #         if isinstance(sv, str) and (sv == dk) and (sk not in depset):
-                    #             depset.add(sk)
-                    #             count += 1
-                    #     if count > 1:
-                    #         break
-                    # for sk, sv in get_deps(sub_graph)[0].items():
-                    #     if sk != dk and sv:
-                    #         if isinstance(sv, set) and dk in sv:
-                    #             tmp_set = set([val for val in sv if val != dk])
-                    #             #import pdb; pdb.set_trace()
-                    #             if not tmp_set.intersection(depset):
-                    #                 #
-                    #                 depset.add(sk)
-                    #                 count += 1
-                    #     if count > 1:
-                    #         break
-                    # import pdb; pdb.set_trace()
-                    # pass
+                layers[k] = Blockwise(
+                    v_old.output,
+                    v_old.output_indices,
+                    v_old.dsk,
+                    v_old.indices,
+                    v_old.numblocks,
+                    concatenate=v_old.concatenate,
+                    new_axes=v_old.new_axes,
+                )
 
     return HighLevelGraph(layers, dsk.dependencies)
