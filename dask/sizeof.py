@@ -45,6 +45,15 @@ def register_cupy():
         return int(x.nbytes)
 
 
+@sizeof.register_lazy("numba")
+def register_numba():
+    import numba.cuda
+
+    @sizeof.register(numba.cuda.cudadrv.devicearray.DeviceNDArray)
+    def sizeof_numba_devicendarray(x):
+        return int(x.nbytes)
+
+
 @sizeof.register_lazy("numpy")
 def register_numpy():
     import numpy as np
