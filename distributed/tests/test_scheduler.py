@@ -1512,8 +1512,10 @@ def test_idle_timeout(c, s, a, b):
         yield gen.sleep(0.01)
     assert time() < start + 3
 
-    assert a.status == "closed"
-    assert b.status == "closed"
+    start = time()
+    while not (a.status == "closed" and b.status == "closed"):
+        yield gen.sleep(0.01)
+        assert time() < start + 1
 
 
 @gen_cluster(client=True, config={"distributed.scheduler.bandwidth": "100 GB"})
