@@ -2420,3 +2420,38 @@ def test_groupby_sort_true_split_out():
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 (for now)
         M.sum(ddf.groupby("x", sort=True), split_out=2)
+
+
+@pytest.mark.parametrize("known_cats", [True, False])
+@pytest.mark.parametrize("ordered_cats", [True, False])
+@pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
+@pytest.mark.parametrize("observed", [True, False])
+def test_groupby_aggregate_categorical_observed(
+    known_cats, ordered_cats, agg_func, groupby, observed
+):
+    # nunique is not implemented for DataFrameGroupBy
+    if agg_func == "nunique":
+        pytest.skip("Not implemented for DataFrameGroupBy yet.")
+
+    pdf = pd.DataFrame(
+        {
+            "cat_1": pd.Categorical(
+                list("AB"), categories=list("ABCDE"), ordered=ordered_cats
+            ),
+            "cat_2": pd.Categorical([1, 2], categories=[1, 2, 3], ordered=ordered_cats),
+            "value_1": np.random.uniform(size=2),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 2)
+
+    if not known_cats:
+        ddf["cat_1"] = ddf["cat_1"].cat.as_unknown()
+        ddf["cat_2"] = ddf["cat_2"].cat.as_unknown()
+
+    def agg(grp, **kwargs):
+        return getattr(grp, agg_func)(**kwargs)
+
+    assert_eq(
+        agg(pdf.groupby(groupby, observed=observed)),
+        agg(ddf.groupby(groupby, observed=observed)),
+    )
