@@ -259,6 +259,8 @@ def test_rename_series_method():
     assert ds.name == "z"
     assert_eq(ds, s)
 
+
+def test_rename_series_method_2():
     # Series index
     s = pd.Series(["a", "b", "c", "d", "e", "f", "g"], name="x")
     ds = dd.from_pandas(s, 2)
@@ -4113,3 +4115,12 @@ def test_pop():
     assert s.name == "y"
     assert ddf.columns == ["x"]
     assert_eq(ddf, df[["x"]])
+
+
+def test_simple_map_partitions():
+    df = pd.DataFrame({"x": range(10), "y": range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.drop("x", axis=1)
+    task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
+    [v] = task[0].dsk.values()
+    assert v[0] == M.drop or v[1] == M.drop
