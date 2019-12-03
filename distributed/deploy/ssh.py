@@ -219,21 +219,16 @@ def SSHCluster(
     Parameters
     ----------
     hosts: List[str]
-        List of hostnames or addresses on which to launch our cluster
-        The first will be used for the scheduler and the rest for workers
-    connect_options:
-        Keywords to pass through to asyncssh.connect
-        known_hosts: List[str] or None
-            The list of keys which will be used to validate the server host
-            key presented during the SSH handshake.  If this is not specified,
-            the keys will be looked up in the file .ssh/known_hosts.  If this
-            is explicitly set to None, server host key validation will be disabled.
-    worker_options:
-        Keywords to pass on to dask-worker
-    scheduler_options:
-        Keywords to pass on to dask-scheduler
-    worker_module:
-        Python module to call to start the worker
+        List of hostnames or addresses on which to launch our cluster.
+        The first will be used for the scheduler and the rest for workers.
+    connect_options: dict, optional
+        Keywords to pass through to ``asyncssh.connect``.
+    worker_options: dict, optional
+        Keywords to pass on to workers.
+    scheduler_options: dict, optional
+        Keywords to pass on to scheduler.
+    worker_module: str, optional
+        Python module to call to start the worker.
 
     Examples
     --------
