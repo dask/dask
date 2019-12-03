@@ -89,12 +89,12 @@ def order(dsk, dependencies=None):
     This currently traverses the graph as a single-threaded scheduler would
     traverse it.  It breaks ties in the following ways:
 
-    1.  Start from roots nodes that have the largest subgraphs
-    2.  When a node has dependencies that are not yet computed prefer
-        dependencies with large subtrees  (start hard things first)
-    2.  When we reach a node that can be computed we then traverse up and
-        prefer dependents that have small super-trees (few total dependents)
-        (finish existing work quickly)
+    1.  Begin at a leaf node that is a dependency of a root node that has the
+        largest subgraph (start hard things first)
+    2.  Prefer tall branches with few dependents (start hard things first and
+        try to avoid memory usage)
+    3.  Prefer dependents that are dependencies of root nodes that have
+        the smallest subgraph (do small goals that can terminate quickly)
 
     Examples
     --------
@@ -110,12 +110,13 @@ def order(dsk, dependencies=None):
 
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = ndependents(dependencies, dependents, total_dependencies)
+    metrics = graph_metrics(dependencies, dependents, total_dependencies)
+    del total_dependencies
 
     def initial_stack_key(x):
         """ Choose which task to run at the very beginning
 
-        First prioritize large, tall groups, then prioritize the same as `dependents_key`.
+        First prioritize large, tall groups, then prioritize the same as ``dependents_key``.
         """
         num_dependents = len(dependents[x])
         total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[
@@ -157,7 +158,7 @@ def order(dsk, dependencies=None):
     def dependencies_key(x):
         """ Choose which dependency to run as part of a reverse DFS
 
-        This is very similar to both `initial_stack_key` and `dependents_key`.
+        This is very similar to both ``initial_stack_key`` and ``dependents_key``.
         """
         num_dependents = len(dependents[x])
         total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[
@@ -181,21 +182,35 @@ def order(dsk, dependencies=None):
     result = {}
     i = 0
 
+    # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph
     init_stack = {k for k, v in dependencies.items() if not v}
+
+    # Nodes in the current weakly connected subgraph that are not part of the current
+    # DFS along dependencies.  The next DFS will begin from these nodes.  `outer_stack`
+    # is populated from `init_stack` and the dependencies of `completed_list`.
     outer_stack = []
-    outer_stack_seeds = []
-    outer_stack_seeds_index = 0
+
+    # Nodes get added to this as they complete.  We will populate `outer_stack` from
+    # dependents of these nodes.  We consider nodes using a FIFO policy (yes, we could
+    # have used collections.deque, but a list with the current index is faster).
+    # Note that this does not include nodes with no dependents!
+    completed_list = []
+    completed_list_index = 0
+
+    # Used to perform a DFS along dependencies.  Once emptied (when traversing dependencies),
+    # this continues (along dependents) along a path from the initial (leaf) node down to a
+    # root node (a tactical goal).  This ensures this root node will get calculated before
+    # we consider any other dependents from `completed_list`.
     inner_stack = []
 
     # aliases for speed
     outer_stack_append = outer_stack.append
     outer_stack_pop = outer_stack.pop
     outer_stack_extend = outer_stack.extend
-    outer_stack_seeds_append = outer_stack_seeds.append
+    completed_list_append = completed_list.append
     inner_stack_append = inner_stack.append
     inner_stack_pop = inner_stack.pop
     inner_stack_extend = inner_stack.extend
-    inner_stack_reverse = inner_stack.reverse
 
     is_init_sorted = False
     item = min(init_stack, key=initial_stack_key)
@@ -204,17 +219,10 @@ def order(dsk, dependencies=None):
         while outer_stack:
             item = outer_stack_pop()
             if item not in result:
-                # Pre-populate the inner stack with a path down to our tactical goal
                 inner_stack_append(item)
-                deps = dependents[item]
-                while deps:
-                    item = min(deps, key=dependents_key)
-                    inner_stack_append(item)
-                    deps = dependents[item]
-                inner_stack_reverse()
 
                 while inner_stack:
-                    # Perform a DFS along dependencies
+                    # Perform a DFS along dependencies until we complete our tactical goal
                     item = inner_stack_pop()
                     if item in result:
                         continue
@@ -235,30 +243,40 @@ def order(dsk, dependencies=None):
 
                     result[item] = i
                     i += 1
-                    for dep in dependents[item]:
-                        num_needed[dep] -= 1
+                    deps = dependents[item]
+                    if deps:
+                        for dep in deps:
+                            num_needed[dep] -= 1
+                        if not inner_stack:
+                            # Continue towards our tactical goal (an easy-to-compute root)
+                            if len(deps) == 1:
+                                inner_stack_extend(deps)
+                            else:
+                                inner_stack_append(min(deps, key=dependents_key))
 
-                    # Our next starting point will be "seeded" by a completed task in a FIFO manner.
-                    # When our DFS with `inner_stack` is finished--which means we computed our tactical
-                    # goal--we will choose our next starting point from the dependents of completed tasks.
-                    # However, it is too expensive to consider all dependents of all completed tasks, so
-                    # we consider the dependents of tasks in the order they complete.
-                    #
-                    # Instead of always using a FIFO policy with the seeds, a reasonable variant would be
-                    # to use a LIFO policy of seeds collected until `inner_stack` is empty.
-                    outer_stack_seeds_append(item)
+                        # Our next starting point will be "seeded" by a completed task in a FIFO
+                        # manner.  When our DFS with `inner_stack` is finished--which means we
+                        # computed our tactical goal--we will choose our next starting point from
+                        # the dependents of completed tasks.  However, it is too expensive to
+                        # consider all dependents of all completed tasks, so we consider the
+                        # dependents of tasks in the order they complete.
+                        completed_list_append(item)
 
-            while not outer_stack and outer_stack_seeds_index < len(outer_stack_seeds):
-                outer_stack_extend(
-                    sorted(
-                        dependents[
-                            outer_stack_seeds[outer_stack_seeds_index]
-                        ].difference(result),
-                        key=dependents_key,
-                        reverse=True,
-                    )
+            while not outer_stack and completed_list_index < len(completed_list):
+                # We wait for as long as possible to consider dependents of completed nodes, because:
+                # 1. some may have already completed, so waiting lets us sort fewer items, and
+                # 2. sorting via `dependents_key` depends on `num_needed`, which is dynamic.
+                deps = dependents[completed_list[completed_list_index]].difference(
+                    result
                 )
-                outer_stack_seeds_index += 1
+                if deps:
+                    if len(deps) == 1:
+                        outer_stack_extend(deps)
+                    else:
+                        outer_stack_extend(
+                            sorted(deps, key=dependents_key, reverse=True)
+                        )
+                completed_list_index += 1
 
         if len(dependencies) == len(result):
             break  # all done!
@@ -292,15 +310,19 @@ def order(dsk, dependencies=None):
     return result
 
 
-def ndependents(dependencies, dependents, total_dependencies):
-    """ Number of total data elements that depend on key
+def graph_metrics(dependencies, dependents, total_dependencies):
+    """ Useful measures of a graph used by ``dask.order.order``
+Number of total data elements that depend on key
 
-    For each key we return the number of keys that can only be run after this
-    key is run.  The root nodes have value 1 while deep child nodes will have
-    larger values.
-
-    We also return the minimum value of the maximum number of dependencies of
-    all final dependencies (see module-level comment for more)
+    For each key we return:
+    1.  The number of keys that can only be run after this key is run.  The
+        root nodes have value 1 while deep child nodes will have larger values.
+    2.  The minimum value of the maximum number of dependencies of
+        all final dependencies (see module-level comment for more)
+    3.  The maximum value of the maximum number of dependencies of
+        all final dependencies (see module-level comment for more)
+    4.  The minimum height from a root node
+    5.  The maximum height from a root node
 
     Examples
     --------
@@ -308,19 +330,16 @@ def ndependents(dependencies, dependents, total_dependencies):
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> _, total_dependencies = ndependencies(dependencies, dependents)
-    >>> total_dependents, _, _, _, _= ndependents(dependencies,
-    ...                                           dependents,
-    ...                                           total_dependencies)
+    >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
+    >>> total_dependents = {key: val[0] for key, val in metrics.items()}
     >>> sorted(total_dependents.items())
     [('a', 3), ('b', 2), ('c', 1)]
+    >>> sorted(metrics.items())
+    [('a', (3, 3, 3, 3, 3)), ('b', (2, 3, 3, 2, 2)), ('c', (1, 3, 3, 1, 1))]
 
     Returns
     -------
-    total_dependents: Dict[key, int]
-    min_dependencies: Dict[key, int]
-    max_dependencies: Dict[key, int]
-    min_heights: Dict[key, int]
-    max_heights: Dict[key, int]
+    metrics: Dict[key, Tuple[int, int, int, int, int]]
     """
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items()}
