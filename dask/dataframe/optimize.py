@@ -105,10 +105,10 @@ def optimize_drop(dsk, force=False):
         sub_graph = v.dsk 
         for ki, vi in sub_graph.items():
 
-            deps = (not get_deps(sub_graph)[0][ki])
+            nodeps = (not get_deps(sub_graph)[0][ki])
             if vi[0] == apply and vi[1] == M.drop:
 
-                if deps and not force:
+                if nodeps and not force:
                     continue
 
                 v_old = layers[k]
