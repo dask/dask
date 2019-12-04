@@ -1,7 +1,7 @@
 """ Dataframe optimizations """
 import operator
 
-from ..optimization import cull, fuse, SubgraphCallable
+from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict, M, apply
