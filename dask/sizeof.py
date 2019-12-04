@@ -54,6 +54,17 @@ def register_numba():
         return int(x.nbytes)
 
 
+@sizeof.register_lazy("rmm")
+def register_rmm():
+    import rmm
+
+    # Only included in 0.11.0+
+    if hasattr(rmm, "DeviceBuffer"):
+        @sizeof.register(rmm.DeviceBuffer)
+        def sizeof_rmm_devicebuffer(x):
+            return int(x.nbytes)
+
+
 @sizeof.register_lazy("numpy")
 def register_numpy():
     import numpy as np
