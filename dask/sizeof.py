@@ -60,6 +60,7 @@ def register_rmm():
 
     # Only included in 0.11.0+
     if hasattr(rmm, "DeviceBuffer"):
+
         @sizeof.register(rmm.DeviceBuffer)
         def sizeof_rmm_devicebuffer(x):
             return int(x.nbytes)
