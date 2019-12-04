@@ -195,6 +195,8 @@ def read_sql_table(
             )
         )
 
+    engine.dispose()
+
     return from_delayed(parts, meta, divisions=divisions)
 
 
@@ -202,8 +204,9 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     import sqlalchemy as sa
 
     engine_kwargs = engine_kwargs or {}
-    conn = sa.create_engine(uri, **engine_kwargs)
-    df = pd.read_sql(q, conn, **kwargs)
+    engine = sa.create_engine(uri, **engine_kwargs)
+    df = pd.read_sql(q, engine, **kwargs)
+    engine.dispose()
     if df.empty:
         return meta
     else:
