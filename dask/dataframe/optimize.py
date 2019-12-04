@@ -93,7 +93,7 @@ def optimize_read_parquet_getitem(dsk):
     return HighLevelGraph(layers, dsk.dependencies)
 
 
-def optimize_drop(dsk):
+def optimize_drop(dsk, force=False):
 
     layers = dsk.layers.copy()
 
@@ -105,12 +105,11 @@ def optimize_drop(dsk):
         sub_graph = v.dsk 
         for ki, vi in sub_graph.items():
 
-            deps = get_deps(sub_graph)[0][ki]
+            deps = (not get_deps(sub_graph)[0][ki])
             if vi[0] == apply and vi[1] == M.drop:
 
-                if not deps:
-                    print("WARNING -- We have a drop call, but no deps...")
-                    # continue
+                if deps and not force:
+                    continue
 
                 v_old = layers[k]
 
