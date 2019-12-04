@@ -31,7 +31,7 @@ def _get_md_row_groups(pieces):
             row_group = piece.get_metadata().row_group(rg)
             for c in range(row_group.num_columns):
                 if not row_group.column(c).statistics:
-                    return []
+                    return (None, None)
             row_groups.append(row_group)
         row_groups_per_piece.append(num_row_groups)
     if len(row_groups) == len(pieces):
