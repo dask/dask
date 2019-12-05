@@ -3761,6 +3761,16 @@ class DataFrame(_Frame):
             "Drop currently only works for axis=1 or when columns is not None"
         )
 
+    def shallow_copy_and_drop(self, columns):
+        """Makes a shallow copy of the DataFrame excluding specified columns"""
+
+        def _shallow_copy_and_drop(m, cols):
+            ret = m.copy(deep=False)
+            ret.drop(columns=cols, inplace=True)
+            return ret
+
+        return self.map_partitions(_shallow_copy_and_drop, columns,)
+
     def merge(
         self,
         right,
