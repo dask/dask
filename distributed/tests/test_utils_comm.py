@@ -1,7 +1,11 @@
 from distributed.core import ConnectionPool
 from distributed.comm import Comm
-from distributed.utils_test import gen_cluster
-from distributed.utils_comm import pack_data, gather_from_workers
+from distributed.utils_test import gen_cluster, loop  # noqa: F401
+from distributed.utils_comm import pack_data, gather_from_workers, retry
+
+from unittest import mock
+
+import pytest
 
 
 def test_pack_data():
@@ -58,3 +62,70 @@ def test_gather_from_workers_permissive_flaky(c, s, a, b):
 
     assert missing == {"x": [a.address]}
     assert bad_workers == [a.address]
+
+
+def test_retry_no_exception(loop):
+    n_calls = 0
+    retval = object()
+
+    async def coro():
+        nonlocal n_calls
+        n_calls += 1
+        return retval
+
+    assert (
+        loop.run_sync(lambda: retry(coro, count=0, delay_min=-1, delay_max=-1))
+        is retval
+    )
+    assert n_calls == 1
+
+
+def test_retry0_raises_immediately(loop):
+    # test that using max_reties=0 raises after 1 call
+
+    n_calls = 0
+
+    async def coro():
+        nonlocal n_calls
+        n_calls += 1
+        raise RuntimeError(f"RT_ERROR {n_calls}")
+
+    with pytest.raises(RuntimeError, match="RT_ERROR 1"):
+        loop.run_sync(lambda: retry(coro, count=0, delay_min=-1, delay_max=-1))
+
+    assert n_calls == 1
+
+
+def test_retry_does_retry_and_sleep(loop):
+    # test the retry and sleep pattern of `retry`
+    n_calls = 0
+
+    class MyEx(Exception):
+        pass
+
+    async def coro():
+        nonlocal n_calls
+        n_calls += 1
+        raise MyEx(f"RT_ERROR {n_calls}")
+
+    sleep_calls = []
+
+    async def my_sleep(amount):
+        sleep_calls.append(amount)
+        return
+
+    with mock.patch("asyncio.sleep", my_sleep):
+        with pytest.raises(MyEx, match="RT_ERROR 6"):
+            loop.run_sync(
+                lambda: retry(
+                    coro,
+                    retry_on_exceptions=(MyEx,),
+                    count=5,
+                    delay_min=1.0,
+                    delay_max=6.0,
+                    jitter_fraction=0.0,
+                )
+            )
+
+    assert n_calls == 6
+    assert sleep_calls == [0.0, 1.0, 3.0, 6.0, 6.0]

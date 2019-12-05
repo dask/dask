@@ -59,7 +59,7 @@ from .utils import (
     shutting_down,
     tmpfile,
 )
-from .utils_comm import scatter_to_workers, gather_from_workers
+from .utils_comm import scatter_to_workers, gather_from_workers, retry_operation
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
 
 from .publish import PublishExtension
@@ -2786,7 +2786,10 @@ class Scheduler(ServerNode):
                 to_senders[sender.address].append(ts.key)
 
             result = await asyncio.gather(
-                *(self.rpc(addr=r).gather(who_has=v) for r, v in to_recipients.items())
+                *(
+                    retry_operation(self.rpc(addr=r).gather, who_has=v)
+                    for r, v in to_recipients.items()
+                )
             )
             for r, v in to_recipients.items():
                 self.log_event(r, {"action": "rebalance", "who_has": v})
@@ -2819,7 +2822,7 @@ class Scheduler(ServerNode):
 
             await asyncio.gather(
                 *(
-                    self.rpc(addr=r).delete_data(keys=v, report=False)
+                    retry_operation(self.rpc(addr=r).delete_data, keys=v, report=False)
                     for r, v in to_senders.items()
                 )
             )
@@ -2887,8 +2890,10 @@ class Scheduler(ServerNode):
 
             await asyncio.gather(
                 *(
-                    self.rpc(addr=ws.address).delete_data(
-                        keys=[ts.key for ts in tasks], report=False
+                    retry_operation(
+                        self.rpc(addr=ws.address).delete_data,
+                        keys=[ts.key for ts in tasks],
+                        report=False,
                     )
                     for ws, tasks in del_worker_tasks.items()
                 )
@@ -2922,7 +2927,7 @@ class Scheduler(ServerNode):
 
             results = await asyncio.gather(
                 *(
-                    self.rpc(addr=w).gather(who_has=who_has)
+                    retry_operation(self.rpc(addr=w).gather, who_has=who_has)
                     for w, who_has in gathers.items()
                 )
             )

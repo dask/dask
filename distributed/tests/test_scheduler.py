@@ -7,6 +7,7 @@ import json
 import operator
 import sys
 from time import sleep
+from unittest import mock
 import logging
 
 import dask
@@ -1749,7 +1750,8 @@ async def test_gather_failing_cnn_recover(c, s, a, b):
     x = await c.scatter({"x": 1}, workers=a.address)
 
     s.rpc = FlakyConnectionPool(failing_connections=1)
-    res = await s.gather(keys=["x"])
+    with mock.patch("distributed.utils_comm.retry_count", 1):
+        res = await s.gather(keys=["x"])
     assert res["status"] == "OK"
 
 
@@ -1811,25 +1813,31 @@ async def test_gather_allow_worker_reconnect(c, s, a, b):
 
     s.rpc = FlakyConnectionPool(failing_connections=4)
 
-    with captured_logger(logging.getLogger("distributed.scheduler")) as sched_logger:
-        with captured_logger(logging.getLogger("distributed.client")) as client_logger:
-            with captured_logger(
-                logging.getLogger("distributed.worker")
-            ) as worker_logger:
-                # Gather using the client (as an ordinary user would)
-                # Upon a missing key, the client will reschedule the computations
-                res = await c.gather(z)
+    with captured_logger(
+        logging.getLogger("distributed.scheduler")
+    ) as sched_logger, captured_logger(
+        logging.getLogger("distributed.client")
+    ) as client_logger, captured_logger(
+        logging.getLogger("distributed.utils_comm")
+    ) as utils_comm_logger, mock.patch(
+        "distributed.utils_comm.retry_count", 3
+    ), mock.patch(
+        "distributed.utils_comm.retry_delay_min", 0.5
+    ):
+        # Gather using the client (as an ordinary user would)
+        # Upon a missing key, the client will reschedule the computations
+        res = await c.gather(z)
 
     assert res == 5
 
     sched_logger = sched_logger.getvalue()
     client_logger = client_logger.getvalue()
-    worker_logger = worker_logger.getvalue()
+    utils_comm_logger = utils_comm_logger.getvalue()
 
     # Ensure that the communication was done via the scheduler, i.e. we actually hit a bad connection
     assert s.rpc.cnn_count > 0
 
-    assert "Encountered connection issue during data collection" in worker_logger
+    assert "Retrying get_data_from_worker after exception" in utils_comm_logger
 
     # The reducer task was actually not found upon first collection. The client will reschedule the graph
     assert "Couldn't gather 1 keys, rescheduling" in client_logger
@@ -1841,14 +1849,12 @@ async def test_gather_allow_worker_reconnect(c, s, a, b):
     # that the scheduler again knows about the result.
     # The final reduce step should then be used from the re-connected worker
     # instead of recomputing it.
-
-    starts = []
-    finish_processing_transitions = 0
-    for transition in s.transition_log:
-        key, start, finish, recommendations, timestamp = transition
-        if "reducer" in key and finish == "processing":
-            finish_processing_transitions += 1
-    assert finish_processing_transitions == 1
+    transitions_to_processing = [
+        (key, start, timestamp)
+        for key, start, finish, recommendations, timestamp in s.transition_log
+        if finish == "processing" and "reducer" in key
+    ]
+    assert len(transitions_to_processing) == 1
 
 
 @pytest.mark.asyncio

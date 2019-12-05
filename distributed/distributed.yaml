@@ -72,6 +72,11 @@ distributed:
     lost-worker-timeout: 15s  # Interval after which to hard-close a lost worker job
 
   comm:
+    retry:  # some operations (such as gathering data) are subject to re-tries with the below parameters
+      count: 0  # the maximum retry attempts. 0 disables re-trying.
+      delay:
+         min: 1s  # the first non-zero delay between re-tries
+         max: 20s  # the maximum delay between re-tries
     compression: auto
     offload: 10MiB # Size after which we choose to offload serialization to another thread
     default-scheme: tcp

@@ -53,6 +53,7 @@ from .utils_comm import (
     pack_data,
     scatter_to_workers,
     gather_from_workers,
+    retry_operation,
 )
 from .cfexecutor import ClientExecutor
 from .core import connect, rpc, clean_exception, CommClosedError, PooledRPCCall
@@ -1794,19 +1795,19 @@ class Client(Node):
 
         try:
             if direct or local_worker:  # gather directly from workers
-                who_has = await self.scheduler.who_has(keys=keys)
+                who_has = await retry_operation(self.scheduler.who_has, keys=keys)
                 data2, missing_keys, missing_workers = await gather_from_workers(
                     who_has, rpc=self.rpc, close=False
                 )
                 response = {"status": "OK", "data": data2}
                 if missing_keys:
                     keys2 = [key for key in keys if key not in data2]
-                    response = await self.scheduler.gather(keys=keys2)
+                    response = await retry_operation(self.scheduler.gather, keys=keys2)
                     if response["status"] == "OK":
                         response["data"].update(data2)
 
             else:  # ask scheduler to gather data for us
-                response = await self.scheduler.gather(keys=keys)
+                response = await retry_operation(self.scheduler.gather, keys=keys)
         finally:
             self._gather_semaphore.release()
 

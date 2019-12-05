@@ -63,7 +63,7 @@ from .utils import (
     warn_on_duration,
     LRU,
 )
-from .utils_comm import pack_data, gather_from_workers
+from .utils_comm import pack_data, gather_from_workers, retry_operation
 from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
 
 logger = logging.getLogger(__name__)
@@ -868,7 +868,8 @@ class Worker(ServerNode):
             logger.debug("Heartbeat: %s" % self.address)
             try:
                 start = time()
-                response = await self.scheduler.heartbeat_worker(
+                response = await retry_operation(
+                    self.scheduler.heartbeat_worker,
                     address=self.contact_address,
                     now=time(),
                     metrics=await self.get_metrics(),
@@ -1299,8 +1300,10 @@ class Worker(ServerNode):
                 self.available_resources[r] = quantity
             self.total_resources[r] = quantity
 
-        await self.scheduler.set_resources(
-            resources=self.total_resources, worker=self.contact_address
+        await retry_operation(
+            self.scheduler.set_resources,
+            resources=self.total_resources,
+            worker=self.contact_address,
         )
 
     ###################
@@ -2047,7 +2050,7 @@ class Worker(ServerNode):
                     self.suspicious_deps[dep],
                 )
 
-            who_has = await self.scheduler.who_has(keys=list(deps))
+            who_has = await retry_operation(self.scheduler.who_has, keys=list(deps))
             who_has = {k: v for k, v in who_has.items() if v}
             self.update_who_has(who_has)
             for dep in deps:
@@ -2081,7 +2084,7 @@ class Worker(ServerNode):
 
     async def query_who_has(self, *deps):
         with log_errors():
-            response = await self.scheduler.who_has(keys=deps)
+            response = await retry_operation(self.scheduler.who_has, keys=deps)
             self.update_who_has(response)
             return response
 
@@ -3132,10 +3135,7 @@ async def get_data_from_worker(
     if deserializers is None:
         deserializers = rpc.deserializers
 
-    retry_count = 0
-    max_retries = 3
-
-    while True:
+    async def _get_data():
         comm = await rpc.connect(worker)
         comm.name = "Ephemeral Worker->Worker for gather"
         try:
@@ -3155,25 +3155,11 @@ async def get_data_from_worker(
             else:
                 if status == "OK":
                     await comm.write("OK")
-            break
-        except (EnvironmentError, CommClosedError):
-            if retry_count < max_retries:
-                await asyncio.sleep(0.1 * (2 ** retry_count))
-                retry_count += 1
-                logger.info(
-                    "Encountered connection issue during data collection of keys %s on worker %s. Retrying (%s / %s)",
-                    keys,
-                    worker,
-                    retry_count,
-                    max_retries,
-                )
-                continue
-            else:
-                raise
+            return response
         finally:
             rpc.reuse(worker, comm)
 
-    return response
+    return await retry_operation(_get_data, operation="get_data_from_worker")
 
 
 job_counter = [0]
