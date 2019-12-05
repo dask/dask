@@ -70,6 +70,7 @@ from .utils import (
     valid_divisions,
     hash_object_dispatch,
     check_matching_columns,
+    drop_by_shallow_copy,
 )
 
 no_default = "__no_default__"
@@ -3748,7 +3749,9 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if (axis == 1) or (columns is not None):
+        if columns is not None:
+            return self.map_partitions(drop_by_shallow_copy, columns)
+        elif axis == 1:
             return self.map_partitions(
                 M.drop,
                 labels=labels,

@@ -952,3 +952,14 @@ def valid_divisions(divisions):
         return False
 
     return True
+
+
+def drop_by_shallow_copy(df, columns):
+    """ Use shallow copy to drop columns in place
+    """
+    df2 = df.copy(deep=False)
+    if isinstance(columns, str):
+        columns = [columns]
+    for column in columns:
+        del df2[column]
+    return df2
