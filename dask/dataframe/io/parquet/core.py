@@ -590,6 +590,8 @@ def apply_filters(parts, statistics, filters):
                         and max > value
                         or operator == ">="
                         and max >= value
+                        or operator == "in"
+                        and any(min <= item <= max for item in value)
                     ):
                         out_parts.append(part)
                         out_statistics.append(stats)

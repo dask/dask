@@ -1137,6 +1137,10 @@ def test_filters_pyarrow(tmpdir):
     assert d.npartitions == 3
     assert ((d.x > 1) & (d.x < 8)).all().compute()
 
+    e = dd.read_parquet(tmp_path, engine="pyarrow", filters=[("x", "in", (0, 9))])
+    assert e.npartitions == 2
+    assert ((e.x < 2) | (e.x > 7)).all().compute()
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
