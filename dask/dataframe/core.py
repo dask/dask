@@ -3355,7 +3355,7 @@ class DataFrame(_Frame):
         self.divisions = df.divisions
 
     def __delitem__(self, key):
-        result = self.drop([key], axis=1)
+        result = self.shallow_copy_and_drop(key)
         self.dask = result.dask
         self._name = result._name
         self._meta = result._meta
