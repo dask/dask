@@ -3532,9 +3532,6 @@ def test_reconnect(loop):
         assert time() < start + 5
         sleep(0.01)
 
-    with pytest.raises(Exception):
-        c.nthreads()
-
     assert x.status == "cancelled"
     with pytest.raises(CancelledError):
         x.result()

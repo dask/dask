@@ -750,3 +750,35 @@ async def test_deserialize_error():
     assert type(info.value) == Exception
     for c in str(info.value):
         assert c.isalpha() or c in "(',!)"  # no crazy bytestrings
+
+
+@pytest.mark.asyncio
+async def test_connection_pool_detects_remote_close():
+    server = Server({"ping": pingpong})
+    await server.listen("tcp://")
+
+    # open a connection, use it and give it back to the pool
+    p = ConnectionPool(limit=10)
+    conn = await p.connect(server.address)
+    await send_recv(conn, op="ping")
+    p.reuse(server.address, conn)
+
+    # now close this connection on the *server*
+    assert len(server._comms) == 1
+    server_conn = list(server._comms.keys())[0]
+    await server_conn.close()
+
+    # give the ConnectionPool some time to realize that the connection is closed
+    await asyncio.sleep(0.1)
+
+    # the connection pool should not hand out `conn` again
+    conn2 = await p.connect(server.address)
+    assert conn2 is not conn
+    p.reuse(server.address, conn2)
+    # check that `conn` has ben removed from the internal data structures
+    assert p.open == 1 and p.active == 0
+
+    # check connection pool invariants hold even after it detects a closed connection
+    # while creating conn2:
+    p._validate()
+    p.close()

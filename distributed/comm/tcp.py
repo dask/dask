@@ -132,6 +132,10 @@ def convert_stream_closed_error(obj, exc):
         raise CommClosedError("in %s: %s" % (obj, exc))
 
 
+def _do_nothing():
+    pass
+
+
 class TCP(Comm):
     """
     An established communication based on an underlying Tornado IOStream.
@@ -154,6 +158,16 @@ class TCP(Comm):
 
         stream.set_nodelay(True)
         set_tcp_timeout(stream)
+        # set a close callback, to make `self.stream.closed()` more reliable.
+        # Background: if `stream` is unused (e.g. because it's in `ConnectionPool.available`),
+        # the underlying fd is not watched for changes. In this case, even if the
+        # connection is actively closed by the remote end, `self.closed()` would still return `False`.
+        # Registering a closed callback will make tornado register the underlying fd
+        # for changes, and this would be reflected in `self.closed()` even without reading/writing.
+        #
+        # Use a global method (instead of a lambda) to avoid creating a reference
+        # to the local scope.
+        stream.set_close_callback(_do_nothing)
         self._read_extra()
 
     def _read_extra(self):
