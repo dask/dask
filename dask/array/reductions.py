@@ -813,7 +813,8 @@ with ignoring(AttributeError):
 @wraps(chunk.std)
 def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None):
     result = sqrt(
-        a.var(
+        var(
+            a,
             axis=axis,
             dtype=dtype,
             keepdims=keepdims,
