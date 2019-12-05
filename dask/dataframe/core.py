@@ -3762,7 +3762,18 @@ class DataFrame(_Frame):
         )
 
     def shallow_copy_and_drop(self, columns):
-        """Makes a shallow copy of the DataFrame excluding specified columns"""
+        """Makes a shallow copy of the DataFrame excluding specified columns
+
+        Parameters
+        ----------
+        columns : str or list
+            A single column or a list of columns to drop.
+
+        Returns
+        -------
+        shallow_copy : DataFrame
+            A shallow copy of the DataFrame.
+        """
 
         def _shallow_copy_and_drop(m, cols):
             ret = m.copy(deep=False)
