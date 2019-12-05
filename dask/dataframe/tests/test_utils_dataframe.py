@@ -16,7 +16,6 @@ from dask.dataframe.utils import (
     is_series_like,
     is_index_like,
     PANDAS_GT_0240,
-    assert_eq,
     drop_by_shallow_copy,
 )
 
@@ -428,10 +427,11 @@ def test_apply_and_enforce_message():
         apply_and_enforce(_func=func, _meta=meta)
 
 
+@pytest.mark.xfail(reason="Pandas shallow copy is doesn't work.")
 @pytest.mark.parametrize("cols", ["A", ["A"], ["A", "B"]])
 def test_drop_by_shallow_copy(cols):
 
     df = pd.DataFrame(np.random.randn(10, 3), columns=list("ABC"))
     df2 = drop_by_shallow_copy(df, cols)
 
-    assert_eq(df2, df.drop(columns=cols))
+    assert df2.C._values is df.C._values

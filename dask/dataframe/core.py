@@ -3749,17 +3749,8 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if columns is not None:
-            return self.map_partitions(drop_by_shallow_copy, columns)
-        elif axis == 1:
-            return self.map_partitions(
-                M.drop,
-                labels=labels,
-                axis=axis,
-                columns=columns,
-                errors=errors,
-                enforce_metadata=False,
-            )
+        if (axis == 1) or (columns is not None):
+            return self.map_partitions(drop_by_shallow_copy, columns or labels)
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
         )
