@@ -4115,3 +4115,13 @@ def test_pop():
     assert s.name == "y"
     assert ddf.columns == ["x"]
     assert_eq(ddf, df[["x"]])
+
+
+def test_simple_map_partitions():
+    data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.clip(-4, 6)
+    task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
+    [v] = task[0].dsk.values()
+    assert v[0] == M.clip or v[1] == M.clip
