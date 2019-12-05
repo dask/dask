@@ -4120,7 +4120,7 @@ def test_pop():
 def test_simple_map_partitions():
     df = pd.DataFrame({"x": range(10), "y": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf = ddf.drop("x", axis=1)
+    ddf = ddf.drop("x", axis=1, deep=True)
     task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
     [v] = task[0].dsk.values()
     assert v[0] == M.drop or v[1] == M.drop
