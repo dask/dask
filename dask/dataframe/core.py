@@ -3780,7 +3780,7 @@ class DataFrame(_Frame):
             ret.drop(columns=cols, inplace=True)
             return ret
 
-        return self.map_partitions(_shallow_copy_and_drop, columns,)
+        return self.map_partitions(_shallow_copy_and_drop, columns)
 
     def merge(
         self,
