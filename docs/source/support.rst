@@ -22,13 +22,17 @@ Conversation happens in the following places:
     questions and bug reports on gitter and instead ask people to use Stack
     Overflow or GitHub.
 4.  **Monthly developer meeting** happens the first Thursday of the month at
-    11:00 US Central Time in `this video meeting <https://zoom.us/j/802251830>`_.
+    10:00 US Central Time in `this video meeting <https://zoom.us/j/802251830>`_.
     Meeting notes are available at
     https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit
 
+    .. raw:: html
+
+       <iframe src="https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+
     You can subscribe to this calendar to be notified of changes:
 
-    * `Google Calendar <https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com&ctz=America%2FChicago>`__
+    * `Google Calendar <https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com>`__
     * `iCal <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`__
 
 .. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
