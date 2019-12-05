@@ -36,7 +36,7 @@ from .comm import (
     get_address_host,
     unparse_host_port,
 )
-from .comm.addressing import address_from_user_args
+from .comm.addressing import addresses_from_user_args
 from .core import rpc, connect, send_recv, clean_exception, CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
 from . import profile
@@ -1118,7 +1118,7 @@ class Scheduler(ServerNode):
 
         connection_limit = get_fileno_limit() / 2
 
-        self._start_address = address_from_user_args(
+        self._start_address = addresses_from_user_args(
             host=host,
             port=port,
             interface=interface,
@@ -1215,14 +1215,15 @@ class Scheduler(ServerNode):
                 c.cancel()
 
         if self.status != "running":
-            await self.listen(self._start_address, listen_args=self.listen_args)
-            self.ip = get_address_host(self.listen_address)
-            listen_ip = self.ip
+            for addr in self._start_address:
+                await self.listen(addr, listen_args=self.listen_args)
+                self.ip = get_address_host(self.listen_address)
+                listen_ip = self.ip
 
-            if listen_ip == "0.0.0.0":
-                listen_ip = ""
+                if listen_ip == "0.0.0.0":
+                    listen_ip = ""
 
-            if self._start_address.startswith("inproc://"):
+            if self.address.startswith("inproc://"):
                 listen_ip = "localhost"
 
             # Services listen on all addresses

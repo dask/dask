@@ -136,7 +136,7 @@ class Server(object):
         self._ongoing_coroutines = weakref.WeakSet()
         self._event_finished = Event()
 
-        self.listener = None
+        self.listeners = []
         self.io_loop = io_loop or IOLoop.current()
         self.loop = self.io_loop
 
@@ -221,7 +221,7 @@ class Server(object):
     def stop(self):
         if not self.__stopped:
             self.__stopped = True
-            if self.listener is not None:
+            for listener in self.listeners:
                 # Delay closing the server socket until the next IO loop tick.
                 # Otherwise race conditions can appear if an event handler
                 # for an accept() call is already scheduled by the IO loop,
@@ -229,7 +229,14 @@ class Server(object):
                 # The demonstrator for this is Worker.terminate(), which
                 # closes the server socket in response to an incoming message.
                 # See https://github.com/tornadoweb/tornado/issues/2069
-                self.io_loop.add_callback(self.listener.stop)
+                self.io_loop.add_callback(listener.stop)
+
+    @property
+    def listener(self):
+        if self.listeners:
+            return self.listeners[0]
+        else:
+            return None
 
     def _measure_tick(self):
         now = time()
@@ -305,13 +312,14 @@ class Server(object):
         else:
             addr = port_or_addr
             assert isinstance(addr, str)
-        self.listener = listen(
+        listener = listen(
             addr,
             self.handle_comm,
             deserialize=self.deserialize,
             connection_args=listen_args,
         )
-        await self.listener.start()
+        await listener.start()
+        self.listeners.append(listener)
 
     async def handle_comm(self, comm, shutting_down=shutting_down):
         """ Dispatch new communications to coroutine-handlers
@@ -487,7 +495,7 @@ class Server(object):
     def close(self):
         for pc in self.periodic_callbacks.values():
             pc.stop()
-        if self.listener:
+        for listener in self.listeners:
             self.listener.stop()
         for i in range(20):  # let comms close naturally for a second
             if not self._comms:

@@ -1849,3 +1849,22 @@ async def test_gather_allow_worker_reconnect(c, s, a, b):
         if "reducer" in key and finish == "processing":
             finish_processing_transitions += 1
     assert finish_processing_transitions == 1
+
+
+@pytest.mark.asyncio
+async def test_multiple_listeners(cleanup):
+    async with Scheduler(port=0, protocol=["inproc", "tcp"]) as s:
+        async with Worker(s.listeners[0].contact_address) as a:
+            async with Worker(s.listeners[1].contact_address) as b:
+                assert a.address.startswith("inproc")
+                assert a.scheduler.address.startswith("inproc")
+                assert b.address.startswith("tcp")
+                assert b.scheduler.address.startswith("tcp")
+
+                async with Client(s.address, asynchronous=True) as c:
+                    futures = c.map(inc, range(20))
+                    await wait(futures)
+
+                    # Force inter-worker communication both ways
+                    await c.submit(sum, futures, workers=[a.address])
+                    await c.submit(len, futures, workers=[b.address])

@@ -1,3 +1,4 @@
+import itertools
 import dask
 
 from . import registry
@@ -206,6 +207,54 @@ def uri_from_host_port(host_arg, port_arg, default_port):
     return addr
 
 
+def addresses_from_user_args(
+    host=None,
+    port=None,
+    interface=None,
+    protocol=None,
+    peer=None,
+    security=None,
+    default_port=0,
+) -> list:
+    """ Get a list of addresses if the inputs are lists
+
+    This is like ``address_from_user_args`` except that it also accepts lists
+    for some of the arguments.  If these arguments are lists then it will map
+    over them accordingly.
+
+    Examples
+    --------
+    >>> addresses_from_user_args(host="127.0.0.1", protocol=["inproc", "tcp"])
+    ["inproc://127.0.0.1:", "tcp://127.0.0.1:"]
+    """
+
+    def listify(obj):
+        if isinstance(obj, (tuple, list)):
+            return obj
+        else:
+            return itertools.repeat(obj)
+
+    if any(isinstance(x, (tuple, list)) for x in (host, port, interface, protocol)):
+        return [
+            address_from_user_args(
+                host=h,
+                port=p,
+                interface=i,
+                protocol=pr,
+                peer=peer,
+                security=security,
+                default_port=default_port,
+            )
+            for h, p, i, pr in zip(*map(listify, (host, port, interface, protocol)))
+        ]
+    else:
+        return [
+            address_from_user_args(
+                host, port, interface, protocol, peer, security, default_port
+            )
+        ]
+
+
 def address_from_user_args(
     host=None,
     port=None,
@@ -214,8 +263,9 @@ def address_from_user_args(
     peer=None,
     security=None,
     default_port=0,
-):
+) -> str:
     """ Get an address to listen on from common user provided arguments """
+
     if security and security.require_encryption and not protocol:
         protocol = "tls"
 
