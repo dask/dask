@@ -250,6 +250,7 @@ def test_Client_twice(loop):
 
 @pytest.mark.asyncio
 async def test_client_constructor_with_temporary_security(cleanup):
+    pytest.importorskip("cryptography")
     async with Client(
         security=True, silence_logs=False, dashboard_address=None, asynchronous=True
     ) as c:
@@ -709,6 +710,7 @@ def test_adapt_then_manual(loop):
 @pytest.mark.parametrize("temporary", [True, False])
 def test_local_tls(loop, temporary):
     if temporary:
+        pytest.importorskip("cryptography")
         security = True
     else:
         security = tls_only_security()
@@ -989,6 +991,7 @@ async def test_repr(cleanup):
 @pytest.mark.parametrize("temporary", [True, False])
 async def test_capture_security(cleanup, temporary):
     if temporary:
+        pytest.importorskip("cryptography")
         security = True
     else:
         security = tls_only_security()

@@ -379,6 +379,8 @@ async def test_require_encryption():
 
 
 def test_temporary_credentials():
+    pytest.importorskip("cryptography")
+
     sec = Security.temporary()
     sec_repr = repr(sec)
     fields = ["tls_ca_file"]
