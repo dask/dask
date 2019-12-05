@@ -70,6 +70,7 @@ from .utils import (
     valid_divisions,
     hash_object_dispatch,
     check_matching_columns,
+    drop_by_shallow_copy,
 )
 
 no_default = "__no_default__"
@@ -3750,12 +3751,7 @@ class DataFrame(_Frame):
         axis = self._validate_axis(axis)
         if (axis == 1) or (columns is not None):
             return self.map_partitions(
-                M.drop,
-                labels=labels,
-                axis=axis,
-                columns=columns,
-                errors=errors,
-                enforce_metadata=False,
+                drop_by_shallow_copy, columns or labels, errors=errors
             )
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
