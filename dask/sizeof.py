@@ -45,6 +45,27 @@ def register_cupy():
         return int(x.nbytes)
 
 
+@sizeof.register_lazy("numba")
+def register_numba():
+    import numba.cuda
+
+    @sizeof.register(numba.cuda.cudadrv.devicearray.DeviceNDArray)
+    def sizeof_numba_devicendarray(x):
+        return int(x.nbytes)
+
+
+@sizeof.register_lazy("rmm")
+def register_rmm():
+    import rmm
+
+    # Only included in 0.11.0+
+    if hasattr(rmm, "DeviceBuffer"):
+
+        @sizeof.register(rmm.DeviceBuffer)
+        def sizeof_rmm_devicebuffer(x):
+            return int(x.nbytes)
+
+
 @sizeof.register_lazy("numpy")
 def register_numpy():
     import numpy as np
