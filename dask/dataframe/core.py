@@ -3753,12 +3753,7 @@ class DataFrame(_Frame):
             return self.map_partitions(drop_by_shallow_copy, columns)
         elif axis == 1:
             return self.map_partitions(
-                M.drop,
-                labels=labels,
-                axis=axis,
-                columns=columns,
-                errors=errors,
-                enforce_metadata=False,
+                drop_by_shallow_copy, columns or labels, errors=errors
             )
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
