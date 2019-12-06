@@ -115,7 +115,7 @@ def read_parquet(
         read in the data as a Series.
     filters : list
         List of filters to apply, like ``[('x', '>', 0), ...]``. This
-         implements row-group (partition) -level filtering only, i.e., to
+        implements row-group (partition) -level filtering only, i.e., to
         prevent the loading of some chunks of the data, and only if relevant
         statistics have been included in the metadata.
     index : string, list, False or None (default)

@@ -349,8 +349,7 @@ def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs)
     :func:`dask.array.map_blocks`
 
     Parameters
-    __________
-
+    ----------
     func1d : callable
         Function to apply to 1-D slices of the array along the given axis
     axis : int

@@ -129,8 +129,8 @@ def make_people(npartitions=10, records_per_partition=1000, seed=None, locale="e
     This makes a Dask Bag with dictionary records of randomly generated people.
     This requires the optional library ``mimesis`` to generate records.
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     npartitions : int
         Number of partitions
     records_per_partition : int
