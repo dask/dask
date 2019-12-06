@@ -1,6 +1,36 @@
 Changelog
 =========
 
+2.9.0 / 2019-12-06
+------------------
+
+Array
++++++
+- Fix ``da.std`` to work with NumPy arrays (:pr:`5681`) `James Bourbeau`_
+
+Core
+++++
+- Register ``sizeof`` functions for Numba and RMM (:pr:`5668`) `John A Kirkham`_
+- Update meeting time (:pr:`5682`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+- Modify ``dd.DataFrame.drop`` to use shallow copy (:pr:`5675`) `Richard J Zamora`_
+- Fix bug in ``_get_md_row_groups`` (:pr:`5673`) `Richard J Zamora`_
+- Close sqlalchemy engine after querying DB (:pr:`5629`) `Krishan Bhasin`_
+- Allow ``dd.map_partitions`` to not enforce meta (:pr:`5660`) `Matthew Rocklin`_
+- Generalize ``concat_unindexed_dataframes`` to support cudf-backend (:pr:`5659`) `Richard J Zamora`_
+- Add dataframe resample methods (:pr:`5636`) `Ben Zaitlen`_
+- Compute length of dataframe as length of first column (:pr:`5635`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+- Doc fixup (:pr:`5665`) `James Bourbeau`_
+- Update doc build instructions (:pr:`5640`) `James Bourbeau`_
+- Fix ADL link (:pr:`5639`) `Ray Bell`_
+- Add documentation build (:pr:`5617`) `James Bourbeau`_
+
+
 2.8.1 / 2019-11-22
 ------------------
 
@@ -2730,3 +2760,4 @@ Other
 .. _`Gina Helfrich`: https://github.com/Dr-G
 .. _`ossdev07`: https://github.com/ossdev07
 .. _`Nuno Gomes Silva`: https://github.com/mgsnuno
+.. _`Ray Bell`: https://github.com/raybellwaves
