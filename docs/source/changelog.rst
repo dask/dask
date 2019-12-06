@@ -1,6 +1,44 @@
 Changelog
 =========
 
+2.9.0 - 2019-12-06
+------------------
+
+- Add ``dask-spec`` CLI tool (:pr:`3090`) `Matthew Rocklin`_
+- Connectionpool: don't hand out closed connections (:pr:`3301`) `byjott`_
+- Retry operations on network issues (:pr:`3294`) `byjott`_
+- Skip ``Security.temporary()`` tests if cryptography not installed (:pr:`3302`) `James Bourbeau`_
+- Support multiple listeners in the scheduler (:pr:`3288`) `Matthew Rocklin`_
+- Updates RMM comment to the correct release (:pr:`3299`) `John Kirkham`_
+- Add title to ``performance_report`` (:pr:`3298`) `Matthew Rocklin`_
+- Forgot to fix slow test (:pr:`3297`) `Benjamin Zaitlen`_
+- Update ``SSHCluster`` docstring parameters (:pr:`3296`) `James Bourbeau`_
+- ``worker.close()`` awaits ``batched_stream.close()`` (:pr:`3291`) `Mads R. B. Kristensen`_
+- Fix asynchronous listener in UCX (:pr:`3292`) `Benjamin Zaitlen`_
+- Avoid repeatedly adding deps to already in memory stack (:pr:`3293`) `James Bourbeau`_
+- xfail ucx empty object typed dataframe (:pr:`3279`) `Benjamin Zaitlen`_
+- Fix ``distributed.wait`` documentation (:pr:`3289`) `Tom Rochette`_
+- Move Python 3 syntax tests into main tests (:pr:`3281`) `Matthew Rocklin`_
+- xfail ``test_workspace_concurrency`` for Python 3.6 (:pr:`3283`) `Matthew Rocklin`_
+- Add ``performance_report`` context manager for static report generation (:pr:`3282`) `Matthew Rocklin`_
+- Update function serialization caches with custom LRU class (:pr:`3260`) `James Bourbeau`_
+- Make ``Listener.start`` asynchronous (:pr:`3278`) `Matthew Rocklin`_
+- Remove ``dask-submit`` and ``dask-remote`` (:pr:`3280`) `Matthew Rocklin`_
+- Worker profile server (:pr:`3274`) `Matthew Rocklin`_
+- Improve bandwidth workers plot (:pr:`3273`) `Matthew Rocklin`_
+- Make profile coroutines consistent between ``Scheduler`` and ``Worker`` (:pr:`3277`) `Matthew Rocklin`_
+- Enable saving profile information from server threads (:pr:`3271`) `Matthew Rocklin`_
+- Remove memory use plot (:pr:`3269`) `Matthew Rocklin`_
+- Add offload size to configuration (:pr:`3270`) `Matthew Rocklin`_
+- Fix layout scaling on profile plots (:pr:`3268`) `Jacob Tomlinson`_
+- Set ``x_range`` in CPU plot based on the number of threads (:pr:`3266`) `Matthew Rocklin`_
+- Use base-2 values for byte-valued axes in dashboard (:pr:`3267`) `Matthew Rocklin`_
+- Robust gather in case of connection failures (:pr:`3246`) `fjetter`_
+- Use ``DeviceBuffer`` from newer RMM releases (:pr:`3261`) `John Kirkham`_
+- Fix dev requirements for pytest (:pr:`3264`) `Elliott Sales de Andrade`_
+- Add validate options to configuration (:pr:`3258`) `Matthew Rocklin`_
+
+
 2.8.1 - 2019-11-22
 ------------------
 
@@ -1408,3 +1446,4 @@ significantly without many new features.
 .. _`Jed Brown`: https://github.com/jedbrown
 .. _`He Jia`: https://github.com/HerculesJack
 .. _`Jim Crist-Harif`: https://github.com/jcrist
+.. _`fjetter`: https://github.com/fjetter
