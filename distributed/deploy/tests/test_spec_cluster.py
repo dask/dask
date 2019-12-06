@@ -4,7 +4,7 @@ from time import sleep
 
 import dask
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
-from distributed.deploy.spec import close_clusters, ProcessInterface
+from distributed.deploy.spec import close_clusters, ProcessInterface, run_spec
 from distributed.metrics import time
 from distributed.utils_test import loop, cleanup  # noqa: F401
 from distributed.utils import is_valid_xml
@@ -25,7 +25,7 @@ class BrokenWorker(Worker):
 
 
 worker_spec = {
-    0: {"cls": Worker, "options": {"nthreads": 1}},
+    0: {"cls": "dask.distributed.Worker", "options": {"nthreads": 1}},
     1: {"cls": Worker, "options": {"nthreads": 2}},
     "my-worker": {"cls": MyWorker, "options": {"nthreads": 3}},
 }
@@ -429,6 +429,8 @@ async def test_MultiWorker(cleanup):
             await cluster
             assert len(cluster.worker_spec) == 2
             await client.wait_for_workers(4)
+            while len(cluster.scheduler_info["workers"]) < 4:
+                await asyncio.sleep(0.01)
 
             while "workers=4" not in repr(cluster):
                 await asyncio.sleep(0.1)
@@ -460,3 +462,17 @@ async def test_MultiWorker(cleanup):
             future = client.submit(lambda x: x + 1, 10)
             await future
             assert len(cluster.workers) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_spec(cleanup):
+    async with Scheduler(port=0) as s:
+        workers = await run_spec(worker_spec, s.address)
+        async with Client(s.address, asynchronous=True) as c:
+            await c.wait_for_workers(len(worker_spec))
+
+            await asyncio.gather(*[w.close() for w in workers.values()])
+
+            assert not s.workers
+
+            await asyncio.gather(*[w.finished() for w in workers.values()])

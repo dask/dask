@@ -7,11 +7,19 @@ import weakref
 
 import dask
 from tornado import gen
+from tornado.locks import Event
 
 from .adaptive import Adaptive
 from .cluster import Cluster
 from ..core import rpc, CommClosedError
-from ..utils import LoopRunner, silence_logging, ignoring, parse_bytes, parse_timedelta
+from ..utils import (
+    LoopRunner,
+    silence_logging,
+    ignoring,
+    parse_bytes,
+    parse_timedelta,
+    import_term,
+)
 from ..scheduler import Scheduler
 from ..security import Security
 
@@ -33,6 +41,7 @@ class ProcessInterface:
         self.external_address = None
         self.lock = asyncio.Lock()
         self.status = "created"
+        self._event_finished = Event()
 
     def __await__(self):
         async def _():
@@ -65,6 +74,11 @@ class ProcessInterface:
         need to worry about shutting down gracefully
         """
         self.status = "closed"
+        self._event_finished.set()
+
+    async def finished(self):
+        """ Wait until the server has finished """
+        await self._event_finished.wait()
 
     def __repr__(self):
         return "<%s: status=%s>" % (type(self).__name__, self.status)
@@ -260,9 +274,11 @@ class SpecCluster(Cluster):
             else:
                 services = {("dashboard", 8787): BokehScheduler}
             self.scheduler_spec = {"cls": Scheduler, "options": {"services": services}}
-        self.scheduler = self.scheduler_spec["cls"](
-            **self.scheduler_spec.get("options", {})
-        )
+
+        cls = self.scheduler_spec["cls"]
+        if isinstance(cls, str):
+            cls = import_term(cls)
+        self.scheduler = cls(**self.scheduler_spec.get("options", {}))
 
         self.status = "starting"
         self.scheduler = await self.scheduler
@@ -307,6 +323,8 @@ class SpecCluster(Cluster):
                 if "name" not in opts:
                     opts = opts.copy()
                     opts["name"] = name
+                if isinstance(cls, str):
+                    cls = import_term(cls)
                 worker = cls(self.scheduler.address, **opts)
                 self._created.add(worker)
                 workers.append(worker)
@@ -564,6 +582,21 @@ class SpecCluster(Cluster):
             )
 
         return super().adapt(*args, minimum=minimum, maximum=maximum, **kwargs)
+
+
+async def run_spec(spec: dict, *args):
+    workers = {}
+    for k, d in spec.items():
+        cls = d["cls"]
+        if isinstance(cls, str):
+            cls = import_term(cls)
+        workers[k] = cls(*args, **d.get("opts", {}))
+
+    if workers:
+        await asyncio.gather(*workers.values())
+        for w in workers.values():
+            await w  # for tornado gen.coroutine support
+    return workers
 
 
 @atexit.register

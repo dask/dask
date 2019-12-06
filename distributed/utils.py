@@ -1366,6 +1366,23 @@ except TypeError:
 weakref.finalize(_offload_executor, _offload_executor.shutdown)
 
 
+def import_term(name: str):
+    """ Return the fully qualified term
+
+    Examples
+    --------
+    >>> import_term("math.sin")
+    <function math.sin(x, /)>
+    """
+    try:
+        module_name, attr_name = name.rsplit(".", 1)
+    except ValueError:
+        return importlib.import_module(name)
+
+    module = importlib.import_module(module_name)
+    return getattr(module, attr_name)
+
+
 async def offload(fn, *args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(_offload_executor, fn, *args, **kwargs)
