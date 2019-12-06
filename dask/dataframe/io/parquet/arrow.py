@@ -31,7 +31,7 @@ def _get_md_row_groups(pieces):
             row_group = piece.get_metadata().row_group(rg)
             for c in range(row_group.num_columns):
                 if not row_group.column(c).statistics:
-                    return []
+                    return (None, None)
             row_groups.append(row_group)
         row_groups_per_piece.append(num_row_groups)
     if len(row_groups) == len(pieces):
@@ -263,6 +263,7 @@ class ArrowEngine(Engine):
                                 }
                             )
                         s["columns"].append(d)
+                s["total_byte_size"] = row_group.total_byte_size
                 stats.append(s)
         else:
             stats = None
@@ -289,10 +290,15 @@ class ArrowEngine(Engine):
             if split_row_groups and row_groups_per_piece:
                 # TODO: This block can be removed after ARROW-2801
                 parts = []
+                rg_tot = 0
                 for i, piece in enumerate(pieces):
                     num_row_groups = row_groups_per_piece[i]
                     for rg in range(num_row_groups):
                         parts.append((piece.path, rg, piece.partition_keys))
+                        # Setting file_path here, because it may be
+                        # missing from the row-group/column-chunk stats
+                        stats[rg_tot]["file_path_0"] = piece.path
+                        rg_tot += 1
             else:
                 parts = [
                     (piece.path, piece.row_group, piece.partition_keys)
@@ -321,12 +327,14 @@ class ArrowEngine(Engine):
             )
         else:
             # `piece` contains (path, row_group, partition_keys)
+            (path, row_group, partition_keys) = piece
             piece = pq.ParquetDatasetPiece(
-                piece[0],
-                row_group=piece[1],
-                partition_keys=piece[2],
+                path,
+                row_group=row_group,
+                partition_keys=partition_keys,
                 open_file_func=partial(fs.open, mode="rb"),
             )
+
         df = piece.read(
             columns=columns,
             partitions=partitions,
