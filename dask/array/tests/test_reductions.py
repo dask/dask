@@ -668,13 +668,13 @@ def test_trace():
     _assert(a, b, offset=1, axis1=0, axis2=2, dtype=float)
 
 
+@pytest.mark.parametrize("func", ["median", "nanmedian"])
 @pytest.mark.parametrize("axis", [0, [0, 1], 1, -1])
 @pytest.mark.parametrize("keepdims", [True, False])
-def test_median(axis, keepdims):
+def test_median(axis, keepdims, func):
     x = np.arange(100).reshape((2, 5, 10))
     d = da.from_array(x, chunks=2)
-
     assert_eq(
-        da.median(d, axis=axis, keepdims=keepdims),
-        np.median(x, axis=axis, keepdims=keepdims),
+        getattr(da, func)(d, axis=axis, keepdims=keepdims),
+        getattr(np, func)(x, axis=axis, keepdims=keepdims),
     )
