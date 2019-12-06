@@ -230,15 +230,12 @@ def order(dsk, dependencies=None):
                     if num_needed[item]:
                         inner_stack_append(item)
                         deps = dependencies[item].difference(result)
-                        if len(deps) < 1000:
+                        if 1 < len(deps) < 1000:
                             inner_stack_extend(
                                 sorted(deps, key=dependencies_key, reverse=True)
                             )
                         else:
                             inner_stack_extend(deps)
-                            inner_stack_append(
-                                min(deps, key=dependencies_key)  # one good one
-                            )
                         continue
 
                     result[item] = i
@@ -252,6 +249,9 @@ def order(dsk, dependencies=None):
                             if len(deps) == 1:
                                 inner_stack_extend(deps)
                             else:
+                                # If there are many, many dependents, then calculating
+                                # `dependents_key` here could be relatively expensive.
+                                # However, this is still probably worth it tactically.
                                 inner_stack_append(min(deps, key=dependents_key))
 
                         # Our next starting point will be "seeded" by a completed task in a FIFO
@@ -270,12 +270,12 @@ def order(dsk, dependencies=None):
                     result
                 )
                 if deps:
-                    if len(deps) == 1:
-                        outer_stack_extend(deps)
-                    else:
+                    if 1 < len(deps) < 1000:
                         outer_stack_extend(
                             sorted(deps, key=dependents_key, reverse=True)
                         )
+                    else:
+                        outer_stack_extend(deps)
                 completed_list_index += 1
 
         if len(dependencies) == len(result):
@@ -343,7 +343,7 @@ Number of total data elements that depend on key
     """
     result = {}
     num_needed = {k: len(v) for k, v in dependents.items()}
-    current = {k for k, v in num_needed.items() if v == 0}
+    current = {k for k, v in num_needed.items() if not v}
     current_pop = current.pop
     current_add = current.add
     while current:
@@ -365,7 +365,7 @@ Number of total data elements that depend on key
             result[key] = (1, val, val, 1, 1)
         for child in dependencies[key]:
             num_needed[child] -= 1
-            if num_needed[child] == 0:
+            if not num_needed[child]:
                 current_add(child)
     return result
 
@@ -392,7 +392,7 @@ def ndependencies(dependencies, dependents):
     result = {}
     num_needed = {k: len(v) for k, v in dependencies.items()}
     num_dependencies = num_needed.copy()
-    current = {k for k, v in num_needed.items() if v == 0}
+    current = {k for k, v in num_needed.items() if not v}
     current_pop = current.pop
     current_add = current.add
     while current:
@@ -400,7 +400,7 @@ def ndependencies(dependencies, dependents):
         result[key] = 1 + sum(result[child] for child in dependencies[key])
         for parent in dependents[key]:
             num_needed[parent] -= 1
-            if num_needed[parent] == 0:
+            if not num_needed[parent]:
                 current_add(parent)
     return num_dependencies, result
 
