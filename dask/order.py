@@ -111,7 +111,6 @@ def order(dsk, dependencies=None):
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     metrics = graph_metrics(dependencies, dependents, total_dependencies)
-    del total_dependencies
 
     def initial_stack_key(x):
         """ Choose which task to run at the very beginning
@@ -164,13 +163,16 @@ def order(dsk, dependencies=None):
         total_dependents, min_dependencies, max_dependencies, min_heights, max_heights = metrics[
             x
         ]
+        # Prefer short and narrow instead of tall in narrow, because we're going in
+        # reverse along dependencies.
         return (
-            # at a high-level, work towards a large goal (and prefer tall and narrow)
+            # at a high-level, work towards a large goal (and prefer short and narrow)
             -max_dependencies,
-            num_dependents - max_heights,
+            num_dependents + max_heights,
             # tactically, finish small connected jobs first
             min_dependencies,
-            num_dependents - min_heights,  # prefer tall and narrow
+            num_dependents + min_heights,  # prefer short and narrow
+            -total_dependencies[x],  # go where the work is
             -total_dependents,  # stay where the work is
             # try to be memory efficient
             num_dependents - len(dependencies[x]) + num_needed[x],
