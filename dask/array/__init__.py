@@ -197,6 +197,7 @@ try:
         argmax,
         nansum,
         nanmean,
+        nanmedian,
         nanstd,
         nanvar,
         nanmin,

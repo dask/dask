@@ -123,6 +123,7 @@ Top level user functions:
    max
    maximum
    mean
+   median
    meshgrid
    min
    minimum
@@ -135,6 +136,7 @@ Top level user functions:
    nancumsum
    nanmax
    nanmean
+   nanmedian
    nanmin
    nanprod
    nanstd
@@ -499,6 +501,7 @@ Other functions
 .. autofunction:: max
 .. autofunction:: maximum
 .. autofunction:: mean
+.. autofunction:: median
 .. autofunction:: meshgrid
 .. autofunction:: min
 .. autofunction:: minimum
@@ -511,6 +514,7 @@ Other functions
 .. autofunction:: nancumsum
 .. autofunction:: nanmax
 .. autofunction:: nanmean
+.. autofunction:: nanmedian
 .. autofunction:: nanmin
 .. autofunction:: nanprod
 .. autofunction:: nanstd
