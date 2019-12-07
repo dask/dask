@@ -2114,6 +2114,43 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
 
+def test_optimize_getitem_and_nonblockwise(tmpdir):
+    path = os.path.join(tmpdir, "path.parquet")
+    df = pd.DataFrame(
+        {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
+        index=["a", "b", "c"],
+    )
+    df.to_parquet(path)
+
+    df2 = dd.read_parquet(path)
+    df2[["a", "b"]].rolling(3).max().compute()
+
+
+def test_optimize_and_not(tmpdir):
+    path = os.path.join(tmpdir, "path.parquet")
+    df = pd.DataFrame(
+        {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
+        index=["a", "b", "c"],
+    )
+    df.to_parquet(path)
+
+    df2 = dd.read_parquet(path)
+    df2a = df2["a"].groupby(df2["c"]).first().to_delayed()
+    df2b = df2["b"].groupby(df2["c"]).first().to_delayed()
+    df2c = df2[["a", "b"]].rolling(2).max().to_delayed()
+    df2d = df2.rolling(2).max().to_delayed()
+    (result,) = dask.compute(df2a + df2b + df2c + df2d)
+
+    expected = [
+        dask.compute(df2a)[0][0],
+        dask.compute(df2b)[0][0],
+        dask.compute(df2c)[0][0],
+        dask.compute(df2d)[0][0],
+    ]
+    for a, b in zip(result, expected):
+        assert_eq(a, b)
+
+
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
