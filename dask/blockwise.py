@@ -157,6 +157,7 @@ class Blockwise(Mapping):
     new_axes: Dict
         New index dimensions that may have been created, and their extent
 
+
     See Also
     --------
     dask.blockwise.blockwise
@@ -182,6 +183,9 @@ class Blockwise(Mapping):
         self.numblocks = numblocks
         self.concatenate = concatenate
         self.new_axes = new_axes or {}
+
+    def __repr__(self):
+        return "Blockwise<{} -> {}>".format(self.indices, self.output)
 
     @property
     def _dict(self):
