@@ -2224,15 +2224,15 @@ Dask Name: {name}, {task} tasks""".format(
         )
 
     @derived_from(pd.DataFrame)
-    def astype(self, dtype):
+    def astype(self, dtype, errors="raise"):
         # XXX: Pandas will segfault for empty dataframes when setting
         # categorical dtypes. This operation isn't allowed currently anyway. We
         # get the metadata with a non-empty frame to throw the error instead of
         # segfaulting.
         if is_dataframe_like(self._meta) and is_categorical_dtype(dtype):
-            meta = self._meta_nonempty.astype(dtype)
+            meta = self._meta_nonempty.astype(dtype, errors=errors)
         else:
-            meta = self._meta.astype(dtype)
+            meta = self._meta.astype(dtype, errors=errors)
         if hasattr(dtype, "items"):
             set_unknown = [
                 k
@@ -2243,7 +2243,7 @@ Dask Name: {name}, {task} tasks""".format(
         elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
-            M.astype, dtype=dtype, meta=meta, enforce_metadata=False
+            M.astype, dtype=dtype, meta=meta, enforce_metadata=False, errors=errors
         )
 
     @derived_from(pd.Series)

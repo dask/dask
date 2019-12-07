@@ -2926,6 +2926,23 @@ def test_astype():
     assert_eq(a.x.astype(float), df.x.astype(float))
 
 
+def test_astype_errors():
+    df = pd.DataFrame(
+        {"x": [1, 2, 3, "invalid_string"], "y": [10, 20, 30, 40]},
+        index=[10, 20, 30, 40],
+    )
+    a = dd.from_pandas(df, 2)
+
+    msg = "could not convert string to float: 'invalid_string'"
+    with pytest.raises(ValueError, match=msg):
+        assert_eq(a.astype(float), df.astype(float))
+    with pytest.raises(ValueError, match=msg):
+        assert_eq(a.x.astype(float), df.x.astype(float))
+
+    assert_eq(a.astype(str, errors="ignore"), df.astype(str, errors="ignore"))
+    assert_eq(a.x.astype(str, errors="ignore"), df.x.astype(str, errors="ignore"))
+
+
 def test_astype_categoricals():
     df = pd.DataFrame(
         {
