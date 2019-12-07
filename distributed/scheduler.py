@@ -1304,7 +1304,7 @@ class Scheduler(ServerNode):
         for comm in self.client_comms.values():
             comm.abort()
 
-        self.rpc.close()
+        await self.rpc.close()
 
         self.status = "closed"
         self.stop()

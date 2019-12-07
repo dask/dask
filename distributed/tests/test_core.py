@@ -562,7 +562,7 @@ async def test_connection_pool():
         await asyncio.sleep(0.01)
         assert time() < start + 2
 
-    rpc.close()
+    await rpc.close()
 
 
 @pytest.mark.asyncio
@@ -612,7 +612,7 @@ async def test_connection_pool_tls():
     await asyncio.gather(*[rpc(s.address).ping() for s in servers])
     assert rpc.active == 0
 
-    rpc.close()
+    await rpc.close()
 
 
 @pytest.mark.asyncio
@@ -651,7 +651,7 @@ async def test_connection_pool_remove():
     rpc.remove(serv.address)
     rpc.reuse(serv.address, comm)
 
-    rpc.close()
+    await rpc.close()
 
 
 @pytest.mark.asyncio

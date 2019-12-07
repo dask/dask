@@ -1102,7 +1102,7 @@ class Worker(ServerNode):
             self.actor_executor.shutdown(wait=executor_wait, timeout=timeout)
 
             self.stop()
-            self.rpc.close()
+            await self.rpc.close()
 
             self.status = "closed"
             await ServerNode.close(self)

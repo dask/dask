@@ -1278,7 +1278,7 @@ class Client(Node):
             if self._start_arg is None:
                 with ignoring(AttributeError):
                     await self.cluster.close()
-            self.rpc.close()
+            await self.rpc.close()
             self.status = "closed"
             if _get_global_client() is self:
                 _set_global_client(None)

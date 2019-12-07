@@ -959,18 +959,17 @@ class ConnectionPool(object):
                 IOLoop.current().add_callback(comm.close)
                 self.semaphore.release()
 
-    def close(self):
+    async def close(self):
         """
-        Close all communications abruptly.
+        Close all communications
         """
-        for comms in self.available.values():
-            for comm in comms:
-                comm.abort()
+        for d in [self.available, self.occupied]:
+            comms = [comm for comms in d.values() for comm in comms]
+            await asyncio.gather(
+                *[comm.close() for comm in comms], return_exceptions=True
+            )
+            for _ in comms:
                 self.semaphore.release()
-        for comms in self.occupied.values():
-            for comm in comms:
-                self.semaphore.release()
-                comm.abort()
 
         for comm in self._created:
             IOLoop.current().add_callback(comm.abort)

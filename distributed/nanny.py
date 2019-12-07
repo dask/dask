@@ -451,7 +451,7 @@ class Nanny(ServerNode):
         except Exception:
             pass
         self.process = None
-        self.rpc.close()
+        await self.rpc.close()
         self.status = "closed"
         if comm:
             await comm.write("OK")
