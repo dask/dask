@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import timedelta
 import json
 import operator
+import re
 import sys
 from time import sleep
 from unittest import mock
@@ -1859,18 +1860,23 @@ async def test_gather_allow_worker_reconnect(c, s, a, b):
 
 @pytest.mark.asyncio
 async def test_multiple_listeners(cleanup):
-    async with Scheduler(port=0, protocol=["inproc", "tcp"]) as s:
-        async with Worker(s.listeners[0].contact_address) as a:
-            async with Worker(s.listeners[1].contact_address) as b:
-                assert a.address.startswith("inproc")
-                assert a.scheduler.address.startswith("inproc")
-                assert b.address.startswith("tcp")
-                assert b.scheduler.address.startswith("tcp")
+    with captured_logger(logging.getLogger("distributed.scheduler")) as log:
+        async with Scheduler(port=0, protocol=["inproc", "tcp"]) as s:
+            async with Worker(s.listeners[0].contact_address) as a:
+                async with Worker(s.listeners[1].contact_address) as b:
+                    assert a.address.startswith("inproc")
+                    assert a.scheduler.address.startswith("inproc")
+                    assert b.address.startswith("tcp")
+                    assert b.scheduler.address.startswith("tcp")
 
-                async with Client(s.address, asynchronous=True) as c:
-                    futures = c.map(inc, range(20))
-                    await wait(futures)
+                    async with Client(s.address, asynchronous=True) as c:
+                        futures = c.map(inc, range(20))
+                        await wait(futures)
 
-                    # Force inter-worker communication both ways
-                    await c.submit(sum, futures, workers=[a.address])
-                    await c.submit(len, futures, workers=[b.address])
+                        # Force inter-worker communication both ways
+                        await c.submit(sum, futures, workers=[a.address])
+                        await c.submit(len, futures, workers=[b.address])
+
+    log = log.getvalue()
+    assert re.search(r"Scheduler at:\s*tcp://", log)
+    assert re.search(r"Scheduler at:\s*inproc://", log)

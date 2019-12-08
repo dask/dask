@@ -1230,7 +1230,8 @@ class Scheduler(ServerNode):
             self.start_services(listen_ip)
 
             self.status = "running"
-            logger.info("  Scheduler at: %25s", self.address)
+            for listener in self.listeners:
+                logger.info("  Scheduler at: %25s", listener.contact_address)
             for k, v in self.services.items():
                 logger.info("%11s at: %25s", k, "%s:%d" % (listen_ip, v.port))
 
