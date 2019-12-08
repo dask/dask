@@ -1,6 +1,7 @@
 """ Dataframe optimizations """
 import operator
 
+from dask.base import tokenize
 from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
@@ -34,15 +35,17 @@ def optimize(dsk, keys, **kwargs):
 
 
 def optimize_read_parquet_getitem(dsk):
-    # find the keys to optimze
+    # find the keys to optimize
     from .io.parquet.core import ParquetSubgraph
 
     read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
 
     layers = dsk.layers.copy()
+    dependencies = dsk.dependencies.copy()
 
     for k in read_parquets:
         columns = set()
+        update_blocks = {}
 
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
@@ -65,28 +68,47 @@ def optimize_read_parquet_getitem(dsk):
                 block_columns = [block_columns]
 
             columns |= set(block_columns)
+            update_blocks[dep] = block
 
         old = layers[k]
 
         if columns and columns < set(old.meta.columns):
             columns = list(columns)
             meta = old.meta[columns]
+            name = "read-parquet-" + tokenize(old.name, columns)
+            assert len(update_blocks)
+
+            for block_key, block in update_blocks.items():
+                # (('read-parquet-old', (.,)), ( ... )) ->
+                # (('read-parquet-new', (.,)), ( ... ))
+                new_indices = ((name, block.indices[0][1]), block.indices[1])
+                numblocks = {name: block.numblocks[old.name]}
+                new_block = Blockwise(
+                    block.output,
+                    block.output_indices,
+                    block.dsk,
+                    new_indices,
+                    numblocks,
+                    block.concatenate,
+                    block.new_axes,
+                )
+                layers[block_key] = new_block
+                dependencies[block_key] = {name}
+            dependencies[name] = dependencies.pop(k)
+
         else:
             # Things like df[df.A == 'a'], where the argument to
             # getitem is not a column name
+            name = old.name
             meta = old.meta
             columns = list(meta.columns)
 
         new = ParquetSubgraph(
-            old.name,
-            old.engine,
-            old.fs,
-            meta,
-            columns,
-            old.index,
-            old.parts,
-            old.kwargs,
+            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
         )
-        layers[k] = new
+        layers[name] = new
+        if name != old.name:
+            del layers[old.name]
 
-    return HighLevelGraph(layers, dsk.dependencies)
+    new_hlg = HighLevelGraph(layers, dependencies)
+    return new_hlg
