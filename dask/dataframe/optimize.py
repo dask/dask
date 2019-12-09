@@ -107,7 +107,7 @@ def optimize_read_parquet_getitem(dsk):
             name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
         )
         layers[name] = new
-        if name != old.name:
+        if name != old.name and old.name in layers:
             del layers[old.name]
 
     new_hlg = HighLevelGraph(layers, dependencies)
