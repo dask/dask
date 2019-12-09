@@ -1,4 +1,4 @@
-numpydoc==0.8
+numpydoc==0.9.1
 sphinx
 dask-sphinx-theme>=1.1.0
 sphinx-click
