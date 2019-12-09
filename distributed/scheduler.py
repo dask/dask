@@ -57,6 +57,7 @@ from .utils import (
     parse_bytes,
     PeriodicCallback,
     shutting_down,
+    empty_context,
     tmpfile,
 )
 from .utils_comm import scatter_to_workers, gather_from_workers, retry_operation
@@ -885,6 +886,7 @@ class Scheduler(ServerNode):
         else:
             self.idle_timeout = None
         self.time_started = time()
+        self._lock = asyncio.Lock()
         self.bandwidth = parse_bytes(dask.config.get("distributed.scheduler.bandwidth"))
         self.bandwidth_workers = defaultdict(float)
         self.bandwidth_types = defaultdict(float)
@@ -2722,118 +2724,124 @@ class Scheduler(ServerNode):
         average expected load.
         """
         with log_errors():
-            if keys:
-                tasks = {self.tasks[k] for k in keys}
-                missing_data = [ts.key for ts in tasks if not ts.who_has]
-                if missing_data:
-                    return {"status": "missing-data", "keys": missing_data}
-            else:
-                tasks = set(self.tasks.values())
+            async with self._lock:
+                if keys:
+                    tasks = {self.tasks[k] for k in keys}
+                    missing_data = [ts.key for ts in tasks if not ts.who_has]
+                    if missing_data:
+                        return {"status": "missing-data", "keys": missing_data}
+                else:
+                    tasks = set(self.tasks.values())
 
-            if workers:
-                workers = {self.workers[w] for w in workers}
-                workers_by_task = {ts: ts.who_has & workers for ts in tasks}
-            else:
-                workers = set(self.workers.values())
-                workers_by_task = {ts: ts.who_has for ts in tasks}
+                if workers:
+                    workers = {self.workers[w] for w in workers}
+                    workers_by_task = {ts: ts.who_has & workers for ts in tasks}
+                else:
+                    workers = set(self.workers.values())
+                    workers_by_task = {ts: ts.who_has for ts in tasks}
 
-            tasks_by_worker = {ws: set() for ws in workers}
+                tasks_by_worker = {ws: set() for ws in workers}
 
-            for k, v in workers_by_task.items():
-                for vv in v:
-                    tasks_by_worker[vv].add(k)
+                for k, v in workers_by_task.items():
+                    for vv in v:
+                        tasks_by_worker[vv].add(k)
 
-            worker_bytes = {
-                ws: sum(ts.get_nbytes() for ts in v)
-                for ws, v in tasks_by_worker.items()
-            }
-
-            avg = sum(worker_bytes.values()) / len(worker_bytes)
-
-            sorted_workers = list(
-                map(first, sorted(worker_bytes.items(), key=second, reverse=True))
-            )
-
-            recipients = iter(reversed(sorted_workers))
-            recipient = next(recipients)
-            msgs = []  # (sender, recipient, key)
-            for sender in sorted_workers[: len(workers) // 2]:
-                sender_keys = {ts: ts.get_nbytes() for ts in tasks_by_worker[sender]}
-                sender_keys = iter(
-                    sorted(sender_keys.items(), key=second, reverse=True)
-                )
-
-                try:
-                    while worker_bytes[sender] > avg:
-                        while (
-                            worker_bytes[recipient] < avg and worker_bytes[sender] > avg
-                        ):
-                            ts, nb = next(sender_keys)
-                            if ts not in tasks_by_worker[recipient]:
-                                tasks_by_worker[recipient].add(ts)
-                                # tasks_by_worker[sender].remove(ts)
-                                msgs.append((sender, recipient, ts))
-                                worker_bytes[sender] -= nb
-                                worker_bytes[recipient] += nb
-                        if worker_bytes[sender] > avg:
-                            recipient = next(recipients)
-                except StopIteration:
-                    break
-
-            to_recipients = defaultdict(lambda: defaultdict(list))
-            to_senders = defaultdict(list)
-            for sender, recipient, ts in msgs:
-                to_recipients[recipient.address][ts.key].append(sender.address)
-                to_senders[sender.address].append(ts.key)
-
-            result = await asyncio.gather(
-                *(
-                    retry_operation(self.rpc(addr=r).gather, who_has=v)
-                    for r, v in to_recipients.items()
-                )
-            )
-            for r, v in to_recipients.items():
-                self.log_event(r, {"action": "rebalance", "who_has": v})
-
-            self.log_event(
-                "all",
-                {
-                    "action": "rebalance",
-                    "total-keys": len(tasks),
-                    "senders": valmap(len, to_senders),
-                    "recipients": valmap(len, to_recipients),
-                    "moved_keys": len(msgs),
-                },
-            )
-
-            if not all(r["status"] == "OK" for r in result):
-                return {
-                    "status": "missing-data",
-                    "keys": sum([r["keys"] for r in result if "keys" in r], []),
+                worker_bytes = {
+                    ws: sum(ts.get_nbytes() for ts in v)
+                    for ws, v in tasks_by_worker.items()
                 }
 
-            for sender, recipient, ts in msgs:
-                assert ts.state == "memory"
-                ts.who_has.add(recipient)
-                recipient.has_what.add(ts)
-                recipient.nbytes += ts.get_nbytes()
-                self.log.append(
-                    ("rebalance", ts.key, time(), sender.address, recipient.address)
+                avg = sum(worker_bytes.values()) / len(worker_bytes)
+
+                sorted_workers = list(
+                    map(first, sorted(worker_bytes.items(), key=second, reverse=True))
                 )
 
-            await asyncio.gather(
-                *(
-                    retry_operation(self.rpc(addr=r).delete_data, keys=v, report=False)
-                    for r, v in to_senders.items()
+                recipients = iter(reversed(sorted_workers))
+                recipient = next(recipients)
+                msgs = []  # (sender, recipient, key)
+                for sender in sorted_workers[: len(workers) // 2]:
+                    sender_keys = {
+                        ts: ts.get_nbytes() for ts in tasks_by_worker[sender]
+                    }
+                    sender_keys = iter(
+                        sorted(sender_keys.items(), key=second, reverse=True)
+                    )
+
+                    try:
+                        while worker_bytes[sender] > avg:
+                            while (
+                                worker_bytes[recipient] < avg
+                                and worker_bytes[sender] > avg
+                            ):
+                                ts, nb = next(sender_keys)
+                                if ts not in tasks_by_worker[recipient]:
+                                    tasks_by_worker[recipient].add(ts)
+                                    # tasks_by_worker[sender].remove(ts)
+                                    msgs.append((sender, recipient, ts))
+                                    worker_bytes[sender] -= nb
+                                    worker_bytes[recipient] += nb
+                            if worker_bytes[sender] > avg:
+                                recipient = next(recipients)
+                    except StopIteration:
+                        break
+
+                to_recipients = defaultdict(lambda: defaultdict(list))
+                to_senders = defaultdict(list)
+                for sender, recipient, ts in msgs:
+                    to_recipients[recipient.address][ts.key].append(sender.address)
+                    to_senders[sender.address].append(ts.key)
+
+                result = await asyncio.gather(
+                    *(
+                        retry_operation(self.rpc(addr=r).gather, who_has=v)
+                        for r, v in to_recipients.items()
+                    )
                 )
-            )
+                for r, v in to_recipients.items():
+                    self.log_event(r, {"action": "rebalance", "who_has": v})
 
-            for sender, recipient, ts in msgs:
-                ts.who_has.remove(sender)
-                sender.has_what.remove(ts)
-                sender.nbytes -= ts.get_nbytes()
+                self.log_event(
+                    "all",
+                    {
+                        "action": "rebalance",
+                        "total-keys": len(tasks),
+                        "senders": valmap(len, to_senders),
+                        "recipients": valmap(len, to_recipients),
+                        "moved_keys": len(msgs),
+                    },
+                )
 
-            return {"status": "OK"}
+                if not all(r["status"] == "OK" for r in result):
+                    return {
+                        "status": "missing-data",
+                        "keys": sum([r["keys"] for r in result if "keys" in r], []),
+                    }
+
+                for sender, recipient, ts in msgs:
+                    assert ts.state == "memory"
+                    ts.who_has.add(recipient)
+                    recipient.has_what.add(ts)
+                    recipient.nbytes += ts.get_nbytes()
+                    self.log.append(
+                        ("rebalance", ts.key, time(), sender.address, recipient.address)
+                    )
+
+                await asyncio.gather(
+                    *(
+                        retry_operation(
+                            self.rpc(addr=r).delete_data, keys=v, report=False
+                        )
+                        for r, v in to_senders.items()
+                    )
+                )
+
+                for sender, recipient, ts in msgs:
+                    ts.who_has.remove(sender)
+                    sender.has_what.remove(ts)
+                    sender.nbytes -= ts.get_nbytes()
+
+                return {"status": "OK"}
 
     async def replicate(
         self,
@@ -2843,6 +2851,7 @@ class Scheduler(ServerNode):
         workers=None,
         branching_factor=2,
         delete=True,
+        lock=True,
     ):
         """ Replicate data throughout cluster
 
@@ -2866,89 +2875,96 @@ class Scheduler(ServerNode):
         Scheduler.rebalance
         """
         assert branching_factor > 0
+        async with self._lock if lock else empty_context:
+            workers = {self.workers[w] for w in self.workers_list(workers)}
+            if n is None:
+                n = len(workers)
+            else:
+                n = min(n, len(workers))
+            if n == 0:
+                raise ValueError("Can not use replicate to delete data")
 
-        workers = {self.workers[w] for w in self.workers_list(workers)}
-        if n is None:
-            n = len(workers)
-        else:
-            n = min(n, len(workers))
-        if n == 0:
-            raise ValueError("Can not use replicate to delete data")
+            tasks = {self.tasks[k] for k in keys}
+            missing_data = [ts.key for ts in tasks if not ts.who_has]
+            if missing_data:
+                return {"status": "missing-data", "keys": missing_data}
 
-        tasks = {self.tasks[k] for k in keys}
-        missing_data = [ts.key for ts in tasks if not ts.who_has]
-        if missing_data:
-            return {"status": "missing-data", "keys": missing_data}
-
-        # Delete extraneous data
-        if delete:
-            del_worker_tasks = defaultdict(set)
-            for ts in tasks:
-                del_candidates = ts.who_has & workers
-                if len(del_candidates) > n:
-                    for ws in random.sample(del_candidates, len(del_candidates) - n):
-                        del_worker_tasks[ws].add(ts)
-
-            await asyncio.gather(
-                *(
-                    retry_operation(
-                        self.rpc(addr=ws.address).delete_data,
-                        keys=[ts.key for ts in tasks],
-                        report=False,
-                    )
-                    for ws, tasks in del_worker_tasks.items()
-                )
-            )
-
-            for ws, tasks in del_worker_tasks.items():
-                ws.has_what -= tasks
+            # Delete extraneous data
+            if delete:
+                del_worker_tasks = defaultdict(set)
                 for ts in tasks:
-                    ts.who_has.remove(ws)
-                    ws.nbytes -= ts.get_nbytes()
-                self.log_event(
-                    ws.address,
-                    {"action": "replicate-remove", "keys": [ts.key for ts in tasks]},
+                    del_candidates = ts.who_has & workers
+                    if len(del_candidates) > n:
+                        for ws in random.sample(
+                            del_candidates, len(del_candidates) - n
+                        ):
+                            del_worker_tasks[ws].add(ts)
+
+                await asyncio.gather(
+                    *(
+                        retry_operation(
+                            self.rpc(addr=ws.address).delete_data,
+                            keys=[ts.key for ts in tasks],
+                            report=False,
+                        )
+                        for ws, tasks in del_worker_tasks.items()
+                    )
                 )
 
-        # Copy not-yet-filled data
-        while tasks:
-            gathers = defaultdict(dict)
-            for ts in list(tasks):
-                n_missing = n - len(ts.who_has & workers)
-                if n_missing <= 0:
-                    # Already replicated enough
-                    tasks.remove(ts)
-                    continue
+                for ws, tasks in del_worker_tasks.items():
+                    ws.has_what -= tasks
+                    for ts in tasks:
+                        ts.who_has.remove(ws)
+                        ws.nbytes -= ts.get_nbytes()
+                    self.log_event(
+                        ws.address,
+                        {
+                            "action": "replicate-remove",
+                            "keys": [ts.key for ts in tasks],
+                        },
+                    )
 
-                count = min(n_missing, branching_factor * len(ts.who_has))
-                assert count > 0
+            # Copy not-yet-filled data
+            while tasks:
+                gathers = defaultdict(dict)
+                for ts in list(tasks):
+                    n_missing = n - len(ts.who_has & workers)
+                    if n_missing <= 0:
+                        # Already replicated enough
+                        tasks.remove(ts)
+                        continue
 
-                for ws in random.sample(workers - ts.who_has, count):
-                    gathers[ws.address][ts.key] = [wws.address for wws in ts.who_has]
+                    count = min(n_missing, branching_factor * len(ts.who_has))
+                    assert count > 0
 
-            results = await asyncio.gather(
-                *(
-                    retry_operation(self.rpc(addr=w).gather, who_has=who_has)
-                    for w, who_has in gathers.items()
+                    for ws in random.sample(workers - ts.who_has, count):
+                        gathers[ws.address][ts.key] = [
+                            wws.address for wws in ts.who_has
+                        ]
+
+                results = await asyncio.gather(
+                    *(
+                        retry_operation(self.rpc(addr=w).gather, who_has=who_has)
+                        for w, who_has in gathers.items()
+                    )
                 )
+                for w, v in zip(gathers, results):
+                    if v["status"] == "OK":
+                        self.add_keys(worker=w, keys=list(gathers[w]))
+                    else:
+                        logger.warning("Communication failed during replication: %s", v)
+
+                    self.log_event(w, {"action": "replicate-add", "keys": gathers[w]})
+
+            self.log_event(
+                "all",
+                {
+                    "action": "replicate",
+                    "workers": list(workers),
+                    "key-count": len(keys),
+                    "branching-factor": branching_factor,
+                },
             )
-            for w, v in zip(gathers, results):
-                if v["status"] == "OK":
-                    self.add_keys(worker=w, keys=list(gathers[w]))
-                else:
-                    logger.warning("Communication failed during replication: %s", v)
-
-                self.log_event(w, {"action": "replicate-add", "keys": gathers[w]})
-
-        self.log_event(
-            "all",
-            {
-                "action": "replicate",
-                "workers": list(workers),
-                "key-count": len(keys),
-                "branching-factor": branching_factor,
-            },
-        )
 
     def workers_to_close(
         self,
@@ -3090,6 +3106,7 @@ class Scheduler(ServerNode):
         remove=True,
         close_workers=False,
         names=None,
+        lock=True,
         **kwargs
     ):
         """ Gracefully retire workers from cluster
@@ -3122,68 +3139,73 @@ class Scheduler(ServerNode):
         Scheduler.workers_to_close
         """
         with log_errors():
-            if names is not None:
-                if names:
-                    logger.info("Retire worker names %s", names)
-                names = set(map(str, names))
-                workers = [
-                    ws.address for ws in self.workers.values() if str(ws.name) in names
-                ]
-            if workers is None:
-                while True:
-                    try:
-                        workers = self.workers_to_close(**kwargs)
-                        if workers:
-                            workers = await self.retire_workers(
-                                workers=workers,
-                                remove=remove,
-                                close_workers=close_workers,
-                            )
-                        return workers
-                    except KeyError:  # keys left during replicate
-                        pass
-            workers = {self.workers[w] for w in workers if w in self.workers}
-            if not workers:
-                return []
-            logger.info("Retire workers %s", workers)
-
-            # Keys orphaned by retiring those workers
-            keys = set.union(*[w.has_what for w in workers])
-            keys = {ts.key for ts in keys if ts.who_has.issubset(workers)}
-
-            other_workers = set(self.workers.values()) - workers
-            if keys:
-                if other_workers:
-                    logger.info("Moving %d keys to other workers", len(keys))
-                    await self.replicate(
-                        keys=keys,
-                        workers=[ws.address for ws in other_workers],
-                        n=1,
-                        delete=False,
-                    )
-                else:
+            async with self._lock if lock else empty_context:
+                if names is not None:
+                    if names:
+                        logger.info("Retire worker names %s", names)
+                    names = set(map(str, names))
+                    workers = [
+                        ws.address
+                        for ws in self.workers.values()
+                        if str(ws.name) in names
+                    ]
+                if workers is None:
+                    while True:
+                        try:
+                            workers = self.workers_to_close(**kwargs)
+                            if workers:
+                                workers = await self.retire_workers(
+                                    workers=workers,
+                                    remove=remove,
+                                    close_workers=close_workers,
+                                    lock=False,
+                                )
+                            return workers
+                        except KeyError:  # keys left during replicate
+                            pass
+                workers = {self.workers[w] for w in workers if w in self.workers}
+                if not workers:
                     return []
+                logger.info("Retire workers %s", workers)
 
-            worker_keys = {ws.address: ws.identity() for ws in workers}
-            if close_workers and worker_keys:
-                await asyncio.gather(
-                    *[self.close_worker(worker=w, safe=True) for w in worker_keys]
+                # Keys orphaned by retiring those workers
+                keys = set.union(*[w.has_what for w in workers])
+                keys = {ts.key for ts in keys if ts.who_has.issubset(workers)}
+
+                other_workers = set(self.workers.values()) - workers
+                if keys:
+                    if other_workers:
+                        logger.info("Moving %d keys to other workers", len(keys))
+                        await self.replicate(
+                            keys=keys,
+                            workers=[ws.address for ws in other_workers],
+                            n=1,
+                            delete=False,
+                            lock=False,
+                        )
+                    else:
+                        return []
+
+                worker_keys = {ws.address: ws.identity() for ws in workers}
+                if close_workers and worker_keys:
+                    await asyncio.gather(
+                        *[self.close_worker(worker=w, safe=True) for w in worker_keys]
+                    )
+                if remove:
+                    for w in worker_keys:
+                        self.remove_worker(address=w, safe=True)
+
+                self.log_event(
+                    "all",
+                    {
+                        "action": "retire-workers",
+                        "workers": worker_keys,
+                        "moved-keys": len(keys),
+                    },
                 )
-            if remove:
-                for w in worker_keys:
-                    self.remove_worker(address=w, safe=True)
+                self.log_event(list(worker_keys), {"action": "retired"})
 
-            self.log_event(
-                "all",
-                {
-                    "action": "retire-workers",
-                    "workers": worker_keys,
-                    "moved-keys": len(keys),
-                },
-            )
-            self.log_event(list(worker_keys), {"action": "retired"})
-
-            return worker_keys
+                return worker_keys
 
     def add_keys(self, comm=None, worker=None, keys=()):
         """
