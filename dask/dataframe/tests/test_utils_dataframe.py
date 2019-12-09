@@ -16,8 +16,6 @@ from dask.dataframe.utils import (
     is_series_like,
     is_index_like,
     PANDAS_GT_0240,
-    assert_eq,
-    drop_by_shallow_copy,
 )
 
 import pytest
@@ -426,12 +424,3 @@ def test_apply_and_enforce_message():
 
     with pytest.raises(ValueError, match=re.escape("Missing: ['D']")):
         apply_and_enforce(_func=func, _meta=meta)
-
-
-@pytest.mark.parametrize("cols", ["A", ["A"], ["A", "B"]])
-def test_drop_by_shallow_copy(cols):
-
-    df = pd.DataFrame(np.random.randn(10, 3), columns=list("ABC"))
-    df2 = drop_by_shallow_copy(df, cols)
-
-    assert_eq(df2, df.drop(columns=cols))
