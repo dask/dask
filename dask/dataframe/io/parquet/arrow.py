@@ -168,12 +168,13 @@ class ArrowEngine(Engine):
                 storage_name_mapping,
                 column_index_names,
             ) = _parse_pandas_metadata(pandas_metadata)
-            categories = categories or []
-            for col in pandas_metadata["columns"]:
-                if (col["pandas_type"] == "categorical") and (
-                    col["name"] not in categories
-                ):
-                    categories.append(col["name"])
+            if categories is None:
+                categories = []
+                for col in pandas_metadata["columns"]:
+                    if (col["pandas_type"] == "categorical") and (
+                        col["name"] not in categories
+                    ):
+                        categories.append(col["name"])
         else:
             index_names = []
             column_names = schema.names
