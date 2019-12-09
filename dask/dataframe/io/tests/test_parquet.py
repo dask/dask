@@ -59,6 +59,11 @@ def check_pyarrow():
         pytest.skip(SKIP_PYARROW_REASON)
 
 
+def check_engine():
+    if SKIP_FASTPARQUET and SKIP_PYARROW:
+        pytest.skip("No parquet engine (fastparquet or pyarrow) found")
+
+
 nrows = 40
 npartitions = 15
 df = pd.DataFrame(
@@ -2115,6 +2120,7 @@ def test_split_row_groups_pyarrow(tmpdir):
 
 
 def test_optimize_getitem_and_nonblockwise(tmpdir):
+    check_engine()
     path = os.path.join(tmpdir, "path.parquet")
     df = pd.DataFrame(
         {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
@@ -2127,6 +2133,7 @@ def test_optimize_getitem_and_nonblockwise(tmpdir):
 
 
 def test_optimize_and_not(tmpdir):
+    check_engine()
     path = os.path.join(tmpdir, "path.parquet")
     df = pd.DataFrame(
         {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
