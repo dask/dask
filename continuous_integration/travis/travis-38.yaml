@@ -11,14 +11,14 @@ dependencies:
   - pytest
   - pytest-xdist
   - moto
-  - fastparquet
+  # - fastparquet
   - h5py
   - pytables
   - zarr
-  - tiledb-py
+  # - tiledb-py
   - fsspec>=0.6.0
   - sqlalchemy
-  - pyarrow>=0.14.0
+  # - pyarrow>=0.14.0
   - coverage
   # other -- IO
   - bcolz
@@ -36,7 +36,7 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  - numba
+  # - numba
   - partd
   - psutil
   - requests
