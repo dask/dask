@@ -117,11 +117,20 @@ def read_parquet(
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
-    filters : list
-        List of filters to apply, like ``[('x', '>', 0), ...]``. This
-         implements row-group (partition) -level filtering only, i.e., to
-        prevent the loading of some chunks of the data, and only if relevant
-        statistics have been included in the metadata.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
+        implements partition-level (hive) filtering only, i.e., to prevent the
+        loading of some row-groups and/or files.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means
+        that the innermost tuple describes a single column predicate. These
+        inner predicates are combined with an AND conjunction into a larger
+        predicate. The outer-most list then combines all of the combined
+        filters with an OR disjunction.
+
+        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        as an AND conjunction. To express OR in predictates, one must use the
+        (preferred) List[List[Tuple]] notation.
     index : string, list, False or None (default)
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
@@ -557,7 +566,19 @@ def apply_filters(parts, statistics, filters):
     statistics: List[dict]
         List of statistics for each part, including min and max values
     filters: Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
-        List of filters to apply, like [[('x', '=', 0), ...], ...]
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
+        implements partition-level (hive) filtering only, i.e., to prevent the
+        loading of some row-groups and/or files.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means
+        that the innermost tuple describes a single column predicate. These
+        inner predicates are combined with an AND conjunction into a larger
+        predicate. The outer-most list then combines all of the combined
+        filters with an OR disjunction.
+
+        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        as an AND conjunction. To express OR in predictates, one must use the
+        (preferred) List[List[Tuple]] notation.
 
     Returns
     -------
