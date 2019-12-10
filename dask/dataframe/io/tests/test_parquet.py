@@ -26,7 +26,6 @@ try:
     import pyarrow as pa
 
     check_pa_divs = pa.__version__ >= LooseVersion("0.9.0")
-    PYARROW_LT_0150 = pa.__version__ < LooseVersion("0.15.0")
 except ImportError:
     check_pa_divs = False
 
@@ -1796,20 +1795,8 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": ["c", "a", "b"]}),
         pd.DataFrame({"x": ["cc", "a", "bbb"]}),
         pd.DataFrame({"x": [b"a", b"b", b"c"]}),
-        pytest.param(
-            pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])}),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652",
-                strict=PYARROW_LT_0150,
-            ),
-        ),
-        pytest.param(
-            pd.DataFrame({"x": pd.Categorical([1, 2, 1])}),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652",
-                strict=PYARROW_LT_0150,
-            ),
-        ),
+        pytest.param(pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])})),
+        pytest.param(pd.DataFrame({"x": pd.Categorical([1, 2, 1])})),
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000000, 2000000, 1000000]))}),  # ms
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
