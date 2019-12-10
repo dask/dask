@@ -26,6 +26,7 @@ try:
     import pyarrow as pa
 
     check_pa_divs = pa.__version__ >= LooseVersion("0.9.0")
+    PYARROW_LT_0150 = pa.__version__ < LooseVersion("0.15.0")
 except ImportError:
     check_pa_divs = False
 
@@ -1798,13 +1799,15 @@ def test_append_cat_fp(tmpdir, engine):
         pytest.param(
             pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])}),
             marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652", strict=False
+                reason="https://issues.apache.org/jira/browse/ARROW-3652",
+                strict=PYARROW_LT_0150,
             ),
         ),
         pytest.param(
             pd.DataFrame({"x": pd.Categorical([1, 2, 1])}),
             marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652", strict=False
+                reason="https://issues.apache.org/jira/browse/ARROW-3652",
+                strict=PYARROW_LT_0150,
             ),
         ),
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000000, 2000000, 1000000]))}),  # ms
