@@ -118,7 +118,7 @@ def get_fileno_limit():
 
 
 @toolz.memoize
-def _get_ip(host, port, family, default):
+def _get_ip(host, port, family):
     # By using a UDP socket, we don't actually try to connect but
     # simply select the local address through which *host* is reachable.
     sock = socket.socket(family, socket.SOCK_DGRAM)
@@ -130,10 +130,10 @@ def _get_ip(host, port, family, default):
         # XXX Should first try getaddrinfo() on socket.gethostname() and getfqdn()
         warnings.warn(
             "Couldn't detect a suitable IP address for "
-            "reaching %r, defaulting to %r: %s" % (host, default, e),
+            "reaching %r, defaulting to hostname: %s" % (host, e),
             RuntimeWarning,
         )
-        return default
+        return socket.gethostname()
     finally:
         sock.close()
 
@@ -145,14 +145,14 @@ def get_ip(host="8.8.8.8", port=80):
     *host* defaults to a well-known Internet host (one of Google's public
     DNS servers).
     """
-    return _get_ip(host, port, family=socket.AF_INET, default="127.0.0.1")
+    return _get_ip(host, port, family=socket.AF_INET)
 
 
 def get_ipv6(host="2001:4860:4860::8888", port=80):
     """
     The same as get_ip(), but for IPv6.
     """
-    return _get_ip(host, port, family=socket.AF_INET6, default="::1")
+    return _get_ip(host, port, family=socket.AF_INET6)
 
 
 def get_ip_interface(ifname):
