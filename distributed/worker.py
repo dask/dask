@@ -828,7 +828,7 @@ class Worker(ServerNode):
                 response = await future
                 _end = time()
                 middle = (_start + _end) / 2
-                self.latency = (_end - start) * 0.05 + self.latency * 0.95
+                self._update_latency(_end - start)
                 self.scheduler_delay = response["time"] - middle
                 self.status = "running"
                 break
@@ -862,6 +862,11 @@ class Worker(ServerNode):
         self.periodic_callbacks["heartbeat"].start()
         self.loop.add_callback(self.handle_scheduler, comm)
 
+    def _update_latency(self, latency):
+        self.latency = latency * 0.05 + self.latency * 0.95
+        if self.digests is not None:
+            self.digests["latency"].add(latency)
+
     async def heartbeat(self):
         if not self.heartbeat_active:
             self.heartbeat_active = True
@@ -876,6 +881,8 @@ class Worker(ServerNode):
                 )
                 end = time()
                 middle = (start + end) / 2
+
+                self._update_latency(end - start)
 
                 if response["status"] == "missing":
                     await self._register_with_scheduler()
