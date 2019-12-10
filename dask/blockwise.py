@@ -647,23 +647,20 @@ def rewrite_blockwise(inputs):
 
             # Bump new inputs up in list
             sub = {}
+            # Map from (id(key), inds or None) -> index in indices. Used to deduplicate indices.
+            index_map = {(id(k), inds): n for n, (k, inds) in enumerate(indices)}
             for i, index in enumerate(new_indices):
-                try:
-                    contains = index in indices
-                except (ValueError, TypeError):
-                    contains = False
-
-                if contains:  # use old inputs if available
-                    sub[blockwise_token(i)] = blockwise_token(indices.index(index))
+                id_key = (id(index[0]), index[1])
+                if id_key in index_map:  # use old inputs if available
+                    sub[blockwise_token(i)] = blockwise_token(index_map[id_key])
                 else:
+                    index_map[id_key] = len(indices)
                     sub[blockwise_token(i)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
             # indices.extend(new_indices)
             dsk.update(new_dsk)
-
-    indices = [(a, tuple(b) if isinstance(b, list) else b) for a, b in indices]
 
     # De-duplicate indices like [(a, ij), (b, i), (a, ij)] -> [(a, ij), (b, i)]
     # Make sure that we map everything else appropriately as we remove inputs

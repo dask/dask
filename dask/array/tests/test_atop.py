@@ -141,6 +141,27 @@ i, j, k = "ijk"
                 [(456, None), (a, "j"), (123, None)],
             ),
         ],
+        # Literals that compare equal (e.g. 0 and False) aren't deduplicated
+        [
+            [
+                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (0, None)]),
+                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (False, None)]),
+            ],
+            (
+                c,
+                "j",
+                {b: (add, _1, _2), c: (add, b, _0)},
+                [(False, None), (a, "j"), (0, None)],
+            ),
+        ],
+        # Literals are deduplicated
+        [
+            [
+                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
+                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (123, None)]),
+            ],
+            (c, "j", {b: (add, _1, _0), c: (add, b, _0)}, [(123, None), (a, "j")]),
+        ],
     ],
 )
 def test_rewrite(inputs, expected):
