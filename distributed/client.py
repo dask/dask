@@ -51,6 +51,7 @@ from .utils_comm import (
     WrappedKey,
     unpack_remotedata,
     pack_data,
+    subs_multiple,
     scatter_to_workers,
     gather_from_workers,
     retry_operation,
@@ -2435,10 +2436,12 @@ class Client(Node):
             futures = {key: Future(key, self, inform=False) for key in keyset}
 
             values = {
-                k for k, v in dsk.items() if isinstance(v, Future) and k not in keyset
+                k: v
+                for k, v in dsk.items()
+                if isinstance(v, Future) and k not in keyset
             }
             if values:
-                dsk = dask.optimization.inline(dsk, keys=values)
+                dsk = subs_multiple(dsk, values)
 
             d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
             extra_futures = set.union(*[v[1] for v in d.values()]) if d else set()

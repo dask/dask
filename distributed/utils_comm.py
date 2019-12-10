@@ -280,6 +280,38 @@ def pack_data(o, d, key_types=object):
         return o
 
 
+def subs_multiple(o, d):
+    """ Perform substitutions on a tasks
+
+    Parameters
+    ----------
+    o:
+        Core data structures containing literals and keys
+    d: dict
+        Mapping of keys to values
+
+    Examples
+    --------
+    >>> dsk = {"a": (sum, ["x", 2])}
+    >>> data = {"x": 1}
+    >>> subs_multiple(dsk, data)  # doctest: +SKIP
+    {'a': (sum, [1, 2])}
+
+    """
+    typ = type(o)
+    if typ is tuple and o and callable(o[0]):  # istask(o)
+        return (o[0],) + tuple(subs_multiple(i, d) for i in o[1:])
+    elif typ is list:
+        return [subs_multiple(i, d) for i in o]
+    elif typ is dict:
+        return {k: subs_multiple(v, d) for (k, v) in o.items()}
+    else:
+        try:
+            return d.get(o, o)
+        except TypeError:
+            return o
+
+
 retry_count = dask.config.get("distributed.comm.retry.count")
 retry_delay_min = parse_timedelta(
     dask.config.get("distributed.comm.retry.delay.min"), default="s"

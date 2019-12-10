@@ -1,7 +1,7 @@
 from distributed.core import ConnectionPool
 from distributed.comm import Comm
 from distributed.utils_test import gen_cluster, loop  # noqa: F401
-from distributed.utils_comm import pack_data, gather_from_workers, retry
+from distributed.utils_comm import pack_data, subs_multiple, gather_from_workers, retry
 
 from unittest import mock
 
@@ -13,6 +13,20 @@ def test_pack_data():
     assert pack_data(("x", "y"), data) == (1, "y")
     assert pack_data({"a": "x", "b": "y"}, data) == {"a": 1, "b": "y"}
     assert pack_data({"a": ["x"], "b": "y"}, data) == {"a": [1], "b": "y"}
+
+
+def test_subs_multiple():
+    data = {"x": 1, "y": 2}
+    assert subs_multiple((sum, [0, "x", "y", "z"]), data) == (sum, [0, 1, 2, "z"])
+    assert subs_multiple((sum, [0, ["x", "y", "z"]]), data) == (sum, [0, [1, 2, "z"]])
+
+    dsk = {"a": (sum, ["x", "y"])}
+    assert subs_multiple(dsk, data) == {"a": (sum, [1, 2])}
+
+    # Tuple key
+    data = {"x": 1, ("y", 0): 2}
+    dsk = {"a": (sum, ["x", ("y", 0)])}
+    assert subs_multiple(dsk, data) == {"a": (sum, [1, 2])}
 
 
 @gen_cluster(client=True)
