@@ -389,7 +389,7 @@ Number of total data elements that depend on key
         key = current_pop()
         parents = dependents[key]
         if len(parents) == 1:
-            parent, = parents
+            (parent,) = parents
             (
                 total_dependents,
                 min_dependencies,
