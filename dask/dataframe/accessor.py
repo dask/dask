@@ -3,7 +3,7 @@ import pandas as pd
 from toolz import partial
 
 from ..utils import derived_from
-from .utils import PANDAS_VERSION
+from .utils import PANDAS_VERSION, is_dataframe_like, is_series_like, is_index_like
 
 
 def maybe_wrap_pandas(obj, x):
@@ -135,21 +135,17 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
-        from .core import DataFrame, Series, Index
+        from .core import Series, Index
 
         if others is None:
             raise NotImplementedError("x.str.cat() with `others == None`")
 
-        is_dataframe_like = (DataFrame, pd.DataFrame)
-        is_series_like = (Series, pd.Series)
-        is_index_like = (Index, pd.Index)
-
-        if isinstance(others, is_series_like) or isinstance(others, is_index_like):
+        if is_series_like(others) or is_index_like(others):
             others = [others]
-        elif isinstance(others, is_dataframe_like):
+        elif is_dataframe_like(others):
             raise TypeError("others must be Series/Index and not dataframe")
         elif not all(
-            isinstance(a, is_series_like) or isinstance(a, is_index_like)
+            is_series_like(a) or is_index_like(a)
             for a in others
         ):
             raise TypeError("others must be Series/Index")
