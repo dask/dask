@@ -176,6 +176,7 @@ def test_avoid_upwards_branching_complex(abcde):
 
     o = order(dsk)
     assert o[(c, 1)] < o[(b, 1)]
+    assert abs(o[(d, 2)] - o[(d, 3)]) == 1
 
 
 def test_deep_bases_win_over_dependents(abcde):
@@ -588,12 +589,7 @@ def test_dont_run_all_dependents_too_early(abcde):
     """ From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372 """
     a, b, c, d, e = abcde
     depth = 10
-    dsk = {
-        (a, 0): 0,
-        (b, 0): 1,
-        (c, 0): 2,
-        (d, 0): (f, (a, 0), (b, 0), (c, 0))
-    }
+    dsk = {(a, 0): 0, (b, 0): 1, (c, 0): 2, (d, 0): (f, (a, 0), (b, 0), (c, 0))}
     for i in range(1, depth):
         dsk[(b, i)] = (f, (b, 0))
         dsk[(c, i)] = (f, (c, 0))
@@ -618,32 +614,26 @@ def test_many_branches_use_ndependencies(abcde):
     ee = e + e
     dsk = {
         (a, 0): 0,
-
         (a, 1): (f, (a, 0)),
         (a, 2): (f, (a, 1)),
-
         (b, 1): (f, (a, 0)),
         (b, 2): (f, (b, 1)),
-
         (c, 1): (f, (a, 0)),  # most short and thin; should go last
-
         (d, 1): (f, (a, 0)),
         (d, 2): (f, (d, 1)),
         (dd, 1): (f, (a, 0)),
         (dd, 2): (f, (dd, 1)),
         (dd, 3): (f, (d, 2), (dd, 2)),
-
         (e, 1): (f, (a, 0)),
         (e, 2): (f, (e, 1)),
         (ee, 1): (f, (a, 0)),
         (ee, 2): (f, (ee, 1)),
         (ee, 3): (f, (e, 2), (ee, 2)),
-
         (a, 3): (f, (a, 2), (b, 2), (c, 1), (dd, 3), (ee, 3)),
     }
     o = order(dsk)
     # run all d's and e's first
     expected = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    actual = sorted(v for(letter, _), v in o.items() if letter in {d, dd, e, ee})
+    actual = sorted(v for (letter, _), v in o.items() if letter in {d, dd, e, ee})
     assert actual == expected
     assert o[(c, 1)] == o[(a, 3)] - 1
