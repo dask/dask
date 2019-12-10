@@ -436,7 +436,7 @@ def ndependencies(dependencies, dependents):
     --------
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> num_dependencies, total_dependencies = ndependencies(dependencies, dependents).items())
+    >>> num_dependencies, total_dependencies = ndependencies(dependencies, dependents).items()
     >>> sorted(total_dependencies.items())
     [('a', 1), ('b', 2), ('c', 3)]
 
