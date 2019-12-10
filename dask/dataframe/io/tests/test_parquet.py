@@ -871,6 +871,10 @@ def test_categories(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, categories=["y"], engine=engine)
 
+    # Shouldn't need to specify categories explicitly
+    ddf3 = dd.read_parquet(fn, engine=engine)
+    assert_eq(ddf3, ddf2)
+
     with pytest.raises(NotImplementedError):
         ddf2.y.cat.categories
     assert set(ddf2.y.compute().cat.categories) == {"a", "b", "c"}
@@ -883,7 +887,7 @@ def test_categories(tmpdir, engine):
             # attempt to load as category that which is not so encoded
             ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, FutureWarning)):
         # attempt to load as category unknown column
         ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
 
@@ -1796,18 +1800,8 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": ["c", "a", "b"]}),
         pd.DataFrame({"x": ["cc", "a", "bbb"]}),
         pd.DataFrame({"x": [b"a", b"b", b"c"]}),
-        pytest.param(
-            pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])}),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652"
-            ),
-        ),
-        pytest.param(
-            pd.DataFrame({"x": pd.Categorical([1, 2, 1])}),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652"
-            ),
-        ),
+        pytest.param(pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])})),
+        pytest.param(pd.DataFrame({"x": pd.Categorical([1, 2, 1])})),
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000000, 2000000, 1000000]))}),  # ms
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
