@@ -269,25 +269,40 @@ class FastParquetEngine(Engine):
             # make statistics conform in layout
             for (i, row_group) in enumerate(pf.row_groups):
                 s = {"num-rows": row_group.num_rows, "columns": []}
-                for col in pf.columns:
+                for i_col, col in enumerate(pf.columns):
                     if col not in skip_cols:
                         d = {"name": col}
+                        cs_min = None
+                        cs_max = None
                         if pf.statistics["min"][col][0] is not None:
                             cs_min = pf.statistics["min"][col][i]
                             cs_max = pf.statistics["max"][col][i]
-                            if None in [cs_min, cs_max] and i == 0:
-                                skip_cols.add(col)
-                                continue
-                            if isinstance(cs_min, np.datetime64):
-                                cs_min = pd.Timestamp(cs_min)
-                                cs_max = pd.Timestamp(cs_max)
-                            d.update(
-                                {
-                                    "min": cs_min,
-                                    "max": cs_max,
-                                    "null_count": pf.statistics["null_count"][col][i],
-                                }
-                            )
+                        elif (
+                            dtypes[col] == "object"
+                            and row_group.columns[i_col].meta_data.statistics
+                        ):
+                            cs_min = row_group.columns[
+                                i_col
+                            ].meta_data.statistics.min_value
+                            cs_max = row_group.columns[
+                                i_col
+                            ].meta_data.statistics.max_value
+                            if isinstance(cs_min, (bytes, bytearray)):
+                                cs_min = cs_min.decode("utf-8")
+                                cs_max = cs_max.decode("utf-8")
+                        if None in [cs_min, cs_max] and i == 0:
+                            skip_cols.add(col)
+                            continue
+                        if isinstance(cs_min, np.datetime64):
+                            cs_min = pd.Timestamp(cs_min)
+                            cs_max = pd.Timestamp(cs_max)
+                        d.update(
+                            {
+                                "min": cs_min,
+                                "max": cs_max,
+                                "null_count": pf.statistics["null_count"][col][i],
+                            }
+                        )
                         s["columns"].append(d)
                 # Need this to filter out partitioned-on categorical columns
                 s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)

@@ -185,7 +185,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     assert_eq(ddf, read_df)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
@@ -196,7 +196,7 @@ def test_simple(tmpdir, write_engine, read_engine):
     assert_eq(ddf, read_df)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
@@ -1093,7 +1093,7 @@ def test_partition_on_string(tmpdir, partition_on):
 
 
 @write_read_engines_xfail
-def test_filters(tmpdir, write_engine, read_engine):
+def test_filters_categorical(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     cats = ["2018-01-01", "2018-01-02", "2018-01-03", "2018-01-04"]
     dftest = pd.DataFrame(
@@ -1110,29 +1110,45 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert len(ddftest_read) == 2
 
 
-def test_filters_pyarrow(tmpdir):
-    check_pyarrow()
+@write_read_engines()
+def test_filters(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
     assert ddf.npartitions == 5
 
-    ddf.to_parquet(tmp_path, engine="pyarrow")
+    ddf.to_parquet(tmp_path, engine=write_engine)
 
-    a = dd.read_parquet(tmp_path, engine="pyarrow", filters=[("x", ">", 4)])
+    a = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", ">", 4)])
     assert a.npartitions == 3
     assert (a.x > 3).all().compute()
 
-    b = dd.read_parquet(tmp_path, engine="pyarrow", filters=[("y", "==", "c")])
+    b = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "==", "c")])
     assert b.npartitions == 1
     assert (b.y == "c").all().compute()
 
     c = dd.read_parquet(
-        tmp_path, engine="pyarrow", filters=[("y", "==", "c"), ("x", ">", 6)]
+        tmp_path, engine=read_engine, filters=[("y", "==", "c"), ("x", ">", 6)]
     )
     assert c.npartitions <= 1
     assert not len(c)
     assert_eq(c, c)
+
+    d = dd.read_parquet(
+        tmp_path,
+        engine=read_engine,
+        filters=[
+            # Select two overlapping ranges
+            [("x", ">", 1), ("x", "<", 6)],
+            [("x", ">", 3), ("x", "<", 8)],
+        ],
+    )
+    assert d.npartitions == 3
+    assert ((d.x > 1) & (d.x < 8)).all().compute()
+
+    e = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "in", (0, 9))])
+    assert e.npartitions == 2
+    assert ((e.x < 2) | (e.x > 7)).all().compute()
 
 
 @write_read_engines()
