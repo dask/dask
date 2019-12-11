@@ -3194,6 +3194,16 @@ def test_setitem_triggering_realign():
     assert len(a) == 12
 
 
+def test_setitem_index_value_no_alignment():
+    df = pd.DataFrame({"A": [1, 2, 3, 4]}, index=["a", "b", "c", "d"])
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf["B"] = ddf.index.str.upper()
+    expected = pd.DataFrame(
+        {"A": [1, 2, 3, 4], "B": ["A", "B", "C", "D"]}, index=["a", "b", "c", "d"]
+    )
+    assert_eq(ddf, expected)
+
+
 def test_inplace_operators():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.0, 2.0, 3.0, 4.0, 5.0]})
     ddf = dd.from_pandas(df, npartitions=2)

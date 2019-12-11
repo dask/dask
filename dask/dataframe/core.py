@@ -3594,6 +3594,12 @@ class DataFrame(_Frame):
             if callable(v):
                 kwargs[k] = v(self)
 
+            if isinstance(v, Index):
+                # TODO: Could probably get a simpler graph by handling these
+                #   directly instead of via to_dask_array / from_dask_array,
+                #   but this is simplest for now.
+                v = v.to_dask_array()
+
             if isinstance(v, Array):
                 from .io import from_dask_array
 
