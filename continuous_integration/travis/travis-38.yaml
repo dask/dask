@@ -54,3 +54,8 @@ dependencies:
       - cityhash
       - mmh3
       - xxhash
+      # There was a bug in tblib on Python 3.8 that was fixed in tblib==1.5.0
+      # (ref https://github.com/ionelmc/python-tblib/issues/46)
+      # Version 1.5.0 is not currently available on conda-forge, so we're installing
+      # from PyPI for now. Remove the tblib line below once tblib>=1.5.0 is on conda-forge.
+      - tblib
