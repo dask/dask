@@ -180,7 +180,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     assert_eq(ddf, read_df)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
@@ -191,7 +191,7 @@ def test_simple(tmpdir, write_engine, read_engine):
     assert_eq(ddf, read_df)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
@@ -1101,7 +1101,7 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
     assert len(ddftest_read) == 2
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_filters(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
