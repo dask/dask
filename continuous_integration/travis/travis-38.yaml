@@ -11,14 +11,16 @@ dependencies:
   - pytest
   - pytest-xdist
   - moto
+  # Fastparquet depends on numba being available for Python 3.8
+  # Uncomment the line below when fastparquet is avaialbe on conda-forge for 3.8
   # - fastparquet
   - h5py
   - pytables
   - zarr
-  # - tiledb-py
+  - tiledb-py
   - fsspec>=0.6.0
   - sqlalchemy
-  # - pyarrow>=0.14.0
+  - pyarrow>=0.14.0
   - coverage
   # other -- IO
   - bcolz
@@ -36,6 +38,8 @@ dependencies:
   - graphviz
   - ipython
   - lz4
+  # Numba is not currently released for Python 3.8. Uncomment the numba line
+  # below when https://github.com/conda-forge/numba-feedstock/pull/38 is resolved
   # - numba
   - partd
   - psutil
