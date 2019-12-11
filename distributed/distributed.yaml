@@ -23,7 +23,9 @@ distributed:
     pickle: True            # Is the scheduler allowed to deserialize arbitrary bytestrings
     preload: []
     preload-argv: []
-    default-task-durations: {}  # How long we expect function names to run ("1h", "1s") (helps for long tasks)
+    default-task-durations:  # How long we expect function names to run ("1h", "1s") (helps for long tasks)
+      rechunk-split: 1us
+      shuffle-split: 1us
     validate: False         # Check scheduler state at every step for debugging
     dashboard:
       status:

@@ -317,12 +317,15 @@ def test_dont_steal_executing_tasks(c, s, a, b):
     assert len(b.data) == 0
 
 
-@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 10)
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 1)] * 10,
+    config={"distributed.scheduler.default-task-durations": {"slowidentity": 0.2}},
+)
 def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
     s.extensions["stealing"]._pc.callback_time = 20
     x = c.submit(mul, b"0", 100000000, workers=a.address)  # 100 MB
     yield wait(x)
-    s.task_duration["slowidentity"] = 0.2
 
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2) for i in range(2)]
 
@@ -336,12 +339,12 @@ def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
     client=True,
     nthreads=[("127.0.0.1", 1)] * 10,
     worker_kwargs={"memory_limit": MEMORY_LIMIT},
+    config={"distributed.scheduler.default-task-durations": {"slowidentity": 0.2}},
 )
 def test_steal_when_more_tasks(c, s, a, *rest):
     s.extensions["stealing"]._pc.callback_time = 20
     x = c.submit(mul, b"0", 50000000, workers=a.address)  # 50 MB
     yield wait(x)
-    s.task_duration["slowidentity"] = 0.2
 
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2) for i in range(20)]
 
@@ -351,7 +354,16 @@ def test_steal_when_more_tasks(c, s, a, *rest):
         assert time() < start + 1
 
 
-@gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 10)
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 1)] * 10,
+    config={
+        "distributed.scheduler.default-task-durations": {
+            "slowidentity": 0.2,
+            "slow2": 1,
+        }
+    },
+)
 def test_steal_more_attractive_tasks(c, s, a, *rest):
     def slow2(x):
         sleep(1)
@@ -360,9 +372,6 @@ def test_steal_more_attractive_tasks(c, s, a, *rest):
     s.extensions["stealing"]._pc.callback_time = 20
     x = c.submit(mul, b"0", 100000000, workers=a.address)  # 100 MB
     yield wait(x)
-
-    s.task_duration["slowidentity"] = 0.2
-    s.task_duration["slow2"] = 1
 
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2) for i in range(10)]
     future = c.submit(slow2, x, priority=-1)
@@ -399,7 +408,6 @@ def assert_balanced(inp, expected, c, s, *workers):
                     ws.nbytes += ts.nbytes - old_nbytes
             else:
                 dat = 123
-            s.task_duration[str(int(t))] = 1
             i = next(counter)
             f = c.submit(
                 func,
@@ -473,7 +481,15 @@ def assert_balanced(inp, expected, c, s, *workers):
 )
 def test_balance(inp, expected):
     test = lambda *args, **kwargs: assert_balanced(inp, expected, *args, **kwargs)
-    test = gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * len(inp))(test)
+    test = gen_cluster(
+        client=True,
+        nthreads=[("127.0.0.1", 1)] * len(inp),
+        config={
+            "distributed.scheduler.default-task-durations": {
+                str(i): 1 for i in range(10)
+            }
+        },
+    )(test)
     test()
 
 
@@ -495,10 +511,12 @@ def test_restart(c, s, a, b):
     assert not any(x for L in steal.stealable.values() for x in L)
 
 
-@gen_cluster(client=True)
+@gen_cluster(
+    client=True,
+    config={"distributed.scheduler.default-task-durations": {"slowadd": 0.001}},
+)
 def test_steal_communication_heavy_tasks(c, s, a, b):
     steal = s.extensions["stealing"]
-    s.task_duration["slowadd"] = 0.001
     x = c.submit(mul, b"0", int(s.bandwidth), workers=a.address)
     y = c.submit(mul, b"1", int(s.bandwidth), workers=b.address)
 

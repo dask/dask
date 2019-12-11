@@ -1262,7 +1262,9 @@ def test_if_intermediates_clear_on_error(c, s, a, b):
     assert not any(ts.who_has for ts in s.tasks.values())
 
 
-@gen_cluster(client=True)
+@gen_cluster(
+    client=True, config={"distributed.scheduler.default-task-durations": {"f": "1ms"}}
+)
 def test_pragmatic_move_small_data_to_large_data(c, s, a, b):
     np = pytest.importorskip("numpy")
     lists = c.map(np.ones, [10000] * 10, pure=False)
@@ -1272,7 +1274,6 @@ def test_pragmatic_move_small_data_to_large_data(c, s, a, b):
     def f(x, y):
         return None
 
-    s.task_duration["f"] = 0.001
     results = c.map(f, lists, [total] * 10)
 
     yield wait([total])
@@ -3102,12 +3103,12 @@ def test_client_replicate_sync(c):
 def test_task_load_adapts_quickly(c, s, a):
     future = c.submit(slowinc, 1, delay=0.2)  # slow
     yield wait(future)
-    assert 0.15 < s.task_duration["slowinc"] < 0.4
+    assert 0.15 < s.task_prefixes["slowinc"].duration_average < 0.4
 
     futures = c.map(slowinc, range(10), delay=0)  # very fast
     yield wait(futures)
 
-    assert 0 < s.task_duration["slowinc"] < 0.1
+    assert 0 < s.task_prefixes["slowinc"].duration_average < 0.1
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 2)
@@ -4013,10 +4014,13 @@ def test_retire_many_workers(c, s, *workers):
         assert 15 < len(keys) < 50
 
 
-@gen_cluster(client=True, nthreads=[("127.0.0.1", 3)] * 2)
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 3)] * 2,
+    config={"distributed.scheduler.default-task-durations": {"f": "10ms"}},
+)
 def test_weight_occupancy_against_data_movement(c, s, a, b):
     s.extensions["stealing"]._pc.callback_time = 1000000
-    s.task_duration["f"] = 0.01
 
     def f(x, y=0, z=0):
         sleep(0.01)
@@ -4033,9 +4037,12 @@ def test_weight_occupancy_against_data_movement(c, s, a, b):
     assert sum(f.key in b.data for f in futures) >= 1
 
 
-@gen_cluster(client=True, nthreads=[("127.0.0.1", 1), ("127.0.0.1", 10)])
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 1), ("127.0.0.1", 10)],
+    config={"distributed.scheduler.default-task-durations": {"f": "10ms"}},
+)
 def test_distribute_tasks_by_nthreads(c, s, a, b):
-    s.task_duration["f"] = 0.01
     s.extensions["stealing"]._pc.callback_time = 1000000
 
     def f(x, y=0):
@@ -4748,7 +4755,6 @@ def test_secede_balances(c, s, a, b):
         yield gen.sleep(0.01)
         assert threading.active_count() < count + 50
 
-    # assert 0.005 < s.task_duration['f'] < 0.1
     assert len(a.log) < 2 * len(b.log)
     assert len(b.log) < 2 * len(a.log)
 

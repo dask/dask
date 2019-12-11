@@ -60,14 +60,13 @@ from distributed.dashboard.utils import (
 from distributed.metrics import time
 from distributed.utils import log_errors, format_time, parse_timedelta
 from distributed.diagnostics.progress_stream import color_of, progress_quads
-from distributed.diagnostics.progress import AllProgress
 from distributed.diagnostics.graph_layout import GraphLayout
 from distributed.diagnostics.task_stream import TaskStreamPlugin
 
 try:
-    from cytoolz.curried import map, concat, groupby, valmap
+    from cytoolz.curried import map, concat, groupby
 except ImportError:
-    from toolz.curried import map, concat, groupby, valmap
+    from toolz.curried import map, concat, groupby
 
 if dask.config.get("distributed.dashboard.export-tool"):
     from distributed.dashboard.export_tool import ExportTool
@@ -1283,11 +1282,6 @@ class TaskProgress(DashboardComponent):
 
     def __init__(self, scheduler, **kwargs):
         self.scheduler = scheduler
-        ps = [p for p in scheduler.plugins if isinstance(p, AllProgress)]
-        if ps:
-            self.plugin = ps[0]
-        else:
-            self.plugin = AllProgress(scheduler)
 
         data = progress_quads(
             dict(all={}, memory={}, erred={}, released={}, processing={})
@@ -1415,9 +1409,26 @@ class TaskProgress(DashboardComponent):
     @without_property_validation
     def update(self):
         with log_errors():
-            state = {"all": valmap(len, self.plugin.all), "nbytes": self.plugin.nbytes}
-            for k in ["memory", "erred", "released", "processing", "waiting"]:
-                state[k] = valmap(len, self.plugin.state[k])
+            state = {
+                "memory": {},
+                "erred": {},
+                "released": {},
+                "processing": {},
+                "waiting": {},
+            }
+
+            for tp in self.scheduler.task_prefixes.values():
+                if any(tp.active_states.values()):
+                    state["memory"][tp.name] = tp.active_states["memory"]
+                    state["erred"][tp.name] = tp.active_states["erred"]
+                    state["released"][tp.name] = tp.active_states["released"]
+                    state["processing"][tp.name] = tp.active_states["processing"]
+                    state["waiting"][tp.name] = tp.active_states["waiting"]
+
+            state["all"] = {
+                k: sum(v[k] for v in state.values()) for k in state["memory"]
+            }
+
             if not state["all"] and not len(self.source.data["all"]):
                 return
 

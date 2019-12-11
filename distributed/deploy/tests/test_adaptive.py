@@ -1,8 +1,8 @@
 from time import sleep
 
+import dask
 import pytest
 from tornado import gen
-from tornado.ioloop import IOLoop
 
 from distributed import Client, wait, Adaptive, LocalCluster, SpecCluster, Worker
 from distributed.utils_test import gen_test, slowinc, clean
@@ -26,21 +26,25 @@ async def test_simultaneous_scale_up_and_down(cleanup):
         def scale_down(self, workers):
             assert False
 
-    async with TestCluster(n_workers=4, processes=False, asynchronous=True) as cluster:
-        async with Client(cluster, asynchronous=True) as c:
-            s = cluster.scheduler
-            s.task_duration["a"] = 4
-            s.task_duration["b"] = 4
-            s.task_duration["c"] = 1
+    with dask.config.set(
+        {"distributed.scheduler.default-task-durations": {"a": 4, "b": 4, "c": 1}}
+    ):
+        async with TestCluster(
+            n_workers=4, processes=False, asynchronous=True
+        ) as cluster:
+            async with Client(cluster, asynchronous=True) as c:
+                s = cluster.scheduler
 
-            future = c.map(slowinc, [1, 1, 1], key=["a-4", "b-4", "c-1"])
+                future = c.map(slowinc, [1, 1, 1], key=["a-4", "b-4", "c-1"])
 
-            while len(s.rprocessing) < 3:
-                await gen.sleep(0.001)
+                while len(s.rprocessing) < 3:
+                    await gen.sleep(0.001)
 
-            ta = cluster.adapt(interval="100 ms", scale_factor=2, Adaptive=TestAdaptive)
+                ta = cluster.adapt(
+                    interval="100 ms", scale_factor=2, Adaptive=TestAdaptive
+                )
 
-            await gen.sleep(0.3)
+                await gen.sleep(0.3)
 
 
 def test_adaptive_local_cluster(loop):
@@ -298,32 +302,25 @@ def test_adapt_down():
 
 
 @gen_test(timeout=30)
-def test_no_more_workers_than_tasks():
-    loop = IOLoop.current()
-    cluster = yield LocalCluster(
-        0,
-        scheduler_port=0,
-        silence_logs=False,
-        processes=False,
-        dashboard_address=None,
-        loop=loop,
-        asynchronous=True,
-    )
-    yield cluster._start()
-    try:
-        adapt = cluster.adapt(minimum=0, maximum=4, interval="10 ms")
-        client = yield Client(cluster, asynchronous=True, loop=loop)
-        cluster.scheduler.task_duration["slowinc"] = 1000
-
-        yield client.submit(slowinc, 1, delay=0.100)
-
-        assert len(cluster.scheduler.workers) <= 1
-    finally:
-        yield client.close()
-        yield cluster.close()
+async def test_no_more_workers_than_tasks():
+    with dask.config.set(
+        {"distributed.scheduler.default-task-durations": {"slowinc": 1000}}
+    ):
+        async with LocalCluster(
+            0,
+            scheduler_port=0,
+            silence_logs=False,
+            processes=False,
+            dashboard_address=None,
+            asynchronous=True,
+        ) as cluster:
+            adapt = cluster.adapt(minimum=0, maximum=4, interval="10 ms")
+            async with Client(cluster, asynchronous=True) as client:
+                await client.submit(slowinc, 1, delay=0.100)
+                assert len(cluster.scheduler.workers) <= 1
 
 
-def test_basic_no_loop():
+def test_basic_no_loop(loop):
     with clean(threads=False):
         try:
             with LocalCluster(
@@ -339,36 +336,31 @@ def test_basic_no_loop():
 
 
 @gen_test(timeout=None)
-def test_target_duration():
+async def test_target_duration():
     """ Ensure that redefining adapt with a lower maximum removes workers """
-    cluster = yield LocalCluster(
-        0,
-        asynchronous=True,
-        processes=False,
-        scheduler_port=0,
-        silence_logs=False,
-        dashboard_address=None,
-    )
-    client = yield Client(cluster, asynchronous=True)
-    adapt = cluster.adapt(interval="20ms", minimum=2, target_duration="5s")
+    with dask.config.set(
+        {"distributed.scheduler.default-task-durations": {"slowinc": 1}}
+    ):
+        async with LocalCluster(
+            0,
+            asynchronous=True,
+            processes=False,
+            scheduler_port=0,
+            silence_logs=False,
+            dashboard_address=None,
+        ) as cluster:
+            adapt = cluster.adapt(interval="20ms", minimum=2, target_duration="5s")
+            async with Client(cluster, asynchronous=True) as client:
+                while len(cluster.scheduler.workers) < 2:
+                    await gen.sleep(0.01)
 
-    cluster.scheduler.task_duration["slowinc"] = 1
+                futures = client.map(slowinc, range(100), delay=0.3)
 
-    try:
-        while len(cluster.scheduler.workers) < 2:
-            yield gen.sleep(0.01)
+                while len(adapt.log) < 2:
+                    await gen.sleep(0.01)
 
-        futures = client.map(slowinc, range(100), delay=0.3)
-
-        while len(adapt.log) < 2:
-            yield gen.sleep(0.01)
-
-        assert adapt.log[0][1] == {"status": "up", "n": 2}
-        assert adapt.log[1][1] == {"status": "up", "n": 20}
-
-    finally:
-        yield client.close()
-        yield cluster.close()
+                assert adapt.log[0][1] == {"status": "up", "n": 2}
+                assert adapt.log[1][1] == {"status": "up", "n": 20}
 
 
 @pytest.mark.asyncio

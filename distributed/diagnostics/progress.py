@@ -246,7 +246,7 @@ class AllProgress(SchedulerPlugin):
 
         for ts in self.scheduler.tasks.values():
             key = ts.key
-            prefix = ts.prefix
+            prefix = ts.prefix.name
             self.all[prefix].add(key)
             self.state[ts.state][prefix].add(key)
             if ts.nbytes is not None:
@@ -256,7 +256,7 @@ class AllProgress(SchedulerPlugin):
 
     def transition(self, key, start, finish, *args, **kwargs):
         ts = self.scheduler.tasks[key]
-        prefix = ts.prefix
+        prefix = ts.prefix.name
         self.all[prefix].add(key)
         try:
             self.state[start][prefix].remove(key)
