@@ -781,6 +781,7 @@ def assert_eq(
     check_dtypes=True,
     check_divisions=True,
     check_index=True,
+    check_sane_keynames=True,
     **kwargs
 ):
     if check_divisions:
@@ -790,8 +791,9 @@ def assert_eq(
             at = type(np.asarray(a.divisions).tolist()[0])  # numpy to python
             bt = type(np.asarray(b.divisions).tolist()[0])  # scalar conversion
             assert at == bt, (at, bt)
-    assert_sane_keynames(a)
-    assert_sane_keynames(b)
+    if check_sane_keynames:
+        assert_sane_keynames(a, limit=check_sane_keynames)
+        assert_sane_keynames(b, limit=check_sane_keynames)
     a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
     b = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes)
     if not check_index:
@@ -861,14 +863,16 @@ def assert_divisions(ddf):
         assert index(results[-1]).max() <= ddf.divisions[-1]
 
 
-def assert_sane_keynames(ddf):
+def assert_sane_keynames(ddf, limit=100):
     if not hasattr(ddf, "dask"):
         return
+    if limit is True:
+        limit = 100
     for k in ddf.dask.keys():
         while isinstance(k, tuple):
             k = k[0]
         assert isinstance(k, (str, bytes))
-        assert len(k) < 100
+        assert len(k) < limit
         assert " " not in k
         assert k.split("-")[0].isidentifier()
 

@@ -1630,10 +1630,10 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         expected = expected.astype(float)
 
     result = call(ddf.groupby(["idx", "a"]), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_sane_keynames=102)
 
     result = call(ddf_no_divs.groupby(["idx", "a"]), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_sane_keynames=102)
 
     # apply-combine-apply aggregation functions
     aca_agg = {"sum", "mean", "var", "size", "std", "count", "first", "last", "prod"}
@@ -1651,10 +1651,10 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         expected = expected.astype(float)
 
     result = call(ddf.groupby(["a", "idx"]), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_sane_keynames=102)
 
     result = call(ddf_no_divs.groupby(["a", "idx"]), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_sane_keynames=102)
 
     # Test aggregate strings
     if agg_func in aca_agg:
@@ -1669,10 +1669,10 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         expected = expected.astype(float)
 
     result = call(ddf.groupby("idx"), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_sane_keynames=102)
 
     result = call(ddf_no_divs.groupby("idx"), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, check_sane_keynames=102)
 
     # Test aggregate strings
     if agg_func in aca_agg:
