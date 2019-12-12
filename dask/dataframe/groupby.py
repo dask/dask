@@ -1123,7 +1123,12 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(index_meta, group_keys=self.group_keys, **self.dropna)
+        grouped = sample.groupby(
+            index_meta,
+            group_keys=self.group_keys,
+            **self.dropna,
+            observed=self.observed
+        )
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(
