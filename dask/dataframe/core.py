@@ -3598,7 +3598,6 @@ class DataFrame(_Frame):
                 # TODO: Could probably get a simpler graph by handling these
                 #   directly instead of via to_dask_array / from_dask_array,
                 #   but this is simplest for now.
-                # breakpoint()
                 v = v.to_dask_array()
 
             if isinstance(v, Array):
