@@ -709,10 +709,11 @@ class Worker(ServerNode):
 
     def __repr__(self):
         return (
-            "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>"
+            "<%s: %r, %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>"
             % (
                 self.__class__.__name__,
                 self.address,
+                self.name,
                 self.status,
                 len(self.data),
                 len(self.executing),

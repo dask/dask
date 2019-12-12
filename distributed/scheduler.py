@@ -292,14 +292,12 @@ class WorkerState(object):
         return ws
 
     def __repr__(self):
-        return "<Worker %r, memory: %d, processing: %d>" % (
+        return "<Worker %r, name: %s, memory: %d, processing: %d>" % (
             self.address,
+            self.name,
             len(self.has_what),
             len(self.processing),
         )
-
-    def __str__(self):
-        return self.address
 
     def identity(self):
         return {
@@ -1616,7 +1614,7 @@ class Scheduler(ServerNode):
 
             ws = self.workers.get(address)
             if ws is not None:
-                raise ValueError("Worker already exists %s" % address)
+                raise ValueError("Worker already exists %s" % ws)
 
             self.workers[address] = ws = WorkerState(
                 address=address,
@@ -1699,7 +1697,7 @@ class Scheduler(ServerNode):
 
             self.log_event(address, {"action": "add-worker"})
             self.log_event("all", {"action": "add-worker", "worker": address})
-            logger.info("Register %s", str(address))
+            logger.info("Register worker %s", ws)
 
             if comm:
                 await comm.write(
@@ -2120,7 +2118,7 @@ class Scheduler(ServerNode):
                     "processing-tasks": dict(ws.processing),
                 },
             )
-            logger.info("Remove worker %s", address)
+            logger.info("Remove worker %s", ws)
             if close:
                 with ignoring(AttributeError, CommClosedError):
                     self.stream_comms[address].send({"op": "close", "report": False})
@@ -2191,7 +2189,7 @@ class Scheduler(ServerNode):
                 dask.config.get("distributed.scheduler.events-cleanup-delay")
             )
             self.loop.call_later(cleanup_delay, remove_worker_from_events)
-            logger.debug("Removed worker %s", address)
+            logger.debug("Removed worker %s", ws)
 
         return "OK"
 

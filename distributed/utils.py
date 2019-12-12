@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 import functools
 from hashlib import md5
+import html
 import inspect
 import json
 import logging
@@ -1284,7 +1285,9 @@ class Log(str):
     """ A container for logs """
 
     def _repr_html_(self):
-        return "<pre><code>\n{log}\n</code></pre>".format(log=self.rstrip())
+        return "<pre><code>\n{log}\n</code></pre>".format(
+            log=html.escape(self.rstrip())
+        )
 
 
 class Logs(dict):
