@@ -397,7 +397,7 @@ def from_dask_array(x, columns=None, index=None):
         indices to match.
 
     Examples
-    -------
+    --------
     >>> import dask.array as da
     >>> import dask.dataframe as dd
     >>> x = da.ones((4, 2), chunks=(2, 2))
