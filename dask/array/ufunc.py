@@ -21,7 +21,7 @@ def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
     return x.__array_wrap__(numpy_ufunc(x, *args, **kwargs))
 
 
-def wrap_elemwise(numpy_ufunc, array_wrap=False):
+def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
     """ Wrap up numpy function into dask.array """
 
     def wrapped(*args, **kwargs):
@@ -41,7 +41,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
 
     # functools.wraps cannot wrap ufunc in Python 2.x
     wrapped.__name__ = numpy_ufunc.__name__
-    return derived_from(np)(wrapped)
+    return derived_from(source)(wrapped)
 
 
 class da_frompyfunc(object):
@@ -86,7 +86,6 @@ def frompyfunc(func, nin, nout):
     return ufunc(da_frompyfunc(func, nin, nout))
 
 
-@derived_from(np)
 class ufunc(object):
     _forward_attrs = {
         "nin",
@@ -106,6 +105,8 @@ class ufunc(object):
             )
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
+        if isinstance(ufunc, np.ufunc):
+            derived_from(np)(self)
 
     def __getattr__(self, key):
         if key in self._forward_attrs:
