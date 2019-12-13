@@ -156,17 +156,17 @@ def task_stream_append(lists, msg, workers):
     name = key_split(key)
     startstops = msg.get("startstops", [])
 
-    for action, start, stop in startstops:
-        color = colors[action]
+    for startstop in startstops:
+        color = colors[startstop["action"]]
         if type(color) is not str:
             color = color(msg)
 
-        lists["start"].append((start + stop) / 2 * 1000)
-        lists["duration"].append(1000 * (stop - start))
+        lists["start"].append((startstop["start"] + startstop["stop"]) / 2 * 1000)
+        lists["duration"].append(1000 * (startstop["stop"] - startstop["start"]))
         lists["key"].append(key)
-        lists["name"].append(prefix[action] + name)
+        lists["name"].append(prefix[startstop["action"]] + name)
         lists["color"].append(color)
-        lists["alpha"].append(alphas[action])
+        lists["alpha"].append(alphas[startstop["action"]])
         lists["worker"].append(msg["worker"])
 
         worker_thread = "%s-%d" % (msg["worker"], msg["thread"])

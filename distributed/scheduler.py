@@ -4031,7 +4031,11 @@ class Scheduler(ServerNode):
                 return {}
 
             if startstops:
-                L = [(b, c) for a, b, c in startstops if a == "compute"]
+                L = [
+                    (startstop["start"], startstop["stop"])
+                    for startstop in startstops
+                    if startstop["action"] == "compute"
+                ]
                 if L:
                     compute_start, compute_stop = L[0]
                 else:  # This is very rare

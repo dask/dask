@@ -668,7 +668,7 @@ def test_multiple_transfers(c, s, w1, w2, w3):
     yield wait(z)
 
     r = w3.startstops[z.key]
-    transfers = [t for t in r if t[0] == "transfer"]
+    transfers = [t for t in r if t["action"] == "transfer"]
     assert len(transfers) == 2
 
 

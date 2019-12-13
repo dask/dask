@@ -215,7 +215,7 @@ class Worker(ServerNode):
         The exception caused by running a task if it erred
     * **tracebacks**: ``{key: traceback}``
         The exception caused by running a task if it erred
-    * **startstops**: ``{key: [(str, float, float)]}``
+    * **startstops**: ``{key: [{startstop}]}``
         Log of transfer, load, and compute times for a task
 
     * **priorities**: ``{key: tuple}``
@@ -1866,7 +1866,9 @@ class Worker(ServerNode):
             self.data[key] = value
             stop = time()
             if stop - start > 0.020:
-                self.startstops[key].append(("disk-write", start, stop))
+                self.startstops[key].append(
+                    {"action": "disk-write", "start": start, "stop": stop}
+                )
 
         if key not in self.nbytes:
             self.nbytes[key] = sizeof(value)
@@ -1933,11 +1935,12 @@ class Worker(ServerNode):
 
                 if cause:
                     self.startstops[cause].append(
-                        (
-                            "transfer",
-                            start + self.scheduler_delay,
-                            stop + self.scheduler_delay,
-                        )
+                        {
+                            "action": "transfer",
+                            "start": start + self.scheduler_delay,
+                            "stop": stop + self.scheduler_delay,
+                            "source": worker,
+                        }
                     )
 
                 total_bytes = sum(self.nbytes.get(dep, 0) for dep in response["data"])
@@ -2383,7 +2386,9 @@ class Worker(ServerNode):
             stop = time()
 
             if stop - start > 0.010:
-                self.startstops[key].append(("deserialize", start, stop))
+                self.startstops[key].append(
+                    {"action": "deserialize", "start": start, "stop": stop}
+                )
             return function, args, kwargs
         except Exception as e:
             logger.warning("Could not deserialize task", exc_info=True)
@@ -2456,7 +2461,9 @@ class Worker(ServerNode):
             kwargs2 = pack_data(kwargs, data, key_types=(bytes, str))
             stop = time()
             if stop - start > 0.005:
-                self.startstops[key].append(("disk-read", start, stop))
+                self.startstops[key].append(
+                    {"action": "disk-read", "start": start, "stop": stop}
+                )
                 if self.digests is not None:
                     self.digests["disk-load-duration"].add(stop - start)
 
@@ -2487,7 +2494,9 @@ class Worker(ServerNode):
 
             result["key"] = key
             value = result.pop("result", None)
-            self.startstops[key].append(("compute", result["start"], result["stop"]))
+            self.startstops[key].append(
+                {"action": "compute", "start": result["start"], "stop": result["stop"]}
+            )
             self.threads[key] = result["thread"]
 
             if result["op"] == "task-finished":
