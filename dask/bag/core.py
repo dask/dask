@@ -665,10 +665,10 @@ class Bag(DaskMethodsMixin):
         --------
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.random_sample(0.5, 42))
-        [1, 3]
-        >>> list(b.random_sample(0.5, 42))
-        [1, 3]
+        >>> list(b.random_sample(0.5, 43))
+        [0, 2]
+        >>> list(b.random_sample(0.5, 43))
+        [0, 2]
         """
         if not 0 <= prob <= 1:
             raise ValueError("prob must be a number in the interval [0, 1]")
@@ -2491,9 +2491,7 @@ def random_state_data_python(n, random_state=None):
         random_state = Random(random_state)
 
     maxuint32 = 1 << 32
-    return [
-        tuple(random_state.randint(0, maxuint32) for i in range(624)) for i in range(n)
-    ]
+    return [random_state.randint(0, maxuint32) for i in range(n)]
 
 
 def split(seq, n):
