@@ -4,8 +4,12 @@ import logging
 
 import dask
 from dask.utils import format_bytes
-import toolz
-from toolz import merge
+
+try:
+    from cytoolz import merge, merge_with
+except ImportError:
+    from toolz import merge, merge_with
+
 from tornado import escape
 
 try:
@@ -42,6 +46,7 @@ from .worker import counters_doc
 from .proxy import GlobalProxyHandler
 from .utils import RequestHandler, redirect
 from ..utils import log_errors, format_time
+from ..scheduler import ALL_TASK_STATES
 
 
 ns = {
@@ -65,7 +70,7 @@ class Workers(RequestHandler):
                 "workers.html",
                 title="Workers",
                 scheduler=self.server,
-                **toolz.merge(self.server.__dict__, ns, self.extra, rel_path_statics),
+                **merge(self.server.__dict__, ns, self.extra, rel_path_statics),
             )
 
 
@@ -81,7 +86,7 @@ class Worker(RequestHandler):
                 title="Worker: " + worker,
                 scheduler=self.server,
                 Worker=worker,
-                **toolz.merge(self.server.__dict__, ns, self.extra, rel_path_statics),
+                **merge(self.server.__dict__, ns, self.extra, rel_path_statics),
             )
 
 
@@ -97,7 +102,7 @@ class Task(RequestHandler):
                 title="Task: " + task,
                 Task=task,
                 scheduler=self.server,
-                **toolz.merge(self.server.__dict__, ns, self.extra, rel_path_statics),
+                **merge(self.server.__dict__, ns, self.extra, rel_path_statics),
             )
 
 
@@ -109,7 +114,7 @@ class Logs(RequestHandler):
                 "logs.html",
                 title="Logs",
                 logs=logs,
-                **toolz.merge(self.extra, rel_path_statics),
+                **merge(self.extra, rel_path_statics),
             )
 
 
@@ -123,7 +128,7 @@ class WorkerLogs(RequestHandler):
                 "logs.html",
                 title="Logs: " + worker,
                 logs=logs,
-                **toolz.merge(self.extra, rel_path_statics),
+                **merge(self.extra, rel_path_statics),
             )
 
 
@@ -137,7 +142,7 @@ class WorkerCallStacks(RequestHandler):
                 "call-stack.html",
                 title="Call Stacks: " + worker,
                 call_stack=call_stack,
-                **toolz.merge(self.extra, rel_path_statics),
+                **merge(self.extra, rel_path_statics),
             )
 
 
@@ -156,7 +161,7 @@ class TaskCallStack(RequestHandler):
                     "call-stack.html",
                     title="Call Stack: " + key,
                     call_stack=call_stack,
-                    **toolz.merge(self.extra, rel_path_statics),
+                    **merge(self.extra, rel_path_statics),
                 )
 
 
@@ -239,7 +244,7 @@ class _PrometheusCollector(object):
         self.server = server
 
     def collect(self):
-        from prometheus_client.core import GaugeMetricFamily
+        from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily
 
         yield GaugeMetricFamily(
             "dask_scheduler_clients",
@@ -253,40 +258,53 @@ class _PrometheusCollector(object):
             value=self.server.adaptive_target(),
         )
 
-        tasks = GaugeMetricFamily(
+        worker_states = GaugeMetricFamily(
             "dask_scheduler_workers",
             "Number of workers known by scheduler.",
             labels=["state"],
         )
-        tasks.add_metric(["connected"], len(self.server.workers))
-        tasks.add_metric(["saturated"], len(self.server.saturated))
-        tasks.add_metric(["idle"], len(self.server.idle))
-        yield tasks
+        worker_states.add_metric(["connected"], len(self.server.workers))
+        worker_states.add_metric(["saturated"], len(self.server.saturated))
+        worker_states.add_metric(["idle"], len(self.server.idle))
+        yield worker_states
 
         tasks = GaugeMetricFamily(
             "dask_scheduler_tasks",
             "Number of tasks known by scheduler.",
             labels=["state"],
         )
-        tasks.add_metric(["received"], len(self.server.tasks))
-        tasks.add_metric(["unrunnable"], len(self.server.unrunnable))
+
+        task_counter = merge_with(
+            sum, (tp.states for tp in self.server.task_prefixes.values())
+        )
+
+        yield CounterMetricFamily(
+            "dask_scheduler_tasks_forgotten",
+            "Total number of processed tasks no longer in memory and already removed from the scheduler job queue.",
+            value=task_counter.get("forgotten", 0.0),
+        )
+
+        for state in ALL_TASK_STATES:
+            tasks.add_metric([state], task_counter.get(state, 0.0))
         yield tasks
 
 
 class PrometheusHandler(RequestHandler):
-    _initialized = False
+    _collector = None
 
     def __init__(self, *args, **kwargs):
         import prometheus_client
 
         super(PrometheusHandler, self).__init__(*args, **kwargs)
 
-        if PrometheusHandler._initialized:
+        if PrometheusHandler._collector:
+            # Especially during testing, multiple schedulers are started
+            # sequentially in the same python process
+            PrometheusHandler._collector.server = self.server
             return
 
-        prometheus_client.REGISTRY.register(_PrometheusCollector(self.server))
-
-        PrometheusHandler._initialized = True
+        PrometheusHandler._collector = _PrometheusCollector(self.server)
+        prometheus_client.REGISTRY.register(PrometheusHandler._collector)
 
     def get(self):
         import prometheus_client
