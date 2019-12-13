@@ -3291,6 +3291,10 @@ class DataFrame(_Frame):
             return super().__len__()
         else:
             return len(s)
+        
+    @property
+    def empty(self):
+        return len(self) == 0
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
