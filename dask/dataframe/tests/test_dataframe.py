@@ -37,6 +37,12 @@ d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 
 
+def test_dataframe_doc():
+    doc = d.add.__doc__
+    disclaimer = "Some inconsistencies with the Dask version may exist."
+    assert disclaimer in doc
+
+
 def test_Dataframe():
     expected = pd.Series(
         [2, 3, 4, 5, 6, 7, 8, 9, 10], index=[0, 1, 3, 5, 6, 8, 9, 9, 9], name="a"

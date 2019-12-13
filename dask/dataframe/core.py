@@ -40,7 +40,6 @@ from ..utils import (
     OperatorMethodMixin,
     is_arraylike,
     typename,
-    skip_doctest,
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import empty_like_safe, zeros_like_safe
@@ -2932,8 +2931,8 @@ Dask Name: {name}, {task} tasks""".format(
                 op, self, other, meta=meta, axis=axis, fill_value=fill_value
             )
 
-        meth.__doc__ = skip_doctest(op.__doc__)
-        setattr(cls, name, meth)
+        meth.__name__ = name
+        setattr(cls, name, derived_from(pd.Series)(meth))
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -2949,8 +2948,8 @@ Dask Name: {name}, {task} tasks""".format(
                 op = partial(comparison, fill_value=fill_value)
                 return elemwise(op, self, other, axis=axis)
 
-        meth.__doc__ = skip_doctest(comparison.__doc__)
-        setattr(cls, name, meth)
+        meth.__name__ = name
+        setattr(cls, name, derived_from(pd.Series)(meth))
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
@@ -3969,8 +3968,8 @@ class DataFrame(_Frame):
                 enforce_metadata=False,
             )
 
-        meth.__doc__ = skip_doctest(op.__doc__)
-        setattr(cls, name, meth)
+        meth.__name__ = name
+        setattr(cls, name, derived_from(pd.DataFrame)(meth))
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
@@ -3982,8 +3981,8 @@ class DataFrame(_Frame):
             axis = self._validate_axis(axis)
             return elemwise(comparison, self, other, axis=axis)
 
-        meth.__doc__ = skip_doctest(comparison.__doc__)
-        setattr(cls, name, meth)
+        meth.__name__ = name
+        setattr(cls, name, derived_from(pd.DataFrame)(meth))
 
     @insert_meta_param_description(pad=12)
     def apply(
