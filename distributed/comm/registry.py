@@ -60,10 +60,28 @@ backends = {}
 def get_backend(scheme):
     """
     Get the Backend instance for the given *scheme*.
+    It looks for matching scheme in dask's internal cache, and falls-back to
+    package metadata for the group name ``distributed.comm.backends``
     """
+
     backend = backends.get(scheme)
     if backend is None:
-        raise ValueError(
-            "unknown address scheme %r (known schemes: %s)" % (scheme, sorted(backends))
+        import pkg_resources
+
+        backend = next(
+            iter(
+                backend_class_ep.load()()
+                for backend_class_ep in pkg_resources.iter_entry_points(
+                    "distributed.comm.backends", scheme
+                )
+            ),
+            None,
         )
+        if backend is None:
+            raise ValueError(
+                "unknown address scheme %r (known schemes: %s)"
+                % (scheme, sorted(backends))
+            )
+        else:
+            backends[scheme] = backend
     return backend

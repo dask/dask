@@ -97,6 +97,22 @@ Each transport is represented by a URI scheme (such as ``tcp``) and
 backed by a dedicated :class:`Backend` implementation, which provides
 entry points into all transport-specific routines.
 
+Out-of-tree backends can be registered under the group ``distributed.comm.backends``
+in setuptools `entry_points`_. For example, a hypothetical ``dask_udp`` package
+would register its UDP backend class by including the following in its ``setup.py`` file:
+
+.. code-block:: python
+
+    setup(name="dask_udp",
+          entry_points={
+            "distributed.comm.backends": [
+                "udp=dask_udp.backend:UDPBackend",
+            ]
+          },
+          ...
+    )
 
 .. autoclass:: distributed.comm.registry.Backend
    :members:
+
+.. _entry_points: https://packaging.python.org/guides/creating-and-discovering-plugins/#using-package-metadata
