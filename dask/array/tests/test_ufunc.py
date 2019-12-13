@@ -27,7 +27,10 @@ def test_ufunc_meta(name):
     assert ufunc.__name__ == name
     assert disclaimer in ufunc.__doc__
 
-    assert ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "") == getattr(np, name).__doc__
+    assert (
+        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
+        == getattr(np, name).__doc__
+    )
 
 
 def test_ufunc():
