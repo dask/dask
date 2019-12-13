@@ -2,7 +2,6 @@ from operator import getitem
 from functools import partial
 
 import numpy as np
-from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
 from .utils import empty_like_safe, IS_NEP18_ACTIVE
@@ -10,7 +9,6 @@ from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import (
-    skip_doctest,
     funcname,
     derived_from,
     is_dataframe_like,
@@ -21,12 +19,6 @@ from ..utils import (
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
     return x.__array_wrap__(numpy_ufunc(x, *args, **kwargs))
-
-
-@curry
-def copy_docstring(target, source=None):
-    target.__doc__ = skip_doctest(source.__doc__)
-    return target
 
 
 def wrap_elemwise(numpy_ufunc, array_wrap=False):
@@ -49,8 +41,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
 
     # functools.wraps cannot wrap ufunc in Python 2.x
     wrapped.__name__ = numpy_ufunc.__name__
-    wrapped.__doc__ = skip_doctest(numpy_ufunc.__doc__)
-    return wrapped
+    return derived_from(np)(wrapped)
 
 
 class da_frompyfunc(object):
@@ -95,6 +86,7 @@ def frompyfunc(func, nin, nout):
     return ufunc(da_frompyfunc(func, nin, nout))
 
 
+@derived_from(np)
 class ufunc(object):
     _forward_attrs = {
         "nin",
@@ -114,7 +106,6 @@ class ufunc(object):
             )
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
-        copy_docstring(self, ufunc)
 
     def __getattr__(self, key):
         if key in self._forward_attrs:
@@ -142,7 +133,7 @@ class ufunc(object):
         else:
             return self._ufunc(*args, **kwargs)
 
-    @copy_docstring(source=np.ufunc.outer)
+    @derived_from(np.ufunc)
     def outer(self, A, B, **kwargs):
         if self.nin != 2:
             raise ValueError("outer product only supported for binary functions")
@@ -304,7 +295,7 @@ sinc = wrap_elemwise(np.sinc, array_wrap=True)
 nan_to_num = wrap_elemwise(np.nan_to_num, array_wrap=True)
 
 
-@copy_docstring(source=np.angle)
+@derived_from(np)
 def angle(x, deg=0):
     deg = bool(deg)
     if hasattr(x, "_elemwise"):
@@ -312,7 +303,7 @@ def angle(x, deg=0):
     return np.angle(x, deg=deg)
 
 
-@copy_docstring(source=np.frexp)
+@derived_from(np)
 def frexp(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.frexp, x, dtype=object)
@@ -337,7 +328,7 @@ def frexp(x):
     return L, R
 
 
-@copy_docstring(source=np.modf)
+@derived_from(np)
 def modf(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.modf, x, dtype=object)
@@ -362,7 +353,7 @@ def modf(x):
     return L, R
 
 
-@copy_docstring(source=np.divmod)
+@derived_from(np)
 def divmod(x, y):
     res1 = x // y
     res2 = x % y
