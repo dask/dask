@@ -2189,6 +2189,48 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
         )
 
 
+@pytest.mark.parametrize(
+    "grouping,agg",
+    [
+        (
+            lambda df: df.drop(columns="category_2").groupby("category_1"),
+            lambda grp: grp.mean(),
+        ),
+        (
+            lambda df: df.drop(columns="category_2").groupby("category_1"),
+            lambda grp: grp.agg("mean"),
+        ),
+        (lambda df: df.groupby(["category_1", "category_2"]), lambda grp: grp.mean()),
+        pytest.param(
+            lambda df: df.groupby(["category_1", "category_2"]),
+            lambda grp: grp.agg("mean"),
+            marks=pytest.mark.xfail(
+                not dask.dataframe.utils.PANDAS_GT_100,
+                reason=(
+                    "Should work starting from pandas 1.0.0: "
+                    "https://github.com/dask/dask/pull/5423"
+                ),
+            ),
+        ),
+    ],
+)
+def test_groupby_aggregate_categoricals(grouping, agg):
+    pdf = pd.DataFrame(
+        {
+            "category_1": pd.Categorical(list("AABBCC")),
+            "category_2": pd.Categorical(list("ABCABC")),
+            "value": np.random.uniform(size=6),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 2)
+
+    # DataFrameGroupBy
+    assert_eq(agg(grouping(pdf)), agg(grouping(ddf)))
+
+    # SeriesGroupBy
+    assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
+
+
 @pytest.mark.xfail(reason="dropna kwarg not supported in pandas groupby.")
 @pytest.mark.parametrize("dropna", [False, True])
 def test_groupby_dropna_pandas(dropna):

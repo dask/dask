@@ -48,7 +48,6 @@ source_suffix = ".rst"
 
 # The master toctree document.
 master_doc = "index"
-html_extra_path = ["index.html"]
 
 # General information about the project.
 project = u"Dask"
@@ -359,10 +358,9 @@ redirect_template = """\
 """
 
 html_context = {
-    'css_files': [
-        '_static/theme_overrides.css',  # override wide tables in RTD theme
-        ],
-     }
+    "css_files": ["_static/theme_overrides.css"]  # override wide tables in RTD theme
+}
+
 
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":

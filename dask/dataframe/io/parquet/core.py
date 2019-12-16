@@ -8,8 +8,9 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....utils import import_required, natural_sort_key
+from ....utils import import_required, natural_sort_key, parse_bytes
 from collections.abc import Mapping
+from ...methods import concat
 
 
 try:
@@ -44,8 +45,8 @@ class ParquetSubgraph(Mapping):
         self.kwargs = kwargs
 
     def __repr__(self):
-        return "ParquetSubgraph<name='{}', n_parts={}>".format(
-            self.name, len(self.parts)
+        return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.parts), list(self.columns)
         )
 
     def __getitem__(self, key):
@@ -62,16 +63,18 @@ class ParquetSubgraph(Mapping):
             raise KeyError(key)
 
         part = self.parts[i]
+        if not isinstance(part, list):
+            part = [part]
 
         return (
             read_parquet_part,
             self.engine.read_partition,
             self.fs,
             self.meta,
-            part["piece"],
+            [p["piece"] for p in part],
             self.columns,
             self.index,
-            toolz.merge(part["kwargs"], self.kwargs or {}),
+            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
         )
 
     def __len__(self):
@@ -92,6 +95,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=True,
+    chunksize=None,
     **kwargs
 ):
     """
@@ -113,11 +117,20 @@ def read_parquet(
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
-    filters : list
-        List of filters to apply, like ``[('x', '>', 0), ...]``. This
-         implements row-group (partition) -level filtering only, i.e., to
-        prevent the loading of some chunks of the data, and only if relevant
-        statistics have been included in the metadata.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
+        implements partition-level (hive) filtering only, i.e., to prevent the
+        loading of some row-groups and/or files.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means
+        that the innermost tuple describes a single column predicate. These
+        inner predicates are combined with an AND conjunction into a larger
+        predicate. The outer-most list then combines all of the combined
+        filters with an OR disjunction.
+
+        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        as an AND conjunction. To express OR in predictates, one must use the
+        (preferred) List[List[Tuple]] notation.
     index : string, list, False or None (default)
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
@@ -144,6 +157,10 @@ def read_parquet(
         to parquet-file row-groups (when enough row-group metadata is
         available). Otherwise, partitions correspond to distinct files.
         Only the "pyarrow" engine currently supports this argument.
+    chunksize : int, str
+        The target task partition size.  If set, consecutive row-groups
+        from the same file will be aggregated into the same output
+        partition until the aggregate size reaches this value.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -218,116 +235,16 @@ def read_parquet(
     if meta.index.name is not None:
         index = meta.index.name
 
-    ignore_index_column_intersection = False
-    if columns is None:
-        # User didn't specify columns, so ignore any intersection
-        # of auto-detected values with the index (if necessary)
-        ignore_index_column_intersection = True
-        columns = [c for c in meta.columns]
-
-    if not set(columns).issubset(set(meta.columns)):
-        raise ValueError(
-            "The following columns were not found in the dataset %s\n"
-            "The following columns were found %s"
-            % (set(columns) - set(meta.columns), meta.columns)
-        )
-
     # Parse dataset statistics from metadata (if available)
-    index_in_columns = False
-    if statistics:
-        result = list(
-            zip(
-                *[
-                    (part, stats)
-                    for part, stats in zip(parts, statistics)
-                    if stats["num-rows"] > 0
-                ]
-            )
-        )
-        parts, statistics = result or [[], []]
-        if filters:
-            parts, statistics = apply_filters(parts, statistics, filters)
+    parts, divisions, index, index_in_columns = process_statistics(
+        parts, statistics, filters, index, chunksize
+    )
 
-        out = sorted_columns(statistics)
-
-        if index and isinstance(index, str):
-            index = [index]
-        if index and out:
-            # Only one valid column
-            out = [o for o in out if o["name"] in index]
-        if index is not False and len(out) == 1:
-            # Use only sorted column with statistics as the index
-            divisions = out[0]["divisions"]
-            if index is None:
-                index_in_columns = True
-                index = [out[0]["name"]]
-            elif index != [out[0]["name"]]:
-                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
-        elif index is not False and len(out) > 1:
-            if any(o["name"] == "index" for o in out):
-                # Use sorted column named "index" as the index
-                [o] = [o for o in out if o["name"] == "index"]
-                divisions = o["divisions"]
-                if index is None:
-                    index = [o["name"]]
-                    index_in_columns = True
-                elif index != [o["name"]]:
-                    raise ValueError(
-                        "Specified index is invalid.\nindex: {}".format(index)
-                    )
-            else:
-                # Multiple sorted columns found, cannot autodetect the index
-                warnings.warn(
-                    "Multiple sorted columns found %s, cannot\n "
-                    "autodetect index. Will continue without an index.\n"
-                    "To pick an index column, use the index= keyword; to \n"
-                    "silence this warning use index=False."
-                    "" % [o["name"] for o in out],
-                    RuntimeWarning,
-                )
-                index = False
-                divisions = [None] * (len(parts) + 1)
-        else:
-            divisions = [None] * (len(parts) + 1)
-    else:
-        divisions = [None] * (len(parts) + 1)
-
-    if index:
-        if isinstance(index, str):
-            index = [index]
-        if isinstance(columns, str):
-            columns = [columns]
-
-        if ignore_index_column_intersection:
-            columns = [col for col in columns if col not in index]
-        if set(index).intersection(columns):
-            if auto_index_allowed:
-                raise ValueError(
-                    "Specified index and column arguments must not intersect"
-                    " (set index=False or remove the detected index from columns).\n"
-                    "index: {} | column: {}".format(index, columns)
-                )
-            else:
-                raise ValueError(
-                    "Specified index and column arguments must not intersect.\n"
-                    "index: {} | column: {}".format(index, columns)
-                )
-
-        # Leaving index as a column in `meta`, because the index
-        # will be reset below (in case the index was detected after
-        # meta was created)
-        if index_in_columns:
-            meta = meta[columns + index]
-        else:
-            meta = meta[columns]
-
-    else:
-        meta = meta[list(columns)]
-
-    def _merge_kwargs(x, y):
-        z = x.copy()
-        z.update(y)
-        return z
+    # Account for index and columns arguments.
+    # Modify `meta` dataframe accordingly
+    meta, index, columns = set_index_columns(
+        meta, index, columns, index_in_columns, auto_index_allowed
+    )
 
     subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
@@ -347,7 +264,12 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-    df = func(fs, part, columns, index, **kwargs)
+    if isinstance(part, list):
+        dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
+        df = concat(dfs, axis=0)
+    else:
+        df = func(fs, part, columns, index, **kwargs)
+
     if meta.columns.name:
         df.columns.name = meta.columns.name
     columns = columns or []
@@ -643,45 +565,234 @@ def apply_filters(parts, statistics, filters):
         Tokens corresponding to row groups to read in the future
     statistics: List[dict]
         List of statistics for each part, including min and max values
-    filters: List[Tuple[str, str, Any]]
-        List like [('x', '>', 5), ('y', '==', 'Alice')]
+    filters: Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
+        implements partition-level (hive) filtering only, i.e., to prevent the
+        loading of some row-groups and/or files.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means
+        that the innermost tuple describes a single column predicate. These
+        inner predicates are combined with an AND conjunction into a larger
+        predicate. The outer-most list then combines all of the combined
+        filters with an OR disjunction.
+
+        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        as an AND conjunction. To express OR in predictates, one must use the
+        (preferred) List[List[Tuple]] notation.
 
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset
     """
-    for column, operator, value in filters:
-        out_parts = []
-        out_statistics = []
-        for part, stats in zip(parts, statistics):
-            if "filter" in stats and stats["filter"]:
-                continue  # Filtered by engine
-            try:
-                c = toolz.groupby("name", stats["columns"])[column][0]
-                min = c["min"]
-                max = c["max"]
-            except KeyError:
-                out_parts.append(part)
-                out_statistics.append(stats)
-            else:
-                if (
-                    operator == "=="
-                    and min <= value <= max
-                    or operator == "<"
-                    and min < value
-                    or operator == "<="
-                    and min <= value
-                    or operator == ">"
-                    and max > value
-                    or operator == ">="
-                    and max >= value
-                ):
+
+    def apply_conjunction(parts, statistics, conjunction):
+        for column, operator, value in conjunction:
+            out_parts = []
+            out_statistics = []
+            for part, stats in zip(parts, statistics):
+                if "filter" in stats and stats["filter"]:
+                    continue  # Filtered by engine
+                try:
+                    c = toolz.groupby("name", stats["columns"])[column][0]
+                    min = c["min"]
+                    max = c["max"]
+                except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
+                else:
+                    if (
+                        operator == "=="
+                        and min <= value <= max
+                        or operator == "<"
+                        and min < value
+                        or operator == "<="
+                        and min <= value
+                        or operator == ">"
+                        and max > value
+                        or operator == ">="
+                        and max >= value
+                        or operator == "in"
+                        and any(min <= item <= max for item in value)
+                    ):
+                        out_parts.append(part)
+                        out_statistics.append(stats)
 
-        parts, statistics = out_parts, out_statistics
+            parts, statistics = out_parts, out_statistics
 
-    return parts, statistics
+        return parts, statistics
+
+    conjunction, *disjunction = filters if isinstance(filters[0], list) else [filters]
+
+    out_parts, out_statistics = apply_conjunction(parts, statistics, conjunction)
+    for conjunction in disjunction:
+        for part, stats in zip(*apply_conjunction(parts, statistics, conjunction)):
+            if part not in out_parts:
+                out_parts.append(part)
+                out_statistics.append(stats)
+
+    return out_parts, out_statistics
+
+
+def process_statistics(parts, statistics, filters, index, chunksize):
+    """Process row-group column statistics in metadata
+    Used in read_parquet.
+    """
+    index_in_columns = False
+    if statistics:
+        result = list(
+            zip(
+                *[
+                    (part, stats)
+                    for part, stats in zip(parts, statistics)
+                    if stats["num-rows"] > 0
+                ]
+            )
+        )
+        parts, statistics = result or [[], []]
+        if filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
+
+        # Aggregate parts/statistics if we are splitting by row-group
+        if chunksize:
+            parts, statistics = aggregate_row_groups(parts, statistics, chunksize)
+
+        out = sorted_columns(statistics)
+
+        if index and isinstance(index, str):
+            index = [index]
+        if index and out:
+            # Only one valid column
+            out = [o for o in out if o["name"] in index]
+        if index is not False and len(out) == 1:
+            # Use only sorted column with statistics as the index
+            divisions = out[0]["divisions"]
+            if index is None:
+                index_in_columns = True
+                index = [out[0]["name"]]
+            elif index != [out[0]["name"]]:
+                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
+        elif index is not False and len(out) > 1:
+            if any(o["name"] == "index" for o in out):
+                # Use sorted column named "index" as the index
+                [o] = [o for o in out if o["name"] == "index"]
+                divisions = o["divisions"]
+                if index is None:
+                    index = [o["name"]]
+                    index_in_columns = True
+                elif index != [o["name"]]:
+                    raise ValueError(
+                        "Specified index is invalid.\nindex: {}".format(index)
+                    )
+            else:
+                # Multiple sorted columns found, cannot autodetect the index
+                warnings.warn(
+                    "Multiple sorted columns found %s, cannot\n "
+                    "autodetect index. Will continue without an index.\n"
+                    "To pick an index column, use the index= keyword; to \n"
+                    "silence this warning use index=False."
+                    "" % [o["name"] for o in out],
+                    RuntimeWarning,
+                )
+                index = False
+                divisions = [None] * (len(parts) + 1)
+        else:
+            divisions = [None] * (len(parts) + 1)
+    else:
+        divisions = [None] * (len(parts) + 1)
+
+    return parts, divisions, index, index_in_columns
+
+
+def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
+    """Handle index/column arguments, and modify `meta`
+    Used in read_parquet.
+    """
+    ignore_index_column_intersection = False
+    if columns is None:
+        # User didn't specify columns, so ignore any intersection
+        # of auto-detected values with the index (if necessary)
+        ignore_index_column_intersection = True
+        columns = [c for c in meta.columns]
+
+    if not set(columns).issubset(set(meta.columns)):
+        raise ValueError(
+            "The following columns were not found in the dataset %s\n"
+            "The following columns were found %s"
+            % (set(columns) - set(meta.columns), meta.columns)
+        )
+
+    if index:
+        if isinstance(index, str):
+            index = [index]
+        if isinstance(columns, str):
+            columns = [columns]
+
+        if ignore_index_column_intersection:
+            columns = [col for col in columns if col not in index]
+        if set(index).intersection(columns):
+            if auto_index_allowed:
+                raise ValueError(
+                    "Specified index and column arguments must not intersect"
+                    " (set index=False or remove the detected index from columns).\n"
+                    "index: {} | column: {}".format(index, columns)
+                )
+            else:
+                raise ValueError(
+                    "Specified index and column arguments must not intersect.\n"
+                    "index: {} | column: {}".format(index, columns)
+                )
+
+        # Leaving index as a column in `meta`, because the index
+        # will be reset below (in case the index was detected after
+        # meta was created)
+        if index_in_columns:
+            meta = meta[columns + index]
+        else:
+            meta = meta[columns]
+
+    else:
+        meta = meta[list(columns)]
+
+    return meta, index, columns
+
+
+def aggregate_row_groups(parts, stats, chunksize):
+    if not stats[0].get("file_path_0", None):
+        return parts, stats
+
+    parts_agg = []
+    stats_agg = []
+    chunksize = parse_bytes(chunksize)
+    next_part, next_stat = [parts[0].copy()], stats[0].copy()
+    for i in range(1, len(parts)):
+        stat, part = stats[i], parts[i]
+        if (stat["file_path_0"] == next_stat["file_path_0"]) and (
+            (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
+        ):
+            # Update part list
+            next_part.append(part)
+
+            # Update Statistics
+            next_stat["total_byte_size"] += stat["total_byte_size"]
+            next_stat["num-rows"] += stat["num-rows"]
+            for col, col_add in zip(next_stat["columns"], stat["columns"]):
+                if col["name"] != col_add["name"]:
+                    raise ValueError("Columns are different!!")
+                if "null_count" in col:
+                    col["null_count"] += col_add["null_count"]
+                if "min" in col:
+                    col["min"] = min(col["min"], col_add["min"])
+                if "max" in col:
+                    col["max"] = max(col["max"], col_add["max"])
+        else:
+            parts_agg.append(next_part)
+            stats_agg.append(next_stat)
+            next_part, next_stat = [part.copy()], stat.copy()
+
+    parts_agg.append(next_part)
+    stats_agg.append(next_stat)
+
+    return parts_agg, stats_agg
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

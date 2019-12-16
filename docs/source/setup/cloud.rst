@@ -26,7 +26,7 @@ to access the object stores of each cloud:
 
 -  `s3fs <https://s3fs.readthedocs.io/>`_ for Amazon's S3
 -  `gcsfs <https://gcsfs.readthedocs.io/>`_ for Google's GCS
--  `adlfs <https://azure-datalake-store.readthedocs.io/>`_ for Microsoft's ADL
+-  `adlfs <https://github.com/dask/adlfs/>`_ for Microsoft's ADL
 
 Historical Libraries
 --------------------

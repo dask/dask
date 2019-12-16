@@ -813,7 +813,8 @@ with ignoring(AttributeError):
 @wraps(chunk.std)
 def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None):
     result = sqrt(
-        a.var(
+        var(
+            a,
             axis=axis,
             dtype=dtype,
             keepdims=keepdims,
@@ -1275,6 +1276,39 @@ def median(a, axis=None, keepdims=False, out=None):
 
     result = a.map_blocks(
         np.median,
+        axis=axis,
+        keepdims=keepdims,
+        drop_axis=axis if not keepdims else None,
+        chunks=[1 if ax in axis else c for ax, c in enumerate(a.chunks)]
+        if keepdims
+        else None,
+    )
+
+    result = handle_out(out, result)
+    return result
+
+
+@derived_from(np)
+def nanmedian(a, axis=None, keepdims=False, out=None):
+    """
+    This works by automatically chunking the reduced axes to a single chunk
+    and then calling ``numpy.nanmedian`` function across the remaining dimensions
+    """
+    if axis is None:
+        raise NotImplementedError(
+            "The da.nanmedian function only works along an axis or a subset of axes.  "
+            "The full algorithm is difficult to do in parallel"
+        )
+
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+
+    axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+
+    result = a.map_blocks(
+        np.nanmedian,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,

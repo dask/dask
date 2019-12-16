@@ -37,6 +37,12 @@ d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 
 
+def test_dataframe_doc():
+    doc = d.add.__doc__
+    disclaimer = "Some inconsistencies with the Dask version may exist."
+    assert disclaimer in doc
+
+
 def test_Dataframe():
     expected = pd.Series(
         [2, 3, 4, 5, 6, 7, 8, 9, 10], index=[0, 1, 3, 5, 6, 8, 9, 9, 9], name="a"
@@ -259,6 +265,8 @@ def test_rename_series_method():
     assert ds.name == "z"
     assert_eq(ds, s)
 
+
+def test_rename_series_method_2():
     # Series index
     s = pd.Series(["a", "b", "c", "d", "e", "f", "g"], name="x")
     ds = dd.from_pandas(s, 2)
@@ -1018,6 +1026,8 @@ def test_isin():
 def test_len():
     assert len(d) == len(full)
     assert len(d.a) == len(full.a)
+    assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
+    assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
 
 
 def test_size():
@@ -1734,7 +1744,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype),
+        index=pd.Series([1, 2, 3, 4, 5, 6] * 10, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -4111,3 +4121,13 @@ def test_pop():
     assert s.name == "y"
     assert ddf.columns == ["x"]
     assert_eq(ddf, df[["x"]])
+
+
+def test_simple_map_partitions():
+    data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.clip(-4, 6)
+    task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
+    [v] = task[0].dsk.values()
+    assert v[0] == M.clip or v[1] == M.clip

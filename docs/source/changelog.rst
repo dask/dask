@@ -1,6 +1,64 @@
 Changelog
 =========
 
+2.9.0 / 2019-12-06
+------------------
+
+Array
++++++
+- Fix ``da.std`` to work with NumPy arrays (:pr:`5681`) `James Bourbeau`_
+
+Core
+++++
+- Register ``sizeof`` functions for Numba and RMM (:pr:`5668`) `John A Kirkham`_
+- Update meeting time (:pr:`5682`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+- Modify ``dd.DataFrame.drop`` to use shallow copy (:pr:`5675`) `Richard J Zamora`_
+- Fix bug in ``_get_md_row_groups`` (:pr:`5673`) `Richard J Zamora`_
+- Close sqlalchemy engine after querying DB (:pr:`5629`) `Krishan Bhasin`_
+- Allow ``dd.map_partitions`` to not enforce meta (:pr:`5660`) `Matthew Rocklin`_
+- Generalize ``concat_unindexed_dataframes`` to support cudf-backend (:pr:`5659`) `Richard J Zamora`_
+- Add dataframe resample methods (:pr:`5636`) `Ben Zaitlen`_
+- Compute length of dataframe as length of first column (:pr:`5635`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+- Doc fixup (:pr:`5665`) `James Bourbeau`_
+- Update doc build instructions (:pr:`5640`) `James Bourbeau`_
+- Fix ADL link (:pr:`5639`) `Ray Bell`_
+- Add documentation build (:pr:`5617`) `James Bourbeau`_
+
+
+2.8.1 / 2019-11-22
+------------------
+
+Array
++++++
+- Use auto rechunking in ``da.rechunk`` if no value given (:pr:`5605`) `Matthew Rocklin`_
+
+Core
+++++
+- Add simple action to activate GH actions (:pr:`5619`) `James Bourbeau`_
+
+DataFrame
++++++++++
+- Fix "file_path_0" bug in ``aggregate_row_groups`` (:pr:`5627`) `Richard J Zamora`_
+- Add ``chunksize`` argument to ``read_parquet`` (:pr:`5607`) `Richard J Zamora`_
+- Change ``test_repartition_npartitions`` to support arch64 architecture (:pr:`5620`) `ossdev07`_
+- Categories lost after groupby + agg (:pr:`5423`) `Oliver Hofkens`_
+- Fixed relative path issue with parquet metadata file (:pr:`5608`) `Nuno Gomes Silva`_
+- Enable gpu-backed covariance/correlation in dataframes (:pr:`5597`) `Richard J Zamora`_
+
+Documentation
++++++++++++++
+- Fix institutional faq and unknown doc warnings (:pr:`5616`) `James Bourbeau`_
+- Add doc for some utils (:pr:`5609`) `Tom Augspurger`_
+- Removes ``html_extra_path`` (:pr:`5614`) `James Bourbeau`_
+- Fixed See Also referencence (:pr:`5612`) `Tom Augspurger`_
+
+
 2.8.0 / 2019-11-14
 ------------------
 
@@ -2700,3 +2758,6 @@ Other
 .. _`Prithvi MK`: https://github.com/pmk21
 .. _`Eric Dill`: https://github.com/ericdill
 .. _`Gina Helfrich`: https://github.com/Dr-G
+.. _`ossdev07`: https://github.com/ossdev07
+.. _`Nuno Gomes Silva`: https://github.com/mgsnuno
+.. _`Ray Bell`: https://github.com/raybellwaves
