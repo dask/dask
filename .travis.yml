@@ -43,16 +43,6 @@ jobs:
       - *imports
       - *array_function
 
-    - env: &py38_env
-      - PYTHON_VERSION=3.8
-      - ENV_FILE=continuous_integration/travis/travis-38.yaml
-      - *test_and_lint
-      - *coverage
-      - *no_optimize
-      - *imports
-      - *array_function
-      os: osx
-
     - env: &py38_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - ENV_FILE=continuous_integration/travis/travis-38-dev.yaml
