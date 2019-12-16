@@ -2599,25 +2599,38 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             for i in small:
                 chunks[i] = (shape[i],)
             return auto_chunks(chunks, shape, limit, dtype)
-#To calculate automatically undefined chunk (C_1, C_2,..,C_n), which fits to total chunk element size 
-#for 'auto' (E ), If we suppose that the chunk size is well distributed in the shape(S_1,S_2,...,S_n),
-#it should follow ;
-#C_1:S_1=C_2:S_2= ... = C_n:S_2
-#C_1 x C_2  x...  x C_n = E
-#E is calculated by array.chunk-size/dtype.itemsize / nonautochunk
-#nonautochunk is product of all the non auto chunk
-#C_i = C_1 x S_i / S_1
-#C_1 x (C_1 x S_2 / S_1) x ...   x (C_1 x S_n / S_1 ) = E
-#C_1** (n)  = E x  S_1** (n) / (S_1 x S_2x ... S_n)
-#C_1 =  (E/(S_1 x S_2 x ... S_n)** (1/n) x  S_1
-#Once C_1 is calculated, E can be re-evaluated, then  C_2 can be solved, then untill C_n
-#below elementsize corresonds to 'E'
-#autoshape corresponds to 'S_1 x S_2 x ...x S_n'
-        elementsize=int(parse_bytes(limit)/dtype.itemsize)
+        # To calculate automatically undefined chunk (C_1, C_2,..,C_n), which fits to total chunk element size
+        # for 'auto' (E ), If we suppose that the chunk size is well distributed in the shape(S_1,S_2,...,S_n),
+        # it should follow ;
+        # C_1:S_1=C_2:S_2= ... = C_n:S_2
+        # C_1 x C_2  x...  x C_n = E
+        # E is calculated by array.chunk-size/dtype.itemsize / nonautochunk
+        # nonautochunk is product of all the non auto chunk
+        # C_i = C_1 x S_i / S_1
+        # C_1 x (C_1 x S_2 / S_1) x ...   x (C_1 x S_n / S_1 ) = E
+        # C_1** (n)  = E x  S_1** (n) / (S_1 x S_2x ... S_n)
+        # C_1 =  (E/(S_1 x S_2 x ... S_n)** (1/n) x  S_1
+        # Once C_1 is calculated, E can be re-evaluated, then  C_2 can be solved, then untill C_n
+        # below elementsize corresonds to 'E'
+        # autoshape corresponds to 'S_1 x S_2 x ...x S_n'
+        elementsize = int(parse_bytes(limit) / dtype.itemsize)
         for i in autos:
             autoshape = [shape[j] for j, c in enumerate(chunks) if c == "auto"]
-            nonautochunk = np.prod([chunks[i] for i, c in enumerate(chunks) if c != "auto"])
-            size=int((((elementsize/nonautochunk )/ np.prod(autoshape))**(1/len(autoshape)))*shape[i])
+            nonautochunk = np.prod(
+                [chunks[i] for i, c in enumerate(chunks) if c != "auto"]
+            )
+            print(
+                elementsize, nonautochunk, np.prod(autoshape), len(autoshape), shape[i]
+            )
+            print("elementsize,nonautochunk,np.prod(autoshape),len(autoshape),shape[i]")
+
+            size = int(
+                (
+                    ((elementsize / nonautochunk) / np.prod(autoshape))
+                    ** (1 / len(autoshape))
+                )
+                * shape[i]
+            )
             chunks[i] = round_to(size, shape[i])
         return tuple(chunks)
 
