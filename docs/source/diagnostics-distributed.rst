@@ -51,6 +51,7 @@ Capture diagnostics
 .. autosummary::
    get_task_stream
    Client.profile
+   performance_report
 
 You can capture some of the same information that the dashboard presents for
 offline processing using the ``get_task_stream`` and ``Client.profile``
