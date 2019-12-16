@@ -731,7 +731,7 @@ def test_set_index_categorical():
     order = list(reversed(string.ascii_letters))
     values = list(string.ascii_letters)
     random.shuffle(values)
-    dtype = pd.CategoricalDtype(order, ordered=True)
+    dtype = pd.api.types.CategoricalDtype(order, ordered=True)
     df = pd.DataFrame({"A": pd.Categorical(values, dtype=dtype), "B": 1})
 
     result = dd.from_pandas(df, npartitions=2).set_index("A")
