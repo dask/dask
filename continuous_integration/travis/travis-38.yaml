@@ -12,7 +12,7 @@ dependencies:
   - pytest-xdist
   - moto
   # Fastparquet depends on numba being available for Python 3.8
-  # Uncomment the line below when fastparquet is avaialbe on conda-forge for 3.8
+  # Uncomment the line below when fastparquet is available on conda-forge for 3.8
   # - fastparquet
   - h5py
   - pytables
@@ -49,7 +49,9 @@ dependencies:
   - scipy
   - toolz
   - python-snappy
-  - sparse
+  # Sparse depends on numba being available for Python 3.8
+  # Uncomment the line below when sparse is available on conda-forge for 3.8
+  # - sparse
   - cachey
   - python-graphviz
   - pandas-datareader
