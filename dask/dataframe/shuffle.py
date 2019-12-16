@@ -109,7 +109,14 @@ def set_index(
             return result.map_partitions(M.sort_index)
 
     return set_partition(
-        df, index, divisions, shuffle=shuffle, drop=drop, compute=compute, **kwargs
+        df,
+        index,
+        divisions,
+        shuffle=shuffle,
+        drop=drop,
+        compute=compute,
+        empty_dataframe_detected=empty_dataframe_detected,
+        **kwargs
     )
 
 
@@ -154,7 +161,14 @@ def remove_nans(divisions):
 
 
 def set_partition(
-    df, index, divisions, max_branch=32, drop=True, shuffle=None, compute=None
+    df,
+    index,
+    divisions,
+    max_branch=32,
+    drop=True,
+    shuffle=None,
+    compute=None,
+    empty_dataframe_detected=False,
 ):
     """ Group DataFrame by index
 
@@ -180,6 +194,8 @@ def set_partition(
         If using the task-based shuffle, the amount of splitting each
         partition undergoes.  Increase this for fewer copies but more
         scheduler overhead.
+    empty_dataframe_detected : bool, default False
+        Whether all divisions were nan.
 
     See Also
     --------
@@ -189,13 +205,22 @@ def set_partition(
     """
     meta = df._meta._constructor_sliced([0])
     if np.isscalar(index):
-        divisions = df._meta._constructor_sliced(divisions, dtype=df[index].dtype)
+        dtype = df[index].dtype
+    else:
+        dtype = index.dtype
+
+    if empty_dataframe_detected:
+        # Can't construct a Series[int64] when any / all of the divisions are NaN.
+        divisions = df._meta._constructor_sliced(divisions)
+    else:
+        divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
+
+    if np.isscalar(index):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
         df2 = df.assign(_partitions=partitions)
     else:
-        divisions = df._meta._constructor_sliced(divisions, dtype=index.dtype)
         partitions = index.map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
