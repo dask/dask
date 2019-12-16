@@ -1,5 +1,7 @@
 import itertools
 import os
+import random
+
 import pandas as pd
 import pytest
 import pickle
@@ -722,6 +724,22 @@ def test_set_index_on_empty():
 
         assert assert_eq(ddf, expected_df)
         assert ddf.npartitions == 1
+
+
+def test_set_index_categorical():
+    # https://github.com/dask/dask/issues/5671
+    order = list(reversed(string.ascii_letters))
+    values = list(string.ascii_letters)
+    random.shuffle(values)
+    dtype = pd.CategoricalDtype(order, ordered=True)
+    df = pd.DataFrame({"A": pd.Categorical(values, dtype=dtype), "B": 1})
+
+    result = dd.from_pandas(df, npartitions=2).set_index("A")
+    assert len(result) == len(df)
+
+    # sorted with the metric defined by the Categorical
+    divisions = pd.Categorical(result.divisions, dtype=dtype)
+    tm.assert_categorical_equal(divisions, divisions.sort_values())
 
 
 def test_compute_divisions():

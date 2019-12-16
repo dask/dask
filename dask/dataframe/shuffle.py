@@ -187,14 +187,15 @@ def set_partition(
     shuffle
     partd
     """
-    divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
     if np.isscalar(index):
+        divisions = df._meta._constructor_sliced(divisions, dtype=df[index].dtype)
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
         df2 = df.assign(_partitions=partitions)
     else:
+        divisions = df._meta._constructor_sliced(divisions, dtype=index.dtype)
         partitions = index.map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
