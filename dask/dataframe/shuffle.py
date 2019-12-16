@@ -90,6 +90,12 @@ def set_index(
 
         mins = remove_nans(mins)
         maxes = remove_nans(maxes)
+        if pd.api.types.is_categorical_dtype(index2.dtype):
+            dtype = index2.dtype
+            mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
+            maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
+        else:
+            dtype = None
 
         if (
             mins == sorted(mins)
@@ -105,6 +111,17 @@ def set_index(
     return set_partition(
         df, index, divisions, shuffle=shuffle, drop=drop, compute=compute, **kwargs
     )
+
+
+def maybe_categorical_sorted(values, dtype=None):
+    if dtype is None:
+        return sorted(values)
+    return list(pd.Categorical(values, dtype=dtype).sort_values())
+
+
+def maybe_categorical_compare_minmax(mins, maxes, dtype=None):
+    if dtype is None:
+        return all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
 
 
 def remove_nans(divisions):
