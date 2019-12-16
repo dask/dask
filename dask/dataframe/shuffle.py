@@ -94,8 +94,6 @@ def set_index(
             dtype = index2.dtype
             mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
             maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
-        else:
-            dtype = None
 
         if (
             mins == sorted(mins)
