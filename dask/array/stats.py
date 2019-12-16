@@ -367,9 +367,8 @@ def moment(a, moment=1, axis=0, nan_policy="propagate"):
 # -------
 # Don't really want to do all of scipy.special (or do we?)
 
-
-_xlogy = wrap_elemwise(special.xlogy)
-_fdtrc = wrap_elemwise(special.fdtrc)
+_xlogy = wrap_elemwise(special.xlogy, source=special)
+_fdtrc = wrap_elemwise(special.fdtrc, source=special)
 
 
 def _equal_var_ttest_denom(v1, n1, v2, n2):
