@@ -115,6 +115,35 @@ command on the workers:
    client.run(lambda dask_worker: dask_worker.incoming_transfer_log)
 
 
+Performance Reports
+-------------------
+
+Often when benchmarking and/or profiling, users may want to record a
+particular computation or even a full workflow.  Dask can save the bokeh
+dashboards as static HTML plots including the task stream, worker profiles,
+bandwidths, etc. This is done wrapping a computation with the ``performance_report`` context manager:
+
+.. code-block:: python
+
+    from dask.distributed import performance_report
+
+    with performance_report(filename="dask-report.html):
+        ## some dask computation
+
+The following video demonstrates the ``performance_report`` context manager in greater
+detail:
+
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/nTMGbkS761Q"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+    </iframe>
+
+
 A note about times
 ------------------
 

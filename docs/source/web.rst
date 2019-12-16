@@ -126,6 +126,15 @@ accordingly.
 .. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/bokeh-task-stream.gif
    :alt: Task stream plot of Dask web interface
 
+The colors signifying the following:
+
+1.  Serialization (gray)
+2.  Communication between workers (red)
+3.  Disk I/O (orange)
+4.  Error (black)
+5.  Execution times (colored by task: purple, green, yellow, etc)
+
+
 If data transfer occurs between workers a *red* bar appears preceding the
 task bar showing the duration of the transfer.  If an error occurs than a
 *black* bar replaces the normal color.  This plot show the last 1000 tasks.
