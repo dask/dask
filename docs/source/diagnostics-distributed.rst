@@ -66,6 +66,28 @@ as well as the results of a statistical profiler.
 
    history = ts.data
 
+Additoinally, Dask can save many of diagnostics dashboards at once including the task stream, worker profiles, bandwidths, etc. with the ``performance_report`` context manager:
+
+.. code-block:: python
+
+    from dask.distributed import performance_report
+
+    with performance_report(filename="dask-report.html):
+        ## some dask computation
+
+The following video demonstrates the ``performance_report`` context manager in greater
+detail:
+
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/nTMGbkS761Q"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+    </iframe>
+
 
 Progress bar
 ------------
