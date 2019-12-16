@@ -105,6 +105,8 @@ def set_index(
             # There are cases where this still may not be sorted
             # so sort_index to be sure. https://github.com/dask/dask/issues/2288
             return result.map_partitions(M.sort_index)
+    else:
+        empty_dataframe_detected = False
 
     return set_partition(
         df,
