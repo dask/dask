@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
+  - python=3.8.*
   # For the dependencies. These will be re-installed later.
   - numpy
   - pandas
@@ -12,7 +12,9 @@ dependencies:
   - pytest
   - pytest-xdist
   - moto
-  - fastparquet
+  # Fastparquet depends on numba being available for Python 3.8
+  # Uncomment the line below when fastparquet is avaialbe on conda-forge for 3.8
+  # - fastparquet
   - h5py
   - pytables
   - zarr
@@ -36,7 +38,9 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  - numba
+  # Numba is not currently released for Python 3.8. Uncomment the numba line
+  # below when https://github.com/conda-forge/numba-feedstock/pull/38 is resolved
+  # - numba
   - partd
   - psutil
   - requests

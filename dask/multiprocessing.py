@@ -144,6 +144,13 @@ def get_context():
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
     context_name = config.get("multiprocessing.context", None)
+    # The default context on OSX was switched from "fork" to "spawn" in
+    # Python 3.8. We keep "fork" as the default here for backwards
+    # compatibility and to avoid raising a RuntimeError when using the
+    # multiprocessing scheduler in a Python script that is not in a
+    # if __name__ == "__main__" block
+    if context_name is None and sys.platform == "darwin":
+        context_name = "fork"
     return multiprocessing.get_context(context_name)
 
 
