@@ -215,7 +215,8 @@ def test_get_context_using_python3_posix():
 
     If default context is changed this test will need to change too.
     """
-    assert get_context() is multiprocessing.get_context(None)
+    default_context = None if sys.platform != "darwin" else "fork"
+    assert get_context() is multiprocessing.get_context(default_context)
     with dask.config.set({"multiprocessing.context": "forkserver"}):
         assert get_context() is multiprocessing.get_context("forkserver")
     with dask.config.set({"multiprocessing.context": "spawn"}):

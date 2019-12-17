@@ -59,6 +59,11 @@ def check_pyarrow():
         pytest.skip(SKIP_PYARROW_REASON)
 
 
+def check_engine():
+    if SKIP_FASTPARQUET and SKIP_PYARROW:
+        pytest.skip("No parquet engine (fastparquet or pyarrow) found")
+
+
 nrows = 40
 npartitions = 15
 df = pd.DataFrame(
@@ -180,7 +185,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     assert_eq(ddf, read_df)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
@@ -191,7 +196,7 @@ def test_simple(tmpdir, write_engine, read_engine):
     assert_eq(ddf, read_df)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
@@ -866,6 +871,10 @@ def test_categories(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, categories=["y"], engine=engine)
 
+    # Shouldn't need to specify categories explicitly
+    ddf3 = dd.read_parquet(fn, engine=engine)
+    assert_eq(ddf3, ddf2)
+
     with pytest.raises(NotImplementedError):
         ddf2.y.cat.categories
     assert set(ddf2.y.compute().cat.categories) == {"a", "b", "c"}
@@ -878,7 +887,7 @@ def test_categories(tmpdir, engine):
             # attempt to load as category that which is not so encoded
             ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, FutureWarning)):
         # attempt to load as category unknown column
         ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
 
@@ -1084,7 +1093,7 @@ def test_partition_on_string(tmpdir, partition_on):
 
 
 @write_read_engines_xfail
-def test_filters(tmpdir, write_engine, read_engine):
+def test_filters_categorical(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     cats = ["2018-01-01", "2018-01-02", "2018-01-03", "2018-01-04"]
     dftest = pd.DataFrame(
@@ -1101,29 +1110,45 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert len(ddftest_read) == 2
 
 
-def test_filters_pyarrow(tmpdir):
-    check_pyarrow()
+@write_read_engines()
+def test_filters(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
     assert ddf.npartitions == 5
 
-    ddf.to_parquet(tmp_path, engine="pyarrow")
+    ddf.to_parquet(tmp_path, engine=write_engine)
 
-    a = dd.read_parquet(tmp_path, engine="pyarrow", filters=[("x", ">", 4)])
+    a = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", ">", 4)])
     assert a.npartitions == 3
     assert (a.x > 3).all().compute()
 
-    b = dd.read_parquet(tmp_path, engine="pyarrow", filters=[("y", "==", "c")])
+    b = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "==", "c")])
     assert b.npartitions == 1
     assert (b.y == "c").all().compute()
 
     c = dd.read_parquet(
-        tmp_path, engine="pyarrow", filters=[("y", "==", "c"), ("x", ">", 6)]
+        tmp_path, engine=read_engine, filters=[("y", "==", "c"), ("x", ">", 6)]
     )
     assert c.npartitions <= 1
     assert not len(c)
     assert_eq(c, c)
+
+    d = dd.read_parquet(
+        tmp_path,
+        engine=read_engine,
+        filters=[
+            # Select two overlapping ranges
+            [("x", ">", 1), ("x", "<", 6)],
+            [("x", ">", 3), ("x", "<", 8)],
+        ],
+    )
+    assert d.npartitions == 3
+    assert ((d.x > 1) & (d.x < 8)).all().compute()
+
+    e = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "in", (0, 9))])
+    assert e.npartitions == 2
+    assert ((e.x < 2) | (e.x > 7)).all().compute()
 
 
 @write_read_engines()
@@ -1791,18 +1816,8 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": ["c", "a", "b"]}),
         pd.DataFrame({"x": ["cc", "a", "bbb"]}),
         pd.DataFrame({"x": [b"a", b"b", b"c"]}),
-        pytest.param(
-            pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])}),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652"
-            ),
-        ),
-        pytest.param(
-            pd.DataFrame({"x": pd.Categorical([1, 2, 1])}),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-3652"
-            ),
-        ),
+        pytest.param(pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])})),
+        pytest.param(pd.DataFrame({"x": pd.Categorical([1, 2, 1])})),
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000000, 2000000, 1000000]))}),  # ms
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
@@ -2112,6 +2127,45 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
+
+
+def test_optimize_getitem_and_nonblockwise(tmpdir):
+    check_engine()
+    path = os.path.join(tmpdir, "path.parquet")
+    df = pd.DataFrame(
+        {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
+        index=["a", "b", "c"],
+    )
+    df.to_parquet(path)
+
+    df2 = dd.read_parquet(path)
+    df2[["a", "b"]].rolling(3).max().compute()
+
+
+def test_optimize_and_not(tmpdir):
+    check_engine()
+    path = os.path.join(tmpdir, "path.parquet")
+    df = pd.DataFrame(
+        {"a": [3, 4, 2], "b": [1, 2, 4], "c": [5, 4, 2], "d": [1, 2, 3]},
+        index=["a", "b", "c"],
+    )
+    df.to_parquet(path)
+
+    df2 = dd.read_parquet(path)
+    df2a = df2["a"].groupby(df2["c"]).first().to_delayed()
+    df2b = df2["b"].groupby(df2["c"]).first().to_delayed()
+    df2c = df2[["a", "b"]].rolling(2).max().to_delayed()
+    df2d = df2.rolling(2).max().to_delayed()
+    (result,) = dask.compute(df2a + df2b + df2c + df2d)
+
+    expected = [
+        dask.compute(df2a)[0][0],
+        dask.compute(df2b)[0][0],
+        dask.compute(df2c)[0][0],
+        dask.compute(df2d)[0][0],
+    ]
+    for a, b in zip(result, expected):
+        assert_eq(a, b)
 
 
 @pytest.mark.parametrize("metadata", [True, False])
