@@ -3383,6 +3383,9 @@ class DataFrame(_Frame):
         o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
+    def __iter__(self):
+        return iter(self._meta)
+
     def _ipython_key_completions_(self):
         return self.columns.tolist()
 
