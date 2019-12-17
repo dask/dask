@@ -112,7 +112,7 @@ def order(dsk, dependencies=None):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
             "Cycle detected between the following keys:\n  -> %s"
-            % "\n  -> ".join(cycle)
+            % "\n  -> ".join(str(x) for x in cycle)
         )
 
     def initial_stack_key(x):

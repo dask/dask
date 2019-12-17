@@ -641,10 +641,14 @@ def test_many_branches_use_ndependencies(abcde):
 
 def test_order_cycle():
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        dask.get({"a": (f, "a")}, "a")
+        dask.get({"a": (f, "a")}, "a")  # we encounter this in `get`
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "a")})
+        order({"a": (f, "a")})  # trivial self-loop
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})
+        order({("a", 0): (f, ("a", 0))})  # non-string
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})  # non-trivial loop
     with pytest.raises(RuntimeError, match="Cycle detected"):
         order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
