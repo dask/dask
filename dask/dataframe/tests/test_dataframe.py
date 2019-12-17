@@ -4131,3 +4131,12 @@ def test_simple_map_partitions():
     task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
     [v] = task[0].dsk.values()
     assert v[0] == M.clip or v[1] == M.clip
+
+
+def test_iter():
+    df = pd.DataFrame({"A": [1, 2, 3, 4], "B": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, 2)
+
+    assert list(df) == list(ddf)
+    for col, expected in zip(ddf, ["A", "B"]):
+        assert col == expected
