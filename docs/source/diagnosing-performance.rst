@@ -127,7 +127,7 @@ bandwidths, etc. This is done wrapping a computation with the ``performance_repo
 
     from dask.distributed import performance_report
 
-    with performance_report(filename="dask-report.html):
+    with performance_report(filename="dask-report.html"):
         ## some dask computation
 
 The following video demonstrates the ``performance_report`` context manager in greater
