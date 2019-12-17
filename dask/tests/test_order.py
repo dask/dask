@@ -637,3 +637,14 @@ def test_many_branches_use_ndependencies(abcde):
     actual = sorted(v for (letter, _), v in o.items() if letter in {d, dd, e, ee})
     assert actual == expected
     assert o[(c, 1)] == o[(a, 3)] - 1
+
+
+def test_order_cycle():
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        dask.get({"a": (f, "a")}, "a")
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "a")})
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})

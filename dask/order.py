@@ -75,7 +75,7 @@ Work towards *small goals* with *big steps*.
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
 from math import log
-from .core import get_dependencies, reverse_dict, get_deps  # noqa: F401
+from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -105,12 +105,15 @@ def order(dsk, dependencies=None):
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
-    for k, deps in dependencies.items():
-        deps.discard(k)
-
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     metrics = graph_metrics(dependencies, dependents, total_dependencies)
+    if len(metrics) != len(dsk):
+        cycle = getcycle(dsk, None)
+        raise RuntimeError(
+            "Cycle detected between the following keys:\n  -> %s"
+            % "\n  -> ".join(cycle)
+        )
 
     def initial_stack_key(x):
         """ Choose which task to run at the very beginning
@@ -222,6 +225,7 @@ def order(dsk, dependencies=None):
     inner_stack_append = inner_stack.append
     inner_stack_pop = inner_stack.pop
     inner_stack_extend = inner_stack.extend
+    set_difference = set.difference
 
     is_init_sorted = False
     item = min(init_stack, key=initial_stack_key)
@@ -240,7 +244,7 @@ def order(dsk, dependencies=None):
 
                     if num_needed[item]:
                         inner_stack_append(item)
-                        deps = dependencies[item].difference(result)
+                        deps = set_difference(dependencies[item], result)
                         if 1 < len(deps) < 1000:
                             inner_stack_extend(
                                 sorted(deps, key=dependencies_key, reverse=True)
@@ -296,9 +300,9 @@ def order(dsk, dependencies=None):
                 # We wait for as long as possible to consider dependents of completed nodes:
                 # 1. some may have already completed, so waiting lets us sort fewer items, and
                 # 2. sorting via `dependents_key` depends on `num_needed`, which is dynamic.
-                deps = dependents[
-                    outer_stack_seeds[outer_stack_seeds_index]
-                ].difference(result)
+                deps = set_difference(
+                    dependents[outer_stack_seeds[outer_stack_seeds_index]], result
+                )
                 if deps:
                     if 1 < len(deps) < 1000:
                         outer_stack_extend(
@@ -318,7 +322,7 @@ def order(dsk, dependencies=None):
         # If we have many tiny groups left, then it's best to simply iterate.
         if not is_init_sorted:
             prev_len = len(init_stack)
-            init_stack = init_stack.difference(result)
+            init_stack = set_difference(init_stack, result)
             N = len(init_stack)
             m = prev_len - N
             # is `min` likely better than `sort`?
@@ -341,31 +345,72 @@ def order(dsk, dependencies=None):
 
 
 def graph_metrics(dependencies, dependents, total_dependencies):
-    """ Useful measures of a graph used by ``dask.order.order``
-Number of total data elements that depend on key
+    r""" Useful measures of a graph used by ``dask.order.order``
+
+    Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
+
+    c1
+    |
+    b1  b2
+     \  /
+      a1
 
     For each key we return:
     1.  The number of keys that can only be run after this key is run.  The
         root nodes have value 1 while deep child nodes will have larger values.
-    2.  The minimum value of the maximum number of dependencies of
-        all final dependencies (see module-level comment for more)
-    3.  The maximum value of the maximum number of dependencies of
-        all final dependencies (see module-level comment for more)
+
+        1
+        |
+        2   1
+         \ /
+          4
+
+    2.  The minimum value of the total number of dependencies of
+        all final dependents (see module-level comment for more).
+        In other words, the minimum of ``ndependencies`` of root
+        nodes connected to the current node.
+
+        3
+        |
+        3   2
+         \ /
+          2
+
+    3.  The maximum value of the total number of dependencies of
+        all final dependents (see module-level comment for more).
+        In other words, the maximum of ``ndependencies`` of root
+        nodes connected to the current node.
+
+        3
+        |
+        3   2
+         \ /
+          3
+
     4.  The minimum height from a root node
+
+        1
+        |
+        2   1
+         \ /
+          2
+
     5.  The maximum height from a root node
+
+        1
+        |
+        2   1
+         \ /
+          3
 
     Examples
     --------
-    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
+    >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
     >>> dependencies, dependents = get_deps(dsk)
-
     >>> _, total_dependencies = ndependencies(dependencies, dependents)
     >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
-    >>> total_dependents = {key: val[0] for key, val in metrics.items()}
-    >>> sorted(total_dependents.items())
-    [('a', 3), ('b', 2), ('c', 1)]
     >>> sorted(metrics.items())
-    [('a', (3, 3, 3, 3, 3)), ('b', (2, 3, 3, 2, 2)), ('c', (1, 3, 3, 1, 1))]
+    [('a1', (4, 2, 3, 2, 3)), ('b1', (2, 3, 3, 2, 2)), ('b2', (1, 2, 2, 1, 1)), ('c1', (1, 3, 3, 1, 1))]
 
     Returns
     -------
