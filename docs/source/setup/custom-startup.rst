@@ -63,8 +63,9 @@ if it is on the path) when we start the scheduler::
 Worker Lifecycle Plugins
 ------------------------
 
-You can also create a class with setup and teardown methods, and register that
-class with the scheduler to give to every worker.
+You can also create a class with ``setup``, ``teardown``, and ``transition`` methods,
+and register that class with the scheduler to give to every worker using the
+``Client.register_worker_plugin`` method.
 
 .. currentmodule:: distributed
 
@@ -72,3 +73,4 @@ class with the scheduler to give to every worker.
    Client.register_worker_plugin
 
 .. automethod:: Client.register_worker_plugin
+   :noindex:

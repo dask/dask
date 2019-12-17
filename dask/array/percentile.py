@@ -64,13 +64,13 @@ def percentile(a, q, interpolation="linear", method="default"):
         The interpolation method to use when the desired percentile lies
         between two data points ``i < j``. Only valid for ``method='dask'``.
 
-        * 'linear': ``i + (j - i) * fraction``, where ``fraction``
-        is the fractional part of the index surrounded by ``i``
-        and ``j``.
-        * 'lower': ``i``.
-        * 'higher': ``j``.
-        * 'nearest': ``i`` or ``j``, whichever is nearest.
-        * 'midpoint': ``(i + j) / 2``.
+        - 'linear': ``i + (j - i) * fraction``, where ``fraction``
+          is the fractional part of the index surrounded by ``i``
+          and ``j``.
+        - 'lower': ``i``.
+        - 'higher': ``j``.
+        - 'nearest': ``i`` or ``j``, whichever is nearest.
+        - 'midpoint': ``(i + j) / 2``.
 
     method : {'default', 'dask', 'tdigest'}, optional
         What method to use. By default will use dask's internal custom

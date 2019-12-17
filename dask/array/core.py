@@ -1568,14 +1568,12 @@ class Array(DaskMethodsMixin):
 
         Mixed basic/advanced indexing with slices/arrays is also supported. The
         order of dimensions in the result follows those proposed for
-        ndarray.vindex [1]_: the subspace spanned by arrays is followed by all
-        slices.
+        `ndarray.vindex <https://github.com/numpy/numpy/pull/6256>`_:
+        the subspace spanned by arrays is followed by all slices.
 
         Note: ``vindex`` provides more general functionality than standard
         indexing, but it also has fewer optimizations and can be significantly
         slower.
-
-        _[1]: https://github.com/numpy/numpy/pull/6256
         """
         return IndexCallable(self._vindex)
 
@@ -2067,8 +2065,8 @@ class Array(DaskMethodsMixin):
         References
         ----------
         .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
-        Computation of Covariances and Arbitrary-Order Statistical Moments"
-        (PDF), Technical Report SAND2008-6212, Sandia National Laboratories
+           Computation of Covariances and Arbitrary-Order Statistical Moments",
+           Technical Report SAND2008-6212, Sandia National Laboratories.
 
         """
 
@@ -2652,14 +2650,15 @@ def from_array(
     x : array_like
     chunks : int, tuple
         How to chunk the array. Must be one of the following forms:
-        -   A blocksize like 1000.
-        -   A blockshape like (1000, 1000).
-        -   Explicit sizes of all blocks along all dimensions like
-            ((1000, 1000, 500), (400, 400)).
-        -   A size in bytes, like "100 MiB" which will choose a uniform
-            block-like shape
-        -   The word "auto" which acts like the above, but uses a configuration
-            value ``array.chunk-size`` for the chunk size
+
+        - A blocksize like 1000.
+        - A blockshape like (1000, 1000).
+        - Explicit sizes of all blocks along all dimensions like
+          ((1000, 1000, 500), (400, 400)).
+        - A size in bytes, like "100 MiB" which will choose a uniform
+          block-like shape
+        - The word "auto" which acts like the above, but uses a configuration
+          value ``array.chunk-size`` for the chunk size
 
         -1 or None as a blocksize indicate the size of the corresponding
         dimension.
@@ -4649,6 +4648,9 @@ def to_npy_stack(dirname, x, axis=0):
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
 
+    The ``.npy`` files store numpy arrays for ``x[0:2], x[2:4], and x[4:5]``
+    respectively, as is specified by the chunk size along the zeroth axis::
+
         $ tree data/
         data/
         |-- 0.npy
@@ -4656,10 +4658,7 @@ def to_npy_stack(dirname, x, axis=0):
         |-- 2.npy
         |-- info
 
-    The ``.npy`` files store numpy arrays for ``x[0:2], x[2:4], and x[4:5]``
-    respectively, as is specified by the chunk size along the zeroth axis.  The
-    info file stores the dtype, chunks, and axis information of the array.
-
+    The ``info`` file stores the dtype, chunks, and axis information of the array.
     You can load these stacks with the ``da.from_npy_stack`` function.
 
     >>> y = da.from_npy_stack('data/')  # doctest: +SKIP

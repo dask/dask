@@ -2,8 +2,7 @@ Create Dask Arrays
 ==================
 
 You can load or store Dask arrays from a variety of common sources like HDF5,
-NetCDF, `Zarr <https://zarr.readthedocs.io/en/stable/>`_, or any format that
-supports NumPy-style slicing.
+NetCDF, `Zarr`_, or any format that supports NumPy-style slicing.
 
 .. currentmodule:: dask.array
 
@@ -294,7 +293,7 @@ You can store several arrays in one computation with the function
 Zarr
 ----
 
-The `Zarr <https://zarr.readthedocs.io>`_ format is a chunk-wise binary array
+The `Zarr`_ format is a chunk-wise binary array
 storage file format with a good selection of encoding and compression options.
 Due to each chunk being stored in a separate file, it is ideal for parallel
 access in both reading and writing (for the latter, if the Dask array
@@ -467,3 +466,6 @@ other, chaining results through them:
 
    with dask.config.set(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
        ...
+
+
+.. _Zarr: https://zarr.readthedocs.io/en/stable/
