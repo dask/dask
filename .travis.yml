@@ -29,14 +29,23 @@ jobs:
       - PYTHON_VERSION=3.7
       - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
+      - *no_coverage
+      - *no_optimize
+      - *imports
+      - *array_function
+
+    - env: &py38_env
+      - PYTHON_VERSION=3.8
+      - ENV_FILE=continuous_integration/travis/travis-38.yaml
+      - *test_and_lint
       - *coverage
       - *no_optimize
       - *imports
       - *array_function
 
-    - env: &py37_dev
+    - env: &py38_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - ENV_FILE=continuous_integration/travis/travis-37-dev.yaml
+      - ENV_FILE=continuous_integration/travis/travis-38-dev.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -74,7 +83,7 @@ jobs:
         - source continuous_integration/hdfs/startup_hdfs.sh
 
   allow_failures:
-    - env: *py37_dev
+    - env: *py38_dev
     - os: osx
 
 
