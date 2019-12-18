@@ -9,3 +9,4 @@ toolz >= 0.7.4
 tornado >= 5
 zict >= 0.1.3
 pyyaml
+setuptools
