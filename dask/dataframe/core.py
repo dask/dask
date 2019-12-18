@@ -2118,6 +2118,7 @@ Dask Name: {name}, {task} tasks""".format(
                 else:
                     # aggregate with previous cumulation results
                     layer[(cname, i)] = (
+                        methods._cum_aggregate_apply,
                         aggregate,
                         (cname, i - 1),
                         (cumlast._name, i - 1),
