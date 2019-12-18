@@ -442,6 +442,8 @@ def test_TaskGraph(c, s, a, b):
     gp.update()
     assert set(map(len, gp.node_source.data.values())) == {6}
     assert set(map(len, gp.edge_source.data.values())) == {5}
+    json.dumps(gp.edge_source.data)
+    json.dumps(gp.node_source.data)
 
     da = pytest.importorskip("dask.array")
     x = da.random.random((20, 20), chunks=(10, 10)).persist()

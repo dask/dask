@@ -1219,7 +1219,7 @@ class TaskGraph(DashboardComponent):
                 node_x.append(xx)
                 node_y.append(yy)
                 node_state.append(task.state)
-                node_name.append(task.prefix)
+                node_name.append(task.prefix.name)
 
             for a, b in new_edges:
                 try:
