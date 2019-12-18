@@ -3770,6 +3770,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
+        max_branch=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -3864,6 +3865,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             indicator=indicator,
             shuffle=shuffle,
+            max_branch=None,
         )
 
     @derived_from(pd.DataFrame)

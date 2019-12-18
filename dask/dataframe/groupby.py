@@ -1068,7 +1068,7 @@ class _GroupBy(object):
     ):
         if aggfunc is None:
             aggfunc = func
-
+        # import pdb; pdb.set_trace()
         meta = func(self._meta_nonempty)
         columns = meta.name if is_series_like(meta) else meta.columns
 
