@@ -12,7 +12,7 @@ except ImportError:
 from .core import reverse_dict
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
-from .optimization import SubgraphCallable, fuse
+from .optimization import fuse, callable_from_subgraph
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
@@ -193,7 +193,7 @@ class Blockwise(Mapping):
             return self._cached_dict
         else:
             keys = tuple(map(blockwise_token, range(len(self.indices))))
-            func = SubgraphCallable(self.dsk, self.output, keys)
+            func = callable_from_subgraph(self.dsk, self.output, keys)
             self._cached_dict = make_blockwise_graph(
                 func,
                 self.output,

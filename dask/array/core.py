@@ -629,11 +629,11 @@ def map_blocks(
 
     if has_keyword(func, "block_id"):
         for k, vv in dsk.items():
-            v = copy.copy(vv[0])  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__block_id_dummy__": k[1:]})
-            v.dsk[key] = task
+            # Right now we expect `v` to always be TaskCallable, because `func`
+            # above has a keyword and the task has kwargs.
+            v = vv[0]
+            v = copy.copy(v)  # Need to copy and unpack task callable
+            v.task = subs(v.task, {"__block_id_dummy__": k[1:]})
             dsk[k] = (v,) + vv[1:]
 
     if chunks is not None:
@@ -688,11 +688,7 @@ def map_blocks(
                     num_chunks[i] = arg.numblocks
         out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
-        for k, v in dsk.items():
-            vv = v
-            v = v[0]
-            [(key, task)] = v.dsk.items()  # unpack subgraph callable
-
+        for k, vv in dsk.items():
             # Get position of chunk, indexed by axis labels
             location = {out_ind[i]: loc for i, loc in enumerate(k[1:])}
             info = {}
@@ -727,11 +723,11 @@ def map_blocks(
                 "dtype": dtype,
             }
 
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__block_info_dummy__": info})
-            v.dsk[key] = task
+            # Right now we expect `v` to always be TaskCallable, because `func`
+            # above has a keyword and the task has kwargs.
+            v = vv[0]
+            v = copy.copy(v)  # Need to copy and unpack task callable
+            v.task = subs(v.task, {"__block_info_dummy__": info})
             dsk[k] = (v,) + vv[1:]
 
     return out

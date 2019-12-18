@@ -938,6 +938,42 @@ def key_split(s):
         return "Other"
 
 
+def callable_from_subgraph(dsk, outkey, inkeys, name=None):
+    """Create a callable object from a dask graph.
+
+    Parameters
+    ----------
+    dsk : dict
+        A dask graph
+    outkey : hashable
+        The output key from the graph
+    inkeys : list
+        A list of keys to be used as arguments to the callable.
+    name : str, optional
+        The name to use for the function.
+
+    Returns
+    -------
+    callable :
+        - SubgraphCallable if ``len(dsk) != 1``
+        - ``dsk[outkey][0]`` if ``len(dsk) == 1 and dsk[outkey][1:] == inkeys``
+        - TaskCallable if ``len(dsk) == 1 and dsk[outkey][1:] != inkeys``
+    """
+    if type(inkeys) is not tuple:
+        inkeys = tuple(inkeys)
+    if len(dsk) == 1:
+        task = dsk[outkey]
+        try:
+            if task[1:] == inkeys:
+                # If the task is like `(add, '_0', '_1')`, then return `add`
+                return task[0]
+        except (TypeError, ValueError):  # not observed, but just in case
+            pass
+        return TaskCallable(task, inkeys, name=name)
+    else:
+        return SubgraphCallable(dsk, outkey, inkeys, name=name)
+
+
 class SubgraphCallable(object):
     """Create a callable object from a dask graph.
 
@@ -955,11 +991,11 @@ class SubgraphCallable(object):
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
-        self.name = name
+        self.name = name if name is not None else "subgraph_callable"
 
     def __repr__(self):
         return self.name
@@ -983,3 +1019,48 @@ class SubgraphCallable(object):
 
     def __reduce__(self):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
+
+
+class TaskCallable(object):
+    """Create a callable object from a dask task.
+
+    This can replace SubgraphCallable when the graph has a single item.
+
+    Parameters
+    ----------
+    task : tuple
+        A dask task
+    inkeys : list
+        A list of keys to be used as arguments to the callable.
+    name : str, optional
+        The name to use for the function.
+    """
+
+    __slots__ = ("task", "inkeys", "name")
+
+    def __init__(self, task, inkeys, name=None):
+        self.task = task
+        self.inkeys = inkeys
+        self.name = name if name is not None else "task_callable"
+
+    def __repr__(self):
+        return self.name
+
+    def __eq__(self, other):
+        return (
+            type(self) is type(other)
+            and self.task == other.task
+            and set(self.inkeys) == set(other.inkeys)
+            and self.name == other.name
+        )
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __call__(self, *args):
+        if not len(args) == len(self.inkeys):
+            raise ValueError("Expected %d args, got %d" % (len(self.inkeys), len(args)))
+        return core._execute_task(self.task, dict(zip(self.inkeys, args)))
+
+    def __reduce__(self):
+        return (TaskCallable, (self.task, self.inkeys, self.name))

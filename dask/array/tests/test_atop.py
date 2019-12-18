@@ -9,6 +9,7 @@ import dask
 import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
 from dask.blockwise import Blockwise, rewrite_blockwise, optimize_blockwise, index_subs
+from dask.optimization import SubgraphCallable, TaskCallable
 from dask.array.utils import assert_eq
 from dask.array.numpy_compat import _numpy_116
 from dask.utils_test import inc, dec
@@ -587,3 +588,15 @@ def test_atop_legacy():
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)
     assert y.name == z.name
+
+
+def test_single_blockwise_is_not_subgraphcallable():
+    """Don't use SubgraphCallable if we can simply use the original function"""
+    x = da.ones(10, chunks=(5,))
+    y = x + x - 1
+    dsk = dict(y.dask)
+    assert all(
+        not isinstance(val[0], (SubgraphCallable, TaskCallable))
+        for val in dsk.values()
+        if type(val) is tuple
+    )
