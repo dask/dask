@@ -105,30 +105,10 @@ def set_index(
             # There are cases where this still may not be sorted
             # so sort_index to be sure. https://github.com/dask/dask/issues/2288
             return result.map_partitions(M.sort_index)
-    else:
-        empty_dataframe_detected = False
 
     return set_partition(
-        df,
-        index,
-        divisions,
-        shuffle=shuffle,
-        drop=drop,
-        compute=compute,
-        empty_dataframe_detected=empty_dataframe_detected,
-        **kwargs
+        df, index, divisions, shuffle=shuffle, drop=drop, compute=compute, **kwargs
     )
-
-
-def maybe_categorical_sorted(values, dtype=None):
-    if dtype is None:
-        return sorted(values)
-    return list(pd.Categorical(values, dtype=dtype).sort_values())
-
-
-def maybe_categorical_compare_minmax(mins, maxes, dtype=None):
-    if dtype is None:
-        return all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
 
 
 def remove_nans(divisions):
@@ -161,14 +141,7 @@ def remove_nans(divisions):
 
 
 def set_partition(
-    df,
-    index,
-    divisions,
-    max_branch=32,
-    drop=True,
-    shuffle=None,
-    compute=None,
-    empty_dataframe_detected=False,
+    df, index, divisions, max_branch=32, drop=True, shuffle=None, compute=None
 ):
     """ Group DataFrame by index
 
@@ -194,8 +167,6 @@ def set_partition(
         If using the task-based shuffle, the amount of splitting each
         partition undergoes.  Increase this for fewer copies but more
         scheduler overhead.
-    empty_dataframe_detected : bool, default False
-        Whether all divisions were nan.
 
     See Also
     --------
@@ -204,12 +175,16 @@ def set_partition(
     partd
     """
     meta = df._meta._constructor_sliced([0])
+    if isinstance(divisions, tuple):
+        # pd.isna considers tuples to be scalars. Convert to a list.
+        divisions = list(divisions)
+
     if np.isscalar(index):
         dtype = df[index].dtype
     else:
         dtype = index.dtype
 
-    if empty_dataframe_detected:
+    if pd.isna(divisions).any() and pd.api.types.is_integer_dtype(dtype):
         # Can't construct a Series[int64] when any / all of the divisions are NaN.
         divisions = df._meta._constructor_sliced(divisions)
     else:
