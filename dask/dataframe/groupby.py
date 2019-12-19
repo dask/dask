@@ -332,6 +332,7 @@ def _var_agg(g, levels, ddof):
     result /= div
     result[(n - ddof) == 0] = np.nan
     assert is_dataframe_like(result)
+    result[result < 0] = 0  # avoid rounding errors that take us to zero
     return result
 
 
