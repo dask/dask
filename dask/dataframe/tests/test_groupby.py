@@ -2296,3 +2296,11 @@ def test_rounding_negative_var():
 
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std())
+
+
+@pytest.mark.xfail(reason="Unable to calculate stddev")
+def test_groupby_large_ints_exception():
+    dtype_max = int(np.iinfo(np.int64).max ** 0.5 + 1)
+    df = pd.DataFrame({"x": [1, 1, dtype_max, dtype_max], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.groupby("x").std().compute()

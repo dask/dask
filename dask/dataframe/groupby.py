@@ -297,6 +297,16 @@ def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
 
+    for col in df.columns:
+        if df[col].dtype == np.int64:
+            if df[col].max() > np.iinfo(df[col].dtype).max ** 0.5:
+                raise ValueError(
+                    "Unable to calculate stddev of int64 columns"
+                    " larger than the sqrt of their maximum value."
+                    " Convert to string before proceeding. Column"
+                    " %s" % col
+                )
+
     df = df.copy()
     cols = df._get_numeric_data().columns
 
