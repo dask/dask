@@ -22,6 +22,7 @@ from dask.dataframe.shuffle import (
     remove_nans,
 )
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.compatibility import PY_VERSION
 
 
 dsk = {
@@ -747,6 +748,8 @@ def test_compute_divisions():
         compute_divisions(c)
 
 
+# TODO: Fix sporadic failure on Python 3.8 and remove this xfail mark
+@pytest.mark.xfail(PY_VERSION >= "3.8", reason="Flaky test", strict=False)
 def test_temporary_directory(tmpdir):
     from multiprocessing.pool import Pool
 
