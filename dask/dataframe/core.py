@@ -3383,6 +3383,9 @@ class DataFrame(_Frame):
         o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
+    def __iter__(self):
+        return iter(self._meta)
+
     def _ipython_key_completions_(self):
         return self.columns.tolist()
 
@@ -3780,6 +3783,7 @@ class DataFrame(_Frame):
         right: dask.dataframe.DataFrame
         how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
             How to handle the operation of the two objects:
+
             - left: use calling frame's index (or column if on is specified)
             - right: use other frame's index
             - outer: form union of calling frame's index (or column if on is
@@ -3788,6 +3792,7 @@ class DataFrame(_Frame):
             - inner: form intersection of calling frame's index (or column if
               on is specified) with other frame's index, preserving the order
               of the calling's one
+
         on : label or list
             Column or index level names to join on. These must be found in both
             DataFrames. If on is None and not merging on indexes then this

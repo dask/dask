@@ -29,14 +29,23 @@ jobs:
       - PYTHON_VERSION=3.7
       - ENV_FILE=continuous_integration/travis/travis-37.yaml
       - *test_and_lint
+      - *no_coverage
+      - *no_optimize
+      - *imports
+      - *array_function
+
+    - env: &py38_env
+      - PYTHON_VERSION=3.8
+      - ENV_FILE=continuous_integration/travis/travis-38.yaml
+      - *test_and_lint
       - *coverage
       - *no_optimize
       - *imports
       - *array_function
 
-    - env: &py37_dev
+    - env: &py38_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - ENV_FILE=continuous_integration/travis/travis-37-dev.yaml
+      - ENV_FILE=continuous_integration/travis/travis-38-dev.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -74,7 +83,7 @@ jobs:
         - source continuous_integration/hdfs/startup_hdfs.sh
 
   allow_failures:
-    - env: *py37_dev
+    - env: *py38_dev
     - os: osx
 
 
@@ -86,8 +95,7 @@ script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
   - if [[ $LINT == 'true' ]]; then pip install flake8 ; flake8 dask; fi
-  # See https://bitbucket.org/mrabarnett/mrab-regex/issues/349/ for why we have --no-binary=regex
-  - if [[ $LINT == 'true' ]]; then pip install git+https://github.com/psf/black@73bd7038fbefdb1c6a61fa1edf16ff61613050a5 --no-binary=regex; black dask --check; fi
+  - if [[ $LINT == 'true' ]]; then pip install git+https://github.com/psf/black@73bd7038fbefdb1c6a61fa1edf16ff61613050a5; black dask --check; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then bash continuous_integration/travis/test_imports.sh; fi
 
 after_success:

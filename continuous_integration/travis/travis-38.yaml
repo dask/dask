@@ -1,0 +1,62 @@
+# This job includes coverage
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.8.*
+  - numpy=1.17.*
+  - pandas=0.25.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  # Fastparquet depends on numba being available for Python 3.8
+  # Uncomment the line below when fastparquet is available on conda-forge for 3.8
+  # - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  - tiledb-py
+  - fsspec>=0.6.0
+  - sqlalchemy
+  - pyarrow>=0.14.0
+  - coverage
+  # other -- IO
+  - bcolz
+  - blosc
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - s3fs
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed==2.0.1
+  - graphviz
+  - ipython
+  - lz4
+  # Numba is not currently released for Python 3.8. Uncomment the numba line
+  # below when https://github.com/conda-forge/numba-feedstock/pull/38 is resolved
+  # - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  # Sparse depends on numba being available for Python 3.8
+  # Uncomment the line below when sparse is available on conda-forge for 3.8
+  # - sparse
+  - cachey
+  - python-graphviz
+  - pandas-datareader
+  - pip
+  - pip:
+      - cityhash
+      - mmh3
+      - xxhash

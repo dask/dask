@@ -107,10 +107,8 @@ def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):
 
     field = field or {}
 
-    if seed is None:
-        seed = random.random()
-
-    seeds = db.core.random_state_data_python(npartitions, seed)
+    random_state = random.Random(seed)
+    seeds = [random_state.randint(0, 1 << 32) for _ in range(npartitions)]
 
     name = "mimesis-" + tokenize(
         field, schema, npartitions, records_per_partition, seed
@@ -129,8 +127,8 @@ def make_people(npartitions=10, records_per_partition=1000, seed=None, locale="e
     This makes a Dask Bag with dictionary records of randomly generated people.
     This requires the optional library ``mimesis`` to generate records.
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     npartitions : int
         Number of partitions
     records_per_partition : int
