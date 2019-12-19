@@ -172,25 +172,35 @@ def set_partition(
     """
     divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
-    if np.isscalar(index):
-        partitions = df[index].map_partitions(
-            set_partitions_pre, divisions=divisions, meta=meta
-        )
-        df2 = df.assign(_partitions=partitions)
-    else:
-        partitions = index.map_partitions(
-            set_partitions_pre, divisions=divisions, meta=meta
-        )
-        df2 = df.assign(_partitions=partitions, _index=index)
 
-    df3 = rearrange_by_column(
-        df2,
-        "_partitions",
-        max_branch=max_branch,
-        npartitions=len(divisions) - 1,
-        shuffle=shuffle,
-        compute=compute,
-    )
+    if shuffle == "hash":
+        df3 = rearrange_by_column(
+            df,
+            index,
+            max_branch=max_branch,
+            npartitions=len(divisions) - 1,
+            shuffle="tasks",
+            compute=compute,
+        )
+    else:
+        if np.isscalar(index):
+            partitions = df[index].map_partitions(
+                set_partitions_pre, divisions=divisions, meta=meta
+            )
+            df2 = df.assign(_partitions=partitions)
+        else:
+            partitions = index.map_partitions(
+                set_partitions_pre, divisions=divisions, meta=meta
+            )
+            df2 = df.assign(_partitions=partitions, _index=index)
+        df3 = rearrange_by_column(
+            df2,
+            "_partitions",
+            max_branch=max_branch,
+            npartitions=len(divisions) - 1,
+            shuffle=shuffle,
+            compute=compute,
+        )
 
     if np.isscalar(index):
         df4 = df3.map_partitions(
@@ -232,23 +242,33 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
 
-    partitions = index.map_partitions(
-        partitioning_index,
-        npartitions=npartitions or df.npartitions,
-        meta=df._meta._constructor_sliced([0]),
-        transform_divisions=False,
-    )
-    df2 = df.assign(_partitions=partitions)
-    df2._meta.index.name = df._meta.index.name
-    df3 = rearrange_by_column(
-        df2,
-        "_partitions",
-        npartitions=npartitions,
-        max_branch=max_branch,
-        shuffle=shuffle,
-        compute=compute,
-    )
-    del df3["_partitions"]
+    if shuffle == "hash":
+        df3 = rearrange_by_column(
+            df,
+            index.columns[0],
+            npartitions=npartitions,
+            max_branch=max_branch,
+            shuffle="tasks",
+            compute=compute,
+        )
+    else:
+        partitions = index.map_partitions(
+            partitioning_index,
+            npartitions=npartitions or df.npartitions,
+            meta=df._meta._constructor_sliced([0]),
+            transform_divisions=False,
+        )
+        df2 = df.assign(_partitions=partitions)
+        df2._meta.index.name = df._meta.index.name
+        df3 = rearrange_by_column(
+            df2,
+            "_partitions",
+            npartitions=npartitions,
+            max_branch=max_branch,
+            shuffle=shuffle,
+            compute=compute,
+        )
+        del df3["_partitions"]
     return df3
 
 
@@ -608,6 +628,11 @@ def shuffle_group(df, col, stage, k, npartitions):
     if col == "_partitions":
         ind = df[col]
     else:
+        # For cudf-backed DataFrames, just use `partition_by_hash`
+        if hasattr(df, "partition_by_hash"):
+            return {
+                i: gdf for i, gdf in enumerate(df.partition_by_hash([col], npartitions))
+            }
         ind = hash_object_dispatch(df, index=False)
 
     c = ind.values
@@ -627,13 +652,19 @@ def shuffle_group_3(df, col, npartitions, p):
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):
-    df2 = df.drop("_partitions", axis=1).set_index(index_name, drop=drop)
+    if "_partitions" in df.columns:
+        df2 = df.drop("_partitions", axis=1).set_index(index_name, drop=drop)
+    else:
+        df2 = df.set_index(index_name, drop=drop)
     df2.columns = df2.columns.astype(column_dtype)
     return df2
 
 
 def set_index_post_series(df, index_name, drop, column_dtype):
-    df2 = df.drop("_partitions", axis=1).set_index("_index", drop=True)
+    if "_partitions" in df.columns:
+        df2 = df.drop("_partitions", axis=1).set_index("_index", drop=True)
+    else:
+        df2 = df.set_index("_index", drop=True)
     df2.index.name = index_name
     df2.columns = df2.columns.astype(column_dtype)
     return df2
