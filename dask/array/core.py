@@ -2191,13 +2191,15 @@ class Array(DaskMethodsMixin):
 
         return clip(self, min, max)
 
-    def view(self, dtype, order="C"):
+    def view(self, dtype=None, order="C"):
         """ Get a view of the array as a new data type
 
         Parameters
         ----------
         dtype:
-            The dtype by which to view the array
+            The dtype by which to view the array.
+            The default, None, results in the view having the same data-type
+            as the original array.
         order: string
             'C' or 'F' (Fortran) ordering
 
@@ -2211,7 +2213,10 @@ class Array(DaskMethodsMixin):
         views of Fortran ordered arrays if the first dimension has chunks of
         size one.
         """
-        dtype = np.dtype(dtype)
+        if dtype is None:
+            dtype = self.dtype
+        else:
+            dtype = np.dtype(dtype)
         mult = self.dtype.itemsize / dtype.itemsize
 
         if order == "C":
