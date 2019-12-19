@@ -24,6 +24,12 @@ despite its name, runs very well on a single machine).
 
 .. currentmodule:: distributed
 
+Examples
+--------
+
+Visit https://examples.dask.org/futures.html to see and run examples
+using futures with Dask.
+
 Start Dask Client
 -----------------
 

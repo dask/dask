@@ -37,6 +37,12 @@ d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 
 
+def test_dataframe_doc():
+    doc = d.add.__doc__
+    disclaimer = "Some inconsistencies with the Dask version may exist."
+    assert disclaimer in doc
+
+
 def test_Dataframe():
     expected = pd.Series(
         [2, 3, 4, 5, 6, 7, 8, 9, 10], index=[0, 1, 3, 5, 6, 8, 9, 9, 9], name="a"
@@ -4125,3 +4131,12 @@ def test_simple_map_partitions():
     task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
     [v] = task[0].dsk.values()
     assert v[0] == M.clip or v[1] == M.clip
+
+
+def test_iter():
+    df = pd.DataFrame({"A": [1, 2, 3, 4], "B": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, 2)
+
+    assert list(df) == list(ddf)
+    for col, expected in zip(ddf, ["A", "B"]):
+        assert col == expected

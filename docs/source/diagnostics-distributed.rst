@@ -51,6 +51,7 @@ Capture diagnostics
 .. autosummary::
    get_task_stream
    Client.profile
+   performance_report
 
 You can capture some of the same information that the dashboard presents for
 offline processing using the ``get_task_stream`` and ``Client.profile``
@@ -65,6 +66,30 @@ as well as the results of a statistical profiler.
    client.profile(filename="dask-profile.html")
 
    history = ts.data
+
+Additionally, Dask can save many diagnostics dashboards at once including the
+task stream, worker profiles, bandwidths, etc. with the ``performance_report``
+context manager:
+
+.. code-block:: python
+
+    from dask.distributed import performance_report
+
+    with performance_report(filename="dask-report.html"):
+        ## some dask computation
+
+The following video demonstrates the ``performance_report`` context manager in greater
+detail:
+
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/nTMGbkS761Q"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+    </iframe>
 
 
 Progress bar

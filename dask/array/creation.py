@@ -396,11 +396,12 @@ def indices(dimensions, dtype=int, chunks="auto"):
     chunks : sequence of ints, str
         The size of each block.  Must be one of the following forms:
 
-        -   A blocksize like (500, 1000)
-        -   A size in bytes, like "100 MiB" which will choose a uniform
-            block-like shape
-        -   The word "auto" which acts like the above, but uses a configuration
-            value ``array.chunk-size`` for the chunk size
+        - A blocksize like (500, 1000)
+        - A size in bytes, like "100 MiB" which will choose a uniform
+          block-like shape
+        - The word "auto" which acts like the above, but uses a configuration
+          value ``array.chunk-size`` for the chunk size
+
         Note that the last block will have fewer samples if ``len(array) % chunks != 0``.
 
     Returns

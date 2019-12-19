@@ -2286,3 +2286,13 @@ def test_groupby_dropna_cudf(dropna, by):
         dask_result.index.name = cudf_result.index.name
 
     assert_eq(dask_result, cudf_result)
+
+
+def test_rounding_negative_var():
+    x = [-0.00179999999 for _ in range(10)]
+    ids = [1 for _ in range(5)] + [2 for _ in range(5)]
+
+    df = pd.DataFrame({"ids": ids, "x": x})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std())

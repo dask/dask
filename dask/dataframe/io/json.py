@@ -132,7 +132,7 @@ def read_json(
         newline character.
     sample: int
         Number of bytes to pre-load, to provide an empty dataframe structure
-        to any blocks wihout data. Only relevant is using blocksize.
+        to any blocks without data. Only relevant is using blocksize.
     encoding, errors:
         Text conversion, ``see bytes.decode()``
     compression : string or None
