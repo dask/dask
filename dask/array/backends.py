@@ -17,6 +17,26 @@ def register_cupy():
         return cupy.einsum(*args, **kwargs)
 
 
+@concatenate_lookup.register_lazy("cupyx")
+def register_cupyx():
+    import cupyx
+    import cupy
+
+    def _concat_cupy_sparse(L, axis=0):
+        if axis == 0:
+            return cupy.sparse.vstack(L)
+        elif axis == 1:
+            return cupy.sparse.hstack(L)
+        else:
+            msg = (
+                "Can only concatenate cupy sparse matrices for axis in "
+                "{0, 1}.  Got %s" % axis
+            )
+            raise ValueError(msg)
+
+    concatenate_lookup.register(cupyx.scipy.sparse.spmatrix, _concat_cupy_sparse)
+
+
 @tensordot_lookup.register_lazy("sparse")
 @concatenate_lookup.register_lazy("sparse")
 def register_sparse():
