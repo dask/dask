@@ -39,6 +39,9 @@ directly with a light annotation of normal python code:
 Example
 -------
 
+Visit https://examples.dask.org/delayed.html to see and run examples using Dask
+Delayed.
+
 Sometimes we face problems that are parallelizable, but don't fit into high-level
 abstractions like Dask Array or Dask DataFrame.  Consider the following example:
 
