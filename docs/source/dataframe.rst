@@ -31,6 +31,12 @@ on the constituent Pandas DataFrames.
            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
            allowfullscreen></iframe>
 
+Examples
+--------
+
+Visit https://examples.dask.org/dataframe.html to see and run examples using
+Dask DataFrame.
+
 Design
 ------
 

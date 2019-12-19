@@ -33,6 +33,12 @@ these blocked algorithms using Dask graphs.
            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
            allowfullscreen></iframe>
 
+Examples
+--------
+
+Visit https://examples.dask.org/array.html to see and run examples using
+Dask Array.
+
 Design
 ------
 

@@ -16,6 +16,11 @@ version of PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 .. _PyToolz: https://toolz.readthedocs.io/en/latest/
 .. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python/pyspark.html
 
+Examples
+--------
+
+Visit https://examples.dask.org/bag.html to see and run examples using Dask Bag.
+
 Design
 ------
 
