@@ -115,20 +115,11 @@ def order(dsk, dependencies=None):
             % "\n  -> ".join(str(x) for x in cycle)
         )
 
-    def initial_stack_key(x):
-        """ Choose which task to run at the very beginning
-
-        First prioritize large, tall groups, then prioritize the same as ``dependents_key``.
-        """
-        num_dependents = len(dependents[x])
-        (
-            total_dependents,
-            min_dependencies,
-            max_dependencies,
-            min_heights,
-            max_heights,
-        ) = metrics[x]
-        return (
+    # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
+    # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
+    init_stack = {
+        # First prioritize large, tall groups, then prioritize the same as ``dependents_key``.
+        key: (
             # at a high-level, work towards a large goal (and prefer tall and narrow)
             -max_dependencies,
             num_dependents - max_heights,
@@ -139,8 +130,23 @@ def order(dsk, dependencies=None):
             # try to be memory efficient
             num_dependents,
             # tie-breaker
-            StrComparable(x),
+            StrComparable(key),
         )
+        for key, num_dependents, (
+            total_dependents,
+            min_dependencies,
+            max_dependencies,
+            min_heights,
+            max_heights,
+        ) in (
+            (key, len(dependents[key]), metrics[key])
+            for key, val in dependencies.items()
+            if not val
+        )
+    }
+    # `initial_stack_key` chooses which task to run at the very beginning.
+    # This value is static, so we pre-compute as the value of this dict.
+    initial_stack_key = init_stack.__getitem__
 
     def dependents_key(x):
         """ Choose a path from our starting task to our tactical goal
@@ -195,9 +201,6 @@ def order(dsk, dependencies=None):
 
     result = {}
     i = 0
-
-    # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph
-    init_stack = {k for k, v in dependencies.items() if not v}
 
     # Nodes in the current weakly connected subgraph that are not part of the current
     # DFS along dependencies.  The next DFS will begin from these nodes.  `outer_stack`
@@ -322,6 +325,8 @@ def order(dsk, dependencies=None):
         # If we have many tiny groups left, then it's best to simply iterate.
         if not is_init_sorted:
             prev_len = len(init_stack)
+            if type(init_stack) is dict:
+                init_stack = set(init_stack)
             init_stack = set_difference(init_stack, result)
             N = len(init_stack)
             m = prev_len - N
