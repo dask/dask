@@ -305,8 +305,11 @@ def _var_chunk(df, *index):
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
 
-    for col in set(cols).difference(set(index)):
-        df[col] = df[col] ** 2
+    try:
+        for col in set(cols).difference(set(index)):
+            df[col] = df[col] ** 2
+    except TypeError:
+        df[cols] = df[cols] ** 2
 
     g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))

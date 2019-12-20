@@ -2298,9 +2298,15 @@ def test_rounding_negative_var():
     assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std())
 
 
-@pytest.mark.xfail(reason="Unable to calculate stddev")
-def test_groupby_large_ints_exception():
-    dtype_max = int(np.iinfo(np.int64).max ** 0.5 + 1)
-    df = pd.DataFrame({"x": [1, 1, dtype_max, dtype_max], "y": [1, 2, 3, 4]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf.groupby("x").std().compute()
+def test_groupby_large_ints_exception_cudf():
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+
+    num = 38
+    gdf = cudf.DataFrame({"x": np.arange(num)**7, "y": np.arange(num), "z": np.arange(num)})
+    pdf = gdf.to_pandas()
+    gddf = dask_cudf.from_cudf(gdf, npartitions=2)
+    pddf = dd.from_pandas(pdf, npartitions=2)
+    gg = gddf.groupby("x").std().compute()
+    pg = pddf.groupby("x").std().compute()
+    assert_eq(gg, pg)
