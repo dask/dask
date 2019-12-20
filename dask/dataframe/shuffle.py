@@ -173,34 +173,24 @@ def set_partition(
     divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
 
-    if shuffle == "hash":
-        df3 = rearrange_by_column(
-            df,
-            index,
-            max_branch=max_branch,
-            npartitions=len(divisions) - 1,
-            shuffle="tasks",
-            compute=compute,
+    if np.isscalar(index):
+        partitions = df[index].map_partitions(
+            set_partitions_pre, divisions=divisions, meta=meta
         )
+        df2 = df.assign(_partitions=partitions)
     else:
-        if np.isscalar(index):
-            partitions = df[index].map_partitions(
-                set_partitions_pre, divisions=divisions, meta=meta
-            )
-            df2 = df.assign(_partitions=partitions)
-        else:
-            partitions = index.map_partitions(
-                set_partitions_pre, divisions=divisions, meta=meta
-            )
-            df2 = df.assign(_partitions=partitions, _index=index)
-        df3 = rearrange_by_column(
-            df2,
-            "_partitions",
-            max_branch=max_branch,
-            npartitions=len(divisions) - 1,
-            shuffle=shuffle,
-            compute=compute,
+        partitions = index.map_partitions(
+            set_partitions_pre, divisions=divisions, meta=meta
         )
+        df2 = df.assign(_partitions=partitions, _index=index)
+    df3 = rearrange_by_column(
+        df2,
+        "_partitions",
+        max_branch=max_branch,
+        npartitions=len(divisions) - 1,
+        shuffle=shuffle,
+        compute=compute,
+    )
 
     if np.isscalar(index):
         df4 = df3.map_partitions(
@@ -628,11 +618,6 @@ def shuffle_group(df, col, stage, k, npartitions):
     if col == "_partitions":
         ind = df[col]
     else:
-        # For cudf-backed DataFrames, just use `partition_by_hash`
-        if hasattr(df, "partition_by_hash"):
-            return {
-                i: gdf for i, gdf in enumerate(df.partition_by_hash([col], npartitions))
-            }
         ind = hash_object_dispatch(df, index=False)
 
     c = ind.values
