@@ -297,16 +297,6 @@ def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
 
-    for col in df.columns:
-        if df[col].dtype == np.int64:
-            if df[col].max() > np.iinfo(df[col].dtype).max ** 0.5:
-                raise ValueError(
-                    "Unable to calculate stddev of int64 columns"
-                    " larger than the sqrt of their maximum value."
-                    " Convert to string before proceeding. Column"
-                    " %s" % col
-                )
-
     df = df.copy()
     cols = df._get_numeric_data().columns
 
@@ -315,11 +305,12 @@ def _var_chunk(df, *index):
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
 
-    df[cols] = df[cols] ** 2
+    for col in set(cols).difference(set(index)):
+        df[col] = df[col] ** 2
+
     g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
 
-    x2.index = x.index
     return concat([x, x2, n], axis=1)
 
 
