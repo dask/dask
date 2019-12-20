@@ -3825,9 +3825,11 @@ class DataFrame(_Frame):
             performing a hash_join (merging on columns only). If ``None`` then
             ``npartitions = max(lhs.npartitions, rhs.npartitions)``.
             Default is ``None``.
-        shuffle: {'disk', 'tasks'}, optional
+        shuffle: {'disk', 'tasks', 'tasks-hash'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
-            distributed operation.  Will be inferred by your current scheduler.
+            distributed operation. ``'tasks-hash'`` is equivalent to ``'tasks'``,
+            except value hashing will be used to split partitions.
+            Will be inferred by your current scheduler.
 
         Notes
         -----

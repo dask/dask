@@ -232,10 +232,14 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
 
-    if shuffle == "hash":
+    if shuffle == "tasks-hash":
+        if isinstance(index, DataFrame):
+            name = index.columns[0]
+        else:
+            name = index.name
         df3 = rearrange_by_column(
             df,
-            index.columns[0],
+            name,
             npartitions=npartitions,
             max_branch=max_branch,
             shuffle="tasks",
@@ -290,7 +294,7 @@ def rearrange_by_column(
     shuffle = shuffle or config.get("shuffle", None) or "disk"
     if shuffle == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
-    elif shuffle == "tasks":
+    elif shuffle in ["tasks", "tasks-hash"]:
         return rearrange_by_column_tasks(df, col, max_branch, npartitions)
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
