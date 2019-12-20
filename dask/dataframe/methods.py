@@ -245,9 +245,16 @@ def cummax_aggregate(x, y):
         return x if x > y else y
 
 
+def set_column(df, name, value):
+    df = df.copy(deep=False)
+    df[name] = value
+    return df
+
+
 def assign(df, *pairs):
-    kwargs = dict(partition(2, pairs))
-    return df.assign(**kwargs)
+    for name, val in dict(partition(2, pairs)).items():
+        df = set_column(df, name, val)
+    return df
 
 
 def unique(x, series_name=None):
