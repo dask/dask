@@ -3234,15 +3234,19 @@ def execute_task(task):
 
 cache_dumps = LRU(maxsize=100)
 
+_cache_lock = threading.Lock()
+
 
 def dumps_function(func):
     """ Dump a function to bytes, cache functions """
     try:
-        result = cache_dumps[func]
+        with _cache_lock:
+            result = cache_dumps[func]
     except KeyError:
         result = pickle.dumps(func)
         if len(result) < 100000:
-            cache_dumps[func] = result
+            with _cache_lock:
+                cache_dumps[func] = result
     except TypeError:  # Unhashable function
         result = pickle.dumps(func)
     return result
