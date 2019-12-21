@@ -252,8 +252,9 @@ def set_column(df, name, value):
 
 
 def assign(df, *pairs):
+    df = df.copy(deep=False)
     for name, val in dict(partition(2, pairs)).items():
-        df = set_column(df, name, val)
+        df[name] = val
     return df
 
 
