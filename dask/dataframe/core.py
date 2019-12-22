@@ -183,6 +183,13 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta = state
 
+    def __bool__(self):
+        raise TypeError(
+            "Dask dataframe Scalars don't support conversion to a "
+            "boolean because they are lazily evaluated. Consider computing "
+            "the scalar value prior to converting to a boolean."
+        )
+
     @property
     def key(self):
         return (self._name, 0)
