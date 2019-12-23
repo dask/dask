@@ -185,9 +185,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
 
     def __bool__(self):
         raise TypeError(
-            "Dask dataframe Scalars don't support conversion to a "
-            "boolean because they are lazily evaluated. Consider computing "
-            "the scalar value prior to converting to a boolean."
+            "Trying to convert {} to a boolean value. Because Dask objects are "
+            "lazily evaluated, they cannot be converted to a boolean value or used "
+            "in boolean conditions like if statements. Try calling .compute() to "
+            "force computation prior to converting to a boolean value or using in "
+            "a conditional statement.".format(self)
         )
 
     @property

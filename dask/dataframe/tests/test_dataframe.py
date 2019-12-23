@@ -161,7 +161,7 @@ def test_Scalar():
 def test_scalar_raises():
     val = np.int64(1)
     s = Scalar({("a", 0): val}, "a", "i8")
-    msg = "Dask dataframe Scalars don't support conversion to a boolean"
+    msg = "cannot be converted to a boolean value"
     with pytest.raises(TypeError, match=msg):
         bool(s)
 
