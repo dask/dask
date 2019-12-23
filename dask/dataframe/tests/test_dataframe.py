@@ -158,6 +158,14 @@ def test_Scalar():
     assert repr(s) == "dd.Scalar<a, type=Timestamp>"
 
 
+def test_scalar_raises():
+    val = np.int64(1)
+    s = Scalar({("a", 0): val}, "a", "i8")
+    msg = "cannot be converted to a boolean value"
+    with pytest.raises(TypeError, match=msg):
+        bool(s)
+
+
 def test_attributes():
     assert "a" in dir(d)
     assert "foo" not in dir(d)

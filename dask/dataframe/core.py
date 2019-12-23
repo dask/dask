@@ -183,6 +183,15 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta = state
 
+    def __bool__(self):
+        raise TypeError(
+            "Trying to convert {} to a boolean value. Because Dask objects are "
+            "lazily evaluated, they cannot be converted to a boolean value or used "
+            "in boolean conditions like if statements. Try calling .compute() to "
+            "force computation prior to converting to a boolean value or using in "
+            "a conditional statement.".format(self)
+        )
+
     @property
     def key(self):
         return (self._name, 0)
