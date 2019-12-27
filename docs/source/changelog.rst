@@ -1,6 +1,28 @@
 Changelog
 =========
 
+2.9.1 - 2019-12-27
+------------------
+
+-  Add lock around dumps_function cache (:pr:`3337`) `Matthew Rocklin`_
+-  Add setuptools to dependencies (:pr:`3320`) `James Bourbeau`_
+-  Use TaskPrefix.name in Graph layout (:pr:`3328`) `Matthew Rocklin`_
+-  Add missing `"` in performance report example (:pr:`3329`) `John Kirkham`_
+-  Add performance report docs and color definitions to docs (:pr:`3325`) `Benjamin Zaitlen`_
+-  Switch startstops to dicts and add worker name to transfer (:pr:`3319`) `Jacob Tomlinson`_
+-  Add plugin entry point for out-of-tree comms library (:pr:`3305`) `Patrick Sodré`_
+-  All scheduler task states in prometheus (:pr:`3307`) `fjetter`_
+-  Use worker name in logs (:pr:`3309`) `Stephan Erb`_
+-  Add TaskGroup and TaskPrefix scheduler state (:pr:`3262`)  `Matthew Rocklin`_
+-  Update latencies with heartbeats (:pr:`3310`) `fjetter`_
+-  Update inlining Futures in task graph in Client._graph_to_futures (:pr:`3303`) `James Bourbeau`_
+-  Use hostname as default IP address rather than localhost (:pr:`3308`) `Matthew Rocklin`_
+-  Clean up flaky test_nanny_throttle (:pr:`3295`) `Tom Augspurger`_
+-  Add lock to scheduler for sensitive operations (:pr:`3259`) `Matthew Rocklin`_
+-  Log address for each of the Scheduler listerners (:pr:`3306`) `Matthew Rocklin`_
+-  Make ConnectionPool.close asynchronous (:pr:`3304`) `Matthew Rocklin`_
+
+
 2.9.0 - 2019-12-06
 ------------------
 
@@ -1447,3 +1469,5 @@ significantly without many new features.
 .. _`He Jia`: https://github.com/HerculesJack
 .. _`Jim Crist-Harif`: https://github.com/jcrist
 .. _`fjetter`: https://github.com/fjetter
+.. _`Patrick Sodré`: https://github.com/sodre
+.. _`Stephan Erb`: https://github.com/StephanErb
