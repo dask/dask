@@ -5693,18 +5693,27 @@ async def test_futures_of_sorted(c, s, a, b):
 
 @gen_cluster(client=True, worker_kwargs={"profile_cycle_interval": "10ms"})
 async def test_profile_server(c, s, a, b):
-    x = c.map(slowinc, range(10), delay=0.01, workers=a.address)
-    await wait(x)
+    for i in range(5):
+        try:
+            x = c.map(slowinc, range(10), delay=0.01, workers=a.address, pure=False)
+            await wait(x)
 
-    await asyncio.gather(
-        c.run(slowinc, 1, delay=0.5), c.run_on_scheduler(slowdec, 1, delay=0.5)
-    )
+            await asyncio.gather(
+                c.run(slowinc, 1, delay=0.5), c.run_on_scheduler(slowdec, 1, delay=0.5)
+            )
 
-    p = await c.profile(server=True)  #  All worker servers
-    assert "slowinc" in str(p)
+            p = await c.profile(server=True)  #  All worker servers
+            assert "slowinc" in str(p)
 
-    p = await c.profile(scheduler=True)  #  Scheduler
-    assert "slowdec" in str(p)
+            p = await c.profile(scheduler=True)  #  Scheduler
+            assert "slowdec" in str(p)
+        except AssertionError:
+            if i == 4:
+                raise
+            else:
+                pass
+        else:
+            break
 
 
 @gen_cluster(client=True)
