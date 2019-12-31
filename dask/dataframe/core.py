@@ -2252,7 +2252,7 @@ Dask Name: {name}, {task} tasks""".format(
         elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
-            M.astype, dtype=dtype, meta=meta, enforce_metadata=False
+            M.astype, dtype=dtype, meta=meta, enforce_metadata=False, errors=errors
         )
 
     @derived_from(pd.Series)
