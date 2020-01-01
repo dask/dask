@@ -34,11 +34,19 @@ def set_index(
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
-        raise NotImplementedError(
-            "Dask dataframe does not yet support multi-indexes.\n"
-            "You tried to index with this index: %s\n"
-            "Indexes must be single columns only." % str(index)
-        )
+        # Accept ["a"], but not [["a"]]
+        if (
+            isinstance(index, (tuple, list))
+            and len(index) == 1
+            and not isinstance(index[0], (list, tuple))
+        ):
+            index = index[0]
+        else:
+            raise NotImplementedError(
+                "Dask dataframe does not yet support multi-indexes.\n"
+                "You tried to index with this index: %s\n"
+                "Indexes must be single columns only." % str(index)
+            )
 
     if npartitions == "auto":
         repartition = True

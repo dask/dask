@@ -557,6 +557,16 @@ def test_set_index():
     assert_eq(d4, full.set_index("b"))
 
 
+def test_set_index_single_item_list_tuple():
+    d1 = d.set_index(["b"])
+    assert d1.index.name == "b"
+    assert_eq(d1, full.set_index("b"))
+
+    d2 = d.set_index(("b",))
+    assert d2.index.name == "b"
+    assert_eq(d2, full.set_index("b"))
+
+
 def test_set_index_interpolate():
     df = pd.DataFrame({"x": [4, 1, 1, 3, 3], "y": [1.0, 1, 1, 1, 2]})
     d = dd.from_pandas(df, 2)
@@ -641,6 +651,18 @@ def test_set_index_raises_error_on_bad_input():
     msg = r"Dask dataframe does not yet support multi-indexes"
     with pytest.raises(NotImplementedError) as err:
         ddf.set_index(["a", "b"])
+    assert msg in str(err.value)
+
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index([["a", "b"]])
+    assert msg in str(err.value)
+
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index([["a"]])
+    assert msg in str(err.value)
+
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index((("a",),))
     assert msg in str(err.value)
 
 
