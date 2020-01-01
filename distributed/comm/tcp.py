@@ -12,7 +12,6 @@ except ImportError:
     ssl = None
 
 import dask
-import tornado
 from tornado import netutil
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.tcpclient import TCPClient
@@ -20,15 +19,7 @@ from tornado.tcpserver import TCPServer
 
 from ..system import MEMORY_LIMIT
 from ..threadpoolexecutor import ThreadPoolExecutor
-from ..utils import (
-    ensure_bytes,
-    ensure_ip,
-    get_ip,
-    get_ipv6,
-    nbytes,
-    parse_timedelta,
-    shutting_down,
-)
+from ..utils import ensure_ip, get_ip, get_ipv6, nbytes, parse_timedelta, shutting_down
 
 from .registry import Backend, backends
 from .addressing import parse_host_port, unparse_host_port
@@ -141,7 +132,6 @@ class TCP(Comm):
     An established communication based on an underlying Tornado IOStream.
     """
 
-    _iostream_allows_memoryview = tornado.version_info >= (4, 5)
     # IOStream.read_into() currently proposed in
     # https://github.com/tornadoweb/tornado/pull/2193
     _iostream_has_read_into = hasattr(IOStream, "read_into")
@@ -251,14 +241,12 @@ class TCP(Comm):
             else:
                 stream.write(b"".join(length_bytes))  # avoid large memcpy, send in many
 
-                for frame in frames:
+                for frame, frame_bytes in zip(frames, lengths):
                     # Can't wait for the write() Future as it may be lost
                     # ("If write is called again before that Future has resolved,
                     #   the previous future will be orphaned and will never resolve")
-                    if not self._iostream_allows_memoryview:
-                        frame = ensure_bytes(frame)
                     future = stream.write(frame)
-                    bytes_since_last_yield += nbytes(frame)
+                    bytes_since_last_yield += frame_bytes
                     if bytes_since_last_yield > 32e6:
                         await future
                         bytes_since_last_yield = 0
@@ -271,7 +259,7 @@ class TCP(Comm):
             else:
                 raise
 
-        return sum(map(nbytes, frames))
+        return sum(lengths)
 
     @gen.coroutine
     def close(self):
