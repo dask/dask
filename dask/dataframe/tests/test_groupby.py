@@ -2304,9 +2304,9 @@ def test_groupby_large_ints_exception_cudf():
 
     max = np.iinfo(np.uint64).max
     sqrt = max ** 0.5
-    series = pd.Series(
-        np.concatenate([sqrt * np.arange(5), np.arange(35)])
-    ).astype("int64")
+    series = pd.Series(np.concatenate([sqrt * np.arange(5), np.arange(35)])).astype(
+        "int64"
+    )
     pdf = pd.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
     gdf = cudf.from_pandas(pdf)
     gddf = dask_cudf.from_cudf(gdf, npartitions=2)
