@@ -2302,11 +2302,26 @@ def test_groupby_large_ints_exception_cudf():
     cudf = pytest.importorskip("cudf")
     dask_cudf = pytest.importorskip("dask_cudf")
 
-    num = 38
-    gdf = cudf.DataFrame({"x": np.arange(num)**7, "y": np.arange(num), "z": np.arange(num)})
-    pdf = gdf.to_pandas()
+    max = np.iinfo(np.uint64).max
+    sqrt = max ** 0.5
+    series = pd.Series(
+        np.concatenate([sqrt * np.arange(5), np.arange(35)])
+    ).astype("int64")
+    pdf = pd.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
+    gdf = cudf.from_pandas(pdf)
     gddf = dask_cudf.from_cudf(gdf, npartitions=2)
     pddf = dd.from_pandas(pdf, npartitions=2)
     gg = gddf.groupby("x").std().compute()
     pg = pddf.groupby("x").std().compute()
     assert_eq(gg, pg)
+
+
+def test_groupby_large_ints_exception_pandas():
+    max = np.iinfo(np.uint64).max
+    sqrt = max ** 0.5
+    series = pd.Series(np.concatenate([sqrt * np.arange(5), np.arange(35)])).astype(
+        "int64"
+    )
+    df = pd.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.groupby("x").std().compute(scheduler="single-threaded")
