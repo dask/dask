@@ -36,9 +36,9 @@ def set_index(
     if isinstance(index, (DataFrame, tuple, list)):
         # Accept ["a"], but not [["a"]]
         if (
-            isinstance(index, (tuple, list))
+            isinstance(index, list)
             and len(index) == 1
-            and not isinstance(index[0], (list, tuple))
+            and not isinstance(index[0], list)  # if index = [["a"]], leave it that way
         ):
             index = index[0]
         else:
