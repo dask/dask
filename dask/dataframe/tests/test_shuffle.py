@@ -558,7 +558,7 @@ def test_set_index():
 
     d5 = d.set_index(["b"])
     assert d5.index.name == "b"
-    assert_eq(d5, full.set_index("b"))
+    assert_eq(d5, full.set_index(["b"]))
 
 
 def test_set_index_interpolate():
