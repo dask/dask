@@ -97,3 +97,39 @@ special and others can write different schedulers better suited to other
 applications or architectures easily.  Systems that emit dask graphs (like
 Dask Array, Dask Bag, and so on) may leverage the appropriate scheduler for
 the application and hardware.
+
+
+Task Expectations
+-----------------
+
+When a task is submitted to Dask for execution, there are a number of assumptions
+that are made about that task. In general, tasks with side-effects that alter the
+state of a future in-place are not recommended. Dask Futures are mutable, and can
+be updated in-place. For example, consider a workflow involving a
+``pandas.DataFrame``:
+
+.. code-block:: python
+
+   from distributed import Client
+   import pandas 
+
+   c = Client()  # LocalCluster
+   df = pandas.DataFrame({"c":[1,2,3,4], "d":[4,5,6,76]})  
+   a_future = c.scatter(df)
+   assert a_future.result().index.equals(df.index) 
+   b_future = c.submit(
+      lambda df: df.set_axis(
+         df.index.map(str), # Convert index to strings
+         axis="index",
+         inplace=True, # `inplace=True` will alter `a_future`
+      ),
+      a_future
+   )
+   assert a_future.result().index.equals(df.index)  # False, `a_future` is modified inplace
+
+In the example above Dask will update the field (``index``) of the Future in-place.
+This behavior holds for any object with mutable underlying data or fields. Completed 
+Futures in Dask contain pointers to Python objects. If a field or attribute of that
+underlying Python object is updated in-place, e.g. with ``setattr``, the Future
+is effectively modified in-place. Subsequent accesses of that Future will return the
+updated object.
