@@ -104,28 +104,23 @@ Task Expectations
 
 When a task is submitted to Dask for execution, there are a number of assumptions
 that are made about that task. In general, tasks with side-effects that alter the
-state of a future in-place are not recommended. Dask Futures are mutable, and can
-be updated in-place. For example, consider a workflow involving a
-``pandas.DataFrame``:
+state of a future in-place are not recommended. Values stored by Dask are mutable,
+and can be updated in-place. For example, consider a workflow involving a
+``np.array``:
 
 .. code-block:: python
 
    from dask.distributed import Client
-   import pandas 
+   import numpy as np 
 
    client = Client() 
-   df = pandas.DataFrame({"c":[1,2,3,4], "d":[4,5,6,76]})  
-   a_future = c.scatter(df)
-   assert a_future.result().index.equals(df.index) 
-   b_future = c.submit(
-      lambda df: df.set_axis(
-         df.index.map(str), # Convert index to strings
-         axis="index",
-         inplace=True, # `inplace=True` will alter `a_future`
-      ),
-      a_future
-   )
-   assert a_future.result().index.equals(df.index)  # False, `a_future` is modified inplace
+   x = client.submit(np.arange, 10)  # [0, 1, 2, 3, ...]
+
+   def f(arr):
+       arr[arr > 5] = 0  # modifies input directly without making a copy
+       return arr
+
+   y = x.submit(f, x)
 
 In the example above Dask will update the field (``index``) of the Future in-place.
 This behavior holds for any object with mutable underlying data or fields. Completed 
