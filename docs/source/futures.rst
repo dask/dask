@@ -108,7 +108,8 @@ However, note that each task comes with about 1ms of overhead.  If you want to
 map a function over a large number of inputs, then you might consider
 :doc:`dask.bag <bag>` or :doc:`dask.dataframe <dataframe>` instead.
 
-.. note: Futures are mutable and can be updated in-place. See the `Task Graphs <https://docs.dask.org/en/latest/graphs.html>`_ page for more details.
+.. note: See `this page <https://docs.dask.org/en/latest/graphs.html>`_ for
+   restrictions on what functions you use with Dask.
 
 Move Data
 ---------
