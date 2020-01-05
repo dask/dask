@@ -106,7 +106,7 @@ When a task is submitted to Dask for execution, there are a number of assumption
 that are made about that task. In general, tasks with side-effects that alter the
 state of a future in-place are not recommended. Values stored by Dask are mutable,
 and can be updated in-place. For example, consider a workflow involving a
-``np.array``:
+Numpy array:
 
 .. code-block:: python
 
