@@ -104,9 +104,9 @@ Task Expectations
 
 When a task is submitted to Dask for execution, there are a number of assumptions
 that are made about that task. In general, tasks with side-effects that alter the
-state of a future in-place are not recommended. Values stored by Dask are mutable,
-and can be updated in-place. For example, consider a workflow involving a
-Numpy array:
+state of a future in-place are not recommended. Modifying data that is stored in
+Dask in-place can have unintended consequences. For example, consider a workflow 
+involving a Numpy array:
 
 .. code-block:: python
 
@@ -122,9 +122,9 @@ Numpy array:
 
    y = x.submit(f, x)
 
-In the example above Dask will update the field (``index``) of the Future in-place.
-This behavior holds for any object with mutable underlying data or fields. Completed 
-Futures in Dask contain pointers to Python objects. If a field or attribute of that
-underlying Python object is updated in-place, e.g. with ``setattr``, the Future
-is effectively modified in-place. Subsequent accesses of that Future will return the
-updated object.
+In the example above Dask will update the values of the Numpy array in the Future
+``x`` in-place. This behavior holds for any object with mutable underlying data or
+fields. Completed Futures in Dask contain pointers to Python objects. If a field
+or attribute of that underlying Python object is updated in-place, e.g. with
+``setattr``, the Future is effectively modified in-place. Subsequent accesses of
+that Future will return the updated object.
