@@ -110,10 +110,10 @@ be updated in-place. For example, consider a workflow involving a
 
 .. code-block:: python
 
-   from distributed import Client
+   from dask.distributed import Client
    import pandas 
 
-   c = Client()  # LocalCluster
+   client = Client() 
    df = pandas.DataFrame({"c":[1,2,3,4], "d":[4,5,6,76]})  
    a_future = c.scatter(df)
    assert a_future.result().index.equals(df.index) 
