@@ -132,3 +132,16 @@ In the example above Dask will update the values of the Numpy array
 ``x`` in-place.  While efficient, this behavior can have unintended consequences,
 particularly if other tasks need to use ``x``, or if Dask needs to rerun this
 computation multiple times because of worker failure.
+
+
+Avoid Holding the GIL
+~~~~~~~~~~~~~~~~~~~~~
+
+Some Python functions that wrap external C/C++ code can hold onto the GIL,
+which stops other Python code from running in the background.  This is
+troublesome because while Dask workers run your function, they also need to
+communicate to each other in the background.
+
+If you wrap external code then please try to release the GIL.  This is usually
+easy to do if you are using any of the common solutions to code-wrapping like
+Cython, Numba, ctypes or others.
