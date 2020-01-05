@@ -4025,6 +4025,11 @@ def broadcast_arrays(*args, **kwargs):
     if kwargs:
         raise TypeError("unsupported keyword argument(s) provided")
 
+    # Unify uneven chunking
+    inds = [list(range(x.ndim))[::-1] for x in args]
+    uc_args = list(concat(zip(args, inds)))
+    _, args = unify_chunks(*uc_args, warn=False)
+
     shape = broadcast_shapes(*(e.shape for e in args))
     chunks = broadcast_chunks(*(e.chunks for e in args))
 
