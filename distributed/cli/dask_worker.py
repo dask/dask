@@ -398,7 +398,7 @@ def main(
         signal_fired = True
         if signum != signal.SIGINT:
             logger.info("Exiting on signal %d", signum)
-        asyncio.ensure_future(close_all())
+        return asyncio.ensure_future(close_all())
 
     async def run():
         await asyncio.gather(*nannies)
