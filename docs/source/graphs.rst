@@ -126,7 +126,7 @@ array:
        arr += 1          # modifies input directly without making a copy
        return arr
 
-   y = x.submit(f, x)
+   y = client.submit(f, x)
 
 In the example above Dask will update the values of the Numpy array
 ``x`` in-place.  While efficient, this behavior can have unintended consequences,
