@@ -561,7 +561,7 @@ implementation. There are two ways to do this:
 2. Register a function with ``dask.base.normalize_token``
 
    If defining a method on the class isn't possible or you need to
-   customize the tokenize function for a class who's super-class is
+   customize the tokenize function for a class whose super-class is
    already registered (for example if you need to sub-class built-ins),
    you can register a tokenize function with the ``normalize_token``
    dispatch.  The function should have the same signature as described
