@@ -1625,7 +1625,7 @@ class WorkerTable(DashboardComponent):
     def update(self):
         data = {name: [] for name in self.names + self.extra_names}
         for i, (addr, ws) in enumerate(
-            sorted(self.scheduler.workers.items(), key=lambda kv: kv[1].name)
+            sorted(self.scheduler.workers.items(), key=lambda kv: str(kv[1].name))
         ):
             for name in self.names + self.extra_names:
                 data[name].append(ws.metrics.get(name, None))
