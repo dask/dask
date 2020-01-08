@@ -67,6 +67,10 @@ def optimize_read_parquet_getitem(dsk):
             if isinstance(block_columns, str):
                 block_columns = [block_columns]
 
+            if set(block_columns).intersection(set(dsk.layers[k].categories)):
+                # ... where the item is not a partition column
+                return dsk
+
             columns |= set(block_columns)
             update_blocks[dep] = block
 
@@ -104,7 +108,15 @@ def optimize_read_parquet_getitem(dsk):
             columns = list(meta.columns)
 
         new = ParquetSubgraph(
-            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
+            name,
+            old.engine,
+            old.fs,
+            meta,
+            columns,
+            old.index,
+            old.parts,
+            old.categories,
+            old.kwargs,
         )
         layers[name] = new
         if name != old.name:

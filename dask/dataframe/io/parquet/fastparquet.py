@@ -339,7 +339,7 @@ class FastParquetEngine(Engine):
             }
             parts.append(part)
 
-        return (meta, stats, parts)
+        return (meta, stats, parts, [])
 
     @staticmethod
     def read_partition(fs, piece, columns, index, categories=(), pf=None, **kwargs):

@@ -319,7 +319,7 @@ class ArrowEngine(Engine):
             for piece in parts
         ]
 
-        return (meta, stats, parts)
+        return (meta, stats, parts, list(dataset.partitions.partition_names))
 
     @staticmethod
     def read_partition(

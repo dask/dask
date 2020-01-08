@@ -34,7 +34,9 @@ class ParquetSubgraph(Mapping):
     Enables optimiziations (see optimize_read_parquet_getitem).
     """
 
-    def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
+    def __init__(
+        self, name, engine, fs, meta, columns, index, parts, categories, kwargs
+    ):
         self.name = name
         self.engine = engine
         self.fs = fs
@@ -42,6 +44,7 @@ class ParquetSubgraph(Mapping):
         self.columns = columns
         self.index = index
         self.parts = parts
+        self.categories = categories or []
         self.kwargs = kwargs
 
     def __repr__(self):
@@ -222,7 +225,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts = engine.read_metadata(
+    meta, statistics, parts, partition_names = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -246,7 +249,9 @@ def read_parquet(
         meta, index, columns, index_in_columns, auto_index_allowed
     )
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = ParquetSubgraph(
+        name, engine, fs, meta, columns, index, parts, partition_names, kwargs
+    )
 
     # Set the index that was previously treated as a column
     if index_in_columns:
