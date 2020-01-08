@@ -1601,7 +1601,10 @@ class Bag(DaskMethodsMixin):
         return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):
-        """ Coalesce bag into fewer partitions.
+        """ Changes the number of partitions of the bag.
+
+        This can be used to reduce or increase the number of partitions
+        of the bag.
 
         Examples
         --------
