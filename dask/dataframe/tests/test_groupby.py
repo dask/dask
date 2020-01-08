@@ -2281,7 +2281,7 @@ def test_groupby_dropna_cudf(dropna, by):
         dask_result = ddf.groupby(by, dropna=dropna).e.sum()
         cudf_result = df.groupby(by, dropna=dropna).e.sum()
     if by in ["c", "d"]:
-        # Loose string/category index name in cudf...
+        # Lose string/category index name in cudf...
         dask_result = dask_result.compute()
         dask_result.index.name = cudf_result.index.name
 
@@ -2296,3 +2296,28 @@ def test_rounding_negative_var():
 
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std())
+
+
+@pytest.mark.parametrize("split_out", [2, 3])
+@pytest.mark.parametrize("column", [["b", "c"], ["b", "d"], ["b", "e"]])
+def test_groupby_split_out_multiindex(split_out, column):
+    df = pd.DataFrame(
+        {
+            "a": np.arange(8),
+            "b": [1, 0, 0, 2, 1, 1, 2, 0],
+            "c": [0, 1] * 4,
+            "d": ["dog", "cat", "cat", "dog", "dog", "dog", "cat", "bird"],
+        }
+    ).fillna(0)
+    df["e"] = df["d"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf_result_so1 = (
+        ddf.groupby(column).a.mean(split_out=1).compute().sort_values().dropna()
+    )
+
+    ddf_result = (
+        ddf.groupby(column).a.mean(split_out=split_out).compute().sort_values().dropna()
+    )
+
+    assert_eq(ddf_result, ddf_result_so1, check_index=False)
