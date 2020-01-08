@@ -382,6 +382,9 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
         if isinstance(dfs[0], pd.CategoricalIndex):
+            for i in range(1, len(dfs)):
+                if not isinstance(dfs[i], pd.CategoricalIndex):
+                    dfs[i] = dfs[i].astype("category")
             return pd.CategoricalIndex(union_categoricals(dfs), name=dfs[0].name)
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
