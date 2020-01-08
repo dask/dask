@@ -231,6 +231,23 @@ def describe_nonnumeric_aggregate(stats, name):
     return pd.Series(values, index=index, name=name)
 
 
+def _cum_aggregate_apply(aggregate, x, y):
+    """ Apply aggregation function within a cumulative aggregation
+
+    Parameters
+    ----------
+    aggregate: function (a, a) -> a
+        The aggregation function, like add, which is used to and subsequent
+        results
+    x:
+    y:
+    """
+    if y is None:
+        return x
+    else:
+        return aggregate(x, y)
+
+
 def cummin_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
