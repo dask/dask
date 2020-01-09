@@ -77,7 +77,6 @@ from .utils import (
     log_errors,
     str_graph,
     key_split,
-    asciitable,
     thread_state,
     no_default,
     PeriodicCallback,
@@ -88,7 +87,7 @@ from .utils import (
     has_keyword,
     format_dashboard_link,
 )
-from .versions import get_versions
+from . import versions as version_module
 
 
 logger = logging.getLogger(__name__)
@@ -1050,7 +1049,12 @@ class Client(Node):
             else:
                 await self._update_scheduler_info()
             await comm.write(
-                {"op": "register-client", "client": self.id, "reply": False}
+                {
+                    "op": "register-client",
+                    "client": self.id,
+                    "reply": False,
+                    "versions": version_module.get_versions(),
+                }
             )
         except Exception as e:
             if self.status == "closed":
@@ -1065,6 +1069,9 @@ class Client(Node):
             msg = await comm.read()
         assert len(msg) == 1
         assert msg[0]["op"] == "stream-start"
+
+        if msg[0].get("warning"):
+            warnings.warn(version_module.VersionMismatchWarning(msg[0]["warning"]))
 
         bcomm = BatchedSend(interval="10ms", loop=self.loop)
         bcomm.start(comm)
@@ -1249,7 +1256,7 @@ class Client(Node):
             if self.get == dask.config.get("get", None):
                 del dask.config.config["get"]
             if self.status == "closed":
-                raise gen.Return()
+                return
 
             if (
                 self.scheduler_comm
@@ -1274,15 +1281,21 @@ class Client(Node):
                 and not self.scheduler_comm.comm.closed()
             ):
                 await self.scheduler_comm.close()
+
             for key in list(self.futures):
                 self._release_key(key=key)
+
             if self._start_arg is None:
                 with ignoring(AttributeError):
                     await self.cluster.close()
+
             await self.rpc.close()
+
             self.status = "closed"
+
             if _get_global_client() is self:
                 _set_global_client(None)
+
             coroutines = set(self.coroutines)
             for f in self.coroutines:
                 # cancel() works on asyncio futures (Tornado 5)
@@ -1292,11 +1305,14 @@ class Client(Node):
                 if f.cancelled():
                     coroutines.remove(f)
             del self.coroutines[:]
+
             if not fast:
                 with ignoring(TimeoutError):
                     await gen.with_timeout(timedelta(seconds=2), list(coroutines))
+
             with ignoring(AttributeError):
                 await self.scheduler.close_rpc()
+
             self.scheduler = None
 
         self.status = "closed"
@@ -3551,7 +3567,7 @@ class Client(Node):
         return self.sync(self._get_versions, check=check, packages=packages)
 
     async def _get_versions(self, check=False, packages=[]):
-        client = get_versions(packages=packages)
+        client = version_module.get_versions(packages=packages)
         try:
             scheduler = await self.scheduler.versions(packages=packages)
         except KeyError:
@@ -3565,32 +3581,9 @@ class Client(Node):
         result = {"scheduler": scheduler, "workers": workers, "client": client}
 
         if check:
-            # we care about the required & optional packages matching
-            def to_packages(d):
-                L = list(d["packages"].values())
-                return dict(sum(L, type(L[0])()))
-
-            client_versions = to_packages(result["client"])
-            versions = [("scheduler", to_packages(result["scheduler"]))]
-            versions.extend((w, to_packages(d)) for w, d in sorted(workers.items()))
-
-            mismatched = defaultdict(list)
-            for name, vers in versions:
-                for pkg, cv in client_versions.items():
-                    v = vers.get(pkg, "MISSING")
-                    if cv != v:
-                        mismatched[pkg].append((name, v))
-
-            if mismatched:
-                errs = []
-                for pkg, versions in sorted(mismatched.items()):
-                    rows = [("client", client_versions[pkg])]
-                    rows.extend(versions)
-                    errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
-
-                raise ValueError(
-                    "Mismatched versions found\n\n%s" % ("\n\n".join(errs))
-                )
+            msg = version_module.error_message(scheduler, workers, client)
+            if msg:
+                raise ValueError(msg)
 
         return result
 

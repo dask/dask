@@ -272,33 +272,29 @@ def test_adapt_quickly():
 
 
 @gen_test(timeout=None)
-def test_adapt_down():
+async def test_adapt_down():
     """ Ensure that redefining adapt with a lower maximum removes workers """
-    cluster = yield LocalCluster(
+    async with LocalCluster(
         0,
         asynchronous=True,
         processes=False,
         scheduler_port=0,
         silence_logs=False,
         dashboard_address=None,
-    )
-    client = yield Client(cluster, asynchronous=True)
-    cluster.adapt(interval="20ms", maximum=5)
+    ) as cluster:
+        async with Client(cluster, asynchronous=True) as client:
+            cluster.adapt(interval="20ms", maximum=5)
 
-    try:
-        futures = client.map(slowinc, range(1000), delay=0.1)
-        while len(cluster.scheduler.workers) < 5:
-            yield gen.sleep(0.1)
+            futures = client.map(slowinc, range(1000), delay=0.1)
+            while len(cluster.scheduler.workers) < 5:
+                await gen.sleep(0.1)
 
-        cluster.adapt(maximum=2)
+            cluster.adapt(maximum=2)
 
-        start = time()
-        while len(cluster.scheduler.workers) != 2:
-            yield gen.sleep(0.1)
-            assert time() < start + 1
-    finally:
-        yield client.close()
-        yield cluster.close()
+            start = time()
+            while len(cluster.scheduler.workers) != 2:
+                await gen.sleep(0.1)
+                assert time() < start + 1
 
 
 @gen_test(timeout=30)

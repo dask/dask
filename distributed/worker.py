@@ -65,6 +65,7 @@ from .utils import (
 )
 from .utils_comm import pack_data, gather_from_workers, retry_operation
 from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
+from .versions import get_versions
 
 logger = logging.getLogger(__name__)
 
@@ -725,6 +726,10 @@ class Worker(ServerNode):
         )
 
     @property
+    def logs(self):
+        return self._deque_handler.deque
+
+    @property
     def worker_address(self):
         """ For API compatibility with Nanny """
         return self.address
@@ -797,7 +802,6 @@ class Worker(ServerNode):
         while True:
             try:
                 _start = time()
-                types = {k: typename(v) for k, v in self.data.items()}
                 comm = await connect(
                     self.scheduler.address, connection_args=self.connection_args
                 )
@@ -812,7 +816,7 @@ class Worker(ServerNode):
                         nthreads=self.nthreads,
                         name=self.name,
                         nbytes=self.nbytes,
-                        types=types,
+                        types={k: typename(v) for k, v in self.data.items()},
                         now=time(),
                         resources=self.total_resources,
                         memory_limit=self.memory_limit,
@@ -820,13 +824,18 @@ class Worker(ServerNode):
                         services=self.service_ports,
                         nanny=self.nanny,
                         pid=os.getpid(),
+                        versions=get_versions(),
                         metrics=await self.get_metrics(),
                         extra=await self.get_startup_information(),
                     ),
                     serializers=["msgpack"],
                 )
                 future = comm.read(deserializers=["msgpack"])
+
                 response = await future
+                if response.get("warning"):
+                    logger.warning(response["warning"])
+
                 _end = time()
                 middle = (_start + _end) / 2
                 self._update_latency(_end - start)
@@ -886,7 +895,13 @@ class Worker(ServerNode):
                 self._update_latency(end - start)
 
                 if response["status"] == "missing":
-                    await self._register_with_scheduler()
+                    for i in range(10):
+                        if self.status != "running":
+                            break
+                        else:
+                            await asyncio.sleep(0.05)
+                    else:
+                        await self._register_with_scheduler()
                     return
                 self.scheduler_delay = response["time"] - middle
                 self.periodic_callbacks["heartbeat"].callback_time = (

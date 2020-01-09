@@ -3724,7 +3724,7 @@ def test_get_versions(c):
     # that this does not raise
 
     v = c.get_versions(packages=["requests"])
-    assert dict(v["client"]["packages"]["optional"])["requests"] == requests.__version__
+    assert v["client"]["packages"]["requests"] == requests.__version__
 
 
 @gen_cluster(client=True)
@@ -4007,7 +4007,11 @@ def test_retire_many_workers(c, s, *workers):
     results = yield c.gather(futures)
     assert results == list(range(100))
 
+    while len(s.workers) != 3:
+        yield gen.sleep(0.01)
+
     assert len(s.has_what) == len(s.nthreads) == 3
+
     assert all(future.done() for future in futures)
     assert all(s.tasks[future.key].state == "memory" for future in futures)
     for w, keys in s.has_what.items():
@@ -5284,40 +5288,39 @@ def test_client_active_bad_port():
 @pytest.mark.parametrize("direct", [True, False])
 def test_turn_off_pickle(direct):
     @gen_cluster()
-    def test(s, a, b):
+    async def test(s, a, b):
         import numpy as np
 
-        c = yield Client(s.address, asynchronous=True, serializers=["dask", "msgpack"])
-        try:
-            assert (yield c.submit(inc, 1)) == 2
-            yield c.submit(np.ones, 5)
-            yield c.scatter(1)
+        async with Client(
+            s.address, asynchronous=True, serializers=["dask", "msgpack"]
+        ) as c:
+            assert (await c.submit(inc, 1)) == 2
+            await c.submit(np.ones, 5)
+            await c.scatter(1)
 
             # Can't send complex data
             with pytest.raises(TypeError):
-                future = yield c.scatter(inc)
+                future = await c.scatter(inc)
 
             # can send complex tasks (this uses pickle regardless)
             future = c.submit(lambda x: x, inc)
-            yield wait(future)
+            await wait(future)
 
             # but can't receive complex results
             with pytest.raises(TypeError):
-                yield c.gather(future, direct=direct)
+                await c.gather(future, direct=direct)
 
             # Run works
-            result = yield c.run(lambda: 1)
+            result = await c.run(lambda: 1)
             assert list(result.values()) == [1, 1]
-            result = yield c.run_on_scheduler(lambda: 1)
+            result = await c.run_on_scheduler(lambda: 1)
             assert result == 1
 
             # But not with complex return values
             with pytest.raises(TypeError):
-                yield c.run(lambda: inc)
+                await c.run(lambda: inc)
             with pytest.raises(TypeError):
-                yield c.run_on_scheduler(lambda: inc)
-        finally:
-            yield c.close()
+                await c.run_on_scheduler(lambda: inc)
 
     test()
 
@@ -5697,7 +5700,6 @@ async def test_profile_server(c, s, a, b):
         try:
             x = c.map(slowinc, range(10), delay=0.01, workers=a.address, pure=False)
             await wait(x)
-
             await asyncio.gather(
                 c.run(slowinc, 1, delay=0.5), c.run_on_scheduler(slowdec, 1, delay=0.5)
             )
@@ -5821,7 +5823,7 @@ def test_client_sync_with_async_def(loop):
             assert c.sync(ff) == 1
 
 
-@pytest.mark.xfail(reason="known intermittent failure")
+@pytest.mark.skip(reason="known intermittent failure")
 @gen_cluster(client=True)
 async def test_dont_hold_on_to_large_messages(c, s, a, b):
     np = pytest.importorskip("numpy")

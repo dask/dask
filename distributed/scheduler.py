@@ -63,6 +63,7 @@ from .utils import (
 )
 from .utils_comm import scatter_to_workers, gather_from_workers, retry_operation
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
+from . import versions as version_module
 
 from .publish import PublishExtension
 from .queues import QueueExtension
@@ -115,12 +116,13 @@ class ClientState(object):
 
     """
 
-    __slots__ = ("client_key", "wants_what", "last_seen")
+    __slots__ = ("client_key", "wants_what", "last_seen", "versions")
 
-    def __init__(self, client):
+    def __init__(self, client, versions=None):
         self.client_key = client
         self.wants_what = set()
         self.last_seen = time()
+        self.versions = versions or {}
 
     def __repr__(self):
         return "<Client %r>" % (self.client_key,)
@@ -232,6 +234,7 @@ class WorkerState(object):
         "status",
         "time_delay",
         "used_resources",
+        "versions",
     )
 
     def __init__(
@@ -243,6 +246,7 @@ class WorkerState(object):
         memory_limit=0,
         local_directory=None,
         services=None,
+        versions=None,
         nanny=None,
         extra=None,
     ):
@@ -253,6 +257,7 @@ class WorkerState(object):
         self.memory_limit = memory_limit
         self.local_directory = local_directory
         self.services = services or {}
+        self.versions = versions or {}
         self.nanny = nanny
 
         self.status = "running"
@@ -1533,33 +1538,30 @@ class Scheduler(ServerNode):
         host = get_address_host(address)
         local_now = time()
         now = now or time()
-        metrics = metrics or {}
+        assert metrics
         host_info = host_info or {}
 
         self.host_info[host]["last-seen"] = local_now
         frac = 1 / len(self.workers)
-        try:
-            self.bandwidth = (
-                self.bandwidth * (1 - frac) + metrics["bandwidth"]["total"] * frac
-            )
-            for other, (bw, count) in metrics["bandwidth"]["workers"].items():
-                if (address, other) not in self.bandwidth_workers:
-                    self.bandwidth_workers[address, other] = bw / count
-                else:
-                    alpha = (1 - frac) ** count
-                    self.bandwidth_workers[address, other] = self.bandwidth_workers[
-                        address, other
-                    ] * alpha + bw * (1 - alpha)
-            for typ, (bw, count) in metrics["bandwidth"]["types"].items():
-                if typ not in self.bandwidth_types:
-                    self.bandwidth_types[typ] = bw / count
-                else:
-                    alpha = (1 - frac) ** count
-                    self.bandwidth_types[typ] = self.bandwidth_types[
-                        typ
-                    ] * alpha + bw * (1 - alpha)
-        except KeyError:
-            pass
+        self.bandwidth = (
+            self.bandwidth * (1 - frac) + metrics["bandwidth"]["total"] * frac
+        )
+        for other, (bw, count) in metrics["bandwidth"]["workers"].items():
+            if (address, other) not in self.bandwidth_workers:
+                self.bandwidth_workers[address, other] = bw / count
+            else:
+                alpha = (1 - frac) ** count
+                self.bandwidth_workers[address, other] = self.bandwidth_workers[
+                    address, other
+                ] * alpha + bw * (1 - alpha)
+        for typ, (bw, count) in metrics["bandwidth"]["types"].items():
+            if typ not in self.bandwidth_types:
+                self.bandwidth_types[typ] = bw / count
+            else:
+                alpha = (1 - frac) ** count
+                self.bandwidth_types[typ] = self.bandwidth_types[typ] * alpha + bw * (
+                    1 - alpha
+                )
 
         ws = self.workers[address]
 
@@ -1603,6 +1605,7 @@ class Scheduler(ServerNode):
         pid=0,
         services=None,
         local_directory=None,
+        versions=None,
         nanny=None,
         extra=None,
     ):
@@ -1624,6 +1627,7 @@ class Scheduler(ServerNode):
                 name=name,
                 local_directory=local_directory,
                 services=services,
+                versions=versions,
                 nanny=nanny,
                 extra=extra,
             )
@@ -1699,15 +1703,27 @@ class Scheduler(ServerNode):
             self.log_event("all", {"action": "add-worker", "worker": address})
             logger.info("Register worker %s", ws)
 
+            msg = {
+                "status": "OK",
+                "time": time(),
+                "heartbeat-interval": heartbeat_interval(len(self.workers)),
+                "worker-plugins": self.worker_plugins,
+            }
+
+            version_warning = version_module.error_message(
+                version_module.get_versions(),
+                merge(
+                    {w: ws.versions for w, ws in self.workers.items()},
+                    {c: cs.versions for c, cs in self.clients.items() if cs.versions},
+                ),
+                versions,
+                client_name="This Worker",
+            )
+            if version_warning:
+                msg["warning"] = version_warning
+
             if comm:
-                await comm.write(
-                    {
-                        "status": "OK",
-                        "time": time(),
-                        "heartbeat-interval": heartbeat_interval(len(self.workers)),
-                        "worker-plugins": self.worker_plugins,
-                    }
-                )
+                await comm.write(msg)
             await self.handle_worker(comm=comm, worker=address)
 
     def update_graph(
@@ -2438,7 +2454,7 @@ class Scheduler(ServerNode):
                 if self.status == "running":
                     logger.critical("Tried writing to closed comm: %s", msg)
 
-    async def add_client(self, comm, client=None):
+    async def add_client(self, comm, client=None, versions=None):
         """ Add client to network
 
         We listen to all future messages from this Comm.
@@ -2447,12 +2463,21 @@ class Scheduler(ServerNode):
         comm.name = "Scheduler->Client"
         logger.info("Receive client connection: %s", client)
         self.log_event(["all", client], {"action": "add-client", "client": client})
-        self.clients[client] = ClientState(client)
+        self.clients[client] = ClientState(client, versions=versions)
+
         try:
             bcomm = BatchedSend(interval="2ms", loop=self.loop)
             bcomm.start(comm)
             self.client_comms[client] = bcomm
-            bcomm.send({"op": "stream-start"})
+            msg = {"op": "stream-start"}
+            version_warning = version_module.error_message(
+                version_module.get_versions(),
+                {w: ws.versions for w, ws in self.workers.items()},
+                versions,
+            )
+            if version_warning:
+                msg["warning"] = version_warning
+            bcomm.send(msg)
 
             try:
                 await self.handle_stream(comm=comm, extra={"client": client})
