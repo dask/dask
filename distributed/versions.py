@@ -7,7 +7,6 @@ import platform
 import struct
 import os
 import sys
-import locale
 import importlib
 
 
@@ -56,7 +55,6 @@ def get_system_info():
         ("byteorder", "%s" % sys.byteorder),
         ("LC_ALL", "%s" % os.environ.get("LC_ALL", "None")),
         ("LANG", "%s" % os.environ.get("LANG", "None")),
-        ("LOCALE", "%s.%s" % locale.getlocale()),
     ]
 
     return host
