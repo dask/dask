@@ -2343,7 +2343,12 @@ Dask Name: {name}, {task} tasks""".format(
         date = self.divisions[0] + offset
         end = self.loc._get_partitions(date)
 
-        include_right = offset.is_anchored() or not hasattr(offset, "_inc")
+        if PANDAS_GT_100:
+            is_anchored = offset.is_anchored()
+        else:
+            is_anchored = offset.isAnchored()
+
+        include_right = is_anchored or not hasattr(offset, "_inc")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -5893,13 +5898,18 @@ def maybe_shift_divisions(df, periods, freq):
     """
     if isinstance(freq, str):
         freq = pd.tseries.frequencies.to_offset(freq)
-    if isinstance(freq, pd.DateOffset) and (
-        freq.is_anchored() or not hasattr(freq, "delta")
-    ):
-        # Can't infer divisions on relative or anchored offsets, as
-        # divisions may now split identical index value.
-        # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
-        return df.clear_divisions()
+
+    is_offset = isinstance(freq, pd.DateOffset)
+    if is_offset:
+        if PANDAS_GT_100:
+            is_anchored = freq.is_anchored()
+        else:
+            is_anchored = freq.isAnchored()
+        if is_anchored or not hasattr(freq, "delta"):
+            # Can't infer divisions on relative or anchored offsets, as
+            # divisions may now split identical index value.
+            # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
+            return df.clear_divisions()
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index

@@ -222,7 +222,7 @@ def list_eq(aa, bb):
         av = a.sort_values().values
         bv = b.sort_values().values
 
-    np.testing.assert_array_equal(av, bv)
+    dd._compat.assert_numpy_array_equal(av, bv)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])

@@ -32,6 +32,16 @@ def assert_categorical_equal(left, right, *args, **kwargs):
         return tm.assert_categorical_equal(left, right, *args, **kwargs)
 
 
+def assert_numpy_array_equal(left, right):
+    left_na = pd.isna(left)
+    right_na = pd.isna(right)
+    np.testing.assert_array_equal(left_na, right_na)
+
+    left_valid = left[~left_na]
+    right_valid = right[~right_na]
+    np.testing.assert_array_equal(left_valid, right_valid)
+
+
 def makeDataFrame():
     data = np.random.randn(30, 4)
     index = list(string.ascii_letters)[:30]
