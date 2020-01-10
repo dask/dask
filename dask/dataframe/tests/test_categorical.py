@@ -2,11 +2,12 @@ import operator
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
+from dask.dataframe import _compat
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     make_meta,
@@ -213,7 +214,7 @@ def test_categorize():
 
 def test_categorize_index():
     # Object dtype
-    ddf = dd.from_pandas(tm.makeDataFrame(), npartitions=5)
+    ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
     df = ddf.compute()
 
     ddf2 = ddf.categorize()

@@ -1709,9 +1709,11 @@ Dask Name: {name}, {task} tasks""".format(
                 self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns
             )
 
-            if count_timedeltas == len(self._meta.columns):
+            # pandas 1.0+ does not implement var on timedelta
+
+            if not PANDAS_GT_100 and count_timedeltas == len(self._meta.columns):
                 result = self._var_timedeltas(skipna, ddof, split_every)
-            elif count_timedeltas > 0:
+            elif not PANDAS_GT_100 and count_timedeltas > 0:
                 result = self._var_mixed(skipna, ddof, split_every)
             else:
                 result = self._var_numeric(skipna, ddof, split_every)
@@ -2109,7 +2111,11 @@ Dask Name: {name}, {task} tasks""".format(
 
             name2 = "{0}{1}-take-last".format(self._token_prefix, op_name)
             cumlast = map_partitions(
-                _take_last, cumpart, skipna, meta=pd.Series([]), token=name2
+                _take_last,
+                cumpart,
+                skipna,
+                meta=pd.Series([], dtype="float"),
+                token=name2,
             )
 
             suffix = tokenize(self)
@@ -2337,7 +2343,7 @@ Dask Name: {name}, {task} tasks""".format(
         date = self.divisions[0] + offset
         end = self.loc._get_partitions(date)
 
-        include_right = offset.isAnchored() or not hasattr(offset, "_inc")
+        include_right = offset.is_anchored() or not hasattr(offset, "_inc")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -5114,7 +5120,7 @@ def quantile(df, q, method="default"):
         name = "quantiles-" + token
         empty_index = pd.Index([], dtype=float)
         return Series(
-            {(name, 0): pd.Series([], name=df.name, index=empty_index)},
+            {(name, 0): pd.Series([], name=df.name, index=empty_index, dtype="float")},
             name,
             df._meta,
             [None, None],
@@ -5387,7 +5393,7 @@ def _take_last(a, skipna=True):
             # create Series from appropriate backend dataframe library
             series_typ = type(a.iloc[0:1, 0])
             if a.empty:
-                return series_typ([])
+                return series_typ([], dtype="float")
             return series_typ(
                 {col: _last_valid(a[col]) for col in a.columns}, index=a.columns
             )
@@ -5888,7 +5894,7 @@ def maybe_shift_divisions(df, periods, freq):
     if isinstance(freq, str):
         freq = pd.tseries.frequencies.to_offset(freq)
     if isinstance(freq, pd.DateOffset) and (
-        freq.isAnchored() or not hasattr(freq, "delta")
+        freq.is_anchored() or not hasattr(freq, "delta")
     ):
         # Can't infer divisions on relative or anchored offsets, as
         # divisions may now split identical index value.

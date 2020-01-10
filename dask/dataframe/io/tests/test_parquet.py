@@ -4,12 +4,12 @@ from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem

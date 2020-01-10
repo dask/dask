@@ -4,9 +4,9 @@ import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 from dask.base import compute_as_if_collection
+from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (
@@ -221,7 +221,8 @@ def list_eq(aa, bb):
     else:
         av = a.sort_values().values
         bv = b.sort_values().values
-    tm.assert_numpy_array_equal(av, bv)
+
+    np.testing.assert_array_equal(av, bv)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
@@ -1971,6 +1972,9 @@ def test_multi_duplicate_divisions():
     assert_eq(r1, r2)
 
 
+@pytest.mark.xfail(
+    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
+)
 def test_merge_outer_empty():
     # Issue #5470 bug reproducer
     k_clusters = 3
