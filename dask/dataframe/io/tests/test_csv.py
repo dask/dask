@@ -11,10 +11,9 @@ dd = pytest.importorskip("dask.dataframe")
 
 from toolz import partition_all, valmap
 
-import pandas.util.testing as tm
-
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,

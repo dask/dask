@@ -1,11 +1,11 @@
 import pandas as pd
-import pandas.util.testing as tm
 import numpy as np
 
 import pytest
 
 import dask.dataframe as dd
 
+from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
 
@@ -37,24 +37,30 @@ def test_loc():
     else:
         expected_warning = None
 
-    with pytest.warns(expected_warning):
-        assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
-    with pytest.warns(expected_warning):
-        assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
-    with pytest.warns(expected_warning):
-        assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
+    if not PANDAS_GT_100:
+        # removed in pandas 1.0
+        with pytest.warns(expected_warning):
+            assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
+        with pytest.warns(expected_warning):
+            assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
+        with pytest.warns(expected_warning):
+            assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
 
     assert_eq(d.a.loc[5], full.a.loc[5:5])
     assert_eq(d.a.loc[3:8], full.a.loc[3:8])
     assert_eq(d.a.loc[:8], full.a.loc[:8])
     assert_eq(d.a.loc[3:], full.a.loc[3:])
     assert_eq(d.a.loc[[5]], full.a.loc[[5]])
-    with pytest.warns(expected_warning):
-        assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
-    with pytest.warns(expected_warning):
-        assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
-    with pytest.warns(expected_warning):
-        assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
+    if not PANDAS_GT_100:
+        # removed in pandas 1.0
+        with pytest.warns(expected_warning):
+            assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
+        with pytest.warns(expected_warning):
+            assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
+        with pytest.warns(expected_warning):
+            assert_eq(
+                d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])]
+            )
     assert_eq(d.a.loc[[]], full.a.loc[[]])
     assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
 
@@ -82,8 +88,8 @@ def test_loc_non_informative_index():
 
 
 def test_loc_with_text_dates():
-    A = tm.makeTimeSeries(10).iloc[:5]
-    B = tm.makeTimeSeries(10).iloc[5:]
+    A = dd._compat.makeTimeSeries().iloc[:5]
+    B = dd._compat.makeTimeSeries().iloc[5:]
     s = dd.Series(
         {("df", 0): A, ("df", 1): B},
         "df",
@@ -168,6 +174,7 @@ def test_loc2d():
         d.a.loc[d.a % 2 == 0, 3]
 
 
+@pytest.mark.skip(PANDAS_GT_100, reason="Removed in pandas 1.0")
 def test_loc2d_some_missing():
     with pytest.warns(FutureWarning):
         assert_eq(d.loc[[3, 4, 3], ["a"]], full.loc[[3, 4, 3], ["a"]])

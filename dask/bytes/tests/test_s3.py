@@ -386,6 +386,8 @@ def test_modification_time_read_bytes():
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
 def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
+    from dask.dataframe._compat import tm
+
     lib = pytest.importorskip(engine)
     if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
@@ -415,7 +417,7 @@ def test_parquet(s3, engine):
     df2 = dd.read_parquet(url, index="foo", engine=engine)
     assert len(df2.divisions) > 1
 
-    pd.util.testing.assert_frame_equal(data, df2.compute())
+    tm.assert_frame_equal(data, df2.compute())
 
 
 def test_parquet_wstoragepars(s3):

@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import dask.dataframe as dd
 
+from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
 
 

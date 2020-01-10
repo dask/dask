@@ -1,9 +1,9 @@
-import pandas.util.testing as tm
 import pandas as pd
 import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq
 
 

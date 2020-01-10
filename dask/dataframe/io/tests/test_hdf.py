@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import os
@@ -9,6 +8,7 @@ import pathlib
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.dataframe.utils import assert_eq
 

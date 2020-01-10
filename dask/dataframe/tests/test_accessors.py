@@ -47,7 +47,7 @@ def test_register(obj, registrar):
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
         registrar("mine")(MyAccessor)
-        instance = dd.from_pandas(obj._partition_type([]), 2)
+        instance = dd.from_pandas(obj._partition_type([], dtype=float), 2)
         assert instance.mine.prop == "item"
         after = set(dir(obj))
         assert (before ^ after) == {"mine"}

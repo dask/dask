@@ -3,7 +3,6 @@ import numbers
 import re
 import textwrap
 from collections.abc import Iterator, Mapping
-from distutils.version import LooseVersion
 
 import sys
 import traceback
@@ -11,7 +10,6 @@ from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 from pandas.api.types import (
     is_categorical_dtype,
     is_scalar,
@@ -19,6 +17,17 @@ from pandas.api.types import (
     is_period_dtype,
     is_datetime64tz_dtype,
     is_interval_dtype,
+)
+
+# include these here for compat
+from ._compat import (  # noqa: F401
+    PANDAS_VERSION,
+    PANDAS_GT_0230,
+    PANDAS_GT_0240,
+    PANDAS_GT_0250,
+    PANDAS_GT_100,
+    HAS_INT_NA,
+    tm,
 )
 
 from .extensions import make_array_nonempty, make_scalar
@@ -29,14 +38,6 @@ from ..utils import asciitable, is_arraylike, Dispatch, typename
 from ..utils import is_dataframe_like as dask_is_dataframe_like
 from ..utils import is_series_like as dask_is_series_like
 from ..utils import is_index_like as dask_is_index_like
-
-
-PANDAS_VERSION = LooseVersion(pd.__version__)
-PANDAS_GT_0230 = PANDAS_VERSION >= LooseVersion("0.23.0")
-PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0rc1")
-PANDAS_GT_0250 = PANDAS_VERSION >= LooseVersion("0.25.0")
-PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("0.26.0.dev0")
-HAS_INT_NA = PANDAS_GT_0240
 
 
 def is_integer_na_dtype(t):

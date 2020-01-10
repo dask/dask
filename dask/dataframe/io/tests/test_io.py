@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 import pytest
 from threading import Lock
@@ -8,6 +7,7 @@ from multiprocessing.pool import ThreadPool
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 

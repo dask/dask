@@ -2,8 +2,8 @@ import re
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     shard_df_on_index,
