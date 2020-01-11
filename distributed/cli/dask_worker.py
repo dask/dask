@@ -11,7 +11,7 @@ import click
 import dask
 from dask.utils import ignoring
 from dask.system import CPU_COUNT
-from distributed import Nanny, Worker
+from distributed import Nanny
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
@@ -20,7 +20,7 @@ from distributed.proctitle import (
     enable_proctitle_on_children,
     enable_proctitle_on_current,
 )
-from distributed.utils import deserialize_for_cli
+from distributed.utils import deserialize_for_cli, import_term
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
@@ -191,6 +191,13 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     help="Random amount by which to stagger lifetime values",
 )
 @click.option(
+    "--worker-class",
+    type=str,
+    default="dask.distributed.Worker",
+    show_default=True,
+    help="Worker class used to instantiate workers from.",
+)
+@click.option(
     "--lifetime-restart/--no-lifetime-restart",
     "lifetime_restart",
     default=False,
@@ -233,6 +240,7 @@ def main(
     tls_cert,
     tls_key,
     dashboard_address,
+    worker_class,
     **kwargs
 ):
     g0, g1, g2 = gc.get_threshold()  # https://github.com/dask/distributed/issues/1653
@@ -339,13 +347,17 @@ def main(
 
     loop = IOLoop.current()
 
+    worker_class = import_term(worker_class)
+    if nanny:
+        kwargs["worker_class"] = worker_class
+
     if nanny:
         kwargs.update({"worker_port": worker_port, "listen_address": listen_address})
         t = Nanny
     else:
         if nanny_port:
             kwargs["service_ports"] = {"nanny": nanny_port}
-        t = Worker
+        t = worker_class
 
     if (
         not scheduler

@@ -340,3 +340,46 @@ async def test_integer_names(cleanup):
                 await asyncio.sleep(0.01)
             [ws] = s.workers.values()
             assert ws.name == 123
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("nanny", ["--nanny", "--no-nanny"])
+async def test_worker_class(cleanup, tmp_path, nanny):
+    # Create module with custom worker class
+    WORKER_CLASS_TEXT = """
+from distributed.worker import Worker
+
+class MyWorker(Worker):
+    pass
+"""
+    tmpdir = str(tmp_path)
+    tmpfile = str(tmp_path / "myworker.py")
+    with open(tmpfile, "w") as f:
+        f.write(WORKER_CLASS_TEXT)
+
+    # Put module on PYTHONPATH
+    env = os.environ.copy()
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = tmpdir + ":" + env["PYTHONPATH"]
+    else:
+        env["PYTHONPATH"] = tmpdir
+
+    async with Scheduler(port=0) as s:
+        async with Client(s.address, asynchronous=True) as c:
+            with popen(
+                [
+                    "dask-worker",
+                    s.address,
+                    nanny,
+                    "--worker-class",
+                    "myworker.MyWorker",
+                ],
+                env=env,
+            ) as worker:
+                await c.wait_for_workers(1)
+
+                def worker_type(dask_worker):
+                    return type(dask_worker).__name__
+
+                worker_types = await c.run(worker_type)
+                assert all(name == "MyWorker" for name in worker_types.values())
