@@ -532,4 +532,11 @@ def test_duplicate_columns_repr():
 def test_empty_repr():
     df = pd.DataFrame()
     ddf = dd.from_pandas(df, npartitions=1)
-    repr(ddf)
+    exp = (
+        "Dask DataFrame Structure:\n"
+        "Empty DataFrame\n"
+        "Columns: []\n"
+        "Index: [, ]\n"
+        "Dask Name: from_pandas, 1 tasks"
+    )
+    assert repr(ddf) == exp
