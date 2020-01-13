@@ -672,7 +672,7 @@ def test_compression_multiple_files():
         f.write(csv_text.encode())
         f.close()
 
-        with tm.assert_produces_warning(UserWarning):
+        with pytest.warns(UserWarning):
             df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2

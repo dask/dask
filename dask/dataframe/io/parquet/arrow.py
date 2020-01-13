@@ -326,7 +326,12 @@ class ArrowEngine(Engine):
         fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
         if isinstance(index, list):
-            columns += index
+            for level in index:
+                # unclear if we can use set ops here. I think the order matters.
+                # Need the membership test to avoid duplicating index when
+                # we slice with `columns` later on.
+                if level not in columns:
+                    columns.append(level)
         if isinstance(piece, str):
             # `piece` is a file-path string
             piece = pq.ParquetDatasetPiece(
