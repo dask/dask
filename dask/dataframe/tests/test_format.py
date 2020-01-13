@@ -527,3 +527,9 @@ def test_duplicate_columns_repr():
     arr = da.from_array(np.arange(10).reshape(5, 2), chunks=(5, 2))
     frame = dd.from_dask_array(arr, columns=["a", "a"])
     repr(frame)
+
+
+def test_empty_repr():
+    df = pd.DataFrame()
+    ddf = dd.from_pandas(df, npartitions=1)
+    repr(ddf)
