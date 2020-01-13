@@ -617,8 +617,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    pd.util.testing.assert_series_equal(out1, df.a + 1)
-    pd.util.testing.assert_series_equal(out2, df.a + df.b)
+    pd.testing.assert_series_equal(out1, df.a + 1)
+    pd.testing.assert_series_equal(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd or not da")

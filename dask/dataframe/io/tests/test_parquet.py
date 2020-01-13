@@ -9,7 +9,6 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -908,7 +907,7 @@ def test_empty_partition(tmpdir, engine):
 
 def test_timestamp_index(tmpdir, engine):
     fn = str(tmpdir)
-    df = tm.makeTimeDataFrame()
+    df = dd._compat.makeTimeDataFrame()
     df.index.name = "foo"
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine)

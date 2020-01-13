@@ -263,7 +263,7 @@ def test_from_pandas_small():
             ddf = dd.from_pandas(df, npartitions=5, sort=sort)
             assert_eq(df, ddf)
 
-            s = pd.Series([0] * i, name="x")
+            s = pd.Series([0] * i, name="x", dtype=int)
             ds = dd.from_pandas(s, npartitions=5, sort=sort)
             assert_eq(s, ds)
 
