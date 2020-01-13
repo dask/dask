@@ -376,6 +376,7 @@ def test_to_hdf_link_optimizations():
 
 
 @pytest.mark.slow
+@skip_pandas_rc
 def test_to_hdf_lock_delays():
     pytest.importorskip("tables")
     df16 = pd.DataFrame(

@@ -136,7 +136,11 @@ def test_to_hdf_distributed(c):
     ],
 )
 def test_to_hdf_scheduler_distributed(npartitions, c):
+    dd = pytest.importorskip("dask.dataframe")
     from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
+
+    if dd._compat.PANDAS_GT_100:
+        pytest.skip(reaons="https://github.com/pandas-dev/pandas/issues/30962")
 
     test_to_hdf_schedulers(None, npartitions)
 
