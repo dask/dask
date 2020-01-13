@@ -342,6 +342,16 @@ class ArrowEngine(Engine):
                 open_file_func=partial(fs.open, mode="rb"),
             )
 
+        # Ensure `columns` and `partitions` do not overlap
+        columns_and_parts = columns.copy()
+        if columns_and_parts and partitions:
+            for part_name in partitions.partition_names:
+                if part_name in columns:
+                    columns.remove(part_name)
+                else:
+                    columns_and_parts.append(part_name)
+            columns = columns or None
+
         df = piece.read(
             columns=columns,
             partitions=partitions,
@@ -349,7 +359,7 @@ class ArrowEngine(Engine):
             use_threads=False,
             **kwargs.get("read", {}),
         ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
-            list(columns)
+            list(columns_and_parts)
         ]
 
         if index:
