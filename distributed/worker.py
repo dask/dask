@@ -1096,7 +1096,7 @@ class Worker(ServerNode):
             for pc in self.periodic_callbacks.values():
                 pc.stop()
             with ignoring(EnvironmentError, gen.TimeoutError):
-                if report:
+                if report and self.contact_address is not None:
                     await gen.with_timeout(
                         timedelta(seconds=timeout),
                         self.scheduler.unregister(

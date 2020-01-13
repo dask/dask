@@ -1619,6 +1619,16 @@ class Scheduler(ServerNode):
             if ws is not None:
                 raise ValueError("Worker already exists %s" % ws)
 
+            if name in self.aliases:
+                msg = {
+                    "status": "error",
+                    "message": "name taken, %s" % name,
+                    "time": time(),
+                }
+                if comm:
+                    await comm.write(msg)
+                return
+
             self.workers[address] = ws = WorkerState(
                 address=address,
                 pid=pid,
@@ -1631,16 +1641,6 @@ class Scheduler(ServerNode):
                 nanny=nanny,
                 extra=extra,
             )
-
-            if name in self.aliases:
-                msg = {
-                    "status": "error",
-                    "message": "name taken, %s" % name,
-                    "time": time(),
-                }
-                if comm:
-                    await comm.write(msg)
-                return
 
             if "addresses" not in self.host_info[host]:
                 self.host_info[host].update({"addresses": set(), "nthreads": 0})
@@ -2118,10 +2118,12 @@ class Scheduler(ServerNode):
         with log_errors():
             if self.status == "closed":
                 return
+
+            address = self.coerce_address(address)
+
             if address not in self.workers:
                 return "already-removed"
 
-            address = self.coerce_address(address)
             host = get_address_host(address)
 
             ws = self.workers[address]

@@ -217,6 +217,15 @@ def test_remove_worker_from_scheduler(s, a, b):
     s.validate_state()
 
 
+@gen_cluster()
+def test_remove_worker_by_name_from_scheduler(s, a, b):
+    assert a.address in s.stream_comms
+    assert s.remove_worker(address=a.name) == "OK"
+    assert a.address not in s.nthreads
+    assert s.remove_worker(address=a.address) == "already-removed"
+    s.validate_state()
+
+
 @gen_cluster(config={"distributed.scheduler.events-cleanup-delay": "10 ms"})
 def test_clear_events_worker_removal(s, a, b):
     assert a.address in s.events
@@ -566,7 +575,7 @@ def test_coerce_address():
             "tcp://127.0.0.1:8000",
             "tcp://[::1]:8000",
         )
-        assert s.coerce_address(u"localhost:8000") in (
+        assert s.coerce_address("localhost:8000") in (
             "tcp://127.0.0.1:8000",
             "tcp://[::1]:8000",
         )
@@ -1966,3 +1975,16 @@ async def test_multiple_listeners(cleanup):
     log = log.getvalue()
     assert re.search(r"Scheduler at:\s*tcp://", log)
     assert re.search(r"Scheduler at:\s*inproc://", log)
+
+
+@gen_cluster(nthreads=[("127.0.0.1", 1)])
+async def test_worker_name_collision(s, a):
+    # test that a name collision for workers produces the expected respsone
+    # and leaves the data structures of Scheduler in a good state
+    # is not updated by the second worker
+    with pytest.raises(ValueError, match=f"name taken, {a.name!r}"):
+        await Worker(s.address, name=a.name, loop=s.loop, host="127.0.0.1")
+
+    s.validate_state()
+    assert set(s.workers) == {a.address}
+    assert s.aliases == {a.name: a.address}
