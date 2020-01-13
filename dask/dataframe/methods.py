@@ -231,6 +231,23 @@ def describe_nonnumeric_aggregate(stats, name):
     return pd.Series(values, index=index, name=name)
 
 
+def _cum_aggregate_apply(aggregate, x, y):
+    """ Apply aggregation function within a cumulative aggregation
+
+    Parameters
+    ----------
+    aggregate: function (a, a) -> a
+        The aggregation function, like add, which is used to and subsequent
+        results
+    x:
+    y:
+    """
+    if y is None:
+        return x
+    else:
+        return aggregate(x, y)
+
+
 def cummin_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
@@ -365,6 +382,9 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
         if isinstance(dfs[0], pd.CategoricalIndex):
+            for i in range(1, len(dfs)):
+                if not isinstance(dfs[i], pd.CategoricalIndex):
+                    dfs[i] = dfs[i].astype("category")
             return pd.CategoricalIndex(union_categoricals(dfs), name=dfs[0].name)
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]

@@ -11,10 +11,9 @@ dd = pytest.importorskip("dask.dataframe")
 
 from toolz import partition_all, valmap
 
-import pandas.util.testing as tm
-
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
@@ -673,7 +672,7 @@ def test_compression_multiple_files():
         f.write(csv_text.encode())
         f.close()
 
-        with tm.assert_produces_warning(UserWarning):
+        with pytest.warns(UserWarning):
             df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2

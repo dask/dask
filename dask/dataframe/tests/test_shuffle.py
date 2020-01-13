@@ -1,5 +1,7 @@
 import itertools
 import os
+import random
+
 import pandas as pd
 import pytest
 import pickle
@@ -7,10 +9,10 @@ import numpy as np
 import string
 import multiprocessing as mp
 from copy import copy
-import pandas.util.testing as tm
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm, PANDAS_GT_100, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe.shuffle import (
@@ -140,6 +142,9 @@ def test_partitioning_index():
     assert len(np.unique(res)) > 1
 
 
+@pytest.mark.xfail(
+    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
+)
 def test_partitioning_index_categorical_on_values():
     df = pd.DataFrame({"a": list(string.ascii_letters), "b": [1, 2, 3, 4] * 13})
     df.a = df.a.astype("category")
@@ -554,6 +559,10 @@ def test_set_index():
     assert d4.index.name == "b"
     assert_eq(d4, full.set_index("b"))
 
+    d5 = d.set_index(["b"])
+    assert d5.index.name == "b"
+    assert_eq(d5, full.set_index(["b"]))
+
 
 def test_set_index_interpolate():
     df = pd.DataFrame({"x": [4, 1, 1, 3, 3], "y": [1.0, 1, 1, 1, 2]})
@@ -641,6 +650,14 @@ def test_set_index_raises_error_on_bad_input():
         ddf.set_index(["a", "b"])
     assert msg in str(err.value)
 
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index([["a", "b"]])
+    assert msg in str(err.value)
+
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index([["a"]])
+    assert msg in str(err.value)
+
 
 def test_set_index_sorted_true():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]})
@@ -723,6 +740,22 @@ def test_set_index_on_empty():
 
         assert assert_eq(ddf, expected_df)
         assert ddf.npartitions == 1
+
+
+def test_set_index_categorical():
+    # https://github.com/dask/dask/issues/5671
+    order = list(reversed(string.ascii_letters))
+    values = list(string.ascii_letters)
+    random.shuffle(values)
+    dtype = pd.api.types.CategoricalDtype(order, ordered=True)
+    df = pd.DataFrame({"A": pd.Categorical(values, dtype=dtype), "B": 1})
+
+    result = dd.from_pandas(df, npartitions=2).set_index("A")
+    assert len(result) == len(df)
+
+    # sorted with the metric defined by the Categorical
+    divisions = pd.Categorical(result.divisions, dtype=dtype)
+    assert_categorical_equal(divisions, divisions.sort_values())
 
 
 def test_compute_divisions():

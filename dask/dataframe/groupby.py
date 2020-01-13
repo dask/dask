@@ -51,7 +51,7 @@ from ..highlevelgraph import HighLevelGraph
 # operates on matching partitions of frame-like objects passed as varargs.
 #
 # After the initial chunk step, the passed index is implicitly passed along to
-# subsequent operations as the index of the parittions. Groupby operations on
+# subsequent operations as the index of the partitions. Groupby operations on
 # the individual partitions can then access the index via the ``levels``
 # parameter of the ``groupby`` function. The correct argument is determined by
 # the ``_determine_levels`` function.
@@ -126,7 +126,7 @@ def _groupby_raise_unaligned(df, **kwargs):
     """Groupby, but raise if df and `by` key are unaligned.
 
     Pandas supports grouping by a column that doesn't align with the input
-    frame/series/index. However, the reindexing this causes doesn't seem to be
+    frame/series/index. However, the reindexing does not seem to be
     threadsafe, and can result in incorrect results. Since grouping by an
     unaligned key is generally a bad idea, we just error loudly in dask.
 

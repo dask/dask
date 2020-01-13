@@ -34,11 +34,19 @@ def set_index(
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
-        raise NotImplementedError(
-            "Dask dataframe does not yet support multi-indexes.\n"
-            "You tried to index with this index: %s\n"
-            "Indexes must be single columns only." % str(index)
-        )
+        # Accept ["a"], but not [["a"]]
+        if (
+            isinstance(index, list)
+            and len(index) == 1
+            and not isinstance(index[0], list)  # if index = [["a"]], leave it that way
+        ):
+            index = index[0]
+        else:
+            raise NotImplementedError(
+                "Dask dataframe does not yet support multi-indexes.\n"
+                "You tried to index with this index: %s\n"
+                "Indexes must be single columns only." % str(index)
+            )
 
     if npartitions == "auto":
         repartition = True
@@ -90,6 +98,10 @@ def set_index(
 
         mins = remove_nans(mins)
         maxes = remove_nans(maxes)
+        if pd.api.types.is_categorical_dtype(index2.dtype):
+            dtype = index2.dtype
+            mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
+            maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
 
         if (
             mins == sorted(mins)
@@ -170,8 +182,22 @@ def set_partition(
     shuffle
     partd
     """
-    divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
+    if isinstance(divisions, tuple):
+        # pd.isna considers tuples to be scalars. Convert to a list.
+        divisions = list(divisions)
+
+    if np.isscalar(index):
+        dtype = df[index].dtype
+    else:
+        dtype = index.dtype
+
+    if pd.isna(divisions).any() and pd.api.types.is_integer_dtype(dtype):
+        # Can't construct a Series[int64] when any / all of the divisions are NaN.
+        divisions = df._meta._constructor_sliced(divisions)
+    else:
+        divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
+
     if np.isscalar(index):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta

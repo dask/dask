@@ -2803,6 +2803,7 @@ def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(2, 3))
 
+    assert_eq(x.view(), d.view())
     assert_eq(x.view("i4"), d.view("i4"))
     assert_eq(x.view("i2"), d.view("i2"))
     assert all(isinstance(s, int) for s in d.shape)

@@ -1,6 +1,46 @@
 Changelog
 =========
 
+2.9.1 / 2019-12-27
+------------------
+
+Array
++++++
+
+-  Support Array.view with dtype=None (:pr:`5736`) `Anderson Banihirwe`_
+-  Add dask.array.nanmedian (:pr:`5684`) `Deepak Cherian`_
+
+Core
+++++
+
+-  xfail test_temporary_directory on Python 3.8 (:pr:`5734`) `James Bourbeau`_
+-  Add support for Python 3.8 (:pr:`5603`) `James Bourbeau`_
+-  Use id to dedupe constants in rewrite_blockwise (:pr:`5696`) `Jim Crist`_
+
+DataFrame
++++++++++
+
+-  Raise error when converting a dask dataframe scalar to a boolean (:pr:`5743`) `James Bourbeau`_
+-  Ensure dataframe groupby-variance is greater than zero (:pr:`5728`) `Matthew Rocklin`_
+-  Fix DataFrame.__iter__ (:pr:`5719`) `Tom Augspurger`_
+-  Support Parquet filters in disjunctive normal form, like PyArrow (:pr:`5656`) `Matteo De Wint`_
+-  Auto-detect categorical columns in ArrowEngine-based read_parquet (:pr:`5690`) `Richard J Zamora`_
+-  Skip parquet getitem optimization tests if no engine found (:pr:`5697`) `James Bourbeau`_
+-  Fix independent optimization of parquet-getitem (:pr:`5613`) `Tom Augspurger`_
+
+Documentation
++++++++++++++
+
+-  Update helm config doc (:pr:`5750`) `Ray Bell`_
+-  Link to examples.dask.org in several places (:pr:`5733`) `Tom Augspurger`_
+-  Add missing " in performance report example (:pr:`5724`) `James Bourbeau`_
+-  Resolve several documentation build warnings (:pr:`5685`) `James Bourbeau`_
+-  add info on performance_report (:pr:`5713`) `Ben Zaitlen`_
+-  Add more docs disclaimers (:pr:`5710`) `Julia Signell`_
+-  Fix simple typo: wihout -> without (:pr:`5708`) `Tim Gates`_
+-  Update numpydoc dependency (:pr:`5694`) `James Bourbeau`_
+
+
 2.9.0 / 2019-12-06
 ------------------
 
@@ -2761,3 +2801,6 @@ Other
 .. _`ossdev07`: https://github.com/ossdev07
 .. _`Nuno Gomes Silva`: https://github.com/mgsnuno
 .. _`Ray Bell`: https://github.com/raybellwaves
+.. _`Deepak Cherian`: https://github.com/dcherian
+.. _`Matteo De Wint`: https://github.com/mdwint
+.. _`Tim Gates`: https://github.com/timgates42

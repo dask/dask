@@ -4,12 +4,13 @@ from packaging import version
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe import _compat
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
@@ -475,7 +476,7 @@ def test_series_groupby_errors():
 
 
 def test_groupby_index_array():
-    df = tm.makeTimeDataFrame()
+    df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
 
     # first select column, then group
@@ -494,7 +495,7 @@ def test_groupby_index_array():
 
 
 def test_groupby_set_index():
-    df = tm.makeTimeDataFrame()
+    df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
     pytest.raises(TypeError, lambda: ddf.groupby(df.index.month, as_index=False))
 
@@ -681,7 +682,10 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("x"))
     pytest.raises(KeyError, lambda: ddf.groupby(["a", "x"]))
     pytest.raises(KeyError, lambda: ddf.groupby("a")["x"])
-    pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
+    with warnings.catch_warnings():
+        # pandas warns about using tuples before throwing the KeyError
+        warnings.simplefilter("ignore", FutureWarning)
+        pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
     # test graph node labels
@@ -878,7 +882,7 @@ def test_numeric_column_names():
 
 
 def test_groupby_apply_tasks():
-    df = pd.util.testing.makeTimeDataFrame()
+    df = _compat.makeTimeDataFrame()
     df["A"] = df.A // 0.1
     df["B"] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
@@ -974,11 +978,13 @@ def test_aggregate__examples(spec, split_every, grouper):
     # Warning from pandas deprecation .agg(dict[dict])
     # it's from pandas, so no reason to assert the deprecation warning,
     # but we should still test it for now
-    with pytest.warns(None):
-        assert_eq(
-            pdf.groupby(grouper(pdf)).agg(spec),
-            ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-        )
+    if not PANDAS_GT_100:
+        # removed in pandas 1.0
+        with pytest.warns(None):
+            assert_eq(
+                pdf.groupby(grouper(pdf)).agg(spec),
+                ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every),
+            )
 
 
 @pytest.mark.parametrize(
@@ -1013,11 +1019,13 @@ def test_series_aggregate__examples(spec, split_every, grouper):
     # Warning from pandas deprecation .agg(dict[dict])
     # it's from pandas, so no reason to assert the deprecation warning,
     # but we should still test it for now
-    with pytest.warns(None):
-        assert_eq(
-            ps.groupby(grouper(pdf)).agg(spec),
-            ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-        )
+    if not PANDAS_GT_100:
+        # removed in pandas 1.0
+        with pytest.warns(None):
+            assert_eq(
+                ps.groupby(grouper(pdf)).agg(spec),
+                ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
+            )
 
 
 def test_aggregate__single_element_groups(agg_func):
@@ -2281,7 +2289,7 @@ def test_groupby_dropna_cudf(dropna, by):
         dask_result = ddf.groupby(by, dropna=dropna).e.sum()
         cudf_result = df.groupby(by, dropna=dropna).e.sum()
     if by in ["c", "d"]:
-        # Loose string/category index name in cudf...
+        # Lose string/category index name in cudf...
         dask_result = dask_result.compute()
         dask_result.index.name = cudf_result.index.name
 
@@ -2296,6 +2304,31 @@ def test_rounding_negative_var():
 
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std())
+
+
+@pytest.mark.parametrize("split_out", [2, 3])
+@pytest.mark.parametrize("column", [["b", "c"], ["b", "d"], ["b", "e"]])
+def test_groupby_split_out_multiindex(split_out, column):
+    df = pd.DataFrame(
+        {
+            "a": np.arange(8),
+            "b": [1, 0, 0, 2, 1, 1, 2, 0],
+            "c": [0, 1] * 4,
+            "d": ["dog", "cat", "cat", "dog", "dog", "dog", "cat", "bird"],
+        }
+    ).fillna(0)
+    df["e"] = df["d"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf_result_so1 = (
+        ddf.groupby(column).a.mean(split_out=1).compute().sort_values().dropna()
+    )
+
+    ddf_result = (
+        ddf.groupby(column).a.mean(split_out=split_out).compute().sort_values().dropna()
+    )
+
+    assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
 def test_groupby_large_ints_exception_cudf():

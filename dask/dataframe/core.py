@@ -183,6 +183,15 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta = state
 
+    def __bool__(self):
+        raise TypeError(
+            "Trying to convert {} to a boolean value. Because Dask objects are "
+            "lazily evaluated, they cannot be converted to a boolean value or used "
+            "in boolean conditions like if statements. Try calling .compute() to "
+            "force computation prior to converting to a boolean value or using in "
+            "a conditional statement.".format(self)
+        )
+
     @property
     def key(self):
         return (self._name, 0)
@@ -1700,9 +1709,11 @@ Dask Name: {name}, {task} tasks""".format(
                 self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns
             )
 
-            if count_timedeltas == len(self._meta.columns):
+            # pandas 1.0+ does not implement var on timedelta
+
+            if not PANDAS_GT_100 and count_timedeltas == len(self._meta.columns):
                 result = self._var_timedeltas(skipna, ddof, split_every)
-            elif count_timedeltas > 0:
+            elif not PANDAS_GT_100 and count_timedeltas > 0:
                 result = self._var_mixed(skipna, ddof, split_every)
             else:
                 result = self._var_numeric(skipna, ddof, split_every)
@@ -2100,7 +2111,11 @@ Dask Name: {name}, {task} tasks""".format(
 
             name2 = "{0}{1}-take-last".format(self._token_prefix, op_name)
             cumlast = map_partitions(
-                _take_last, cumpart, skipna, meta=pd.Series([]), token=name2
+                _take_last,
+                cumpart,
+                skipna,
+                meta=pd.Series([], dtype="float"),
+                token=name2,
             )
 
             suffix = tokenize(self)
@@ -2118,6 +2133,7 @@ Dask Name: {name}, {task} tasks""".format(
                 else:
                     # aggregate with previous cumulation results
                     layer[(cname, i)] = (
+                        methods._cum_aggregate_apply,
                         aggregate,
                         (cname, i - 1),
                         (cumlast._name, i - 1),
@@ -2327,7 +2343,12 @@ Dask Name: {name}, {task} tasks""".format(
         date = self.divisions[0] + offset
         end = self.loc._get_partitions(date)
 
-        include_right = offset.isAnchored() or not hasattr(offset, "_inc")
+        if PANDAS_GT_100:
+            is_anchored = offset.is_anchored()
+        else:
+            is_anchored = offset.isAnchored()
+
+        include_right = is_anchored or not hasattr(offset, "_inc")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -5104,7 +5125,7 @@ def quantile(df, q, method="default"):
         name = "quantiles-" + token
         empty_index = pd.Index([], dtype=float)
         return Series(
-            {(name, 0): pd.Series([], name=df.name, index=empty_index)},
+            {(name, 0): pd.Series([], name=df.name, index=empty_index, dtype="float")},
             name,
             df._meta,
             [None, None],
@@ -5377,7 +5398,7 @@ def _take_last(a, skipna=True):
             # create Series from appropriate backend dataframe library
             series_typ = type(a.iloc[0:1, 0])
             if a.empty:
-                return series_typ([])
+                return series_typ([], dtype="float")
             return series_typ(
                 {col: _last_valid(a[col]) for col in a.columns}, index=a.columns
             )
@@ -5877,13 +5898,18 @@ def maybe_shift_divisions(df, periods, freq):
     """
     if isinstance(freq, str):
         freq = pd.tseries.frequencies.to_offset(freq)
-    if isinstance(freq, pd.DateOffset) and (
-        freq.isAnchored() or not hasattr(freq, "delta")
-    ):
-        # Can't infer divisions on relative or anchored offsets, as
-        # divisions may now split identical index value.
-        # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
-        return df.clear_divisions()
+
+    is_offset = isinstance(freq, pd.DateOffset)
+    if is_offset:
+        if PANDAS_GT_100:
+            is_anchored = freq.is_anchored()
+        else:
+            is_anchored = freq.isAnchored()
+        if is_anchored or not hasattr(freq, "delta"):
+            # Can't infer divisions on relative or anchored offsets, as
+            # divisions may now split identical index value.
+            # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
+            return df.clear_divisions()
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index

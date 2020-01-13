@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import dask.dataframe as dd
+from dask.dataframe import _compat
+from dask.dataframe._compat import tm, PANDAS_GT_100
 from pandas.util import hash_pandas_object
 
 import pytest
@@ -20,11 +21,11 @@ from dask.dataframe.utils import assert_eq
         pd.Index([1, 2, 3]),
         pd.Index([True, False, True]),
         pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}),
-        pd.util.testing.makeMissingDataframe(),
-        pd.util.testing.makeMixedDataFrame(),
-        pd.util.testing.makeTimeDataFrame(),
-        pd.util.testing.makeTimeSeries(),
-        pd.util.testing.makeTimedeltaIndex(),
+        _compat.makeMissingDataframe(),
+        _compat.makeMixedDataFrame(),
+        _compat.makeTimeDataFrame(),
+        _compat.makeTimeSeries(),
+        _compat.makeTimedeltaIndex(),
     ],
 )
 def test_hash_pandas_object(obj):
@@ -64,16 +65,24 @@ def test_object_missing_values():
     tm.assert_series_equal(h1, h2)
 
 
+xfail_hash_object = pytest.mark.xfail(
+    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
+)
+
+
 @pytest.mark.parametrize(
     "obj",
     [
         pd.Index([1, 2, 3]),
-        pd.Index([True, False, True], index=[1.5, 1.1, 3.3]),
+        pytest.param(pd.Index([True, False, True]), marks=xfail_hash_object),
         pd.Series([1, 2, 3]),
         pd.Series([1.0, 1.5, 3.2]),
         pd.Series([1.0, 1.5, 3.2], index=[1.5, 1.1, 3.3]),
         pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}),
-        pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=["a", "z", "x"]),
+        pytest.param(
+            pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=["a", "z", "x"]),
+            marks=xfail_hash_object,
+        ),
     ],
 )
 def test_hash_object_dispatch(obj):
