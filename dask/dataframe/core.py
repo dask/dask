@@ -417,7 +417,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 {data}
 Dask Name: {name}, {task} tasks"""
         if "Empty" in data:
-            data = data.partition("\n")[-1].replace("Index","Divisions")
+            data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = "Empty {}".format(_str_fmt)
         return _str_fmt.format(
             klass=self.__class__.__name__,
