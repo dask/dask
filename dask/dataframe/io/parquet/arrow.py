@@ -331,7 +331,7 @@ class ArrowEngine(Engine):
                 # Need the membership test to avoid duplicating index when
                 # we slice with `columns` later on.
                 if level not in columns:
-                    columns.append(index)
+                    columns.append(level)
         if isinstance(piece, str):
             # `piece` is a file-path string
             piece = pq.ParquetDatasetPiece(
