@@ -2243,3 +2243,17 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
     )
 
     assert_eq(pdf, ddf_read)
+
+
+def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
+    check_fastparquet()
+
+    pdf = pd.DataFrame(
+        [{"str": str(i), "int": i, "group": "ABC"[i % 3]} for i in range(6)]
+    )
+    path = str(tmpdir)
+    pdf.to_parquet(path, partition_cols=["group"], engine="fastparquet")
+    ddf_read = dd.read_parquet(path, engine=engine)
+
+    assert len(ddf_read["group"].compute()) == 6
+    assert len(ddf_read.compute().group) == 6
