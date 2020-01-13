@@ -413,9 +413,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     def __repr__(self):
         data = self._repr_data().to_string(max_rows=5, show_dimensions=False)
-        return """Dask {klass} Structure:
+        _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {task} tasks""".format(
+Dask Name: {name}, {task} tasks"""
+        if "Empty" in data:
+            data = data.partition("\n")[-1].replace("Index","Divisions")
+            _str_fmt = "Empty {}".format(_str_fmt)
+        return _str_fmt.format(
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),

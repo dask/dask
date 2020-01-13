@@ -533,10 +533,35 @@ def test_empty_repr():
     df = pd.DataFrame()
     ddf = dd.from_pandas(df, npartitions=1)
     exp = (
-        "Dask DataFrame Structure:\n"
-        "Empty DataFrame\n"
+        "Empty Dask DataFrame Structure:\n"
         "Columns: []\n"
-        "Index: [, ]\n"
+        "Divisions: [, ]\n"
         "Dask Name: from_pandas, 1 tasks"
     )
     assert repr(ddf) == exp
+    exp_table = """<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+    </tr>
+    <tr>
+      <th>npartitions=1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th></th>
+    </tr>
+    <tr>
+      <th></th>
+    </tr>
+  </tbody>
+</table>"""
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+<div>
+{style}{exp_table}
+</div>
+<div>Dask Name: from_pandas, 1 tasks</div>""".format(
+        style=style, exp_table=exp_table
+    )
+    assert ddf._repr_html_() == exp
