@@ -320,7 +320,7 @@ class maybe_buffered_partd(object):
     def __init__(self, buffer=True, tempdir=None):
         self.tempdir = tempdir or config.get("temporary_directory", None)
         self.buffer = buffer
-        self.compression = config.get("shuffle-disk-compression", None)
+        self.compression = config.get("dataframe.shuffle-compression", None)
 
     def __reduce__(self):
         if self.tempdir:
@@ -330,7 +330,6 @@ class maybe_buffered_partd(object):
 
     def __call__(self, *args, **kwargs):
         import partd
-
         # Try to load partd compression module. Silently fail, if compression algorithm is not found.
         try:
             partd_compression = (
@@ -339,19 +338,14 @@ class maybe_buffered_partd(object):
                 else None
             )
         except AttributeError:
-            partd_compression = None
+            raise AttributeError('Not able to import and load {0} as compression algorithm. Is it supported by Partd or installed?')
         if self.tempdir:
             file = partd.File(dir=self.tempdir)
         else:
             file = partd.File()
         # Envelope partd file with compression, if set and if available
-        if (
-            self.compression
-            and partd_compression
-            and isinstance(partd_compression(), partd.encode.Encode)
-        ):
+        if partd_compression:
             file = partd_compression(file)
-
         if self.buffer:
             return partd.PandasBlocks(partd.Buffer(partd.Dict(), file))
         else:
