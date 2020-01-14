@@ -334,7 +334,7 @@ class maybe_buffered_partd(object):
         # Try to load partd compression module. Silently fail, if compression algorithm is not found.
         try:
             partd_compression = getattr(partd.compressed, self.compression) if self.compression else None
-        except ImportError:
+        except AttributeError:
             partd_compression = None
         if self.tempdir:
             file = partd.File(dir=self.tempdir)
