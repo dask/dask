@@ -652,3 +652,7 @@ def test_order_cycle():
         order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
     with pytest.raises(RuntimeError, match="Cycle detected"):
         order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
+
+
+def test_order_empty():
+    assert order({}) == {}

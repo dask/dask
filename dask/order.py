@@ -102,6 +102,9 @@ def order(dsk, dependencies=None):
     >>> order(dsk)
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
+    if not dsk:
+        return {}
+
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
