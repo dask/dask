@@ -330,7 +330,7 @@ class maybe_buffered_partd(object):
 
     def __call__(self, *args, **kwargs):
         import partd
-        # Try to load partd compression module. Silently fail, if compression algorithm is not found.
+
         try:
             partd_compression = (
                 getattr(partd.compressed, self.compression)
@@ -338,12 +338,17 @@ class maybe_buffered_partd(object):
                 else None
             )
         except AttributeError:
-            raise AttributeError('Not able to import and load {0} as compression algorithm. Is it supported by Partd or installed?')
+            raise ImportError(
+                "Not able to import and load {0} as compression algorithm."
+                "Please check if the library is installed and supported by Partd.".format(
+                    self.compression
+                )
+            )
         if self.tempdir:
             file = partd.File(dir=self.tempdir)
         else:
             file = partd.File()
-        # Envelope partd file with compression, if set and if available
+        # Envelope partd file with compression, if set and available
         if partd_compression:
             file = partd_compression(file)
         if self.buffer:

@@ -920,12 +920,19 @@ def test_set_index_timestamp():
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression(compression):
+    # test if dataframe shuffle works both with and without compression
     with dask.config.set({"dataframe.shuffle-compression": compression}):
         test_shuffle("disk")
 
-@pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO", ])
-def test_disk_shuffle_with_unkown_compression(compression):
+
+@pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO",])
+def test_disk_shuffle_with_unknown_compression(compression):
     # test if dask raises an error in case of fault config string
     with dask.config.set({"dataframe.shuffle-compression": compression}):
-        with pytest.raises(AttributeError):
+        with pytest.raises(ImportError) as excinfo:
             test_shuffle("disk")
+        assert str(
+            excinfo.value
+        ) == "Not able to import and load {0} as compression algorithm." "Please check if the library is installed and supported by Partd.".format(
+            compression
+        )
