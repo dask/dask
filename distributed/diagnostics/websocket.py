@@ -20,6 +20,18 @@ class WebsocketPlugin(SchedulerPlugin):
         """ Run when a worker leaves the cluster"""
         self.socket.send("remove_worker", {"worker": worker})
 
+    def add_client(self, scheduler=None, client=None, **kwargs):
+        """ Run when a new client connects """
+        self.socket.send("add_client", {"client": client})
+
+    def remove_client(self, scheduler=None, client=None, **kwargs):
+        """ Run when a client disconnects """
+        self.socket.send("remove_client", {"client": client})
+
+    def update_graph(self, scheduler, client=None, **kwargs):
+        """ Run when a new graph / tasks enter the scheduler """
+        self.socket.send("update_graph", {"client": client})
+
     def transition(self, key, start, finish, *args, **kwargs):
         """ Run whenever a task changes state
 
