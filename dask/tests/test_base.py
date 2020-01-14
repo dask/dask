@@ -629,7 +629,7 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    pd.util.testing.assert_series_equal(df_out, df.a + 2)
+    dd._compat.tm.assert_series_equal(df_out, df.a + 2)
 
 
 @pytest.mark.skipif("not dd")
