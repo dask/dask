@@ -2357,4 +2357,7 @@ def test_groupby_large_ints_exception_pandas():
     )
     df = pd.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
     ddf = dd.from_pandas(df, npartitions=1)
-    ddf.groupby("x").std().compute(scheduler="single-threaded")
+    assert_eq(
+        df.groupby("x").std(),
+        ddf.groupby("x").std().compute(scheduler="single-threaded"),
+    )
