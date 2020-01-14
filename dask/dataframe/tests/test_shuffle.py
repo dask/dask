@@ -920,5 +920,12 @@ def test_set_index_timestamp():
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
 def test_disk_shuffle_with_compression(compression):
-    with dask.config.set({"shuffle-disk-compression": compression}):
+    with dask.config.set({"dataframe.shuffle-compression": compression}):
         test_shuffle("disk")
+
+@pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO", ])
+def test_disk_shuffle_with_unkown_compression(compression):
+    # test if dask raises an error in case of fault config string
+    with dask.config.set({"dataframe.shuffle-compression": compression}):
+        with pytest.raises(AttributeError):
+            test_shuffle("disk")
