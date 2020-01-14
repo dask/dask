@@ -679,8 +679,8 @@ def test_https_support(c, s, a, b):
             url="https://localhost:%d/%s" % (port, suffix), ssl_options=ctx
         )
         response = yield http_client.fetch(req)
+        assert response.code < 300
         body = response.body.decode()
-        assert "bokeh" in body.lower()
         assert not re.search("href=./", body)  # no absolute links
 
 

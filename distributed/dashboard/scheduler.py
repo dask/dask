@@ -1,5 +1,7 @@
 from datetime import datetime
 from functools import partial
+import os
+import os.path
 import json
 import logging
 
@@ -234,11 +236,18 @@ class IndexJSON(RequestHandler):
 class IndividualPlots(RequestHandler):
     def get(self):
         bokeh_server = self.server.services["dashboard"]
-        result = {
+        individual_bokeh = {
             uri.strip("/").replace("-", " ").title(): uri
             for uri in bokeh_server.apps
             if uri.lstrip("/").startswith("individual-") and not uri.endswith(".json")
         }
+        individual_static = {
+            uri.strip("/").replace(".html", "").replace("-", " ").title(): "/statics/"
+            + uri
+            for uri in os.listdir(os.path.join(os.path.dirname(__file__), "static"))
+            if uri.lstrip("/").startswith("individual-") and uri.endswith(".html")
+        }
+        result = {**individual_bokeh, **individual_static}
         self.write(result)
 
 
