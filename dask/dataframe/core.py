@@ -416,7 +416,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         _str_fmt = """Dask {klass} Structure:
 {data}
 Dask Name: {name}, {task} tasks"""
-        if "Empty" in data:
+        if len(self.columns) == 0:
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = "Empty {}".format(_str_fmt)
         return _str_fmt.format(
