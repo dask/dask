@@ -416,3 +416,4 @@ def test_merge_None_to_dict():
 
 def test_core_file():
     assert "temporary-directory" in dask.config.config
+    assert "shuffle-disk-compression" in dask.config.config

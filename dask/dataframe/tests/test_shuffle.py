@@ -916,3 +916,9 @@ def test_set_index_timestamp():
 
     assert_eq(df2, ddf_new_div)
     assert_eq(df2, ddf.set_index("A"))
+
+
+@pytest.mark.parametrize("compression", [None, "ZLib"])
+def test_disk_shuffle_with_compression(compression):
+    with dask.config.set({"shuffle-disk-compression": compression}):
+        test_shuffle("disk")
