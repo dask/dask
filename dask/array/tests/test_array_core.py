@@ -971,6 +971,20 @@ def test_broadcast_arrays():
         assert_eq(e_a_r, e_d_r)
 
 
+def test_broadcast_arrays_uneven_chunks():
+    x = da.ones(30, chunks=(3,))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+    x = da.ones((1, 30), chunks=(1, 3))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+
 @pytest.mark.parametrize(
     "u_shape, v_shape",
     [
