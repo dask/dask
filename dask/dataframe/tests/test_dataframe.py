@@ -3126,9 +3126,11 @@ def test_categorize_info():
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
         "Data columns (total 3 columns):\n"
-        "x    4 non-null int64\n"
-        "y    4 non-null category\n"
-        "z    4 non-null object\n"
+        " #   Column  Non-Null Count  Dtype\n"
+        "---  ------  --------------  -----\n"
+        " 0   x       4 non-null      int64\n"
+        " 1   y       4 non-null      category\n"
+        " 2   z       4 non-null      object\n"
         "dtypes: category(1), object(1), int64(1)"
     )
     assert buf.getvalue() == expected
