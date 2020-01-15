@@ -276,7 +276,8 @@ class Aggregation(object):
 
 def _groupby_aggregate(df, aggfunc=None, levels=None, dropna=None, **kwargs):
     dropna = {"dropna": dropna} if dropna is not None else {}
-    return aggfunc(df.groupby(level=levels, sort=False, **dropna), **kwargs)
+    # sort = kwargs.pop("sort", False)
+    return aggfunc(df.groupby(level=levels, **dropna), **kwargs)
 
 
 def _apply_chunk(df, *index, dropna=None, **kwargs):
@@ -987,15 +988,21 @@ class _GroupBy(object):
         Passed to pandas.DataFrame.groupby()
     dropna: bool
         Whether to drop null values from groupby index
+    sort: bool, defult True
+        Passed along to aggregation methods. If allowed,
+        the output aggregation will have sorted keys.
     """
 
-    def __init__(self, df, by=None, slice=None, group_keys=True, dropna=None):
+    def __init__(
+        self, df, by=None, slice=None, group_keys=True, dropna=None, sort=True
+    ):
 
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
         self.obj = df
         # grouping key passed via groupby method
         self.index = _normalize_index(df, by)
+        # self.sort = sort
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
@@ -1093,6 +1100,7 @@ class _GroupBy(object):
             ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            # sort=self.sort,
         )
 
     def _cum_agg(self, token, chunk, aggregate, initial):
@@ -1347,6 +1355,7 @@ class _GroupBy(object):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            # sort=self.sort,
         )
 
         if isinstance(self.obj, Series):
@@ -1405,6 +1414,7 @@ class _GroupBy(object):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            # sort=self.sort,
         )
 
         if isinstance(self.obj, Series):
@@ -1520,6 +1530,7 @@ class _GroupBy(object):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            # sort=self.sort,
         )
 
     @insert_meta_param_description(pad=12)
@@ -1789,6 +1800,7 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            # sort=self.sort,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
