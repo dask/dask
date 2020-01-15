@@ -2331,32 +2331,21 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
-def test_groupby_large_ints_exception_cudf():
-    cudf = pytest.importorskip("cudf")
-    dask_cudf = pytest.importorskip("dask_cudf")
-
+@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+def test_groupby_large_ints_exception(backend):
+    data_source = pytest.importorskip(backend)
+    if backend == "cudf":
+        dask_cudf = pytest.importorskip("dask_cudf")
+        data_frame = dask_cudf.from_cudf
+    else:
+        data_frame = dd.from_pandas
     max = np.iinfo(np.uint64).max
     sqrt = max ** 0.5
-    series = pd.Series(np.concatenate([sqrt * np.arange(5), np.arange(35)])).astype(
+    series = data_source.Series(np.concatenate([sqrt * np.arange(5), np.arange(35)])).astype(
         "int64"
     )
-    pdf = pd.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
-    gdf = cudf.from_pandas(pdf)
-    gddf = dask_cudf.from_cudf(gdf, npartitions=2)
-    pddf = dd.from_pandas(pdf, npartitions=2)
-    gg = gddf.groupby("x").std().compute()
-    pg = pddf.groupby("x").std().compute()
-    assert_eq(gg, pg)
-
-
-def test_groupby_large_ints_exception_pandas():
-    max = np.iinfo(np.uint64).max
-    sqrt = max ** 0.5
-    series = pd.Series(np.concatenate([sqrt * np.arange(5), np.arange(35)])).astype(
-        "int64"
-    )
-    df = pd.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
-    ddf = dd.from_pandas(df, npartitions=1)
+    df = data_source.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
+    ddf = data_frame(df, npartitions=1)
     assert_eq(
         df.groupby("x").std(),
         ddf.groupby("x").std().compute(scheduler="single-threaded"),
