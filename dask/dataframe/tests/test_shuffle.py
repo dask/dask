@@ -929,14 +929,16 @@ def test_disk_shuffle_with_compression_option(compression):
 def test_disk_shuffle_with_unknown_compression(compression):
     # test if dask raises an error in case of fault config string
     with dask.config.set({"dataframe.shuffle-compression": compression}):
-        with pytest.raises(ImportError) as excinfo:
+        with pytest.raises(
+            ImportError,
+            match=(
+                "Not able to import and load {0} as compression algorithm."
+                "Please check if the library is installed and supported by Partd.".format(
+                    compression
+                )
+            ),
+        ):
             test_shuffle("disk")
-        assert str(excinfo.value) == (
-            "Not able to import and load {0} as compression algorithm."
-            "Please check if the library is installed and supported by Partd.".format(
-                compression
-            )
-        )
 
 
 def test_disk_shuffle_check_actual_compression():
