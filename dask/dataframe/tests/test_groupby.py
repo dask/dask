@@ -2341,9 +2341,9 @@ def test_groupby_large_ints_exception(backend):
         data_frame = dd.from_pandas
     max = np.iinfo(np.uint64).max
     sqrt = max ** 0.5
-    series = data_source.Series(np.concatenate([sqrt * np.arange(5), np.arange(35)])).astype(
-        "int64"
-    )
+    series = data_source.Series(
+        np.concatenate([sqrt * np.arange(5), np.arange(35)])
+    ).astype("int64")
     df = data_source.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
     ddf = data_frame(df, npartitions=1)
     assert_eq(
