@@ -947,7 +947,6 @@ def test_disk_shuffle_check_actual_compression():
         df1["b"] = (df1["a"] * 123).astype(str)
         with dask.config.set({"dataframe.shuffle-compression": compression}):
             p1 = maybe_buffered_partd(buffer=False, tempdir=None)()
-            p1 = f()
             p1.append({"x": df1})
             # get underlying filename from partd - depending on nested structure of partd object
             filename = (
