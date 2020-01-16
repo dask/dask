@@ -274,10 +274,11 @@ class Aggregation(object):
         self.__name__ = name
 
 
-def _groupby_aggregate(df, aggfunc=None, levels=None, dropna=None, **kwargs):
+def _groupby_aggregate(
+    df, aggfunc=None, levels=None, dropna=None, sort=False, **kwargs
+):
     dropna = {"dropna": dropna} if dropna is not None else {}
-    # sort = kwargs.pop("sort", False)
-    return aggfunc(df.groupby(level=levels, **dropna), **kwargs)
+    return aggfunc(df.groupby(level=levels, sort=sort, **dropna), **kwargs)
 
 
 def _apply_chunk(df, *index, dropna=None, **kwargs):
@@ -898,9 +899,9 @@ def _compute_sum_of_squares(grouped, column):
     return base.apply(lambda x: (x ** 2).sum())
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level):
+def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=None):
     # finish the final aggregation level
-    df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level)
+    df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level, sort=sort)
 
     # and finalize the result
     result = collections.OrderedDict()
@@ -988,13 +989,13 @@ class _GroupBy(object):
         Passed to pandas.DataFrame.groupby()
     dropna: bool
         Whether to drop null values from groupby index
-    sort: bool, defult True
+    sort: bool, defult None
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
     """
 
     def __init__(
-        self, df, by=None, slice=None, group_keys=True, dropna=None, sort=True
+        self, df, by=None, slice=None, group_keys=True, dropna=None, sort=None
     ):
 
         assert isinstance(df, (DataFrame, Series))
@@ -1002,7 +1003,7 @@ class _GroupBy(object):
         self.obj = df
         # grouping key passed via groupby method
         self.index = _normalize_index(df, by)
-        # self.sort = sort
+        self.sort = sort
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
@@ -1100,7 +1101,7 @@ class _GroupBy(object):
             ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            # sort=self.sort,
+            sort=self.sort,
         )
 
     def _cum_agg(self, token, chunk, aggregate, initial):
@@ -1355,7 +1356,7 @@ class _GroupBy(object):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            # sort=self.sort,
+            sort=self.sort,
         )
 
         if isinstance(self.obj, Series):
@@ -1414,7 +1415,7 @@ class _GroupBy(object):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            # sort=self.sort,
+            sort=self.sort,
         )
 
         if isinstance(self.obj, Series):
@@ -1530,7 +1531,7 @@ class _GroupBy(object):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            # sort=self.sort,
+            sort=self.sort,
         )
 
     @insert_meta_param_description(pad=12)
@@ -1716,9 +1717,13 @@ class DataFrameGroupBy(_GroupBy):
 
     def __getitem__(self, key):
         if isinstance(key, list):
-            g = DataFrameGroupBy(self.obj, by=self.index, slice=key, **self.dropna)
+            g = DataFrameGroupBy(
+                self.obj, by=self.index, slice=key, sort=self.sort, **self.dropna
+            )
         else:
-            g = SeriesGroupBy(self.obj, by=self.index, slice=key, **self.dropna)
+            g = SeriesGroupBy(
+                self.obj, by=self.index, slice=key, sort=self.sort, **self.dropna
+            )
 
         # error is raised from pandas
         g._meta = g._meta[key]
@@ -1800,7 +1805,7 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            # sort=self.sort,
+            sort=self.sort,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

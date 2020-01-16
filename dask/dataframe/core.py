@@ -4648,7 +4648,7 @@ def apply_concat_apply(
     split_out=None,
     split_out_setup=None,
     split_out_setup_kwargs=None,
-    # sort=True,
+    sort=None,
     **kwargs
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -4807,9 +4807,9 @@ def apply_concat_apply(
         a = b
         depth += 1
 
-    # if sort:
-    #     aggregate_kwargs = aggregate_kwargs or {}
-    #     aggregate_kwargs["sort"] = True
+    if sort:
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = True
 
     # Aggregate
     for j in range(split_out):
