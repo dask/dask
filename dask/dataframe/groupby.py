@@ -298,7 +298,6 @@ def _var_chunk(df, *index):
         df = df.to_frame()
 
     df = df.copy()
-    cols = df._get_numeric_data().columns
 
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
