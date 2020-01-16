@@ -1,0 +1,33 @@
+name: Windows CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.6", "3.7"]
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v1
+
+      - name: Setup Conda Environment
+        uses: goanpeca/setup-miniconda@v1
+        with:
+          miniconda-version: "latest"
+          python-version: ${{ matrix.python-version }}
+          environment-file: continuous_integration/environment.yml
+          activate-environment: testenv
+          auto-activate-base: false
+
+      - name: Install distributed from source
+        shell: bash -l {0}
+        run: pip install -q --no-deps -e .
+
+      - name: Run tests
+        shell: bash -l {0}
+        env:
+          PYTHONFAULTHANDLER: 1
+        run: py.test -m "not avoid_travis" distributed --verbose -r s --timeout-method=thread --timeout=300 --durations=20

@@ -1,0 +1,36 @@
+name: testenv
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - zstandard
+  - bokeh
+  - click
+  - cloudpickle
+  - dask
+  - dill
+  - lz4
+  - ipykernel
+  - ipywidgets
+  - joblib
+  - jupyter_client
+  - msgpack-python
+  - prometheus_client
+  - psutil
+  - pytest
+  - requests
+  - toolz
+  - tblib
+  - tornado=5
+  - zict
+  - fsspec
+  - pip
+  - pip:
+      - pytest-repeat
+      - pytest-timeout
+      - pytest-faulthandler
+      - sortedcollections
+      - pytest-asyncio
+      - git+https://github.com/dask/dask
+      - git+https://github.com/joblib/joblib.git
+      - git+https://github.com/dask/zict
