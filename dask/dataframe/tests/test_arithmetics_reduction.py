@@ -1352,6 +1352,6 @@ def test_datetime_series_mean():
     pds = pd.Series(pd.date_range("2000", periods=4))
     dds = dd.from_pandas(pds, npartitions=1)
     if not PANDAS_GT_0250:
-        assert_eq(pds.mean(), pd.Timestamp("2000-01-02 12:00:00"))
+        assert_eq(dds.mean(), pd.Timestamp("2000-01-02 12:00:00"))
     else:
-        assert_eq(pds.mean(), dds.mean())
+        assert_eq(dds.mean(), pds.mean())
