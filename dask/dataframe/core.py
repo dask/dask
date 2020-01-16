@@ -1669,7 +1669,10 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
         else:
-            num = self._get_numeric_data()
+            if self.dtype == '<M8[ns]':
+                num = self._get_numeric_data().astype("i8")
+            else:
+                num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
@@ -1683,6 +1686,12 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
+            if self.dtype == '<M8[ns]':
+                val = pd.Timestamp(result.compute())
+                add_layers = {result._name: {(result._name, 0): val}}
+                add_dependencies = {result._name: set()}
+                result.dask.layers.update(add_layers)
+                result.dask.dependencies.update(add_dependencies)
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
