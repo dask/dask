@@ -1349,6 +1349,8 @@ def test_moment():
 
 
 def test_datetime_series_mean():
-    pds = pd.Series(pd.date_range('2000', periods=4))
+    pds = pd.Series(pd.date_range("2000", periods=4))
     dds = dd.from_pandas(pds, npartitions=1)
-    assert_eq(pds.mean(),dds.mean(),)
+    assert_eq(
+        pds.mean(), dds.mean(),
+    )
