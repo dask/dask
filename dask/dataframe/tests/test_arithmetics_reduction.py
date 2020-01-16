@@ -1346,3 +1346,9 @@ def test_moment():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(stats.moment(ddf, 2, 0), scipy.stats.moment(df, 2, 0))
+
+
+def test_datetime_series_mean():
+    pds = pd.Series(pd.date_range('2000', periods=4))
+    dds = dd.from_pandas(pds, npartitions=1)
+    assert_eq(pds.mean(),dds.mean(),)
