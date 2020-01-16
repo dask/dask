@@ -1409,8 +1409,6 @@ def test_groupby_not_supported():
     with pytest.raises(TypeError):
         ddf.groupby("A", as_index=False)
     with pytest.raises(TypeError):
-        ddf.groupby("A", sort=False)
-    with pytest.raises(TypeError):
         ddf.groupby("A", squeeze=True)
 
 
