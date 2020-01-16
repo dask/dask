@@ -1039,7 +1039,19 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-@pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be"])
+xfail_pandas_100 = pytest.mark.xfail(
+    dd._compat.PANDAS_GT_100, reason="https://github.com/dask/dask/issues/5787"
+)
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        pytest.param("utf-16", marks=xfail_pandas_100),
+        pytest.param("utf-16-le", marks=xfail_pandas_100),
+        "utf-16-be",
+    ],
+)
 def test_encoding_gh601(encoding):
     ar = pd.Series(range(0, 100))
     br = ar % 7
