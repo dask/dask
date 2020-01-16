@@ -1669,7 +1669,8 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
         else:
-            if self.dtype == "<M8[ns]":
+            dtype = getattr(self, "dtype", None)
+            if dtype == "<M8[ns]":
                 num = self._get_numeric_data().astype("i8")
             else:
                 num = self._get_numeric_data()
@@ -1686,7 +1687,7 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
-            if self.dtype == "<M8[ns]":
+            if dtype == "<M8[ns]":
                 val = pd.Timestamp(result.compute())
                 add_layers = {result._name: {(result._name, 0): val}}
                 add_dependencies = {result._name: set()}
