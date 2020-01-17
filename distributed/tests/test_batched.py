@@ -1,10 +1,8 @@
 import asyncio
-from datetime import timedelta
 import random
 
 import pytest
 from toolz import assoc
-from tornado import gen
 
 from distributed.batched import BatchedSend
 from distributed.core import listen, connect, CommClosedError
@@ -170,7 +168,7 @@ async def test_stress():
 
         async def recv():
             while True:
-                result = await gen.with_timeout(timedelta(seconds=1), comm.read())
+                result = await asyncio.wait_for(comm.read(), 1)
                 L.extend(result)
                 if result[-1] == 9999:
                     break
@@ -205,7 +203,7 @@ async def run_traffic_jam(nsends, nbytes):
             # If this times out then I think it's a backpressure issue
             # Somehow we're able to flood the socket so that the receiving end
             # loses some of our messages
-            L = await gen.with_timeout(timedelta(seconds=5), comm.read())
+            L = await asyncio.wait_for(comm.read(), 5)
             count += 1
             results.extend(r["i"] for r in L)
 
@@ -254,5 +252,5 @@ async def test_serializers():
         msg = await comm.read()
         assert list(msg) == [{"x": 123}, {"x": "hello"}]
 
-        with pytest.raises(gen.TimeoutError):
-            msg = await gen.with_timeout(timedelta(milliseconds=100), comm.read())
+        with pytest.raises(asyncio.TimeoutError):
+            msg = await asyncio.wait_for(comm.read(), 0.1)

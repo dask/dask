@@ -14,7 +14,16 @@ from concurrent.futures import (
 import pytest
 from toolz import take
 
-from distributed.utils_test import slowinc, slowadd, slowdec, inc, throws, varying
+from distributed import Client
+from distributed.utils_test import (
+    slowinc,
+    slowadd,
+    slowdec,
+    inc,
+    throws,
+    varying,
+    cluster,
+)
 from distributed.utils_test import client, cluster_fixture, loop, s, a, b  # noqa: F401
 
 
@@ -218,30 +227,32 @@ def test_retries(client):
         exc_info.match("one")
 
 
-def test_shutdown(client):
-    # shutdown(wait=True) waits for pending tasks to finish
-    e = client.get_executor()
-    fut = e.submit(time.sleep, 1.0)
-    t1 = time.time()
-    e.shutdown()
-    dt = time.time() - t1
-    assert 0.5 <= dt <= 2.0
-    time.sleep(0.1)  # wait for future outcome to propagate
-    assert fut.done()
-    fut.result()  # doesn't raise
+def test_shutdown(loop):
+    with cluster(disconnect_timeout=10) as (s, [a, b]):
+        with Client(s["address"], loop=loop) as client:
+            # shutdown(wait=True) waits for pending tasks to finish
+            e = client.get_executor()
+            fut = e.submit(time.sleep, 1.0)
+            t1 = time.time()
+            e.shutdown()
+            dt = time.time() - t1
+            assert 0.5 <= dt <= 2.0
+            time.sleep(0.1)  # wait for future outcome to propagate
+            assert fut.done()
+            fut.result()  # doesn't raise
 
-    with pytest.raises(RuntimeError):
-        e.submit(time.sleep, 1.0)
+            with pytest.raises(RuntimeError):
+                e.submit(time.sleep, 1.0)
 
-    # shutdown(wait=False) cancels pending tasks
-    e = client.get_executor()
-    fut = e.submit(time.sleep, 2.0)
-    t1 = time.time()
-    e.shutdown(wait=False)
-    dt = time.time() - t1
-    assert dt < 0.5
-    time.sleep(0.1)  # wait for future outcome to propagate
-    assert fut.cancelled()
+            # shutdown(wait=False) cancels pending tasks
+            e = client.get_executor()
+            fut = e.submit(time.sleep, 2.0)
+            t1 = time.time()
+            e.shutdown(wait=False)
+            dt = time.time() - t1
+            assert dt < 0.5
+            time.sleep(0.1)  # wait for future outcome to propagate
+            assert fut.cancelled()
 
-    with pytest.raises(RuntimeError):
-        e.submit(time.sleep, 1.0)
+            with pytest.raises(RuntimeError):
+                e.submit(time.sleep, 1.0)

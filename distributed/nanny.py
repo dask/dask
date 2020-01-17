@@ -1,5 +1,4 @@
 import asyncio
-from datetime import timedelta
 import logging
 from multiprocessing.queues import Empty
 import os
@@ -31,6 +30,7 @@ from .utils import (
     json_load_robust,
     PeriodicCallback,
     parse_timedelta,
+    ignoring,
 )
 from .worker import run, parse_memory_limit, Worker
 
@@ -219,14 +219,10 @@ class Nanny(ServerNode):
             EnvironmentError,
             RPCClosed,
         )
-        try:
-            await gen.with_timeout(
-                timedelta(seconds=timeout),
-                self.scheduler.unregister(address=self.worker_address),
-                quiet_exceptions=allowed_errors,
+        with ignoring(allowed_errors):
+            await asyncio.wait_for(
+                self.scheduler.unregister(address=self.worker_address), timeout
             )
-        except allowed_errors:
-            pass
 
     @property
     def worker_address(self):
@@ -318,8 +314,8 @@ class Nanny(ServerNode):
         self.auto_restart = True
         if self.death_timeout:
             try:
-                result = await gen.with_timeout(
-                    timedelta(seconds=self.death_timeout), self.process.start()
+                result = await asyncio.wait_for(
+                    self.process.start(), self.death_timeout
                 )
             except gen.TimeoutError:
                 await self.close(timeout=self.death_timeout)
@@ -343,8 +339,8 @@ class Nanny(ServerNode):
                 await self.instantiate()
 
         try:
-            await gen.with_timeout(timedelta(seconds=timeout), _())
-        except gen.TimeoutError:
+            await asyncio.wait_for(_(), timeout)
+        except asyncio.TimeoutError:
             logger.error("Restart timed out, returning before finished")
             return "timed out"
         else:

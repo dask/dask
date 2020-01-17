@@ -26,7 +26,7 @@ from distributed.utils_test import loop  # noqa: F401
 
 
 def test_submit_after_failed_worker_sync(loop):
-    with cluster(active_rpc_timeout=10) as (s, [a, b]):
+    with cluster(active_rpc_timeout=10, disconnect_timeout=10) as (s, [a, b]):
         with Client(s["address"], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
@@ -64,7 +64,7 @@ def test_submit_after_failed_worker(c, s, a, b):
 
 
 def test_gather_after_failed_worker(loop):
-    with cluster(active_rpc_timeout=10) as (s, [a, b]):
+    with cluster(active_rpc_timeout=10, disconnect_timeout=10) as (s, [a, b]):
         with Client(s["address"], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)

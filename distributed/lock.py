@@ -1,9 +1,8 @@
 from collections import defaultdict, deque
-from datetime import timedelta
 import logging
 import uuid
+import asyncio
 
-from tornado import gen
 import tornado.locks
 
 from .client import _get_global_client
@@ -45,10 +44,10 @@ class LockExtension(object):
                     self.events[name].append(event)
                     future = event.wait()
                     if timeout is not None:
-                        future = gen.with_timeout(timedelta(seconds=timeout), future)
+                        future = asyncio.wait_for(future, timeout)
                     try:
                         await future
-                    except gen.TimeoutError:
+                    except asyncio.TimeoutError:
                         result = False
                         break
                     else:

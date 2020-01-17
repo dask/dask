@@ -523,7 +523,7 @@ def test_memory_nanny(loop, n_workers):
 
 
 def test_death_timeout_raises(loop):
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         with LocalCluster(
             scheduler_port=0,
             silence_logs=False,

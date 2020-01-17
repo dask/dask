@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
 import importlib
 import logging
 from numbers import Number
@@ -10,6 +9,7 @@ import shutil
 import sys
 from time import sleep
 import traceback
+import asyncio
 
 import dask
 from dask import delayed
@@ -19,7 +19,6 @@ import pytest
 from toolz import pluck, sliding_window, first
 import tornado
 from tornado import gen
-from tornado.ioloop import TimeoutError
 
 from distributed import (
     Client,
@@ -326,8 +325,8 @@ def test_worker_waits_for_scheduler(loop):
     def f():
         w = Worker("127.0.0.1", 8007)
         try:
-            yield gen.with_timeout(timedelta(seconds=3), w)
-        except TimeoutError:
+            yield asyncio.wait_for(w, 3)
+        except asyncio.TimeoutError:
             pass
         else:
             assert False
@@ -762,7 +761,7 @@ def test_worker_death_timeout(s):
         yield s.close()
         w = Worker(s.address, death_timeout=1)
 
-    with pytest.raises(gen.TimeoutError) as info:
+    with pytest.raises(asyncio.TimeoutError) as info:
         yield w
 
     assert "Worker" in str(info.value)

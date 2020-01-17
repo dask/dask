@@ -173,7 +173,7 @@ class ServerNode(Node, Server):
                         await asyncio.wait_for(future, timeout=timeout)
                     except Exception:
                         await self.close(timeout=1)
-                        raise gen.TimeoutError(
+                        raise asyncio.TimeoutError(
                             "{} failed to start in {} seconds".format(
                                 type(self).__name__, timeout
                             )

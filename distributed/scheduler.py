@@ -2878,7 +2878,7 @@ class Scheduler(ServerNode):
                         for nanny in nannies
                     ]
                 )
-                resps = await gen.with_timeout(timedelta(seconds=timeout), resps)
+                resps = await asyncio.wait_for(resps, timeout)
                 if not all(resp == "OK" for resp in resps):
                     logger.error(
                         "Not all workers responded positively: %s", resps, exc_info=True

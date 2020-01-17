@@ -184,7 +184,7 @@ def test_nanny_alt_worker_class(c, s, w1, w2):
 def test_nanny_death_timeout(s):
     yield s.close()
     w = Nanny(s.address, death_timeout=1)
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         yield w
 
     assert w.status == "closed"

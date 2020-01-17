@@ -3,7 +3,6 @@ import atexit
 from collections import deque, OrderedDict, UserDict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from datetime import timedelta
 import functools
 from hashlib import md5
 import html
@@ -325,7 +324,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
             thread_state.asynchronous = True
             future = func(*args, **kwargs)
             if callback_timeout is not None:
-                future = gen.with_timeout(timedelta(seconds=callback_timeout), future)
+                future = asyncio.wait_for(future, callback_timeout)
             result[0] = yield future
         except Exception as exc:
             error[0] = sys.exc_info()

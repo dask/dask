@@ -496,7 +496,7 @@ def test_thread(c):
     assert x.result() == 2
 
     x = c.submit(slowinc, 1, delay=0.3)
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises((gen.TimeoutError, asyncio.TimeoutError)):
         x.result(timeout=0.01)
     assert x.result() == 2
 
@@ -681,7 +681,7 @@ def test_wait_first_completed(c, s, a, b):
 @gen_cluster(client=True, timeout=2)
 def test_wait_timeout(c, s, a, b):
     future = c.submit(sleep, 0.3)
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         yield wait(future, timeout=0.01)
 
 
@@ -695,7 +695,7 @@ def test_wait_sync(c):
     assert x.status == y.status == "finished"
 
     future = c.submit(sleep, 0.3)
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         wait(future, timeout=0.01)
 
 
@@ -5279,7 +5279,7 @@ def test_client_active_bad_port():
     http_server.listen(8080)
     with dask.config.set({"distributed.comm.timeouts.connect": "10ms"}):
         c = Client("127.0.0.1:8080", asynchronous=True)
-        with pytest.raises((TimeoutError, IOError)):
+        with pytest.raises((asyncio.TimeoutError, IOError)):
             yield c
         yield c._close(fast=True)
     http_server.stop()

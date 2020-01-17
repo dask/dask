@@ -54,8 +54,8 @@ def test_publish_non_string_key(s, a, b):
             assert name in datasets
 
     finally:
-        c.close()
-        f.close()
+        yield c.close()
+        yield f.close()
 
 
 @gen_cluster(client=False)
