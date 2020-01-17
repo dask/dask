@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2.9.3 - 2020-01-17
+------------------
+
+- Raise ``RuntimeError`` if no running loop (:pr:`3385`) `James Bourbeau`_
+- Fix ``get_running_loop`` import (:pr:`3383`) `James Bourbeau`_
+- Get JavaScript document location instead of window and handle proxied url (:pr:`3382`) `Jacob Tomlinson`_
+
+
 2.9.2 - 2020-01-16
 ------------------
 
