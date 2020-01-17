@@ -2904,17 +2904,14 @@ def to_zarr(
 
     chunks = [c[0] for c in arr.chunks]
 
-    # The zarr.create function has the side-effect of immediately creating metadata
-    # on disk.  This may not be desired if compute=False.  The caller may be
-    # creating many arrays on a slow filesystem, with the desire that any I/O be
-    # sharded across workers (not done serially on the originating machine).
-    # Or the caller may decide later to not to do this computation, and so
-    # nothing should be written to disk.
-    create_fn = zarr.create
-    if not compute:
-        create_fn = delayed(create_fn)
-
-    z = create_fn(
+    # The zarr.create function has the side-effect of immediately
+    # creating metadata on disk.  This may not be desired,
+    # particularly if compute=False.  The caller may be creating many
+    # arrays on a slow filesystem, with the desire that any I/O be
+    # sharded across workers (not done serially on the originating
+    # machine).  Or the caller may decide later to not to do this
+    # computation, and so nothing should be written to disk.
+    z = delayed(zarr.create)(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
