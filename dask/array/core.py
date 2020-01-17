@@ -2902,14 +2902,19 @@ def to_zarr(
         mapper = url
 
     chunks = [c[0] for c in arr.chunks]
-    z = zarr.create(
+
+    create_fn = zarr.create
+    if not compute:
+        create_fn = delayed(create_fn)
+
+    z = create_fn(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
         store=mapper,
         path=component,
         overwrite=overwrite,
-        **kwargs
+        **kwargs,
     )
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
 
