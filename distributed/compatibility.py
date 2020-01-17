@@ -11,4 +11,11 @@ WINDOWS = sys.platform.startswith("win")
 if sys.version_info[:2] >= (3, 7):
     from asyncio import get_running_loop
 else:
-    from asyncio import _get_running_loop as get_running_loop  # noqa: F401
+
+    def get_running_loop():
+        from asyncio import _get_running_loop
+
+        loop = _get_running_loop()
+        if loop is None:
+            raise RuntimeError("no running event loop")
+        return loop
