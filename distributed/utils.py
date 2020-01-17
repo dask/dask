@@ -56,7 +56,7 @@ try:
 except ImportError:
     PollIOLoop = None  # dropped in tornado 6.0
 
-from .compatibility import PYPY, WINDOWS
+from .compatibility import PYPY, WINDOWS, get_running_loop
 from .metrics import time
 
 
@@ -1204,7 +1204,7 @@ if tornado.version_info[0] >= 5:
 
         if is_kernel():
             try:
-                asyncio.get_running_loop()
+                get_running_loop()
             except RuntimeError:
                 is_kernel_and_no_running_loop = True
 
