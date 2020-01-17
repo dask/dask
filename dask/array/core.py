@@ -619,7 +619,7 @@ def map_blocks(
         concatenate=True,
         align_arrays=False,
         meta=meta,
-        **kwargs
+        **kwargs,
     )
 
     if has_keyword(func, "block_id") or has_keyword(func, "block_info") or drop_axis:
@@ -3870,7 +3870,7 @@ def elemwise(op, *args, **kwargs):
             (a, tuple(range(a.ndim)[::-1]) if not is_scalar_for_elemwise(a) else None)
             for a in args
         ),
-        **blockwise_kwargs
+        **blockwise_kwargs,
     )
 
     return handle_out(out, result)
@@ -4386,7 +4386,7 @@ def to_hdf5(filename, *args, **kwargs):
                 shape=x.shape,
                 dtype=x.dtype,
                 chunks=tuple([c[0] for c in x.chunks]) if chunks is True else chunks,
-                **kwargs
+                **kwargs,
             )
             for dp, x in data.items()
         ]
