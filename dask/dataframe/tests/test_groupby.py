@@ -2329,3 +2329,24 @@ def test_groupby_split_out_multiindex(split_out, column):
     )
 
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
+
+
+@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+def test_groupby_large_ints_exception(backend):
+    data_source = pytest.importorskip(backend)
+    if backend == "cudf":
+        dask_cudf = pytest.importorskip("dask_cudf")
+        data_frame = dask_cudf.from_cudf
+    else:
+        data_frame = dd.from_pandas
+    max = np.iinfo(np.uint64).max
+    sqrt = max ** 0.5
+    series = data_source.Series(
+        np.concatenate([sqrt * np.arange(5), np.arange(35)])
+    ).astype("int64")
+    df = data_source.DataFrame({"x": series, "z": np.arange(40), "y": np.arange(40)})
+    ddf = data_frame(df, npartitions=1)
+    assert_eq(
+        df.groupby("x").std(),
+        ddf.groupby("x").std().compute(scheduler="single-threaded"),
+    )
