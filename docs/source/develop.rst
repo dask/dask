@@ -152,7 +152,7 @@ You can also test certain modules or individual tests for faster response::
 
    py.test dask/dataframe --verbose
 
-   py.test dask/dataframe/tests/test_dataframe_core.py::test_set_index
+   py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
 
 Tests run automatically on the Travis.ci and Appveyor continuous testing
 frameworks on every push to every pull request on GitHub.
@@ -161,6 +161,7 @@ Tests are organized within the various modules' subdirectories::
 
     dask/array/tests/test_*.py
     dask/bag/tests/test_*.py
+    dask/bytes/tests/test_*.py
     dask/dataframe/tests/test_*.py
     dask/diagnostics/tests/test_*.py
 
