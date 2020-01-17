@@ -300,18 +300,18 @@ def _var_chunk(df, *index):
         df = df.to_frame()
 
     df = df.copy()
-    cols = df._get_numeric_data().columns
 
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
 
+    cols = x.columns
     df[cols] = df[cols] ** 2
+
     g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
 
-    x2.index = x.index
     return concat([x, x2, n], axis=1)
 
 

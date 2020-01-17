@@ -919,3 +919,48 @@ def test_set_index_timestamp():
 
     assert_eq(df2, ddf_new_div)
     assert_eq(df2, ddf.set_index("A"))
+
+
+@pytest.mark.parametrize("compression", [None, "ZLib"])
+def test_disk_shuffle_with_compression_option(compression):
+    # test if dataframe shuffle works both with and without compression
+    with dask.config.set({"dataframe.shuffle-compression": compression}):
+        test_shuffle("disk")
+
+
+@pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO"])
+def test_disk_shuffle_with_unknown_compression(compression):
+    # test if dask raises an error in case of fault config string
+    with dask.config.set({"dataframe.shuffle-compression": compression}):
+        with pytest.raises(
+            ImportError,
+            match=(
+                "Not able to import and load {0} as compression algorithm."
+                "Please check if the library is installed and supported by Partd.".format(
+                    compression
+                )
+            ),
+        ):
+            test_shuffle("disk")
+
+
+def test_disk_shuffle_check_actual_compression():
+    # test if the compression switch is really respected by testing the size of the actual partd-data on disk
+    def generate_raw_partd_file(compression):
+        # generate and write a dummy dataframe to disk and return the raw data bytes
+        df1 = pd.DataFrame({"a": list(range(10000))})
+        df1["b"] = (df1["a"] * 123).astype(str)
+        with dask.config.set({"dataframe.shuffle-compression": compression}):
+            p1 = maybe_buffered_partd(buffer=False, tempdir=None)()
+            p1.append({"x": df1})
+            # get underlying filename from partd - depending on nested structure of partd object
+            filename = (
+                p1.partd.partd.filename("x") if compression else p1.partd.filename("x")
+            )
+            return open(filename, "rb").read()
+
+    # get compressed and uncompressed raw data
+    uncompressed_data = generate_raw_partd_file(compression=None)
+    compressed_data = generate_raw_partd_file(compression="BZ2")
+
+    assert len(uncompressed_data) > len(compressed_data)

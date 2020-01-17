@@ -95,7 +95,7 @@ script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
   - if [[ $LINT == 'true' ]]; then pip install flake8 ; flake8 dask; fi
-  - if [[ $LINT == 'true' ]]; then pip install git+https://github.com/psf/black@73bd7038fbefdb1c6a61fa1edf16ff61613050a5; black dask --check; fi
+  - if [[ $LINT == 'true' ]]; then pip install black ; black dask --check; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then bash continuous_integration/travis/test_imports.sh; fi
 
 after_success:
