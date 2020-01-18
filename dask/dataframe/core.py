@@ -1487,7 +1487,7 @@ Dask Name: {name}, {task} tasks""".format(
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1645,7 +1645,7 @@ Dask Name: {name}, {task} tasks""".format(
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     @derived_from(pd.DataFrame)
@@ -1678,7 +1678,7 @@ Dask Name: {name}, {task} tasks""".format(
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1719,7 +1719,7 @@ Dask Name: {name}, {task} tasks""".format(
                 result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def _var_numeric(self, skipna=True, ddof=1, split_every=False):
@@ -1881,7 +1881,7 @@ Dask Name: {name}, {task} tasks""".format(
             )
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     def quantile(self, q=0.5, axis=0, method="default"):
