@@ -1349,7 +1349,18 @@ def test_moment():
 
 
 def test_datetime_series_mean():
-    pds = pd.Series(pd.date_range("2000", periods=4))
+    pds = pd.Series(
+        ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04", pd.NaT],
+        dtype="datetime64[ns]",
+    )
     dds = dd.from_pandas(pds, npartitions=1)
+    pdf = pd.DataFrame(pds)
+    ddf = dd.from_pandas(pdf, npartitions=1)
     if PANDAS_GT_0250:
-        assert_eq(dds.mean(), pds.mean())
+        assert dds.mean().compute() == pds.mean()
+    assert_eq(ddf.mean(), pdf.mean())
+    assert_eq(ddf.mean(axis=1), pdf.mean(axis=1))
+    pdf[1] = 4
+    ddf = dd.from_pandas(pdf, npartitions=1)
+    assert_eq(ddf.mean(), pdf.mean())
+    assert_eq(ddf.mean(axis=1), pdf.mean(axis=1))
