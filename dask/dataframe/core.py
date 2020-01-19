@@ -1491,7 +1491,7 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1649,7 +1649,7 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     @derived_from(pd.DataFrame)
@@ -1671,7 +1671,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             dtype = getattr(self, "dtype", None)
             if dtype == "<M8[ns]":
-                num = self._get_numeric_data().astype("i8")
+                num = self.dropna()._get_numeric_data().astype("i8")
             else:
                 num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
@@ -1686,13 +1686,11 @@ Dask Name: {name}, {task} tasks"""
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
+                if len(result.index) == 0:
+                    result.index = result.index.astype("i")
             if dtype == "<M8[ns]":
-                val = pd.Timestamp(result.compute())
-                add_layers = {result._name: {(result._name, 0): val}}
-                add_dependencies = {result._name: set()}
-                result.dask.layers.update(add_layers)
-                result.dask.dependencies.update(add_dependencies)
+                result = delayed(pd.Timestamp)(result)
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
