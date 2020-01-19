@@ -1650,6 +1650,8 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
+                if len(result) == 0:
+                    result = result.astype("int64")
             return result
 
     @derived_from(pd.DataFrame)
@@ -1687,7 +1689,7 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
-                if len(result.index) == 0:
+                if len(result.index) == 0 and self.columns != 0:
                     result.index = result.index.astype("i")
             if dtype == "<M8[ns]":
                 result = delayed(pd.Timestamp)(result)
