@@ -1646,6 +1646,8 @@ Dask Name: {name}, {task} tasks""".format(
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
+                if len(result) == 0:
+                    result = result.astype("int64")
             return result
 
     @derived_from(pd.DataFrame)
