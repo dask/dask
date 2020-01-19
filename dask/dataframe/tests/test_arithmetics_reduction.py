@@ -1346,3 +1346,14 @@ def test_moment():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(stats.moment(ddf, 2, 0), scipy.stats.moment(df, 2, 0))
+
+
+@pytest.mark.parametrize("func", ["sum", "count", "mean", "var", "sem"])
+def test_empty_df_reductions(func):
+    pdf = pd.DataFrame()
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    dsk_func = getattr(ddf.__class__, func)
+    pd_func = getattr(pdf.__class__, func)
+
+    assert_eq(dsk_func(ddf), pd_func(pdf))
