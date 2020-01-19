@@ -11,6 +11,7 @@ from toolz import memoize, merge, pluck, concat
 from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
+import dask.array as da
 
 colon = slice(None, None, None)
 
@@ -1240,3 +1241,15 @@ def cached_cumsum(seq, initial_zero=False):
     if not initial_zero:
         result = result[1:]
     return result
+
+
+def take_along_axis(arr,indices,axis):
+    if axis is None:
+      arr=arr.flat
+      arr_shape=(len(arr),)
+      axis=0
+    arr=np.array(arr)
+    indices=np.array()
+    if np.shape(arr)!=np.shape(indices):
+      raise ValueError('Dimensions of arr and indices does not match ')
+    
