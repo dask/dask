@@ -1690,7 +1690,7 @@ Dask Name: {name}, {task} tasks"""
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
                 if len(result.index) == 0 and len(self.columns != 0):
-                    result.index = result.index.astype("i")
+                    result.index = result.index.astype("int64")
             if dtype == "<M8[ns]":
                 result = delayed(pd.Timestamp)(result)
             return handle_out(out, result)
