@@ -285,6 +285,27 @@ def test_tokenize_pandas_no_pickle():
     tokenize(df)
 
 
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_extension_array():
+    from dask.dataframe._compat import PANDAS_GT_100
+
+    if not PANDAS_GT_100:
+        pytest.skip(reason="requires pandas>=1.0.0")
+
+    arrays = [
+        pd.array(["a", "b", None], dtype="string"),
+        pd.array([True, False, None], dtype="boolean"),
+        pd.array([1, 0, None], dtype="Int64"),
+        pd.array(["2000"], dtype="Period[D]"),
+        pd.array([1, 0, 0], dtype="Sparse[int]"),
+        pd.array([pd.Timestamp("2000")], dtype="datetime64[ns]"),
+        pd.array([pd.Timestamp("2000", tz="CET")], dtype="datetime64[ns, CET]"),
+        pd.array(["a", "b"], dtype=pd.CategoricalDtype(["a", "b", "c"])),
+    ]
+    for arr in arrays:
+        assert tokenize(arr) == tokenize(arr)
+
+
 def test_tokenize_kwargs():
     assert tokenize(5, x=1) == tokenize(5, x=1)
     assert tokenize(5) != tokenize(5, x=1)
