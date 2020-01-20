@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe._compat import PANDAS_GT_0240
 import dask.dataframe as dd
 
 
@@ -103,6 +104,7 @@ def test_resample_index_name():
     assert ddf.resample("D").mean().head().index.name == "date"
 
 
+@pytest.mark.skipif(PANDAS_GT_0240, reason="nonexistent not in 0.23 or older")
 def test_series_resample_non_existent_datetime():
     index = [
         pd.Timestamp("2016-10-15 00:00:00"),

@@ -6,6 +6,7 @@ from ..core import DataFrame, Series
 from ...base import tokenize
 from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
+from .._compat import PANDAS_GT_0240
 
 
 def getnanos(rule):
@@ -30,16 +31,20 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-    return out.reindex(
+    new_index = (
         pd.date_range(
             start.tz_localize(None),
             end.tz_localize(None),
             freq=rule,
             closed=reindex_closed,
             name=out.index.name,
-        ).tz_localize(start.tz, nonexistent="shift_forward"),
-        fill_value=fill_value,
+        ).tz_localize(start.tz, nonexistent="shift_forward")
+        if PANDAS_GT_0240
+        else pd.date_range(
+            start, end, freq=rule, closed=reindex_closed, name=out.index.name
+        )
     )
+    return out.reindex(new_index, fill_value=fill_value)
 
 
 def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
