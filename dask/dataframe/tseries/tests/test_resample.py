@@ -114,7 +114,7 @@ def test_series_resample_non_existent_datetime():
     df = pd.DataFrame([[1], [2], [3]], index=index)
     df.index = df.index.tz_localize("America/Sao_Paulo")
     ddf = dd.from_pandas(df, npartitions=1)
-    result = ddf.resample("1D").mean().compute()
+    result = ddf.resample("1D").mean()
     expected = df.resample("1D").mean()
 
     assert_eq(result, expected)
