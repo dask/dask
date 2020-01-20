@@ -1358,7 +1358,7 @@ def test_empty_df_reductions(func):
 
     assert_eq(dsk_func(ddf), pd_func(pdf))
 
-    idx = pd.date_range('2000', periods=4)
+    idx = pd.date_range("2000", periods=4)
     pdf = pd.DataFrame(index=idx)
     ddf = dd.from_pandas(pdf, npartitions=1)
 
