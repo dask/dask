@@ -31,19 +31,19 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-    new_index = (
-        pd.date_range(
+    if PANDAS_GT_0240:
+        new_index = pd.date_range(
             start.tz_localize(None),
             end.tz_localize(None),
             freq=rule,
             closed=reindex_closed,
             name=out.index.name,
         ).tz_localize(start.tz, nonexistent="shift_forward")
-        if PANDAS_GT_0240
-        else pd.date_range(
+
+    else:
+        new_index = pd.date_range(
             start, end, freq=rule, closed=reindex_closed, name=out.index.name
         )
-    )
     return out.reindex(new_index, fill_value=fill_value)
 
 
