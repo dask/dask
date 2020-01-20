@@ -1041,6 +1041,7 @@ class Scheduler(ServerNode):
         dashboard_address=None,
         preload=None,
         preload_argv=(),
+        plugins=(),
         **kwargs
     ):
         self._setup_logging(logger)
@@ -1210,7 +1211,7 @@ class Scheduler(ServerNode):
         ]
 
         self.extensions = {}
-        self.plugins = []
+        self.plugins = list(plugins)
         self.transition_log = deque(
             maxlen=dask.config.get("distributed.scheduler.transition-log-length")
         )
@@ -1437,6 +1438,8 @@ class Scheduler(ServerNode):
 
         preload_modules(self.preload, parameter=self, argv=self.preload_argv)
 
+        await asyncio.gather(*[plugin.start(self) for plugin in self.plugins])
+
         self.start_periodic_callbacks()
 
         setproctitle("dask-scheduler [%s]" % (self.address,))
@@ -1466,6 +1469,8 @@ class Scheduler(ServerNode):
                     await asyncio.sleep(0.05)
                 else:
                     break
+
+        await asyncio.gather(*[plugin.close() for plugin in self.plugins])
 
         for pc in self.periodic_callbacks.values():
             pc.stop()

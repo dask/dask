@@ -1,3 +1,4 @@
+import asyncio
 import array
 import datetime
 from functools import partial
@@ -109,7 +110,7 @@ def test_sync_error(loop_in_thread):
 
 def test_sync_timeout(loop_in_thread):
     loop = loop_in_thread
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises((asyncio.TimeoutError, gen.TimeoutError)):
         sync(loop_in_thread, gen.sleep, 0.5, callback_timeout=0.05)
 
 

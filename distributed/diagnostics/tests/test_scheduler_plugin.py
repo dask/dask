@@ -1,5 +1,6 @@
-from distributed import Worker, SchedulerPlugin
-from distributed.utils_test import inc, gen_cluster
+import pytest
+from distributed import Scheduler, Worker, SchedulerPlugin
+from distributed.utils_test import inc, gen_cluster, cleanup  # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -67,3 +68,24 @@ def test_add_remove_worker(s):
     a = yield Worker(s.address)
     yield a.close()
     assert events == []
+
+
+@pytest.mark.asyncio
+async def test_lifecycle(cleanup):
+    class LifeCycle(SchedulerPlugin):
+        def __init__(self):
+            self.history = []
+
+        async def start(self, scheduler):
+            self.scheduler = scheduler
+            self.history.append("started")
+
+        async def close(self):
+            self.history.append("closed")
+
+    plugin = LifeCycle()
+    async with Scheduler(plugins=[plugin]) as s:
+        pass
+
+    assert plugin.history == ["started", "closed"]
+    assert plugin.scheduler is s
