@@ -32,8 +32,12 @@ def _resample_series(
     )
     return out.reindex(
         pd.date_range(
-            start, end, freq=rule, closed=reindex_closed, name=out.index.name
-        ),
+            start.tz_localize(None),
+            end.tz_localize(None),
+            freq=rule,
+            closed=reindex_closed,
+            name=out.index.name,
+        ).tz_localize(start.tz, nonexistent="shift_forward"),
         fill_value=fill_value,
     )
 

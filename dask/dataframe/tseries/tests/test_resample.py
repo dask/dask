@@ -103,6 +103,21 @@ def test_resample_index_name():
     assert ddf.resample("D").mean().head().index.name == "date"
 
 
+def test_series_resample_non_existent_datetime():
+    index = [
+        pd.Timestamp("2016-10-15 00:00:00"),
+        pd.Timestamp("2016-10-16 10:00:00"),
+        pd.Timestamp("2016-10-17 00:00:00"),
+    ]
+    df = pd.DataFrame([[1], [2], [3]], index=index)
+    df.index = df.index.tz_localize("America/Sao_Paulo")
+    ddf = dd.from_pandas(df, npartitions=1)
+    result = ddf.resample("1D").mean().compute()
+    expected = df.resample("1D").mean()
+
+    assert_eq(result, expected)
+
+
 @pytest.mark.skipif(PANDAS_VERSION <= "0.23.4", reason="quantile not in 0.23")
 @pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])
 def test_common_aggs(agg):
