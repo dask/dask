@@ -619,7 +619,7 @@ def map_blocks(
         concatenate=True,
         align_arrays=False,
         meta=meta,
-        **kwargs
+        **kwargs,
     )
 
     if has_keyword(func, "block_id") or has_keyword(func, "block_info") or drop_axis:
@@ -2851,7 +2851,8 @@ def to_zarr(
         paths)
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
-        where overwrite=True will replace the existing data.
+        where overwrite=True will replace the existing data.  Note that this
+        check is done at computation time, not during graph creation.
     compute, return_stored: see ``store()``
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
 
@@ -2902,14 +2903,22 @@ def to_zarr(
         mapper = url
 
     chunks = [c[0] for c in arr.chunks]
-    z = zarr.create(
+
+    # The zarr.create function has the side-effect of immediately
+    # creating metadata on disk.  This may not be desired,
+    # particularly if compute=False.  The caller may be creating many
+    # arrays on a slow filesystem, with the desire that any I/O be
+    # sharded across workers (not done serially on the originating
+    # machine).  Or the caller may decide later to not to do this
+    # computation, and so nothing should be written to disk.
+    z = delayed(zarr.create)(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
         store=mapper,
         path=component,
         overwrite=overwrite,
-        **kwargs
+        **kwargs,
     )
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
 
@@ -3865,7 +3874,7 @@ def elemwise(op, *args, **kwargs):
             (a, tuple(range(a.ndim)[::-1]) if not is_scalar_for_elemwise(a) else None)
             for a in args
         ),
-        **blockwise_kwargs
+        **blockwise_kwargs,
     )
 
     return handle_out(out, result)
@@ -4381,7 +4390,7 @@ def to_hdf5(filename, *args, **kwargs):
                 shape=x.shape,
                 dtype=x.dtype,
                 chunks=tuple([c[0] for c in x.chunks]) if chunks is True else chunks,
-                **kwargs
+                **kwargs,
             )
             for dp, x in data.items()
         ]

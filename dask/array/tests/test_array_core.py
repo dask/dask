@@ -3742,6 +3742,18 @@ def test_zarr_return_stored(compute):
         assert a2.chunks == a.chunks
 
 
+def test_to_zarr_delayed_creates_no_metadata():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.from_array([42])
+        result = a.to_zarr(d, compute=False)
+        assert not os.listdir(d)  # No .zarray file
+        # Verify array still created upon compute.
+        result.compute()
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+
+
 def test_zarr_existing_array():
     zarr = pytest.importorskip("zarr")
     c = (1, 1)
