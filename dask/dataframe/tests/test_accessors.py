@@ -125,7 +125,8 @@ def test_str_accessor(df_ddf):
 
     # implemented methods are present in tab completion
     assert "upper" in dir(ddf.str_col.str)
-    assert "upper" in dir(ddf.string_col.str)
+    if dd._compat.PANDAS_GT_100:
+        assert "upper" in dir(ddf.string_col.str)
     assert "upper" in dir(ddf.index.str)
 
     # not implemented methods don't show up
@@ -134,17 +135,21 @@ def test_str_accessor(df_ddf):
 
     # Test simple method on both series and index
     assert_eq(ddf.str_col.str.upper(), df.str_col.str.upper())
-    assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper())
     assert set(ddf.str_col.str.upper().dask) == set(ddf.str_col.str.upper().dask)
-    # TODO: figure out what's tokenized differently
-    # assert set(ddf.string_col.str.upper().dask) == set(ddf.string_col.str.upper().dask)
+
+    if dd._compat.PANDAS_GT_100:
+        assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper())
+        assert set(ddf.string_col.str.upper().dask) == set(
+            ddf.string_col.str.upper().dask
+        )
 
     assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass thru args & kwargs
     assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
-    assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
+    if dd._compat.PANDAS_GT_100:
+        assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
