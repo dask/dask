@@ -25,7 +25,7 @@ from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
-from distributed.utils import tmpfile, typename
+from distributed.utils import tmpfile, typename, TimeoutError
 from distributed.utils_test import (  # noqa: F401
     captured_logger,
     cleanup,
@@ -145,7 +145,7 @@ def test_no_valid_workers(client, s, a, b, c):
 
     assert s.tasks[x.key] in s.unrunnable
 
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield asyncio.wait_for(x, 0.05)
 
 
@@ -165,7 +165,7 @@ def test_no_workers(client, s):
 
     assert s.tasks[x.key] in s.unrunnable
 
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield asyncio.wait_for(x, 0.05)
 
 
@@ -656,11 +656,11 @@ def test_story(c, s, a, b):
 
 @gen_cluster(nthreads=[], client=True)
 def test_scatter_no_workers(c, s):
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield s.scatter(data={"x": 1}, client="alice", timeout=0.1)
 
     start = time()
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield c.scatter(123, timeout=0.1)
     assert time() < start + 1.5
 

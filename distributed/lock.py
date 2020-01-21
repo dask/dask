@@ -6,7 +6,7 @@ import asyncio
 import tornado.locks
 
 from .client import _get_global_client
-from .utils import log_errors
+from .utils import log_errors, TimeoutError
 from .worker import get_worker
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class LockExtension(object):
                         future = asyncio.wait_for(future, timeout)
                     try:
                         await future
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         result = False
                         break
                     else:

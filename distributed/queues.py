@@ -5,9 +5,10 @@ import uuid
 
 import tornado.queues
 from tornado.locks import Event
+from tornado import gen
 
 from .client import Future, _get_global_client, Client
-from .utils import tokey, sync, thread_state
+from .utils import tokey, sync, thread_state, TimeoutError
 from .worker import get_client
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,10 @@ class QueueExtension(object):
             record = {"type": "msgpack", "value": data}
         if timeout is not None:
             timeout = datetime.timedelta(seconds=timeout)
-        await self.queues[name].put(record, timeout=timeout)
+        try:
+            await self.queues[name].put(record, timeout=timeout)
+        except gen.TimeoutError:
+            raise TimeoutError("Timed out waiting for Queue")
 
     def future_release(self, name=None, key=None, client=None):
         self.future_refcount[name, key] -= 1
@@ -124,7 +128,10 @@ class QueueExtension(object):
         else:
             if timeout is not None:
                 timeout = datetime.timedelta(seconds=timeout)
-            record = await self.queues[name].get(timeout=timeout)
+            try:
+                record = await self.queues[name].get(timeout=timeout)
+            except gen.TimeoutError:
+                raise TimeoutError("Timed out waiting for Queue")
             record = process(record)
             return record
 
@@ -225,9 +232,12 @@ class Queue(object):
         return self.client.sync(self._qsize, **kwargs)
 
     async def _get(self, timeout=None, batch=False):
-        resp = await self.client.scheduler.queue_get(
-            timeout=timeout, name=self.name, batch=batch
-        )
+        try:
+            resp = await self.client.scheduler.queue_get(
+                timeout=timeout, name=self.name, batch=batch
+            )
+        except gen.TimeoutError:
+            raise TimeoutError("Timed out waiting for Queue")
 
         def process(d):
             if d["type"] == "Future":

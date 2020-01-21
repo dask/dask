@@ -34,7 +34,6 @@ import pytest
 import dask
 from toolz import merge, memoize, assoc
 from tornado import gen, queues
-from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
 from . import system
@@ -60,6 +59,7 @@ from .utils import (
     iscoroutinefunction,
     thread_state,
     _offload_executor,
+    TimeoutError,
 )
 from .worker import Worker
 from .nanny import Nanny
@@ -141,7 +141,7 @@ def loop():
             except RuntimeError as e:
                 if not re.match("IOLoop is clos(ed|ing)", str(e)):
                     raise
-            except gen.TimeoutError:
+            except TimeoutError:
                 pass
             else:
                 is_stopped.wait()

@@ -20,7 +20,7 @@ from distributed import Nanny, rpc, Scheduler, Worker, Client, wait
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
-from distributed.utils import ignoring, tmpfile
+from distributed.utils import ignoring, tmpfile, TimeoutError
 from distributed.utils_test import (  # noqa: F401
     gen_cluster,
     gen_test,
@@ -184,7 +184,7 @@ def test_nanny_alt_worker_class(c, s, w1, w2):
 def test_nanny_death_timeout(s):
     yield s.close()
     w = Nanny(s.address, death_timeout=1)
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield w
 
     assert w.status == "closed"

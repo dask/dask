@@ -24,12 +24,10 @@ from .pubsub import Pub, Sub
 from .queues import Queue
 from .scheduler import Scheduler
 from .threadpoolexecutor import rejoin
-from .utils import sync
+from .utils import sync, TimeoutError
 from .variable import Variable
 from .worker import Worker, get_worker, get_client, secede, Reschedule
 from .worker_client import local_client, worker_client
-
-from tornado.gen import TimeoutError
 
 from ._version import get_versions
 

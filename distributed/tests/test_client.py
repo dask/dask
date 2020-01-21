@@ -496,7 +496,7 @@ def test_thread(c):
     assert x.result() == 2
 
     x = c.submit(slowinc, 1, delay=0.3)
-    with pytest.raises((gen.TimeoutError, asyncio.TimeoutError)):
+    with pytest.raises(TimeoutError):
         x.result(timeout=0.01)
     assert x.result() == 2
 
@@ -681,7 +681,7 @@ def test_wait_first_completed(c, s, a, b):
 @gen_cluster(client=True, timeout=2)
 def test_wait_timeout(c, s, a, b):
     future = c.submit(sleep, 0.3)
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield wait(future, timeout=0.01)
 
 
@@ -695,7 +695,7 @@ def test_wait_sync(c):
     assert x.status == y.status == "finished"
 
     future = c.submit(sleep, 0.3)
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         wait(future, timeout=0.01)
 
 
@@ -1394,7 +1394,7 @@ def test_scatter_direct_broadcast_target(c, s, *workers):
 
 @gen_cluster(client=True, nthreads=[])
 def test_scatter_direct_empty(c, s):
-    with pytest.raises((ValueError, gen.TimeoutError)):
+    with pytest.raises((ValueError, TimeoutError)):
         yield c.scatter(123, direct=True, timeout=0.1)
 
 
@@ -1801,12 +1801,12 @@ def test_allow_restrictions(c, s, a, b):
 def test_bad_address():
     try:
         Client("123.123.123.123:1234", timeout=0.1)
-    except (IOError, gen.TimeoutError) as e:
+    except (IOError, TimeoutError) as e:
         assert "connect" in str(e).lower()
 
     try:
         Client("127.0.0.1:1234", timeout=0.1)
-    except (IOError, gen.TimeoutError) as e:
+    except (IOError, TimeoutError) as e:
         assert "connect" in str(e).lower()
 
 
@@ -3501,7 +3501,7 @@ def test_persist_optimize_graph(c, s, a, b):
 
 @gen_cluster(client=True, nthreads=[])
 def test_scatter_raises_if_no_workers(c, s):
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield c.scatter(1, timeout=0.5)
 
 
@@ -5279,7 +5279,7 @@ def test_client_active_bad_port():
     http_server.listen(8080)
     with dask.config.set({"distributed.comm.timeouts.connect": "10ms"}):
         c = Client("127.0.0.1:8080", asynchronous=True)
-        with pytest.raises((asyncio.TimeoutError, IOError)):
+        with pytest.raises((TimeoutError, IOError)):
             yield c
         yield c._close(fast=True)
     http_server.stop()

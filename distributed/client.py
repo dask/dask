@@ -37,7 +37,6 @@ try:
 except ImportError:
     single_key = first
 from tornado import gen
-from tornado.gen import TimeoutError
 from tornado.locks import Event, Condition, Semaphore
 from tornado.ioloop import IOLoop
 from tornado.queues import Queue
@@ -85,6 +84,7 @@ from .utils import (
     Any,
     has_keyword,
     format_dashboard_link,
+    TimeoutError,
 )
 from . import versions as version_module
 
@@ -1265,7 +1265,7 @@ class Client(Node):
 
             # Give the scheduler 'stream-closed' message 100ms to come through
             # This makes the shutdown slightly smoother and quieter
-            with ignoring(AttributeError, CancelledError, asyncio.TimeoutError):
+            with ignoring(AttributeError, CancelledError, TimeoutError):
                 await asyncio.wait_for(
                     asyncio.shield(self._handle_scheduler_coroutine), 0.1
                 )
@@ -1957,7 +1957,7 @@ class Client(Node):
                     if nthreads is not None:
                         await asyncio.sleep(0.1)
                     if time() > start + timeout:
-                        raise gen.TimeoutError("No valid workers found")
+                        raise TimeoutError("No valid workers found")
                     nthreads = await self.scheduler.ncores(workers=workers)
                 if not nthreads:
                     raise ValueError("No valid workers")

@@ -6,7 +6,7 @@ from toolz import merge
 from tornado import gen
 
 from .metrics import time
-from .utils import sync
+from .utils import sync, TimeoutError
 
 
 @gen.coroutine
@@ -135,7 +135,7 @@ class ClientExecutor(cf.Executor):
                     if timeout is not None:
                         try:
                             yield future.result(end_time - time())
-                        except gen.TimeoutError:
+                        except TimeoutError:
                             raise cf.TimeoutError
                     else:
                         yield future.result()

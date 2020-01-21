@@ -1,4 +1,5 @@
 import asyncio
+from asyncio import TimeoutError
 import atexit
 from collections import deque, OrderedDict, UserDict
 from concurrent.futures import ThreadPoolExecutor
@@ -335,7 +336,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
     loop.add_callback(f)
     if callback_timeout is not None:
         if not e.wait(callback_timeout):
-            raise gen.TimeoutError("timed out after %s s." % (callback_timeout,))
+            raise TimeoutError("timed out after %s s." % (callback_timeout,))
     else:
         while not e.is_set():
             e.wait(10)

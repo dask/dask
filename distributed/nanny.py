@@ -11,9 +11,9 @@ import weakref
 
 import dask
 from dask.system import CPU_COUNT
-from tornado import gen
-from tornado.ioloop import IOLoop, TimeoutError
+from tornado.ioloop import IOLoop
 from tornado.locks import Event
+from tornado import gen
 
 from .comm import get_address_host, unparse_host_port
 from .comm.addressing import address_from_user_args
@@ -31,6 +31,7 @@ from .utils import (
     PeriodicCallback,
     parse_timedelta,
     ignoring,
+    TimeoutError,
 )
 from .worker import run, parse_memory_limit, Worker
 
@@ -213,12 +214,7 @@ class Nanny(ServerNode):
         if worker_address is None:
             return
 
-        allowed_errors = (
-            gen.TimeoutError,
-            CommClosedError,
-            EnvironmentError,
-            RPCClosed,
-        )
+        allowed_errors = (TimeoutError, CommClosedError, EnvironmentError, RPCClosed)
         with ignoring(allowed_errors):
             await asyncio.wait_for(
                 self.scheduler.unregister(address=self.worker_address), timeout
@@ -317,7 +313,7 @@ class Nanny(ServerNode):
                 result = await asyncio.wait_for(
                     self.process.start(), self.death_timeout
                 )
-            except gen.TimeoutError:
+            except TimeoutError:
                 await self.close(timeout=self.death_timeout)
                 logger.error(
                     "Timed out connecting Nanny '%s' to scheduler '%s'",
@@ -340,7 +336,7 @@ class Nanny(ServerNode):
 
         try:
             await asyncio.wait_for(_(), timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Restart timed out, returning before finished")
             return "timed out"
         else:
@@ -729,7 +725,7 @@ class WorkerProcess(object):
 
         try:
             loop.run_sync(run)
-        except TimeoutError:
+        except (TimeoutError, gen.TimeoutError):
             # Loop was stopped before wait_until_closed() returned, ignore
             pass
         except KeyboardInterrupt:

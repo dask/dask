@@ -62,6 +62,7 @@ from .utils import (
     iscoroutinefunction,
     warn_on_duration,
     LRU,
+    TimeoutError,
 )
 from .utils_comm import pack_data, gather_from_workers, retry_operation
 from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
@@ -845,7 +846,7 @@ class Worker(ServerNode):
             except EnvironmentError:
                 logger.info("Waiting to connect to: %26s", self.scheduler.address)
                 await asyncio.sleep(0.1)
-            except gen.TimeoutError:
+            except TimeoutError:
                 logger.info("Timed out when connecting to scheduler")
         if response["status"] != "OK":
             raise ValueError("Unexpected response from register: %r" % (response,))
@@ -1095,7 +1096,7 @@ class Worker(ServerNode):
 
             for pc in self.periodic_callbacks.values():
                 pc.stop()
-            with ignoring(EnvironmentError, asyncio.TimeoutError):
+            with ignoring(EnvironmentError, TimeoutError):
                 if report and self.contact_address is not None:
                     await asyncio.wait_for(
                         self.scheduler.unregister(
@@ -1113,7 +1114,7 @@ class Worker(ServerNode):
                 self.batched_stream.send({"op": "close-stream"})
 
             if self.batched_stream:
-                with ignoring(gen.TimeoutError):
+                with ignoring(TimeoutError):
                     await self.batched_stream.close(timedelta(seconds=timeout))
 
             self.actor_executor._work_queue.queue.clear()

@@ -9,7 +9,7 @@ import dask
 
 from .core import Server, ConnectionPool
 from .versions import get_versions
-from .utils import DequeHandler
+from .utils import DequeHandler, TimeoutError
 
 
 class Node(object):
@@ -173,7 +173,7 @@ class ServerNode(Node, Server):
                         await asyncio.wait_for(future, timeout=timeout)
                     except Exception:
                         await self.close(timeout=1)
-                        raise asyncio.TimeoutError(
+                        raise TimeoutError(
                             "{} failed to start in {} seconds".format(
                                 type(self).__name__, timeout
                             )

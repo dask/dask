@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from tornado import gen
 
-from distributed import Client, Queue, Nanny, worker_client, wait
+from distributed import Client, Queue, Nanny, worker_client, wait, TimeoutError
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, div
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
@@ -24,7 +24,7 @@ def test_queue(c, s, a, b):
     future2 = yield xx.get()
     assert future.key == future2.key
 
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield x.get(timeout=0.1)
 
     del future, future2
@@ -50,7 +50,7 @@ def test_queue_with_data(c, s, a, b):
 
     assert data == (1, "hello")
 
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield x.get(timeout=0.1)
 
 
@@ -181,7 +181,7 @@ def test_get_many(c, s, a, b):
     data = yield xx.get(batch=2)
     assert data == [1, 2]
 
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         data = yield asyncio.wait_for(xx.get(batch=2), 0.1)
 
 
@@ -248,7 +248,7 @@ def test_timeout(c, s, a, b):
     q = yield Queue("v", maxsize=1)
 
     start = time()
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield q.get(timeout=0.3)
     stop = time()
     assert 0.2 < stop - start < 2.0
@@ -256,7 +256,7 @@ def test_timeout(c, s, a, b):
     yield q.put(1)
 
     start = time()
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield q.put(2, timeout=0.3)
     stop = time()
     assert 0.1 < stop - start < 2.0

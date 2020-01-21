@@ -8,7 +8,7 @@ import weakref
 import asyncio
 import dask
 
-from .utils import mp_context
+from .utils import mp_context, TimeoutError
 
 from tornado import gen
 from tornado.concurrent import Future
@@ -283,7 +283,7 @@ class AsyncProcess(object):
         else:
             try:
                 yield asyncio.wait_for(self._exit_future, timeout)
-            except gen.TimeoutError:
+            except TimeoutError:
                 pass
 
     def close(self):

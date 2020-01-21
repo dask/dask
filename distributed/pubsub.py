@@ -8,7 +8,7 @@ import tornado.locks
 from tornado import gen
 
 from .core import CommClosedError
-from .utils import sync
+from .utils import sync, TimeoutError
 from .protocol.serialize import to_serialize
 
 logger = logging.getLogger(__name__)
@@ -400,10 +400,13 @@ class Sub(object):
             if timeout is not None:
                 timeout2 = timeout - (datetime.datetime.now() - start)
                 if timeout2.total_seconds() < 0:
-                    raise gen.TimeoutError()
+                    raise TimeoutError()
             else:
                 timeout2 = None
-            await self.condition.wait(timeout=timeout2)
+            try:
+                await self.condition.wait(timeout=timeout2)
+            except gen.TimeoutError:
+                raise TimeoutError("Timed out waiting on Sub")
 
         return self.buffer.popleft()
 

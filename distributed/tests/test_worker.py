@@ -35,7 +35,7 @@ from distributed.core import rpc
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, parse_memory_limit
-from distributed.utils import tmpfile
+from distributed.utils import tmpfile, TimeoutError
 from distributed.utils_test import (  # noqa: F401
     cleanup,
     inc,
@@ -326,7 +326,7 @@ def test_worker_waits_for_scheduler(loop):
         w = Worker("127.0.0.1", 8007)
         try:
             yield asyncio.wait_for(w, 3)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         else:
             assert False
@@ -761,7 +761,7 @@ def test_worker_death_timeout(s):
         yield s.close()
         w = Worker(s.address, death_timeout=1)
 
-    with pytest.raises(asyncio.TimeoutError) as info:
+    with pytest.raises(TimeoutError) as info:
         yield w
 
     assert "Worker" in str(info.value)

@@ -31,7 +31,7 @@ from distributed.utils_test import (  # noqa: F401
     tls_only_security,
 )
 from distributed.utils_test import loop  # noqa: F401
-from distributed.utils import sync
+from distributed.utils import sync, TimeoutError
 
 from distributed.deploy.utils_test import ClusterTest
 
@@ -523,7 +523,7 @@ def test_memory_nanny(loop, n_workers):
 
 
 def test_death_timeout_raises(loop):
-    with pytest.raises(asyncio.TimeoutError):
+    with pytest.raises(TimeoutError):
         with LocalCluster(
             scheduler_port=0,
             silence_logs=False,

@@ -6,7 +6,7 @@ import sys
 import pytest
 from tornado import gen
 
-from distributed import Client, Variable, worker_client, Nanny, wait
+from distributed import Client, Variable, worker_client, Nanny, wait, TimeoutError
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, div
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
@@ -84,7 +84,7 @@ def test_timeout(c, s, a, b):
     v = Variable("v")
 
     start = time()
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         yield v.get(timeout=0.1)
     stop = time()
     assert 0.1 < stop - start < 2.0
@@ -93,7 +93,7 @@ def test_timeout(c, s, a, b):
 def test_timeout_sync(client):
     v = Variable("v")
     start = time()
-    with pytest.raises(gen.TimeoutError):
+    with pytest.raises(TimeoutError):
         v.get(timeout=0.1)
     stop = time()
     assert 0.1 < stop - start < 2.0
