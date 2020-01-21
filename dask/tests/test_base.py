@@ -300,10 +300,23 @@ def test_tokenize_pandas_extension_array():
         pd.array([1, 0, 0], dtype="Sparse[int]"),
         pd.array([pd.Timestamp("2000")], dtype="datetime64[ns]"),
         pd.array([pd.Timestamp("2000", tz="CET")], dtype="datetime64[ns, CET]"),
-        pd.array(["a", "b"], dtype=pd.api.types.CategoricalDtype(["a", "b", "c"])),
+        pd.array(
+            ["a", "b"],
+            dtype=pd.api.types.CategoricalDtype(["a", "b", "c"]),
+            ordered=False,
+        ),
     ]
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_index():
+    idx = pd.Index(["a", "b"])
+    assert tokenize(idx) == tokenize(idx)
+
+    idx = pd.MultiIndex.from_product([["a", "b"], [0, 1]])
+    assert tokenize(idx) == tokenize(idx)
 
 
 def test_tokenize_kwargs():

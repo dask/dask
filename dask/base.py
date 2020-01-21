@@ -749,6 +749,14 @@ def register_pandas():
             values = ind.values
         return [ind.name, normalize_token(values)]
 
+    @normalize_token.register(pd.MultiIndex)
+    def normalize_index(ind):
+        return (
+            [ind.name]
+            + [normalize_token(x) for x in ind.levels]
+            + [normalize_token(x) for x in ind.codes]
+        )
+
     @normalize_token.register(pd.Categorical)
     def normalize_categorical(cat):
         return [normalize_token(cat.codes), normalize_token(cat.dtype)]
