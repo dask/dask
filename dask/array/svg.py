@@ -49,7 +49,7 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
 
     header = (
         '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (max_x + 50, max_y + 50,)
+        % (max_x + 50, max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -87,7 +87,7 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
 
     header = (
         '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (max_z + 50, max_y + 50,)
+        % (max_z + 50, max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -154,7 +154,7 @@ def svg_nd(chunks, size=200):
 
     header = (
         '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (left, total_height,)
+        % (left, total_height)
     )
     footer = "\n</svg>"
     return header + "\n\n".join(out) + footer
