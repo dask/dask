@@ -80,7 +80,6 @@ def df_ddf():
         },
         index=["E", "f", "g", "h"],
     )
-
     ddf = dd.from_pandas(df, 2)
 
     return df, ddf
