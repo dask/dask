@@ -290,7 +290,7 @@ def test_tokenize_pandas_extension_array():
     from dask.dataframe._compat import PANDAS_GT_100
 
     if not PANDAS_GT_100:
-        pytest.skip(reason="requires pandas>=1.0.0")
+        pytest.skip("requires pandas>=1.0.0")
 
     arrays = [
         pd.array(["a", "b", None], dtype="string"),
