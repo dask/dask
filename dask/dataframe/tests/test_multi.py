@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (
@@ -1944,9 +1944,6 @@ def test_multi_duplicate_divisions():
     assert_eq(r1, r2)
 
 
-@pytest.mark.xfail(
-    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
-)
 def test_merge_outer_empty():
     # Issue #5470 bug reproducer
     k_clusters = 3
