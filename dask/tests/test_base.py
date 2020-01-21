@@ -456,6 +456,7 @@ def test_unpack_collections():
 
         if dataclasses is not None:
             t[2]["f"] = ADataClass(a=a)
+            t[2]["g"] = (ADataClass, a)
 
         return t
 
