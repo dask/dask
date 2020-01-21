@@ -2981,7 +2981,7 @@ def test_astype_categoricals_known():
     )
     ddf = dd.from_pandas(df, 2)
 
-    abc = pd.api.types.CategoricalDtype(["a", "b", "c"])
+    abc = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
     category = pd.api.types.CategoricalDtype(ordered=False)
 
     # DataFrame
