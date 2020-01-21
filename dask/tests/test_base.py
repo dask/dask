@@ -287,14 +287,12 @@ def test_tokenize_pandas_no_pickle():
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_extension_array():
-    from dask.dataframe._compat import PANDAS_GT_100
+    from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_0240
 
-    if not PANDAS_GT_100:
+    if not PANDAS_GT_0240:
         pytest.skip("requires pandas>=1.0.0")
 
     arrays = [
-        pd.array(["a", "b", None], dtype="string"),
-        pd.array([True, False, None], dtype="boolean"),
         pd.array([1, 0, None], dtype="Int64"),
         pd.array(["2000"], dtype="Period[D]"),
         pd.array([1, 0, 0], dtype="Sparse[int]"),
@@ -302,10 +300,18 @@ def test_tokenize_pandas_extension_array():
         pd.array([pd.Timestamp("2000", tz="CET")], dtype="datetime64[ns, CET]"),
         pd.array(
             ["a", "b"],
-            dtype=pd.api.types.CategoricalDtype(["a", "b", "c"]),
-            ordered=False,
+            dtype=pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False),
         ),
     ]
+
+    if PANDAS_GT_100:
+        arrays.extend(
+            [
+                pd.array(["a", "b", None], dtype="string"),
+                pd.array([True, False, None], dtype="boolean"),
+            ]
+        )
+
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)
 

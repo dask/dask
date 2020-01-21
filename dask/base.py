@@ -751,10 +751,11 @@ def register_pandas():
 
     @normalize_token.register(pd.MultiIndex)
     def normalize_index(ind):
+        codes = ind.codes if PANDAS_GT_0240 else ind.levels
         return (
             [ind.name]
             + [normalize_token(x) for x in ind.levels]
-            + [normalize_token(x) for x in ind.codes]
+            + [normalize_token(x) for x in codes]
         )
 
     @normalize_token.register(pd.Categorical)
