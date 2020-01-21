@@ -791,7 +791,7 @@ def register_pandas():
         return normalize_token(np.asarray(arr))
 
     # Dtypes
-    @normalize_token.register(pd.CategoricalDtype)
+    @normalize_token.register(pd.api.types.CategoricalDtype)
     def normalize_categorical_dtype(dtype):
         return [normalize_token(dtype.categories), normalize_token(dtype.ordered)]
 

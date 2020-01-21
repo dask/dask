@@ -39,9 +39,6 @@ from ..utils import is_dataframe_like as dask_is_dataframe_like
 from ..utils import is_series_like as dask_is_series_like
 from ..utils import is_index_like as dask_is_index_like
 
-# register pandas extension types
-from . import _dtypes  # noqa: F401
-
 
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)

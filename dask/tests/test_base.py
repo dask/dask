@@ -300,7 +300,7 @@ def test_tokenize_pandas_extension_array():
         pd.array([1, 0, 0], dtype="Sparse[int]"),
         pd.array([pd.Timestamp("2000")], dtype="datetime64[ns]"),
         pd.array([pd.Timestamp("2000", tz="CET")], dtype="datetime64[ns, CET]"),
-        pd.array(["a", "b"], dtype=pd.CategoricalDtype(["a", "b", "c"])),
+        pd.array(["a", "b"], dtype=pd.api.types.CategoricalDtype(["a", "b", "c"])),
     ]
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)
