@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import dask
+from dask.utils import M
 import dask.dataframe as dd
 from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.dataframe import _compat
@@ -2348,3 +2349,55 @@ def test_groupby_large_ints_exception(backend):
         df.groupby("x").std(),
         ddf.groupby("x").std().compute(scheduler="single-threaded"),
     )
+
+
+@pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
+@pytest.mark.parametrize("agg", ["count", "mean", "std"])
+@pytest.mark.parametrize("sort", [True, False])
+def test_groupby_sort_argument(by, agg, sort):
+
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, 0] * 4,
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    gb = ddf.groupby(by, sort=sort)
+    gb_pd = df.groupby(by, sort=sort)
+
+    # Basic groupby aggregation
+    result_1 = getattr(gb, agg)
+    result_1_pd = getattr(gb_pd, agg)
+
+    # Choose single column
+    result_2 = getattr(gb.e, agg)
+    result_2_pd = getattr(gb_pd.e, agg)
+
+    # Use `agg()` api
+    result_3 = gb.agg({"e": agg})
+    result_3_pd = gb_pd.agg({"e": agg})
+
+    if agg == "mean":
+        assert_eq(result_1(), result_1_pd().astype("float"))
+        assert_eq(result_2(), result_2_pd().astype("float"))
+        assert_eq(result_3, result_3_pd.astype("float"))
+    else:
+        assert_eq(result_1(), result_1_pd())
+        assert_eq(result_2(), result_2_pd())
+        assert_eq(result_3, result_3_pd)
+
+
+@pytest.mark.parametrize("agg", [M.sum, M.prod, M.max, M.min])
+@pytest.mark.parametrize("sort", [True, False])
+def test_groupby_sort_argument_agg(agg, sort):
+    df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = agg(ddf.groupby("x", sort=sort))
+    result_pd = agg(df.groupby("x"))
+
+    assert_eq(result, result_pd)

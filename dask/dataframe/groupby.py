@@ -315,12 +315,12 @@ def _var_chunk(df, *index):
     return concat([x, x2, n], axis=1)
 
 
-def _var_combine(g, levels):
-    return g.groupby(level=levels, sort=False).sum()
+def _var_combine(g, levels, sort=False):
+    return g.groupby(level=levels, sort=sort).sum()
 
 
-def _var_agg(g, levels, ddof):
-    g = g.groupby(level=levels, sort=False).sum()
+def _var_agg(g, levels, ddof, sort=False):
+    g = g.groupby(level=levels, sort=sort).sum()
     nc = len(g.columns)
     x = g[g.columns[: nc // 3]]
     # chunks columns are tuples (value, name), so we just keep the value part
@@ -431,7 +431,7 @@ def _cov_chunk(df, *index):
     return (x, mul, n, col_mapping)
 
 
-def _cov_agg(_t, levels, ddof, std=False):
+def _cov_agg(_t, levels, ddof, std=False, sort=False):
     sums = []
     muls = []
     counts = []
@@ -446,8 +446,8 @@ def _cov_agg(_t, levels, ddof, std=False):
         counts.append(n)
         col_mapping = col_mapping
 
-    total_sums = concat(sums).groupby(level=levels, sort=False).sum()
-    total_muls = concat(muls).groupby(level=levels, sort=False).sum()
+    total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=sort).sum()
     total_counts = concat(counts).groupby(level=levels).sum()
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
@@ -525,8 +525,8 @@ def _drop_duplicates_rename(df):
     return df.drop_duplicates().rename_axis(names, copy=False)
 
 
-def _nunique_df_combine(df, levels):
-    result = df.groupby(level=levels, sort=False).apply(_drop_duplicates_rename)
+def _nunique_df_combine(df, levels, sort=False):
+    result = df.groupby(level=levels, sort=sort).apply(_drop_duplicates_rename)
 
     if isinstance(levels, list):
         result.index = pd.MultiIndex.from_arrays(
@@ -538,8 +538,8 @@ def _nunique_df_combine(df, levels):
     return result
 
 
-def _nunique_df_aggregate(df, levels, name):
-    return df.groupby(level=levels, sort=False)[name].nunique()
+def _nunique_df_aggregate(df, levels, name, sort=False):
+    return df.groupby(level=levels, sort=sort)[name].nunique()
 
 
 def _nunique_series_chunk(df, *index, **_ignored_):
@@ -899,7 +899,7 @@ def _compute_sum_of_squares(grouped, column):
     return base.apply(lambda x: (x ** 2).sum())
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=None):
+def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False):
     # finish the final aggregation level
     df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level, sort=sort)
 

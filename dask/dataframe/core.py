@@ -4688,7 +4688,7 @@ def apply_concat_apply(
         as is.
     split_out_setup_kwargs : dict, optional
         Keywords for the `split_out_setup` function only.
-    sort : bool, default True
+    sort : bool, default None
         If allowed, sort the keys of the output aggregation.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
