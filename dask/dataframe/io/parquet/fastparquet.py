@@ -17,6 +17,12 @@ try:
 except ImportError:
     pass
 
+try:
+    # https://github.com/dask/fastparquet/pull/471
+    from fastparquet.api import paths_to_cats
+except ImportError:
+    paths_to_cats = None
+
 from .utils import _parse_pandas_metadata, _normalize_index_columns, _analyze_paths
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
@@ -71,6 +77,9 @@ def _paths_to_cats(paths, scheme):
     return {k: list(v) for k, v in cats.items()}
 
 
+paths_to_cats = paths_to_cats or _paths_to_cats
+
+
 def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     """ Determine how to access metadata and break read into ``parts``
 
@@ -114,7 +123,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
                 scheme = get_file_scheme(fns)
                 pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
                 pf.file_scheme = scheme
-                pf.cats = _paths_to_cats(fns, scheme)
+                pf.cats = paths_to_cats(fns, scheme)
                 parts = paths.copy()
     elif fs.isdir(paths[0]):
         # This is a directory, check for _metadata, then _common_metadata
@@ -148,7 +157,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
                 pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
             scheme = get_file_scheme(fns)
             pf.file_scheme = scheme
-            pf.cats = _paths_to_cats(fns, scheme)
+            pf.cats = paths_to_cats(fns, scheme)
             parts = paths.copy()
     else:
         # There is only one file to read
@@ -355,7 +364,7 @@ class FastParquetEngine(Engine):
                 for ch in rg.columns:
                     ch.file_path = relpath
             pf.file_scheme = scheme
-            pf.cats = _paths_to_cats(fns, scheme)
+            pf.cats = paths_to_cats(fns, scheme)
             pf.fn = base
             return pf.to_pandas(columns, categories, index=index)
         else:
