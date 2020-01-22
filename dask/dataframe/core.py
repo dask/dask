@@ -3294,7 +3294,11 @@ class DataFrame(_Frame):
         
     @property
     def empty(self):
-        return len(self) == 0
+        raise NotImplementedError(
+            "Checking the dimensions of a Dask DataFrame can be expensive. "
+            "Instead, check whether a specific axis is empty, with either "
+            "`len(df.index) == 0` or `len(df.columns) == 0`"
+        )
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
