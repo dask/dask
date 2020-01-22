@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm
 from pandas.util import hash_pandas_object
 
 import pytest
@@ -65,24 +65,16 @@ def test_object_missing_values():
     tm.assert_series_equal(h1, h2)
 
 
-xfail_hash_object = pytest.mark.xfail(
-    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
-)
-
-
 @pytest.mark.parametrize(
     "obj",
     [
         pd.Index([1, 2, 3]),
-        pytest.param(pd.Index([True, False, True]), marks=xfail_hash_object),
+        pd.Index([True, False, True]),
         pd.Series([1, 2, 3]),
         pd.Series([1.0, 1.5, 3.2]),
         pd.Series([1.0, 1.5, 3.2], index=[1.5, 1.1, 3.3]),
         pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}),
-        pytest.param(
-            pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=["a", "z", "x"]),
-            marks=xfail_hash_object,
-        ),
+        pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=["a", "z", "x"]),
     ],
 )
 def test_hash_object_dispatch(obj):
