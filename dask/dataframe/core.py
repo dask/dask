@@ -4807,9 +4807,9 @@ def apply_concat_apply(
         a = b
         depth += 1
 
-    if sort:
+    if sort is not None:
         aggregate_kwargs = aggregate_kwargs or {}
-        aggregate_kwargs["sort"] = True
+        aggregate_kwargs["sort"] = sort
 
     # Aggregate
     for j in range(split_out):
