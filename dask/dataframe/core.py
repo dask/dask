@@ -3291,7 +3291,7 @@ class DataFrame(_Frame):
             return super().__len__()
         else:
             return len(s)
-        
+
     @property
     def empty(self):
         raise NotImplementedError(
