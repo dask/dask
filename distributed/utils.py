@@ -1394,7 +1394,7 @@ def import_term(name: str):
 
 async def offload(fn, *args, **kwargs):
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_offload_executor, fn, *args, **kwargs)
+    return await loop.run_in_executor(_offload_executor, lambda: fn(*args, **kwargs))
 
 
 def serialize_for_cli(data):
