@@ -617,7 +617,7 @@ def test_categorical_known():
     c,c
     """
     )
-    dtype = pd.api.types.CategoricalDtype(["a", "b", "c"])
+    dtype = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         result = dd.read_csv("foo.*.csv", dtype={"A": "category", "B": "category"})
         assert result.A.cat.known is False
@@ -654,7 +654,9 @@ def test_categorical_known():
         assert_eq(result, expected)
 
         # Specify "unknown" categories
-        result = dd.read_csv("foo.*.csv", dtype=pd.api.types.CategoricalDtype())
+        result = dd.read_csv(
+            "foo.*.csv", dtype=pd.api.types.CategoricalDtype(ordered=False)
+        )
         assert result.A.cat.known is False
 
         result = dd.read_csv("foo.*.csv", dtype="category")

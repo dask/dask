@@ -215,9 +215,12 @@ class ArrowEngine(Engine):
         if (
             gather_statistics is None
             and dataset.metadata
-            and dataset.metadata.num_row_groups == len(pieces)
+            and dataset.metadata.num_row_groups >= len(pieces)
         ):
             gather_statistics = True
+            # Don't gather stats by default if this is a partitioned dataset
+            if dataset.metadata.num_row_groups != len(pieces) and partitions:
+                gather_statistics = False
         if not pieces:
             gather_statistics = False
 

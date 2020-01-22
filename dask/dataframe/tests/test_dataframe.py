@@ -2981,8 +2981,8 @@ def test_astype_categoricals_known():
     )
     ddf = dd.from_pandas(df, 2)
 
-    abc = pd.api.types.CategoricalDtype(["a", "b", "c"])
-    category = pd.api.types.CategoricalDtype()
+    abc = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
+    category = pd.api.types.CategoricalDtype(ordered=False)
 
     # DataFrame
     ddf2 = ddf.astype({"x": abc, "y": category, "z": "category", "other": "f8"})
@@ -3480,20 +3480,9 @@ def test_first_and_last(method):
             assert_eq(f(ddf.A, offset), f(df.A, offset))
 
 
-xfail_hash_object = pytest.mark.xfail(PANDAS_GT_100, reason="GH-30887")
-
-
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
 @pytest.mark.parametrize("split_every", [2, 5])
-@pytest.mark.parametrize(
-    "split_out",
-    [
-        None,
-        1,
-        pytest.param(5, marks=xfail_hash_object),
-        pytest.param(20, marks=xfail_hash_object),
-    ],
-)
+@pytest.mark.parametrize("split_out", [None, 1, 5, 20])
 def test_hash_split_unique(npartitions, split_every, split_out):
     from string import ascii_lowercase
 
@@ -4098,9 +4087,6 @@ def test_dtype_cast():
 @pytest.mark.parametrize("map_npart", [1, 3])
 @pytest.mark.parametrize("sorted_index", [False, True])
 @pytest.mark.parametrize("sorted_map_index", [False, True])
-@pytest.mark.xfail(
-    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
-)
 def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     base = pd.Series(
         ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]
