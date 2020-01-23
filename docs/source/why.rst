@@ -11,7 +11,7 @@ Python's role in Data Science
 Python has grown to become the dominant language both in data analytics and
 general programming:
 
-.. image:: https://zgab33vy595fw5zq-zippykid.netdna-ssl.com/wp-content/uploads/2017/09/growth_major_languages-1-1024x878.png
+.. image:: images/growth_of_languages.png
    :alt: Growth of major programming languages
    :width: 75%
 
@@ -19,7 +19,7 @@ This is fueled both by computational libraries like Numpy, Pandas, and
 Scikit-Learn and by a wealth of libraries for visualization, interactive
 notebooks, collaboration, and so forth.
 
-.. image:: https://zgab33vy595fw5zq-zippykid.netdna-ssl.com/wp-content/uploads/2017/09/related_tags_over_time-1-1024x1024.png
+.. image:: images/growth_of_libraries.png
    :alt: Stack overflow traffic to various packages
    :width: 75%
 
