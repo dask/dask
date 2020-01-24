@@ -345,7 +345,7 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
         kwargs = self._get_connect_args(**connection_args)
 
         try:
-            stream = await BaseTCPConnector.client.connect(
+            stream = await self.client.connect(
                 ip, port, max_buffer_size=MAX_BUFFER_SIZE, **kwargs
             )
 
