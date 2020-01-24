@@ -4162,6 +4162,8 @@ class DataFrame(_Frame):
         )
 
         if verbose:
+            import textwrap
+
             index = computations["index"]
             counts = computations["count"]
             lines.append(index_summary(index))
@@ -4169,12 +4171,36 @@ class DataFrame(_Frame):
 
             from pandas.io.formats.printing import pprint_thing
 
-            space = max([len(pprint_thing(k)) for k in self.columns]) + 3
-            column_template = "{!s:<%d} {} non-null {}" % space
+            space = max([len(pprint_thing(k)) for k in self.columns]) + 1
+            column_width = max(space, 7)
+
+            header = (
+                textwrap.dedent(
+                    """\
+             #   {{column:<{column_width}}} Non-Null Count  Dtype
+            ---  {{underl:<{column_width}}} --------------  -----"""
+                )
+                .format(column_width=column_width)
+                .format(column="Column", underl="------")
+            )
+            column_template = textwrap.dedent(
+                """\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""".format(
+                    column_width=column_width
+                )
+            )
             column_info = [
-                column_template.format(pprint_thing(x[0]), x[1], x[2])
-                for x in zip(self.columns, counts, self.dtypes)
+                column_template.format(
+                    i=pprint_thing(i),
+                    name=pprint_thing(name),
+                    count=pprint_thing(count),
+                    dtype=pprint_thing(dtype),
+                )
+                for i, (name, count, dtype) in enumerate(
+                    zip(self.columns, counts, self.dtypes)
+                )
             ]
+            lines.extend(header.split("\n"))
         else:
             column_info = [index_summary(self.columns, name="Columns")]
 
