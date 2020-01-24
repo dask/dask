@@ -1953,7 +1953,7 @@ def test_groupby_cov(columns):
     cols = 3
     data = np.random.randn(rows, cols)
     df = pd.DataFrame(data, columns=columns)
-    df["key"] = np.random.randint(0, cols, size=rows)
+    df["key"] = [0] * 10 + [1] * 5 + [2] * 5
     ddf = dd.from_pandas(df, npartitions=3)
 
     expected = df.groupby("key").cov()
