@@ -89,9 +89,6 @@ DEFAULT_EXTENSIONS = [
     PubSubSchedulerExtension,
 ]
 
-if dask.config.get("distributed.scheduler.work-stealing"):
-    DEFAULT_EXTENSIONS.append(WorkStealing)
-
 ALL_TASK_STATES = {"released", "waiting", "no-worker", "processing", "erred", "memory"}
 
 
@@ -1333,7 +1330,9 @@ class Scheduler(ServerNode):
             self.periodic_callbacks["idle-timeout"] = pc
 
         if extensions is None:
-            extensions = DEFAULT_EXTENSIONS
+            extensions = list(DEFAULT_EXTENSIONS)
+            if dask.config.get("distributed.scheduler.work-stealing"):
+                extensions.append(WorkStealing)
         for ext in extensions:
             ext(self)
 
