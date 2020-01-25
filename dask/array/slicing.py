@@ -1254,7 +1254,7 @@ def take_along_axis(arr,indices,axis=None):
             raiseIndexError('indices must be an integer array')
     if axis is None:
         arr = arr.flatten
-        arr_shape = (np.prod((arr.shape),)
+        arr_shape = (np.prod((arr.shape),))
         axis = 0
     Ni, M, Nk=arr.shape[:axis], arr.shape[axis], arr.shape[axis+1:]
     j=indices.shape[axis]
@@ -1268,10 +1268,4 @@ def take_along_axis(arr,indices,axis=None):
             out_d=np.append(out_d,out_1d,axis=0)
     out_d=np.reshape(out_d, arr.shape)
     return(da.from_array(out_d))
-"""                     
-a =np.array([[10, 30, 20], [60, 40, 50]])
-ai=np.array([[0, 2, 1],[1, 2, 0]])
-y=take_along_axis(a,ai,axis=0)
-print(y.compute())
-"""   
-             
+    
