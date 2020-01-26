@@ -1,5 +1,4 @@
 import re
-import itertools
 
 
 class Engine:
@@ -430,18 +429,3 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
-
-
-def unique_everseen(iterable):
-    """List unique elements, preserving order. Remember all elements ever seen.
-    FixMe: This has been pasted from https://github.com/dask/fastparquet/pull/471
-    and is not needed with fastparquet>0.3.2.
-
-    unique_everseen('AAAABBBCCDAABBB') --> A B C D
-    """
-
-    seen = set()
-    seen_add = seen.add
-    for element in itertools.filterfalse(seen.__contains__, iterable):
-        seen_add(element)
-        yield element

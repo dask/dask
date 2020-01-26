@@ -5,6 +5,11 @@ import copy
 import json
 import warnings
 
+try:
+    import cytoolz as toolz
+except ModuleNotFoundError:
+    import toolz
+
 import numpy as np
 import pandas as pd
 
@@ -24,7 +29,7 @@ from ...utils import UNKNOWN_CATEGORIES
 #########################
 # Fastparquet interface #
 #########################
-from .utils import Engine, unique_everseen
+from .utils import Engine
 
 
 def _paths_to_cats(paths, file_scheme):
@@ -49,16 +54,14 @@ def _paths_to_cats(paths, file_scheme):
     cats = OrderedDict()
     raw_cats = OrderedDict()
     s = ex_from_sep("/")
-    paths = unique_everseen(paths)
+    paths = toolz.unique(paths)
     if file_scheme == "hive":
-        partitions = unique_everseen(
-            (k, v) for path in paths for k, v in s.findall(path)
-        )
+        partitions = toolz.unique((k, v) for path in paths for k, v in s.findall(path))
         for key, val in partitions:
             cats.setdefault(key, set()).add(val_to_num(val))
             raw_cats.setdefault(key, set()).add(val)
     else:
-        i_val = unique_everseen(
+        i_val = toolz.unique(
             (i, val) for path in paths for i, val in enumerate(path.split("/")[:-1])
         )
         for i, val in i_val:
