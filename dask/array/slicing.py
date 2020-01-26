@@ -1242,7 +1242,7 @@ def cached_cumsum(seq, initial_zero=False):
     return result
 
 
-def take_along_axis(arr,indices,axis=None):
+def take_along_axis(arr,indices,axis):
     out_d = np.array([]) #creating a new empty array to store the value of result
     arr = np.array(arr)
     indices = np.array(indices)
@@ -1252,10 +1252,9 @@ def take_along_axis(arr,indices,axis=None):
     for integer in indices:
         if not isinstance(integer,int):
             raiseIndexError('indices must be an integer array')
-    if axis is None:
+    if axis == 0:
         arr = arr.flatten
         arr_shape = (np.prod((arr.shape),))
-        axis = 0
     Ni, M, Nk=arr.shape[:axis], arr.shape[axis], arr.shape[axis+1:]
     j=indices.shape[axis]
     out=np.empty(Ni+ (j,)+Nk)
