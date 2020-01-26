@@ -17,12 +17,6 @@ try:
 except ImportError:
     pass
 
-try:
-    # https://github.com/dask/fastparquet/pull/471
-    from fastparquet.api import paths_to_cats
-except ImportError:
-    paths_to_cats = None
-
 from .utils import _parse_pandas_metadata, _normalize_index_columns, _analyze_paths
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
@@ -30,31 +24,50 @@ from ...utils import UNKNOWN_CATEGORIES
 #########################
 # Fastparquet interface #
 #########################
-from .utils import Engine
+from .utils import Engine, unique_everseen
 
 
-def _paths_to_cats(paths, scheme):
-    """Extract out fields and labels from directory names"""
-    # can be factored out in fastparquet
+def _paths_to_cats(paths, file_scheme):
+    """
+    Extract categorical fields and labels from hive- or drill-style paths.
+    FixMe: This has been pasted from https://github.com/dask/fastparquet/pull/471
+    Use fastparquet.api.paths_to_cats from fastparquet>0.3.2 instead.
+
+    Parameters
+    ----------
+    paths (Iterable[str]): file paths relative to root
+    file_scheme (str):
+
+    Returns
+    -------
+    cats (OrderedDict[str, List[Any]]): a dict of field names and their values
+    """
+    if file_scheme in ["simple", "flat", "other"]:
+        cats = {}
+        return cats
+
     cats = OrderedDict()
     raw_cats = OrderedDict()
+    s = ex_from_sep("/")
+    paths = unique_everseen(paths)
+    if file_scheme == "hive":
+        partitions = unique_everseen(
+            (k, v) for path in paths for k, v in s.findall(path)
+        )
+        for key, val in partitions:
+            cats.setdefault(key, set()).add(val_to_num(val))
+            raw_cats.setdefault(key, set()).add(val)
+    else:
+        i_val = unique_everseen(
+            (i, val) for path in paths for i, val in enumerate(path.split("/")[:-1])
+        )
+        for i, val in i_val:
+            key = "dir%i" % i
+            cats.setdefault(key, set()).add(val_to_num(val))
+            raw_cats.setdefault(key, set()).add(val)
 
-    for path in paths:
-        s = ex_from_sep("/")
-        if scheme == "hive":
-            partitions = s.findall(path)
-            for (key, val) in partitions:
-                cats.setdefault(key, set()).add(val_to_num(val))
-                raw_cats.setdefault(key, set()).add(val)
-        else:
-            for (i, val) in enumerate(path.split("/")[:-1]):
-                key = "dir%i" % i
-                cats.setdefault(key, set()).add(val_to_num(val))
-                raw_cats.setdefault(key, set()).add(val)
-
-    for (key, v) in cats.items():
-        # Check that no partition names map to the same value after
-        # transformation by val_to_num
+    for key, v in cats.items():
+        # Check that no partition names map to the same value after transformation by val_to_num
         raw = raw_cats[key]
         if len(v) != len(raw):
             conflicts_by_value = OrderedDict()
@@ -66,18 +79,21 @@ def _paths_to_cats(paths, scheme):
             raise ValueError("Partition names map to the same value: %s" % conflicts)
         vals_by_type = groupby_types(v)
 
-        # Check that all partition names map to the same type after
-        # transformation by val_to_num
+        # Check that all partition names map to the same type after transformation by val_to_num
         if len(vals_by_type) > 1:
             examples = [x[0] for x in vals_by_type.values()]
             warnings.warn(
-                "Partition names coerce to values of different"
-                " types, e.g. %s" % examples
+                "Partition names coerce to values of different types, e.g. %s"
+                % examples
             )
-    return {k: list(v) for k, v in cats.items()}
+
+    cats = OrderedDict([(key, list(v)) for key, v in cats.items()])
+    return cats
 
 
-paths_to_cats = paths_to_cats or _paths_to_cats
+paths_to_cats = (
+    _paths_to_cats  # FixMe: use fastparquet.api.paths_to_cats for fastparquet>0.3.2
+)
 
 
 def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
