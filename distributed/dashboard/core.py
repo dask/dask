@@ -5,6 +5,7 @@ import warnings
 import bokeh
 from bokeh.server.server import Server
 from tornado import web
+from urllib.parse import urljoin
 
 
 if LooseVersion(bokeh.__version__) < LooseVersion("0.13.0"):
@@ -34,7 +35,13 @@ class BokehServer(object):
                     check_unused_sessions_milliseconds=500,
                     allow_websocket_origin=["*"],
                     use_index=False,
-                    extra_patterns=[(r"/", web.RedirectHandler, {"url": "/status"})],
+                    extra_patterns=[
+                        (
+                            r"/",
+                            web.RedirectHandler,
+                            {"url": urljoin(self.prefix.rstrip("/") + "/", r"status")},
+                        )
+                    ],
                 )
                 server_kwargs.update(self.server_kwargs)
                 self.server = Server(self.apps, **server_kwargs)
