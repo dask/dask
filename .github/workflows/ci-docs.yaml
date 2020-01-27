@@ -1,0 +1,28 @@
+name: Documentation CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+
+      - name: Install Distributed
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Install doc dependencies
+        run: pip install -r docs/requirements.txt
+
+      - name: Build docs
+        run: |
+            cd docs
+            make html
