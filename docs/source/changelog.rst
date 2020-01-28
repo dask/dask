@@ -1,6 +1,19 @@
 Changelog
 =========
 
+2.10.0 / 2020-01-28
+-------------------
+
+- Support for pandas 1.0's new ``BooleanDtype`` and ``StringDtype`` (:pr:`5815`) `Tom Augspurger`_
+- Compatibility with pandas 1.0's API breaking changes and deprecations (:pr:`5792`) `Tom Augspurger`_
+- Fixed non-deterministic tokenization of some extension-array backed pandas objects (:pr:`5813`) `Tom Augspurger`_
+- Fixed handling of dataclass class objects in collections (:pr:`5812`) `Matteo De Wint`_
+- Fixed resampling with tz-aware dates when one of the endpoints fell in a non-existent time (:pr:`5807`) `dfonnegra`_
+- Delay initial Zarr dataset creation until the computation occurs (:pr:`5797`) `Chris Roat`_
+- Use parquet dataset statistics in more cases with the ``pyarrow`` engine (:pr:`5799`) `Richard J Zamora`_
+- Fixed exception in ``groupby.std()`` when some of the keys were large integers (:pr:`5737`) `H. Thomson Comer`_
+
+
 2.9.2 / 2020-01-16
 ------------------
 
@@ -2851,3 +2864,6 @@ Other
 .. _`Timost`: https://github.com/Timost
 .. _`Maarten Breddels`: https://github.com/maartenbreddels
 .. _`Devin Petersohn`: https://github.com/devin-petersohn
+.. _`dfonnegra`: https://github.com/dfonnegra
+.. _`Chris Roat`: https://github.com/ChrisRoat
+.. _`H. Thomson Comer`: https://github.com/thomcom
