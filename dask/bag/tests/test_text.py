@@ -1,3 +1,5 @@
+import os.path
+
 import pytest
 from toolz import partial
 
@@ -32,11 +34,16 @@ expected = "".join([files[v] for v in sorted(files)])
 fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
 
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
-fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs for encoding in encodings]
+fmt_bs_enc_path = [
+    (fmt, bs, encoding, include_path)
+    for fmt, bs in fmt_bs
+    for encoding in encodings
+    for include_path in (True, False)
+]
 
 
-@pytest.mark.parametrize("fmt,bs,encoding", fmt_bs_enc)
-def test_read_text(fmt, bs, encoding):
+@pytest.mark.parametrize("fmt,bs,encoding,include_path", fmt_bs_enc_path)
+def test_read_text(fmt, bs, encoding, include_path):
     if fmt not in utils.compress:
         pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
@@ -48,9 +55,21 @@ def test_read_text(fmt, bs, encoding):
         (L,) = compute(b)
         assert "".join(L) == expected
 
-        b = read_text(sorted(files), compression=fmt, blocksize=bs, encoding=encoding)
+        o = read_text(
+            sorted(files),
+            compression=fmt,
+            blocksize=bs,
+            encoding=encoding,
+            include_path=include_path,
+        )
+        b = o[0] if include_path else o
         (L,) = compute(b)
         assert "".join(L) == expected
+        if include_path:
+            paths = o[1]
+            assert len(paths) == b.npartitions
+            for path in paths:
+                assert os.path.split(path)[-1] in files
 
         blocks = read_text(
             ".test.accounts.*.json",
