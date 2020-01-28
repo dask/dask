@@ -1418,12 +1418,13 @@ class TaskProgress(DashboardComponent):
             }
 
             for tp in self.scheduler.task_prefixes.values():
-                if any(tp.active_states.values()):
-                    state["memory"][tp.name] = tp.active_states["memory"]
-                    state["erred"][tp.name] = tp.active_states["erred"]
-                    state["released"][tp.name] = tp.active_states["released"]
-                    state["processing"][tp.name] = tp.active_states["processing"]
-                    state["waiting"][tp.name] = tp.active_states["waiting"]
+                active_states = tp.active_states
+                if any(active_states.get(s) for s in state.keys()):
+                    state["memory"][tp.name] = active_states["memory"]
+                    state["erred"][tp.name] = active_states["erred"]
+                    state["released"][tp.name] = active_states["released"]
+                    state["processing"][tp.name] = active_states["processing"]
+                    state["waiting"][tp.name] = active_states["waiting"]
 
             state["all"] = {
                 k: sum(v[k] for v in state.values()) for k in state["memory"]
