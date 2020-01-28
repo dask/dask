@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2.10.0 - 2020-01-28
+-------------------
+
+- Fixed ``ZeroDivisionError`` in dashboard when no workers were present (:pr:`3407`) `James Bourbeau`_
+- Respect the ``dashboard-prefix`` when redirecting from the root (:pr:`3387`) `Chrysostomos Nanakos`_
+- Allow enabling / disabling work-stealing after the cluster has started (:pr:`3410`) `John Kirkham`_
+- Support ``*args`` and ``**kwargs`` in offload (:pr:`3392`) `Matthew Rocklin`_
+- Add lifecycle hooks to SchedulerPlugin (:pr:`3391`) `Matthew Rocklin`_
+
+
 2.9.3 - 2020-01-17
 ------------------
 
@@ -1501,3 +1511,4 @@ significantly without many new features.
 .. _`Benedikt Reinartz`: https://github.com/filmor
 .. _`Markus Mohrhard`: https://github.com/mmohrhard
 .. _`Mana Borwornpadungkitti`: https://github.com/potpath
+.. _`Chrysostomos Nanakos`: https://github.com/cnanakos
