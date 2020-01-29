@@ -1,4 +1,4 @@
-language: python
+language: generic
 # sudo shouldn't be required, but currently tests fail when run in a container
 # on travis instead of a vm. See https://github.com/dask/distributed/pull/1563.
 sudo: required
@@ -13,8 +13,15 @@ matrix:
   fast_finish: true
   include:
   - os: linux
+    language: python
     python: 3.6
     env: LINT=true
+  - os: osx
+    env: PYTHON=3.7 TESTS=true PACKAGES="scikit-learn python-snappy python-blosc" TORNADO=6
+    if: type != pull_request OR commit_message =~ test-osx  # Skip on PRs unless the commit message contains "test-osx"
+
+  allow_failures:
+    - os: osx
 
 install:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/install.sh ; fi
