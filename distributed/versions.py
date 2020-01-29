@@ -26,9 +26,15 @@ optional_packages = [
 ]
 
 
+# only these scheduler packages will be checked for version mismatch
+scheduler_relevant_packages = set(pkg for pkg, _ in required_packages) | set(
+    ["lz4", "blosc"]
+)
+
+
 def get_versions(packages=None):
     """
-    Return basic information on our software installation, and out installed versions of packages.
+    Return basic information on our software installation, and our installed versions of packages.
     """
     if packages is None:
         packages = []
@@ -98,34 +104,39 @@ def get_package_info(pkgs):
 
 
 def error_message(scheduler, workers, client, client_name="client"):
-    # we care about the required & optional packages matching
-    try:
-        client_versions = client["packages"]
-        versions = [("scheduler", scheduler["packages"])]
-        versions.extend((w, d["packages"]) for w, d in sorted(workers.items()))
-    except KeyError:
-        return (
-            "Version mismatch for dask.distributed. "
-            "The scheduler has version >= 1.28.0 "
-            "but some other component is less than this"
+    from .utils import asciitable
+
+    nodes = {**{client_name: client}, **{"scheduler": scheduler}, **workers}
+
+    # Hold all versions, e.g. versions["scheduler"]["distributed"] = 2.9.3
+    node_packages = defaultdict(dict)
+
+    # Collect all package versions
+    packages = set()
+
+    for node, info in nodes.items():
+        if info is None or not (isinstance(info, dict)) or "packages" not in info:
+            node_packages[node] = defaultdict(lambda: "UNKNOWN")
+        else:
+            node_packages[node] = defaultdict(lambda: "MISSING")
+            for pkg, version in info["packages"].items():
+                node_packages[node][pkg] = version
+                packages.add(pkg)
+
+    errs = []
+    for pkg in sorted(packages):
+        versions = set(
+            node_packages[node][pkg]
+            for node in nodes
+            if node != "scheduler" or pkg in scheduler_relevant_packages
         )
-
-    mismatched = defaultdict(list)
-    for name, vers in versions:
-        for pkg, cv in client_versions.items():
-            v = vers.get(pkg, "MISSING")
-            if cv != v:
-                mismatched[pkg].append((name, v))
-
-    if mismatched:
-        from .utils import asciitable
-
-        errs = []
-        for pkg, versions in sorted(mismatched.items()):
-            rows = [(client_name, client_versions[pkg])]
-            rows.extend(versions)
-            errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
-
+        if len(versions) <= 1:
+            continue
+        rows = [
+            (node_name, node_packages[node_name][pkg]) for node_name in nodes.keys()
+        ]
+        errs.append("%s\n%s" % (pkg, asciitable(["", "version"], rows)))
+    if errs:
         return "Mismatched versions found\n" "\n" "%s" % ("\n\n".join(errs))
     else:
         return ""
