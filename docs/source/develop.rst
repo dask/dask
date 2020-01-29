@@ -6,9 +6,7 @@ of bug reports, documentation, code, design proposals, and more.
 This page provides resources on how best to contribute.
 
 .. note:: Dask strives to be a welcoming community of individuals with diverse
-   backgrounds.
-
-   For more information on our values, please see our
+   backgrounds. For more information on our values, please see our
    `code of conduct
    <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
    and
