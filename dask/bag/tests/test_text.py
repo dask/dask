@@ -1,5 +1,3 @@
-import os.path
-
 import pytest
 from toolz import partial
 
@@ -62,14 +60,13 @@ def test_read_text(fmt, bs, encoding, include_path):
             encoding=encoding,
             include_path=include_path,
         )
-        b = o[0] if include_path else o
+        b = o.pluck(0) if include_path else o
         (L,) = compute(b)
         assert "".join(L) == expected
         if include_path:
-            paths = o[1]
-            assert len(paths) == b.npartitions
-            for path in paths:
-                assert os.path.split(path)[-1] in files
+            (paths,) = compute(o.pluck(1))
+            unique_paths = set(paths)
+            assert len(unique_paths) == len(files)
 
         blocks = read_text(
             ".test.accounts.*.json",
@@ -95,6 +92,18 @@ def test_files_per_partition():
             assert l == 10, "10 files should be grouped into one partition"
 
             assert b.count().compute() == 20, "All 20 lines should be read"
+
+            with pytest.warns(UserWarning):
+                b = read_text("*.txt", files_per_partition=10, include_path=True)
+                p = b.take(100, npartitions=1)
+
+            p_paths = tuple(zip(*p))[1]
+            p_unique_paths = set(p_paths)
+            assert len(p_unique_paths) == 10
+
+            b_paths = tuple(zip(*b.compute()))[1]
+            b_unique_paths = set(b_paths)
+            assert len(b_unique_paths) == 20
 
 
 def test_errors():

@@ -3,9 +3,9 @@ import os
 
 from toolz import concat
 
-from ..utils import system_encoding, parse_bytes
-from ..delayed import delayed
 from ..bytes import open_files, read_bytes
+from ..delayed import delayed
+from ..utils import parse_bytes, system_encoding
 from .core import from_delayed
 
 delayed = delayed(pure=True)
@@ -50,7 +50,8 @@ def read_text(
         If set, group input files into partitions of the requested size,
         instead of one partition per file. Mutually exclusive with blocksize.
     include_path: bool
-        Whether or not to include the path along with the bag.
+        Whether or not to include the path in the bag.
+        If true, elements are tuples of (line, path).
         Default is False.
 
     Examples
@@ -69,21 +70,12 @@ def read_text(
 
     Get file paths of the bag by setting include_path=True
 
-    >>> b, paths = read_text('myfiles.*.txt', include_path=True) # doctest: +SKIP
-    >>> paths # doctest: +SKIP
-    ['myfiles.0.txt', 'myfiles.1.txt']
+    >>> b = read_text('myfiles.*.txt', include_path=True) # doctest: +SKIP
 
     Returns
     -------
-    content : dask.bag.Bag or list
-        dask.bag.Bag if collection is True or list of Delayed lists otherwise
-    paths : list of strings, only included if include_path is True
-        List of the of the same length as the partition count of content if
-        collection is True (i.e. content is a dask.bag.Bag), or of same length
-        as content if collection is False (i.e. content is a list of Delayed
-        lists).
-        Each item is a string representing the file path of the corresponding
-        bag partition / Delayed list.
+    dask.bag.Bag or list
+        dask.bag.Bag if collection is True or list of Delayed lists otherwise.
 
     See Also
     --------
@@ -93,8 +85,6 @@ def read_text(
         raise ValueError("Only one of blocksize or files_per_partition can be set")
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
-
-    paths = None
 
     files = open_files(
         urlpath,
@@ -106,18 +96,24 @@ def read_text(
     )
     if blocksize is None:
         if files_per_partition is None:
-            if include_path:
-                paths = [fil.path for fil in files]
-            blocks = [delayed(list)(delayed(file_to_blocks)(fil)) for fil in files]
-        else:
-            if include_path:
-                raise ValueError(
-                    "Cannot set include_path when files_per_partition is set."
+            blocks = [
+                delayed(list)(
+                    delayed(
+                        file_to_blocks_with_path if include_path else file_to_blocks
+                    )(fil)
                 )
+                for fil in files
+            ]
+        else:
             blocks = []
             for start in range(0, len(files), files_per_partition):
                 block_files = files[start : (start + files_per_partition)]
-                block_lines = delayed(concat)(delayed(map)(file_to_blocks, block_files))
+                block_lines = delayed(concat)(
+                    delayed(map)(
+                        file_to_blocks_with_path if include_path else file_to_blocks,
+                        block_files,
+                    )
+                )
                 blocks.append(block_lines)
     else:
         o = read_bytes(
@@ -129,22 +125,21 @@ def read_text(
             include_path=include_path,
             **(storage_options or {})
         )
-        blocks = o[1]
+        raw_blocks = o[1]
+        blocks = [delayed(decode)(b, encoding, errors) for b in concat(raw_blocks)]
         if include_path:
             paths = list(
-                concat([[path] * len(blocks[i]) for i, path in enumerate(o[2])])
+                concat([[path] * len(raw_blocks[i]) for i, path in enumerate(o[2])])
             )
-        blocks = [delayed(decode)(b, encoding, errors) for b in concat(blocks)]
-        print(paths, blocks)
+            blocks = [
+                delayed(attach_path)(entry, path) for entry, path in zip(blocks, paths)
+            ]
 
     if not blocks:
         raise ValueError("No files found", urlpath)
 
     if collection:
         blocks = from_delayed(blocks)
-
-    if include_path:
-        return blocks, paths
 
     return blocks
 
@@ -153,6 +148,17 @@ def file_to_blocks(lazy_file):
     with lazy_file as f:
         for line in f:
             yield line
+
+
+def file_to_blocks_with_path(lazy_file):
+    with lazy_file as f:
+        for line in f:
+            yield (line, lazy_file.path)
+
+
+def attach_path(block, path):
+    for p in block:
+        yield (p, path)
 
 
 def decode(block, encoding, errors):
