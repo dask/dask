@@ -13,11 +13,6 @@ from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.dataframe.utils import assert_eq
 
 
-skip_pandas_rc = pytest.mark.xfail(
-    dd._compat.PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30962"
-)
-
-
 def test_to_hdf():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -49,7 +44,6 @@ def test_to_hdf():
         tm.assert_frame_equal(df, out[:])
 
 
-@skip_pandas_rc
 def test_to_hdf_multiple_nodes():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -130,7 +124,6 @@ def test_to_hdf_multiple_nodes():
             assert_eq(df16, out)
 
 
-@skip_pandas_rc
 def test_to_hdf_multiple_files():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -214,7 +207,6 @@ def test_to_hdf_multiple_files():
             assert_eq(df, out)
 
 
-@skip_pandas_rc
 def test_to_hdf_modes_multiple_nodes():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -263,7 +255,6 @@ def test_to_hdf_modes_multiple_nodes():
         assert_eq(df.append(df), out)
 
 
-@skip_pandas_rc
 def test_to_hdf_modes_multiple_files():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -376,7 +367,6 @@ def test_to_hdf_link_optimizations():
 
 
 @pytest.mark.slow
-@skip_pandas_rc
 def test_to_hdf_lock_delays():
     pytest.importorskip("tables")
     df16 = pd.DataFrame(
@@ -468,7 +458,6 @@ def test_to_hdf_exceptions():
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
 @pytest.mark.parametrize("npartitions", [1, 4, 10])
-@skip_pandas_rc
 def test_to_hdf_schedulers(scheduler, npartitions):
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -620,7 +609,6 @@ def test_to_fmt_warns():
         (pd.Series([1, 2, 3, 4], name="a"), tm.assert_series_equal),
     ],
 )
-@skip_pandas_rc
 def test_read_hdf(data, compare):
     pytest.importorskip("tables")
     with tmpfile("h5") as fn:
@@ -656,7 +644,6 @@ def test_read_hdf(data, compare):
         compare(a.compute(), sorted_data)
 
 
-@skip_pandas_rc
 def test_read_hdf_multiply_open():
     """Test that we can read from a file that's already opened elsewhere in
     read-only mode."""
@@ -670,7 +657,6 @@ def test_read_hdf_multiply_open():
             dd.read_hdf(fn, "/data", chunksize=2, mode="r")
 
 
-@skip_pandas_rc
 def test_read_hdf_multiple():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -724,7 +710,6 @@ def test_read_hdf_multiple():
         assert_eq(a, r)
 
 
-@skip_pandas_rc
 def test_read_hdf_start_stop_values():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -743,7 +728,6 @@ def test_read_hdf_start_stop_values():
             dd.read_hdf(fn, "/data", chunksize=-1)
 
 
-@skip_pandas_rc
 def test_hdf_globbing():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -781,7 +765,6 @@ def test_hdf_globbing():
             tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
 
 
-@skip_pandas_rc
 def test_hdf_file_list():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -798,7 +781,6 @@ def test_hdf_file_list():
             tm.assert_frame_equal(res.compute(), df)
 
 
-@skip_pandas_rc
 def test_read_hdf_pattern_pathlike():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -826,7 +808,6 @@ def test_to_hdf_path_pathlike():
         assert_eq(res, ddf)
 
 
-@skip_pandas_rc
 def test_read_hdf_doesnt_segfault():
     pytest.importorskip("tables")
     with tmpfile("h5") as fn:
