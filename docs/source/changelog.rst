@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2.10.1 / 2020-01-30
+-------------------
+
+- Fix Pandas 1.0 version comparison (:pr:`5851`) `Tom Augspurger`_
+- Fix typo in distributed diagnostics documentation (:pr:`5841`) `Gerrit Holl`_
+
+
 2.10.0 / 2020-01-28
 -------------------
 
@@ -2867,3 +2874,4 @@ Other
 .. _`dfonnegra`: https://github.com/dfonnegra
 .. _`Chris Roat`: https://github.com/ChrisRoat
 .. _`H. Thomson Comer`: https://github.com/thomcom
+.. _`Gerrit Holl`: https://github.com/gerritholl
