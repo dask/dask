@@ -952,3 +952,9 @@ def test_gh4043(lock, asarray, fancy):
     a2 = da.from_array(np.ones(3), chunks=1, asarray=asarray, lock=lock, fancy=fancy)
     al = da.stack([a1, a2])
     assert_eq(al, al)
+def test_take_along_axis():
+    a = np.array([[10, 30, 20], [60, 40, 50]])
+    b = np.array([[0, 2, 1],[1, 2, 0]])      
+    y = take_along_axis(a,b,axis=0)
+    x = np.take_along_axis(a,b,axis=0)
+    assert_eq(x, y)
