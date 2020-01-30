@@ -33,7 +33,7 @@ For local use this happens when you create a client with no arguments:
 It is typically served at http://localhost:8787/status ,
 but may be served elsewhere if this port is taken.
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
-or can be queriesd from ``client.scheduler_info()['services']``.
+or can be queried from ``client.scheduler_info()['services']``.
 
 There are numerous pages with information about task runtimes, communication,
 statistical profiling, load balancing, memory use, and much more.
