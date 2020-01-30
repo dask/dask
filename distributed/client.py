@@ -752,6 +752,22 @@ class Client(Node):
         """
         return self._asynchronous and self.loop is IOLoop.current()
 
+    @property
+    def dashboard_link(self):
+        scheduler, info = self._get_scheduler_info()
+        try:
+            return self.cluster.dashboard_link
+        except AttributeError:
+            protocol, rest = scheduler.address.split("://")
+
+            port = info["services"]["dashboard"]
+            if protocol == "inproc":
+                host = "localhost"
+            else:
+                host = rest.split(":")[0]
+
+            return format_dashboard_link(host, port)
+
     def sync(self, func, *args, asynchronous=None, callback_timeout=None, **kwargs):
         if (
             asynchronous
@@ -766,6 +782,29 @@ class Client(Node):
             return sync(
                 self.loop, func, *args, callback_timeout=callback_timeout, **kwargs
             )
+
+    def _get_scheduler_info(self):
+        from .scheduler import Scheduler
+
+        if (
+            self.cluster
+            and hasattr(self.cluster, "scheduler")
+            and isinstance(self.cluster.scheduler, Scheduler)
+        ):
+            info = self.cluster.scheduler.identity()
+            scheduler = self.cluster.scheduler
+        elif (
+            self._loop_runner.is_started()
+            and self.scheduler
+            and not (self.asynchronous and self.loop is IOLoop.current())
+        ):
+            info = sync(self.loop, self.scheduler.identity)
+            scheduler = self.scheduler
+        else:
+            info = self._scheduler_identity
+            scheduler = self.scheduler
+
+        return scheduler, info
 
     def __repr__(self):
         # Note: avoid doing I/O here...
@@ -796,25 +835,7 @@ class Client(Node):
             return "<%s: not connected>" % (self.__class__.__name__,)
 
     def _repr_html_(self):
-        from .scheduler import Scheduler
-
-        if (
-            self.cluster
-            and hasattr(self.cluster, "scheduler")
-            and isinstance(self.cluster.scheduler, Scheduler)
-        ):
-            info = self.cluster.scheduler.identity()
-            scheduler = self.cluster.scheduler
-        elif (
-            self._loop_runner.is_started()
-            and self.scheduler
-            and not (self.asynchronous and self.loop is IOLoop.current())
-        ):
-            info = sync(self.loop, self.scheduler.identity)
-            scheduler = self.scheduler
-        else:
-            info = self._scheduler_identity
-            scheduler = self.scheduler
+        scheduler, info = self._get_scheduler_info()
 
         text = (
             '<h3 style="text-align: left;">Client</h3>\n'
@@ -826,22 +847,9 @@ class Client(Node):
             text += "  <li><b>Scheduler: not connected</b></li>\n"
 
         if info and "dashboard" in info["services"]:
-            try:
-                address = self.cluster.dashboard_link
-            except AttributeError:
-                protocol, rest = scheduler.address.split("://")
-
-                port = info["services"]["dashboard"]
-                if protocol == "inproc":
-                    host = "localhost"
-                else:
-                    host = rest.split(":")[0]
-
-                address = format_dashboard_link(host, port)
-
             text += (
                 "  <li><b>Dashboard: </b><a href='%(web)s' target='_blank'>%(web)s</a>\n"
-                % {"web": address}
+                % {"web": self.dashboard_link}
             )
 
         text += "</ul>\n"

@@ -5249,8 +5249,9 @@ def test_dashboard_link(loop, monkeypatch):
             with dask.config.set(
                 {"distributed.dashboard.link": "{scheme}://foo-{USER}:{port}/status"}
             ):
-                text = c._repr_html_()
                 link = "http://foo-myusername:12355/status"
+                assert link == c.dashboard_link
+                text = c._repr_html_()
                 assert link in text
 
 
