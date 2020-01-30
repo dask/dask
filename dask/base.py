@@ -8,6 +8,7 @@ import pickle
 import os
 import threading
 import uuid
+from distutils.version import LooseVersion
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
@@ -739,7 +740,10 @@ def _normalize_function(func):
 @normalize_token.register_lazy("pandas")
 def register_pandas():
     import pandas as pd
-    from dask.dataframe._compat import PANDAS_GT_0240
+
+    # Intentionally not importing PANDAS_GT_0240 from dask.dataframe._compat
+    # to avoid ImportErrors from extra dependencies
+    PANDAS_GT_0240 = LooseVersion(pd.__version__) >= LooseVersion("0.24.0")
 
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
