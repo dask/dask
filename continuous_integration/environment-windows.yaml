@@ -17,7 +17,7 @@ dependencies:
   - lz4
   - psutil
   - pytables
-  - fsspec==0.6.0
+  - fsspec>=0.6.0
   - s3fs
   - scipy
   - fastparquet
