@@ -1,0 +1,32 @@
+name: testenv
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # required dependencies
+  - numpy>=1.13.0,<=1.16.4    # >= 1.17.0 breaks from https://github.com/pydata/sparse/issues/257
+  - pandas>=0.21.0
+  - pytest
+  - cloudpickle
+  - distributed
+  - toolz
+  - bcolz
+  - bokeh
+  - h5py
+  - ipython
+  - lz4
+  - psutil
+  - pytables
+  - fsspec==0.6.0
+  - s3fs
+  - scipy
+  - fastparquet
+  - python-snappy
+  - zarr
+  - crick
+  - pip
+  - partd
+  - cachey
+  - sparse
+  - blosc
+  - moto
