@@ -28,4 +28,4 @@ jobs:
 
       - name: Run tests
         shell: bash -l {0}
-        run: pytest -sv dask
+        run: pytest -v dask
