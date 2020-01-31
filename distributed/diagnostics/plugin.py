@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class SchedulerPlugin(object):
+class SchedulerPlugin:
     """ Interface to extend the Scheduler
 
     The scheduler operates by triggering and responding to events like
@@ -86,7 +86,7 @@ class SchedulerPlugin(object):
         """ Run when a client disconnects """
 
 
-class WorkerPlugin(object):
+class WorkerPlugin:
     """ Interface to extend the Worker
 
     A worker plugin enables custom code to run at different stages of the Workers'

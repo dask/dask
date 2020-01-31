@@ -12,7 +12,7 @@ from .utils import parse_timedelta
 logger = logging.getLogger(__name__)
 
 
-class BatchedSend(object):
+class BatchedSend:
     """ Batch messages in batches on a stream
 
     This takes an IOStream and an interval (in ms) and ensures that we send no

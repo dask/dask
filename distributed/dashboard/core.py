@@ -16,7 +16,7 @@ if LooseVersion(bokeh.__version__) < LooseVersion("0.13.0"):
     raise ImportError("Dask needs bokeh >= 0.13.0")
 
 
-class BokehServer(object):
+class BokehServer:
     server_kwargs = {}
 
     def listen(self, addr):

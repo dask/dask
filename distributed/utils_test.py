@@ -343,7 +343,7 @@ _varying_dict = collections.defaultdict(int)
 _varying_key_gen = itertools.count()
 
 
-class _ModuleSlot(object):
+class _ModuleSlot:
     def __init__(self, modname, slotname):
         self.modname = modname
         self.slotname = slotname

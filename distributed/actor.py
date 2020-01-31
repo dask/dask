@@ -178,7 +178,7 @@ class Actor(WrappedKey):
         return self._future.client
 
 
-class ProxyRPC(object):
+class ProxyRPC:
     """
     An rpc-like object that uses the scheduler's rpc to connect to a worker
     """
@@ -196,7 +196,7 @@ class ProxyRPC(object):
         return func
 
 
-class ActorFuture(object):
+class ActorFuture:
     """ Future to an actor's method call
 
     Whenever you call a method on an Actor you get an ActorFuture immediately

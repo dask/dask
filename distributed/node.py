@@ -12,7 +12,7 @@ from .versions import get_versions
 from .utils import DequeHandler, TimeoutError
 
 
-class Node(object):
+class Node:
     """
     Base class for nodes in a distributed cluster.
     """

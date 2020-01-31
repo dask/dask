@@ -13,7 +13,7 @@ import dask
 __all__ = ("Security",)
 
 
-class Security(object):
+class Security:
     """Security configuration for a Dask cluster.
 
     Default values are loaded from Dask's configuration files, and can be

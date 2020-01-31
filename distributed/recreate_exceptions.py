@@ -7,7 +7,7 @@ from .worker import _deserialize
 logger = logging.getLogger(__name__)
 
 
-class ReplayExceptionScheduler(object):
+class ReplayExceptionScheduler:
     """ A plugin for the scheduler to recreate exceptions locally
 
     This adds the following routes to the scheduler
@@ -50,7 +50,7 @@ class ReplayExceptionScheduler(object):
                 }
 
 
-class ReplayExceptionClient(object):
+class ReplayExceptionClient:
     """
     A plugin for the client allowing replay of remote exceptions locally
 

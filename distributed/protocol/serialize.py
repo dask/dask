@@ -268,7 +268,7 @@ def deserialize(header, frames, deserializers=None):
     return loads(header, frames)
 
 
-class Serialize(object):
+class Serialize:
     """ Mark an object that should be serialized
 
     Example
@@ -301,7 +301,7 @@ class Serialize(object):
 to_serialize = Serialize
 
 
-class Serialized(object):
+class Serialized:
     """
     An object that is already serialized into header and frames
 
@@ -484,7 +484,7 @@ def register_serialization(cls, serialize, deserialize):
 
     Examples
     --------
-    >>> class Human(object):
+    >>> class Human:
     ...     def __init__(self, name):
     ...         self.name = name
 

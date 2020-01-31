@@ -35,7 +35,7 @@ template_variables = {
 }
 
 
-class _PrometheusCollector(object):
+class _PrometheusCollector:
     def __init__(self, server):
         self.worker = server
         self.logger = logging.getLogger("distributed.dask_worker")

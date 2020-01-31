@@ -349,7 +349,7 @@ def sync(loop, func, *args, callback_timeout=None, **kwargs):
         return result[0]
 
 
-class LoopRunner(object):
+class LoopRunner:
     """
     A helper to start and stop an IO loop in a controlled way.
     Several loop runners can associate safely to the same IO loop.
@@ -1061,7 +1061,7 @@ def import_file(path):
     return loaded
 
 
-class itemgetter(object):
+class itemgetter:
     """A picklable itemgetter.
 
     Examples

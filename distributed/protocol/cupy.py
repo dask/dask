@@ -5,7 +5,7 @@ import cupy
 from .cuda import cuda_serialize, cuda_deserialize
 
 
-class PatchedCudaArrayInterface(object):
+class PatchedCudaArrayInterface:
     """This class do two things:
         1) Makes sure that __cuda_array_interface__['strides']
            behaves as specified in the protocol.

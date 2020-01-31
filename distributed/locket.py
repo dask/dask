@@ -114,7 +114,7 @@ def _acquire_non_blocking(acquire, timeout, retry_period, path):
             time.sleep(retry_period)
 
 
-class _LockSet(object):
+class _LockSet:
     def __init__(self, locks):
         self._locks = locks
 
@@ -136,7 +136,7 @@ class _LockSet(object):
             lock.release()
 
 
-class _ThreadLock(object):
+class _ThreadLock:
     def __init__(self, path):
         self._path = path
         self._lock = threading.Lock()
@@ -156,7 +156,7 @@ class _ThreadLock(object):
         self._lock.release()
 
 
-class _LockFile(object):
+class _LockFile:
     def __init__(self, path):
         self._path = path
         self._file = None
@@ -181,7 +181,7 @@ class _LockFile(object):
         self._file = None
 
 
-class _Locker(object):
+class _Locker:
     """
     A lock wrapper to always apply the given *timeout* and *retry_period*
     to acquire() calls.

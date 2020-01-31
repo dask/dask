@@ -14,7 +14,7 @@ from .protocol.serialize import to_serialize
 logger = logging.getLogger(__name__)
 
 
-class PubSubSchedulerExtension(object):
+class PubSubSchedulerExtension:
     """ Extend Dask's scheduler with routes to handle PubSub machinery """
 
     def __init__(self, scheduler):
@@ -117,7 +117,7 @@ class PubSubSchedulerExtension(object):
                 )
 
 
-class PubSubWorkerExtension(object):
+class PubSubWorkerExtension:
     """ Extend Dask's Worker with routes to handle PubSub machinery """
 
     def __init__(self, worker):
@@ -170,7 +170,7 @@ class PubSubWorkerExtension(object):
                 del self.publish_to_scheduler[name]
 
 
-class PubSubClientExtension(object):
+class PubSubClientExtension:
     """ Extend Dask's Client with handlers to handle PubSub machinery """
 
     def __init__(self, client):
@@ -199,7 +199,7 @@ class PubSubClientExtension(object):
                 self.client.scheduler_comm.send(msg)
 
 
-class Pub(object):
+class Pub:
     """ Publish data with Publish-Subscribe pattern
 
     This allows clients and workers to directly communicate data between each
@@ -349,7 +349,7 @@ class Pub(object):
     __str__ = __repr__
 
 
-class Sub(object):
+class Sub:
     """ Subscribe to a Publish/Subscribe topic
 
     See Also

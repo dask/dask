@@ -12,7 +12,7 @@ from .worker import get_worker
 logger = logging.getLogger(__name__)
 
 
-class LockExtension(object):
+class LockExtension:
     """ An extension for the scheduler to manage Locks
 
     This adds the following routes to the scheduler
@@ -73,7 +73,7 @@ class LockExtension(object):
                 del self.events[name]
 
 
-class Lock(object):
+class Lock:
     """ Distributed Centralized Lock
 
     Parameters

@@ -14,7 +14,7 @@ from .worker import get_client
 logger = logging.getLogger(__name__)
 
 
-class QueueExtension(object):
+class QueueExtension:
     """ An extension for the scheduler to manage queues
 
     This adds the following routes to the scheduler
@@ -139,7 +139,7 @@ class QueueExtension(object):
         return self.queues[name].qsize()
 
 
-class Queue(object):
+class Queue:
     """ Distributed Queue
 
     This allows multiple clients to share futures or small bits of data between

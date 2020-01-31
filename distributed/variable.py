@@ -19,7 +19,7 @@ from .worker import get_client
 logger = logging.getLogger(__name__)
 
 
-class VariableExtension(object):
+class VariableExtension:
     """ An extension for the scheduler to manage queues
 
     This adds the following routes to the scheduler
@@ -114,7 +114,7 @@ class VariableExtension(object):
             del self.variables[name]
 
 
-class Variable(object):
+class Variable:
     """ Distributed Global Variable
 
     This allows multiple clients to share futures and data between each other

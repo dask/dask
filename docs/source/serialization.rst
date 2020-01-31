@@ -154,7 +154,7 @@ register them with Dask.
 
 .. code-block:: python
 
-    class Human(object):
+    class Human:
         def __init__(self, name):
             self.name = name
 

@@ -86,7 +86,7 @@ def test_identity():
 
 @gen_cluster(client=True)
 def test_worker_bad_args(c, s, a, b):
-    class NoReprObj(object):
+    class NoReprObj:
         """ This object cannot be properly represented as a string. """
 
         def __str__(self):
@@ -833,7 +833,7 @@ def test_worker_dir(worker):
 
 @gen_cluster(client=True)
 def test_dataframe_attribute_error(c, s, a, b):
-    class BadSize(object):
+    class BadSize:
         def __init__(self, data):
             self.data = data
 
@@ -847,7 +847,7 @@ def test_dataframe_attribute_error(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_fail_write_to_disk(c, s, a, b):
-    class Bad(object):
+    class Bad:
         def __getstate__(self):
             raise TypeError()
 
@@ -876,7 +876,7 @@ def test_fail_write_many_to_disk(c, s, a):
     yield gen.sleep(0.1)
     assert not a.paused
 
-    class Bad(object):
+    class Bad:
         def __init__(self, x):
             pass
 
@@ -1094,7 +1094,7 @@ def test_robust_to_bad_sizeof_estimates(c, s, a):
     memory = psutil.Process().memory_info().rss
     a.memory_limit = memory / 0.7 + 400e6
 
-    class BadAccounting(object):
+    class BadAccounting:
         def __init__(self, data):
             self.data = data
 

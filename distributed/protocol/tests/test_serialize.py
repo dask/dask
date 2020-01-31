@@ -26,7 +26,7 @@ from distributed.utils_test import inc, gen_test
 from distributed.comm.utils import to_frames, from_frames
 
 
-class MyObj(object):
+class MyObj:
     def __init__(self, data):
         self.data = data
 
@@ -151,7 +151,7 @@ def test_inter_worker_comms(c, s, a, b):
     assert o2.data == 123
 
 
-class Empty(object):
+class Empty:
     def __getstate__(self):
         raise Exception("Not picklable")
 
@@ -213,7 +213,7 @@ def test_malicious_exception():
         def __setstate__(self):
             return Exception("Sneaky deserialization code")
 
-    class MyClass(object):
+    class MyClass:
         def __getstate__(self):
             raise BadException()
 
@@ -258,7 +258,7 @@ def test_err_on_bad_deserializer():
         yield from_frames(frames, deserializers=["msgpack"])
 
 
-class MyObject(object):
+class MyObject:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
@@ -348,7 +348,7 @@ def test_context_specific_serialization_class(c, s, a, b):
 
 
 def test_serialize_raises():
-    class Foo(object):
+    class Foo:
         pass
 
     @dask_serialize.register(Foo)

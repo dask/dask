@@ -12,7 +12,7 @@ from .metrics import thread_time
 logger = _logger = logging.getLogger(__name__)
 
 
-class ThrottledGC(object):
+class ThrottledGC:
     """Wrap gc.collect to protect against excessively repeated calls.
 
     Allows to run throttled garbage collection in the workers as a
@@ -67,7 +67,7 @@ class ThrottledGC(object):
             )
 
 
-class FractionalTimer(object):
+class FractionalTimer:
     """
     An object that measures runtimes, accumulates them and computes
     a running fraction of the recent runtimes over the corresponding
@@ -128,7 +128,7 @@ class FractionalTimer(object):
         return self._running_fraction
 
 
-class GCDiagnosis(object):
+class GCDiagnosis:
     """
     An object that hooks itself into the gc callbacks to collect
     timing and memory statistics, and log interesting info.

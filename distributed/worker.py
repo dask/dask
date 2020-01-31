@@ -3417,7 +3417,7 @@ def get_msg_safe_str(msg):
     ignoring them.
     """
 
-    class Repr(object):
+    class Repr:
         def __init__(self, f, val):
             self._f = f
             self._val = val

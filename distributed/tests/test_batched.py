@@ -12,7 +12,7 @@ from distributed.utils_test import captured_logger
 from distributed.protocol import to_serialize
 
 
-class EchoServer(object):
+class EchoServer:
     count = 0
 
     async def handle_comm(self, comm):

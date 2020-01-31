@@ -92,7 +92,7 @@ DEFAULT_EXTENSIONS = [
 ALL_TASK_STATES = {"released", "waiting", "no-worker", "processing", "erred", "memory"}
 
 
-class ClientState(object):
+class ClientState:
     """
     A simple object holding information about a client.
 
@@ -128,7 +128,7 @@ class ClientState(object):
         return self.client_key
 
 
-class WorkerState(object):
+class WorkerState:
     """
     A simple object holding information about a worker.
 
@@ -324,7 +324,7 @@ class WorkerState(object):
         return self.nthreads
 
 
-class TaskState(object):
+class TaskState:
     """
     A simple object holding information about a task.
 
@@ -683,7 +683,7 @@ class TaskState(object):
                 pdb.set_trace()
 
 
-class TaskGroup(object):
+class TaskGroup:
     """ Collection tracking all tasks within a group
 
     Keys often have a structure like ``("x-123", 0)``
@@ -754,7 +754,7 @@ class TaskGroup(object):
         return sum(self.states.values())
 
 
-class TaskPrefix(object):
+class TaskPrefix:
     """ Collection tracking all tasks within a group
 
     Keys often have a structure like ``("x-123", 0)``

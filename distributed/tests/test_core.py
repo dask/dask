@@ -49,7 +49,7 @@ def echo(comm, x):
     return x
 
 
-class CountedObject(object):
+class CountedObject:
     """
     A class which counts the number of live instances.
     """

@@ -21,7 +21,7 @@ from ..utils import (
 logger = logging.getLogger(__name__)
 
 
-class Cluster(object):
+class Cluster:
     """ Superclass for cluster objects
 
     This class contains common functionality for Dask Cluster manager classes.

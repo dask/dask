@@ -1070,7 +1070,7 @@ def _raise_eoferror():
     raise EOFError
 
 
-class _EOFRaising(object):
+class _EOFRaising:
     def __reduce__(self):
         return _raise_eoferror, ()
 

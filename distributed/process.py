@@ -40,13 +40,13 @@ def _call_and_set_future(loop, future, func, *args, **kwargs):
         _loop_add_callback(loop, future.set_result, res)
 
 
-class _ProcessState(object):
+class _ProcessState:
     is_alive = False
     pid = None
     exitcode = None
 
 
-class AsyncProcess(object):
+class AsyncProcess:
     """
     A coroutine-compatible multiprocessing.Process-alike.
     All normally blocking methods are wrapped in Tornado coroutines.

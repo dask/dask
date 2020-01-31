@@ -24,7 +24,7 @@ def get_scheduler(scheduler):
     return coerce_to_address(scheduler)
 
 
-class ProgressBar(object):
+class ProgressBar:
     def __init__(self, keys, scheduler=None, interval="100ms", complete=True):
         self.scheduler = get_scheduler(scheduler)
 
@@ -207,7 +207,7 @@ class ProgressWidget(ProgressBar):
         )
 
 
-class MultiProgressBar(object):
+class MultiProgressBar:
     def __init__(
         self,
         keys,

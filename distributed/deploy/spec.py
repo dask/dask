@@ -92,7 +92,7 @@ class ProcessInterface:
         await self.close()
 
 
-class NoOpAwaitable(object):
+class NoOpAwaitable:
     """An awaitable object that always returns None.
 
     Useful to return from a method that can be called in both asynchronous and

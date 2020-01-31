@@ -324,7 +324,7 @@ def _expect_tls_context(connection_args):
     return ctx
 
 
-class RequireEncryptionMixin(object):
+class RequireEncryptionMixin:
     def _check_encryption(self, address, connection_args):
         if not self.encrypted and connection_args.get("require_encryption"):
             # XXX Should we have a dedicated SecurityError class?

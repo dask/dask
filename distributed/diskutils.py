@@ -30,7 +30,7 @@ def safe_unlink(path):
             logger.error("Failed to remove %r", str(e))
 
 
-class WorkDir(object):
+class WorkDir:
     """
     A temporary work directory inside a WorkSpace.
     """
@@ -102,7 +102,7 @@ class WorkDir(object):
                 safe_unlink(lock_path)
 
 
-class WorkSpace(object):
+class WorkSpace:
     """
     An on-disk workspace that tracks disposable work directories inside it.
     If a process crashes or another event left stale directories behind,

@@ -3,7 +3,7 @@ from ..client import Client
 import pytest
 
 
-class ClusterTest(object):
+class ClusterTest:
     Cluster = None
     kwargs = {}
 

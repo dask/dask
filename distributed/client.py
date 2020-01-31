@@ -412,7 +412,7 @@ class Future(WrappedKey):
         return self.result().__await__()
 
 
-class FutureState(object):
+class FutureState:
     """A Future's internal state.
 
     This is shared between all Futures with the same key and client.
@@ -4142,7 +4142,7 @@ async def _first_completed(futures):
     return result
 
 
-class as_completed(object):
+class as_completed:
     """
     Return futures in the order in which they complete
 
@@ -4480,7 +4480,7 @@ def fire_and_forget(obj):
         )
 
 
-class get_task_stream(object):
+class get_task_stream:
     """
     Collect task stream within a context block
 

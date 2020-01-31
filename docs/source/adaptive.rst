@@ -59,7 +59,7 @@ the correct times.
 
 .. code-block:: python
 
-   class MyCluster(object):
+   class MyCluster:
        async def scale_up(self, n, **kwargs):
            """
            Bring the total count of workers up to ``n``
@@ -110,7 +110,7 @@ We reproduce the full body of the implementation below as an example:
    from marathon import MarathonClient, MarathonApp
    from marathon.models.container import MarathonContainer
 
-   class MarathonCluster(object):
+   class MarathonCluster:
        def __init__(self, scheduler,
                     executable='dask-worker',
                     docker_image='mrocklin/dask-distributed',

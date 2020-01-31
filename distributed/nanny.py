@@ -450,7 +450,7 @@ class Nanny(ServerNode):
         await ServerNode.close(self)
 
 
-class WorkerProcess(object):
+class WorkerProcess:
     def __init__(
         self,
         worker_kwargs,

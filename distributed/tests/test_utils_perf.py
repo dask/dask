@@ -11,7 +11,7 @@ from distributed.utils_perf import FractionalTimer, GCDiagnosis, disable_gc_diag
 from distributed.utils_test import captured_logger, run_for
 
 
-class RandomTimer(object):
+class RandomTimer:
     """
     A mock timer producing random (but monotonic) values.
     """

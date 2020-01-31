@@ -96,7 +96,7 @@ async def gather_from_workers(who_has, rpc, close=True, serializers=None, who=No
     return (results, bad_keys, list(missing_workers))
 
 
-class WrappedKey(object):
+class WrappedKey:
     """ Interface for a key in a dask graph.
 
     Subclasses must have .key attribute that refers to a key in a dask graph.

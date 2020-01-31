@@ -25,7 +25,7 @@ ConnectionRequest = namedtuple(
 )
 
 
-class Manager(object):
+class Manager:
     """
     An object coordinating listeners and their addresses.
     """
@@ -87,7 +87,7 @@ class QueueEmpty(Exception):
     pass
 
 
-class Queue(object):
+class Queue:
     """
     A single-reader, single-writer, non-threadsafe, peekable queue.
     """

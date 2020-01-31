@@ -6,7 +6,7 @@ from distributed.utils_test import slowinc, cleanup  # noqa: F401
 from distributed.metrics import time
 
 
-class SlowWorker(object):
+class SlowWorker:
     def __init__(self, *args, delay=0, **kwargs):
         self.worker = Worker(*args, **kwargs)
         self.delay = delay

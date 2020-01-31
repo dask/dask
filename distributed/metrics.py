@@ -36,7 +36,7 @@ disk_io_counters = _psutil_caller("disk_io_counters")
 net_io_counters = _psutil_caller("net_io_counters")
 
 
-class _WindowsTime(object):
+class _WindowsTime:
     """
     Combine time.time() and time.perf_counter() to get an absolute clock
     with fine resolution.

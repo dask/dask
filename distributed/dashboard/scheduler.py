@@ -251,7 +251,7 @@ class IndividualPlots(RequestHandler):
         self.write(result)
 
 
-class _PrometheusCollector(object):
+class _PrometheusCollector:
     def __init__(self, server):
         self.server = server
 

@@ -42,7 +42,7 @@ profile_interval = dask.config.get("distributed.worker.profile.interval")
 profile_interval = parse_timedelta(profile_interval, default="ms")
 
 
-class DashboardComponent(object):
+class DashboardComponent:
     """ Base class for Dask.distributed UI dashboard components.
 
     This class must have two attributes, ``root`` and ``source``, and one

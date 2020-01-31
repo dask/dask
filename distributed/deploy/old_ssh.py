@@ -335,7 +335,7 @@ def start_worker(
     return merge(cmd_dict, {"thread": thread})
 
 
-class SSHCluster(object):
+class SSHCluster:
     def __init__(
         self,
         scheduler_addr,

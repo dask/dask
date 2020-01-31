@@ -92,7 +92,7 @@ def register_checker(name):
     return decorate
 
 
-class ResourceChecker(object):
+class ResourceChecker:
     def on_start_test(self):
         pass
 
@@ -260,7 +260,7 @@ class TracemallocMemoryChecker(ResourceChecker):
         return "\n".join(lines)
 
 
-class LeakChecker(object):
+class LeakChecker:
     def __init__(self, checkers, grace_delay, mark_failed, max_retries):
         self.checkers = checkers
         self.grace_delay = grace_delay
