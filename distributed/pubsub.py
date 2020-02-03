@@ -238,7 +238,13 @@ class Pub:
     Parameters
     ----------
     name: object (msgpack serializable)
-        The name of the group of Pubs and Subs on which to participate
+        The name of the group of Pubs and Subs on which to participate.
+    worker: Worker (optional)
+        The worker to be used for publishing data. Defaults to the value of
+        ```get_worker()```. If given, ``client`` must be ``None``.
+    client: Client (optional)
+        Client used for communication with the scheduler. Defaults to
+        the value of ``get_client()``. If given, ``worker`` must be ``None``.
 
     Examples
     --------

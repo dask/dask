@@ -141,6 +141,18 @@ class Queue:
 
        This object is experimental and has known issues in Python 2
 
+    Parameters
+    ----------
+    name: string (optional)
+        Name used by other clients and the scheduler to identify the queue. If
+        not given, a random name will be generated.
+    client: Client (optional)
+        Client used for communication with the scheduler. Defaults to the
+        value of ``_get_global_client()``.
+    maxsize: int (optional)
+        Number of items allowed in the queue. If 0 (the default), the queue
+        size is unbounded.
+
     Examples
     --------
     >>> from dask.distributed import Client, Queue  # doctest: +SKIP

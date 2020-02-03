@@ -76,9 +76,13 @@ class Lock:
 
     Parameters
     ----------
-    name: string
+    name: string (optional)
         Name of the lock to acquire.  Choosing the same name allows two
-        disconnected processes to coordinate a lock.
+        disconnected processes to coordinate a lock.  If not given, a random
+        name will be generated.
+    client: Client (optional)
+        Client to use for communication with the scheduler.  If not given, the
+        default global client will be used.
 
     Examples
     --------
