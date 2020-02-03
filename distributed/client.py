@@ -4513,7 +4513,7 @@ class get_task_stream:
     A common way to do this is to upload the file as a gist, and then serve it
     on https://raw.githack.com ::
 
-       $ pip install gist
+       $ python -m pip install gist
        $ gist task-stream.html
        https://gist.github.com/8a5b3c74b10b413f612bb5e250856ceb
 

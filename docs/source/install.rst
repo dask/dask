@@ -18,7 +18,7 @@ Pip
 
 Or install distributed with ``pip``::
 
-    pip install dask distributed --upgrade
+    python -m pip install dask distributed --upgrade
 
 Source
 ------

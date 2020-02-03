@@ -547,7 +547,9 @@ class Worker(ServerNode):
             try:
                 from zict import Buffer, File, Func
             except ImportError:
-                raise ImportError("Please `pip install zict` for spill-to-disk workers")
+                raise ImportError(
+                    "Please `python -m pip install zict` for spill-to-disk workers"
+                )
             path = os.path.join(self.local_directory, "storage")
             storage = Func(
                 partial(serialize_bytelist, on_error="raise"),

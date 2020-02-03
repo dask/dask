@@ -58,28 +58,28 @@ conda install -q \
 conda install -c defaults -c conda-forge libunwind zstandard asyncssh
 conda install --no-deps -c defaults -c numba -c conda-forge stacktrace
 
-pip install -q "pytest>=4" pytest-repeat pytest-faulthandler pytest-asyncio
+python -m pip install -q "pytest>=4" pytest-repeat pytest-faulthandler pytest-asyncio
 
-pip install -q git+https://github.com/dask/dask.git --upgrade --no-deps
-pip install -q git+https://github.com/joblib/joblib.git --upgrade --no-deps
-pip install -q git+https://github.com/intake/filesystem_spec.git --upgrade --no-deps
-pip install -q git+https://github.com/dask/s3fs.git --upgrade --no-deps
-pip install -q git+https://github.com/dask/zict.git --upgrade --no-deps
-pip install -q sortedcollections msgpack --no-deps
-pip install -q keras --upgrade --no-deps
-pip install -q asyncssh 
+python -m pip install -q git+https://github.com/dask/dask.git --upgrade --no-deps
+python -m pip install -q git+https://github.com/joblib/joblib.git --upgrade --no-deps
+python -m pip install -q git+https://github.com/intake/filesystem_spec.git --upgrade --no-deps
+python -m pip install -q git+https://github.com/dask/s3fs.git --upgrade --no-deps
+python -m pip install -q git+https://github.com/dask/zict.git --upgrade --no-deps
+python -m pip install -q sortedcollections msgpack --no-deps
+python -m pip install -q keras --upgrade --no-deps
+python -m pip install -q asyncssh
 
 if [[ $CRICK == true ]]; then
     conda install -q cython
-    pip install -q git+https://github.com/jcrist/crick.git
+    python -m pip install -q git+https://github.com/jcrist/crick.git
 fi;
 
 # Install distributed
-pip install --no-deps -e .
+python -m pip install --no-deps -e .
 
 # For debugging
 echo -e "--\n--Conda Environment\n--"
 conda list
 
 echo -e "--\n--Pip Environment\n--"
-pip list --format=columns
+python -m pip list --format=columns

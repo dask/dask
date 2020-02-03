@@ -6,7 +6,7 @@ Install
 
 ::
 
-    $ pip install dask distributed --upgrade
+    $ python -m pip install dask distributed --upgrade
 
 See :doc:`installation <install>` document for more information.
 

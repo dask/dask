@@ -70,7 +70,7 @@ except ImportError:
     logger.info(
         "To route to workers diagnostics web server "
         "please install jupyter-server-proxy: "
-        "pip install jupyter-server-proxy"
+        "python -m pip install jupyter-server-proxy"
     )
 
     class GlobalProxyHandler(web.RequestHandler):
@@ -94,7 +94,7 @@ except ImportError:
                 </p>
 
                 <p><pre> conda install jupyter-server-proxy -c conda-forge </pre></p>
-                <p><pre> pip install jupyter-server-proxy</pre></p>
+                <p><pre> python -m pip install jupyter-server-proxy</pre></p>
 
                 <p>
                 The link above should work though if your workers are on a
