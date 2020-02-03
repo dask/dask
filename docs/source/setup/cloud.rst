@@ -7,7 +7,7 @@ like Kubernetes, Yarn, or custom APIs with which Dask can connect easily.
 You may want to consider the following options:
 
 1.  A managed Kubernetes service and Dask's
-    :doc:`Kubernetes and Helm integraation <kubernetes-helm>`.
+    :doc:`Kubernetes and Helm integration <kubernetes-helm>`.
 2.  A managed Yarn service,
     like `Amazon EMR <https://aws.amazon.com/emr/>`_
     or `Google Cloud DataProc <https://cloud.google.com/dataproc/>`_
