@@ -12,7 +12,6 @@ import pytest
 from toolz import valmap, first
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.locks import Event
 
 import dask
 from distributed.diagnostics import SchedulerPlugin
@@ -453,7 +452,7 @@ async def test_nanny_closes_cleanly(cleanup):
 @pytest.mark.asyncio
 async def test_lifetime(cleanup):
     counter = 0
-    event = Event()
+    event = asyncio.Event()
 
     class Plugin(SchedulerPlugin):
         def add_worker(self, **kwargs):

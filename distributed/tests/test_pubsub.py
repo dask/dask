@@ -124,6 +124,8 @@ def test_timeouts(c, s, a, b):
         yield sub.get(timeout=0.1)
     stop = time()
     assert stop - start < 1
+    with pytest.raises(TimeoutError):
+        yield sub.get(timeout=0.01)
 
 
 @gen_cluster(client=True)

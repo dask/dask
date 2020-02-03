@@ -13,7 +13,6 @@ import dask
 from toolz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.locks import Event
 
 from .comm import (
     connect,
@@ -134,7 +133,7 @@ class Server:
         self.events = None
         self.event_counts = None
         self._ongoing_coroutines = weakref.WeakSet()
-        self._event_finished = Event()
+        self._event_finished = asyncio.Event()
 
         self.listeners = []
         self.io_loop = io_loop or IOLoop.current()

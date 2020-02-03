@@ -6,7 +6,6 @@ import math
 import weakref
 
 import dask
-from tornado.locks import Event
 from tornado import gen
 
 from .adaptive import Adaptive
@@ -42,7 +41,7 @@ class ProcessInterface:
         self.external_address = None
         self.lock = asyncio.Lock()
         self.status = "created"
-        self._event_finished = Event()
+        self._event_finished = asyncio.Event()
 
     def __await__(self):
         async def _():

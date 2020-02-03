@@ -1,9 +1,7 @@
+import asyncio
 from collections import defaultdict, deque
 import logging
 import uuid
-import asyncio
-
-import tornado.locks
 
 from .client import _get_global_client
 from .utils import log_errors, TimeoutError
@@ -40,7 +38,7 @@ class LockExtension:
                 result = True
             else:
                 while name in self.ids:
-                    event = tornado.locks.Event()
+                    event = asyncio.Event()
                     self.events[name].append(event)
                     future = event.wait()
                     if timeout is not None:

@@ -9,7 +9,7 @@ import warnings
 import pkg_resources
 import pytest
 
-from tornado import ioloop, locks, queues
+from tornado import ioloop, queues
 from tornado.concurrent import Future
 
 import distributed
@@ -901,7 +901,7 @@ async def check_listener_deserialize(addr, deserialize, in_value, check_out):
 
 
 async def check_connector_deserialize(addr, deserialize, in_value, check_out):
-    done = locks.Event()
+    done = asyncio.Event()
 
     async def handle_comm(comm):
         await comm.write(in_value)
