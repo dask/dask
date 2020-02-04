@@ -1473,3 +1473,12 @@ def test_map_releases_element_references_as_soon_as_possible():
         b.compute(scheduler="sync")
     finally:
         gc.enable()
+
+
+def test_bagged_array_delayed():
+    da = pytest.importorskip("dask.array")
+
+    obj = da.ones(10, chunks=5).to_delayed()[0]
+    bag = db.from_delayed(obj)
+    b = bag.compute()
+    assert_eq(b, [1.0, 1.0, 1.0, 1.0, 1.0])
