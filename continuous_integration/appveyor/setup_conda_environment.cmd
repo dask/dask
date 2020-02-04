@@ -2,7 +2,7 @@
 @rem script in non-root environments.
 set CONDA=cmd /C conda
 set CONDA_INSTALL=%CONDA% install -q -y
-set PIP_INSTALL=pip install -q
+set PIP_INSTALL=python -m pip install -q
 
 @echo on
 

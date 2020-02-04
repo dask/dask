@@ -39,7 +39,7 @@ Or you can specify a hostfile that includes a list of hosts::
 
 The ``dask-ssh`` utility depends on the ``paramiko``::
 
-    pip install paramiko
+    python -m pip install paramiko
 
 .. note::
 

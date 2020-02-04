@@ -17,7 +17,7 @@ Optionally, you can obtain a minimal Dask installation using the following comma
 
    conda install dask-core
 
-This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``pip install dask`` below.
+This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask`` below.
 
 Pip
 ---
@@ -27,22 +27,22 @@ dataframes, ...)  This installs both Dask and dependencies like NumPy, Pandas,
 and so on that are necessary for different workloads.  This is often the right
 choice for Dask users::
 
-   pip install "dask[complete]"    # Install everything
+   python -m pip install "dask[complete]"    # Install everything
 
 You can also install only the Dask library.  Modules like ``dask.array``,
 ``dask.dataframe``, ``dask.delayed``, or ``dask.distributed`` won't work until you also install NumPy,
 Pandas, Toolz, or Tornado, respectively.  This is common for downstream library
 maintainers::
 
-   pip install dask                # Install only core parts of dask
+   python -m pip install dask                # Install only core parts of dask
 
 We also maintain other dependency sets for different subsets of functionality::
 
-   pip install "dask[array]"       # Install requirements for dask array
-   pip install "dask[bag]"         # Install requirements for dask bag
-   pip install "dask[dataframe]"   # Install requirements for dask dataframe
-   pip install "dask[delayed]"     # Install requirements for dask delayed
-   pip install "dask[distributed]" # Install requirements for distributed dask
+   python -m pip install "dask[array]"       # Install requirements for dask array
+   python -m pip install "dask[bag]"         # Install requirements for dask bag
+   python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
+   python -m pip install "dask[delayed]"     # Install requirements for dask delayed
+   python -m pip install "dask[distributed]" # Install requirements for distributed dask
 
 We have these options so that users of the lightweight core Dask scheduler
 aren't required to download the more exotic dependencies of the collections
@@ -57,11 +57,11 @@ To install Dask from source, clone the repository from `github
 
     git clone https://github.com/dask/dask.git
     cd dask
-    pip install .
+    python -m pip install .
 
 You can also install all dependencies as well::
 
-    pip install ".[complete]"
+    python -m pip install ".[complete]"
 
 You can view the list of all dependencies within the ``extras_require`` field
 of ``setup.py``.
@@ -69,7 +69,7 @@ of ``setup.py``.
 
 Or do a developer install by using the ``-e`` flag::
 
-    pip install -e .
+    python -m pip install -e .
 
 Anaconda
 --------

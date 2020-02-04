@@ -145,7 +145,7 @@ def make_people(npartitions=10, records_per_partition=1000, seed=None, locale="e
     import_required(
         "mimesis",
         "The mimesis module is required for this function.  Try:\n"
-        "  pip install mimesis",
+        "  python -m pip install mimesis",
     )
 
     schema = lambda field: {

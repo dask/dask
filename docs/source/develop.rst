@@ -98,11 +98,11 @@ environment on your computer to compile them when installing with ``pip``::
 Install Dask and dependencies::
 
    cd dask
-   pip install -e ".[complete]"
+   python -m pip install -e ".[complete]"
 
 For development, Dask uses the following additional dependencies::
 
-   pip install pytest moto
+   python -m pip install pytest moto
 
 
 Run Tests
@@ -256,7 +256,7 @@ Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
 format throughout the project. ``black`` and ``flake8`` can be installed with
 ``pip``::
 
-   pip install black flake8
+   python -m pip install black flake8
 
 and then run from the root of the Dask repository::
 
@@ -270,7 +270,7 @@ Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
 to automatically run ``black`` and ``flake8`` when you make a git commit. This
 can be done by installing ``pre-commit``::
 
-   pip install pre-commit
+   python -m pip install pre-commit
 
 and then running::
 
@@ -292,7 +292,7 @@ and API documentation.
 To build the documentation locally, first install the necessary requirements::
 
    cd docs/
-   pip install -r requirements-docs.txt
+   python -m pip install -r requirements-docs.txt
 
 Then build the documentation with ``make``::
 

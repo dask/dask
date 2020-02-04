@@ -24,7 +24,7 @@ def test_no_mimesis():
         with pytest.raises(Exception) as info:
             dask.datasets.make_people()
 
-        assert "pip install mimesis" in str(info.value)
+        assert "python -m pip install mimesis" in str(info.value)
 
 
 def test_deterministic():
