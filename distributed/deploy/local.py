@@ -49,8 +49,6 @@ class LocalCluster(SpecCluster):
     asynchronous: bool (False by default)
         Set to True if using this cluster within async/await functions or within
         Tornado gen.coroutines.  This should remain False for normal use.
-    worker_kwargs: dict
-        Extra worker arguments, will be passed to the Worker constructor.
     blocked_handlers: List[str]
         A list of strings specifying a blacklist of handlers to disallow on the Scheduler,
         like ``['feed', 'run_function']``
@@ -68,6 +66,9 @@ class LocalCluster(SpecCluster):
         Network interface to use.  Defaults to lo/localhost
     worker_class: Worker
         Worker class used to instantiate workers from.
+    **worker_kwargs:
+        Extra worker arguments. Any additional keyword arguments will be passed
+        to the ``Worker`` class constructor.
 
     Examples
     --------
