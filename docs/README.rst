@@ -2,7 +2,7 @@ To build a local copy of the Dask documentation, install the packages in
 ``requirements-docs.txt`` and run ``make html``. These dependencies can be
 installed with ``pip``::
 
-  pip install -r requirements-docs.txt
+  python -m pip install -r requirements-docs.txt
 
 or ``conda``::
 
