@@ -50,6 +50,6 @@ except ImportError as e:
         "Dask dataframe requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install dask                     # either conda install\n"
-        "  pip install dask[dataframe] --upgrade  # or pip install"
+        "  python -m pip install dask[dataframe] --upgrade  # or python -m pip install"
     )
     raise ImportError(str(e) + "\n\n" + msg)
