@@ -671,7 +671,6 @@ class Client(Node):
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
-        self._gather_semaphore = asyncio.Semaphore(5, loop=self.loop.asyncio_loop)
         self._gather_keys = None
         self._gather_future = None
 
@@ -980,6 +979,8 @@ class Client(Node):
                 await asyncio.sleep(0.01)
 
             address = self.cluster.scheduler_address
+
+        self._gather_semaphore = asyncio.Semaphore(5)
 
         if self.scheduler is None:
             self.scheduler = self.rpc(address)
@@ -4206,13 +4207,20 @@ class as_completed:
         self.queue = pyQueue()
         self.lock = threading.Lock()
         self.loop = loop or default_client().loop
-        self.condition = asyncio.Condition(loop=self.loop.asyncio_loop)
         self.thread_condition = threading.Condition()
         self.with_results = with_results
         self.raise_errors = raise_errors
 
         if futures:
             self.update(futures)
+
+    @property
+    def condition(self):
+        try:
+            return self._condition
+        except AttributeError:
+            self._condition = asyncio.Condition()
+            return self._condition
 
     async def _track_future(self, future):
         try:

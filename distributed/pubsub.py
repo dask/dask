@@ -378,7 +378,6 @@ class Sub:
             self.loop = self.client.loop
         self.name = name
         self.buffer = deque()
-        self.condition = asyncio.Condition(loop=self.loop.asyncio_loop)
 
         if self.worker:
             pubsub = self.worker.extensions["pubsub"]
@@ -395,6 +394,14 @@ class Sub:
             raise Exception()
 
         weakref.finalize(self, pubsub.trigger_cleanup)
+
+    @property
+    def condition(self):
+        try:
+            return self._condition
+        except AttributeError:
+            self._condition = asyncio.Condition()
+            return self._condition
 
     async def _get(self, timeout=None):
         start = time()
