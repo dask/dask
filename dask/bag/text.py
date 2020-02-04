@@ -1,7 +1,7 @@
 import io
 import os
 
-from toolz import concat
+from toolz import concat, partial
 
 from ..bytes import open_files, read_bytes
 from ..delayed import delayed
@@ -71,6 +71,8 @@ def read_text(
     Get file paths of the bag by setting include_path=True
 
     >>> b = read_text('myfiles.*.txt', include_path=True) # doctest: +SKIP
+    >>> b.pluck(1).take(1)
+    ('.../myfiles.0.txt',)
 
     Returns
     -------
@@ -97,11 +99,7 @@ def read_text(
     if blocksize is None:
         if files_per_partition is None:
             blocks = [
-                delayed(list)(
-                    delayed(
-                        file_to_blocks_with_path if include_path else file_to_blocks
-                    )(fil)
-                )
+                delayed(list)(delayed(partial(file_to_blocks, include_path))(fil))
                 for fil in files
             ]
         else:
@@ -109,10 +107,7 @@ def read_text(
             for start in range(0, len(files), files_per_partition):
                 block_files = files[start : (start + files_per_partition)]
                 block_lines = delayed(concat)(
-                    delayed(map)(
-                        file_to_blocks_with_path if include_path else file_to_blocks,
-                        block_files,
-                    )
+                    delayed(map)(partial(file_to_blocks, include_path), block_files,)
                 )
                 blocks.append(block_lines)
     else:
@@ -144,16 +139,10 @@ def read_text(
     return blocks
 
 
-def file_to_blocks(lazy_file):
+def file_to_blocks(include_path, lazy_file):
     with lazy_file as f:
         for line in f:
-            yield line
-
-
-def file_to_blocks_with_path(lazy_file):
-    with lazy_file as f:
-        for line in f:
-            yield (line, lazy_file.path)
+            yield (line, lazy_file.path) if include_path else line
 
 
 def attach_path(block, path):

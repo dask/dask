@@ -1,5 +1,5 @@
 import pytest
-from toolz import partial
+from toolz import concat, partial
 
 import dask
 from dask import compute
@@ -65,8 +65,12 @@ def test_read_text(fmt, bs, encoding, include_path):
         assert "".join(L) == expected
         if include_path:
             (paths,) = compute(o.pluck(1))
-            unique_paths = set(paths)
-            assert len(unique_paths) == len(files)
+            expected_paths = list(
+                concat([[k] * v.count("\n") for k, v in files.items()])
+            )
+            assert len(paths) == len(expected_paths)
+            for path, expected_path in zip(paths, expected_paths):
+                assert path.endswith(expected_path)
 
         blocks = read_text(
             ".test.accounts.*.json",
