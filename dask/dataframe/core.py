@@ -1491,7 +1491,7 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1649,7 +1649,9 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
+                if len(result) == 0:
+                    result = result.astype("int64")
             return result
 
     @derived_from(pd.DataFrame)
@@ -1669,7 +1671,11 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
         else:
-            num = self._get_numeric_data()
+            dtype = getattr(self, "dtype", None)
+            if dtype == "<M8[ns]":
+                num = self.dropna()._get_numeric_data().astype("i8")
+            else:
+                num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
             name = self._token_prefix + "mean-%s" % tokenize(self, axis, skipna)
@@ -1682,7 +1688,11 @@ Dask Name: {name}, {task} tasks"""
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
+                if len(result.index) == 0 and len(self.columns) != 0:
+                    result.index = result.index.astype("int64")
+            if dtype == "<M8[ns]":
+                result = delayed(pd.Timestamp)(result)
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
