@@ -2398,6 +2398,24 @@ def test_groupby_sort_argument_agg(agg, sort):
     ddf = dd.from_pandas(df, npartitions=3)
 
     result = agg(ddf.groupby("x", sort=sort))
-    result_pd = agg(df.groupby("x"))
+    result_pd = agg(df.groupby("x", sort=sort))
 
     assert_eq(result, result_pd)
+    if sort:
+        # Check order of index if sort==True
+        # (no guarentee that order will match otherwise)
+        assert_eq(result.index, result_pd.index)
+
+
+def test_groupby_sort_true_split_out():
+    df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    # Works fine for split_out==1 or sort=False/None
+    M.sum(ddf.groupby("x", sort=True), split_out=1)
+    M.sum(ddf.groupby("x", sort=False), split_out=2)
+    M.sum(ddf.groupby("x"), split_out=2)
+
+    with pytest.raises(NotImplementedError):
+        # Cannot use sort=True with split_out>1 (for now)
+        M.sum(ddf.groupby("x", sort=True), split_out=2)
