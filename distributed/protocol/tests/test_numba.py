@@ -6,7 +6,7 @@ np = pytest.importorskip("numpy")
 
 
 @pytest.mark.parametrize("dtype", ["u1", "u4", "u8", "f4"])
-def test_serialize_cupy(dtype):
+def test_serialize_numba(dtype):
     if not cuda.is_available():
         pytest.skip("CUDA is not available")
 
