@@ -1645,7 +1645,7 @@ Dask Name: {name}, {task} tasks"""
             # Need the astype(int) for empty dataframes, which sum to float dtype
             result = self.reduction(
                 M.count,
-                aggregate=lambda x: x.sum().astype(int),
+                aggregate=lambda x: x.sum().astype("int64"),
                 meta=meta,
                 token=token,
                 split_every=split_every,
