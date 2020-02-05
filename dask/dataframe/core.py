@@ -1641,17 +1641,17 @@ Dask Name: {name}, {task} tasks"""
             )
         else:
             meta = self._meta_nonempty.count()
+
+            # Need the astype(int) for empty dataframes, which sum to float dtype
             result = self.reduction(
                 M.count,
-                aggregate=M.sum,
+                aggregate=lambda x: x.sum().astype(int),
                 meta=meta,
                 token=token,
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
-                if len(result) == 0:
-                    result = result.astype("int64")
             return result
 
     @derived_from(pd.DataFrame)
