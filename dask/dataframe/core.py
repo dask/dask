@@ -4683,6 +4683,7 @@ def apply_concat_apply(
     split_out=None,
     split_out_setup=None,
     split_out_setup_kwargs=None,
+    sort=None,
     **kwargs
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -4722,6 +4723,8 @@ def apply_concat_apply(
         as is.
     split_out_setup_kwargs : dict, optional
         Keywords for the `split_out_setup` function only.
+    sort : bool, default None
+        If allowed, sort the keys of the output aggregation.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -4838,6 +4841,15 @@ def apply_concat_apply(
         k = part_i + 1
         a = b
         depth += 1
+
+    if sort is not None:
+        if sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarentee sorted keys for `split_out>1`."
+                " Try using split_out=1, or grouping with sort=False."
+            )
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
 
     # Aggregate
     for j in range(split_out):
