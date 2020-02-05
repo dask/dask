@@ -9,7 +9,6 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -908,7 +907,7 @@ def test_empty_partition(tmpdir, engine):
 
 def test_timestamp_index(tmpdir, engine):
     fn = str(tmpdir)
-    df = tm.makeTimeDataFrame()
+    df = dd._compat.makeTimeDataFrame()
     df.index.name = "foo"
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine)
@@ -2096,13 +2095,7 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", row_group_size=100
     )
 
-    ddf3 = dd.read_parquet(
-        tmp,
-        engine="pyarrow",
-        gather_statistics=True,
-        split_row_groups=True,
-        chunksize=1,
-    )
+    ddf3 = dd.read_parquet(tmp, engine="pyarrow", split_row_groups=True, chunksize=1)
     assert ddf3.npartitions == 4
 
     ddf3 = dd.read_parquet(
@@ -2243,3 +2236,17 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
     )
 
     assert_eq(pdf, ddf_read)
+
+
+def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
+    check_fastparquet()
+
+    pdf = pd.DataFrame(
+        [{"str": str(i), "int": i, "group": "ABC"[i % 3]} for i in range(6)]
+    )
+    path = str(tmpdir)
+    pdf.to_parquet(path, partition_cols=["group"], engine="fastparquet")
+    ddf_read = dd.read_parquet(path, engine=engine)
+
+    assert len(ddf_read["group"].compute()) == 6
+    assert len(ddf_read.compute().group) == 6

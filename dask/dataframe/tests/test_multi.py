@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (
@@ -1823,20 +1823,10 @@ def test_append2():
 
     assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
     assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
-        assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
     assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
     assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
-        assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
     # Dask + pandas
     assert_eq(
@@ -1847,15 +1837,6 @@ def test_append2():
         ddf2.append(ddf1.compute()),
         ddf2.compute().append(ddf1.compute(), **concat_kwargs),
     )
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(
-            ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute())
-        )
-        assert_eq(
-            ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute())
-        )
 
     # different columns
     assert_eq(
@@ -1866,15 +1847,6 @@ def test_append2():
         ddf3.append(ddf1.compute()),
         ddf3.compute().append(ddf1.compute(), **concat_kwargs),
     )
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(
-            ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute())
-        )
-        assert_eq(
-            ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute())
-        )
 
 
 def test_append_categorical():
@@ -1972,9 +1944,6 @@ def test_multi_duplicate_divisions():
     assert_eq(r1, r2)
 
 
-@pytest.mark.xfail(
-    PANDAS_GT_100, reason="https://github.com/pandas-dev/pandas/issues/30887"
-)
 def test_merge_outer_empty():
     # Issue #5470 bug reproducer
     k_clusters = 3

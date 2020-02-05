@@ -971,6 +971,20 @@ def test_broadcast_arrays():
         assert_eq(e_a_r, e_d_r)
 
 
+def test_broadcast_arrays_uneven_chunks():
+    x = da.ones(30, chunks=(3,))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+    x = da.ones((1, 30), chunks=(1, 3))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+
 @pytest.mark.parametrize(
     "u_shape, v_shape",
     [
@@ -3726,6 +3740,18 @@ def test_zarr_return_stored(compute):
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
+
+
+def test_to_zarr_delayed_creates_no_metadata():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.from_array([42])
+        result = a.to_zarr(d, compute=False)
+        assert not os.listdir(d)  # No .zarray file
+        # Verify array still created upon compute.
+        result.compute()
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
 
 
 def test_zarr_existing_array():

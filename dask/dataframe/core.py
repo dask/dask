@@ -413,9 +413,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     def __repr__(self):
         data = self._repr_data().to_string(max_rows=5, show_dimensions=False)
-        return """Dask {klass} Structure:
+        _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {task} tasks""".format(
+Dask Name: {name}, {task} tasks"""
+        if len(self.columns) == 0:
+            data = data.partition("\n")[-1].replace("Index", "Divisions")
+            _str_fmt = "Empty {}".format(_str_fmt)
+        return _str_fmt.format(
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),
@@ -4160,6 +4164,8 @@ class DataFrame(_Frame):
         )
 
         if verbose:
+            import textwrap
+
             index = computations["index"]
             counts = computations["count"]
             lines.append(index_summary(index))
@@ -4167,12 +4173,36 @@ class DataFrame(_Frame):
 
             from pandas.io.formats.printing import pprint_thing
 
-            space = max([len(pprint_thing(k)) for k in self.columns]) + 3
-            column_template = "{!s:<%d} {} non-null {}" % space
+            space = max([len(pprint_thing(k)) for k in self.columns]) + 1
+            column_width = max(space, 7)
+
+            header = (
+                textwrap.dedent(
+                    """\
+             #   {{column:<{column_width}}} Non-Null Count  Dtype
+            ---  {{underl:<{column_width}}} --------------  -----"""
+                )
+                .format(column_width=column_width)
+                .format(column="Column", underl="------")
+            )
+            column_template = textwrap.dedent(
+                """\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""".format(
+                    column_width=column_width
+                )
+            )
             column_info = [
-                column_template.format(pprint_thing(x[0]), x[1], x[2])
-                for x in zip(self.columns, counts, self.dtypes)
+                column_template.format(
+                    i=pprint_thing(i),
+                    name=pprint_thing(name),
+                    count=pprint_thing(count),
+                    dtype=pprint_thing(dtype),
+                )
+                for i, (name, count, dtype) in enumerate(
+                    zip(self.columns, counts, self.dtypes)
+                )
             ]
+            lines.extend(header.split("\n"))
         else:
             column_info = [index_summary(self.columns, name="Columns")]
 
@@ -4299,8 +4329,14 @@ class DataFrame(_Frame):
     def _repr_data(self):
         meta = self._meta
         index = self._repr_divisions
-        series_list = [_repr_data_series(s, index=index) for _, s in meta.iteritems()]
-        return pd.concat(series_list, axis=1)
+        cols = meta.columns
+        if len(cols) == 0:
+            series_df = pd.DataFrame([[]] * len(index), columns=cols, index=index)
+        else:
+            series_df = pd.concat(
+                [_repr_data_series(s, index=index) for _, s in meta.iteritems()], axis=1
+            )
+        return series_df
 
     _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}
