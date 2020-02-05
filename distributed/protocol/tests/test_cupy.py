@@ -17,12 +17,15 @@ def test_serialize_cupy(size, dtype):
 
 @pytest.mark.parametrize("dtype", ["u1", "u4", "u8", "f4"])
 def test_serialize_cupy_from_numba(dtype):
-    numba = pytest.importorskip("numba")
+    cuda = pytest.importorskip("numba.cuda")
     np = pytest.importorskip("numpy")
+
+    if not cuda.is_available():
+        pytest.skip("CUDA is not available")
 
     size = 10
     x_np = np.arange(size, dtype=dtype)
-    x = numba.cuda.to_device(x_np)
+    x = cuda.to_device(x_np)
     header, frames = serialize(x, serializers=("cuda", "dask", "pickle"))
     header["type-serialized"] = pickle.dumps(cupy.ndarray)
 
