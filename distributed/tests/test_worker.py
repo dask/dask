@@ -372,6 +372,32 @@ def test_error_message():
         assert len(msg["text"]) > 10100  # default + 100
 
 
+@gen_cluster(client=True)
+def test_chained_error_message(c, s, a, b):
+    def chained_exception_fn():
+        class MyException(Exception):
+            def __init__(self, msg):
+                self.msg = msg
+
+            def __str__(self):
+                return "MyException(%s)" % self.msg
+
+        exception = MyException("Foo")
+        inner_exception = MyException("Bar")
+
+        try:
+            raise inner_exception
+        except Exception as e:
+            raise exception from e
+
+    f = c.submit(chained_exception_fn)
+    try:
+        yield f
+    except Exception as e:
+        assert e.__cause__ is not None
+        assert "Bar" in str(e.__cause__)
+
+
 @gen_cluster()
 def test_gather(s, a, b):
     b.data["x"] = 1

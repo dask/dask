@@ -10,6 +10,7 @@ import uuid
 import weakref
 
 import dask
+import tblib
 from toolz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -981,6 +982,14 @@ def coerce_to_address(o):
     return normalize_address(o)
 
 
+def collect_causes(e):
+    causes = []
+    while e.__cause__ is not None:
+        causes.append(e.__cause__)
+        e = e.__cause__
+    return causes
+
+
 def error_message(e, status="error"):
     """ Produce message to send back given an exception has occurred
 
@@ -997,6 +1006,7 @@ def error_message(e, status="error"):
     clean_exception: deserialize and unpack message into exception/traceback
     """
     MAX_ERROR_LEN = dask.config.get("distributed.admin.max-error-length")
+    tblib.pickling_support.install(e, *collect_causes(e))
     tb = get_traceback()
     e2 = truncate_exception(e, MAX_ERROR_LEN)
     try:
