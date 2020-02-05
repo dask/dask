@@ -73,14 +73,14 @@ class Worker(Process):
         loop=None,
         name=None,
     ):
+        super().__init__()
+
         self.address = address
         self.scheduler = scheduler
         self.worker_module = worker_module
         self.connect_options = connect_options
         self.kwargs = kwargs
         self.name = name
-
-        super().__init__()
 
     async def start(self):
         import asyncssh  # import now to avoid adding to module startup time
@@ -98,7 +98,7 @@ class Worker(Process):
                     "--name",
                     str(self.name),
                 ]
-                + cli_keywords(self.kwargs, cls=_Worker)
+                + cli_keywords(self.kwargs, cls=_Worker, cmd=self.worker_module)
             )
         )
 
@@ -131,11 +131,11 @@ class Scheduler(Process):
     """
 
     def __init__(self, address: str, connect_options: dict, kwargs: dict):
+        super().__init__()
+
         self.address = address
         self.kwargs = kwargs
         self.connect_options = connect_options
-
-        super().__init__()
 
     async def start(self):
         import asyncssh  # import now to avoid adding to module startup time
