@@ -3295,8 +3295,9 @@ class DataFrame(_Frame):
     @property
     def empty(self):
         raise NotImplementedError(
-            "Checking the dimensions of a Dask DataFrame can be expensive. "
-            "Instead, check whether a specific axis is empty, with either "
+            "Checking whether a Dask DataFrame has any rows may be expensive. "
+            "However, checking the number of columns is fast. "
+            "Depending on which of these results you need, use either "
             "`len(df.index) == 0` or `len(df.columns) == 0`"
         )
 
