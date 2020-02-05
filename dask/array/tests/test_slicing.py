@@ -19,6 +19,7 @@ from dask.array.slicing import (
     slicing_plan,
     make_block_sorted_slices,
     shuffle_slice,
+    take_along_axis,
 )
 from dask.array.slicing import (
     _sanitize_index_element,
@@ -956,8 +957,10 @@ def test_gh4043(lock, asarray, fancy):
     
 def test_take_along_axis():
     a = np.array([[10, 30, 20], [60, 40, 50]])
-    b = np.array([[0, 2, 1],[1, 2, 0]])      
-    y = take_along_axis(a,b,axis=0)
-    x = np.take_along_axis(a,b,axis=0)
+    b = np.array([[0, 2, 1],[1, 2, 0]])
+    arr = np.array([[10, 30, 20]])
+    with pytest.raises(ValueError):
+        take_along_axis(arr, b, axis=0)      
+    y = take_along_axis(a, b, axis=0)
+    x = np.take_along_axis(a, b, axis=0)
     assert_eq(x, y)
-    

@@ -1243,28 +1243,26 @@ def cached_cumsum(seq, initial_zero=False):
 
 
 def take_along_axis(arr,indices,axis):
+    from .core import from_array
     out_d = np.array([]) #creating a new empty array to store the value of result
     arr = np.array(arr)
     indices = np.array(indices)
-    if arr.shape != indices.ndim:
+    if arr.shape != indices.shape:
         raise ValueError(
             "`indices` and `arr` must have the same number of dimensions")
-    for integer in indices:
-        if not isinstance(integer,int):
-            raiseIndexError('indices must be an integer array')
+    if (indices.dtype != 'int64'):
+        raise IndexError('indices must be an integer array')
     if axis == 0:
         arr = arr.flatten
-        arr_shape = (np.prod((arr.shape),))
-    Ni, M, Nk=arr.shape[:axis], arr.shape[axis], arr.shape[axis+1:]
-    j=indices.shape[axis]
-    out=np.empty(Ni+ (j,)+Nk)
+    Ni, Nk = arr.shape[:axis], arr.shape[axis + 1:]
+    j = indices.shape[axis]
+    out = np.empty(Ni + (j,) + Nk)
     for i in np.ndindex(Ni):
         for k in np.ndindex(Nk):
-            a_1d = a[i+np.s_[:,]+ k]
-            indices_1d=indices[i+np.s_[:,]+k]
-            out_1d= out[i+np.s_[:,]+k]
-            out_1d[:]=a_1d[indices_1d]
-            out_d=np.append(out_d,out_1d,axis=0)
-    out_d=np.reshape(out_d, arr.shape)
-    return(da.from_array(out_d))
-    
+            a_1d = arr[i + np.s_[:,] + k]
+            indices_1d = indices[i + np.s_[:,] + k]
+            out_1d = out[i + np.s_[:,] + k]
+            out_1d[:] = a_1d[indices_1d]
+            out_d = np.append(out_d,out_1d,axis=0)
+    out_d = np.reshape(out_d, arr.shape)
+    return(from_array(out_d))
