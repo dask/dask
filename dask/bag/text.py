@@ -71,8 +71,8 @@ def read_text(
     Get file paths of the bag by setting include_path=True
 
     >>> b = read_text('myfiles.*.txt', include_path=True) # doctest: +SKIP
-    >>> b.pluck(1).take(1) # doctest: +SKIP
-    ('.../myfiles.0.txt',)
+    >>> b.take(1) # doctest: +SKIP
+    (('first line of the first file', '/home/dask/myfiles.0.txt'),)
 
     Returns
     -------
