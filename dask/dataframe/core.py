@@ -1491,7 +1491,7 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1641,15 +1641,17 @@ Dask Name: {name}, {task} tasks"""
             )
         else:
             meta = self._meta_nonempty.count()
+
+            # Need the astype(int) for empty dataframes, which sum to float dtype
             result = self.reduction(
                 M.count,
-                aggregate=M.sum,
+                aggregate=lambda x: x.sum().astype("int64"),
                 meta=meta,
                 token=token,
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     @derived_from(pd.DataFrame)
@@ -1682,7 +1684,7 @@ Dask Name: {name}, {task} tasks"""
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1723,7 +1725,7 @@ Dask Name: {name}, {task} tasks"""
                 result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def _var_numeric(self, skipna=True, ddof=1, split_every=False):
@@ -1885,7 +1887,7 @@ Dask Name: {name}, {task} tasks"""
             )
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     def quantile(self, q=0.5, axis=0, method="default"):
