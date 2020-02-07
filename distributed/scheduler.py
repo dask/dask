@@ -2963,7 +2963,7 @@ class Scheduler(ServerNode):
             List of keys to delete on the specified worker
         """
         await retry_operation(
-            self.rpc(addr=worker_address).delete_data, keys=list(keys), report=False,
+            self.rpc(addr=worker_address).delete_data, keys=list(keys), report=False
         )
 
         ws = self.workers[worker_address]
@@ -2972,9 +2972,7 @@ class Scheduler(ServerNode):
         for ts in tasks:
             ts.who_has.remove(ws)
             ws.nbytes -= ts.get_nbytes()
-        self.log_event(
-            ws.address, {"action": "remove-worker-data", "keys": keys},
-        )
+        self.log_event(ws.address, {"action": "remove-worker-data", "keys": keys})
 
     async def rebalance(self, comm=None, keys=None, workers=None):
         """ Rebalance keys so that each worker stores roughly equal bytes
