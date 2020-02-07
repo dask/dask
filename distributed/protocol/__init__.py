@@ -80,6 +80,12 @@ def _register_numba():
     from . import numba
 
 
+@cuda_serialize.register_lazy("rmm")
+@cuda_deserialize.register_lazy("rmm")
+def _register_rmm():
+    from . import rmm
+
+
 @cuda_serialize.register_lazy("cudf")
 @cuda_deserialize.register_lazy("cudf")
 def _register_cudf():
