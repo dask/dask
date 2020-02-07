@@ -441,6 +441,10 @@ def map_blocks(
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
 
+    See Also
+    --------
+    dask.array.blockwise : Generalized operation with control over block alignment.
+
     Examples
     --------
     >>> import dask.array as da
