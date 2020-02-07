@@ -74,6 +74,7 @@ Work towards *small goals* with *big steps*.
     This relies on the regularity of graph constructors like dask.array to be a
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
+from itertools import islice
 from math import log
 from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
@@ -228,6 +229,7 @@ def order(dsk, dependencies=None):
     outer_stack_pop = outer_stack.pop
     outer_stack_extend = outer_stack.extend
     outer_stack_seeds_append = outer_stack_seeds.append
+    outer_stack_seeds_pop = outer_stack_seeds.pop
     inner_stack_append = inner_stack.append
     inner_stack_pop = inner_stack.pop
     inner_stack_extend = inner_stack.extend
@@ -295,28 +297,59 @@ def order(dsk, dependencies=None):
                                 outer_stack_seeds_append(item)
                         else:
                             # Our next starting point will be "seeded" by a completed task in a
-                            # FIFO manner.  When our DFS with `inner_stack` is finished--which
-                            # means we computed our tactical goal--we will choose our next starting
+                            # a combination of LIFO and FIFO manners by taking the best dependents
+                            # of each.  When our DFS with `inner_stack` is finished--which means
+                            # we computed our tactical goal--we will choose our next starting
                             # point from the dependents of completed tasks.  However, it is too
                             # expensive to consider all dependents of all completed tasks, so we
                             # consider the dependents of tasks in the order they complete.
                             outer_stack_seeds_append(item)
 
-            while not outer_stack and outer_stack_seeds_index < len(outer_stack_seeds):
+            if not outer_stack:
+                # Now we need to populate `outer_stack` from `outer_stack_seeds`.
                 # We wait for as long as possible to consider dependents of completed nodes:
                 # 1. some may have already completed, so waiting lets us sort fewer items, and
                 # 2. sorting via `dependents_key` depends on `num_needed`, which is dynamic.
-                deps = set_difference(
-                    dependents[outer_stack_seeds[outer_stack_seeds_index]], result
-                )
-                if deps:
-                    if 1 < len(deps) < 1000:
-                        outer_stack_extend(
-                            sorted(deps, key=dependents_key, reverse=True)
-                        )
-                    else:
-                        outer_stack_extend(deps)
-                outer_stack_seeds_index += 1
+                #
+                # We get dependents of the left-most (FIFO) item and right-most (LIFO) item,
+                # merge them, and choose the best ones to add to `outer_stack`.
+                #
+                # It's very important to choose good nodes in this step!  Unfortunately, it is
+                # likely prohibitively expensive to consider all dependents of all completed
+                # nodes, so we need to use a different approach.  Also unfortunately, neither
+                # FIFO or LIFO dominates the other, and choosing only one will likely result in
+                # poor behavior (i.e., excessive memory usage) for some workflows.  So, only
+                # taking the best nodes from LIFO and FIFO appears to be a good compromise that
+                # is fairly robust, although isolated imperfections can be expected sometimes.
+                while outer_stack_seeds_index < len(outer_stack_seeds):
+                    # Get dependents from an item in `outer_stack_seeds` in a FIFO manner
+                    deps = set_difference(
+                        dependents[outer_stack_seeds[outer_stack_seeds_index]], result
+                    )
+                    if deps:
+                        while outer_stack_seeds_index < len(outer_stack_seeds) - 1:
+                            # Get dependents from an item in `outer_stack_seeds` as LIFO
+                            lifo_deps = set_difference(
+                                dependents[outer_stack_seeds[-1]], result
+                            )
+                            if lifo_deps:
+                                deps |= lifo_deps  # Merge FIFO and LIFO dependents
+                                break
+                            outer_stack_seeds_pop()
+
+                        # Add the best ones to `outer_stack`
+                        if len(deps) < 6:
+                            outer_stack_append(min(deps, key=dependents_key))
+                        else:
+                            outer_stack_extend(
+                                islice(
+                                    sorted(deps, key=dependents_key), 1 + len(deps) // 6
+                                )
+                                if len(deps) < 1000
+                                else deps
+                            )
+                        break
+                    outer_stack_seeds_index += 1
 
         if len(dependencies) == len(result):
             break  # all done!
