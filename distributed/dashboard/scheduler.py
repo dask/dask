@@ -292,7 +292,11 @@ class _PrometheusCollector:
 
         yield CounterMetricFamily(
             "dask_scheduler_tasks_forgotten",
-            "Total number of processed tasks no longer in memory and already removed from the scheduler job queue.",
+            (
+                "Total number of processed tasks no longer in memory and already "
+                "removed from the scheduler job queue. Note task groups on the "
+                "scheduler which have all tasks in the forgotten state are not included."
+            ),
             value=task_counter.get("forgotten", 0.0),
         )
 

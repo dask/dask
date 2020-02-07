@@ -650,11 +650,11 @@ def key_split_group(x):
         elif x[0] == "<":
             return x.strip("<>").split()[0].split(".")[-1]
         else:
-            return ""
+            return key_split(x)
     elif typ is bytes:
         return key_split_group(x.decode())
     else:
-        return ""
+        return key_split(x)
 
 
 @contextmanager

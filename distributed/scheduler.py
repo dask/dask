@@ -835,7 +835,7 @@ class TaskPrefix:
 
     @property
     def types(self):
-        return set.union(*[tg.types for tg in self.groups])
+        return set().union(*[tg.types for tg in self.groups])
 
 
 class _StateLegacyMapping(Mapping):
@@ -1976,20 +1976,21 @@ class Scheduler(ServerNode):
         """ Create a new task, and associated states """
         ts = TaskState(key, spec)
         ts._state = state
-        try:
-            tg = self.task_groups[ts.group_key]
-        except KeyError:
-            tg = self.task_groups[ts.group_key] = TaskGroup(ts.group_key)
-        tg.add(ts)
         prefix_key = key_split(key)
         try:
             tp = self.task_prefixes[prefix_key]
         except KeyError:
-            tp = TaskPrefix(prefix_key)
-            tp.groups.append(tg)
-            self.task_prefixes[prefix_key] = tp
+            tp = self.task_prefixes[prefix_key] = TaskPrefix(prefix_key)
         ts.prefix = tp
-        tg.prefix = tp
+
+        group_key = ts.group_key
+        try:
+            tg = self.task_groups[group_key]
+        except KeyError:
+            tg = self.task_groups[group_key] = TaskGroup(group_key)
+            tg.prefix = tp
+            tp.groups.append(tg)
+        tg.add(ts)
         self.tasks[key] = ts
         return ts
 
@@ -4641,6 +4642,13 @@ class Scheduler(ServerNode):
                         logger.info("Plugin failed with exception", exc_info=True)
                 if ts.state == "forgotten":
                     del self.tasks[ts.key]
+
+            if ts.state == "forgotten":
+                # Remove TaskGroup if all tasks are in the forgotten state
+                tg = ts.group
+                if not any(tg.states.get(s) for s in ALL_TASK_STATES):
+                    ts.prefix.groups.remove(tg)
+                    del self.task_groups[tg.name]
 
             return recommendations
         except Exception as e:

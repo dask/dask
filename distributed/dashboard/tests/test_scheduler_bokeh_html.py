@@ -171,7 +171,7 @@ async def test_prometheus_collect_task_states(c, s, a, b):
     active_metrics, forgotten_tasks = await fetch_metrics()
     assert active_metrics.keys() == expected
     assert sum(active_metrics.values()) == 0.0
-    assert sum(forgotten_tasks) == 1.0
+    assert sum(forgotten_tasks) == 0.0
 
 
 @gen_cluster(
