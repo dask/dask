@@ -2144,14 +2144,14 @@ class Array(DaskMethodsMixin):
 
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
+    @derived_from(np.ndarray)
     def cumsum(self, axis, dtype=None, out=None):
-        """ See da.cumsum for docstring """
         from .reductions import cumsum
 
         return cumsum(self, axis, dtype, out=out)
 
+    @derived_from(np.ndarray)
     def cumprod(self, axis, dtype=None, out=None):
-        """ See da.cumprod for docstring """
         from .reductions import cumprod
 
         return cumprod(self, axis, dtype, out=out)

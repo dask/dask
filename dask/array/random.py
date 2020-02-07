@@ -16,18 +16,7 @@ from .core import (
 from .creation import arange
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, skip_doctest
-
-
-def doc_wraps(func):
-    """ Copy docstring from one function to another """
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
+from ..utils import ignoring, random_state_data, derived_from
 
 
 class RandomState(object):
@@ -193,21 +182,21 @@ class RandomState(object):
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
         return Array(graph, name, chunks + extra_chunks, meta=meta)
 
-    @doc_wraps(np.random.RandomState.beta)
+    @derived_from(np.random.RandomState)
     def beta(self, a, b, size=None, chunks="auto"):
         return self._wrap("beta", a, b, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.binomial)
+    @derived_from(np.random.RandomState)
     def binomial(self, n, p, size=None, chunks="auto"):
         return self._wrap("binomial", n, p, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.chisquare)
+    @derived_from(np.random.RandomState)
     def chisquare(self, df, size=None, chunks="auto"):
         return self._wrap("chisquare", df, size=size, chunks=chunks)
 
     with ignoring(AttributeError):
 
-        @doc_wraps(np.random.RandomState.choice)
+        @derived_from(np.random.RandomState)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
             dependencies = []
             # Normalize and validate `a`
@@ -279,52 +268,52 @@ class RandomState(object):
             )
             return Array(graph, name, chunks, dtype=dtype)
 
-    # @doc_wraps(np.random.RandomState.dirichlet)
+    # @derived_from(np.random.RandomState)
     # def dirichlet(self, alpha, size=None, chunks="auto"):
 
-    @doc_wraps(np.random.RandomState.exponential)
+    @derived_from(np.random.RandomState)
     def exponential(self, scale=1.0, size=None, chunks="auto"):
         return self._wrap("exponential", scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.f)
+    @derived_from(np.random.RandomState)
     def f(self, dfnum, dfden, size=None, chunks="auto"):
         return self._wrap("f", dfnum, dfden, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.gamma)
+    @derived_from(np.random.RandomState)
     def gamma(self, shape, scale=1.0, size=None, chunks="auto"):
         return self._wrap("gamma", shape, scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.geometric)
+    @derived_from(np.random.RandomState)
     def geometric(self, p, size=None, chunks="auto"):
         return self._wrap("geometric", p, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.gumbel)
+    @derived_from(np.random.RandomState)
     def gumbel(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
         return self._wrap("gumbel", loc, scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.hypergeometric)
+    @derived_from(np.random.RandomState)
     def hypergeometric(self, ngood, nbad, nsample, size=None, chunks="auto"):
         return self._wrap(
             "hypergeometric", ngood, nbad, nsample, size=size, chunks=chunks
         )
 
-    @doc_wraps(np.random.RandomState.laplace)
+    @derived_from(np.random.RandomState)
     def laplace(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
         return self._wrap("laplace", loc, scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.logistic)
+    @derived_from(np.random.RandomState)
     def logistic(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
         return self._wrap("logistic", loc, scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.lognormal)
+    @derived_from(np.random.RandomState)
     def lognormal(self, mean=0.0, sigma=1.0, size=None, chunks="auto"):
         return self._wrap("lognormal", mean, sigma, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.logseries)
+    @derived_from(np.random.RandomState)
     def logseries(self, p, size=None, chunks="auto"):
         return self._wrap("logseries", p, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.multinomial)
+    @derived_from(np.random.RandomState)
     def multinomial(self, n, pvals, size=None, chunks="auto"):
         return self._wrap(
             "multinomial",
@@ -335,27 +324,27 @@ class RandomState(object):
             extra_chunks=((len(pvals),),),
         )
 
-    @doc_wraps(np.random.RandomState.negative_binomial)
+    @derived_from(np.random.RandomState)
     def negative_binomial(self, n, p, size=None, chunks="auto"):
         return self._wrap("negative_binomial", n, p, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.noncentral_chisquare)
+    @derived_from(np.random.RandomState)
     def noncentral_chisquare(self, df, nonc, size=None, chunks="auto"):
         return self._wrap("noncentral_chisquare", df, nonc, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.noncentral_f)
+    @derived_from(np.random.RandomState)
     def noncentral_f(self, dfnum, dfden, nonc, size=None, chunks="auto"):
         return self._wrap("noncentral_f", dfnum, dfden, nonc, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.normal)
+    @derived_from(np.random.RandomState)
     def normal(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
         return self._wrap("normal", loc, scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.pareto)
+    @derived_from(np.random.RandomState)
     def pareto(self, a, size=None, chunks="auto"):
         return self._wrap("pareto", a, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.permutation)
+    @derived_from(np.random.RandomState)
     def permutation(self, x):
         from .slicing import shuffle_slice
 
@@ -366,77 +355,77 @@ class RandomState(object):
         self._numpy_state.shuffle(index)
         return shuffle_slice(x, index)
 
-    @doc_wraps(np.random.RandomState.poisson)
+    @derived_from(np.random.RandomState)
     def poisson(self, lam=1.0, size=None, chunks="auto"):
         return self._wrap("poisson", lam, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.power)
+    @derived_from(np.random.RandomState)
     def power(self, a, size=None, chunks="auto"):
         return self._wrap("power", a, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.randint)
+    @derived_from(np.random.RandomState)
     def randint(self, low, high=None, size=None, chunks="auto", dtype="l"):
         return self._wrap("randint", low, high, size=size, chunks=chunks, dtype=dtype)
 
-    @doc_wraps(np.random.RandomState.random_integers)
+    @derived_from(np.random.RandomState)
     def random_integers(self, low, high=None, size=None, chunks="auto"):
         return self._wrap("random_integers", low, high, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.random_sample)
+    @derived_from(np.random.RandomState)
     def random_sample(self, size=None, chunks="auto"):
         return self._wrap("random_sample", size=size, chunks=chunks)
 
     random = random_sample
 
-    @doc_wraps(np.random.RandomState.rayleigh)
+    @derived_from(np.random.RandomState)
     def rayleigh(self, scale=1.0, size=None, chunks="auto"):
         return self._wrap("rayleigh", scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.standard_cauchy)
+    @derived_from(np.random.RandomState)
     def standard_cauchy(self, size=None, chunks="auto"):
         return self._wrap("standard_cauchy", size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.standard_exponential)
+    @derived_from(np.random.RandomState)
     def standard_exponential(self, size=None, chunks="auto"):
         return self._wrap("standard_exponential", size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.standard_gamma)
+    @derived_from(np.random.RandomState)
     def standard_gamma(self, shape, size=None, chunks="auto"):
         return self._wrap("standard_gamma", shape, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.standard_normal)
+    @derived_from(np.random.RandomState)
     def standard_normal(self, size=None, chunks="auto"):
         return self._wrap("standard_normal", size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.standard_t)
+    @derived_from(np.random.RandomState)
     def standard_t(self, df, size=None, chunks="auto"):
         return self._wrap("standard_t", df, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.tomaxint)
+    @derived_from(np.random.RandomState)
     def tomaxint(self, size=None, chunks="auto"):
         return self._wrap("tomaxint", size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.triangular)
+    @derived_from(np.random.RandomState)
     def triangular(self, left, mode, right, size=None, chunks="auto"):
         return self._wrap("triangular", left, mode, right, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.uniform)
+    @derived_from(np.random.RandomState)
     def uniform(self, low=0.0, high=1.0, size=None, chunks="auto"):
         return self._wrap("uniform", low, high, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.vonmises)
+    @derived_from(np.random.RandomState)
     def vonmises(self, mu, kappa, size=None, chunks="auto"):
         return self._wrap("vonmises", mu, kappa, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.wald)
+    @derived_from(np.random.RandomState)
     def wald(self, mean, scale, size=None, chunks="auto"):
         return self._wrap("wald", mean, scale, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.weibull)
+    @derived_from(np.random.RandomState)
     def weibull(self, a, size=None, chunks="auto"):
         return self._wrap("weibull", a, size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.zipf)
+    @derived_from(np.random.RandomState)
     def zipf(self, a, size=None, chunks="auto"):
         return self._wrap("zipf", a, size=size, chunks=chunks)
 
