@@ -960,7 +960,7 @@ def test_take_along_axis():
     b = np.array([[0, 2, 1],[1, 2, 0]])
     arr = np.array([[10, 30, 20]])
     with pytest.raises(ValueError):
-        take_along_axis(arr, b, axis=0)      
-    y = take_along_axis(a, b, axis=0)
-    x = np.take_along_axis(a, b, axis=0)
+        take_along_axis(arr, b, axis=1)      
+    y = take_along_axis(a, b, axis=1)
+    x = np.take_along_axis(a, b, axis=1)
     assert_eq(x, y)
