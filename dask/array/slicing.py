@@ -1253,7 +1253,7 @@ def take_along_axis(arr,indices,axis):
     if (indices.dtype != 'int64'):
         raise IndexError('indices must be an integer array')
     if axis == 0:
-        arr = arr.flatten()
+        arr = arr.flatten
     Ni, Nk = arr.shape[:axis], arr.shape[axis + 1:]
     j = indices.shape[axis]
     out = np.empty(Ni + (j,) + Nk)
