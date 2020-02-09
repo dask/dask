@@ -300,13 +300,3 @@ your data separately for each function call.
 
 
 Every call to ``dask.delayed(train)(x, ...)`` has to hash the NumPy array ``x``, which slows things down.
-
-
-**Do**
-
-.. code-block:: python
-
-   x = np.array(...)  # some large array
-   x = dask.delayed(x)  # delay the data, hashing once
-
-   results = [dask.delayed(train)(x, i) for i in range(1000)]
