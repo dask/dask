@@ -22,7 +22,6 @@ from dask.dataframe.utils import (
     make_meta,
     has_known_categories,
     clear_known_categories,
-    PANDAS_GT_0230,
 )
 
 import pytest
@@ -560,10 +559,7 @@ def test_concat(join):
     )
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    if PANDAS_GT_0230:
-        kwargs = {"sort": False}
-    else:
-        kwargs = {}
+    kwargs = {"sort": False}
 
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2), (ddf1, ddf3, pdf1, pdf3)]:
 
