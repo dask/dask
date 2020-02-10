@@ -1024,6 +1024,35 @@ def test_value_counts():
     assert result._name != result2._name
 
 
+def test_value_counts_not_sorted():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, 3, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.x.value_counts(sort=False)
+    expected = df.x.value_counts(sort=False)
+    assert_eq(result, expected)
+    result2 = ddf.x.value_counts(split_every=2)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+
+def test_value_counts_with_dropna():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    if PANDAS_VERSION < "1.1.0":
+        with pytest.raises(NotImplementedError, match="dropna is not a valid argument"):
+            ddf.x.value_counts(dropna=False)
+        return
+
+    # If https://github.com/pandas-dev/pandas/pull/30584 doesn't get in
+    # before 1.1.0 then this will fail and the version check needs to be changed
+    result = ddf.x.value_counts(dropna=False)
+    expected = df.x.value_counts(dropna=False)
+    assert_eq(result, expected)
+    result2 = ddf.x.value_counts(split_every=2)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+
 def test_unique():
     pdf = pd.DataFrame(
         {

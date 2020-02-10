@@ -296,8 +296,8 @@ def value_counts_aggregate(x, sort=True, ascending=False, dropna=None):
     return out
 
 
-def value_counts_combine(x, dropna=None):
-    value_counts_aggregate(x, sort=False, dropna=dropna)
+def value_counts_combine(x, dropna=None, ascending=False):
+    return value_counts_aggregate(x, sort=False, dropna=dropna)
 
 
 def nbytes(x):

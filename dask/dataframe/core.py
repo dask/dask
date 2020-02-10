@@ -2950,6 +2950,11 @@ Dask Name: {name}, {task} tasks""".format(
     def value_counts(
         self, split_every=None, split_out=1, sort=None, ascending=False, dropna=None
     ):
+        if dropna is not None and PANDAS_VERSION < "1.1.0":
+            raise NotImplementedError(
+                "dropna is not a valid argument for dask.dataframe.value_counts "
+                "if pandas < 1.1.0"
+            )
         return aca(
             self,
             chunk=M.value_counts,
