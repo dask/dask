@@ -2947,7 +2947,7 @@ Dask Name: {name}, {task} tasks""".format(
         return self.drop_duplicates(split_every=split_every).count()
 
     @derived_from(pd.Series)
-    def value_counts(self, split_every=None, split_out=1):
+    def value_counts(self, split_every=None, split_out=1, sort=True, ascending=False, dropna=True):
         return aca(
             self,
             chunk=M.value_counts,
@@ -2958,6 +2958,9 @@ Dask Name: {name}, {task} tasks""".format(
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            sort=sort,
+            ascending=ascending,
+            dropna=dropna,
         )
 
     @derived_from(pd.Series)
