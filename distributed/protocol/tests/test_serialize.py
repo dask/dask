@@ -359,3 +359,18 @@ def test_serialize_raises():
         deserialize(*serialize(Foo()))
 
     assert "Hello-123" in str(info.value)
+
+
+@pytest.mark.asyncio
+async def test_profile_nested_sizeof():
+    # https://github.com/dask/distributed/issues/1674
+    n = 500
+    original = outer = {}
+    inner = {}
+
+    for i in range(n):
+        outer["children"] = inner
+        outer, inner = inner, {}
+
+    msg = {"data": original}
+    frames = await to_frames(msg)
