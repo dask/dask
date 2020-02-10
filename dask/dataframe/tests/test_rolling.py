@@ -146,7 +146,11 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     # DataFrame
     prolling = df.rolling(window, center=center)
     drolling = ddf.rolling(window, center=center)
-    kwargs = {"raw": False}
+    if method == "apply":
+        kwargs = {"raw": False}
+    else:
+        kwargs = {}
+
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
