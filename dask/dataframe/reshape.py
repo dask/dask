@@ -158,6 +158,7 @@ def get_dummies(
         columns=columns,
         sparse=sparse,
         drop_first=drop_first,
+        dtype=dtype,
         **kwargs
     )
 
@@ -171,6 +172,7 @@ def get_dummies(
         sparse=sparse,
         drop_first=drop_first,
         meta=meta,
+        dtype=dtype,
         **kwargs
     )
 
