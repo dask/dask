@@ -59,6 +59,8 @@ from .utils import (
     key_split_group,
     empty_context,
     tmpfile,
+    format_bytes,
+    format_time,
     TimeoutError,
 )
 from .utils_comm import scatter_to_workers, gather_from_workers, retry_operation
@@ -4982,7 +4984,7 @@ class Scheduler(ServerNode):
 
         return {"counts": counts, "keys": keys}
 
-    async def performance_report(self, comm=None, start=None):
+    async def performance_report(self, comm=None, start=None, code=""):
         # Profiles
         compute, scheduler, workers = await asyncio.gather(
             *[
@@ -5021,8 +5023,39 @@ class Scheduler(ServerNode):
         bandwidth_types = BandwidthTypes(self, sizing_mode="stretch_both")
         bandwidth_types.update()
 
-        from bokeh.models import Panel, Tabs
+        from bokeh.models import Panel, Tabs, Div
 
+        # HTML
+        html = """
+        <h1> Dask Performance Report </h1>
+
+        <i> Select different tabs on the top for additional information </i>
+
+        <h2> Duration: {time} </h2>
+
+        <h2> Scheduler Information </h2>
+        <ul>
+          <li> Address: {address} </li>
+          <li> Workers: {nworkers} </li>
+          <li> Threads: {threads} </li>
+          <li> Memory: {memory} </li>
+        </ul>
+
+        <h2> Calling Code </h2>
+        <pre>
+{code}
+        </pre>
+        """.format(
+            time=format_time(time() - start),
+            address=self.address,
+            nworkers=len(self.workers),
+            threads=sum(w.nthreads for w in self.workers.values()),
+            memory=format_bytes(sum(w.memory_limit for w in self.workers.values())),
+            code=code,
+        )
+        html = Div(text=html)
+
+        html = Panel(child=html, title="Summary")
         compute = Panel(child=compute, title="Worker Profile (compute)")
         workers = Panel(child=workers, title="Worker Profile (administrative)")
         scheduler = Panel(child=scheduler, title="Scheduler Profile (administrative)")
@@ -5034,6 +5067,7 @@ class Scheduler(ServerNode):
 
         tabs = Tabs(
             tabs=[
+                html,
                 task_stream,
                 compute,
                 workers,

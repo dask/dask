@@ -9,7 +9,7 @@ import copy
 import errno
 from functools import partial
 import html
-from inspect import isawaitable
+import inspect
 import itertools
 import json
 import logging
@@ -1189,7 +1189,7 @@ class Client(Node):
                         try:
                             handler = self._stream_handlers[op]
                             result = handler(**msg)
-                            if isawaitable(result):
+                            if inspect.isawaitable(result):
                                 await result
                         except Exception as e:
                             logger.exception(e)
@@ -4593,8 +4593,13 @@ class performance_report:
         self.start = time()
         await get_client().get_task_stream(start=0, stop=0)  # ensure plugin
 
-    async def __aexit__(self, typ, value, traceback):
-        data = await get_client().scheduler.performance_report(start=self.start)
+    async def __aexit__(self, typ, value, traceback, code=None):
+        if not code:
+            frame = inspect.currentframe().f_back
+            code = inspect.getsource(frame)
+        data = await get_client().scheduler.performance_report(
+            start=self.start, code=code
+        )
         with open(self.filename, "w") as f:
             f.write(data)
 
@@ -4602,7 +4607,9 @@ class performance_report:
         get_client().sync(self.__aenter__)
 
     def __exit__(self, typ, value, traceback):
-        get_client().sync(self.__aexit__, type, value, traceback)
+        frame = inspect.currentframe().f_back
+        code = inspect.getsource(frame)
+        get_client().sync(self.__aexit__, type, value, traceback, code=code)
 
 
 @contextmanager
