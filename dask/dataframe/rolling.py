@@ -411,8 +411,8 @@ class Rolling(object):
             raw=raw,
             engine=engine,
             engine_kwargs=engine_kwargs,
-            args=None,
-            kwargs=None,
+            args=args,
+            kwargs=kwargs,
         )
 
     @derived_from(pd_Rolling)
