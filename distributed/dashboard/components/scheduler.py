@@ -1556,7 +1556,7 @@ class WorkerTable(DashboardComponent):
             point_policy="follow_mouse",
             tooltips="""
                 <div>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@worker: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">Worker (@name): </span>
                   <span style="font-size: 10px; font-family: Monaco, monospace;">@memory_percent</span>
                 </div>
                 """,
@@ -1585,7 +1585,7 @@ class WorkerTable(DashboardComponent):
             point_policy="follow_mouse",
             tooltips="""
                 <div>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@worker: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">Worker (@name): </span>
                   <span style="font-size: 10px; font-family: Monaco, monospace;">@cpu</span>
                 </div>
                 """,
@@ -1640,6 +1640,17 @@ class WorkerTable(DashboardComponent):
             data["cpu"][-1] = ws.metrics["cpu"] / 100.0
             data["cpu_fraction"][-1] = ws.metrics["cpu"] / 100.0 / ws.nthreads
             data["nthreads"][-1] = ws.nthreads
+
+        for name in self.names + self.extra_names:
+            if name == "name":
+                data[name].insert(
+                    0, "Total ({nworkers})".format(nworkers=len(data[name]))
+                )
+                continue
+            try:
+                data[name].insert(0, sum(data[name]))
+            except TypeError:
+                data[name].insert(0, None)
 
         self.source.data.update(data)
 

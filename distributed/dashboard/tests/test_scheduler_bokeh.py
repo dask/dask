@@ -300,10 +300,13 @@ def test_WorkerTable(c, s, a, b):
         for L in wt.source.data.values()
         for v in L
     ), {type(v).__name__ for L in wt.source.data.values() for v in L}
-    assert all(len(v) == 2 for v in wt.source.data.values())
+
+    assert all(len(v) == 3 for v in wt.source.data.values())
+    assert wt.source.data["name"][0] == "Total (2)"
 
     nthreads = wt.source.data["nthreads"]
     assert all(nthreads)
+    assert nthreads[0] == nthreads[1] + nthreads[2]
 
 
 @gen_cluster(client=True)
@@ -334,7 +337,7 @@ def test_WorkerTable_custom_metrics(c, s, a, b):
         assert name in data
 
     assert all(data.values())
-    assert all(len(v) == 2 for v in data.values())
+    assert all(len(v) == 3 for v in data.values())
     my_index = data["address"].index(a.address), data["address"].index(b.address)
     assert [data["metric_port"][i] for i in my_index] == [a.port, b.port]
     assert [data["metric_address"][i] for i in my_index] == [a.address, b.address]
@@ -359,7 +362,7 @@ def test_WorkerTable_different_metrics(c, s, a, b):
     assert "metric_a" in data
     assert "metric_b" in data
     assert all(data.values())
-    assert all(len(v) == 2 for v in data.values())
+    assert all(len(v) == 3 for v in data.values())
     my_index = data["address"].index(a.address), data["address"].index(b.address)
     assert [data["metric_a"][i] for i in my_index] == [a.port, None]
     assert [data["metric_b"][i] for i in my_index] == [None, b.port]
@@ -379,7 +382,7 @@ def test_WorkerTable_metrics_with_different_metric_2(c, s, a, b):
 
     assert "metric_a" in data
     assert all(data.values())
-    assert all(len(v) == 2 for v in data.values())
+    assert all(len(v) == 3 for v in data.values())
     my_index = data["address"].index(a.address), data["address"].index(b.address)
     assert [data["metric_a"][i] for i in my_index] == [a.port, None]
 
