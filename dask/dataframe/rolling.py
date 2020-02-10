@@ -7,7 +7,7 @@ from numbers import Integral
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
 from ..highlevelgraph import HighLevelGraph
-from .compat import PANDAS_GT_100
+from ._compat import PANDAS_GT_100
 from .core import _emulate
 from .utils import make_meta
 from . import methods
