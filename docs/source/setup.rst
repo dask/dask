@@ -95,3 +95,4 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/adaptive.rst
    setup/docker.rst
    setup/custom-startup.rst
+   setup/prometheus.rst
