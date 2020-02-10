@@ -286,9 +286,10 @@ def value_counts_combine(x, dropna=True):
 
 
 def value_counts_aggregate(x, sort=True, ascending=False, dropna=True):
+    out= x.groupby(level=0, dropna=dropna).sum()
     if sort:
-        return x.groupby(level=0, dropna=dropna).sum().sort_values(ascending=ascending)
-    return x.groupby(level=0, dropna=dropna).sum()
+        return out.sort_values(ascending=ascending)
+    return out
 
 
 def nbytes(x):
