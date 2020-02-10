@@ -2948,7 +2948,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, split_every=None, split_out=1, sort=True, ascending=False, dropna=True
+        self, split_every=None, split_out=1, sort=None, ascending=False, dropna=None
     ):
         return aca(
             self,
