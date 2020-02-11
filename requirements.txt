@@ -4,7 +4,7 @@ dask >= 2.9.0
 msgpack
 psutil >= 5.0
 sortedcontainers !=2.0.0, !=2.0.1
-tblib
+tblib >= 1.6.0
 toolz >= 0.7.4
 tornado >= 5
 zict >= 0.1.3
