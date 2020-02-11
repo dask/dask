@@ -275,6 +275,12 @@ class WorkerState:
 
         self.extra = extra or {}
 
+    def __hash__(self):
+        return hash((self.name, self.host))
+
+    def __eq__(self, other):
+        return type(self) == type(other) and hash(self) == hash(other)
+
     @property
     def host(self):
         return get_address_host(self.address)
@@ -2603,7 +2609,7 @@ class Scheduler(ServerNode):
         if ts is None:
             return
         ws = self.workers[worker]
-        if ts.processing_on is not ws:
+        if ts.processing_on != ws:
             return
         r = self.stimulus_missing_data(key=key, ensure=False, **msg)
         self.transitions(r)
@@ -4062,7 +4068,7 @@ class Scheduler(ServerNode):
             if ws is None:
                 return {key: "released"}
 
-            if ws is not ts.processing_on:  # someone else has this task
+            if ws != ts.processing_on:  # someone else has this task
                 logger.info(
                     "Unexpected worker completed task, likely due to"
                     " work stealing.  Expected: %s, Got: %s, Key: %s",
