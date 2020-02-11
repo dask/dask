@@ -7,7 +7,7 @@ from numbers import Integral
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
 from ..highlevelgraph import HighLevelGraph
-from ._compat import PANDAS_GT_100
+from ._compat import PANDAS_GT_100, PANDAS_VERSION
 from .core import _emulate
 from .utils import make_meta
 from . import methods
@@ -318,7 +318,7 @@ class Rolling(object):
                 *args,
                 token=method_name,
                 meta=meta,
-                **kwargs
+                **kwargs,
             )
         # Convert window to overlap
         if self.center:
@@ -340,7 +340,7 @@ class Rolling(object):
             *args,
             token=method_name,
             meta=meta,
-            **kwargs
+            **kwargs,
         )
 
     @derived_from(pd_Rolling)
@@ -401,18 +401,23 @@ class Rolling(object):
         args=None,
         kwargs=None,
     ):
+        compat_kwargs = {}
+        kwargs = kwargs or {}
+        args = args or ()
+
+        if PANDAS_GT_100:
+            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
+        elif engine != "cython" or engine_kwargs is not None:
+            raise NotImplementedError(
+                f"Specifying the engine requires pandas>=1.0.0. Version '{PANDAS_VERSION}' installed."
+            )
+
         if raw is None and PANDAS_GT_100:
             # pandas changed the default
             raw = False
 
         return self._call_method(
-            "apply",
-            func,
-            raw=raw,
-            engine=engine,
-            engine_kwargs=engine_kwargs,
-            args=args,
-            kwargs=kwargs,
+            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
         )
 
     @derived_from(pd_Rolling)

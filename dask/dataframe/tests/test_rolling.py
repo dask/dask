@@ -269,7 +269,10 @@ def test_time_rolling_constructor():
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
     # DataFrame
-    kwargs = {"raw": False}
+    if method == "apply":
+        kwargs = {"raw": False}
+    else:
+        kwargs = {}
     prolling = ts.rolling(window)
     drolling = dts.rolling(window)
     assert_eq(
@@ -391,3 +394,11 @@ def test_rolling_numba_engine():
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
     )
+
+
+@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas<1.0.0")
+def test_rolling_apply_numba_raises():
+    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with pytest.raises(NotImplementedError, match="pandas>=1.0.0"):
+        ddf.rolling(3).apply(lambda x: x.sum(), engine="numba", raw=True)
