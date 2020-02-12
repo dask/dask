@@ -73,7 +73,7 @@ used.
                           allow_other_workers=True)
 
 Additionally the ``scatter`` function supports a ``broadcast=`` keyword
-argument to enforce that the all data is sent to all workers rather than
+argument to enforce that all the data is sent to all workers rather than
 round-robined.  If new workers arrive they will not automatically receive this
 data.
 
