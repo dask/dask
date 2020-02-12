@@ -199,7 +199,7 @@ class Cluster:
         except KeyError:
             return ""
         else:
-            host = self.scheduler_address.split("://")[1].split(":")[0]
+            host = self.scheduler_address.split("://")[1].split("/")[0].split(":")[0]
             return format_dashboard_link(host, port)
 
     def _widget_status(self):
