@@ -393,6 +393,13 @@ redirect_files = [
     ("setup.html", "https://docs.dask.org/en/latest/setup.html"),
     ("ec2.html", "https://docs.dask.org/en/latest/setup/cloud.html"),
     ("configuration.html", "https://docs.dask.org/en/latest/configuration.html"),
+    (
+        "local-cluster.html",
+        "https://docs.dask.org/en/latest/setup/single-distributed.html",
+    ),
+    ("adaptive.html", "https://docs.dask.org/en/latest/setup/adaptive.html"),
+    ("prometheus.html", "https://docs.dask.org/en/latest/setup/prometheus.html"),
+    ("web.html", "https://docs.dask.org/en/latest/diagnostics-distributed.html"),
 ]
 
 
