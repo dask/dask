@@ -1,5 +1,4 @@
 import asyncio
-from tornado import gen
 import functools
 import threading
 from queue import Queue
@@ -169,7 +168,6 @@ class Actor(WrappedKey):
                     attribute=key, actor=self.key
                 )
                 return x["result"]
-                raise gen.Return(x["result"])
 
             return self._sync(get_actor_attribute_from_worker)
 

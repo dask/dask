@@ -1909,7 +1909,7 @@ class Client(Node):
             isinstance(k, (bytes, str)) for k in data
         ):
             d = await self._scatter(keymap(tokey, data), workers, broadcast)
-            raise gen.Return({k: d[tokey(k)] for k in data})
+            return {k: d[tokey(k)] for k in data}
 
         if isinstance(data, type(range(0))):
             data = list(data)
