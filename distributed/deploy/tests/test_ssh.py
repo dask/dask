@@ -38,14 +38,14 @@ async def test_keywords():
             "memory_limit": "2 GiB",
             "death_timeout": "5s",
         },
-        scheduler_options={"idle_timeout": "5s", "port": 0},
+        scheduler_options={"idle_timeout": "10s", "port": 0},
     ) as cluster:
         async with Client(cluster, asynchronous=True) as client:
             assert (
                 await client.run_on_scheduler(
                     lambda dask_scheduler: dask_scheduler.idle_timeout
                 )
-            ) == 5
+            ) == 10
             d = client.scheduler_info()["workers"]
             assert all(v["nthreads"] == 2 for v in d.values())
 

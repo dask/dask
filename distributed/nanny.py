@@ -597,6 +597,7 @@ class WorkerProcess:
                 "executor_wait": executor_wait,
             }
         )
+        await asyncio.sleep(0)  # otherwise we get broken pipe errors
         self.child_stop_q.close()
 
         while process.is_alive() and loop.time() < deadline:
