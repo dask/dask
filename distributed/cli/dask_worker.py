@@ -151,12 +151,12 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 )
 @click.option("--pid-file", type=str, default="", help="File to write the process PID")
 @click.option(
-    "--local-directory", default="", type=str, help="Directory to place worker files"
+    "--local-directory", default=None, type=str, help="Directory to place worker files"
 )
 @click.option(
     "--resources",
     type=str,
-    default="",
+    default=None,
     help='Resources for task constraints like "GPU=2 MEM=10e9". '
     "Resources are applied separately to each worker process "
     "(only relevant when starting multiple worker processes with '--nprocs').",
@@ -164,7 +164,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option(
     "--scheduler-file",
     type=str,
-    default="",
+    default=None,
     help="Filename to JSON encoded scheduler information. "
     "Use with dask-scheduler --scheduler-file",
 )
@@ -180,7 +180,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option(
     "--lifetime",
     type=str,
-    default="",
+    default=None,
     help="If provided, shut down the worker after this duration.",
 )
 @click.option(
