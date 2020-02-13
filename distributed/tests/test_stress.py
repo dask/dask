@@ -1,4 +1,3 @@
-from concurrent.futures import CancelledError
 from operator import add
 import random
 import sys
@@ -12,7 +11,7 @@ from toolz import concat, sliding_window
 from distributed import Client, wait, Nanny
 from distributed.config import config
 from distributed.metrics import time
-from distributed.utils import All, ignoring
+from distributed.utils import All, ignoring, CancelledError
 from distributed.utils_test import (
     gen_cluster,
     cluster,

@@ -8,7 +8,6 @@ See :ref:`communications` for more.
 import ucp
 
 import logging
-import concurrent
 
 import dask
 import numpy as np
@@ -17,7 +16,7 @@ from .addressing import parse_host_port, unparse_host_port
 from .core import Comm, Connector, Listener, CommClosedError
 from .registry import Backend, backends
 from .utils import ensure_concrete_host, to_frames, from_frames
-from ..utils import ensure_ip, get_ip, get_ipv6, nbytes, log_errors
+from ..utils import ensure_ip, get_ip, get_ipv6, nbytes, log_errors, CancelledError
 
 import dask
 import numpy as np
@@ -170,10 +169,7 @@ class UCX(Comm):
                 await self.ep.recv(is_cudas)
                 sizes = np.empty(nframes[0], dtype=np.uint64)
                 await self.ep.recv(sizes)
-            except (
-                ucp.exceptions.UCXBaseException,
-                concurrent.futures._base.CancelledError,
-            ):
+            except (ucp.exceptions.UCXBaseException, CancelledError):
                 self.abort()
                 raise CommClosedError("While reading, the connection was closed")
             else:

@@ -2,6 +2,7 @@ from functools import partial
 import gc
 from operator import add
 import weakref
+import sys
 
 import pytest
 
@@ -23,6 +24,11 @@ def test_pickle_numpy():
     assert (loads(dumps(x)) == x).all()
 
 
+@pytest.mark.xfail(
+    sys.version_info[:2] == (3, 8),
+    reason="Sporadic failure on Python 3.8",
+    strict=False,
+)
 def test_pickle_functions():
     def make_closure():
         value = 1

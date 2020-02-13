@@ -1,6 +1,5 @@
 import asyncio
 from collections import defaultdict, deque
-from concurrent.futures import CancelledError
 from functools import partial
 from inspect import isawaitable
 import logging
@@ -35,6 +34,7 @@ from .utils import (
     PeriodicCallback,
     parse_timedelta,
     has_keyword,
+    CancelledError,
 )
 from . import protocol
 

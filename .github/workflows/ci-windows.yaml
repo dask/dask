@@ -7,7 +7,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        python-version: ["3.6", "3.7"]
+        python-version: ["3.6", "3.7", "3.8"]
 
     steps:
       - name: Checkout source
@@ -21,6 +21,19 @@ jobs:
           environment-file: continuous_integration/environment.yml
           activate-environment: testenv
           auto-activate-base: false
+
+      - name: Install tornado
+        shell: bash -l {0}
+        run: |
+          if [[ "${{ matrix.python-version }}" = "3.8" ]]; then
+            conda install -c conda-forge tornado=6
+          else
+            conda install -c conda-forge tornado=5
+          fi
+
+      - name: List packages in environment
+        shell: bash -l {0}
+        run: conda list
 
       - name: Install distributed from source
         shell: bash -l {0}

@@ -3,7 +3,7 @@ from asyncio import TimeoutError
 import atexit
 import click
 from collections import deque, OrderedDict, UserDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, CancelledError  # noqa: F401
 from contextlib import contextmanager
 import functools
 from hashlib import md5
@@ -1212,11 +1212,27 @@ if tornado.version_info[0] >= 5:
                 is_kernel_and_no_running_loop = True
 
         if not is_kernel_and_no_running_loop:
-            import tornado.platform.asyncio
 
-            asyncio.set_event_loop_policy(
-                tornado.platform.asyncio.AnyThreadEventLoopPolicy()
-            )
+            # TODO: Use tornado's AnyThreadEventLoopPolicy, instead of class below,
+            # once tornado > 6.0.3 is available.
+            if WINDOWS and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+                # WindowsProactorEventLoopPolicy is not compatible with tornado 6
+                # fallback to the pre-3.8 default of Selector
+                # https://github.com/tornadoweb/tornado/issues/2608
+                BaseEventLoopPolicy = asyncio.WindowsSelectorEventLoopPolicy
+            else:
+                BaseEventLoopPolicy = asyncio.DefaultEventLoopPolicy
+
+            class AnyThreadEventLoopPolicy(BaseEventLoopPolicy):
+                def get_event_loop(self):
+                    try:
+                        return super().get_event_loop()
+                    except (RuntimeError, AssertionError):
+                        loop = self.new_event_loop()
+                        self.set_event_loop(loop)
+                        return loop
+
+            asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
 
 
 @functools.lru_cache(1000)

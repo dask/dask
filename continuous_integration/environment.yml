@@ -21,7 +21,6 @@ dependencies:
   - requests
   - toolz
   - tblib
-  - tornado=5
   - zict
   - fsspec
   - pip

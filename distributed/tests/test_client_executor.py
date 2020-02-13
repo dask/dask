@@ -2,7 +2,6 @@ import random
 import time
 
 from concurrent.futures import (
-    CancelledError,
     TimeoutError,
     Future,
     wait,
@@ -15,6 +14,7 @@ import pytest
 from toolz import take
 
 from distributed import Client
+from distributed.utils import CancelledError
 from distributed.utils_test import (
     slowinc,
     slowadd,

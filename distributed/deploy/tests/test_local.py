@@ -7,9 +7,11 @@ from time import sleep
 from threading import Lock
 import unittest
 import weakref
+from distutils.version import LooseVersion
 
 from tornado.ioloop import IOLoop
 from tornado import gen
+import tornado
 import pytest
 
 from dask.system import CPU_COUNT
@@ -451,6 +453,11 @@ async def test_scale_up_and_down():
             assert len(cluster.workers) == 1
 
 
+@pytest.mark.xfail(
+    sys.version_info >= (3, 8) and LooseVersion(tornado.version) < "6.0.3",
+    reason="Known issue with Python 3.8 and Tornado < 6.0.3. See https://github.com/tornadoweb/tornado/pull/2683.",
+    strict=True,
+)
 def test_silent_startup():
     code = """if 1:
         from time import sleep

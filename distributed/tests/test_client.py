@@ -1,6 +1,5 @@
 import asyncio
 from collections import deque
-from concurrent.futures import CancelledError
 import gc
 import logging
 from operator import add
@@ -38,6 +37,7 @@ from distributed import (
     profile,
     performance_report,
     TimeoutError,
+    CancelledError,
 )
 from distributed.comm import CommClosedError
 from distributed.client import (

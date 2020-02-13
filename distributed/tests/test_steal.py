@@ -621,6 +621,11 @@ def test_dont_steal_long_running_tasks(c, s, a, b):
         ) <= 1
 
 
+@pytest.mark.xfail(
+    sys.version_info[:2] == (3, 8),
+    reason="Sporadic failure on Python 3.8",
+    strict=False,
+)
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 5)] * 2)
 def test_cleanup_repeated_tasks(c, s, a, b):
     class Foo:

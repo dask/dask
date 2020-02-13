@@ -2,7 +2,7 @@ import asyncio
 import atexit
 from collections import defaultdict
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor, CancelledError
+from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures._base import DoneAndNotDoneFutures
 from contextlib import contextmanager
 import copy
@@ -82,6 +82,7 @@ from .utils import (
     has_keyword,
     format_dashboard_link,
     TimeoutError,
+    CancelledError,
 )
 from . import versions as version_module
 
@@ -1248,6 +1249,7 @@ class Client(Node):
         """ Send close signal and wait until scheduler completes """
         if self.status == "closed":
             return
+
         self.status = "closing"
 
         for pc in self._periodic_callbacks.values():
@@ -1273,7 +1275,7 @@ class Client(Node):
 
             # Give the scheduler 'stream-closed' message 100ms to come through
             # This makes the shutdown slightly smoother and quieter
-            with ignoring(AttributeError, CancelledError, TimeoutError):
+            with ignoring(AttributeError, asyncio.CancelledError, TimeoutError):
                 await asyncio.wait_for(
                     asyncio.shield(self._handle_scheduler_coroutine), 0.1
                 )
@@ -1310,7 +1312,7 @@ class Client(Node):
             del self.coroutines[:]
 
             if not fast:
-                with ignoring(TimeoutError):
+                with ignoring(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(asyncio.gather(*coroutines), 2)
 
             with ignoring(AttributeError):

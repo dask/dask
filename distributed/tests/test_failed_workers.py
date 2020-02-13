@@ -1,4 +1,3 @@
-from concurrent.futures import CancelledError
 import os
 import random
 from time import sleep
@@ -12,7 +11,7 @@ from distributed import Client, Nanny, wait
 from distributed.comm import CommClosedError
 from distributed.client import wait
 from distributed.metrics import time
-from distributed.utils import sync, ignoring
+from distributed.utils import sync, ignoring, CancelledError
 from distributed.utils_test import (
     gen_cluster,
     cluster,
