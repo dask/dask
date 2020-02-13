@@ -122,9 +122,9 @@
                   <th> Recommended Action </th>
               </thead>
 
-              {% for key, start, finish, recommendations, time in scheduler.story(Task) %}
+              {% for key, start, finish, recommendations, transition_time in scheduler.story(Task) %}
               <tr>
-                  <td> {{ fromtimestamp(time) }} </td>
+                  <td> {{ fromtimestamp(transition_time) }} </td>
                   <td> <a href="{{ url_escape(key) }}.html">{{key}}</a> </td>
                   <td> {{ start }} </td>
                   <td> {{ finish }} </td>

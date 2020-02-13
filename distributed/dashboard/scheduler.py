@@ -50,12 +50,14 @@ from .worker import counters_doc
 from .proxy import GlobalProxyHandler
 from .utils import RequestHandler, redirect
 from ..diagnostics.websocket import WebsocketPlugin
+from ..metrics import time
 from ..utils import log_errors, format_time
 from ..scheduler import ALL_TASK_STATES
 
 
 ns = {
-    func.__name__: func for func in [format_bytes, format_time, datetime.fromtimestamp]
+    func.__name__: func
+    for func in [format_bytes, format_time, datetime.fromtimestamp, time]
 }
 
 rel_path_statics = {"rel_path_statics": "../../"}
