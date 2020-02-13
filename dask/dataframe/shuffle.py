@@ -37,6 +37,7 @@ def set_index(
     **kwargs
 ):
     """ See _Frame.set_index for docstring """
+    is_multi = isinstance(index, list)
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
@@ -47,12 +48,6 @@ def set_index(
             and not isinstance(index[0], list)  # if index = [["a"]], leave it that way
         ):
             index = index[0]
-        else:
-            raise NotImplementedError(
-                "Dask dataframe does not yet support multi-indexes.\n"
-                "You tried to index with this index: %s\n"
-                "Indexes must be single columns only." % str(index)
-            )
 
     if npartitions == "auto":
         repartition = True
@@ -85,6 +80,9 @@ def set_index(
             divisions, sizes, mins, maxes, optimize_graph=False
         )
         divisions = divisions.tolist()
+        if is_multi:
+            mins = [tuple(x) for x in mins]
+            maxes = [tuple(x) for x in maxes]
 
         empty_dataframe_detected = pd.isnull(divisions).all()
         if repartition or empty_dataframe_detected:
@@ -104,7 +102,7 @@ def set_index(
 
         mins = remove_nans(mins)
         maxes = remove_nans(maxes)
-        if pd.api.types.is_categorical_dtype(index2.dtype):
+        if index2.ndim == 1 and pd.api.types.is_categorical_dtype(index2.dtype):
             dtype = index2.dtype
             mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
             maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
@@ -142,11 +140,21 @@ def remove_nans(divisions):
     divisions = list(divisions)
 
     for i in range(len(divisions) - 2, -1, -1):
-        if pd.isnull(divisions[i]):
+        # TODO(MultiIndex): avoid tuples
+        di = divisions[i]
+        isscalar = np.isscalar(di)
+
+        if isscalar and pd.isna(di):
             divisions[i] = divisions[i + 1]
 
     for i in range(len(divisions) - 1, -1, -1):
-        if not pd.isnull(divisions[i]):
+        # TODO(MultiIndex): avoid tuples
+        di = divisions[i]
+        isna = pd.isna(di)
+        isscalar = np.isscalar(di)
+
+        if (not isscalar and not pd.isna(di)) or (not isscalar and isna.all()):
+            # TODO(MultiIndex): test
             for j in range(i + 1, len(divisions)):
                 divisions[j] = divisions[i]
             break
@@ -193,8 +201,13 @@ def set_partition(
         # pd.isna considers tuples to be scalars. Convert to a list.
         divisions = list(divisions)
 
+    multi = isinstance(index, list)
+
     if np.isscalar(index):
         dtype = df[index].dtype
+    elif multi:
+        # TODO: avoid tuples
+        dtype = object
     else:
         dtype = index.dtype
 
@@ -204,7 +217,7 @@ def set_partition(
     else:
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
-    if np.isscalar(index):
+    if np.isscalar(index) or isinstance(index, list):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
@@ -225,7 +238,7 @@ def set_partition(
         ignore_index=True,
     )
 
-    if np.isscalar(index):
+    if np.isscalar(index) or isinstance(index, list):
         df4 = df3.map_partitions(
             set_index_post_scalar,
             index_name=index,
@@ -666,6 +679,9 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions):
+    if s.ndim > 1:
+        # TODO(MultiIndex): avoid tuples
+        s = pd.Series(list(s.itertuples(index=False, name=None)))
     partitions = divisions.searchsorted(s, side="right") - 1
     partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions

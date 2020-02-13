@@ -18,39 +18,65 @@ from dask.dataframe.utils import (
 
 
 @pytest.mark.slow
-def test_arithmetics():
-    dsk = {
-        ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
-        ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
-        ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
-    }
-    meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    pdf1 = ddf1.compute()
+@pytest.mark.parametrize("multi", [False, True])
+def test_arithmetics(multi):
+    numbers = list(range(10))
+    if multi:
+        numbers = [(x,) for x in numbers]
+    indices1 = [0, 1, 3, 5, 6, 8, 9, 9, 9]
+    divisions0 = [numbers[i] for i in [0, 4, 9, 9]]
+    divisions1 = [numbers[i] for i in [0, 1, 3, 6, 9]]
+    divisions2 = [numbers[i] for i in [0, 3, 6, 7]]
+    divisions3 = [numbers[i] for i in [0, 7]]
+    divisions4 = [numbers[i] for i in [0, 2, 4, 5, 7]]
+    divisions5 = [numbers[i] for i in [0, 9]]
+    divisions6 = [numbers[i] for i in [0, 3, 9]]
+    divisions7 = [numbers[i] for i in [0, 5, 9]]
 
-    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": [5, 6, 7, 8, 1, 2, 3, 4]})
-    pdf3 = pd.DataFrame({"a": [5, 6, 7, 8, 4, 3, 2, 1], "b": [2, 4, 5, 3, 4, 2, 1, 0]})
+    if multi:
+        idx = pd.MultiIndex.from_tuples([numbers[i] for i in indices1])
+        idx2 = pd.MultiIndex.from_tuples([numbers[i] for i in range(8)])
+    else:
+        idx = pd.Index([numbers[i] for i in indices1])
+        idx2 = pd.Index(list(range(8)))
+
+    dsk = {
+        ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=idx[:3]),
+        ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=idx[3:6]),
+        ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=idx[6:]),
+    }
+    meta = make_meta({"a": "i8", "b": "i8"}, index=idx[:0])
+    ddf1 = dd.DataFrame(dsk, "x", meta, divisions0)
+    pdf1 = ddf1.compute()
+    assert_eq(ddf1, pdf1)
+
+    pdf2 = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": [5, 6, 7, 8, 1, 2, 3, 4]}, index=idx2
+    )
+    pdf3 = pd.DataFrame(
+        {"a": [5, 6, 7, 8, 4, 3, 2, 1], "b": [2, 4, 5, 3, 4, 2, 1, 0]}, index=idx2
+    )
     ddf2 = dd.from_pandas(pdf2, 3)
     ddf3 = dd.from_pandas(pdf3, 2)
 
     dsk4 = {
-        ("y", 0): pd.DataFrame({"a": [3, 2, 1], "b": [7, 8, 9]}, index=[0, 1, 3]),
-        ("y", 1): pd.DataFrame({"a": [5, 2, 8], "b": [4, 2, 3]}, index=[5, 6, 8]),
-        ("y", 2): pd.DataFrame({"a": [1, 4, 10], "b": [1, 0, 5]}, index=[9, 9, 9]),
+        ("y", 0): pd.DataFrame({"a": [3, 2, 1], "b": [7, 8, 9]}, index=idx[:3]),
+        ("y", 1): pd.DataFrame({"a": [5, 2, 8], "b": [4, 2, 3]}, index=idx[3:6]),
+        ("y", 2): pd.DataFrame({"a": [1, 4, 10], "b": [1, 0, 5]}, index=idx[6:]),
     }
-    ddf4 = dd.DataFrame(dsk4, "y", meta, [0, 4, 9, 9])
+    ddf4 = dd.DataFrame(dsk4, "y", meta, divisions0)
     pdf4 = ddf4.compute()
 
     # Arithmetics
     cases = [
         (ddf1, ddf1, pdf1, pdf1),
-        (ddf1, ddf1.repartition([0, 1, 3, 6, 9]), pdf1, pdf1),
+        (ddf1, ddf1.repartition(divisions1), pdf1, pdf1),
         (ddf2, ddf3, pdf2, pdf3),
-        (ddf2.repartition([0, 3, 6, 7]), ddf3.repartition([0, 7]), pdf2, pdf3),
-        (ddf2.repartition([0, 7]), ddf3.repartition([0, 2, 4, 5, 7]), pdf2, pdf3),
+        (ddf2.repartition(divisions2), ddf3.repartition(divisions3), pdf2, pdf3),
+        (ddf2.repartition(divisions3), ddf3.repartition(divisions4), pdf2, pdf3),
         (ddf1, ddf4, pdf1, pdf4),
-        (ddf1, ddf4.repartition([0, 9]), pdf1, pdf4),
-        (ddf1.repartition([0, 3, 9]), ddf4.repartition([0, 5, 9]), pdf1, pdf4),
+        (ddf1, ddf4.repartition(divisions5), pdf1, pdf4),
+        (ddf1.repartition(divisions6), ddf4.repartition(divisions7), pdf1, pdf4),
         # dask + pandas
         (ddf1, pdf4, pdf1, pdf4),
         (ddf2, pdf3, pdf2, pdf3),
@@ -59,6 +85,10 @@ def test_arithmetics():
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b)
         check_frame_arithmetics(l, r, el, er)
+
+    if multi:
+        # TODO: handle the rest of these...
+        return
 
     # different index, pandas raises ValueError in comparison ops
 

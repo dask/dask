@@ -85,6 +85,12 @@ class _LocIndexer(_IndexerBase):
 
             iindexer = key[0]
             cindexer = key[1]
+
+            if self.obj.index.nlevels > 1 and iindexer != slice(None):
+                raise NotImplementedError(
+                    "Slicing row labels with .loc on a MultiIndex "
+                    "is not currently supported"
+                )
         else:
             # if self.obj is Series, cindexer is always None
             iindexer = key

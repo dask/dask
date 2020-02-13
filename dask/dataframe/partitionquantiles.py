@@ -316,7 +316,13 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
             return np.array(None, dtype=np.float_)
 
     vals, weights = vals_and_weights
-    vals = np.array(vals)
+    if dtype == "object":
+        # TODO(MultiIndex): avoid tuples
+        vals2 = np.empty(len(vals), dtype=dtype)
+        vals2[:] = vals
+        vals = vals2
+    else:
+        vals = np.array(vals)
     weights = np.array(weights)
 
     # We want to create exactly `npartition` number of groups of `vals` that
@@ -379,6 +385,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
         rv = rv.astype(dtype)
+
     return rv
 
 
@@ -425,6 +432,25 @@ def dtype_info(df):
         data = df.values
         info = (data.categories, data.ordered)
     return df.dtype, info
+
+
+def _collapse(partition):
+    return pd.Series(
+        list(partition.itertuples(index=False, name=None)),
+        index=partition.index,
+        name=tuple(partition.columns),
+    )
+
+
+def partition_quantiles_multi(df, npartitions, upsample=1.0, random_state=None):
+    # TODO(MultiIndex): avoid tuples
+    # This is like partition_quantiles, except we initially convert the
+    # DataFrame to a Series[Tuple].
+    name = tuple(df.columns)
+    df2 = df.map_partitions(_collapse, meta=(name, "object"))
+    return partition_quantiles(
+        df2, npartitions, upsample=upsample, random_state=random_state
+    )
 
 
 def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):

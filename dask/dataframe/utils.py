@@ -848,10 +848,7 @@ def assert_divisions(ddf):
     def index(x):
         if is_index_like(x):
             return x
-        try:
-            return x.index.get_level_values(0)
-        except AttributeError:
-            return x.index
+        return np.asarray(x.index)
 
     results = get_sync(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
