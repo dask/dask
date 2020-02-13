@@ -43,6 +43,10 @@ try:
     except ImportError:
         pass
     try:
+        from .io import read_arrow_dataset
+    except ImportError:
+        pass
+    try:
         from .core import isna
     except ImportError:
         pass
