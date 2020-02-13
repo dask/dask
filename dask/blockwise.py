@@ -551,7 +551,10 @@ def _optimize_blockwise(full_graph, keys=()):
                         stack.append(d)
 
             # Merge these Blockwise layers into one
-            new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
+            if len(blockwise_layers) > 1:
+                new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
+            else:
+                new_layer = layers[layer]
             out[layer] = new_layer
             dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
         else:
