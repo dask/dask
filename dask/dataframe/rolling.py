@@ -1,4 +1,5 @@
 import datetime
+import inspect
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
@@ -7,7 +8,7 @@ from numbers import Integral
 from ..base import tokenize
 from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
-from ._compat import PANDAS_GT_100, PANDAS_VERSION
+from ._compat import PANDAS_VERSION
 from .core import _emulate
 from .utils import make_meta
 from . import methods
@@ -405,17 +406,16 @@ class Rolling(object):
         kwargs = kwargs or {}
         args = args or ()
         meta = self.obj._meta.rolling(0)
-        if has_keyword(meta, "engine"):
+        if has_keyword(meta.apply, "engine"):
             # PANDAS_GT_100
             compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
         elif engine != "cython" or engine_kwargs is not None:
             raise NotImplementedError(
                 f"Specifying the engine requires pandas>=1.0.0. Version '{PANDAS_VERSION}' installed."
             )
-
-        if raw is None and PANDAS_GT_100:
-            # pandas changed the default
-            raw = False
+        if raw is None:
+            # PANDAS_GT_100: The default changed from None to False
+            raw = inspect.signature(meta.apply).parameters["raw"]
 
         return self._call_method(
             "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
