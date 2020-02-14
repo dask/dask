@@ -2439,13 +2439,10 @@ class Scheduler(ServerNode):
         If the message contains a key then we only send the message to those
         comms that care about the key.
         """
+        comms = set()
         if client is not None:
             try:
-                comm = self.client_comms[client]
-                comm.send(msg)
-            except CommClosedError:
-                if self.status == "running":
-                    logger.critical("Tried writing to closed comm: %s", msg)
+                comms.add(self.client_comms[client])
             except KeyError:
                 pass
 
@@ -2453,14 +2450,14 @@ class Scheduler(ServerNode):
             ts = self.tasks.get(msg["key"])
         if ts is None:
             # Notify all clients
-            comms = self.client_comms.values()
+            comms |= set(self.client_comms.values())
         else:
             # Notify clients interested in key
-            comms = [
+            comms |= {
                 self.client_comms[c.client_key]
                 for c in ts.who_wants
                 if c.client_key in self.client_comms
-            ]
+            }
         for c in comms:
             try:
                 c.send(msg)
