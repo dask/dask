@@ -228,7 +228,9 @@ def blockwise(
                         raise ValueError(
                             "Dimension {0} has {1} blocks, "
                             "adjust_chunks specified with "
-                            "{2} blocks".format(i, len(chunks[i]), len(adjust_chunks[ind]))
+                            "{2} blocks".format(
+                                i, len(chunks[i]), len(adjust_chunks[ind])
+                            )
                         )
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
