@@ -1645,7 +1645,7 @@ Dask Name: {name}, {task} tasks"""
             # Need the astype(int) for empty dataframes, which sum to float dtype
             result = self.reduction(
                 M.count,
-                aggregate=lambda x: x.sum().astype("int64"),
+                aggregate=_count_aggregate,
                 meta=meta,
                 token=token,
                 split_every=split_every,
@@ -5926,6 +5926,10 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
         return res[0]
     res.name = None
     return res
+
+
+def _count_aggregate(x):
+    return x.sum().astype("int64")
 
 
 def safe_head(df, n):
