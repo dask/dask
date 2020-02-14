@@ -5,6 +5,7 @@ dependencies:
   # required dependencies
   - python=3.6
   # optional dependencies pulled in by pip install dask[array, dataframe]
+  - cloudpickle
   - numpy=1.15
   - pandas=0.23
   - partd
