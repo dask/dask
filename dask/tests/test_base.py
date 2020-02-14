@@ -25,6 +25,7 @@ from dask.base import (
     named_schedulers,
     get_scheduler,
 )
+from dask.core import literal
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -404,6 +405,10 @@ def test_tokenize_object_array_with_nans():
 )
 def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
+
+
+def test_tokenize_literal():
+    assert tokenize(literal(["x", 1])) == tokenize(["x", 1])
 
 
 @pytest.mark.skipif("not np")
