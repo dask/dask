@@ -132,8 +132,8 @@ class HighLevelGraph(Mapping):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
                     try:
-                        key = collection.__dask_layers__()[0]
-                    except (AttributeError, IndexError):
+                        [key] = collection.__dask_layers__()
+                    except AttributeError:
                         key = id(graph)
                     layers[key] = graph
                     deps[name].add(key)
