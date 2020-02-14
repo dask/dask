@@ -5,7 +5,7 @@ from pandas.core.window import Rolling as pd_Rolling
 from numbers import Integral
 
 from ..base import tokenize
-from ..utils import M, funcname, derived_from
+from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
 from ._compat import PANDAS_GT_100, PANDAS_VERSION
 from .core import _emulate
@@ -404,8 +404,9 @@ class Rolling(object):
         compat_kwargs = {}
         kwargs = kwargs or {}
         args = args or ()
-
-        if PANDAS_GT_100:
+        meta = self.obj._meta.rolling(0)
+        if has_keyword(meta, "engine"):
+            # PANDAS_GT_100
             compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
         elif engine != "cython" or engine_kwargs is not None:
             raise NotImplementedError(
