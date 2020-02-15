@@ -680,7 +680,7 @@ def normalize_seq(seq):
 
 @normalize_token.register(literal)
 def normalize_literal(lit):
-    return normalize_token(lit())
+    return "literal", normalize_token(lit())
 
 
 @normalize_token.register(object)

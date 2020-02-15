@@ -408,7 +408,7 @@ def test_tokenize_base_types(x):
 
 
 def test_tokenize_literal():
-    assert tokenize(literal(["x", 1])) == tokenize(["x", 1])
+    assert tokenize(literal(["x", 1])) == tokenize(literal(["x", 1]))
 
 
 @pytest.mark.skipif("not np")
