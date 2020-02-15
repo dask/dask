@@ -1391,6 +1391,10 @@ def test_coarsen():
     assert_eq(
         da.chunk.coarsen(np.sum, x, {0: 2, 1: 4}), da.coarsen(da.sum, d, {0: 2, 1: 4})
     )
+    assert_eq(
+        da.chunk.coarsen(np.mean, x, {0: 2, 1: 4}, dtype="float32"),
+        da.coarsen(da.mean, d, {0: 2, 1: 4}, dtype="float32"),
+    )
 
 
 def test_coarsen_with_excess():
