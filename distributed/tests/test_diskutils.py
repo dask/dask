@@ -272,12 +272,13 @@ def _test_workspace_concurrency(tmpdir, timeout, max_procs):
     return n_created, n_purged
 
 
+@pytest.mark.slow
 def test_workspace_concurrency(tmpdir):
     if WINDOWS:
         raise pytest.xfail.Exception("TODO: unknown failure on windows")
     if sys.version_info < (3, 7):
         raise pytest.xfail.Exception("TODO: unknown failure on Python 3.6")
-    _test_workspace_concurrency(tmpdir, 2.0, 6)
+    _test_workspace_concurrency(tmpdir, 5.0, 6)
 
 
 @pytest.mark.slow

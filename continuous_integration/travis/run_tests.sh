@@ -1,4 +1,4 @@
-export PYTEST_OPTIONS="--verbose -r s --timeout-method=thread --timeout=300 --durations=20"
+export PYTEST_OPTIONS="-r s --timeout-method=thread --timeout=300 --durations=20"
 if [[ $RUNSLOW != false ]]; then
     export PYTEST_OPTIONS="$PYTEST_OPTIONS --runslow"
 fi
