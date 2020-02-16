@@ -96,12 +96,13 @@ delayed objects.  You can pass a dictionary mapping keys of the collection to
 resource requirements during compute or persist calls.
 
 .. code-block:: python
-
+    from dask import core
+    
     x = dd.read_csv(...)
     y = x.map_partitions(func1)
     z = y.map_partitions(func2)
 
-    z.compute(resources={tuple(y.__dask_keys__()): {'GPU': 1})
+    z.compute(resources={tuple(core.flatten(y.__dask_keys__())): {'GPU': 1}})
 
 In some cases (such as the case above) the keys for ``y`` may be optimized away
 before execution.  You can avoid that either by requiring them as an explicit
@@ -110,4 +111,4 @@ output, or by passing the ``optimize_graph=False`` keyword.
 
 .. code-block:: python
 
-    z.compute(resources={tuple(y.__dask_keys__()): {'GPU': 1}, optimize_graph=False)
+    z.compute(resources={tuple(core.flatten(y.__dask_keys__())): {'GPU': 1}}, optimize_graph=False)
