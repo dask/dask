@@ -1370,6 +1370,14 @@ def test_map_blocks_with_kwargs():
     assert_eq(result, np.array([4, 9]))
 
 
+def test_map_blocks_infer_chunks_broadcast():
+    dx = da.from_array([[1, 2, 3, 4]], chunks=((1,), (2, 2)))
+    dy = da.from_array([[10, 20], [30, 40]], chunks=((1, 1), (2,)))
+    result = da.map_blocks(lambda x, y: x + y, dx, dy)
+    assert result.chunks == ((1, 1), (2, 2),)
+    assert_eq(result, np.array([[11, 22, 13, 24], [31, 42, 33, 44]]))
+
+
 def test_map_blocks_with_chunks():
     dx = da.ones((5, 3), chunks=(2, 2))
     dy = da.ones((5, 3), chunks=(2, 2))
@@ -2872,6 +2880,9 @@ def test_map_blocks_with_changed_dimension():
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
+
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=1), chunks=((3, 4),), drop_axis=1)
 
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)

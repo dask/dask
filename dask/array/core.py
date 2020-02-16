@@ -612,6 +612,17 @@ def map_blocks(
         out_ind = tuple(out_ind)
         if max(new_axis) > max(out_ind):
             raise ValueError("New_axis values do not fill in all dimensions")
+
+    if chunks is not None:
+        if len(chunks) != len(out_ind):
+            raise ValueError(
+                "Provided chunks have {0} dims, expected {1} "
+                "dims.".format(len(chunks), len(out_ind))
+            )
+        adjust_chunks = dict(zip(out_ind, chunks))
+    else:
+        adjust_chunks = None
+
     out = blockwise(
         func,
         out_ind,
@@ -621,6 +632,7 @@ def map_blocks(
         dtype=dtype,
         concatenate=True,
         align_arrays=False,
+        adjust_chunks=adjust_chunks,
         meta=meta,
         **kwargs,
     )
@@ -638,30 +650,6 @@ def map_blocks(
             task = subs(task, {"__block_id_dummy__": k[1:]})
             v.dsk[key] = task
             dsk[k] = (v,) + vv[1:]
-
-    if chunks is not None:
-        if len(chunks) != len(out.numblocks):
-            raise ValueError(
-                "Provided chunks have {0} dims, expected {1} "
-                "dims.".format(len(chunks), len(out.numblocks))
-            )
-        chunks2 = []
-        for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
-            if isinstance(c, tuple):
-                # We only check cases where numblocks > 1. Because of
-                # broadcasting, we can't (easily) validate the chunks
-                # when the number of blocks is 1.
-                # See https://github.com/dask/dask/issues/4299 for more.
-                if nb > 1 and len(c) != nb:
-                    raise ValueError(
-                        "Dimension {0} has {1} blocks, "
-                        "chunks specified with "
-                        "{2} blocks".format(i, nb, len(c))
-                    )
-                chunks2.append(c)
-            else:
-                chunks2.append(nb * (c,))
-        out._chunks = normalize_chunks(chunks2)
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, "block_info"):
