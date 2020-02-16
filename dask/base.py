@@ -15,7 +15,7 @@ from toolz.functoolz import Compose
 
 from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
-from .core import flatten, quote, get as simple_get
+from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
@@ -676,6 +676,11 @@ def normalize_set(s):
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
+
+
+@normalize_token.register(literal)
+def normalize_literal(lit):
+    return "literal", normalize_token(lit())
 
 
 @normalize_token.register(object)
