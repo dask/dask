@@ -182,13 +182,12 @@ def slices_from_chunks(chunks):
       (slice(2, 4, None), slice(3, 6, None)),
       (slice(2, 4, None), slice(6, 9, None))]
     """
-    cumdims = [list(accumulate(add, (0,) + bds[:-1])) for bds in chunks]
-    shapes = product(*chunks)
-    starts = product(*cumdims)
-    return [
-        tuple(slice(s, s + dim) for s, dim in zip(start, shape))
-        for start, shape in zip(starts, shapes)
+    cumdims = [cached_cumsum(bds, initial_zero=True) for bds in chunks]
+    slices = [
+        [slice(s, s + dim) for s, dim in zip(starts, shapes)]
+        for starts, shapes in zip(cumdims, chunks)
     ]
+    return list(product(*slices))
 
 
 def getem(
@@ -441,6 +440,10 @@ def map_blocks(
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
 
+    See Also
+    --------
+    dask.array.blockwise : Generalized operation with control over block alignment.
+
     Examples
     --------
     >>> import dask.array as da
@@ -609,6 +612,17 @@ def map_blocks(
         out_ind = tuple(out_ind)
         if max(new_axis) > max(out_ind):
             raise ValueError("New_axis values do not fill in all dimensions")
+
+    if chunks is not None:
+        if len(chunks) != len(out_ind):
+            raise ValueError(
+                "Provided chunks have {0} dims, expected {1} "
+                "dims.".format(len(chunks), len(out_ind))
+            )
+        adjust_chunks = dict(zip(out_ind, chunks))
+    else:
+        adjust_chunks = None
+
     out = blockwise(
         func,
         out_ind,
@@ -618,6 +632,7 @@ def map_blocks(
         dtype=dtype,
         concatenate=True,
         align_arrays=False,
+        adjust_chunks=adjust_chunks,
         meta=meta,
         **kwargs,
     )
@@ -635,30 +650,6 @@ def map_blocks(
             task = subs(task, {"__block_id_dummy__": k[1:]})
             v.dsk[key] = task
             dsk[k] = (v,) + vv[1:]
-
-    if chunks is not None:
-        if len(chunks) != len(out.numblocks):
-            raise ValueError(
-                "Provided chunks have {0} dims, expected {1} "
-                "dims.".format(len(chunks), len(out.numblocks))
-            )
-        chunks2 = []
-        for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
-            if isinstance(c, tuple):
-                # We only check cases where numblocks > 1. Because of
-                # broadcasting, we can't (easily) validate the chunks
-                # when the number of blocks is 1.
-                # See https://github.com/dask/dask/issues/4299 for more.
-                if nb > 1 and len(c) != nb:
-                    raise ValueError(
-                        "Dimension {0} has {1} blocks, "
-                        "chunks specified with "
-                        "{2} blocks".format(i, nb, len(c))
-                    )
-                chunks2.append(c)
-            else:
-                chunks2.append(nb * (c,))
-        out._chunks = normalize_chunks(chunks2)
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, "block_info"):
@@ -2144,14 +2135,14 @@ class Array(DaskMethodsMixin):
 
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
+    @derived_from(np.ndarray)
     def cumsum(self, axis, dtype=None, out=None):
-        """ See da.cumsum for docstring """
         from .reductions import cumsum
 
         return cumsum(self, axis, dtype, out=out)
 
+    @derived_from(np.ndarray)
     def cumprod(self, axis, dtype=None, out=None):
-        """ See da.cumprod for docstring """
         from .reductions import cumprod
 
         return cumprod(self, axis, dtype, out=out)
@@ -3297,7 +3288,10 @@ def block(arrays, allow_unknown_chunksizes=False):
     def atleast_nd(x, ndim):
         x = asanyarray(x)
         diff = max(ndim - x.ndim, 0)
-        return x[(None,) * diff + (Ellipsis,)]
+        if diff == 0:
+            return x
+        else:
+            return x[(None,) * diff + (Ellipsis,)]
 
     def format_index(index):
         return "arrays" + "".join("[{}]".format(i) for i in index)

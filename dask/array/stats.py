@@ -31,8 +31,8 @@ import math
 
 import numpy as np
 import dask.array as da
-from dask.array.random import doc_wraps
 from dask.array.ufunc import wrap_elemwise
+from dask.utils import derived_from
 from dask import delayed
 
 try:
@@ -73,7 +73,7 @@ __all__ = [
 # -----------------
 
 
-@doc_wraps(scipy.stats.ttest_ind)
+@derived_from(scipy.stats)
 def ttest_ind(a, b, axis=0, equal_var=True):
     v1 = da.var(a, axis, ddof=1)  # XXX: np -> da
     v2 = da.var(b, axis, ddof=1)  # XXX: np -> da
@@ -90,7 +90,7 @@ def ttest_ind(a, b, axis=0, equal_var=True):
     return delayed(Ttest_indResult, nout=2)(*res)
 
 
-@doc_wraps(scipy.stats.ttest_1samp)
+@derived_from(scipy.stats)
 def ttest_1samp(a, popmean, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -109,7 +109,7 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate"):
     return delayed(Ttest_1sampResult, nout=2)(t, prob)
 
 
-@doc_wraps(scipy.stats.ttest_rel)
+@derived_from(scipy.stats)
 def ttest_rel(a, b, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -131,12 +131,12 @@ def ttest_rel(a, b, axis=0, nan_policy="propagate"):
     return delayed(Ttest_relResult, nout=2)(t, prob)
 
 
-@doc_wraps(scipy.stats.chisquare)
+@derived_from(scipy.stats)
 def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
     return power_divergence(f_obs, f_exp=f_exp, ddof=ddof, axis=axis, lambda_="pearson")
 
 
-@doc_wraps(scipy.stats.power_divergence)
+@derived_from(scipy.stats)
 def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 
     if isinstance(lambda_, str):
@@ -183,7 +183,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
     return delayed(Power_divergenceResult, nout=2)(stat, p)
 
 
-@doc_wraps(scipy.stats.skew)
+@derived_from(scipy.stats)
 def skew(a, axis=0, bias=True, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -210,7 +210,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
     return vals
 
 
-@doc_wraps(scipy.stats.skewtest)
+@derived_from(scipy.stats)
 def skewtest(a, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -241,7 +241,7 @@ def skewtest(a, axis=0, nan_policy="propagate"):
     return delayed(SkewtestResult, nout=2)(Z, 2 * distributions.norm.sf(np.abs(Z)))
 
 
-@doc_wraps(scipy.stats.kurtosis)
+@derived_from(scipy.stats)
 def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -268,7 +268,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         # TODO: scalar; vals = vals.item()  # array scalar
 
 
-@doc_wraps(scipy.stats.kurtosistest)
+@derived_from(scipy.stats)
 def kurtosistest(a, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -305,7 +305,7 @@ def kurtosistest(a, axis=0, nan_policy="propagate"):
     return delayed(KurtosistestResult, nout=2)(Z, 2 * distributions.norm.sf(np.abs(Z)))
 
 
-@doc_wraps(scipy.stats.normaltest)
+@derived_from(scipy.stats)
 def normaltest(a, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(
@@ -318,7 +318,7 @@ def normaltest(a, axis=0, nan_policy="propagate"):
     return delayed(NormaltestResult, nout=2)(k2, delayed(distributions.chi2.sf)(k2, 2))
 
 
-@doc_wraps(scipy.stats.f_oneway)
+@derived_from(scipy.stats)
 def f_oneway(*args):
     # args = [np.asarray(arg, dtype=float) for arg in args]
     # ANOVA on N groups, each in its own array
@@ -353,7 +353,7 @@ def f_oneway(*args):
     return delayed(F_onewayResult, nout=2)(f, prob)
 
 
-@doc_wraps(scipy.stats.moment)
+@derived_from(scipy.stats)
 def moment(a, moment=1, axis=0, nan_policy="propagate"):
     if nan_policy != "propagate":
         raise NotImplementedError(

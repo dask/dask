@@ -12,7 +12,7 @@ import dask.array as da
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_0230, PANDAS_GT_100
+from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
@@ -2119,10 +2119,7 @@ def test_select_dtypes(include, exclude):
 
     if not PANDAS_GT_100:
         # removed in pandas 1.0
-        if PANDAS_GT_0230:
-            ctx = pytest.warns(FutureWarning)
-        else:
-            ctx = pytest.warns(None)
+        ctx = pytest.warns(FutureWarning)
 
         with ctx:
             tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())

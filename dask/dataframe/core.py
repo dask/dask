@@ -1491,7 +1491,7 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1641,15 +1641,17 @@ Dask Name: {name}, {task} tasks"""
             )
         else:
             meta = self._meta_nonempty.count()
+
+            # Need the astype(int) for empty dataframes, which sum to float dtype
             result = self.reduction(
                 M.count,
-                aggregate=M.sum,
+                aggregate=_count_aggregate,
                 meta=meta,
                 token=token,
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     @derived_from(pd.DataFrame)
@@ -1682,7 +1684,7 @@ Dask Name: {name}, {task} tasks"""
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1723,7 +1725,7 @@ Dask Name: {name}, {task} tasks"""
                 result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def _var_numeric(self, skipna=True, ddof=1, split_every=False):
@@ -1885,7 +1887,7 @@ Dask Name: {name}, {task} tasks"""
             )
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     def quantile(self, q=0.5, axis=0, method="default"):
@@ -3317,6 +3319,15 @@ class DataFrame(_Frame):
         else:
             return len(s)
 
+    @property
+    def empty(self):
+        raise NotImplementedError(
+            "Checking whether a Dask DataFrame has any rows may be expensive. "
+            "However, checking the number of columns is fast. "
+            "Depending on which of these results you need, use either "
+            "`len(df.index) == 0` or `len(df.columns) == 0`"
+        )
+
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
@@ -4674,6 +4685,7 @@ def apply_concat_apply(
     split_out=None,
     split_out_setup=None,
     split_out_setup_kwargs=None,
+    sort=None,
     **kwargs
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -4713,6 +4725,8 @@ def apply_concat_apply(
         as is.
     split_out_setup_kwargs : dict, optional
         Keywords for the `split_out_setup` function only.
+    sort : bool, default None
+        If allowed, sort the keys of the output aggregation.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -4829,6 +4843,15 @@ def apply_concat_apply(
         k = part_i + 1
         a = b
         depth += 1
+
+    if sort is not None:
+        if sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarentee sorted keys for `split_out>1`."
+                " Try using split_out=1, or grouping with sort=False."
+            )
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
 
     # Aggregate
     for j in range(split_out):
@@ -5903,6 +5926,10 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
         return res[0]
     res.name = None
     return res
+
+
+def _count_aggregate(x):
+    return x.sum().astype("int64")
 
 
 def safe_head(df, n):
