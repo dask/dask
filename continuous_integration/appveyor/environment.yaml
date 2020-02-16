@@ -6,7 +6,7 @@ dependencies:
   # required dependencies
   - python=3.6.*
   - numpy>=1.13.0,<=1.16.4    # >= 1.17.0 breaks from https://github.com/pydata/sparse/issues/257
-  - pandas>=0.21.0
+  - pandas>=0.23.0
   - pytest
   - cloudpickle
   - distributed

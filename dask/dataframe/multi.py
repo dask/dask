@@ -80,7 +80,7 @@ from .core import (
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories, is_series_like, asciitable, PANDAS_GT_0230
+from .utils import strip_unknown_categories, is_series_like, asciitable
 
 
 def align_partitions(*dfs):
@@ -719,7 +719,7 @@ def _concat_compat(frames, left, right):
     if PANDAS_GT_100:
         # join_axes removed
         return (pd.concat, frames, 0, "outer", False, None, None, None, False, False)
-    elif PANDAS_GT_0230:
+    else:
         # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
         # we only care about sort, to silence warnings.
         return (
@@ -735,9 +735,6 @@ def _concat_compat(frames, left, right):
             False,
             False,
         )
-    else:
-        columns = get_unsorted_columns([left, right])
-        return (concat_and_unsort, frames, columns)
 
 
 def merge_asof_indexed(left, right, **kwargs):

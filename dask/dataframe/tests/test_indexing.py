@@ -32,10 +32,7 @@ def test_loc():
     assert_eq(d.loc[3:], full.loc[3:])
     assert_eq(d.loc[[5]], full.loc[[5]])
 
-    if PANDAS_VERSION >= "0.23.0":
-        expected_warning = FutureWarning
-    else:
-        expected_warning = None
+    expected_warning = FutureWarning
 
     if not PANDAS_GT_100:
         # removed in pandas 1.0
