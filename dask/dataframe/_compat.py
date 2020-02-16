@@ -6,7 +6,6 @@ import pandas as pd
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
-PANDAS_GT_0230 = PANDAS_VERSION >= LooseVersion("0.23.0")
 PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0")
 PANDAS_GT_0250 = PANDAS_VERSION >= LooseVersion("0.25.0")
 PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
