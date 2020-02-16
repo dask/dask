@@ -268,6 +268,7 @@ def test_large_numpy_array():
         np.broadcast_to(np.arange(10), (20, 10)),  # Some strides are 0
         np.broadcast_to(1, (3, 4, 2)),  # All strides are 0
         np.broadcast_to(np.arange(100)[:1], 5),  # x.base is larger than x
+        np.broadcast_to(np.arange(5), (4, 5))[:, ::-1],
     ],
 )
 @pytest.mark.parametrize("writeable", [True, False])

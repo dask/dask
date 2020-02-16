@@ -44,12 +44,21 @@ def serialize_numpy_ndarray(x):
     else:
         dt = (0, x.dtype.str)
 
-    # Only serialize non-broadcasted data for arrays with zero strided axes
+    # Only serialize broadcastable data for arrays with zero strided axes
+    broadcast_to = None
     if 0 in x.strides:
         broadcast_to = x.shape
-        x = x[tuple(slice(None) if s != 0 else slice(1) for s in x.strides)]
-    else:
-        broadcast_to = None
+        strides = x.strides
+        writeable = x.flags.writeable
+        x = x[tuple(slice(None) if s != 0 else slice(1) for s in strides)]
+        if not x.flags.c_contiguous and not x.flags.f_contiguous:
+            # Broadcasting can only be done with contiguous arrays
+            x = np.ascontiguousarray(x)
+            x = np.lib.stride_tricks.as_strided(
+                x,
+                strides=[j if i != 0 else i for i, j in zip(strides, x.strides)],
+                writeable=writeable,
+            )
 
     if not x.shape:
         # 0d array
