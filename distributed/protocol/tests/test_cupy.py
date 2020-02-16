@@ -3,12 +3,15 @@ import pickle
 import pytest
 
 cupy = pytest.importorskip("cupy")
+numpy = pytest.importorskip("numpy")
 
 
-@pytest.mark.parametrize("size", [0, 10])
+@pytest.mark.parametrize("shape", [(0,), (5,), (4, 6), (10, 11), (2, 3, 5)])
 @pytest.mark.parametrize("dtype", ["u1", "u4", "u8", "f4"])
-def test_serialize_cupy(size, dtype):
-    x = cupy.arange(size, dtype=dtype)
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_serialize_cupy(shape, dtype, order):
+    x = cupy.arange(numpy.product(shape), dtype=dtype)
+    x = cupy.ndarray(shape, dtype=x.dtype, memptr=x.data, order=order)
     header, frames = serialize(x, serializers=("cuda", "dask", "pickle"))
     y = deserialize(header, frames, deserializers=("cuda", "dask", "pickle", "error"))
 
