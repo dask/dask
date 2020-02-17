@@ -314,6 +314,8 @@ def test_plan_rechunk():
     _assert_steps(steps, [(c, c)])
     steps = _plan((f, c), (c, c))
     _assert_steps(steps, [(c, c)])
+    steps = _plan((c, c, c, c), (c, f, c, c))
+    _assert_steps(steps, [(c, f, c, c)])
 
     # An intermediate is used to reduce graph size
     steps = _plan((f, c), (c, f))
