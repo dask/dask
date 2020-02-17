@@ -160,7 +160,7 @@ def order(dsk, dependencies=None):
         total_dependents, min_dependencies, _, min_heights, _ = metrics[x]
         return (
             # tactically, finish small connected jobs first
-            min_dependencies,
+            # min_dependencies,  # this is implied by our partitioning
             num_dependents - min_heights,  # prefer tall and narrow
             -total_dependents,  # take a big step
             # try to be memory efficient
@@ -202,62 +202,77 @@ def order(dsk, dependencies=None):
             StrComparable(x),
         )
 
+    def finish_now_key(x):
+        return (-len(dependencies[x]), StrComparable(x))
+
+    keys = {key: val[1] for key, val in metrics.items()}  # min_dependencies
     result = {}
     i = 0
-
-    # Nodes in the current weakly connected subgraph that are not part of the current
-    # DFS along dependencies.  The next DFS will begin from these nodes.  `outer_stack`
-    # is populated from `init_stack` and the dependents of `outer_stack_seeds`.
-    outer_stack = []
-
-    # Nodes get added to this as they complete.  We will populate `outer_stack` from
-    # dependents of these nodes.  We consider nodes using a FIFO policy (yes, we could
-    # have used collections.deque, but a list with the current index is faster).
-    # Note that this does not include nodes with no dependents!
-    outer_stack_seeds = []
 
     # Used to perform a DFS along dependencies.  Once emptied (when traversing dependencies),
     # this continues (along dependents) along a path from the initial (leaf) node down to a
     # root node (a tactical goal).  This ensures this root node will get calculated before
     # we consider any other dependents from `outer_stack_seeds`.
-    inner_stack = []
+    inner_stacks = []
+    inner_stacks_append = inner_stacks.append
+    inner_stacks_extend = inner_stacks.extend
+    inner_stacks_pop = inner_stacks.pop
 
-    next_pools = {}
+    current_epoch = []
+    current_epoch_extend = current_epoch.extend
+    current_epoch_pop = current_epoch.pop
+    next_epoch = {}
+    next_era = {}  # era > epoch
 
     # aliases for speed
-    outer_stack_append = outer_stack.append
-    outer_stack_pop = outer_stack.pop
-    outer_stack_extend = outer_stack.extend
-    outer_stack_seeds_append = outer_stack_seeds.append
-    inner_stack_append = inner_stack.append
-    inner_stack_pop = inner_stack.pop
-    inner_stack_extend = inner_stack.extend
     set_difference = set.difference
 
     is_init_sorted = False
     item = min(init_stack, key=initial_stack_key)
     while True:
-        outer_stack_append(item)
-        while outer_stack:
-            item = outer_stack_pop()
-            if item not in result:
-                inner_stack_append(item)
+        inner_stacks_append([item])
+        while inner_stacks or next_epoch or next_era:
+            if not inner_stacks and not current_epoch:
+                epoch = next_epoch or next_era
+                epoch_keys = epoch if len(epoch) == 1 else sorted(epoch, reverse=True)
+                for key in epoch_keys:
+                    current_epoch_extend(reversed(epoch[key]))
+                if next_epoch:
+                    next_epoch = {}
+                else:
+                    next_era = {}
+
+            while inner_stacks or current_epoch:
+                if inner_stacks:
+                    inner_stack = inner_stacks_pop()
+                else:
+                    while current_epoch:
+                        pool = [dep for dep in current_epoch_pop() if dep not in result]
+                        if not pool:
+                            continue
+                        elif len(pool) == 1:
+                            inner_stack = pool
+                        else:
+                            if len(pool) < 1000:
+                                pool.sort(key=dependents_key, reverse=True)
+                            inner_stacks_extend([dep] for dep in pool)
+                            inner_stack = inner_stacks_pop()
+                        break
 
                 while inner_stack:
                     # Perform a DFS along dependencies until we complete our tactical goal
-                    item = inner_stack_pop()
+                    item = inner_stack.pop()
                     if item in result:
                         continue
-
                     if num_needed[item]:
-                        inner_stack_append(item)
+                        inner_stack.append(item)
                         deps = set_difference(dependencies[item], result)
                         if 1 < len(deps) < 1000:
-                            inner_stack_extend(
+                            inner_stack.extend(
                                 sorted(deps, key=dependencies_key, reverse=True)
                             )
                         else:
-                            inner_stack_extend(deps)
+                            inner_stack.extend(deps)
                         continue
 
                     result[item] = i
@@ -274,55 +289,113 @@ def order(dsk, dependencies=None):
                             if not dependents[dep] and num_needed[dep] == 1
                         }
                         if finish_now:
-                            deps -= finish_now
+                            deps -= finish_now  # Safe to mutate
                             if len(finish_now) > 1:
-                                finish_now = sorted(finish_now, key=dependents_key)
+                                finish_now = sorted(finish_now, key=finish_now_key)
                             for dep in finish_now:
                                 result[dep] = i
                                 i += 1
-                            if not inner_stack and deps:
-                                for dep in deps:
-                                    num_needed[dep] -= 1
-                                outer_stack_seeds_append(item)
-                                break
 
                     if deps:
                         for dep in deps:
                             num_needed[dep] -= 1
                         if not inner_stack:
-                            # Continue towards our tactical goal (an easy-to-compute root)
                             if len(deps) == 1:
-                                inner_stack_extend(deps)
-                            else:
-                                # If there are many, many dependents, then calculating
-                                # `dependents_key` here could be relatively expensive.
-                                # However, this is still probably worth it tactically.
-                                inner_stack_append(min(deps, key=dependents_key))
-                                outer_stack_seeds_append(item)
+                                inner_stack.append(dep)
+                                continue
                         else:
-                            # Our next starting point will be "seeded" by a completed task in a
-                            # a combination of LIFO and FIFO manners by taking the best dependents
-                            # of each.  When our DFS with `inner_stack` is finished--which means
-                            # we computed our tactical goal--we will choose our next starting
-                            # point from the dependents of completed tasks.  However, it is too
-                            # expensive to consider all dependents of all completed tasks, so we
-                            # consider the dependents of tasks in the order they complete.
-                            outer_stack_seeds_append(item)
+                            deps.discard(inner_stack[-1])  # safe to mutate
+                            if not deps:
+                                continue
 
-            if not outer_stack and outer_stack_seeds:
-                for item in outer_stack_seeds:
-                    for dep in set_difference(dependents[item], result):
-                        key = metrics[dep][1:3]  # (min_dependencies, max_dependencies)
-                        if key in next_pools:
-                            next_pools[key].append(dep)
+                        if len(deps) == 1:
+                            (dep,) = deps
+                            key = keys[dep]
+                            if key < keys[inner_stack[0]]:
+                                # Run before `inner_stack` (change tactical goal!)
+                                inner_stacks_append(inner_stack)
+                                inner_stack = [dep]
+                            else:
+                                item_key = keys[item]
+                                if key == item_key:
+                                    # Run in next epoch (right after current epoch is finished)
+                                    if key in next_epoch:
+                                        next_epoch[key].append([dep])
+                                    else:
+                                        next_epoch[key] = [[dep]]
+                                elif key < item_key:
+                                    # Run after current `inner_stack` (additional tactical goals)
+                                    inner_stacks_append([dep])
+                                # Run in next era (after current epoch and next epoch)
+                                elif key in next_era:
+                                    next_era[key].append([dep])
+                                else:
+                                    next_era[key] = [[dep]]
                         else:
-                            next_pools[key] = [dep]
-                outer_stack_seeds = []
-                outer_stack_seeds_append = outer_stack_seeds.append
-                if next_pools:
-                    for key in sorted(next_pools, reverse=True):
-                        outer_stack_extend(reversed(next_pools[key]))
-                    next_pools = {}
+                            dep_pools = {}
+                            for dep in deps:
+                                key = keys[dep]
+                                if key in dep_pools:
+                                    dep_pools[key].append(dep)
+                                else:
+                                    dep_pools[key] = [dep]
+
+                            item_key = keys[item]
+                            if item_key in dep_pools:
+                                # Run in next epoch (right after current epoch is finished)
+                                if item_key in next_epoch:
+                                    next_epoch[item_key].append(dep_pools.pop(item_key))
+                                else:
+                                    next_epoch[item_key] = [dep_pools.pop(item_key)]
+                                if not dep_pools:
+                                    continue
+
+                            small_keys = []  # < current item
+                            large_keys = []  # > current item
+                            if inner_stack:
+                                prev_key = keys[inner_stack[0]]
+                                tiny_keys = []  # < inner_stack[0]
+                                for k in dep_pools:
+                                    if k < prev_key:
+                                        tiny_keys.append(k)
+                                    elif k < item_key:
+                                        small_keys.append(k)
+                                    else:
+                                        large_keys.append(k)
+                            else:
+                                tiny_keys = None
+                                for k in dep_pools:
+                                    if k < item_key:
+                                        small_keys.append(k)
+                                    else:
+                                        large_keys.append(k)
+                            if small_keys:
+                                # Run after current `inner_stack` (additional tactical goals)
+                                if len(small_keys) > 1:
+                                    small_keys.sort(reverse=True)
+                                for key in small_keys:
+                                    pool = dep_pools[key]
+                                    if 1 < len(pool) < 1000:
+                                        pool.sort(key=dependents_key, reverse=True)
+                                    inner_stacks_extend([dep] for dep in pool)
+                            if tiny_keys:
+                                # Run before `inner_stack` (change tactical goal!)
+                                inner_stacks_append(inner_stack)
+                                if len(tiny_keys) > 1:
+                                    tiny_keys.sort(reverse=True)
+                                for key in tiny_keys:
+                                    pool = dep_pools[key]
+                                    if 1 < len(pool) < 1000:
+                                        pool.sort(key=dependents_key, reverse=True)
+                                    inner_stacks_extend([dep] for dep in pool)
+                                inner_stack = inner_stacks_pop()
+                            if large_keys:
+                                # Run in next era (after current epoch and next epoch)
+                                for key in large_keys:
+                                    if key in next_era:
+                                        next_era[key].append(dep_pools[key])
+                                    else:
+                                        next_era[key] = [dep_pools[key]]
 
         if len(dependencies) == len(result):
             break  # all done!
