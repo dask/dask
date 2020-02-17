@@ -280,9 +280,13 @@ def test_merge_to_number():
     assert chunks == (9,)
 
 
-def _plan(old_chunks, new_chunks, itemsize=1, block_size_limit=1e7):
+def _plan(old_chunks, new_chunks, itemsize=1, block_size_limit=1e7, threshold=4):
     return plan_rechunk(
-        old_chunks, new_chunks, itemsize=itemsize, block_size_limit=block_size_limit
+        old_chunks,
+        new_chunks,
+        itemsize=itemsize,
+        block_size_limit=block_size_limit,
+        threshold=threshold,
     )
 
 
@@ -325,6 +329,10 @@ def test_plan_rechunk():
     # Same, with unknown dim
     steps = _plan((nc + nf, c + c, c + f), (nc + nf, f + f, c + c))
     _assert_steps(steps, steps)
+
+    # Regression test for #5908
+    steps = _plan((c, c), (f, f), threshold=1)
+    _assert_steps(steps, [(f, f)])
 
     # Just at the memory limit => an intermediate is used
     steps = _plan((f, c), (c, f), block_size_limit=400)

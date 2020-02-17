@@ -511,7 +511,8 @@ def plan_rechunk(
         )
         if (chunks == current_chunks and not first_pass) or chunks == new_chunks:
             break
-        steps.append(chunks)
+        if chunks != current_chunks:
+            steps.append(chunks)
         current_chunks = chunks
         if not memory_limit_hit:
             break
