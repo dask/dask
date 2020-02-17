@@ -301,7 +301,20 @@ def order(dsk, dependencies=None):
                             num_needed[dep] -= 1
                         if not inner_stack:
                             if len(deps) == 1:
-                                inner_stack.append(dep)
+                                # An interesting option is to always set `inner_stack = [dep]` here.
+                                # We already bend our normal rules here.  If we have a single
+                                # dependent, then we can always compute it and release the current
+                                # node from memory.  However, this may force us to continue down to
+                                # a costly target while we have better targets available.
+                                # A reasonable enhancement could be to compute the dependent, then
+                                # decide what to do with its dependents.
+                                key = keys[dep]
+                                if key <= keys[item]:
+                                    inner_stack = [dep]
+                                elif key in next_epoch:
+                                    next_epoch[key].append([dep])
+                                else:
+                                    next_epoch[key] = [[dep]]
                                 continue
                         else:
                             deps.discard(inner_stack[-1])  # safe to mutate
@@ -343,10 +356,19 @@ def order(dsk, dependencies=None):
                             item_key = keys[item]
                             if item_key in dep_pools:
                                 # Run in next epoch (right after current epoch is finished)
+                                pool = dep_pools.pop(item_key)
+                                if not inner_stack:
+                                    if len(pool) == 1:
+                                        (dep,) = pool
+                                        inner_stack = [dep]
+                                        if not dep_pools:
+                                            continue
+                                    else:
+                                        inner_stack = [min(pool, key=dependents_key)]
                                 if item_key in next_epoch:
-                                    next_epoch[item_key].append(dep_pools.pop(item_key))
+                                    next_epoch[item_key].append(pool)
                                 else:
-                                    next_epoch[item_key] = [dep_pools.pop(item_key)]
+                                    next_epoch[item_key] = [pool]
                                 if not dep_pools:
                                     continue
 
