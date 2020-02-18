@@ -2026,7 +2026,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
 
     ddf = dd.read_parquet(fn, engine=engine)["B"]
 
-    dsk = optimize_read_parquet_getitem(ddf.dask)
+    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
     get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, ParquetSubgraph)
@@ -2042,7 +2042,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
 
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
-    dsk = optimize_read_parquet_getitem(df2.dask)
+    dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
     subgraph = list(dsk.layers.values())[0]
     assert isinstance(subgraph, ParquetSubgraph)
