@@ -215,9 +215,12 @@ class ArrowEngine(Engine):
         if (
             gather_statistics is None
             and dataset.metadata
-            and dataset.metadata.num_row_groups == len(pieces)
+            and dataset.metadata.num_row_groups >= len(pieces)
         ):
             gather_statistics = True
+            # Don't gather stats by default if this is a partitioned dataset
+            if dataset.metadata.num_row_groups != len(pieces) and partitions:
+                gather_statistics = False
         if not pieces:
             gather_statistics = False
 
@@ -326,7 +329,12 @@ class ArrowEngine(Engine):
         fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
         if isinstance(index, list):
-            columns += index
+            for level in index:
+                # unclear if we can use set ops here. I think the order matters.
+                # Need the membership test to avoid duplicating index when
+                # we slice with `columns` later on.
+                if level not in columns:
+                    columns.append(level)
         if isinstance(piece, str):
             # `piece` is a file-path string
             piece = pq.ParquetDatasetPiece(
@@ -342,6 +350,16 @@ class ArrowEngine(Engine):
                 open_file_func=partial(fs.open, mode="rb"),
             )
 
+        # Ensure `columns` and `partitions` do not overlap
+        columns_and_parts = columns.copy()
+        if columns_and_parts and partitions:
+            for part_name in partitions.partition_names:
+                if part_name in columns:
+                    columns.remove(part_name)
+                else:
+                    columns_and_parts.append(part_name)
+            columns = columns or None
+
         df = piece.read(
             columns=columns,
             partitions=partitions,
@@ -349,7 +367,7 @@ class ArrowEngine(Engine):
             use_threads=False,
             **kwargs.get("read", {}),
         ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
-            list(columns)
+            list(columns_and_parts)
         ]
 
         if index:

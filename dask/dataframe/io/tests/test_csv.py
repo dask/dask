@@ -11,10 +11,9 @@ dd = pytest.importorskip("dask.dataframe")
 
 from toolz import partition_all, valmap
 
-import pandas.util.testing as tm
-
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
@@ -618,7 +617,7 @@ def test_categorical_known():
     c,c
     """
     )
-    dtype = pd.api.types.CategoricalDtype(["a", "b", "c"])
+    dtype = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         result = dd.read_csv("foo.*.csv", dtype={"A": "category", "B": "category"})
         assert result.A.cat.known is False
@@ -655,7 +654,9 @@ def test_categorical_known():
         assert_eq(result, expected)
 
         # Specify "unknown" categories
-        result = dd.read_csv("foo.*.csv", dtype=pd.api.types.CategoricalDtype())
+        result = dd.read_csv(
+            "foo.*.csv", dtype=pd.api.types.CategoricalDtype(ordered=False)
+        )
         assert result.A.cat.known is False
 
         result = dd.read_csv("foo.*.csv", dtype="category")
@@ -673,7 +674,7 @@ def test_compression_multiple_files():
         f.write(csv_text.encode())
         f.close()
 
-        with tm.assert_produces_warning(UserWarning):
+        with pytest.warns(UserWarning):
             df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2
@@ -1040,7 +1041,19 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-@pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be"])
+xfail_pandas_100 = pytest.mark.xfail(
+    dd._compat.PANDAS_GT_100, reason="https://github.com/dask/dask/issues/5787"
+)
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        pytest.param("utf-16", marks=xfail_pandas_100),
+        pytest.param("utf-16-le", marks=xfail_pandas_100),
+        "utf-16-be",
+    ],
+)
 def test_encoding_gh601(encoding):
     ar = pd.Series(range(0, 100))
     br = ar % 7

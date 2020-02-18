@@ -7,6 +7,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_ns_dtype
 
 import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GT_100
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
@@ -799,17 +800,6 @@ def test_reductions_timedelta(split_every):
     ds = pd.Series(pd.to_timedelta([2, 3, 4, np.nan, 5]))
     dds = dd.from_pandas(ds, 2)
 
-    with pytest.warns(None):
-        # runtime warnings; https://github.com/dask/dask/issues/2381
-        assert_eq(dds.var(split_every=split_every), ds.var())
-        if not PANDAS_GT_0250:
-            # https://github.com/pandas-dev/pandas/issues/18880
-            assert_eq(
-                dds.var(split_every=split_every, skipna=False), ds.var(skipna=False)
-            )
-
-    assert_eq(dds.var(ddof=0, split_every=split_every), ds.var(ddof=0))
-
     assert_eq(dds.sum(split_every=split_every), ds.sum())
     assert_eq(dds.min(split_every=split_every), ds.min())
     assert_eq(dds.max(split_every=split_every), ds.max())
@@ -822,12 +812,12 @@ def test_reductions_timedelta(split_every):
         (
             pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
             0,
-            pd.Series([]),
+            pd.Series([], dtype="float64"),
         ),
         (
             pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
             1,
-            pd.Series([]),
+            pd.Series([], dtype="float64"),
         ),
         (pd.Series([1, 2.5, 6]), None, None),
     ],
@@ -1028,7 +1018,6 @@ def test_reductions_non_numeric_dtypes():
 
     # ToDo: pandas supports timedelta std, dask returns float64
     # assert_eq(dds.std(), pds.std())
-    assert_eq(dds.var(), pds.var())
 
     # ToDo: pandas supports timedelta std, otherwise dask raises:
     # TypeError: unsupported operand type(s) for *: 'float' and 'Timedelta'
@@ -1147,13 +1136,23 @@ def test_reductions_frame_dtypes():
     df_no_timedelta = df.drop("timedelta", axis=1, inplace=False)
     ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
 
-    assert_eq(df.sum(), ddf.sum())
+    if not PANDAS_GT_100:
+        # https://github.com/pandas-dev/pandas/issues/30886
+        assert_eq(df.sum(), ddf.sum())
+        assert_eq(df_no_timedelta.mean(), ddf_no_timedelta.mean())
+    else:
+        assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
+        assert_eq(
+            df_no_timedelta.drop(columns="dt").mean(),
+            ddf_no_timedelta.drop(columns="dt").mean(),
+        )
+
     assert_eq(df.prod(), ddf.prod())
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
     assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-    assert_eq(df.var(), ddf.var())
+    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
     if PANDAS_GT_0250:
         # https://github.com/pandas-dev/pandas/issues/18880
         assert_eq(
@@ -1175,8 +1174,6 @@ def test_reductions_frame_dtypes():
         assert_eq(df.var(ddof=0), ddf.var(ddof=0))
         assert_eq(df.var(ddof=0, skipna=False), ddf.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
-
-    assert_eq(df_no_timedelta.mean(), ddf_no_timedelta.mean())
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
@@ -1349,3 +1346,20 @@ def test_moment():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(stats.moment(ddf, 2, 0), scipy.stats.moment(df, 2, 0))
+
+
+@pytest.mark.parametrize("func", ["sum", "count", "mean", "var", "sem"])
+def test_empty_df_reductions(func):
+    pdf = pd.DataFrame()
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    dsk_func = getattr(ddf.__class__, func)
+    pd_func = getattr(pdf.__class__, func)
+
+    assert_eq(dsk_func(ddf), pd_func(pdf))
+
+    idx = pd.date_range("2000", periods=4)
+    pdf = pd.DataFrame(index=idx)
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    assert_eq(dsk_func(ddf), pd_func(pdf))

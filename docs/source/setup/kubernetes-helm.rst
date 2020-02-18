@@ -131,8 +131,8 @@ variable automatically.
 Configure Environment
 ---------------------
 
-By default, the Helm deployment launches three workers using two cores each and
-a standard conda environment.  We can customize this environment by creating a
+By default, the Helm deployment launches three workers using one core each and
+a standard conda environment. We can customize this environment by creating a
 small yaml file that implements a subset of the values in the
 `dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_.
 

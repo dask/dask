@@ -264,7 +264,11 @@ def estimate_graph_size(old_chunks, new_chunks):
     # Estimate the number of intermediate blocks that will be produced
     # (we don't use intersect_chunks() which is much more expensive)
     crossed_size = reduce(
-        mul, (len(oc) + len(nc) for oc, nc in zip(old_chunks, new_chunks))
+        mul,
+        (
+            (len(oc) + len(nc) - 1 if oc != nc else len(oc))
+            for oc, nc in zip(old_chunks, new_chunks)
+        ),
     )
     return crossed_size
 
@@ -511,7 +515,8 @@ def plan_rechunk(
         )
         if (chunks == current_chunks and not first_pass) or chunks == new_chunks:
             break
-        steps.append(chunks)
+        if chunks != current_chunks:
+            steps.append(chunks)
         current_chunks = chunks
         if not memory_limit_hit:
             break

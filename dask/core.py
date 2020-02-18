@@ -463,6 +463,6 @@ def quote(x):
     >>> quote((add, 1, 2))  # doctest: +SKIP
     (literal<type=tuple>,)
     """
-    if istask(x) or type(x) is list:
+    if istask(x) or type(x) is list or type(x) is dict:
         return (literal(x),)
     return x

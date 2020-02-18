@@ -1,6 +1,106 @@
 Changelog
 =========
 
+2.10.1 / 2020-01-30
+-------------------
+
+- Fix Pandas 1.0 version comparison (:pr:`5851`) `Tom Augspurger`_
+- Fix typo in distributed diagnostics documentation (:pr:`5841`) `Gerrit Holl`_
+
+
+2.10.0 / 2020-01-28
+-------------------
+
+- Support for pandas 1.0's new ``BooleanDtype`` and ``StringDtype`` (:pr:`5815`) `Tom Augspurger`_
+- Compatibility with pandas 1.0's API breaking changes and deprecations (:pr:`5792`) `Tom Augspurger`_
+- Fixed non-deterministic tokenization of some extension-array backed pandas objects (:pr:`5813`) `Tom Augspurger`_
+- Fixed handling of dataclass class objects in collections (:pr:`5812`) `Matteo De Wint`_
+- Fixed resampling with tz-aware dates when one of the endpoints fell in a non-existent time (:pr:`5807`) `dfonnegra`_
+- Delay initial Zarr dataset creation until the computation occurs (:pr:`5797`) `Chris Roat`_
+- Use parquet dataset statistics in more cases with the ``pyarrow`` engine (:pr:`5799`) `Richard J Zamora`_
+- Fixed exception in ``groupby.std()`` when some of the keys were large integers (:pr:`5737`) `H. Thomson Comer`_
+
+
+2.9.2 / 2020-01-16
+------------------
+
+Array
++++++
+
+- Unify chunks in ``broadcast_arrays`` (:pr:`5765`) `Matthew Rocklin`_
+
+Core
+++++
+
+- ``xfail`` CSV encoding tests (:pr:`5791`) `Tom Augspurger`_
+- Update order to handle empty dask graph (:pr:`5789`) `James Bourbeau`_
+- Redo ``dask.order.order`` (:pr:`5646`) `Erik Welch`_
+
+DataFrame
++++++++++
+
+- Add transparent compression for on-disk shuffle with ``partd`` (:pr:`5786`) `Christian Wesp`_
+- Fix ``repr`` for empty dataframes (:pr:`5781`) `Shiva Raisinghani`_
+- Pandas 1.0.0RC0 compat (:pr:`5784`) `Tom Augspurger`_
+- Remove buggy assertions (:pr:`5783`) `Tom Augspurger`_
+- Pandas 1.0 compat (:pr:`5782`) `Tom Augspurger`_
+- Fix bug in pyarrow-based ``read_parquet`` on partitioned datasets (:pr:`5777`) `Richard J Zamora`_
+- Compat for pandas 1.0 (:pr:`5779`) `Tom Augspurger`_
+- Fix groupby/mean error with with categorical index (:pr:`5776`) `Richard J Zamora`_
+- Support empty partitions when performing cumulative aggregation (:pr:`5730`) `Matthew Rocklin`_
+- ``set_index`` accepts single-item unnested list (:pr:`5760`) `Wes Roach`_
+- Fixed partitioning in set index for ordered ``Categorical`` (:pr:`5715`) `Tom Augspurger`_
+
+Documentation
++++++++++++++
+
+- Note additional use case for ``normalize_token.register`` (:pr:`5766`) `Thomas A Caswell`_
+- Update bag ``repartition`` docstring (:pr:`5772`) `Timost`_
+- Small typos (:pr:`5771`) `Maarten Breddels`_
+- Fix typo in Task Expectations docs (:pr:`5767`) `James Bourbeau`_
+- Add docs section on task expectations to graph page (:pr:`5764`) `Devin Petersohn`_
+
+
+2.9.1 / 2019-12-27
+------------------
+
+Array
++++++
+
+-  Support Array.view with dtype=None (:pr:`5736`) `Anderson Banihirwe`_
+-  Add dask.array.nanmedian (:pr:`5684`) `Deepak Cherian`_
+
+Core
+++++
+
+-  xfail test_temporary_directory on Python 3.8 (:pr:`5734`) `James Bourbeau`_
+-  Add support for Python 3.8 (:pr:`5603`) `James Bourbeau`_
+-  Use id to dedupe constants in rewrite_blockwise (:pr:`5696`) `Jim Crist`_
+
+DataFrame
++++++++++
+
+-  Raise error when converting a dask dataframe scalar to a boolean (:pr:`5743`) `James Bourbeau`_
+-  Ensure dataframe groupby-variance is greater than zero (:pr:`5728`) `Matthew Rocklin`_
+-  Fix DataFrame.__iter__ (:pr:`5719`) `Tom Augspurger`_
+-  Support Parquet filters in disjunctive normal form, like PyArrow (:pr:`5656`) `Matteo De Wint`_
+-  Auto-detect categorical columns in ArrowEngine-based read_parquet (:pr:`5690`) `Richard J Zamora`_
+-  Skip parquet getitem optimization tests if no engine found (:pr:`5697`) `James Bourbeau`_
+-  Fix independent optimization of parquet-getitem (:pr:`5613`) `Tom Augspurger`_
+
+Documentation
++++++++++++++
+
+-  Update helm config doc (:pr:`5750`) `Ray Bell`_
+-  Link to examples.dask.org in several places (:pr:`5733`) `Tom Augspurger`_
+-  Add missing " in performance report example (:pr:`5724`) `James Bourbeau`_
+-  Resolve several documentation build warnings (:pr:`5685`) `James Bourbeau`_
+-  add info on performance_report (:pr:`5713`) `Ben Zaitlen`_
+-  Add more docs disclaimers (:pr:`5710`) `Julia Signell`_
+-  Fix simple typo: wihout -> without (:pr:`5708`) `Tim Gates`_
+-  Update numpydoc dependency (:pr:`5694`) `James Bourbeau`_
+
+
 2.9.0 / 2019-12-06
 ------------------
 
@@ -2761,3 +2861,17 @@ Other
 .. _`ossdev07`: https://github.com/ossdev07
 .. _`Nuno Gomes Silva`: https://github.com/mgsnuno
 .. _`Ray Bell`: https://github.com/raybellwaves
+.. _`Deepak Cherian`: https://github.com/dcherian
+.. _`Matteo De Wint`: https://github.com/mdwint
+.. _`Tim Gates`: https://github.com/timgates42
+.. _`Erik Welch`: https://github.com/eriknw
+.. _`Christian Wesp`: https://github.com/ChrWesp
+.. _`Shiva Raisinghani`: https://github.com/exemplary-citizen
+.. _`Thomas A Caswell`: https://github.com/tacaswell
+.. _`Timost`: https://github.com/Timost
+.. _`Maarten Breddels`: https://github.com/maartenbreddels
+.. _`Devin Petersohn`: https://github.com/devin-petersohn
+.. _`dfonnegra`: https://github.com/dfonnegra
+.. _`Chris Roat`: https://github.com/ChrisRoat
+.. _`H. Thomson Comer`: https://github.com/thomcom
+.. _`Gerrit Holl`: https://github.com/gerritholl

@@ -587,3 +587,12 @@ def test_atop_legacy():
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)
     assert y.name == z.name
+
+
+def test_non_hlg():
+    # Regression test for https://github.com/dask/dask/issues/5850
+    a = da.from_array(np.ones(1, np.float64), chunks=(1,))
+    a.dask = dict(a.dask)  # Convert from HighLevelGraph to plain dict
+    b = da.from_array(np.zeros(1, np.float64), chunks=(1,))
+    x = a + b
+    assert_eq(x, a)
