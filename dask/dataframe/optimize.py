@@ -13,9 +13,10 @@ def optimize(dsk, keys, **kwargs):
 
     if isinstance(dsk, HighLevelGraph):
         # Think about an API for this.
-        dsk = optimize_read_parquet_getitem(dsk)
-        dsk = optimize_blockwise(dsk, keys=list(core.flatten(keys)))
-        dsk = fuse_roots(dsk, keys=list(core.flatten(keys)))
+        flat_keys = list(core.flatten(keys))
+        dsk = optimize_read_parquet_getitem(dsk, keys=flat_keys)
+        dsk = optimize_blockwise(dsk, keys=flat_keys)
+        dsk = fuse_roots(dsk, keys=flat_keys)
 
     dsk = ensure_dict(dsk)
 
@@ -34,9 +35,11 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
-def optimize_read_parquet_getitem(dsk):
+def optimize_read_parquet_getitem(dsk, keys):
     # find the keys to optimize
     from .io.parquet.core import ParquetSubgraph
+
+    keys = set(keys)
 
     read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
 
@@ -60,7 +63,12 @@ def optimize_read_parquet_getitem(dsk):
                 return dsk
 
             if list(block.dsk.values())[0][0] != operator.getitem:
-                # ... where this value is __getitem__
+                # ... where this value is __getitem__...
+                return dsk
+
+            if set(block.keys()) & keys:
+                # ... but bail on the optimization if the getitem is what's requested
+                # (https://github.com/dask/dask/issues/5893)
                 return dsk
 
             block_columns = block.indices[1][0]

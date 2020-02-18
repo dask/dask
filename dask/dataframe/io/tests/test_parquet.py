@@ -2250,3 +2250,13 @@ def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
 
     assert len(ddf_read["group"].compute()) == 6
     assert len(ddf_read.compute().group) == 6
+
+
+def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
+    # https://github.com/dask/dask/issues/5893
+    pdf = pd.DataFrame({"A": [1, 2, 3, 4, 5, 6], "B": ["a", "b", "c", "d", "e", "f"]})
+    path = os.path.join(str(tmpdir), "data.parquet")
+    pdf.to_parquet(path, engine=engine)
+
+    ddf = dd.read_parquet(path, engine=engine)
+    a, b = dask.optimize(ddf["A"], ddf)
