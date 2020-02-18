@@ -166,7 +166,9 @@ def test_loads_without_deserialization_avoids_compression():
 
 def eq_frames(a, b):
     if b"headers" in a:
-        return msgpack.loads(a, use_list=False) == msgpack.loads(b, use_list=False)
+        return msgpack.loads(a, use_list=False, strict_map_key=False) == msgpack.loads(
+            b, use_list=False, strict_map_key=False
+        )
     else:
         return a == b
 

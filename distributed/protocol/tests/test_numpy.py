@@ -196,7 +196,7 @@ def test_compress_numpy():
     frames = dumps({"x": to_serialize(x)})
     assert sum(map(nbytes, frames)) < x.nbytes
 
-    header = msgpack.loads(frames[2], raw=False, use_list=False)
+    header = msgpack.loads(frames[2], raw=False, use_list=False, strict_map_key=False)
     try:
         import blosc  # noqa: F401
     except ImportError:

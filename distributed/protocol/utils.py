@@ -9,6 +9,7 @@ BIG_BYTES_SHARD_SIZE = 2 ** 26
 msgpack_opts = {
     ("max_%s_len" % x): 2 ** 31 - 1 for x in ["str", "bin", "array", "map", "ext"]
 }
+msgpack_opts["strict_map_key"] = False
 
 try:
     msgpack.loads(msgpack.dumps(""), raw=False, **msgpack_opts)

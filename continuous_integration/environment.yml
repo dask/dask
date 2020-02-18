@@ -14,7 +14,7 @@ dependencies:
   - ipywidgets
   - joblib
   - jupyter_client
-  - msgpack-python
+  - msgpack-python>=0.6.0
   - prometheus_client
   - psutil
   - pytest
