@@ -256,15 +256,13 @@ def cummax_aggregate(x, y):
         return x if x > y else y
 
 
-def set_column(df, name, value):
-    df = df.copy(deep=False)
-    df[name] = value
-    return df
-
-
 def assign(df, *pairs):
-    df = df.copy(deep=False)
-    for name, val in dict(partition(2, pairs)).items():
+    # Only deep copy when updating an element
+    # (to avoid modifying the original)
+    pairs = dict(partition(2, pairs))
+    deep = bool(set(pairs) & set(df.columns))
+    df = df.copy(deep=bool(deep))
+    for name, val in pairs.items():
         df[name] = val
     return df
 
