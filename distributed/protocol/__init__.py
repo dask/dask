@@ -92,3 +92,11 @@ def _register_rmm():
 @dask_deserialize.register_lazy("cudf")
 def _register_cudf():
     from cudf.comm import serialize
+
+
+@cuda_serialize.register_lazy("cuml")
+@cuda_deserialize.register_lazy("cuml")
+@dask_serialize.register_lazy("cuml")
+@dask_deserialize.register_lazy("cuml")
+def _register_cuml():
+    from cuml.comm import serialize
