@@ -579,8 +579,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     diag_chunks = []
     chunk_offsets = []
-    cum1 = list(cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1])
-    cum2 = list(cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1])
+    cum1 = cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1]
+    cum2 = cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1]
     for co1, c1 in zip(cum1, a.chunks[axis1]):
         chunk_offsets.append([])
         for co2, c2 in zip(cum2, a.chunks[axis2]):
