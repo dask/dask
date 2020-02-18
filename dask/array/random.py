@@ -1,4 +1,5 @@
 import numbers
+import warnings
 from itertools import product
 from numbers import Integral
 from operator import getitem
@@ -16,7 +17,22 @@ from .core import (
 from .creation import arange
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from
+from ..utils import ignoring, random_state_data, derived_from, skip_doctest
+
+
+def doc_wraps(func):
+    """ Copy docstring from one function to another """
+    warnings.warn(
+        "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
+        FutureWarning,
+    )
+
+    def _(func2):
+        if func.__doc__ is not None:
+            func2.__doc__ = skip_doctest(func.__doc__)
+        return func2
+
+    return _
 
 
 class RandomState(object):
