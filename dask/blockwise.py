@@ -1,4 +1,5 @@
 import itertools
+import operator
 import warnings
 from collections.abc import Mapping
 
@@ -50,6 +51,8 @@ def blockwise(
     concatenate=None,
     new_axes=None,
     dependencies=(),
+    getitem_key=None,
+    filter_key=None,
     **kwargs
 ):
     """ Create a Blockwise symbolic mutable mapping
@@ -119,8 +122,25 @@ def blockwise(
         kwargs2 = (dict, list(map(list, kwargs.items())))
         subgraph = {output: (apply, func, _keys, kwargs2)}
 
+    into_kwargs = {}
+    if func == operator.getitem and getitem_key is not None:
+        into = BlockwiseGetitem
+        into_kwargs["getitem_key"] = getitem_key
+    elif func in {
+        operator.lt,
+        operator.le,
+        operator.eq,
+        operator.ne,
+        operator.ge,
+        operator.gt,
+    }:
+        into = BlockwiseFilter
+        into_kwargs["filter_key"] = (func, filter_key)
+    else:
+        into = Blockwise
+
     # Construct final output
-    subgraph = Blockwise(
+    subgraph = into(
         output,
         output_indices,
         subgraph,
@@ -128,6 +148,7 @@ def blockwise(
         numblocks=numblocks,
         concatenate=concatenate,
         new_axes=new_axes,
+        **into_kwargs
     )
     return subgraph
 
@@ -201,7 +222,7 @@ class Blockwise(Mapping):
         self.new_axes = new_axes or {}
 
     def __repr__(self):
-        return "Blockwise<{} -> {}>".format(self.indices, self.output)
+        return "{}<{} -> {}>".format(type(self).__name__, self.indices, self.output)
 
     @property
     def _dict(self):
@@ -242,6 +263,62 @@ class Blockwise(Mapping):
                     out_d[a] = d[a]
 
         return out_d
+
+
+class BlockwiseGetitem(Blockwise):
+    """
+    Blockwise dedicated to `__getitem__`
+
+    Parameters
+    ----------
+    getitem_key : Scalar or BlockwiseFilter
+    """
+
+    def __init__(
+        self,
+        output,
+        output_indices,
+        dsk,
+        indices,
+        numblocks,
+        concatenate=None,
+        new_axes=None,
+        getitem_key=None,
+    ):
+        super().__init__(
+            output, output_indices, dsk, indices, numblocks, concatenate, new_axes
+        )
+        self.getitem_key = getitem_key
+
+    @property
+    def can_pushdown(self):
+        """Whether this represents a getitem that can be pushed down.
+
+        In the following
+
+        >>> df[df['A'] == 5]
+
+        The outer would be pushed down, while the inner would not.
+        """
+        return isinstance(self.getitem_key, BlockwiseFilter)
+
+
+class BlockwiseFilter(Blockwise):
+    def __init__(
+        self,
+        output,
+        output_indices,
+        dsk,
+        indices,
+        numblocks,
+        concatenate=None,
+        new_axes=None,
+        filter_key=None,
+    ):
+        super().__init__(
+            output, output_indices, dsk, indices, numblocks, concatenate, new_axes
+        )
+        self.filter_key = filter_key
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):

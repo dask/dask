@@ -34,7 +34,24 @@ class ParquetSubgraph(Mapping):
     Enables optimizations (see optimize_read_parquet_getitem).
     """
 
-    def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
+    def __init__(
+        self,
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        statistics,
+        filters,
+        chunksize,
+        paths,
+        categories,
+        gather_statistics,
+        split_row_groups,
+    ):
         self.name = name
         self.engine = engine
         self.fs = fs
@@ -43,6 +60,13 @@ class ParquetSubgraph(Mapping):
         self.index = index
         self.parts = parts
         self.kwargs = kwargs
+        self.statistics = statistics
+        self.filters = filters
+        self.chunksize = chunksize
+        self.paths = paths
+        self.categories = categories
+        self.gather_statistics = gather_statistics
+        self.split_row_groups = split_row_groups
 
     def __repr__(self):
         return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
@@ -96,6 +120,7 @@ def read_parquet(
     gather_statistics=None,
     split_row_groups=True,
     chunksize=None,
+    name=None,
     **kwargs
 ):
     """
@@ -196,16 +221,17 @@ def read_parquet(
     if columns is not None:
         columns = list(columns)
 
-    name = "read-parquet-" + tokenize(
-        path,
-        columns,
-        filters,
-        categories,
-        index,
-        storage_options,
-        engine,
-        gather_statistics,
-    )
+    if name is None:
+        name = "read-parquet-" + tokenize(
+            path,
+            columns,
+            filters,
+            categories,
+            index,
+            storage_options,
+            engine,
+            gather_statistics,
+        )
 
     if isinstance(engine, str):
         engine = get_engine(engine)
@@ -247,7 +273,23 @@ def read_parquet(
         meta, index, columns, index_in_columns, auto_index_allowed
     )
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = ParquetSubgraph(
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        statistics,
+        filters,
+        chunksize,
+        paths,
+        categories,
+        gather_statistics,
+        split_row_groups,
+    )
 
     # Set the index that was previously treated as a column
     if index_in_columns:
@@ -265,6 +307,7 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
+    # print(kwargs)
     if isinstance(part, list):
         dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
         df = concat(dfs, axis=0)
@@ -644,6 +687,7 @@ def process_statistics(parts, statistics, filters, index, chunksize):
     Used in read_parquet.
     """
     index_in_columns = False
+    # breakpoint()
     if statistics:
         result = list(
             zip(

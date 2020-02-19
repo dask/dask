@@ -2168,6 +2168,22 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
+def test_optimize_pushdown_filter(tmpdir, engine):
+    df = pd.DataFrame(
+        {"A": [1] * 1000 + [2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}
+    )
+    df.index.name = "my_index"
+    ddf = dd.from_pandas(df, 2, sort=False)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    ddf = dd.read_parquet(fn, engine=engine, name="df-")
+    result = ddf[ddf["A"] == 1]
+    dsk, = dask.optimize(result)
+    breakpoint()
+    result.compute()
+
+
 def test_subgraph_getitem():
     meta = pd.DataFrame(columns=["a"])
     subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})

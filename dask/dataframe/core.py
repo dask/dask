@@ -1444,9 +1444,9 @@ Dask Name: {name}, {task} tasks"""
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         if inv:
-            return lambda self, other: elemwise(op, other, self)
+            return lambda self, other: elemwise(op, other, self, filter_key=other)
         else:
-            return lambda self, other: elemwise(op, self, other)
+            return lambda self, other: elemwise(op, self, other, filter_key=other)
 
     def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
@@ -3442,7 +3442,9 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(
+                operator.getitem, name, self, key, getitem_key=key
+            )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -3474,7 +3476,13 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(
+                operator.getitem,
+                name,
+                self,
+                key,
+                getitem_key=key.dask.layers[key._name],
+            )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         raise NotImplementedError(key)
@@ -4625,7 +4633,7 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
+    **kwargs: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
@@ -4642,6 +4650,16 @@ def elemwise(op, *args, **kwargs):
     meta = kwargs.pop("meta", no_default)
     out = kwargs.pop("out", None)
     transform_divisions = kwargs.pop("transform_divisions", True)
+    # filter_key = kwargs.pop("filter_key", None)
+    if op in {
+        operator.lt,
+        operator.le,
+        operator.eq,
+        operator.ne,
+        operator.ge,
+        operator.gt,
+    }:
+        filter_key = kwargs.pop("filter_key", None)
 
     _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 
@@ -4694,7 +4712,7 @@ def elemwise(op, *args, **kwargs):
     ]
 
     # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
+    dsk = partitionwise_graph(op, _name, *args, filter_key=filter_key, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=dasks)
 

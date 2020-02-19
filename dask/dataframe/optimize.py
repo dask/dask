@@ -6,7 +6,7 @@ from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
-from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
+from ..blockwise import optimize_blockwise, fuse_roots, Blockwise, BlockwiseGetitem
 
 
 def optimize(dsk, keys, **kwargs):
@@ -15,6 +15,8 @@ def optimize(dsk, keys, **kwargs):
         # Think about an API for this.
         flat_keys = list(core.flatten(keys))
         dsk = optimize_read_parquet_getitem(dsk, keys=flat_keys)
+        if config.get("optimization.dataframe.io.parquet.predicate_pushdown"):
+            dsk = optimize_read_parquet_predicate_pushdown(dsk, keys=flat_keys)
         dsk = optimize_blockwise(dsk, keys=flat_keys)
         dsk = fuse_roots(dsk, keys=flat_keys)
 
@@ -29,10 +31,47 @@ def optimize(dsk, keys, **kwargs):
     if fuse_subgraphs is None:
         fuse_subgraphs = True
     dsk, dependencies = fuse(
-        dsk, keys, dependencies=dependencies, fuse_subgraphs=fuse_subgraphs,
+        dsk, keys, dependencies=dependencies, fuse_subgraphs=fuse_subgraphs
     )
     dsk, _ = cull(dsk, keys)
     return dsk
+
+
+def optimize_read_parquet_predicate_pushdown(dsk, keys):
+    # find the keys to optimize
+    from .io.parquet.core import ParquetSubgraph
+
+    read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
+
+    layers = dsk.layers.copy()
+    dependencies = dsk.dependencies.copy()
+
+    for k in read_parquets:
+        dependents = dsk.dependents[k]
+        # Check for presence of df[df.A == 0],
+        # i.e. two getitems.
+        if len(dependents) == 2 and all(
+            isinstance(dsk.layers[dep], BlockwiseGetitem) for dep in dependents
+        ):
+            column_layer, filter_layer = [layers[x] for x in dependents]
+            if column_layer.can_pushdown:
+                # got the names backwards
+                column_layer, filter_layer = filter_layer, column_layer
+            func, other = filter_layer.getitem_key.filter_key
+            symbols = {"lt": "<", "le": "<=", "eq": "=", "gt": ">", "ge": ">="}
+            symbol = symbols[func.__name__]
+            filters = [[(column_layer.getitem_key, symbol, other)]]
+
+            old = layers[k]
+            new = filter_parquet_subgraph(old, filters)
+            # print("HI!")
+            name = "read-parquet-" + tokenize(old.name, new.filters)  # TODO
+            layers[name] = new
+            if name != old.name:
+                del layers[old.name]
+
+    new_hlg = HighLevelGraph(layers, dependencies)
+    return new_hlg
 
 
 def optimize_read_parquet_getitem(dsk, keys):
@@ -113,7 +152,21 @@ def optimize_read_parquet_getitem(dsk, keys):
             columns = list(meta.columns)
 
         new = ParquetSubgraph(
-            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
+            name,
+            old.engine,
+            old.fs,
+            meta,
+            columns,
+            old.index,
+            old.parts,
+            old.kwargs,
+            old.statistics,
+            old.filters,
+            old.chunksize,
+            old.paths,
+            old.categories,
+            old.gather_statistics,
+            old.split_row_groups,
         )
         layers[name] = new
         if name != old.name:
@@ -121,3 +174,45 @@ def optimize_read_parquet_getitem(dsk, keys):
 
     new_hlg = HighLevelGraph(layers, dependencies)
     return new_hlg
+
+
+def filter_parquet_subgraph(subgraph, filters):
+    from .io.parquet.core import ParquetSubgraph, process_statistics
+
+    # TODO: I would love to avoid read_metadata.
+    # Might be able to with a bit of work...
+    meta, statistics, parts = subgraph.engine.read_metadata(
+        subgraph.fs,
+        subgraph.paths,
+        categories=subgraph.categories,
+        index=subgraph.index,
+        gather_statistics=subgraph.gather_statistics,
+        filters=filters,
+        split_row_groups=subgraph.split_row_groups,
+        **subgraph.kwargs
+    )
+    index = subgraph.index
+
+    # Parse dataset statistics from metadata (if available)
+    parts, divisions, index, index_in_columns = process_statistics(
+        parts, statistics, filters, index, subgraph.chunksize
+    )
+
+    filtered = ParquetSubgraph(
+        subgraph.name,
+        subgraph.engine,
+        subgraph.fs,
+        subgraph.meta,
+        subgraph.columns,
+        subgraph.index,
+        parts,
+        subgraph.kwargs,
+        statistics,
+        filters,
+        subgraph.chunksize,
+        subgraph.paths,
+        subgraph.categories,
+        subgraph.gather_statistics,
+        subgraph.split_row_groups,
+    )
+    return filtered
