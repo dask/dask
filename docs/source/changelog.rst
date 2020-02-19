@@ -1,6 +1,55 @@
 Changelog
 =========
 
+2.11.0 - 2020-02-19
+-------------------
+
+- Add dask serialization of CUDA objects (:pr:`3482`) `John Kirkham`_
+- Suppress cuML ``ImportError`` (:pr:`3499`) `John Kirkham`_
+- Msgpack 1.0 compatibility (:pr:`3494`) `James Bourbeau`_
+- Register cuML serializers (:pr:`3485`) `John Kirkham`_
+- Check exact equality for worker state (:pr:`3483`) `Brett Naul`_
+- Serialize 1-D, contiguous, ``uint8`` CUDA frames (:pr:`3475`) `John Kirkham`_
+- Update NumPy array serialization to handle non-contiguous slices (:pr:`3474`) `James Bourbeau`_
+- Propose fix for collection based resources docs (:pr:`3480`) `Chris Roat`_
+- Remove ``--verbose`` flag from CI runs (:pr:`3484`) `Matthew Rocklin`_
+- Do not duplicate messages in scheduler report (:pr:`3477`) `Jakub Beránek`_
+- Register Dask cuDF serializers (:pr:`3478`) `John Kirkham`_
+- Add support for Python 3.8 (:pr:`3249`) `James Bourbeau`_
+- Add last seen column to worker table and highlight errant workers (:pr:`3468`) `kaelgreco`_
+- Change default value of ``local_directory`` from empty string to ``None`` (:pr:`3441`) `condoratberlin`_
+- Clear old docs (:pr:`3458`) `Matthew Rocklin`_
+- Change default multiprocessing behavior to spawn (:pr:`3461`) `Matthew Rocklin`_
+- Split dashboard host on additional slashes to handle inproc (:pr:`3466`) `Jacob Tomlinson`_
+- Update ``locality.rst`` (:pr:`3470`) `Dustin Tindall`_
+- Minor ``gen.Return`` cleanup (:pr:`3469`) `James Bourbeau`_
+- Update comparison logic for worker state (:pr:`3321`) `rockwellw`_
+- Update minimum ``tblib`` version to 1.6.0 (:pr:`3451`) `James Bourbeau`_
+- Add total row to workers plot in dashboard (:pr:`3464`) `Julia Signell`_
+- Workaround ``RecursionError`` on profile data (:pr:`3455`) `Tom Augspurger`_
+- Include code and summary in performance report (:pr:`3462`) `Matthew Rocklin`_
+- Skip ``test_open_close_many_workers`` on Python 3.6 (:pr:`3459`) `Matthew Rocklin`_
+- Support serializing/deserializing ``rmm.DeviceBuffer`` s (:pr:`3442`) `John Kirkham`_
+- Always add new ``TaskGroup`` to ``TaskPrefix`` (:pr:`3322`) `James Bourbeau`_
+- Rerun ``black`` on the code base (:pr:`3444`) `John Kirkham`_
+- Ensure ``__causes__`` s of exceptions raised on workers are serialized (:pr:`3430`) `Alex Adamson`_
+- Adjust ``numba.cuda`` import and add check (:pr:`3446`) `John Kirkham`_
+- Fix name of Numba serialization test (:pr:`3447`) `John Kirkham`_
+- Checks for command parameters in ``ssh2`` (:pr:`3078`) `Peter Andreas Entschev`_
+- Update ``worker_kwargs`` description in ``LocalCluster`` constructor (:pr:`3438`) `James Bourbeau`_
+- Ensure scheduler updates task and worker states after successful worker data deletion (:pr:`3401`) `James Bourbeau`_
+- Avoid ``loop=`` keyword in asyncio coordination primitives (:pr:`3437`) `Matthew Rocklin`_
+- Call pip as a module to avoid warnings (:pr:`3436`) `Cyril Shcherbin`_
+- Add documentation of parameters in coordination primitives (:pr:`3434`) `Søren Fuglede Jørgensen`_
+- Replace ``tornado.locks`` with asyncio for Events/Locks/Conditions/Semaphore (:pr:`3397`) `Matthew Rocklin`_
+- Remove object from class hierarchy (:pr:`3432`) `Anderson Banihirwe`_
+- Add ``dashboard_link`` property to ``Client`` (:pr:`3429`) `Jacob Tomlinson`_
+- Allow memory monitor to evict data more aggressively (:pr:`3424`) `fjetter`_
+- Make ``_get_ip`` return an IP address when defaulting (:pr:`3418`) `Pierre Glaser`_
+- Support version checking with older versions of Dask (:pr:`3390`) `Igor Gotlibovych`_
+- Add Mac OS build to CI (:pr:`3358`) `James Bourbeau`_
+
+
 2.10.0 - 2020-01-28
 -------------------
 
@@ -1512,3 +1561,12 @@ significantly without many new features.
 .. _`Markus Mohrhard`: https://github.com/mmohrhard
 .. _`Mana Borwornpadungkitti`: https://github.com/potpath
 .. _`Chrysostomos Nanakos`: https://github.com/cnanakos
+.. _`Chris Roat`: https://github.com/chrisroat
+.. _`Jakub Beránek`: https://github.com/Kobzol
+.. _`kaelgreco`: https://github.com/kaelgreco
+.. _`Dustin Tindall`: https://github.com/dustindall
+.. _`Julia Signell`: https://github.com/jsignell
+.. _`Alex Adamson`: https://github.com/aadamson
+.. _`Cyril Shcherbin`: https://github.com/shcherbin
+.. _`Søren Fuglede Jørgensen`: https://github.com/fuglede
+.. _`Igor Gotlibovych`: https://github.com/ig248
