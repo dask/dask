@@ -10,7 +10,6 @@ dependencies:
   - pytest
   - cloudpickle
   - distributed
-  - msgpack-python==0.6.2
   - toolz
   - bcolz
   - bokeh
