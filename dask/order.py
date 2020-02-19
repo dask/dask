@@ -160,7 +160,7 @@ def order(dsk, dependencies=None):
         total_dependents, min_dependencies, _, min_heights, _ = metrics[x]
         return (
             # tactically, finish small connected jobs first
-            # min_dependencies,  # this is implied by our partitioning
+            min_dependencies,  # this is implied by our partitioning
             num_dependents - min_heights,  # prefer tall and narrow
             -total_dependents,  # take a big step
             # try to be memory efficient
@@ -205,7 +205,8 @@ def order(dsk, dependencies=None):
     def finish_now_key(x):
         return (-len(dependencies[x]), StrComparable(x))
 
-    keys = {key: val[1] for key, val in metrics.items()}  # min_dependencies
+    # total_dependents, min_dependencies
+    keys = {key: val[0:2] for key, val in metrics.items()}
     result = {}
     i = 0
 
