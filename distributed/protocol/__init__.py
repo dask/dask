@@ -70,18 +70,24 @@ def _register_torch():
 
 @cuda_serialize.register_lazy("cupy")
 @cuda_deserialize.register_lazy("cupy")
+@dask_serialize.register_lazy("cupy")
+@dask_deserialize.register_lazy("cupy")
 def _register_cupy():
     from . import cupy
 
 
 @cuda_serialize.register_lazy("numba")
 @cuda_deserialize.register_lazy("numba")
+@dask_serialize.register_lazy("numba")
+@dask_deserialize.register_lazy("numba")
 def _register_numba():
     from . import numba
 
 
 @cuda_serialize.register_lazy("rmm")
 @cuda_deserialize.register_lazy("rmm")
+@dask_serialize.register_lazy("rmm")
+@dask_deserialize.register_lazy("rmm")
 def _register_rmm():
     from . import rmm
 

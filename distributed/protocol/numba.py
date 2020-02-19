@@ -1,10 +1,17 @@
-import numpy as np
 import numba.cuda
-from .cuda import cuda_serialize, cuda_deserialize
+import numpy as np
+
+from .cuda import cuda_deserialize, cuda_serialize
+from .serialize import dask_deserialize, dask_serialize
+
+try:
+    from .rmm import dask_deserialize_rmm_device_buffer
+except ImportError:
+    dask_deserialize_rmm_device_buffer = None
 
 
 @cuda_serialize.register(numba.cuda.devicearray.DeviceNDArray)
-def serialize_numba_ndarray(x):
+def cuda_serialize_numba_ndarray(x):
     # Making sure `x` is behaving
     if not (x.flags["C_CONTIGUOUS"] or x.flags["F_CONTIGUOUS"]):
         shape = x.shape
@@ -24,7 +31,7 @@ def serialize_numba_ndarray(x):
 
 
 @cuda_deserialize.register(numba.cuda.devicearray.DeviceNDArray)
-def deserialize_numba_ndarray(header, frames):
+def cuda_deserialize_numba_ndarray(header, frames):
     (frame,) = frames
     shape = header["shape"]
     strides = header["strides"]
@@ -35,4 +42,22 @@ def deserialize_numba_ndarray(header, frames):
         dtype=np.dtype(header["typestr"]),
         gpu_data=numba.cuda.as_cuda_array(frame).gpu_data,
     )
+    return arr
+
+
+@dask_serialize.register(numba.cuda.devicearray.DeviceNDArray)
+def dask_serialize_numba_ndarray(x):
+    header, frames = cuda_serialize_numba_ndarray(x)
+    frames = [memoryview(f.copy_to_host()) for f in frames]
+    return header, frames
+
+
+@dask_deserialize.register(numba.cuda.devicearray.DeviceNDArray)
+def dask_deserialize_numba_array(header, frames):
+    if dask_deserialize_rmm_device_buffer:
+        frames = [dask_deserialize_rmm_device_buffer(header, frames)]
+    else:
+        frames = [numba.cuda.to_device(np.asarray(memoryview(f))) for f in frames]
+
+    arr = cuda_deserialize_numba_ndarray(header, frames)
     return arr

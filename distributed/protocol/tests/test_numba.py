@@ -9,15 +9,21 @@ np = pytest.importorskip("numpy")
 @pytest.mark.parametrize("shape", [(0,), (5,), (4, 6), (10, 11), (2, 3, 5)])
 @pytest.mark.parametrize("dtype", ["u1", "u4", "u8", "f4"])
 @pytest.mark.parametrize("order", ["C", "F"])
-def test_serialize_numba(shape, dtype, order):
+@pytest.mark.parametrize("serializers", [("cuda",), ("dask",)])
+def test_serialize_numba(shape, dtype, order, serializers):
     if not cuda.is_available():
         pytest.skip("CUDA is not available")
 
     ary = np.arange(np.product(shape), dtype=dtype)
     ary = np.ndarray(shape, dtype=ary.dtype, buffer=ary.data, order=order)
     x = cuda.to_device(ary)
-    header, frames = serialize(x, serializers=("cuda", "dask", "pickle"))
-    y = deserialize(header, frames, deserializers=("cuda", "dask", "pickle", "error"))
+    header, frames = serialize(x, serializers=serializers)
+    y = deserialize(header, frames, deserializers=serializers)
+
+    if serializers[0] == "cuda":
+        assert all(hasattr(f, "__cuda_array_interface__") for f in frames)
+    elif serializers[0] == "dask":
+        assert all(isinstance(f, memoryview) for f in frames)
 
     hx = np.empty_like(ary)
     hy = np.empty_like(ary)

@@ -2,7 +2,14 @@
 Efficient serialization GPU arrays.
 """
 import cupy
-from .cuda import cuda_serialize, cuda_deserialize
+
+from .cuda import cuda_deserialize, cuda_serialize
+from .serialize import dask_deserialize, dask_serialize
+
+try:
+    from .rmm import dask_deserialize_rmm_device_buffer as dask_deserialize_cuda_buffer
+except ImportError:
+    from .numba import dask_deserialize_numba_array as dask_deserialize_cuda_buffer
 
 
 class PatchedCudaArrayInterface:
@@ -31,7 +38,7 @@ class PatchedCudaArrayInterface:
 
 
 @cuda_serialize.register(cupy.ndarray)
-def serialize_cupy_ndarray(x):
+def cuda_serialize_cupy_ndarray(x):
     # Making sure `x` is behaving
     if not (x.flags["C_CONTIGUOUS"] or x.flags["F_CONTIGUOUS"]):
         x = cupy.array(x, copy=True)
@@ -48,7 +55,7 @@ def serialize_cupy_ndarray(x):
 
 
 @cuda_deserialize.register(cupy.ndarray)
-def deserialize_cupy_array(header, frames):
+def cuda_deserialize_cupy_ndarray(header, frames):
     (frame,) = frames
     if not isinstance(frame, cupy.ndarray):
         frame = PatchedCudaArrayInterface(frame)
@@ -58,4 +65,18 @@ def deserialize_cupy_array(header, frames):
         memptr=cupy.asarray(frame).data,
         strides=header["strides"],
     )
+    return arr
+
+
+@dask_serialize.register(cupy.ndarray)
+def dask_serialize_cupy_ndarray(x):
+    header, frames = cuda_serialize_cupy_ndarray(x)
+    frames = [memoryview(cupy.asnumpy(f)) for f in frames]
+    return header, frames
+
+
+@dask_deserialize.register(cupy.ndarray)
+def dask_deserialize_cupy_ndarray(header, frames):
+    frames = [dask_deserialize_cuda_buffer(header, frames)]
+    arr = cuda_deserialize_cupy_ndarray(header, frames)
     return arr
