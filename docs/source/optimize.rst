@@ -34,15 +34,13 @@ Suppose you had a custom Dask graph for doing a word counting task:
 
 .. code-block:: python
 
-    >>> from __future__ import print_function
-
     >>> def print_and_return(string):
     ...     print(string)
     ...     return string
 
     >>> def format_str(count, val, nwords):
-    ...     return ('word list has {0} occurrences of {1}, '
-    ...             'out of {2} words').format(count, val, nwords)
+    ...     return (f'word list has {count} occurrences of '
+    ...             f'{val}, out of {nwords} words')
 
     >>> dsk = {'words': 'apple orange apple pear orange pear pear',
     ...        'nwords': (len, (str.split, 'words')),
