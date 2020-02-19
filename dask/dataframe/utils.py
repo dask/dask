@@ -671,11 +671,14 @@ def check_matching_columns(meta, actual):
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
         extra = actual.columns.difference(meta.columns).tolist()
         missing = meta.columns.difference(actual.columns).tolist()
+        if extra or missing:
+            extra_info = f"  Extra:   {extra}\n  Missing: {missing}"
+        else:
+            extra_info = "Order of columns does not match"
         raise ValueError(
             "The columns in the computed data do not match"
             " the columns in the provided metadata\n"
-            "  Extra:   %s\n"
-            "  Missing: %s" % (extra, missing)
+            f"{extra_info}"
         )
 
 
@@ -781,7 +784,7 @@ def assert_eq(
     check_dtypes=True,
     check_divisions=True,
     check_index=True,
-    **kwargs
+    **kwargs,
 ):
     if check_divisions:
         assert_divisions(a)

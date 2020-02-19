@@ -11,6 +11,7 @@ from dask.dataframe.utils import (
     make_meta,
     raise_on_meta_error,
     check_meta,
+    check_matching_columns,
     UNKNOWN_CATEGORIES,
     is_dataframe_like,
     is_series_like,
@@ -366,6 +367,22 @@ def test_check_meta():
         "+--------+----------+----------+"
     )
     assert str(err.value) == exp
+
+
+def test_check_matching_columns_raises_appropriate_errors():
+    df = pd.DataFrame(columns=["a", "b", "c"])
+
+    meta = pd.DataFrame(columns=["b", "a", "c"])
+    with pytest.raises(ValueError, match="Order of columns does not match"):
+        assert check_matching_columns(meta, df)
+
+    meta = pd.DataFrame(columns=["a", "b", "c", "d"])
+    with pytest.raises(ValueError, match="Missing: \\['d'\\]"):
+        assert check_matching_columns(meta, df)
+
+    meta = pd.DataFrame(columns=["a", "b"])
+    with pytest.raises(ValueError, match="Extra:   \\['c'\\]"):
+        assert check_matching_columns(meta, df)
 
 
 def test_check_meta_typename():
