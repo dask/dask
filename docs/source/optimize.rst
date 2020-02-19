@@ -34,8 +34,6 @@ Suppose you had a custom Dask graph for doing a word counting task:
 
 .. code-block:: python
 
-    >>> from __future__ import print_function
-
     >>> def print_and_return(string):
     ...     print(string)
     ...     return string
