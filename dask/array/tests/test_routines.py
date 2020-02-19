@@ -339,7 +339,7 @@ def test_vdot(shape, chunks):
 
 
 @pytest.mark.parametrize("shape1, shape2", [((20,), (6,)), ((4, 5), (2, 3))])
-def test_inner(shape1, shape2):
+def test_outer(shape1, shape2):
     np.random.random(1337)
 
     x = 2 * np.random.random(shape1) - 1
