@@ -75,15 +75,11 @@ output keys to a scheduler ``get`` function:
     >>> from dask.optimization import cull
 
     >>> outputs = ['print1', 'print2']
-    >>> dsk2, _ = cull(dsk, outputs)  # remove unnecessary tasks from the graph
+    >>> dsk1, dependencies = cull(dsk, outputs)  # remove unnecessary tasks from the graph
 
     >>> results = get(dsk2, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
-
-    >>> results
-    ('word list has 2 occurrences of orange, out of 7 words',
-     'word list has 2 occurrences of apple, out of 7 words')
 
 As can be seen above, the scheduler computed only the requested outputs
 (``'print3'`` was never computed). This is because we called the
@@ -97,10 +93,11 @@ later steps:
 .. code-block:: python
 
     >>> from dask.optimization import cull
+    >>> outputs = ['print1', 'print2']
     >>> dsk1, dependencies = cull(dsk, outputs)
 
 .. image:: images/optimize_dask2.png
-   :width: 60 %
+   :width: 50 %
    :alt: After culling
 
 Looking at the task graph above, there are multiple accesses to constants such
@@ -116,7 +113,7 @@ tasks to improve efficiency using the ``inline`` function. For example:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask3.png
-   :width: 40 %
+   :width: 65 %
    :alt: After inlining
 
 Now we have two sets of *almost* linear task chains. The only link between them
@@ -136,7 +133,7 @@ can be used:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask4.png
-   :width: 40 %
+   :width: 60 %
    :alt: After inlining functions
 
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
@@ -153,7 +150,7 @@ One option is just to merge these linear chains into one big task using the
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask5.png
-   :width: 40 %
+   :width: 60 %
    :alt: After fusing
 
 
