@@ -99,4 +99,5 @@ def _register_cudf():
 @dask_serialize.register_lazy("cuml")
 @dask_deserialize.register_lazy("cuml")
 def _register_cuml():
-    from cuml.comm import serialize
+    with ignoring(ImportError):
+        from cuml.comm import serialize
