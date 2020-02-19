@@ -33,6 +33,7 @@ dependencies:
   - crick
   - cytoolz
   - distributed==2.0.1
+  - msgpack-python==0.6.2
   - graphviz
   - ipython
   - lz4
