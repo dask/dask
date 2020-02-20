@@ -640,7 +640,16 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
-        ((10, 11), (4, 5), 0, "empty", {}),
+        pytest.param(
+            (10, 11),
+            (4, 5),
+            0,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -684,7 +693,16 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
-        ((10,), (3,), 1, "empty", {}),
+        pytest.param(
+            (10,),
+            (3,),
+            1,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
