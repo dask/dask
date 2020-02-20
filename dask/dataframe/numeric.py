@@ -9,7 +9,7 @@ from .core import Series
 __all__ = ("to_numeric",)
 
 
-def to_numeric(arg):
+def to_numeric(arg, meta=None):
     """
     Convert argument to a numeric type.
 
@@ -37,14 +37,14 @@ def to_numeric(arg):
         return arg.map_partitions(
             pd.to_numeric,
             token=arg._name + "-to_numeric",
-            meta=pd.to_numeric(arg._meta),
+            meta=meta if meta is not None else pd.to_numeric(arg._meta),
             enforce_metadata=False,
         )
     if isinstance(arg, Array):
         return arg.map_blocks(
             pd.to_numeric,
             name=arg._name + "-to_numeric",
-            meta=pd.to_numeric(arg._meta),
+            meta=meta if meta is not None else pd.to_numeric(arg._meta),
         )
     if is_scalar(arg):
         return delayed(pd.to_numeric, pure=True)(arg)
