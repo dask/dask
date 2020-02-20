@@ -101,13 +101,12 @@ def read_arrow_dataset_part(
     return table.to_pandas()
 
 
-def read_arrow_dataset(path, partitioning, columns=None, filter=None):
+def read_arrow_dataset(path, partitioning, columns=None, filter=None, filesystem=None, format="parquet"):
 
-    dataset = ds.dataset(path, partitioning=partitioning)
+    dataset = ds.dataset(path, partitioning=partitioning, filesystem=filesystem, format=format)
     source = dataset.sources[0]
     schema = dataset.schema
     files = source.files
-    format = ds.ParquetFileFormat()
 
     # meta = next(dataset.to_batches()).to_pandas()
     meta = schema.empty_table().to_pandas()
@@ -120,7 +119,7 @@ def read_arrow_dataset(path, partitioning, columns=None, filter=None):
     # return DataFrame(dsk, name, meta, tuple([None]*(len(dsk) + 1)))
 
     subgraph = ArrowDatasetSubgraph(
-        name, files, None, schema, partitioning, format, columns, filter, meta,
+        name, files, filesystem, schema, partitioning, format, columns, filter, meta,
     )
 
     return new_dd_object(subgraph, name, meta, tuple([None]*(len(files) + 1)))
