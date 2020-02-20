@@ -640,6 +640,7 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
+        ((10, 11), (4, 5), 0, "empty", {}),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -693,6 +694,19 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     da_r = da.pad(da_a, pad_width, mode, **kwargs)
 
     assert_eq(np_r, da_r)
+
+
+def test_pad_empty():
+    # empty pads lead to undefined values which may not be the same with
+    # multiple runs
+    shape, chunks, pad_width = (10,), (3,), 3
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a, chunks=chunks)
+
+    np_r = np.pad(np_a, pad_width, "empty")
+    da_r = da.pad(da_a, pad_width, "empty")
+
+    assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
 
 
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
