@@ -1,6 +1,7 @@
 import pandas as pd
-from pandas.core.dtypes.common import is_scalar
+from pandas.core.dtypes.common import is_scalar as pd_is_scalar
 
+from ..utils import derived_from
 from ..delayed import delayed
 from ..array import Array
 from .core import Series
@@ -9,46 +10,61 @@ from .core import Series
 __all__ = ("to_numeric",)
 
 
-def to_numeric(arg, meta=None):
+@derived_from(pd)
+def to_numeric(arg, errors="raise", downcast=None, meta=None):
     """
-    Convert argument to a numeric type.
-
-    The default return dtype is `float64` or `int64`
-    depending on the data supplied.
-
-    Please note that precision loss may occur if really large numbers
-    are passed in. Due to the internal limitations of `ndarray`, if
-    numbers smaller than `-9223372036854775808` (np.iinfo(np.int64).min)
-    or larger than `18446744073709551615` (np.iinfo(np.uint64).max) are
-    passed in, it is very likely they will be converted to float so that
-    they can stored in an `ndarray`. These warnings apply similarly to
-    `Series` since it internally leverages `ndarray`.
-
-    Parameters
-    ----------
-    arg : scalar, dask.array.Array, or dask.dataframe.Series
-
-    Returns
-    -------
-    ret : numeric if parsing succeeded.
-        Return type depends on input. Delayed if scalar, otherwise same as input.
+    Return type depends on input. Delayed if scalar, otherwise same as input.
     """
-    if isinstance(arg, Series):
+    if downcast not in (None, "integer", "signed", "unsigned", "float"):
+        raise ValueError("invalid downcasting method provided")
+
+    if errors not in ("ignore", "raise", "coerce"):
+        raise ValueError("invalid error value specified")
+
+    is_series = isinstance(arg, Series)
+    is_array = isinstance(arg, Array)
+    is_scalar = pd_is_scalar(arg)
+
+    if not any([is_series, is_array, is_scalar]):
+        raise TypeError(
+            "arg must be a list, tuple, dask.array.Array, or dask.dataframe.Series"
+        )
+
+    if meta is not None:
+        if is_scalar:
+            raise KeyError("``meta`` is not allowed when input is a scalar.")
+        if downcast is not None:
+            raise KeyError("Only one of downcast and meta should be specified.")
+    else:
+        if is_series or is_array:
+            if downcast is None:
+                meta = pd.to_numeric(arg._meta)
+            else:
+                if downcast in ["integer", "signed"]:
+                    dtype = "int8"
+                elif downcast == "unsigned":
+                    dtype = "uint8"
+                elif downcast == "float":
+                    dtype = "float32"
+                meta = (0, dtype)
+
+    if is_series:
         return arg.map_partitions(
             pd.to_numeric,
             token=arg._name + "-to_numeric",
-            meta=meta if meta is not None else pd.to_numeric(arg._meta),
+            meta=meta,
             enforce_metadata=False,
+            errors=errors,
+            downcast=downcast,
         )
-    if isinstance(arg, Array):
+    if is_array:
         return arg.map_blocks(
             pd.to_numeric,
             name=arg._name + "-to_numeric",
-            meta=meta if meta is not None else pd.to_numeric(arg._meta),
+            meta=meta,
+            errors=errors,
+            downcast=downcast,
         )
-    if is_scalar(arg):
-        return delayed(pd.to_numeric, pure=True)(arg)
-
-    raise TypeError(
-        "arg must be a list, tuple, dask.array.Array, or dask.dataframe.Series"
-    )
+    if is_scalar:
+        obj = lambda x: pd.to_numeric(x, errors=errors, downcast=downcast)
+        return delayed(obj, name="to_numeric", pure=True)(arg)
