@@ -193,7 +193,8 @@ class Blockwise(Mapping):
             return self._cached_dict
         else:
             keys = tuple(map(blockwise_token, range(len(self.indices))))
-            func = SubgraphCallable(self.dsk, self.output, keys)
+            dsk, _ = fuse(self.dsk, [self.output])
+            func = SubgraphCallable(dsk, self.output, keys)
             self._cached_dict = make_blockwise_graph(
                 func,
                 self.output,
