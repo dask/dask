@@ -1267,6 +1267,7 @@ class Scheduler(ServerNode):
             "call_stack": self.get_call_stack,
             "profile": self.get_profile,
             "performance_report": self.performance_report,
+            "get_logs": self.get_logs,
             "logs": self.get_logs,
             "worker_logs": self.get_worker_logs,
             "nbytes": self.get_nbytes,

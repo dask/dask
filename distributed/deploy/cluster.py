@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import threading
+import warnings
 
 from dask.utils import format_bytes
 
@@ -159,11 +160,11 @@ class Cluster:
         else:
             return sync(self.loop, func, *args, **kwargs)
 
-    async def _logs(self, scheduler=True, workers=True):
+    async def _get_logs(self, scheduler=True, workers=True):
         logs = Logs()
 
         if scheduler:
-            L = await self.scheduler_comm.logs()
+            L = await self.scheduler_comm.get_logs()
             logs["Scheduler"] = Log("\n".join(line for level, line in L))
 
         if workers:
@@ -173,7 +174,7 @@ class Cluster:
 
         return logs
 
-    def logs(self, scheduler=True, workers=True):
+    def get_logs(self, scheduler=True, workers=True):
         """ Return logs for the scheduler and workers
 
         Parameters
@@ -190,7 +191,11 @@ class Cluster:
             A dictionary of logs, with one item for the scheduler and one for
             each worker
         """
-        return self.sync(self._logs, scheduler=scheduler, workers=workers)
+        return self.sync(self._get_logs, scheduler=scheduler, workers=workers)
+
+    def logs(self, *args, **kwargs):
+        warnings.warn("logs is deprecated, use get_logs instead", DeprecationWarning)
+        return self.get_logs(*args, **kwargs)
 
     @property
     def dashboard_link(self):
