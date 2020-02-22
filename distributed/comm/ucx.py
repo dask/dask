@@ -5,8 +5,6 @@ See :ref:`communications` for more.
 
 .. _UCX: https://github.com/openucx/ucx
 """
-import ucp
-
 import logging
 
 import dask
@@ -26,7 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 # In order to avoid double init when forking/spawning new processes (multiprocess),
-# we make sure only to import and initialize UCX once at first use.
+# we make sure only to import and initialize UCX once at first use. This is also
+# required to ensure Dask configuration gets propagated to UCX, which needs
+# variables to be set before being imported.
 ucp = None
 cuda_array = None
 
