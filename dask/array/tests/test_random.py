@@ -356,3 +356,11 @@ def test_randint_dtype():
     assert_eq(x, x)
     assert x.dtype == "uint8"
     assert x.compute().dtype == "uint8"
+
+
+def test_doc_wraps_deprecated():
+    with pytest.warns(FutureWarning):
+
+        @da.random.doc_wraps(np.random.normal)
+        def f():
+            pass

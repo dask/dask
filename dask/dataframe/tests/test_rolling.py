@@ -146,10 +146,11 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     # DataFrame
     prolling = df.rolling(window, center=center)
     drolling = ddf.rolling(window, center=center)
-    if method == "apply" and PANDAS_VERSION >= "0.23.0":
+    if method == "apply":
         kwargs = {"raw": False}
     else:
         kwargs = {}
+
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
@@ -166,7 +167,7 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
 
-if PANDAS_VERSION <= "0.25.0" and PANDAS_VERSION >= "0.20.0":
+if PANDAS_VERSION <= "0.25.0":
     filter_panel_warning = pytest.mark.filterwarnings(
         "ignore::DeprecationWarning:pandas[.*]"
     )
@@ -187,12 +188,6 @@ def test_rolling_cov(window, center):
     prolling = df.b.rolling(window, center=center)
     drolling = ddf.b.rolling(window, center=center)
     assert_eq(prolling.cov(), drolling.cov())
-
-
-@pytest.mark.skipif(PANDAS_VERSION >= "0.23.0", reason="Raw is allowed.")
-def test_rolling_raw_pandas_lt_0230_raises():
-    with pytest.raises(TypeError):
-        df.rolling(2).apply(mad, raw=True)
 
 
 def test_rolling_raises():
@@ -274,7 +269,7 @@ def test_time_rolling_constructor():
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
     # DataFrame
-    if method == "apply" and PANDAS_VERSION >= "0.23.0":
+    if method == "apply":
         kwargs = {"raw": False}
     else:
         kwargs = {}
@@ -379,11 +374,31 @@ def test_rolling_agg_aggregate():
         ddf.rolling(window=3).agg({"A": [np.sum, np.mean]}),
     )
 
-    kwargs = {}
-    if PANDAS_VERSION >= "0.23.0":
-        kwargs["raw"] = True
-
+    kwargs = {"raw": True}
     assert_eq(
         df.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
         ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
     )
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
+def test_rolling_numba_engine():
+    pytest.importorskip("numba")
+    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    def f(x):
+        return np.sum(x) + 5
+
+    assert_eq(
+        df.rolling(3).apply(f, engine="numba", raw=True),
+        ddf.rolling(3).apply(f, engine="numba", raw=True),
+    )
+
+
+@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas<1.0.0")
+def test_rolling_apply_numba_raises():
+    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with pytest.raises(NotImplementedError, match="pandas>=1.0.0"):
+        ddf.rolling(3).apply(lambda x: x.sum(), engine="numba", raw=True)

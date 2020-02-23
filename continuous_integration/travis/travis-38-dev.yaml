@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
+  - python=3.8.*
   # For the dependencies. These will be re-installed later.
   - numpy
   - pandas

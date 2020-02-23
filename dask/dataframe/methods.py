@@ -6,7 +6,6 @@ from pandas.api.types import is_categorical_dtype, union_categoricals
 from toolz import partition
 
 from .utils import (
-    PANDAS_VERSION,
     is_series_like,
     is_dataframe_like,
     PANDAS_GT_0250,
@@ -14,11 +13,6 @@ from .utils import (
     group_split_dispatch,
 )
 from ..utils import Dispatch
-
-if PANDAS_VERSION >= "0.23":
-    concat_kwargs = {"sort": False}
-else:
-    concat_kwargs = {}
 
 # ---------------------------------
 # indexing
@@ -151,7 +145,7 @@ def describe_aggregate(values):
             if name not in names:
                 names.append(name)
 
-    return pd.concat(values, axis=1, **concat_kwargs).reindex(names)
+    return pd.concat(values, axis=1, sort=False).reindex(names)
 
 
 def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
@@ -173,7 +167,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
 
-    result = pd.concat([part1, q, part3], **concat_kwargs)
+    result = pd.concat([part1, q, part3], sort=False)
 
     if isinstance(result, pd.Series):
         result.name = name
@@ -231,6 +225,23 @@ def describe_nonnumeric_aggregate(stats, name):
     return pd.Series(values, index=index, name=name)
 
 
+def _cum_aggregate_apply(aggregate, x, y):
+    """ Apply aggregation function within a cumulative aggregation
+
+    Parameters
+    ----------
+    aggregate: function (a, a) -> a
+        The aggregation function, like add, which is used to and subsequent
+        results
+    x:
+    y:
+    """
+    if y is None:
+        return x
+    else:
+        return aggregate(x, y)
+
+
 def cummin_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
@@ -246,8 +257,14 @@ def cummax_aggregate(x, y):
 
 
 def assign(df, *pairs):
-    kwargs = dict(partition(2, pairs))
-    return df.assign(**kwargs)
+    # Only deep copy when updating an element
+    # (to avoid modifying the original)
+    pairs = dict(partition(2, pairs))
+    deep = bool(set(pairs) & set(df.columns))
+    df = df.copy(deep=bool(deep))
+    for name, val in pairs.items():
+        df[name] = val
+    return df
 
 
 def unique(x, series_name=None):
@@ -360,11 +377,14 @@ def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
     if axis == 1:
-        return pd.concat(dfs, axis=axis, join=join, **concat_kwargs)
+        return pd.concat(dfs, axis=axis, join=join, sort=False)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
         if isinstance(dfs[0], pd.CategoricalIndex):
+            for i in range(1, len(dfs)):
+                if not isinstance(dfs[i], pd.CategoricalIndex):
+                    dfs[i] = dfs[i].astype("category")
             return pd.CategoricalIndex(union_categoricals(dfs), name=dfs[0].name)
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
@@ -428,7 +448,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
                 cat_mask = pd.concat(
                     [(df.dtypes == "category").to_frame().T for df in dfs3],
                     join=join,
-                    **concat_kwargs
+                    sort=False,
                 ).any()
 
         if cat_mask.any():
@@ -437,7 +457,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
             out = pd.concat(
                 [df[df.columns.intersection(not_cat)] for df in dfs3],
                 join=join,
-                **concat_kwargs
+                sort=False,
             )
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
@@ -469,7 +489,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if filter_warning:
                     warnings.simplefilter("ignore", FutureWarning)
-                out = pd.concat(dfs3, join=join, **concat_kwargs)
+                out = pd.concat(dfs3, join=join, sort=False)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:
@@ -478,7 +498,7 @@ def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True)
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter("ignore", FutureWarning)
-            out = pd.concat(dfs2, join=join, **concat_kwargs)
+            out = pd.concat(dfs2, join=join, sort=False)
     # Re-add the index if needed
     if ind is not None:
         out.index = ind

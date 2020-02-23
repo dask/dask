@@ -45,8 +45,8 @@ class ParquetSubgraph(Mapping):
         self.kwargs = kwargs
 
     def __repr__(self):
-        return "ParquetSubgraph<name='{}', n_parts={}>".format(
-            self.name, len(self.parts)
+        return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.parts), list(self.columns)
         )
 
     def __getitem__(self, key):
@@ -117,11 +117,20 @@ def read_parquet(
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
-    filters : list
-        List of filters to apply, like ``[('x', '>', 0), ...]``. This
-         implements row-group (partition) -level filtering only, i.e., to
-        prevent the loading of some chunks of the data, and only if relevant
-        statistics have been included in the metadata.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
+        implements partition-level (hive) filtering only, i.e., to prevent the
+        loading of some row-groups and/or files.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means
+        that the innermost tuple describes a single column predicate. These
+        inner predicates are combined with an AND conjunction into a larger
+        predicate. The outer-most list then combines all of the combined
+        filters with an OR disjunction.
+
+        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        as an AND conjunction. To express OR in predictates, one must use the
+        (preferred) List[List[Tuple]] notation.
     index : string, list, False or None (default)
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
@@ -556,45 +565,72 @@ def apply_filters(parts, statistics, filters):
         Tokens corresponding to row groups to read in the future
     statistics: List[dict]
         List of statistics for each part, including min and max values
-    filters: List[Tuple[str, str, Any]]
-        List like [('x', '>', 5), ('y', '==', 'Alice')]
+    filters: Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
+        implements partition-level (hive) filtering only, i.e., to prevent the
+        loading of some row-groups and/or files.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means
+        that the innermost tuple describes a single column predicate. These
+        inner predicates are combined with an AND conjunction into a larger
+        predicate. The outer-most list then combines all of the combined
+        filters with an OR disjunction.
+
+        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        as an AND conjunction. To express OR in predictates, one must use the
+        (preferred) List[List[Tuple]] notation.
 
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset
     """
-    for column, operator, value in filters:
-        out_parts = []
-        out_statistics = []
-        for part, stats in zip(parts, statistics):
-            if "filter" in stats and stats["filter"]:
-                continue  # Filtered by engine
-            try:
-                c = toolz.groupby("name", stats["columns"])[column][0]
-                min = c["min"]
-                max = c["max"]
-            except KeyError:
-                out_parts.append(part)
-                out_statistics.append(stats)
-            else:
-                if (
-                    operator == "=="
-                    and min <= value <= max
-                    or operator == "<"
-                    and min < value
-                    or operator == "<="
-                    and min <= value
-                    or operator == ">"
-                    and max > value
-                    or operator == ">="
-                    and max >= value
-                ):
+
+    def apply_conjunction(parts, statistics, conjunction):
+        for column, operator, value in conjunction:
+            out_parts = []
+            out_statistics = []
+            for part, stats in zip(parts, statistics):
+                if "filter" in stats and stats["filter"]:
+                    continue  # Filtered by engine
+                try:
+                    c = toolz.groupby("name", stats["columns"])[column][0]
+                    min = c["min"]
+                    max = c["max"]
+                except KeyError:
                     out_parts.append(part)
                     out_statistics.append(stats)
+                else:
+                    if (
+                        operator == "=="
+                        and min <= value <= max
+                        or operator == "<"
+                        and min < value
+                        or operator == "<="
+                        and min <= value
+                        or operator == ">"
+                        and max > value
+                        or operator == ">="
+                        and max >= value
+                        or operator == "in"
+                        and any(min <= item <= max for item in value)
+                    ):
+                        out_parts.append(part)
+                        out_statistics.append(stats)
 
-        parts, statistics = out_parts, out_statistics
+            parts, statistics = out_parts, out_statistics
 
-    return parts, statistics
+        return parts, statistics
+
+    conjunction, *disjunction = filters if isinstance(filters[0], list) else [filters]
+
+    out_parts, out_statistics = apply_conjunction(parts, statistics, conjunction)
+    for conjunction in disjunction:
+        for part, stats in zip(*apply_conjunction(parts, statistics, conjunction)):
+            if part not in out_parts:
+                out_parts.append(part)
+                out_statistics.append(stats)
+
+    return out_parts, out_statistics
 
 
 def process_statistics(parts, statistics, filters, index, chunksize):

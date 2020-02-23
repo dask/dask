@@ -4,11 +4,11 @@ import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 from dask.base import compute_as_if_collection
+from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
-from dask.dataframe.methods import concat, concat_kwargs
+from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
     align_partitions,
     merge_indexed_dataframes,
@@ -22,7 +22,6 @@ from dask.dataframe.utils import (
     make_meta,
     has_known_categories,
     clear_known_categories,
-    PANDAS_GT_0230,
 )
 
 import pytest
@@ -221,7 +220,8 @@ def list_eq(aa, bb):
     else:
         av = a.sort_values().values
         bv = b.sort_values().values
-    tm.assert_numpy_array_equal(av, bv)
+
+    dd._compat.assert_numpy_array_equal(av, bv)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
@@ -528,7 +528,7 @@ def test_indexed_concat(join):
     B = pd.DataFrame({"x": [10, 20, 40, 50, 60, 80]}, index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    expected = pd.concat([A, B], axis=0, join=join, **concat_kwargs)
+    expected = pd.concat([A, B], axis=0, join=join, sort=False)
     result = concat_indexed_dataframes([a, b], join=join)
     assert_eq(result, expected)
 
@@ -559,10 +559,7 @@ def test_concat(join):
     )
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    if PANDAS_GT_0230:
-        kwargs = {"sort": False}
-    else:
-        kwargs = {}
+    kwargs = {"sort": False}
 
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2), (ddf1, ddf3, pdf1, pdf3)]:
 
@@ -1401,7 +1398,7 @@ def test_concat2():
         pdcase = [_c.compute() for _c in case]
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, **concat_kwargs)
+            expected = pd.concat(pdcase, sort=False)
 
         ctx = FutureWarning if w else None
 
@@ -1417,7 +1414,7 @@ def test_concat2():
             assert set(result.dask) == set(dd.concat(case).dask)
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join="inner", **concat_kwargs)
+            expected = pd.concat(pdcase, join="inner", sort=False)
 
         ctx = FutureWarning if w else None
 
@@ -1447,7 +1444,7 @@ def test_concat3():
     ddf3 = dd.from_pandas(pdf3, 2)
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2], **concat_kwargs)
+        expected = pd.concat([pdf1, pdf2], sort=False)
 
     ctx = FutureWarning if w else None
 
@@ -1465,7 +1462,7 @@ def test_concat3():
         )
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3], **concat_kwargs)
+        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
 
     ctx = FutureWarning if w else None
 
@@ -1522,12 +1519,11 @@ def test_concat4_interleave_partitions():
         pdcase = [c.compute() for c in case]
 
         assert_eq(
-            dd.concat(case, interleave_partitions=True),
-            pd.concat(pdcase, **concat_kwargs),
+            dd.concat(case, interleave_partitions=True), pd.concat(pdcase, sort=False)
         )
         assert_eq(
             dd.concat(case, join="inner", interleave_partitions=True),
-            pd.concat(pdcase, join="inner", **concat_kwargs),
+            pd.concat(pdcase, join="inner", sort=False),
         )
 
     msg = "'join' must be 'inner' or 'outer'"
@@ -1587,7 +1583,7 @@ def test_concat5():
             # some cases will raise warning directly from pandas
             assert_eq(
                 dd.concat(case, interleave_partitions=True),
-                pd.concat(pdcase, **concat_kwargs),
+                pd.concat(pdcase, sort=False),
             )
 
         assert_eq(
@@ -1820,60 +1816,28 @@ def test_append2():
     meta = make_meta({"b": "i8", "c": "i8"})
     ddf3 = dd.DataFrame(dsk, "y", meta, [None, None])
 
-    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
-    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
-        assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), sort=False))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), sort=False))
 
     # different columns
-    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
-    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
-        assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), sort=False))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), sort=False))
 
     # Dask + pandas
     assert_eq(
-        ddf1.append(ddf2.compute()),
-        ddf1.compute().append(ddf2.compute(), **concat_kwargs),
+        ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute(), sort=False)
     )
     assert_eq(
-        ddf2.append(ddf1.compute()),
-        ddf2.compute().append(ddf1.compute(), **concat_kwargs),
+        ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute(), sort=False)
     )
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(
-            ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute())
-        )
-        assert_eq(
-            ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute())
-        )
 
     # different columns
     assert_eq(
-        ddf1.append(ddf3.compute()),
-        ddf1.compute().append(ddf3.compute(), **concat_kwargs),
+        ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute(), sort=False)
     )
     assert_eq(
-        ddf3.append(ddf1.compute()),
-        ddf3.compute().append(ddf1.compute(), **concat_kwargs),
+        ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute(), sort=False)
     )
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(
-            ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute())
-        )
-        assert_eq(
-            ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute())
-        )
 
 
 def test_append_categorical():
@@ -1997,3 +1961,51 @@ def test_dtype_equality_warning():
         dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
 
     assert len(r) == 0
+
+
+@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+def test_groupby_concat_cudf(engine):
+
+    # NOTE: Issue #5643 Reproducer
+
+    size = 6
+    npartitions = 3
+    d1 = pd.DataFrame(
+        {
+            "a": np.random.permutation(np.arange(size)),
+            "b": np.random.randint(100, size=size),
+        }
+    )
+    d2 = pd.DataFrame(
+        {
+            "c": np.random.permutation(np.arange(size)),
+            "d": np.random.randint(100, size=size),
+        }
+    )
+
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+        d1 = cudf.from_pandas(d1)
+        d2 = cudf.from_pandas(d2)
+        dd1 = dask_cudf.from_cudf(d1, npartitions)
+        dd2 = dask_cudf.from_cudf(d2, npartitions)
+    else:
+        dd1 = dd.from_pandas(d1, npartitions)
+        dd2 = dd.from_pandas(d2, npartitions)
+
+    grouped_d1 = d1.groupby(["a"]).sum()
+    grouped_d2 = d2.groupby(["c"]).sum()
+    res = concat([grouped_d1, grouped_d2], axis=1)
+
+    grouped_dd1 = dd1.groupby(["a"]).sum()
+    grouped_dd2 = dd2.groupby(["c"]).sum()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
+
+    assert_eq(res_dd.compute().sort_index(), res.sort_index())

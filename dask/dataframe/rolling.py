@@ -1,14 +1,16 @@
 import datetime
+import inspect
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
 from numbers import Integral
 
 from ..base import tokenize
-from ..utils import M, funcname, derived_from
+from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
+from ._compat import PANDAS_VERSION
 from .core import _emulate
-from .utils import make_meta, PANDAS_VERSION
+from .utils import make_meta
 from . import methods
 
 
@@ -317,7 +319,7 @@ class Rolling(object):
                 *args,
                 token=method_name,
                 meta=meta,
-                **kwargs
+                **kwargs,
             )
         # Convert window to overlap
         if self.center:
@@ -339,7 +341,7 @@ class Rolling(object):
             *args,
             token=method_name,
             meta=meta,
-            **kwargs
+            **kwargs,
         )
 
     @derived_from(pd_Rolling)
@@ -391,20 +393,33 @@ class Rolling(object):
         return self._call_method("quantile", quantile)
 
     @derived_from(pd_Rolling)
-    def apply(self, func, args=(), kwargs={}, **kwds):
-        # TODO: In a future version of pandas this will change to
-        # raw=False. Think about inspecting the function signature and setting
-        # to that?
-        if PANDAS_VERSION >= "0.23.0":
-            kwds.setdefault("raw", None)
-        else:
-            if kwargs:
-                msg = (
-                    "Invalid argument to 'apply'. Keyword arguments "
-                    "should be given as a dict to the 'kwargs' argument. "
-                )
-                raise TypeError(msg)
-        return self._call_method("apply", func, args=args, kwargs=kwargs, **kwds)
+    def apply(
+        self,
+        func,
+        raw=None,
+        engine="cython",
+        engine_kwargs=None,
+        args=None,
+        kwargs=None,
+    ):
+        compat_kwargs = {}
+        kwargs = kwargs or {}
+        args = args or ()
+        meta = self.obj._meta.rolling(0)
+        if has_keyword(meta.apply, "engine"):
+            # PANDAS_GT_100
+            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
+        elif engine != "cython" or engine_kwargs is not None:
+            raise NotImplementedError(
+                f"Specifying the engine requires pandas>=1.0.0. Version '{PANDAS_VERSION}' installed."
+            )
+        if raw is None:
+            # PANDAS_GT_100: The default changed from None to False
+            raw = inspect.signature(meta.apply).parameters["raw"]
+
+        return self._call_method(
+            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
+        )
 
     @derived_from(pd_Rolling)
     def aggregate(self, func, args=(), kwargs={}, **kwds):

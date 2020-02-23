@@ -971,6 +971,20 @@ def test_broadcast_arrays():
         assert_eq(e_a_r, e_d_r)
 
 
+def test_broadcast_arrays_uneven_chunks():
+    x = da.ones(30, chunks=(3,))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+    x = da.ones((1, 30), chunks=(1, 3))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+
 @pytest.mark.parametrize(
     "u_shape, v_shape",
     [
@@ -1354,6 +1368,14 @@ def test_map_blocks_with_kwargs():
     result = d.map_blocks(np.max, axis=0, keepdims=True, dtype=d.dtype, chunks=(1,))
 
     assert_eq(result, np.array([4, 9]))
+
+
+def test_map_blocks_infer_chunks_broadcast():
+    dx = da.from_array([[1, 2, 3, 4]], chunks=((1,), (2, 2)))
+    dy = da.from_array([[10, 20], [30, 40]], chunks=((1, 1), (2,)))
+    result = da.map_blocks(lambda x, y: x + y, dx, dy)
+    assert result.chunks == ((1, 1), (2, 2),)
+    assert_eq(result, np.array([[11, 22, 13, 24], [31, 42, 33, 44]]))
 
 
 def test_map_blocks_with_chunks():
@@ -2803,6 +2825,7 @@ def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(2, 3))
 
+    assert_eq(x.view(), d.view())
     assert_eq(x.view("i4"), d.view("i4"))
     assert_eq(x.view("i2"), d.view("i2"))
     assert all(isinstance(s, int) for s in d.shape)
@@ -2857,6 +2880,9 @@ def test_map_blocks_with_changed_dimension():
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
+
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=1), chunks=((3, 4),), drop_axis=1)
 
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
@@ -3725,6 +3751,18 @@ def test_zarr_return_stored(compute):
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
+
+
+def test_to_zarr_delayed_creates_no_metadata():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.from_array([42])
+        result = a.to_zarr(d, compute=False)
+        assert not os.listdir(d)  # No .zarray file
+        # Verify array still created upon compute.
+        result.compute()
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
 
 
 def test_zarr_existing_array():

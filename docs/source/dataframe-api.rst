@@ -331,8 +331,8 @@ Convert DataFrames
 
 .. autosummary::
 
-   to_dask_array
-   to_delayed
+   DataFrame.to_dask_array
+   DataFrame.to_delayed
 
 Reshape DataFrames
 ~~~~~~~~~~~~~~~~~~
@@ -426,9 +426,9 @@ Resampling
 Dask Metadata
 ~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.utils
 
-.. autofunction:: utils.make_meta
+.. autofunction:: make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~

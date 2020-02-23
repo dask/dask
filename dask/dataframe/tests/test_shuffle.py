@@ -1,5 +1,7 @@
 import itertools
 import os
+import random
+
 import pandas as pd
 import pytest
 import pickle
@@ -7,10 +9,10 @@ import numpy as np
 import string
 import multiprocessing as mp
 from copy import copy
-import pandas.util.testing as tm
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe.shuffle import (
@@ -22,6 +24,7 @@ from dask.dataframe.shuffle import (
     remove_nans,
 )
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.compatibility import PY_VERSION
 
 
 dsk = {
@@ -553,6 +556,10 @@ def test_set_index():
     assert d4.index.name == "b"
     assert_eq(d4, full.set_index("b"))
 
+    d5 = d.set_index(["b"])
+    assert d5.index.name == "b"
+    assert_eq(d5, full.set_index(["b"]))
+
 
 def test_set_index_interpolate():
     df = pd.DataFrame({"x": [4, 1, 1, 3, 3], "y": [1.0, 1, 1, 1, 2]})
@@ -640,6 +647,14 @@ def test_set_index_raises_error_on_bad_input():
         ddf.set_index(["a", "b"])
     assert msg in str(err.value)
 
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index([["a", "b"]])
+    assert msg in str(err.value)
+
+    with pytest.raises(NotImplementedError) as err:
+        ddf.set_index([["a"]])
+    assert msg in str(err.value)
+
 
 def test_set_index_sorted_true():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]})
@@ -724,6 +739,22 @@ def test_set_index_on_empty():
         assert ddf.npartitions == 1
 
 
+def test_set_index_categorical():
+    # https://github.com/dask/dask/issues/5671
+    order = list(reversed(string.ascii_letters))
+    values = list(string.ascii_letters)
+    random.shuffle(values)
+    dtype = pd.api.types.CategoricalDtype(order, ordered=True)
+    df = pd.DataFrame({"A": pd.Categorical(values, dtype=dtype), "B": 1})
+
+    result = dd.from_pandas(df, npartitions=2).set_index("A")
+    assert len(result) == len(df)
+
+    # sorted with the metric defined by the Categorical
+    divisions = pd.Categorical(result.divisions, dtype=dtype)
+    assert_categorical_equal(divisions, divisions.sort_values())
+
+
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
 
@@ -747,6 +778,8 @@ def test_compute_divisions():
         compute_divisions(c)
 
 
+# TODO: Fix sporadic failure on Python 3.8 and remove this xfail mark
+@pytest.mark.xfail(PY_VERSION >= "3.8", reason="Flaky test", strict=False)
 def test_temporary_directory(tmpdir):
     from multiprocessing.pool import Pool
 
@@ -883,3 +916,48 @@ def test_set_index_timestamp():
 
     assert_eq(df2, ddf_new_div)
     assert_eq(df2, ddf.set_index("A"))
+
+
+@pytest.mark.parametrize("compression", [None, "ZLib"])
+def test_disk_shuffle_with_compression_option(compression):
+    # test if dataframe shuffle works both with and without compression
+    with dask.config.set({"dataframe.shuffle-compression": compression}):
+        test_shuffle("disk")
+
+
+@pytest.mark.parametrize("compression", ["UNKOWN_COMPRESSION_ALGO"])
+def test_disk_shuffle_with_unknown_compression(compression):
+    # test if dask raises an error in case of fault config string
+    with dask.config.set({"dataframe.shuffle-compression": compression}):
+        with pytest.raises(
+            ImportError,
+            match=(
+                "Not able to import and load {0} as compression algorithm."
+                "Please check if the library is installed and supported by Partd.".format(
+                    compression
+                )
+            ),
+        ):
+            test_shuffle("disk")
+
+
+def test_disk_shuffle_check_actual_compression():
+    # test if the compression switch is really respected by testing the size of the actual partd-data on disk
+    def generate_raw_partd_file(compression):
+        # generate and write a dummy dataframe to disk and return the raw data bytes
+        df1 = pd.DataFrame({"a": list(range(10000))})
+        df1["b"] = (df1["a"] * 123).astype(str)
+        with dask.config.set({"dataframe.shuffle-compression": compression}):
+            p1 = maybe_buffered_partd(buffer=False, tempdir=None)()
+            p1.append({"x": df1})
+            # get underlying filename from partd - depending on nested structure of partd object
+            filename = (
+                p1.partd.partd.filename("x") if compression else p1.partd.filename("x")
+            )
+            return open(filename, "rb").read()
+
+    # get compressed and uncompressed raw data
+    uncompressed_data = generate_raw_partd_file(compression=None)
+    compressed_data = generate_raw_partd_file(compression="BZ2")
+
+    assert len(uncompressed_data) > len(compressed_data)

@@ -339,7 +339,7 @@ def test_vdot(shape, chunks):
 
 
 @pytest.mark.parametrize("shape1, shape2", [((20,), (6,)), ((4, 5), (2, 3))])
-def test_inner(shape1, shape2):
+def test_outer(shape1, shape2):
     np.random.random(1337)
 
     x = 2 * np.random.random(shape1) - 1
@@ -1390,6 +1390,10 @@ def test_coarsen():
     )
     assert_eq(
         da.chunk.coarsen(np.sum, x, {0: 2, 1: 4}), da.coarsen(da.sum, d, {0: 2, 1: 4})
+    )
+    assert_eq(
+        da.chunk.coarsen(np.mean, x, {0: 2, 1: 4}, dtype="float32"),
+        da.coarsen(da.mean, d, {0: 2, 1: 4}, dtype="float32"),
     )
 
 
