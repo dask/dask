@@ -285,7 +285,7 @@ To build the documentation locally, first install the necessary requirements.
 These dependencies can be installed with ``pip``::
 
   cd docs/
-  pip install -r requirements-docs.txt
+  python -m pip install -r requirements-docs.txt
 
 or ``conda``::
 
