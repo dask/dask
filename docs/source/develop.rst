@@ -22,6 +22,26 @@ and install it from source::
    cd distributed
    python setup.py install
 
+Using conda, for example::
+
+   git clone git@github.com:{your-fork}/distributed.git
+   cd distributed
+   conda create -y -n distributed python=3.6
+   conda activate distributed
+   python -m pip install -U -r requirements.txt
+   python -m pip install -U -r dev-requirements.txt
+   python -m pip install -e .
+
+To keep a fork in sync with the upstream source::
+
+   cd distributed
+   git remote add upstream git@github.com:dask/distributed.git
+   git remote -v
+   git fetch -a upstream
+   git checkout master
+   git pull upstream master
+   git push origin master
+
 Test
 ----
 
