@@ -132,5 +132,10 @@ distributed:
     log-length: 10000  # default length of logs to keep in memory
     log-format: '%(name)s - %(levelname)s - %(message)s'
     pdb-on-err: False       # enter debug mode on scheduling error
+rmm:
+  pool-size: null
+ucx:
+  nvlink: null
+  infiniband: null
+  net-devices: null
 
-ucx: {}

@@ -10,7 +10,7 @@ from distributed.comm import ucx, parse_address
 from distributed.protocol import to_serialize
 from distributed.deploy.local import LocalCluster
 from dask.dataframe.utils import assert_eq
-from distributed.utils_test import gen_test, loop, inc, cleanup  # noqa: 401
+from distributed.utils_test import gen_test, loop, inc, cleanup, popen  # noqa: 401
 
 from .test_comms import check_deserialize
 
