@@ -44,6 +44,24 @@ def test_dataframe_doc():
     assert disclaimer in doc
 
 
+def test_dataframe_doc_from_non_pandas():
+    class Foo:
+        def foo(self):
+            """This is a new docstring that I just made up
+
+            Parameters:
+            ----------
+            None
+            """
+
+    d._bind_operator_method("foo", Foo.foo, original=Foo)
+
+    doc = d.foo.__doc__
+    disclaimer = "Some inconsistencies with the Dask version may exist."
+    assert disclaimer in doc
+    assert "new docstring that I just made up" in doc
+
+
 def test_Dataframe():
     expected = pd.Series(
         [2, 3, 4, 5, 6, 7, 8, 9, 10], index=[0, 1, 3, 5, 6, 8, 9, 9, 9], name="a"
