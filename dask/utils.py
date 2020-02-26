@@ -15,6 +15,11 @@ from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
 
+try:
+    import cytoolz as toolz
+except ImportError:
+    import toolz
+
 from .core import get_deps
 from .optimization import key_split  # noqa: F401
 
@@ -1013,12 +1018,8 @@ def ensure_dict(d):
         return d
     elif hasattr(d, "dicts"):
         result = {}
-        seen = set()
-        for dd in d.dicts.values():
-            dd_id = id(dd)
-            if dd_id not in seen:
-                result.update(dd)
-                seen.add(dd_id)
+        for dd in toolz.unique(d.dicts.values(), key=id):
+            result.update(dd)
         return result
     return dict(d)
 
