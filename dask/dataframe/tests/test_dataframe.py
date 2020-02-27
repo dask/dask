@@ -55,11 +55,14 @@ def test_dataframe_doc_from_non_pandas():
             """
 
     d._bind_operator_method("foo", Foo.foo, original=Foo)
-
-    doc = d.foo.__doc__
-    disclaimer = "Some inconsistencies with the Dask version may exist."
-    assert disclaimer in doc
-    assert "new docstring that I just made up" in doc
+    try:
+        doc = d.foo.__doc__
+        disclaimer = "Some inconsistencies with the Dask version may exist."
+        assert disclaimer in doc
+        assert "new docstring that I just made up" in doc
+    finally:
+        # make sure to clean up this alteration of the dd.DataFrame class
+        del dd.DataFrame.foo
 
 
 def test_Dataframe():
