@@ -42,30 +42,6 @@ def test_to_numeric_on_dask_dataframe_series_with_meta():
     assert list(output.compute()) == list(expected)
 
 
-def test_to_numeric_on_dask_dataframe_series_with_downcast_as_valid_integer():
-    s = pd.Series(["1", "2"])
-    arg = from_pandas(s, npartitions=2)
-    expected = pd.to_numeric(s)
-    output = to_numeric(arg, downcast="integer")
-    assert output.dtype == "int8"
-    assert isinstance(output, Series)
-    actual = output.compute()
-    assert actual.dtype == "int8"
-    assert list(actual) == list(expected)
-
-
-def test_to_numeric_on_dask_dataframe_series_with_downcast_as_invalid_integer():
-    s = pd.Series(["1", "2.3"])
-    arg = from_pandas(s, npartitions=2)
-    expected = pd.to_numeric(s)
-    output = to_numeric(arg, downcast="integer")
-    assert output.dtype == "int8"
-    assert isinstance(output, Series)
-    actual = output.compute()
-    assert actual.dtype == "float64"
-    assert list(actual) == list(expected)
-
-
 def test_to_numeric_on_dask_dataframe_dataframe_raises_error():
     s = pd.Series(["1.0", "2", -3, -5.1])
     df = pd.DataFrame({"a": s, "b": s})
