@@ -9,6 +9,7 @@ import pytest
 from toolz import sliding_window, concat
 from tornado import gen
 
+import dask
 from distributed import Nanny, Worker, wait, worker_client
 from distributed.config import config
 from distributed.metrics import time
@@ -676,3 +677,20 @@ def test_lose_task(c, s, a, b):
 
     out = log.getvalue()
     assert "Error" not in out
+
+
+@gen_cluster(client=True)
+def test_worker_stealing_interval(c, s, a, b):
+    from distributed.scheduler import WorkStealing
+
+    ws = WorkStealing(s)
+    assert ws._pc.callback_time == 100
+
+    with dask.config.set({"distributed.scheduler.work-stealing-interval": "500ms"}):
+        ws = WorkStealing(s)
+    assert ws._pc.callback_time == 500
+
+    # Default unit is `ms`
+    with dask.config.set({"distributed.scheduler.work-stealing-interval": 2}):
+        ws = WorkStealing(s)
+    assert ws._pc.callback_time == 2

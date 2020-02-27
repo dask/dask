@@ -6,7 +6,7 @@ from time import time
 import dask
 from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
-from .utils import log_errors, PeriodicCallback
+from .utils import log_errors, parse_timedelta, PeriodicCallback
 
 try:
     from cytoolz import topk
@@ -40,8 +40,15 @@ class WorkStealing(SchedulerPlugin):
         for worker in scheduler.workers:
             self.add_worker(worker=worker)
 
+        # `callback_time` is in milliseconds
+        callback_time = 1000 * parse_timedelta(
+            dask.config.get("distributed.scheduler.work-stealing-interval"),
+            default="ms",
+        )
         pc = PeriodicCallback(
-            callback=self.balance, callback_time=100, io_loop=self.scheduler.loop
+            callback=self.balance,
+            callback_time=callback_time,
+            io_loop=self.scheduler.loop,
         )
         self._pc = pc
         self.scheduler.periodic_callbacks["stealing"] = pc

@@ -19,6 +19,7 @@ distributed:
     idle-timeout: null      # Shut down after this duration, like "1h" or "30 minutes"
     transition-log-length: 100000
     work-stealing: True     # workers should steal tasks from each other
+    work-stealing-interval: 100ms  # Callback time for work stealing
     worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this
     pickle: True            # Is the scheduler allowed to deserialize arbitrary bytestrings
     preload: []
