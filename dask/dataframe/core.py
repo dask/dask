@@ -1,6 +1,7 @@
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
+from collections import Counter
 from functools import wraps, partial
 from numbers import Number, Integral
 from operator import getitem
@@ -1494,6 +1495,12 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
+    def _mode_chunk(df, dropna):
+        if dropna:
+            return Counter(df.dropna().values)
+        else:
+            return Counter(df.values)
+
     @derived_from(pd.DataFrame)
     def abs(self):
         _raise_if_object_series(self, "abs")
@@ -1653,6 +1660,44 @@ Dask Name: {name}, {task} tasks"""
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
+
+    @derived_from(pd.DataFrame)
+    def mode(self, axis=0, dropna=True, split_every=False):  # this is the series class
+        """Use a counter on each partition, sum the resulting counters, iterate over key,
+        value pairs until num_occurrences isn't equal to the first one"""
+        if axis == 1:
+            meta = self._meta_nonempty.count(axis=axis)
+            result = map_partitions(
+                M.mode,
+                self,
+                meta=meta,
+                token=self._token_prefix + "mode",
+                axis=axis,
+                dropna=True,
+                enforce_metadata=False,
+            )
+            return result
+        else:
+            from collections import Counter
+
+            def _mode_chunk(df, dropna=dropna):  # already defined elsewhere now
+                if dropna:
+                    return Counter(df.dropna().values)
+                else:
+                    return Counter(df.values)
+
+            all_values_dict = self.reduction(
+                chunk=_mode_chunk,
+                aggregate=M.sum,
+                meta="object",
+                split_every=split_every,
+            ).to_delayed()
+            # now I have the all_values_dict as a delayed object.  Next, find max value and then all keys with max value
+            max_val = delayed(lambda x: max(x.values()))(all_values_dict)
+            mode_list = delayed(
+                lambda x, max_val: sorted([k for k, v in x.items() if v == max_val])
+            )(all_values_dict, max_val)
+            return mode_list
 
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
@@ -2781,6 +2826,20 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.Series)
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
+
+    @derived_from(pd.Series)
+    def mode(self, dropna=True, split_every=False):
+        from .io import from_delayed
+
+        mode_list = super(Series, self).mode(dropna=dropna, split_every=split_every)
+
+        # could possibly use heapq on the result then pull the largest items for better performance on large results
+        mode_list_series = delayed(pd.Series)(mode_list)
+        # Now I need to convert the delayed object to a Series
+
+        mode_series = from_delayed([mode_list_series])  # .repartition(npartitions=1)
+        # mode_series.divisions = (0, delayed(len)(mode_list)-1)
+        return mode_series
 
     @derived_from(pd.Series, version="0.25.0")
     def explode(self):
@@ -4131,6 +4190,45 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
+
+    @derived_from(pd.DataFrame)
+    def mode(self, axis=0, numeric_only=False, dropna=True, split_every=False):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            return super(DataFrame, self).mode(
+                axis=axis, dropna=dropna, split_every=split_every
+            )
+        elif axis == 0:
+            from .io import from_delayed
+
+            def mode_lists_to_df(names, mode_lists):
+                data = {name: data_list for name, data_list in zip(names, mode_lists)}
+
+                lens = {name: delayed(len)(data[name]) for name in names}
+                max_len = delayed(max)([lens[k] for k in lens])
+
+                for name in names:
+                    additional_len = max_len - lens[name]
+                    data[name] = data[name] + [np.nan] * additional_len
+
+                df = delayed(pd.DataFrame)(data)
+                ddf = from_delayed([df])
+                return ddf
+
+            mode_lists = []
+            for col in self.columns:
+                mode_lists.append(
+                    super(Series, self[col]).mode(
+                        dropna=dropna, split_every=split_every
+                    )
+                )
+            ddf = mode_lists_to_df(self.columns, mode_lists)
+
+            # # calculate dataframe divisions
+            # ddf['index'] = 1
+            # ddf['index'] = ddf['index'].cumsum() - 1
+            # ddf = ddf.set_index('index', drop=True)
+            return ddf
 
     @derived_from(pd.DataFrame)
     def cov(self, min_periods=None, split_every=False):
