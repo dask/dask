@@ -2327,7 +2327,7 @@ Dask Name: {name}, {task} tasks"""
         return self.map_partitions(M.combine_first, other)
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
+    def _bind_operator_method(cls, name, op, original=pd.DataFrame):
         """ bind operator method like DataFrame.add to this class """
         raise NotImplementedError
 
@@ -2946,7 +2946,7 @@ Dask Name: {name}, {task} tasks""".format(
         return self._repr_data().to_string(max_rows=max_rows)
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
+    def _bind_operator_method(cls, name, op, original=pd.Series):
         """ bind operator method like Series.add to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
@@ -2959,10 +2959,10 @@ Dask Name: {name}, {task} tasks""".format(
             )
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.Series)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @classmethod
-    def _bind_comparison_method(cls, name, comparison):
+    def _bind_comparison_method(cls, name, comparison, original=pd.Series):
         """ bind comparison method like Series.eq to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
@@ -2976,7 +2976,7 @@ Dask Name: {name}, {task} tasks""".format(
                 return elemwise(op, self, other, axis=axis)
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.Series)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
@@ -3964,7 +3964,7 @@ class DataFrame(_Frame):
                 yield row
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
+    def _bind_operator_method(cls, name, op, original=pd.DataFrame):
         """ bind operator method like DataFrame.add to this class """
 
         # name must be explicitly passed for div method whose name is truediv
@@ -4010,10 +4010,10 @@ class DataFrame(_Frame):
             )
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.DataFrame)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @classmethod
-    def _bind_comparison_method(cls, name, comparison):
+    def _bind_comparison_method(cls, name, comparison, original=pd.DataFrame):
         """ bind comparison method like DataFrame.eq to this class """
 
         def meth(self, other, axis="columns", level=None):
@@ -4023,7 +4023,7 @@ class DataFrame(_Frame):
             return elemwise(comparison, self, other, axis=axis)
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.DataFrame)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
     def apply(
