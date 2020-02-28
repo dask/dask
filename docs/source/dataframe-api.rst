@@ -438,7 +438,7 @@ Other functions
 .. autofunction:: compute
 .. autofunction:: map_partitions
 .. autofunction:: to_datetime
-.. autofunciton:: to_numeric
+.. autofunction:: to_numeric
 
 .. currentmodule:: dask.dataframe.multi
 
