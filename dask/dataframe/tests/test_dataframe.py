@@ -351,6 +351,10 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION == "0.24.2",
+    reason="Known bug in Pandas. See https://github.com/pandas-dev/pandas/issues/24011.",
+)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
