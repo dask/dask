@@ -4597,8 +4597,11 @@ class performance_report:
 
     async def __aexit__(self, typ, value, traceback, code=None):
         if not code:
-            frame = inspect.currentframe().f_back
-            code = inspect.getsource(frame)
+            try:
+                frame = inspect.currentframe().f_back
+                code = inspect.getsource(frame)
+            except Exception:
+                code = ""
         data = await get_client().scheduler.performance_report(
             start=self.start, code=code
         )
@@ -4609,8 +4612,11 @@ class performance_report:
         get_client().sync(self.__aenter__)
 
     def __exit__(self, typ, value, traceback):
-        frame = inspect.currentframe().f_back
-        code = inspect.getsource(frame)
+        try:
+            frame = inspect.currentframe().f_back
+            code = inspect.getsource(frame)
+        except Exception:
+            code = ""
         get_client().sync(self.__aexit__, type, value, traceback, code=code)
 
 
