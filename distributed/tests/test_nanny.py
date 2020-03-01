@@ -402,6 +402,16 @@ def test_data_types(c, s):
     yield w.close()
 
 
+@gen_cluster(nthreads=[])
+def test_local_directory(s):
+    with tmpfile() as fn:
+        with dask.config.set(temporary_directory=fn):
+            w = yield Nanny(s.address)
+            assert w.local_directory.startswith(fn)
+            assert "dask-worker-space" in w.local_directory
+            yield w.close()
+
+
 def _noop(x):
     """Define here because closures aren't pickleable."""
     pass
