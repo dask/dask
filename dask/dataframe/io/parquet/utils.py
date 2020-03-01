@@ -31,7 +31,7 @@ class Engine:
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
         gather_statistics: bool
-            Whether or not to gather statistics data.  If ``None``, we only
+            Whether or not to gather statistics data. If ``None``, we only
             gather statistics data if there is a _metadata file available to
             query (cheaply)
         filters: list
@@ -111,7 +111,7 @@ class Engine:
         df: dask.dataframe.DataFrame
         fs: FileSystem
         path: str
-            Destination directory for data.  Prepend with protocol like ``s3://``
+            Destination directory for data. Prepend with protocol like ``s3://``
             or ``hdfs://`` for remote data.
         append: bool
             If True, may use existing metadata (if any) and perform checks
@@ -341,7 +341,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 
 
 def _analyze_paths(file_list, fs, root=False):
-    """Consolidate list of file-paths into  parquet relative paths
+    """Consolidate list of file-paths into parquet relative paths
 
     Note: This function was mostly copied from dask/fastparquet to
     use in both `FastParquetEngine` and `ArrowEngine`."""

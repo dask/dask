@@ -49,13 +49,13 @@ def to_hdf(
 ):
     """ Store Dask Dataframe to Hierarchical Data Format (HDF) files
 
-    This is a parallel version of the Pandas function of the same name.  Please
+    This is a parallel version of the Pandas function of the same name. Please
     see the Pandas docstring for more detailed information about shared keyword
     arguments.
 
     This function differs from the Pandas version by saving the many partitions
     of a Dask DataFrame in parallel, either to many files, or to many datasets
-    within the same file.  You may specify this parallelism with an asterix
+    within the same file. You may specify this parallelism with an asterix
     ``*`` within the filename or datapath, and an optional ``name_function``.
     The asterix will be replaced with an increasing sequence of integers
     starting from ``0`` or with the result of calling ``name_function`` on each
@@ -71,16 +71,16 @@ def to_hdf(
         object implementing the ``__fspath__`` protocol. May contain a ``*`` to
         denote many filenames.
     key : string
-        Datapath within the files.  May contain a ``*`` to denote many locations
+        Datapath within the files. May contain a ``*`` to denote many locations
     name_function : function
         A function to convert the ``*`` in the above options to a string.
         Should take in a number from 0 to the number of partitions and return a
         string. (see examples below)
     compute : bool
-        Whether or not to execute immediately.  If False then this returns a
+        Whether or not to execute immediately. If False then this returns a
         ``dask.Delayed`` value.
     lock : Lock, optional
-        Lock to use to prevent concurrency issues.  By default a
+        Lock to use to prevent concurrency issues. By default a
         ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
         will be used depending on your scheduler if a lock is required. See
         dask.utils.get_scheduler_lock for more information about lock
@@ -108,7 +108,7 @@ def to_hdf(
 
     >>> df.to_hdf('output-*.hdf', '/data', scheduler='processes') # doctest: +SKIP
 
-    Specify custom naming scheme.  This writes files as
+    Specify custom naming scheme. This writes files as
     '2000-01-01.hdf', '2000-01-02.hdf', '2000-01-03.hdf', etc..
 
     >>> from datetime import date, timedelta
@@ -260,7 +260,7 @@ def to_hdf(
 
 dont_use_fixed_error_message = """
 This HDFStore is not partitionable and can only be use monolithically with
-pandas.  In the future when creating HDFStores use the ``format='table'``
+pandas. In the future when creating HDFStores use the ``format='table'``
 option to ensure that your dataset can be parallelized"""
 
 read_hdf_error_msg = """
