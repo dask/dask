@@ -9,7 +9,7 @@ we describe the required methods to fulfill the Dask collection interface.
 .. note:: This is considered an advanced feature. For most cases the built-in
           collections are probably sufficient.
 
-Before reading this you should read and underestand:
+Before reading this you should read and understand:
 
 - :doc:`overview <graphs>`
 - :doc:`graph specification <spec>`
