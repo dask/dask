@@ -179,7 +179,7 @@ of the Dask collections to help you.
 +------------------------------------+-------------------------------------------------------------+
 | .. code-block:: python             | .. code-block:: python                                      |
 |                                    |                                                             |
-|    # Too mamy tasks                |    # Use collections                                        |
+|    # Too many tasks                |    # Use collections                                        |
 |                                    |                                                             |
 |    results = []                    |    import dask.bag as db                                    |
 |    for x in range(10000000):       |    b = db.from_sequence(range(10000000), npartitions=1000)  |
