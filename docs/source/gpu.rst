@@ -138,7 +138,7 @@ Some configurations may have many GPU devices per node.  Dask is often used to
 balance and coordinate work between these devices.
 
 In these situations it is common to start one Dask worker per device, and use
-the CUDA environment varible ``CUDA_VISIBLE_DEVICES`` to pin each worker to
+the CUDA environment variable ``CUDA_VISIBLE_DEVICES`` to pin each worker to
 prefer one device.
 
 .. code-block:: bash

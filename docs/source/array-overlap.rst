@@ -86,7 +86,7 @@ overlap function:
 Boundaries
 ----------
 
-With respect to overlaping, you can specify how to handle the boundaries.  Current policies
+With respect to overlapping, you can specify how to handle the boundaries.  Current policies
 include the following:
 
 *  ``periodic`` - wrap borders around to the other side
@@ -167,7 +167,7 @@ given to ``overlap``:
 Full Workflow
 -------------
 
-And so, a pretty typical overlaping workflow includes ``overlap``, ``map_blocks``
+And so, a pretty typical overlapping workflow includes ``overlap``, ``map_blocks``
 and ``trim_internal``:
 
 .. code-block:: python

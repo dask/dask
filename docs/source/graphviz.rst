@@ -9,7 +9,7 @@ Visualize task graphs
 Before executing your computation you might consider visualizing the underlying task graph.
 By looking at the inter-connectedness of tasks
 you can learn more about potential bottlenecks
-where parallelism may not be possile,
+where parallelism may not be possible,
 or areas where many tasks depend on each other,
 which may cause a great deal of communication.
 

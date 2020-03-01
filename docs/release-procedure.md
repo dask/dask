@@ -5,7 +5,7 @@ co-released.  We may want to check their status while releasing
 Release per project:
 
 *   Raise an issue in the https://github.com/dask/community issue tracker
-    signalling your intent to release and the motivation.  Let that issue
+    signaling your intent to release and the motivation.  Let that issue
     collect comments for a day to ensure that other maintainers are comfortable
     with releasing.
 
@@ -19,7 +19,7 @@ Release per project:
 
         git tag -a x.x.x -m 'Version x.x.x'
 
-*   Push to github
+*   Push to GitHub
 
         git push dask master --tags
 

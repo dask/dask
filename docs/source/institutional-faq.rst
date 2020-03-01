@@ -151,7 +151,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     To help with this, you'll likely want to use `Dask-Yarn <https://yarn.dask.org>`_.
 
 2.  **HPC**: If you have an HPC machine that runs resource managers like SGE,
-    SLLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
+    SLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
     users can launch Dask on these systems today using either:
 
     - `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
