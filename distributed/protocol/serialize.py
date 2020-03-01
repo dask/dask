@@ -548,6 +548,7 @@ def _is_msgpack_serializable(v):
     typ = type(v)
     return (
         typ is str
+        or typ is bool
         or typ is int
         or typ is float
         or isinstance(v, dict)
