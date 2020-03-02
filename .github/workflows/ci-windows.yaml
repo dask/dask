@@ -19,7 +19,7 @@ jobs:
         with:
           miniconda-version: "latest"
           python-version: ${{ matrix.python-version }}
-          environment-file: continuous_integration/environment-windows.yaml
+          environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
           activate-environment: testenv
           auto-activate-base: false
 

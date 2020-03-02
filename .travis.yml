@@ -19,7 +19,7 @@ jobs:
   include:
     - env: &py36_env
       - PYTHON_VERSION=3.6
-      - ENV_FILE=continuous_integration/travis/travis-36.yaml
+      - ENV_FILE=continuous_integration/environment-3.6.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -27,7 +27,7 @@ jobs:
 
     - env: &py37_env
       - PYTHON_VERSION=3.7
-      - ENV_FILE=continuous_integration/travis/travis-37.yaml
+      - ENV_FILE=continuous_integration/environment-3.7.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -36,7 +36,7 @@ jobs:
 
     - env: &py38_env
       - PYTHON_VERSION=3.8
-      - ENV_FILE=continuous_integration/travis/travis-38.yaml
+      - ENV_FILE=continuous_integration/environment-3.8.yaml
       - *test_and_lint
       - *coverage
       - *no_optimize
@@ -45,7 +45,7 @@ jobs:
 
     - env: &py38_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - ENV_FILE=continuous_integration/travis/travis-38-dev.yaml
+      - ENV_FILE=continuous_integration/environment-3.8-dev.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -58,7 +58,7 @@ jobs:
       os: osx
 
     - env:
-      - ENV_FILE=continuous_integration/travis/travis-mindeps-array-dataframe.yaml
+      - ENV_FILE=continuous_integration/environment-mindeps-array-dataframe.yaml
       - *test
       - *no_coverage
       - *no_optimize
@@ -66,7 +66,7 @@ jobs:
       if: type != pull_request OR commit_message =~ test-mindeps  # Skip on PRS unless the commit message contains "test-mindeps"
 
     - env:
-      - ENV_FILE=continuous_integration/travis/travis-mindeps-bag-delayed.yaml
+      - ENV_FILE=continuous_integration/environment-mindeps-bag-delayed.yaml
       - *test
       - *no_coverage
       - *no_optimize
