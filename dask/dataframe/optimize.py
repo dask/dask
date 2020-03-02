@@ -39,8 +39,6 @@ def optimize_read_parquet_getitem(dsk, keys):
     # find the keys to optimize
     from .io.parquet.core import ParquetSubgraph
 
-    keys = set(keys)
-
     read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
 
     layers = dsk.layers.copy()
@@ -66,9 +64,11 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
-            if set(block.keys()) & keys:
+            if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
                 # ... but bail on the optimization if the getitem is what's requested
-                # (https://github.com/dask/dask/issues/5893)
+                # These keys are structured like [('getitem-<token>', 0), ...]
+                # so we check for the first item of the tuple.
+                # See https://github.com/dask/dask/issues/5893
                 return dsk
 
             block_columns = block.indices[1][0]
