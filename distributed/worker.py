@@ -492,7 +492,7 @@ class Worker(ServerNode):
         if local_directory is None:
             local_directory = dask.config.get("temporary-directory") or os.getcwd()
             if not os.path.exists(local_directory):
-                os.mkdir(local_directory)
+                os.makedirs(local_directory)
             local_directory = os.path.join(local_directory, "dask-worker-space")
 
         with warn_on_duration(
