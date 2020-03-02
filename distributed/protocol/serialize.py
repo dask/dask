@@ -547,7 +547,8 @@ def _deserialize_bytes(header, frames):
 def _is_msgpack_serializable(v):
     typ = type(v)
     return (
-        typ is str
+        v is None
+        or typ is str
         or typ is bool
         or typ is int
         or typ is float
