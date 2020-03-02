@@ -15,11 +15,6 @@ from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
 
-try:
-    import cytoolz as toolz
-except ImportError:
-    import toolz
-
 from .core import get_deps
 from .optimization import key_split  # noqa: F401
 
@@ -1013,14 +1008,28 @@ def get_scheduler_lock(collection=None, scheduler=None):
     return SerializableLock()
 
 
+def unique(seq, key=id):
+    seen = set()
+    seen_add = seen.add
+    for item in seq:
+        _id = key(item)
+        if _id not in seen:
+            seen_add(_id)
+            yield item
+
+
+def merge(*dicts):
+    rv = {}
+    for d in dicts:
+        rv.update(d)
+    return rv
+
+
 def ensure_dict(d):
     if type(d) is dict:
         return d
     elif hasattr(d, "dicts"):
-        result = {}
-        for dd in toolz.unique(d.dicts.values(), key=id):
-            result.update(dd)
-        return result
+        return merge(*unique(d.dicts.values(), key=id))
     return dict(d)
 
 
