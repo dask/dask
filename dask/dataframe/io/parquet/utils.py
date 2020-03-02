@@ -341,7 +341,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 
 
 def _analyze_paths(file_list, fs, root=False):
-    """Consolidate list of file-paths into  parquet relative paths
+    """Consolidate list of file-paths into parquet relative paths
 
     Note: This function was mostly copied from dask/fastparquet to
     use in both `FastParquetEngine` and `ArrowEngine`."""

@@ -24,7 +24,7 @@ chunk_error = (
 fft_preamble = """
     Wrapping of %s
 
-    The axis along which the FFT is applied must have a one chunk. To change
+    The axis along which the FFT is applied must have only one chunk. To change
     the array's chunking use dask.Array.rechunk.
 
     The %s docstring follows below:
