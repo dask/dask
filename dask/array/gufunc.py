@@ -40,7 +40,7 @@ def _parse_gufunc_signature(signature):
     Returns
     -------
     Tuple of input and output core dimensions parsed from the signature, each
-    of the form List[Tuple[str, ...]], except for one output. For one  output
+    of the form List[Tuple[str, ...]], except for one output. For one output
     core dimension is not a list, but of the form Tuple[str, ...]
     """
     signature = signature.replace(" ", "")
@@ -184,7 +184,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     are considered loop dimensions and are required to broadcast
     naturally against each other.
 
-    In other terms, this function is like np.vectorize, but for
+    In other terms, this function is like ``np.vectorize``, but for
     the blocks of dask arrays. If the function itself shall also
     be vectorized use ``vectorize=True`` for convenience.
 
@@ -230,7 +230,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -541,7 +541,7 @@ class gufunc(object):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -671,7 +671,7 @@ def as_gufunc(signature=None, **kwargs):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
