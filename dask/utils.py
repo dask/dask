@@ -1018,7 +1018,7 @@ def unique(seq, key=id):
             yield item
 
 
-def merge(*dicts):
+def merge(dicts):
     rv = {}
     for d in dicts:
         rv.update(d)
@@ -1029,7 +1029,7 @@ def ensure_dict(d):
     if type(d) is dict:
         return d
     elif hasattr(d, "dicts"):
-        return merge(*unique(d.dicts.values(), key=id))
+        return merge(unique(d.dicts.values(), key=id))
     return dict(d)
 
 
