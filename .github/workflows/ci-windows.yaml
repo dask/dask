@@ -23,13 +23,13 @@ jobs:
           activate-environment: testenv
           auto-activate-base: false
 
-      - name: List packages in environment
-        shell: bash -l {0}
-        run: conda list
-
       - name: Install dask from source
         shell: bash -l {0}
         run: pip install -q --no-deps -e .[complete]
+
+      - name: List packages in environment
+        shell: bash -l {0}
+        run: conda list
 
       - name: Run tests
         shell: bash -l {0}
