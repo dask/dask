@@ -20,7 +20,7 @@ jobs:
           miniconda-version: "latest"
           python-version: ${{ matrix.python-version }}
           environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
-          activate-environment: testenv
+          activate-environment: test-environment
           auto-activate-base: false
 
       - name: Install dask from source
