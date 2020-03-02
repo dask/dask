@@ -43,6 +43,7 @@ def optimize_read_parquet_getitem(dsk, keys):
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
+    keys = set(keys)
 
     for k in read_parquets:
         columns = set()
@@ -64,7 +65,8 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
-            if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
+            if set(block.keys()) & keys:
+                # if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
                 # ... but bail on the optimization if the getitem is what's requested
                 # These keys are structured like [('getitem-<token>', 0), ...]
                 # so we check for the first item of the tuple.
