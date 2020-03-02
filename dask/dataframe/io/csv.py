@@ -625,7 +625,7 @@ def to_csv(
         /path/to/data/export-0.csv
         /path/to/data/export-1.csv
 
-    Use a globstring and a ``name_function=`` keyword argument. The
+    Use a globstring and a ``name_function=`` keyword argument.  The
     name_function function should expect an integer and produce a string.
     Strings produced by name_function must preserve the order of their
     respective partition indices.
@@ -669,7 +669,7 @@ def to_csv(
         storage systems such as S3 or GCS. A warning will be issued when
         writing to a file that is not backed by a local filesystem.
     compression : string or None
-        String like 'gzip' or 'xz'. Must support efficient random access.
+        String like 'gzip' or 'xz'.  Must support efficient random access.
         Filenames with extensions corresponding to known compression
         algorithms (gz, bz2) will be compressed accordingly automatically
     sep : character, default ','
@@ -694,7 +694,7 @@ def to_csv(
     index_label : string or sequence, or False, default None
         Column label for index column(s) if desired. If None is given, and
         `header` and `index` are True, then the index names are used. A
-        sequence should be given if the DataFrame uses MultiIndex. If
+        sequence should be given if the DataFrame uses MultiIndex.  If
         False do not print fields for index names. Use index_label=False
         for easier importing in R
     nanRep : None

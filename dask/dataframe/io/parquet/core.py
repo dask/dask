@@ -102,7 +102,7 @@ def read_parquet(
     Read a Parquet file into a Dask DataFrame
 
     This reads a directory of Parquet data into a Dask.dataframe, one file per
-    partition. It selects the index among the sorted columns if any exist.
+    partition.  It selects the index among the sorted columns if any exist.
 
     Parameters
     ----------
@@ -158,7 +158,7 @@ def read_parquet(
         available). Otherwise, partitions correspond to distinct files.
         Only the "pyarrow" engine currently supports this argument.
     chunksize : int, str
-        The target task partition size. If set, consecutive row-groups
+        The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
         partition until the aggregate size reaches this value.
     **kwargs: dict (of dicts)

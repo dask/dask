@@ -75,7 +75,7 @@ def _meta_from_array(x, columns=None, index=None):
 def from_array(x, chunksize=50000, columns=None):
     """ Read any slicable array into a Dask Dataframe
 
-    Uses getitem syntax to pull slices out of the array. The array need not be
+    Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
 
         x[50000:100000]
@@ -118,7 +118,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     parallel.
 
     Note that, despite parallelism, Dask.dataframe may not always be faster
-    than Pandas. We recommend that you stay with Pandas for as long as
+    than Pandas.  We recommend that you stay with Pandas for as long as
     possible before switching to Dask.dataframe.
 
     Parameters
@@ -135,7 +135,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         Sort input first to obtain cleanly divided partitions or don't sort and
         don't get cleanly divided partitions
     name: string, optional
-        An optional keyname for the dataframe. Defaults to hashing the input
+        An optional keyname for the dataframe.  Defaults to hashing the input
 
     Returns
     -------
@@ -212,7 +212,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
     """ Read BColz CTable into a Dask Dataframe
 
     BColz is a fast on-disk compressed column store with careful attention
-    given to compression. https://bcolz.readthedocs.io/en/latest/
+    given to compression.  https://bcolz.readthedocs.io/en/latest/
 
     Parameters
     ----------
@@ -484,7 +484,7 @@ def to_bag(df, index=False):
     ----------
     index : bool, optional
         If True, the elements are tuples of ``(index, value)``, otherwise
-        they're just the ``value``. Default is False.
+        they're just the ``value``.  Default is False.
 
     Examples
     --------
@@ -540,7 +540,7 @@ def from_delayed(
         Partition boundaries along the index.
         For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
         For string 'sorted' will compute the delayed values to find index
-        values. Assumes that the indexes are mutually sorted.
+        values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information
     prefix : str, optional
         Prefix to prepend to the keys.

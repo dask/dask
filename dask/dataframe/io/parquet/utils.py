@@ -31,7 +31,7 @@ class Engine:
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
         gather_statistics: bool
-            Whether or not to gather statistics data. If ``None``, we only
+            Whether or not to gather statistics data.  If ``None``, we only
             gather statistics data if there is a _metadata file available to
             query (cheaply)
         filters: list
@@ -111,7 +111,7 @@ class Engine:
         df: dask.dataframe.DataFrame
         fs: FileSystem
         path: str
-            Destination directory for data. Prepend with protocol like ``s3://``
+            Destination directory for data.  Prepend with protocol like ``s3://``
             or ``hdfs://`` for remote data.
         append: bool
             If True, may use existing metadata (if any) and perform checks
