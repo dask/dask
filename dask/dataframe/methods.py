@@ -257,8 +257,14 @@ def cummax_aggregate(x, y):
 
 
 def assign(df, *pairs):
-    kwargs = dict(partition(2, pairs))
-    return df.assign(**kwargs)
+    # Only deep copy when updating an element
+    # (to avoid modifying the original)
+    pairs = dict(partition(2, pairs))
+    deep = bool(set(pairs) & set(df.columns))
+    df = df.copy(deep=bool(deep))
+    for name, val in pairs.items():
+        df[name] = val
+    return df
 
 
 def unique(x, series_name=None):

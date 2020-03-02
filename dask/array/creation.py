@@ -579,8 +579,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     diag_chunks = []
     chunk_offsets = []
-    cum1 = list(cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1])
-    cum2 = list(cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1])
+    cum1 = cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1]
+    cum2 = cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1]
     for co1, c1 in zip(cum1, a.chunks[axis1]):
         chunk_offsets.append([])
         for co2, c2 in zip(cum2, a.chunks[axis2]):
@@ -945,6 +945,11 @@ def pad_edge(array, pad_width, mode, *args):
                         zip(pad_arrays, end_values, pad_width[d], pad_chunks)
                     )
                 ]
+        elif mode == "empty":
+            pad_arrays = [
+                empty(s, dtype=array.dtype, chunks=c)
+                for s, c in zip(pad_shapes, pad_chunks)
+            ]
 
         result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
@@ -1119,7 +1124,7 @@ def pad(array, pad_width, mode, **kwargs):
         kwargs.setdefault("end_values", 0)
     elif mode in ["reflect", "symmetric"]:
         kwargs.setdefault("reflect_type", "even")
-    elif mode in ["edge", "wrap"]:
+    elif mode in ["edge", "wrap", "empty"]:
         if kwargs:
             raise TypeError("Got unsupported keyword arguments.")
     elif callable(mode):
@@ -1132,7 +1137,7 @@ def pad(array, pad_width, mode, **kwargs):
 
     if mode in ["maximum", "mean", "median", "minimum"]:
         return pad_stats(array, pad_width, mode, *kwargs.values())
-    elif mode in ["constant", "edge", "linear_ramp"]:
+    elif mode in ["constant", "edge", "linear_ramp", "empty"]:
         return pad_edge(array, pad_width, mode, *kwargs.values())
     elif mode in ["reflect", "symmetric", "wrap"]:
         return pad_reuse(array, pad_width, mode, *kwargs.values())

@@ -29,6 +29,7 @@ try:
         to_json,
         read_fwf,
     )
+    from .numeric import to_numeric
     from .optimize import optimize
     from .multi import merge, concat, merge_asof
     from . import rolling, backends

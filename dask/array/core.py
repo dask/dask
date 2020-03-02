@@ -667,7 +667,7 @@ def map_blocks(
                         (
                             cached_cumsum(arg.chunks[j], initial_zero=True)
                             if ind in out_ind
-                            else np.array([0, arg.shape[j]])
+                            else [0, arg.shape[j]]
                         )
                         for j, ind in enumerate(in_ind)
                     ]
@@ -1126,7 +1126,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def shape(self):
-        return tuple(map(sum, self.chunks))
+        return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)
 
     @property
     def chunksize(self):

@@ -32,7 +32,7 @@ dependencies:
   - cloudpickle
   - crick
   - cytoolz
-  - distributed==2.0.1
+  - distributed
   - graphviz
   - ipython
   - lz4
