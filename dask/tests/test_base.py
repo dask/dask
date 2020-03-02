@@ -394,6 +394,13 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+def test_tokenize_range():
+    assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
+    assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 15, 2))  # Different stop
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 10, 1))  # Different step
+
+
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
     a = np.array([u"foo", u"Jos\xe9", np.nan], dtype="O")

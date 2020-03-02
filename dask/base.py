@@ -683,6 +683,11 @@ def normalize_literal(lit):
     return "literal", normalize_token(lit())
 
 
+@normalize_token.register(range)
+def normalize_range(r):
+    return list(map(normalize_token, [r.start, r.stop, r.step]))
+
+
 @normalize_token.register(object)
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)

@@ -217,11 +217,10 @@ def test_dot_graph_defaults():
         ),
     ],
 )
-def test_filenames_and_formats(filename, format, target, expected_result_type):
-    result = dot_graph(dsk, filename=filename, format=format)
-    assert os.path.isfile(target)
+def test_filenames_and_formats(tmpdir, filename, format, target, expected_result_type):
+    result = dot_graph(dsk, filename=str(tmpdir.join(filename)), format=format)
+    assert tmpdir.join(target).exists()
     assert isinstance(result, expected_result_type)
-    ensure_not_exists(target)
 
 
 def test_delayed_kwargs_apply():
