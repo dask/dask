@@ -31,7 +31,7 @@ from distributed import (
     wait,
 )
 from distributed.compatibility import WINDOWS
-from distributed.core import rpc
+from distributed.core import rpc, CommClosedError
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, parse_memory_limit
@@ -1629,3 +1629,26 @@ async def test_update_latency(cleanup):
 
             if w.digests is not None:
                 assert w.digests["latency"].size() > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reconnect", [True, False])
+async def test_heartbeat_comm_closed(cleanup, monkeypatch, reconnect):
+    with captured_logger("distributed.worker", level=logging.WARNING) as logger:
+        async with await Scheduler() as s:
+
+            def bad_heartbeat_worker(*args, **kwargs):
+                raise CommClosedError()
+
+            async with await Worker(s.address, reconnect=reconnect) as w:
+                # Trigger CommClosedError during worker heartbeat
+                monkeypatch.setattr(
+                    w.scheduler, "heartbeat_worker", bad_heartbeat_worker
+                )
+
+                await w.heartbeat()
+                if reconnect:
+                    assert w.status == "running"
+                else:
+                    assert w.status == "closed"
+    assert "Heartbeat to scheduler failed" in logger.getvalue()

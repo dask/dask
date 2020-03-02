@@ -913,14 +913,16 @@ class Worker(ServerNode):
                 )
                 self.bandwidth_workers.clear()
                 self.bandwidth_types.clear()
+            except CommClosedError:
+                logger.warning("Heartbeat to scheduler failed")
+                if not self.reconnect:
+                    await self.close(report=False)
             except IOError as e:
                 # Scheduler is gone. Respect distributed.comm.timeouts.connect
                 if "Timed out trying to connect" in str(e):
                     await self.close(report=False)
                 else:
                     raise e
-            except CommClosedError:
-                logger.warning("Heartbeat to scheduler failed")
             finally:
                 self.heartbeat_active = False
         else:
