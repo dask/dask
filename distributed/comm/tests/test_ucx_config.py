@@ -60,18 +60,6 @@ async def test_ucx_config(cleanup):
         assert ucx_config.get("TLS") == "rc,tcp,sockcm,cuda_copy"
         assert ucx_config.get("MEMTYPE_CACHE") == "y"
 
-    ucx = {
-        "nvlink": False,
-        "infiniband": False,
-        "net-devices": "all",
-        "MEMTYPE_CACHE": "y",
-        "tcp": False,
-        "cuda_copy": True,
-    }
-    with dask.config.set(ucx=ucx):
-        with pytest.raises(ValueError):
-            ucx_config = _scrub_ucx_config()
-
 
 def test_ucx_config_w_env_var(cleanup, loop, monkeypatch):
     size = "1000.00 MB"
