@@ -69,7 +69,7 @@ async def test_ucx_config(cleanup):
         "cuda_copy": True,
     }
     with dask.config.set(ucx=ucx):
-        with raises(ValueError):
+        with pytest.raises(ValueError):
             ucx_config = _scrub_ucx_config()
 
 
