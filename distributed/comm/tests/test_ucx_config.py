@@ -20,18 +20,30 @@ rmm = pytest.importorskip("rmm")
 @pytest.mark.asyncio
 async def test_ucx_config(cleanup):
 
-    ucx = {"nvlink": True, "infiniband": True, "net-devices": ""}
+    ucx = {
+        "nvlink": True,
+        "infiniband": True,
+        "net-devices": "",
+        "tcp": True,
+        "cuda_copy": True,
+    }
 
     with dask.config.set(ucx=ucx):
         ucx_config = _scrub_ucx_config()
         assert ucx_config.get("TLS") == "rc,tcp,sockcm,cuda_copy,cuda_ipc"
         assert ucx_config.get("NET_DEVICES") is None
 
-    ucx = {"nvlink": False, "infiniband": True, "net-devices": "mlx5_0:1"}
+    ucx = {
+        "nvlink": False,
+        "infiniband": True,
+        "net-devices": "mlx5_0:1",
+        "tcp": True,
+        "cuda_copy": False,
+    }
 
     with dask.config.set(ucx=ucx):
         ucx_config = _scrub_ucx_config()
-        assert ucx_config.get("TLS") == "rc,tcp,sockcm,cuda_copy"
+        assert ucx_config.get("TLS") == "rc,tcp,sockcm"
         assert ucx_config.get("NET_DEVICES") == "mlx5_0:1"
 
     ucx = {
@@ -39,12 +51,26 @@ async def test_ucx_config(cleanup):
         "infiniband": True,
         "net-devices": "all",
         "MEMTYPE_CACHE": "y",
+        "tcp": True,
+        "cuda_copy": True,
     }
 
     with dask.config.set(ucx=ucx):
         ucx_config = _scrub_ucx_config()
         assert ucx_config.get("TLS") == "rc,tcp,sockcm,cuda_copy"
         assert ucx_config.get("MEMTYPE_CACHE") == "y"
+
+    ucx = {
+        "nvlink": False,
+        "infiniband": False,
+        "net-devices": "all",
+        "MEMTYPE_CACHE": "y",
+        "tcp": False,
+        "cuda_copy": True,
+    }
+    with dask.config.set(ucx=ucx):
+        with raises(ValueError):
+            ucx_config = _scrub_ucx_config()
 
 
 def test_ucx_config_w_env_var(cleanup, loop, monkeypatch):

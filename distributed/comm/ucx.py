@@ -359,9 +359,21 @@ def _scrub_ucx_config():
 
     # if any of the high level flags are set, as long as they are not Null/None,
     # we assume we should configure basic TLS settings for UCX
-    if any([dask.config.get("ucx.nvlink"), dask.config.get("ucx.infiniband")]):
-        tls = "tcp,sockcm,cuda_copy"
+    if any(
+        [
+            dask.config.get("ucx.tcp"),
+            dask.config.get("ucx.nvlink"),
+            dask.config.get("ucx.infiniband"),
+        ]
+    ):
+        tls = "tcp,sockcm"
         tls_priority = "sockcm"
+
+        # CUDA COPY can optionally be used with ucx -- we rely on the user
+        # to define when messages will include CUDA objects.  Note:
+        # defining only the Infiniband flag will not enable cuda_copy
+        if any([dask.config.get("ucx.nvlink"), dask.config.get("ucx.cuda_copy")]):
+            tls = tls + ",cuda_copy"
 
         if dask.config.get("ucx.infiniband"):
             tls = "rc," + tls
@@ -373,6 +385,10 @@ def _scrub_ucx_config():
         net_devices = dask.config.get("ucx.net-devices")
         if net_devices is not None and net_devices != "":
             options["NET_DEVICES"] = net_devices
+    else:
+        raise ValueError(
+            "UCX Dask config not set.  Please define at least one: ucx.tcp, ucx.nvlink, ucx.infiniband"
+        )
 
     # ANY UCX options defined in config will overwrite high level dask.ucx flags
     valid_ucx_keys = list(get_config().keys())

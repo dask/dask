@@ -136,7 +136,9 @@ distributed:
 rmm:
   pool-size: null
 ucx:
-  nvlink: null
-  infiniband: null
-  net-devices: null
+  tcp: null  # enable tcp
+  nvlink: null  # enable cuda_ipc
+  infiniband: null # enable Infiniband
+  cuda_copy: null  # enable cuda-copy
+  net-devices: null  # define which Infiniband device to use
 
