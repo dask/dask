@@ -1802,7 +1802,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
     assert_eq(a, b, check_divisions=False)
-    assert np.alltrue(b.map_partitions(total_mem_usage).compute() <= 1024)
+    assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
 
