@@ -3084,6 +3084,29 @@ Dask Name: {name}, {task} tasks""".format(
         )
         return delayed(sum)(result.to_delayed())
 
+    def memory_usage_per_partition(self, index=True, deep=False):
+        """ Return the memory usage of each partition
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the Series'
+            index in returned Series.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            ``object`` dtypes for system-level memory consumption, and include
+            it in the returned values.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the parition number and whose values
+            are the memory usage of each partition in bytes.
+        """
+        return self.map_partitions(
+            M.memory_usage, index=index, deep=deep
+        ).clear_divisions()
+
     def __divmod__(self, other):
         res1 = self // other
         res2 = self % other
@@ -4233,6 +4256,28 @@ class DataFrame(_Frame):
         result = self.map_partitions(M.memory_usage, index=index, deep=deep)
         result = result.groupby(result.index).sum()
         return result
+
+    def memory_usage_per_partition(self, index=True, deep=False):
+        """ Return the memory usage of each partition
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the DataFrame's
+            index in returned Series.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            ``object`` dtypes for system-level memory consumption, and include
+            it in the returned values.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the parition number and whose values
+            are the memory usage of each partition in bytes.
+        """
+        result = self.map_partitions(M.memory_usage, index=index, deep=deep)
+        return result.map_partitions(M.sum).clear_divisions()
 
     def pivot_table(self, index=None, columns=None, values=None, aggfunc="mean"):
         """
