@@ -1,7 +1,7 @@
 import dask
 
 from . import pickle
-from .serialize import register_serialization_family
+from .serialize import ObjectDictSerializer, register_serialization_family
 from dask.utils import typename
 
 cuda_serialize = dask.utils.Dispatch("cuda_serialize")
@@ -29,3 +29,8 @@ def cuda_loads(header, frames):
 
 
 register_serialization_family("cuda", cuda_dumps, cuda_loads)
+
+
+cuda_object_with_dict_serializer = ObjectDictSerializer("cuda")
+
+cuda_deserialize.register(dict)(cuda_object_with_dict_serializer.deserialize)

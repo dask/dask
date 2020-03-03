@@ -560,59 +560,69 @@ def _is_msgpack_serializable(v):
     )
 
 
-def serialize_object_with_dict(est):
-    header = {
-        "serializer": "dask",
-        "type-serialized": pickle.dumps(type(est)),
-        "simple": {},
-        "complex": {},
-    }
-    frames = []
+class ObjectDictSerializer:
+    def __init__(self, serializer):
+        self.serializer = serializer
 
-    if isinstance(est, dict):
-        d = est
-    else:
-        d = est.__dict__
+    def serialize(self, est):
+        header = {
+            "serializer": self.serializer,
+            "type-serialized": pickle.dumps(type(est)),
+            "simple": {},
+            "complex": {},
+        }
+        frames = []
 
-    for k, v in d.items():
-        if _is_msgpack_serializable(v):
-            header["simple"][k] = v
+        if isinstance(est, dict):
+            d = est
         else:
-            if isinstance(v, dict):
-                h, f = serialize_object_with_dict(v)
+            d = est.__dict__
+
+        for k, v in d.items():
+            if _is_msgpack_serializable(v):
+                header["simple"][k] = v
             else:
-                h, f = serialize(v)
-            header["complex"][k] = {
-                "header": h,
-                "start": len(frames),
-                "stop": len(frames) + len(f),
-            }
-            frames += f
-    return header, frames
+                if isinstance(v, dict):
+                    h, f = self.serialize(v)
+                else:
+                    h, f = serialize(v, serializers=(self.serializer, "pickle"))
+                header["complex"][k] = {
+                    "header": h,
+                    "start": len(frames),
+                    "stop": len(frames) + len(f),
+                }
+                frames += f
+        return header, frames
+
+    def deserialize(self, header, frames):
+        cls = pickle.loads(header["type-serialized"])
+        if issubclass(cls, dict):
+            dd = obj = {}
+        else:
+            obj = object.__new__(cls)
+            dd = obj.__dict__
+        dd.update(header["simple"])
+        for k, d in header["complex"].items():
+            h = d["header"]
+            f = frames[d["start"] : d["stop"]]
+            v = deserialize(h, f)
+            dd[k] = v
+
+        return obj
 
 
-def deserialize_object_with_dict(header, frames):
-    cls = pickle.loads(header["type-serialized"])
-    if issubclass(cls, dict):
-        dd = obj = {}
-    else:
-        obj = object.__new__(cls)
-        dd = obj.__dict__
-    dd.update(header["simple"])
-    for k, d in header["complex"].items():
-        h = d["header"]
-        f = frames[d["start"] : d["stop"]]
-        v = deserialize(h, f)
-        dd[k] = v
+dask_object_with_dict_serializer = ObjectDictSerializer("dask")
 
-    return obj
+dask_deserialize.register(dict)(dask_object_with_dict_serializer.deserialize)
 
 
-dask_deserialize.register(dict)(deserialize_object_with_dict)
-
-
-def register_generic(cls):
-    """ Register dask_(de)serialize to traverse through __dict__
+def register_generic(
+    cls,
+    serializer_name="dask",
+    serialize_func=dask_serialize,
+    deserialize_func=dask_deserialize,
+):
+    """ Register (de)serialize to traverse through __dict__
 
     Normally when registering new classes for Dask's custom serialization you
     need to manage headers and frames, which can be tedious.  If all you want
@@ -643,5 +653,6 @@ def register_generic(cls):
     dask_serialize
     dask_deserialize
     """
-    dask_serialize.register(cls)(serialize_object_with_dict)
-    dask_deserialize.register(cls)(deserialize_object_with_dict)
+    object_with_dict_serializer = ObjectDictSerializer(serializer_name)
+    serialize_func.register(cls)(object_with_dict_serializer.serialize)
+    deserialize_func.register(cls)(object_with_dict_serializer.deserialize)
