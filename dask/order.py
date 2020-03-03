@@ -254,7 +254,7 @@ def order(dsk, dependencies=None):
                 i += 1
                 deps = dependents[item]
 
-                if metrics[item][3] == 2:  # min_height
+                if metrics[item][3] == 1:  # min_height
                     # Don't leave any dangling single nodes!  Finish all dependents that are
                     # ready and are also root nodes.  Doing this here also lets us continue
                     # down to a different root node.
