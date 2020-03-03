@@ -2150,7 +2150,7 @@ class Worker(ServerNode):
         response = {"op": "steal-response", "key": key, "state": state}
         self.batched_stream.send(response)
 
-        if state in ("ready", "waiting"):
+        if state in ("ready", "waiting", "constrained"):
             self.release_key(key)
 
     def release_key(self, key, cause=None, reason=None, report=True):

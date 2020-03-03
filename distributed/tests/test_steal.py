@@ -224,6 +224,32 @@ def test_dont_steal_worker_restrictions(c, s, a, b):
     assert len(b.task_state) == 0
 
 
+@gen_cluster(
+    client=True, nthreads=[("127.0.0.1", 1), ("127.0.0.1", 2), ("127.0.0.1", 2)]
+)
+def test_steal_worker_restrictions(c, s, wa, wb, wc):
+    future = c.submit(slowinc, 1, delay=0.1, workers={wa.address, wb.address})
+    yield future
+
+    ntasks = 100
+    futures = c.map(slowinc, range(ntasks), delay=0.1, workers={wa.address, wb.address})
+
+    while sum(len(w.task_state) for w in [wa, wb, wc]) < ntasks:
+        yield gen.sleep(0.01)
+
+    assert 0 < len(wa.task_state) < ntasks
+    assert 0 < len(wb.task_state) < ntasks
+    assert len(wc.task_state) == 0
+
+    s.extensions["stealing"].balance()
+
+    yield gen.sleep(0.1)
+
+    assert 0 < len(wa.task_state) < ntasks
+    assert 0 < len(wb.task_state) < ntasks
+    assert len(wc.task_state) == 0
+
+
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
 )
@@ -243,6 +269,34 @@ def test_dont_steal_host_restrictions(c, s, a, b):
     yield gen.sleep(0.1)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
+
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
+)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 1), ("127.0.0.2", 2)])
+def test_steal_host_restrictions(c, s, wa, wb):
+    future = c.submit(slowinc, 1, delay=0.10, workers=wa.address)
+    yield future
+
+    ntasks = 100
+    futures = c.map(slowinc, range(ntasks), delay=0.1, workers="127.0.0.1")
+    while len(wa.task_state) < ntasks:
+        yield gen.sleep(0.01)
+    assert len(wa.task_state) == ntasks
+    assert len(wb.task_state) == 0
+
+    wc = yield Worker(s.address, ncores=1)
+
+    start = time()
+    while not wc.task_state or len(wa.task_state) == ntasks:
+        yield gen.sleep(0.01)
+        assert time() < start + 3
+
+    yield gen.sleep(0.1)
+    assert 0 < len(wa.task_state) < ntasks
+    assert len(wb.task_state) == 0
+    assert 0 < len(wc.task_state) < ntasks
 
 
 @gen_cluster(
@@ -265,7 +319,6 @@ def test_dont_steal_resource_restrictions(c, s, a, b):
     assert len(b.task_state) == 0
 
 
-@pytest.mark.skip(reason="no stealing of resources")
 @gen_cluster(
     client=True, nthreads=[("127.0.0.1", 1, {"resources": {"A": 2}})], timeout=3
 )
