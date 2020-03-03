@@ -476,19 +476,19 @@ def graph_metrics(dependencies, dependents, total_dependencies):
 
     4.  The minimum height from a root node
 
-        1
+        0
         |
-        2   1
+        1   0
          \ /
-          2
+          1
 
     5.  The maximum height from a root node
 
-        1
+        0
         |
-        2   1
+        1   0
          \ /
-          3
+          2
 
     Examples
     --------
@@ -497,7 +497,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
     >>> _, total_dependencies = ndependencies(dependencies, dependents)
     >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
     >>> sorted(metrics.items())
-    [('a1', (4, 2, 3, 2, 3)), ('b1', (2, 3, 3, 2, 2)), ('b2', (1, 2, 2, 1, 1)), ('c1', (1, 3, 3, 1, 1))]
+    [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
 
     Returns
     -------
