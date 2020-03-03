@@ -108,20 +108,20 @@ using the ``@gen_cluster`` style of test, e.g.
     from distributed import Client, Future, Scheduler, Worker
 
     @gen_cluster(client=True)
-    def test_submit(c, s, a, b):
+    async def test_submit(c, s, a, b):
         assert isinstance(c, Client)
         assert isinstance(s, Scheduler)
         assert isinstance(a, Worker)
         assert isinstance(b, Worker)
-
+    
         future = c.submit(inc, 1)
         assert isinstance(future, Future)
         assert future.key in c.futures
-
+    
         # result = future.result()  # This synchronous API call would block
-        result = yield future
+        result = await future
         assert result == 2
-
+    
         assert future.key in s.tasks
         assert future.key in a.data or future.key in b.data
 
@@ -131,8 +131,8 @@ you and cleans them up after the test.  It also allows you to directly inspect
 the state of every element of the cluster directly.  However, you can not use
 the normal synchronous API (doing so will cause the test to wait forever) and
 instead you need to use the coroutine API, where all blocking functions are
-prepended with an underscore (``_``).  Beware, it is a common mistake to use
-the blocking interface within these tests.
+prepended with an underscore (``_``) and awaited with ``await``.
+Beware, it is a common mistake to use the blocking interface within these tests.
 
 If you want to test the normal synchronous API you can use the ``client``
 pytest fixture style test, which sets up a scheduler and workers for you in
@@ -166,7 +166,7 @@ also add the ``s, a, b`` fixtures as well.
 In this style of test you do not have access to the scheduler or workers.  The
 variables ``s, a, b`` are now dictionaries holding a
 ``multiprocessing.Process`` object and a port integer.  However, you can now
-use the normal synchronous API (never use yield in this style of test) and you
+use the normal synchronous API (never use ``await`` in this style of test) and you
 can close processes easily by terminating them.
 
 Typically for most user-facing functions you will find both kinds of tests.
