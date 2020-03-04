@@ -104,7 +104,7 @@ def label(x, cache=None):
     return s
 
 
-def box_label(key, value=None, verbose=True):
+def box_label(key, verbose=True):
     """ Label boxes in graph by chunk index
 
     >>> box_label(('x', 1, 2, 3))
@@ -119,10 +119,8 @@ def box_label(key, value=None, verbose=True):
         if len(key) == 1:
             [key] = key
         return str(key)
-    elif verbose and value is None:
-        return str(key)
     elif verbose:
-        return f"{key}={value}"
+        return str(key)
     else:
         return ""
 
@@ -174,7 +172,7 @@ def to_graphviz(
                 if dep_name not in seen:
                     seen.add(dep_name)
                     attrs = data_attributes.get(dep, {})
-                    attrs.setdefault("label", box_label(dep, dsk.get(dep), verbose))
+                    attrs.setdefault("label", box_label(dep, verbose))
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
@@ -190,7 +188,7 @@ def to_graphviz(
         if ((collapse and k_name in connected) or not collapse) and k_name not in seen:
             seen.add(k_name)
             attrs = data_attributes.get(k, {})
-            attrs.setdefault("label", box_label(k, None, verbose))
+            attrs.setdefault("label", box_label(k, verbose))
             attrs.setdefault("shape", "box")
             g.node(k_name, **attrs)
     return g
