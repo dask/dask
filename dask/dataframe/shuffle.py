@@ -1,6 +1,8 @@
+import os
 import math
 from operator import getitem
 import uuid
+import tempfile
 import warnings
 
 import toolz
@@ -331,6 +333,8 @@ class maybe_buffered_partd(object):
     def __call__(self, *args, **kwargs):
         import partd
 
+        path = tempfile.mkdtemp(suffix=".partd", dir=self.tempdir)
+
         try:
             partd_compression = (
                 getattr(partd.compressed, self.compression)
@@ -344,10 +348,8 @@ class maybe_buffered_partd(object):
                     self.compression
                 )
             )
-        if self.tempdir:
-            file = partd.File(dir=self.tempdir)
-        else:
-            file = partd.File()
+        file = partd.File(path)
+        partd.file.cleanup_files.append(path)
         # Envelope partd file with compression, if set and available
         if partd_compression:
             file = partd_compression(file)
@@ -402,12 +404,10 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk4 = {
         (name, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
     }
-
     divisions = (None,) * (npartitions + 1)
 
     layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
-
     return DataFrame(graph, name, df._meta, divisions)
 
 
@@ -595,8 +595,31 @@ def barrier(args):
 
 def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    res = p.get(part)
-    return res if len(res) > 0 else meta
+    # This also handles cleanup of the on-disk partd files.
+    # See https://github.com/dask/dask/issues/5867 for more.
+    import partd
+
+    try:
+        res = p.get(part)
+        p.delete(part)
+
+        if isinstance(p, partd.Encode):
+            path = p.partd.path
+        else:
+            assert isinstance(p, partd.File)
+            path = p.path
+
+        paths = [x for x in os.listdir(path) if x != ".lock"]
+        if not paths:
+            os.rmdir(path)
+        return res if len(res) > 0 else meta
+    except Exception:
+        try:
+            p.drop()
+        except Exception:
+            # logger.warning("ignoring exception in...")
+            pass
+        raise
 
 
 def set_partitions_pre(s, divisions):
@@ -664,9 +687,13 @@ def shuffle_group(df, col, stage, k, npartitions):
 
 
 def shuffle_group_3(df, col, npartitions, p):
-    g = df.groupby(col)
-    d = {i: g.get_group(i) for i in g.groups}
-    p.append(d, fsync=True)
+    try:
+        g = df.groupby(col)
+        d = {i: g.get_group(i) for i in g.groups}
+        p.append(d, fsync=True)
+    except Exception:
+        p.drop()
+        raise
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):
