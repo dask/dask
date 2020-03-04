@@ -131,6 +131,7 @@ def to_graphviz(
     graph_attr={},
     node_attr=None,
     edge_attr=None,
+    collapse=False,
     **kwargs
 ):
     if data_attributes is None:
@@ -149,22 +150,16 @@ def to_graphviz(
 
     for k, v in dsk.items():
         k_name = name(k)
-        if k_name not in seen:
-            seen.add(k_name)
-            attrs = data_attributes.get(k, {})
-            attrs.setdefault("label", box_label(k))
-            attrs.setdefault("shape", "box")
-            g.node(k_name, **attrs)
-
         if istask(v):
-            func_name = name((k, "function"))
-            if func_name not in seen:
+            func_name = name((k, "function")) if not collapse else k_name
+            if collapse or func_name not in seen:
                 seen.add(func_name)
                 attrs = function_attributes.get(k, {})
                 attrs.setdefault("label", key_split(k))
                 attrs.setdefault("shape", "circle")
                 g.node(func_name, **attrs)
-            g.edge(func_name, k_name)
+            if not collapse:
+                g.edge(func_name, k_name)
 
             for dep in get_dependencies(dsk, k):
                 dep_name = name(dep)
@@ -175,8 +170,16 @@ def to_graphviz(
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
+
         elif ishashable(v) and v in dsk:
             g.edge(name(v), k_name)
+
+        if k_name not in seen:
+            seen.add(k_name)
+            attrs = data_attributes.get(k, {})
+            attrs.setdefault("label", box_label(k))
+            attrs.setdefault("shape", "box")
+            g.node(k_name, **attrs)
     return g
 
 
