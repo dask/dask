@@ -1,8 +1,10 @@
-from distributed.protocol import serialize, deserialize
 import pickle
+
 import pytest
+from distributed.protocol import deserialize, serialize
 
 cupy = pytest.importorskip("cupy")
+cupy_sparse = pytest.importorskip("cupyx.scipy.sparse")
 numpy = pytest.importorskip("numpy")
 
 
@@ -61,3 +63,34 @@ def test_serialize_cupy_from_rmm(size):
     y = deserialize(header, frames, deserializers=("cuda", "dask", "pickle", "error"))
 
     assert (x_np == cupy.asnumpy(y)).all()
+
+
+@pytest.mark.parametrize(
+    "sparse_type",
+    [
+        cupy_sparse.coo_matrix,
+        cupy_sparse.csc_matrix,
+        cupy_sparse.csr_matrix,
+        cupy_sparse.dia_matrix,
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [numpy.dtype("<f4"), numpy.dtype(">f4"), numpy.dtype("<f8"), numpy.dtype(">f8"),],
+)
+@pytest.mark.parametrize("serializer", ["cuda", "dask",])
+def test_serialize_cupy_sparse(sparse_type, dtype, serializer):
+    a_host = numpy.array([[0, 1, 0], [2, 0, 3], [0, 4, 0]], dtype=dtype)
+    a = cupy.asarray(a_host)
+
+    anz = a.nonzero()
+    acoo = cupy_sparse.coo_matrix((a[anz], anz))
+    asp = sparse_type(acoo)
+
+    header, frames = serialize(asp, serializers=[serializer])
+    asp2 = deserialize(header, frames)
+
+    a2 = asp2.todense()
+    a2_host = cupy.asnumpy(a2)
+
+    assert (a_host == a2_host).all()

@@ -30,6 +30,12 @@ def _register_numpy():
     from . import numpy
 
 
+@dask_serialize.register_lazy("scipy")
+@dask_deserialize.register_lazy("scipy")
+def _register_scipy():
+    from . import scipy
+
+
 @dask_serialize.register_lazy("h5py")
 @dask_deserialize.register_lazy("h5py")
 def _register_h5py():

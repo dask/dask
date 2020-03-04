@@ -4,7 +4,7 @@ Efficient serialization GPU arrays.
 import cupy
 
 from .cuda import cuda_deserialize, cuda_serialize
-from .serialize import dask_deserialize, dask_serialize
+from .serialize import dask_deserialize, dask_serialize, register_generic
 
 try:
     from .rmm import dask_deserialize_rmm_device_buffer as dask_deserialize_cuda_buffer
@@ -80,3 +80,20 @@ def dask_deserialize_cupy_ndarray(header, frames):
     frames = [dask_deserialize_cuda_buffer(header, frames)]
     arr = cuda_deserialize_cupy_ndarray(header, frames)
     return arr
+
+
+try:
+    from cupy.cusparse import MatDescriptor
+    from cupyx.scipy.sparse import spmatrix
+
+    cupy_sparse_types = [MatDescriptor, spmatrix]
+except ImportError:
+    cupy_sparse_types = []
+
+
+for t in cupy_sparse_types:
+    for n, s, d in [
+        ("cuda", cuda_serialize, cuda_deserialize),
+        ("dask", dask_serialize, dask_deserialize),
+    ]:
+        register_generic(t, n, s, d)
