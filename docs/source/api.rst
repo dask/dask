@@ -148,6 +148,28 @@ Future
 .. autoclass:: Future
    :members:
 
+Cluster
+-------
+
+Classes relevant for cluster creation and management. Other libraries
+(like `dask-jobqueue`_, `dask-gateway`_, `dask-kubernetes`_, `dask-yarn`_ etc.)
+provide additional cluster objects.
+
+.. _dask-jobqueue: https://jobqueue.dask.org/
+.. _dask-gateway: https://gateway.dask.org/
+.. _dask-kubernetes: https://kubernetes.dask.org/
+.. _dask-yarn: https://yarn.dask.org/en/latest/
+
+.. autosummary::
+   LocalCluster
+   SpecCluster
+
+.. autoclass:: LocalCluster
+   :members:
+
+.. autoclass:: SpecCluster
+   :members:
+
 
 Other
 -----

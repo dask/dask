@@ -502,7 +502,7 @@ class Client(Node):
 
     It is also common to create a Client without specifying the scheduler
     address , like ``Client()``.  In this case the Client creates a
-    ``LocalCluster`` in the background and connects to that.  Any extra
+    :class:`LocalCluster` in the background and connects to that.  Any extra
     keywords are passed from Client to LocalCluster in this case.  See the
     LocalCluster documentation for more information.
 
@@ -569,7 +569,7 @@ class Client(Node):
     See Also
     --------
     distributed.scheduler.Scheduler: Internal scheduler
-    distributed.deploy.local.LocalCluster:
+    distributed.LocalCluster:
     """
 
     _instances = weakref.WeakSet()
