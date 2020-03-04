@@ -477,7 +477,7 @@ group_split_dispatch = Dispatch("group_split_dispatch")
 
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def group_split_pandas(df, c, k):
+def group_split_pandas(df, c, k, ignore_index=True):
     indexer, locations = pd._libs.algos.groupsort_indexer(c, k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
