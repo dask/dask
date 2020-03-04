@@ -656,3 +656,58 @@ def test_order_cycle():
 
 def test_order_empty():
     assert order({}) == {}
+
+
+def test_switching_dependents(abcde):
+    r"""
+
+    a7 a8  <-- do these last
+    | /
+    a6                e6
+    |                /
+    a5   c5    d5  e5
+    |    |    /   /
+    a4   c4 d4  e4
+    |  \ | /   /
+    a3   b3---/
+    |
+    a2
+    |
+    a1
+    |
+    a0  <-- start here
+
+    Test that we are able to switch to better dependents.
+    In this graph, we expect to start at a0.  To compute a4, we need to compute b3.
+    After computing b3, three "better" paths become available.
+    Confirm that we take the better paths before continuing down `a` path.
+
+    This test is pretty specific to how `order` is implemented
+    and is intended to increase code coverage.
+    """
+    a, b, c, d, e = abcde
+    dsk = {
+        (a, 0): 0,
+        (a, 1): (f, (a, 0)),
+        (a, 2): (f, (a, 1)),
+        (a, 3): (f, (a, 2)),
+        (a, 4): (f, (a, 3), (b, 3)),
+        (a, 5): (f, (a, 4)),
+        (a, 6): (f, (a, 5)),
+        (a, 7): (f, (a, 6)),
+        (a, 8): (f, (a, 6)),
+        (b, 3): 1,
+        (c, 4): (f, (b, 3)),
+        (c, 5): (f, (c, 4)),
+        (d, 4): (f, (b, 3)),
+        (d, 5): (f, (d, 4)),
+        (e, 4): (f, (b, 3)),
+        (e, 5): (f, (e, 4)),
+        (e, 6): (f, (e, 5)),
+    }
+    o = order(dsk)
+
+    assert o[(a, 0)] == 0  # probably
+    assert o[(a, 5)] > o[(c, 5)]
+    assert o[(a, 5)] > o[(d, 5)]
+    assert o[(a, 5)] > o[(e, 6)]

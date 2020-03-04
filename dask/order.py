@@ -345,7 +345,7 @@ def order(dsk, dependencies=None):
                 # convert to log scale
                 new_next_nodes = defaultdict(list)
                 for key, vals in next_nodes.items():
-                    new_next_nodes[int(log(key + 1))].extend(vals)
+                    new_next_nodes[int(10 * log(key + 1))].extend(vals)
                 next_nodes = new_next_nodes
 
                 while len(next_nodes) > 150:
