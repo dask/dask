@@ -74,6 +74,7 @@ Work towards *small goals* with *big steps*.
     This relies on the regularity of graph constructors like dask.array to be a
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
+from collections import defaultdict
 from math import log
 from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
@@ -224,8 +225,8 @@ def order(dsk, dependencies=None):
     outer_stack_extend = outer_stack.extend
     outer_stack_pop = outer_stack.pop
 
-    next_nodes = {}
-    later_nodes = {}
+    next_nodes = defaultdict(list)
+    later_nodes = defaultdict(list)
 
     # aliases for speed
     set_difference = set.difference
@@ -291,22 +292,13 @@ def order(dsk, dependencies=None):
                             inner_stacks_append(inner_stack)
                             inner_stack = [dep]
                         elif key < partition_keys[item]:
-                            if key in next_nodes:
-                                next_nodes[key].append(deps)
-                            else:
-                                next_nodes[key] = [deps]
-                        elif key in later_nodes:
-                            later_nodes[key].append(deps)
+                            next_nodes[key].append(deps)
                         else:
-                            later_nodes[key] = [deps]
+                            later_nodes[key].append(deps)
                     else:
-                        dep_pools = {}
+                        dep_pools = defaultdict(list)
                         for dep in deps:
-                            key = partition_keys[dep]
-                            if key in dep_pools:
-                                dep_pools[key].append(dep)
-                            else:
-                                dep_pools[key] = [dep]
+                            dep_pools[partition_keys[dep]].append(dep)
                         item_key = partition_keys[item]
                         if inner_stack:
                             prev_key = partition_keys[inner_stack[0]]
@@ -315,14 +307,9 @@ def order(dsk, dependencies=None):
                                 if key < prev_key:
                                     now_keys.append(key)
                                 elif key < item_key:
-                                    if key in next_nodes:
-                                        next_nodes[key].append(vals)
-                                    else:
-                                        next_nodes[key] = [vals]
-                                elif key in later_nodes:
-                                    later_nodes[key].append(vals)
+                                    next_nodes[key].append(vals)
                                 else:
-                                    later_nodes[key] = [vals]
+                                    later_nodes[key].append(vals)
                             if now_keys:
                                 # Run before `inner_stack` (change tactical goal!)
                                 inner_stacks_append(inner_stack)
@@ -346,14 +333,9 @@ def order(dsk, dependencies=None):
                             inner_stack = [dep]
                             for key, vals in dep_pools.items():
                                 if key < item_key:
-                                    if key in next_nodes:
-                                        next_nodes[key].append(vals)
-                                    else:
-                                        next_nodes[key] = [vals]
-                                elif key in later_nodes:
-                                    later_nodes[key].append(vals)
+                                    next_nodes[key].append(vals)
                                 else:
-                                    later_nodes[key] = [vals]
+                                    later_nodes[key].append(vals)
 
         if len(dependencies) == len(result):
             break  # all done!
@@ -361,28 +343,20 @@ def order(dsk, dependencies=None):
         if next_nodes:
             if len(next_nodes) > 150:
                 # convert to log scale
-                new_next_nodes = {}
+                new_next_nodes = defaultdict(list)
                 for key, vals in next_nodes.items():
-                    key = int(log(key + 1))
-                    if key in new_next_nodes:
-                        new_next_nodes[key].extend(vals)
-                    else:
-                        new_next_nodes[key] = vals
+                    new_next_nodes[int(log(key + 1))].extend(vals)
                 next_nodes = new_next_nodes
 
                 while len(next_nodes) > 150:
                     denom = len(next_nodes) // 75
-                    new_next_nodes = {}
+                    new_next_nodes = defaultdict(list)
                     for key, vals in next_nodes.items():
-                        key //= denom
-                        if key in new_next_nodes:
-                            new_next_nodes[key].extend(vals)
-                        else:
-                            new_next_nodes[key] = vals
+                        new_next_nodes[key // denom].extend(vals)
                     next_nodes = new_next_nodes
             for key in sorted(next_nodes, reverse=True):
                 outer_stack_extend(reversed(next_nodes[key]))
-            next_nodes = {}
+            next_nodes = defaultdict(list)
 
         while outer_stack:
             deps = [x for x in outer_stack_pop() if x not in result]
