@@ -49,6 +49,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.memory_usage
+    DataFrame.memory_usage_per_partition
     DataFrame.merge
     DataFrame.min
     DataFrame.mod
@@ -162,6 +164,7 @@ Series
    Series.max
    Series.mean
    Series.memory_usage
+   Series.memory_usage_per_partition
    Series.min
    Series.mod
    Series.mul
