@@ -464,6 +464,9 @@ def visualize(*args, **kwargs):
     collapse : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
+    verbose : bool, optional
+        Whether to label output and input boxes even if the data aren't chunked.
+        Beware: these labels can get very long. Default is False.
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
 

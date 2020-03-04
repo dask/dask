@@ -104,7 +104,7 @@ def label(x, cache=None):
     return s
 
 
-def box_label(key):
+def box_label(key, value=None, verbose=True):
     """ Label boxes in graph by chunk index
 
     >>> box_label(('x', 1, 2, 3))
@@ -119,6 +119,10 @@ def box_label(key):
         if len(key) == 1:
             [key] = key
         return str(key)
+    elif verbose and value is None:
+        return str(key)
+    elif verbose:
+        return f"{key}={value}"
     else:
         return ""
 
@@ -132,7 +136,8 @@ def to_graphviz(
     node_attr=None,
     edge_attr=None,
     collapse=False,
-    **kwargs
+    verbose=False,
+    **kwargs,
 ):
     if data_attributes is None:
         data_attributes = {}
@@ -147,6 +152,7 @@ def to_graphviz(
     )
 
     seen = set()
+    connected = set()
 
     for k, v in dsk.items():
         k_name = name(k)
@@ -160,24 +166,31 @@ def to_graphviz(
                 g.node(func_name, **attrs)
             if not collapse:
                 g.edge(func_name, k_name)
+                connected.add(func_name)
+                connected.add(k_name)
 
             for dep in get_dependencies(dsk, k):
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
                     attrs = data_attributes.get(dep, {})
-                    attrs.setdefault("label", box_label(dep))
+                    attrs.setdefault("label", box_label(dep, dsk.get(dep), verbose))
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
+                connected.add(dep_name)
+                connected.add(func_name)
 
         elif ishashable(v) and v in dsk:
-            g.edge(name(v), k_name)
+            v_name = name(v)
+            g.edge(v_name, k_name)
+            connected.add(v_name)
+            connected.add(k_name)
 
-        if k_name not in seen:
+        if ((collapse and k_name in connected) or not collapse) and k_name not in seen:
             seen.add(k_name)
             attrs = data_attributes.get(k, {})
-            attrs.setdefault("label", box_label(k))
+            attrs.setdefault("label", box_label(k, None, verbose))
             attrs.setdefault("shape", "box")
             g.node(k_name, **attrs)
     return g
