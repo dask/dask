@@ -917,7 +917,7 @@ def slice_with_int_dask_array(x, index):
         for idx in index
     ]
     if sum(fancy_indexes) > 1:
-        raise NotImplementedError("Don't yet support nd fancy indexing)")
+        raise NotImplementedError("Don't yet support nd fancy indexing")
 
     out_index = []
     dropped_axis_cnt = 0
