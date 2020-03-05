@@ -2026,7 +2026,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
 
     ddf = dd.read_parquet(fn, engine=engine)["B"]
 
-    dsk = optimize_read_parquet_getitem(ddf.dask)
+    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
     get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, ParquetSubgraph)
@@ -2042,7 +2042,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
 
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
-    dsk = optimize_read_parquet_getitem(df2.dask)
+    dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
     subgraph = list(dsk.layers.values())[0]
     assert isinstance(subgraph, ParquetSubgraph)
@@ -2250,3 +2250,13 @@ def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
 
     assert len(ddf_read["group"].compute()) == 6
     assert len(ddf_read.compute().group) == 6
+
+
+def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
+    # https://github.com/dask/dask/issues/5893
+    pdf = pd.DataFrame({"A": [1, 2, 3, 4, 5, 6], "B": ["a", "b", "c", "d", "e", "f"]})
+    path = os.path.join(str(tmpdir), "data.parquet")
+    pdf.to_parquet(path, engine=engine)
+
+    ddf = dd.read_parquet(path, engine=engine)
+    a, b = dask.optimize(ddf["A"], ddf)
