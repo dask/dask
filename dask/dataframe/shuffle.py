@@ -627,19 +627,20 @@ def cleanup_partd_files(p):
 
 def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    # This also handles cleanup of the on-disk partd files.
-    # See https://github.com/dask/dask/issues/5867 for more.
-    try:
-        res = p.get(part)
-        p.delete(part)
-        cleanup_partd_files(p)
-        return res if len(res) > 0 else meta
-    except Exception:
-        try:
-            p.drop()
-        except Exception:
-            logger.exception("ignoring exception dask.dataframe.shuffle.collect")
-        raise
+    res = p.get(part)
+    return res
+
+    # try:
+    #     res = p.get(part)
+    #     p.delete(part)
+    #     cleanup_partd_files(p)
+    #     return res if len(res) > 0 else meta
+    # except Exception:
+    #     try:
+    #         p.drop()
+    #     except Exception:
+    #         logger.exception("ignoring exception dask.dataframe.shuffle.collect")
+    #     raise
 
 
 def set_partitions_pre(s, divisions):
