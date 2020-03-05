@@ -615,7 +615,7 @@ def cleanup_partd_files(p):
         maybe_file
 
     if isinstance(maybe_file, partd.File):
-        path = p.path
+        path = maybe_file.path
     else:
         path = None
 
@@ -639,7 +639,7 @@ def collect(p, part, meta, barrier_token):
             p.drop()
         except Exception:
             logger.exception("ignoring exception dask.dataframe.shuffle.collect")
-            raise
+        raise
 
 
 def set_partitions_pre(s, divisions):
@@ -716,7 +716,7 @@ def shuffle_group_3(df, col, npartitions, p):
             p.drop()
         except Exception:
             logger.exception("ignoring exception dask.dataframe.shuffle.collect")
-            raise
+        raise
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):
