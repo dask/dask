@@ -11,10 +11,10 @@ fi
 
 if [[ $COVERAGE == 'true' ]]; then
     echo "coverage run `which py.test` dask --runslow --doctest-modules $XTRATESTARGS"
-    coverage run `which py.test` -v dask --runslow --doctest-modules $XTRATESTARGS
+    coverage run `which py.test` dask --runslow --doctest-modules $XTRATESTARGS
 else
     echo "py.test dask --runslow $XTRATESTARGS"
-    py.test dask -v --runslow $XTRATESTARGS
+    py.test dask --runslow $XTRATESTARGS
 fi
 
 set +e
