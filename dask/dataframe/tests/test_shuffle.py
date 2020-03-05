@@ -1,6 +1,7 @@
 import itertools
 import os
 import random
+import tempfile
 
 import pandas as pd
 import pytest
@@ -275,6 +276,20 @@ def test_rearrange(shuffle, scheduler):
 
     for i in a._partitions.drop_duplicates():
         assert sum(i in set(part._partitions) for part in parts) == 1
+
+
+def test_rearrange_cleanup():
+    df = pd.DataFrame({"x": np.random.random(10)})
+    ddf = dd.from_pandas(df, npartitions=4)
+    ddf2 = ddf.assign(_partitions=ddf.x % 4)
+
+    tmpdir = tempfile.mkdtemp()
+
+    with dask.config.set(temporay_directory=str(tmpdir)):
+        result = rearrange_by_column(ddf2, "_partitions", max_branch=32, shuffle="disk")
+        result.compute(scheduler="processes")
+
+    assert len(os.listdir(tmpdir)) == 0
 
 
 def test_rearrange_by_column_with_narrow_divisions():

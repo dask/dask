@@ -337,6 +337,7 @@ class maybe_buffered_partd(object):
         import partd
 
         path = tempfile.mkdtemp(suffix=".partd", dir=self.tempdir)
+        print(path)
 
         try:
             partd_compression = (
