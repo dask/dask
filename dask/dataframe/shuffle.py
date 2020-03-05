@@ -1,6 +1,6 @@
 import logging
-import os
 import math
+import shutil
 from operator import getitem
 import uuid
 import tempfile
@@ -412,15 +412,24 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = "shuffle-collect-" + token
+    name1 = "shuffle-collect-1" + token
     dsk4 = {
-        (name, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
+        (name1, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
     }
+    cleanup_token = "cleanup-" + always_new_token
+    dsk5 = {cleanup_token: (cleanup_partd_files, p, list(dsk4))}
+
+    name = "shuffle-collect-2" + token
+    dsk6 = {(name, i): (noop, (name1, i), cleanup_token) for i in range(npartitions)}
     divisions = (None,) * (npartitions + 1)
 
-    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
+    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4, dsk5, dsk6)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
     return DataFrame(graph, name, df._meta, divisions)
+
+
+def noop(x, cleanup_token):
+    return x
 
 
 def rearrange_by_column_tasks(
@@ -614,7 +623,7 @@ def barrier(args):
     return 0
 
 
-def cleanup_partd_files(p):
+def cleanup_partd_files(p, keys):
     """
     Cleanup the files in a partd.File dataset.
 
@@ -638,27 +647,13 @@ def cleanup_partd_files(p):
         path = None
 
     if path:
-        paths = [x for x in os.listdir(path) if x != ".lock"]
-        if not paths:
-            os.rmdir(path)
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
     res = p.get(part)
     return res if len(res) > 0 else meta
-
-    # try:
-    #     res = p.get(part)
-    #     p.delete(part)
-    #     cleanup_partd_files(p)
-    #     return res if len(res) > 0 else meta
-    # except Exception:
-    #     try:
-    #         p.drop()
-    #     except Exception:
-    #         logger.exception("ignoring exception dask.dataframe.shuffle.collect")
-    #     raise
 
 
 def set_partitions_pre(s, divisions):

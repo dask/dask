@@ -258,8 +258,8 @@ def test_shuffle_sort(shuffle):
     assert_eq(ddf2.loc[2:3], df2.loc[2:3])
 
 
-@pytest.mark.parametrize("shuffle", ["tasks", "disk"])
-@pytest.mark.parametrize("scheduler", ["threads", "processes"])
+@pytest.mark.parametrize("shuffle", ["disk"])
+@pytest.mark.parametrize("scheduler", ["processes"])
 def test_rearrange(shuffle, scheduler):
     df = pd.DataFrame({"x": np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
@@ -270,7 +270,7 @@ def test_rearrange(shuffle, scheduler):
     assert set(ddf.dask).issubset(result.dask)
 
     # Every value in exactly one partition
-    a = result.compute(scheduler=scheduler)
+    a = result.compute(scheduler=scheduler, optimize_graph=False)
     get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
 
