@@ -349,7 +349,9 @@ def pivot_count(df, index, columns, values):
 concat_dispatch = Dispatch("concat")
 
 
-def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
+def concat(
+    dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore_index=False
+):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
@@ -364,18 +366,28 @@ def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
         Whether to treat ``dfs[0]`` as representative of ``dfs[1:]``. Set to
         True if all arguments have the same columns and dtypes (but not
         necessarily categories). Default is False.
+    ignore_index : bool, optional
+        Whether to allow index values to be ignored/droped during
+        concatenation. Default is False.
     """
     if len(dfs) == 1:
         return dfs[0]
     else:
         func = concat_dispatch.dispatch(type(dfs[0]))
         return func(
-            dfs, axis=axis, join=join, uniform=uniform, filter_warning=filter_warning
+            dfs,
+            axis=axis,
+            join=join,
+            uniform=uniform,
+            filter_warning=filter_warning,
+            ignore_index=ignore_index,
         )
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def concat_pandas(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
+def concat_pandas(
+    dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore_index=False
+):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, sort=False)
 

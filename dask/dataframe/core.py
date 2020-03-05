@@ -77,7 +77,7 @@ no_default = "__no_default__"
 pd.set_option("compute.use_numexpr", False)
 
 
-def _concat(args):
+def _concat(args, ignore_index=False):
     if not args:
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
@@ -92,7 +92,11 @@ def _concat(args):
     # Ideally this would be handled locally for each operation, but in practice
     # this seems easier. TODO: don't do this.
     args2 = [i for i in args if len(i)]
-    return args[0] if not args2 else methods.concat(args2, uniform=True)
+    return (
+        args[0]
+        if not args2
+        else methods.concat(args2, uniform=True, ignore_index=ignore_index)
+    )
 
 
 def finalize(results):
@@ -743,6 +747,29 @@ Dask Name: {name}, {task} tasks"""
         from .rolling import map_overlap
 
         return map_overlap(func, self, before, after, *args, **kwargs)
+
+    def memory_usage_per_partition(self, index=True, deep=False):
+        """ Return the memory usage of each partition
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index in
+            returned Series.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            ``object`` dtypes for system-level memory consumption, and include
+            it in the returned values.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the parition number and whose values
+            are the memory usage of each partition in bytes.
+        """
+        return self.map_partitions(
+            total_mem_usage, index=index, deep=deep
+        ).clear_divisions()
 
     @insert_meta_param_description(pad=12)
     def reduction(
@@ -5654,7 +5681,7 @@ def repartition_size(df, size):
         size = parse_bytes(size)
     size = int(size)
 
-    mem_usages = df.map_partitions(total_mem_usage).compute()
+    mem_usages = df.map_partitions(total_mem_usage, deep=True).compute()
 
     # 1. split each partition that is larger than partition_size
     nsplits = 1 + mem_usages // size
@@ -5675,8 +5702,8 @@ def repartition_size(df, size):
     return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
 
 
-def total_mem_usage(df):
-    mem_usage = df.memory_usage(deep=True)
+def total_mem_usage(df, index=True, deep=False):
+    mem_usage = df.memory_usage(index=index, deep=deep)
     if is_series_like(mem_usage):
         mem_usage = mem_usage.sum()
     return mem_usage

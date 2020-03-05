@@ -1802,7 +1802,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
     assert_eq(a, b, check_divisions=False)
-    assert np.alltrue(b.map_partitions(total_mem_usage).compute() <= 1024)
+    assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
 
@@ -3612,6 +3612,34 @@ def test_memory_usage(index, deep):
         df.x.memory_usage(index=index, deep=deep)
         == ddf.x.memory_usage(index=index, deep=deep).compute()
     )
+
+
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("deep", [True, False])
+def test_memory_usage_per_partition(index, deep):
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4, 5],
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "z": ["a", "b", "c", "d", "e"],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # DataFrame.memory_usage_per_partition
+    expected = pd.Series(
+        part.compute().memory_usage(index=index, deep=deep).sum()
+        for part in ddf.partitions
+    )
+    result = ddf.memory_usage_per_partition(index=index, deep=deep)
+    assert_eq(expected, result)
+
+    # Series.memory_usage_per_partition
+    expected = pd.Series(
+        part.x.compute().memory_usage(index=index, deep=deep) for part in ddf.partitions
+    )
+    result = ddf.x.memory_usage_per_partition(index=index, deep=deep)
+    assert_eq(expected, result)
 
 
 @pytest.mark.parametrize(
