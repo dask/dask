@@ -216,6 +216,7 @@ def set_partition(
         npartitions=len(divisions) - 1,
         shuffle=shuffle,
         compute=compute,
+        ignore_index=True,
     )
 
     if np.isscalar(index):
@@ -301,13 +302,21 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 
 def rearrange_by_column(
-    df, col, npartitions=None, max_branch=None, shuffle=None, compute=None
+    df,
+    col,
+    npartitions=None,
+    max_branch=None,
+    shuffle=None,
+    compute=None,
+    ignore_index=False,
 ):
     shuffle = shuffle or config.get("shuffle", None) or "disk"
     if shuffle == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == "tasks":
-        return rearrange_by_column_tasks(df, col, max_branch, npartitions)
+        return rearrange_by_column_tasks(
+            df, col, max_branch, npartitions, ignore_index=ignore_index
+        )
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
@@ -411,7 +420,9 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     return DataFrame(graph, name, df._meta, divisions)
 
 
-def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
+def rearrange_by_column_tasks(
+    df, column, max_branch=32, npartitions=None, ignore_index=False
+):
     """ Order divisions of DataFrame so that all values within column align
 
     This enacts a task-based shuffle.  It contains most of the tricky logic
@@ -493,6 +504,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
                 stage - 1,
                 k,
                 n,
+                ignore_index,
             )
             for inp in inputs
         }
@@ -519,6 +531,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
                     )
                     for j in range(k)
                 ],
+                ignore_index,
             )
             for inp in inputs
         }
@@ -540,7 +553,12 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
         token = tokenize(df2, npartitions)
 
         dsk = {
-            ("repartition-group-" + token, i): (shuffle_group_2, k, column)
+            ("repartition-group-" + token, i): (
+                shuffle_group_2,
+                k,
+                column,
+                ignore_index,
+            )
             for i, k in enumerate(df2.__dask_keys__())
         }
         for p in range(npartitions):
@@ -605,12 +623,14 @@ def set_partitions_pre(s, divisions):
     return partitions
 
 
-def shuffle_group_2(df, col):
+def shuffle_group_2(df, col, ignore_index):
     if not len(df):
         return {}, df
     ind = df[col].astype(np.int64)
     n = ind.max() + 1
-    result2 = group_split_dispatch(df, ind.values.view(np.int64), n)
+    result2 = group_split_dispatch(
+        df, ind.values.view(np.int64), n, ignore_index=ignore_index
+    )
     return result2, df.iloc[:0]
 
 
@@ -622,7 +642,7 @@ def shuffle_group_get(g_head, i):
         return head
 
 
-def shuffle_group(df, col, stage, k, npartitions):
+def shuffle_group(df, col, stage, k, npartitions, ignore_index):
     """ Splits dataframe into groups
 
     The group is determined by their final partition, and which stage we are in
@@ -660,7 +680,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    return group_split_dispatch(df, c.astype(np.int64), k)
+    return group_split_dispatch(df, c.astype(np.int64), k, ignore_index=ignore_index)
 
 
 def shuffle_group_3(df, col, npartitions, p):
