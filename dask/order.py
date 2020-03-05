@@ -228,6 +228,10 @@ def order(dsk, dependencies=None):
     next_nodes = defaultdict(list)
     later_nodes = defaultdict(list)
 
+    seen = set()  # seen in an inner_stack (and has dependencies)
+    seen_update = seen.update
+    seen_add = seen.add
+
     # aliases for speed
     set_difference = set.difference
 
@@ -249,12 +253,22 @@ def order(dsk, dependencies=None):
                         )
                     else:
                         inner_stack.extend(deps)
+                    seen_update(deps)
                     continue
 
                 result[item] = i
                 i += 1
                 deps = dependents[item]
 
+                # If inner_stack is empty, then we typically add the best dependent to it.
+                # However, we don't add to it if we complete a node early via "finish_now" below
+                # or if a dependent is already on an inner_stack.  In this case, we add the
+                # dependents (not in an inner_stack) to next_nodes or later_nodes to handle later.
+                # This serves three purposes:
+                #   1. shrink `deps` so that it can be processed faster,
+                #   2. make sure we don't process the same dependency repeatedly, and
+                #   3. make sure we don't accidentally continue down an expensive-to-compute path.
+                add_to_inner_stack = True
                 if metrics[item][3] == 1:  # min_height
                     # Don't leave any dangling single nodes!  Finish all dependents that are
                     # ready and are also root nodes.  Doing this here also lets us continue
@@ -271,27 +285,36 @@ def order(dsk, dependencies=None):
                         for dep in finish_now:
                             result[dep] = i
                             i += 1
+                        add_to_inner_stack = False
 
                 if deps:
                     for dep in deps:
                         num_needed[dep] -= 1
-                    if not inner_stack:
-                        if len(deps) == 1:
-                            inner_stack = [dep]
+
+                    already_seen = deps & seen
+                    if already_seen:
+                        if len(deps) == len(already_seen):
                             continue
-                    else:
-                        deps.discard(inner_stack[-1])  # safe to mutate
-                        if not deps:
-                            continue
+                        add_to_inner_stack = False
+                        deps -= already_seen
 
                     if len(deps) == 1:
                         (dep,) = deps
-                        key = partition_keys[dep]
-                        if key < partition_keys[inner_stack[0]]:
-                            # Run before `inner_stack` (change tactical goal!)
-                            inner_stacks_append(inner_stack)
-                            inner_stack = [dep]
-                        elif key < partition_keys[item]:
+                        if not inner_stack:
+                            if add_to_inner_stack:
+                                inner_stack = [dep]
+                                seen_add(dep)
+                                continue
+                            key = partition_keys[dep]
+                        else:
+                            key = partition_keys[dep]
+                            if key < partition_keys[inner_stack[0]]:
+                                # Run before `inner_stack` (change tactical goal!)
+                                inner_stacks_append(inner_stack)
+                                inner_stack = [dep]
+                                seen_add(dep)
+                                continue
+                        if key < partition_keys[item]:
                             next_nodes[key].append(deps)
                         else:
                             later_nodes[key].append(deps)
@@ -320,17 +343,20 @@ def order(dsk, dependencies=None):
                                     if 1 < len(pool) < 100:
                                         pool.sort(key=dependents_key, reverse=True)
                                     inner_stacks_extend([dep] for dep in pool)
+                                    seen_update(pool)
                                 inner_stack = inner_stacks_pop()
                         else:
-                            min_key = min(dep_pools)
-                            min_pool = dep_pools[min_key]
-                            if 1 < len(min_pool) < 100:
-                                dep = min(min_pool, key=dependents_key)
-                            else:
-                                dep = min_pool.pop()
-                                if not min_pool:
-                                    del dep_pools[min_key]
-                            inner_stack = [dep]
+                            if add_to_inner_stack:
+                                min_key = min(dep_pools)
+                                min_pool = dep_pools[min_key]
+                                if 1 < len(min_pool) < 100:
+                                    dep = min(min_pool, key=dependents_key)
+                                else:
+                                    dep = min_pool.pop()
+                                    if not min_pool:
+                                        del dep_pools[min_key]
+                                inner_stack = [dep]
+                                seen_add(dep)
                             for key, vals in dep_pools.items():
                                 if key < item_key:
                                     next_nodes[key].append(vals)
@@ -364,6 +390,7 @@ def order(dsk, dependencies=None):
                 if 1 < len(deps) < 100:
                     deps.sort(key=dependents_key, reverse=True)
                 inner_stacks_extend([dep] for dep in deps)
+                seen_update(deps)
                 break
 
         if inner_stacks:
