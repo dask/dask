@@ -104,7 +104,7 @@ def label(x, cache=None):
     return s
 
 
-def box_label(key, verbose=True):
+def box_label(key, verbose=False):
     """ Label boxes in graph by chunk index
 
     >>> box_label(('x', 1, 2, 3))
@@ -133,7 +133,7 @@ def to_graphviz(
     graph_attr={},
     node_attr=None,
     edge_attr=None,
-    collapse=False,
+    collapse_outputs=False,
     verbose=False,
     **kwargs,
 ):
@@ -155,14 +155,14 @@ def to_graphviz(
     for k, v in dsk.items():
         k_name = name(k)
         if istask(v):
-            func_name = name((k, "function")) if not collapse else k_name
-            if collapse or func_name not in seen:
+            func_name = name((k, "function")) if not collapse_outputs else k_name
+            if collapse_outputs or func_name not in seen:
                 seen.add(func_name)
                 attrs = function_attributes.get(k, {})
                 attrs.setdefault("label", key_split(k))
                 attrs.setdefault("shape", "circle")
                 g.node(func_name, **attrs)
-            if not collapse:
+            if not collapse_outputs:
                 g.edge(func_name, k_name)
                 connected.add(func_name)
                 connected.add(k_name)
@@ -185,7 +185,7 @@ def to_graphviz(
             connected.add(v_name)
             connected.add(k_name)
 
-        if ((collapse and k_name in connected) or not collapse) and k_name not in seen:
+        if (not collapse_outputs or k_name in connected) and k_name not in seen:
             seen.add(k_name)
             attrs = data_attributes.get(k, {})
             attrs.setdefault("label", box_label(k, verbose))

@@ -461,7 +461,7 @@ def visualize(*args, **kwargs):
     color : {None, 'order'}, optional
         Options to color nodes.  Provide ``cmap=`` keyword for additional
         colormap
-    collapse : bool, optional
+    collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
     verbose : bool, optional

@@ -130,8 +130,8 @@ def test_to_graphviz_verbose():
     assert set(shapes) == set(("box", "circle"))
 
 
-def test_to_graphviz_collapse():
-    g = to_graphviz(dsk, collapse=True)
+def test_to_graphviz_collapse_outputs():
+    g = to_graphviz(dsk, collapse_outputs=True)
     labels = list(filter(None, map(get_label, g.body)))
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"c", "d", "e", "f", '""'}
@@ -139,8 +139,8 @@ def test_to_graphviz_collapse():
     assert set(shapes) == set(("box", "circle"))
 
 
-def test_to_graphviz_collapse_and_verbose():
-    g = to_graphviz(dsk, collapse=True, verbose=True)
+def test_to_graphviz_collapse_outputs_and_verbose():
+    g = to_graphviz(dsk, collapse_outputs=True, verbose=True)
     labels = list(filter(None, map(get_label, g.body)))
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
@@ -155,7 +155,7 @@ def test_to_graphviz_with_unconnected_node():
     assert len(labels) == 11  # 11 nodes total
     assert set(labels) == {"a", "b", "c", "d", "e", "f", "g"}
 
-    g = to_graphviz(dsk, verbose=True, collapse=True)
+    g = to_graphviz(dsk, verbose=True, collapse_outputs=True)
     labels = list(filter(None, map(get_label, g.body)))
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
