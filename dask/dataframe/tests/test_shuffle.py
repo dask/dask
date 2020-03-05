@@ -390,8 +390,9 @@ def test_set_index_consistent_divisions():
 
     ctx = mp.get_context("spawn")
     pool = ctx.Pool(processes=8)
-    results = [pool.apply_async(_set_index, (ddf, "x")) for _ in range(100)]
-    divisions_set = set(result.get() for result in results)
+    with pool:
+        results = [pool.apply_async(_set_index, (ddf, "x")) for _ in range(100)]
+        divisions_set = set(result.get() for result in results)
     assert len(divisions_set) == 1
 
 
