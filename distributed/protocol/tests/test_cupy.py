@@ -4,7 +4,6 @@ import pytest
 from distributed.protocol import deserialize, serialize
 
 cupy = pytest.importorskip("cupy")
-cupy_sparse = pytest.importorskip("cupyx.scipy.sparse")
 numpy = pytest.importorskip("numpy")
 
 
@@ -66,31 +65,37 @@ def test_serialize_cupy_from_rmm(size):
 
 
 @pytest.mark.parametrize(
-    "sparse_type",
-    [
-        cupy_sparse.coo_matrix,
-        cupy_sparse.csc_matrix,
-        cupy_sparse.csr_matrix,
-        cupy_sparse.dia_matrix,
-    ],
+    "sparse_name", ["coo_matrix", "csc_matrix", "csr_matrix", "dia_matrix",],
 )
 @pytest.mark.parametrize(
     "dtype",
     [numpy.dtype("<f4"), numpy.dtype(">f4"), numpy.dtype("<f8"), numpy.dtype(">f8"),],
 )
-@pytest.mark.parametrize("serializer", ["cuda", "dask",])
-def test_serialize_cupy_sparse(sparse_type, dtype, serializer):
+@pytest.mark.parametrize("serializer", ["cuda", "dask", "pickle"])
+def test_serialize_cupy_sparse(sparse_name, dtype, serializer):
+    scipy_sparse = pytest.importorskip("scipy.sparse")
+    cupy_sparse = pytest.importorskip("cupyx.scipy.sparse")
+
+    scipy_sparse_type = getattr(scipy_sparse, sparse_name)
+    cupy_sparse_type = getattr(cupy_sparse, sparse_name)
+
     a_host = numpy.array([[0, 1, 0], [2, 0, 3], [0, 4, 0]], dtype=dtype)
-    a = cupy.asarray(a_host)
+    asp_host = scipy_sparse_type(a_host)
+    if sparse_name == "dia_matrix":
+        # CuPy `dia_matrix` cannot be created from SciPy one
+        # xref: https://github.com/cupy/cupy/issues/3158
+        asp_dev = cupy_sparse_type(
+            (asp_host.data, asp_host.offsets),
+            shape=asp_host.shape,
+            dtype=asp_host.dtype,
+        )
+    else:
+        asp_dev = cupy_sparse_type(asp_host)
 
-    anz = a.nonzero()
-    acoo = cupy_sparse.coo_matrix((a[anz], anz))
-    asp = sparse_type(acoo)
+    header, frames = serialize(asp_dev, serializers=[serializer])
+    a2sp_dev = deserialize(header, frames)
 
-    header, frames = serialize(asp, serializers=[serializer])
-    asp2 = deserialize(header, frames)
-
-    a2 = asp2.todense()
-    a2_host = cupy.asnumpy(a2)
+    a2sp_host = a2sp_dev.get()
+    a2_host = a2sp_host.todense()
 
     assert (a_host == a2_host).all()

@@ -1,6 +1,8 @@
 """
 Efficient serialization GPU arrays.
 """
+import copyreg
+
 import cupy
 
 from .cuda import cuda_deserialize, cuda_serialize
@@ -85,15 +87,35 @@ def dask_deserialize_cupy_ndarray(header, frames):
 try:
     from cupy.cusparse import MatDescriptor
     from cupyx.scipy.sparse import spmatrix
-
-    cupy_sparse_types = [MatDescriptor, spmatrix]
 except ImportError:
-    cupy_sparse_types = []
+    MatDescriptor = None
+    spmatrix = None
 
 
-for t in cupy_sparse_types:
+if MatDescriptor is not None:
+
+    def reduce_matdescriptor(other):
+        # Pickling MatDescriptor errors
+        # xref: https://github.com/cupy/cupy/issues/3061
+        return cupy.cusparse.MatDescriptor.create, ()
+
+    copyreg.pickle(MatDescriptor, reduce_matdescriptor)
+
+    @cuda_serialize.register(MatDescriptor)
+    @dask_serialize.register(MatDescriptor)
+    def serialize_cupy_matdescriptor(x):
+        header, frames = {}, []
+        return header, frames
+
+    @cuda_deserialize.register(MatDescriptor)
+    @dask_deserialize.register(MatDescriptor)
+    def deserialize_cupy_matdescriptor(header, frames):
+        return MatDescriptor.create()
+
+
+if spmatrix is not None:
     for n, s, d in [
         ("cuda", cuda_serialize, cuda_deserialize),
         ("dask", dask_serialize, dask_deserialize),
     ]:
-        register_generic(t, n, s, d)
+        register_generic(spmatrix, n, s, d)
