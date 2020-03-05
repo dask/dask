@@ -265,6 +265,25 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
+def pseudorandom_shuffle(n, random_state=None):
+    """Return a list of shuffled indices for an array of length n.
+
+    Parameters
+    ----------
+    n : int
+        Length of list to shuffle.
+    random_state : int or np.random.RandomState, optional
+        If an int, is used to seed a new ``RandomState``.
+    """
+    import numpy as np
+
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
+
+    out = random_state.permutation(n)
+    return out
+
+
 def random_state_data(n, random_state=None):
     """Return a list of arrays that can initialize
     ``np.random.RandomState``.
