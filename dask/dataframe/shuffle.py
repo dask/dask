@@ -1,3 +1,4 @@
+import logging
 import os
 import math
 from operator import getitem
@@ -18,6 +19,8 @@ from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
+
+logger = logging.getLogger(__name__)
 
 
 def set_index(
@@ -593,33 +596,50 @@ def barrier(args):
     return 0
 
 
+def cleanup_partd_files(p):
+    """
+    Cleanup the files in a partd.File dataset.
+
+    Parameters
+    ----------
+    p : partd.Interface
+        File or Encode wrapping a file should be OK.
+    exc_only : bool, default True
+        Whether to cleanup if and only if there's an exception.
+    """
+    import partd
+
+    if isinstance(p, partd.Encode):
+        maybe_file = p.partd
+    else:
+        maybe_file
+
+    if isinstance(maybe_file, partd.File):
+        path = p.path
+    else:
+        path = None
+
+    if path:
+        paths = [x for x in os.listdir(path) if x != ".lock"]
+        if not paths:
+            os.rmdir(path)
+
+
 def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
     # This also handles cleanup of the on-disk partd files.
     # See https://github.com/dask/dask/issues/5867 for more.
-    import partd
-
     try:
         res = p.get(part)
         p.delete(part)
-
-        if isinstance(p, partd.Encode):
-            path = p.partd.path
-        else:
-            assert isinstance(p, partd.File)
-            path = p.path
-
-        paths = [x for x in os.listdir(path) if x != ".lock"]
-        if not paths:
-            os.rmdir(path)
+        cleanup_partd_files(p)
         return res if len(res) > 0 else meta
     except Exception:
         try:
             p.drop()
         except Exception:
-            # logger.warning("ignoring exception in...")
-            pass
-        raise
+            logger.exception("ignoring exception dask.dataframe.shuffle.collect")
+            raise
 
 
 def set_partitions_pre(s, divisions):
@@ -692,8 +712,11 @@ def shuffle_group_3(df, col, npartitions, p):
         d = {i: g.get_group(i) for i in g.groups}
         p.append(d, fsync=True)
     except Exception:
-        p.drop()
-        raise
+        try:
+            p.drop()
+        except Exception:
+            logger.exception("ignoring exception dask.dataframe.shuffle.collect")
+            raise
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):
