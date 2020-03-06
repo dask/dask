@@ -181,7 +181,16 @@ class Blockwise(Mapping):
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
         )
         self.numblocks = numblocks
-        self.concatenate = concatenate
+        # optimize_blockwise won't merge where `concatenate` doesn't match, so
+        # enforce a canonical value if there are no axes for reduction.
+        if all(
+            all(i in output_indices for i in ind)
+            for name, ind in indices
+            if ind is not None
+        ):
+            self.concatenate = None
+        else:
+            self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
     def __repr__(self):
