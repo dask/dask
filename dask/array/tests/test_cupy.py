@@ -816,6 +816,7 @@ def test_sfqr(m, n, chunks, error_type):
 
 
 def test_sparse_hstack_vstack_csr():
+    pytest.importorskip("cupyx")
     x = cupy.array([2., 1., 5., 2., 1.], dtype=cupy.float32)
     x = cupy.expand_dims(x, axis=0)
 
@@ -825,7 +826,7 @@ def test_sparse_hstack_vstack_csr():
     y = sp.compute()
 
     assert cupy.sparse.isspmatrix(y)
-    assert_eq(x, y.todense())   
+    assert_eq(x, y.todense())
 
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
