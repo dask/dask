@@ -14,6 +14,7 @@ from numbers import Integral, Number
 from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
+from functools import lru_cache
 
 from .core import get_deps
 from .optimization import key_split  # noqa: F401
@@ -806,11 +807,9 @@ def insert(tup, loc, val):
 
 
 def dependency_depth(dsk):
-    import toolz
-
     deps, _ = get_deps(dsk)
 
-    @toolz.memoize
+    @lru_cache(maxsize=None)
     def max_depth_by_deps(key):
         if not deps[key]:
             return 1
