@@ -5453,6 +5453,8 @@ def pd_split(df, p, random_state=None, shuffle=False):
     """
     p = list(p)
     if shuffle:
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
         df = df.sample(frac=1.0, random_state=random_state)
     index = pseudorandom(len(df), p, random_state)
     return [df.iloc[index == i] for i in range(len(p))]
