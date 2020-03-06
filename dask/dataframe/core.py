@@ -943,7 +943,7 @@ Dask Name: {name}, {task} tasks"""
             Otherwise draw from the passed RandomState.
         shuffle : bool, default False
             If set to True, the dataframe is shuffled (within partition)
-             before the split.
+            before the split.
 
         Examples
         --------
@@ -5443,12 +5443,12 @@ def pd_split(df, p, random_state=None, shuffle=False):
     >>> a
        a  b
     3  4  5
-    4  5  6
+    0  1  2
     5  6  7
     >>> b
        a  b
     1  2  3
-    0  1  2
+    4  5  6
     2  3  4
     """
     p = list(p)
