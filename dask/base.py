@@ -458,9 +458,15 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color: {None, 'order'}, optional
+    color : {None, 'order'}, optional
         Options to color nodes.  Provide ``cmap=`` keyword for additional
         colormap
+    collapse_outputs : bool, optional
+        Whether to collapse output boxes, which often have empty labels.
+        Default is False.
+    verbose : bool, optional
+        Whether to label output and input boxes even if the data aren't chunked.
+        Beware: these labels can get very long. Default is False.
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
 
