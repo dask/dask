@@ -1609,12 +1609,10 @@ def test_random_partitions():
     assert a2._name == a._name
     assert b2._name == b._name
 
-    a1, b1 = d.random_split([0.5, 0.5], random_state=42, shuffle=True)
-    a2, b2 = d.random_split([0.5, 0.5], random_state=42, shuffle=True)
-    assert_eq(a1, a2)
-    assert_eq(b1, b2)
-
     a, b = d.random_split([0.5, 0.5], 42, True)
+    a2, b2 = d.random_split([0.5, 0.5], 42, True)
+    assert_eq(a, a2)
+    assert_eq(b, b2)
     with pytest.raises(AssertionError):
         np.testing.assert_array_equal(a.index, sorted(a.index))
 
