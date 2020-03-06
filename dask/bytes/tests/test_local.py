@@ -193,8 +193,11 @@ def test_read_bytes_include_path():
 
 
 @pytest.mark.xfail(
-    os.environ.get("GITHUB_ACTIONS") and sys.platform == "win32",
-    reason="TODO: Fails on Windows when running on GitHub Actions. See https://github.com/dask/dask/pull/5862.",
+    os.environ.get("GITHUB_ACTIONS")
+    and sys.platform == "win32"
+    and sys.version_info[:2] == (3, 6),
+    reason="TODO: Fails on GitHub Actions when running Python 3.6 on Windows."
+    "See https://github.com/dask/dask/pull/5862.",
 )
 def test_with_urls():
     with filetexts(files, mode="b"):
