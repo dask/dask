@@ -1,6 +1,54 @@
 Changelog
 =========
 
+2.12.0 / 2020-03-06
+-------------------
+
+Array
++++++
+
+- Improve reuse of temporaries with numpy (:pr:`5933`) `Bruce Merry`_
+- Make ``map_blocks`` with ``block_info`` produce a ``Blockwise`` (:pr:`5896`) `Bruce Merry`_
+- Optimize ``make_blockwise_graph`` (:pr:`5940`) `Bruce Merry`_
+- Fix axes ordering in ``da.tensordot`` (:pr:`5975`) `Gil Forsyth`_
+- Adds empty mode to ``array.pad`` (:pr:`5931`) `Thomas J Fan`_
+
+Core
+++++
+
+- Remove ``toolz.memoize`` dependency in ``dask.utils`` (:pr:`5978`) `Ryan Grout`_
+- Close pool leaking subprocess (:pr:`5979`) `Tom Augspurger`_
+- Pin ``numpydoc`` to ``0.8.0`` (fix double autoescape) (:pr:`5961`) `Gil Forsyth`_
+- Register deterministic tokenization for ``range`` objects (:pr:`5947`) `James Bourbeau`_
+- Unpin ``msgpack`` in CI (:pr:`5930`) `JAmes Bourbeau`_
+- Ensure dot results are placed in unique files. (:pr:`5937`) `Elliott Sales de Andrade`_
+- Add remaining optional dependencies to Travis 3.8 CI build environment (:pr:`5920`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+- Skip parquet ``getitem`` optimization for some keys (:pr:`5917`) `Tom Augspurger`_
+- Add ``ignore_index`` argument to ``rearrange_by_column`` code path (:pr:`5973`) `Richard J Zamora`_
+- Add DataFrame and Series ``memory_usage_per_partition`` methods (:pr:`5971`) `James Bourbeau`_
+- ``xfail`` test_describe when using Pandas 0.24.2 (:pr:`5948`) `James Bourbeau`_
+- Implement ``dask.dataframe.to_numeric`` (:pr:`5929`) `Julia Signell`_
+- Add new error message content when columns are in a different order (:pr:`5927`) `Julia Signell`_
+- Use shallow copy for assign operations when possible (:pr:`5740`) `Richard J Zamora`_
+
+Documentation
++++++++++++++
+
+- Changed above to below in ``dask.array.triu`` docs (:pr:`5984`) `Henrik Andersson`_
+- Array slicing: fix typo in ``slice_with_int_dask_array`` error message (:pr:`5981`) `Gabe Joseph`_
+- Grammar and formatting updates to docstrings (:pr:`5963`) `James Lamb`_
+- Update develop doc with conda option (:pr:`5939`) `Ray Bell`_
+- Update title of DataFrame extension docs (:pr:`5954`) `James Bourbeau`_
+- Fixed typos in documentation (:pr:`5962`) `James Lamb`_
+- Add original class or module as a ``kwarg`` on ``_bind_*`` methods (:pr:`5946`) `Julia Signell`_
+- Add collect list example (:pr:`5938`) `Ray Bell`_
+- Update optimization doc for python 3 (:pr:`5926`) `Julia Signell`_
+
+
 2.11.0 / 2020-02-19
 -------------------
 
@@ -2945,3 +2993,7 @@ Other
 .. _`Yetunde Dada`: https://github.com/yetudada
 .. _`Andrew Thomas`: https://github.com/amcnicho
 .. _`rockwellw`: https://github.com/rockwellw
+.. _`Gil Forsyth`: https://github.com/gforsyth
+.. _`Thomas J Fan`: https://github.com/thomasjpfan
+.. _`Henrik Andersson`: https://github.com/hnra
+.. _`James Lamb`: https://github.com/jameslamb
