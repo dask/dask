@@ -615,14 +615,14 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 def triu(m, k=0):
     """
-    Upper triangle of an array with elements above the `k`-th diagonal zeroed.
+    Upper triangle of an array with elements below the `k`-th diagonal zeroed.
 
     Parameters
     ----------
     m : array_like, shape (M, N)
         Input array.
     k : int, optional
-        Diagonal above which to zero elements.  `k = 0` (the default) is the
+        Diagonal below which to zero elements.  `k = 0` (the default) is the
         main diagonal, `k < 0` is below it and `k > 0` is above.
 
     Returns
