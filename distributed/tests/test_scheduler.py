@@ -1837,6 +1837,17 @@ async def test_task_unique_groups(c, s, a, b):
     assert s.task_prefixes["sum"].states["memory"] == 2
 
 
+@gen_cluster(client=True)
+async def test_task_group_on_fire_and_forget(c, s, a, b):
+    # Regression test for https://github.com/dask/distributed/issues/3465
+    with captured_logger("distributed.scheduler") as logs:
+        x = await c.scatter(list(range(10)))
+        fire_and_forget([c.submit(slowadd, i, x[i]) for i in range(len(x))])
+        await asyncio.sleep(1)
+
+    assert "Error transitioning" not in logs.getvalue()
+
+
 class BrokenComm(Comm):
     peer_address = None
     local_address = None

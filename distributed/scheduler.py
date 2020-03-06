@@ -4649,7 +4649,7 @@ class Scheduler(ServerNode):
                 if ts.state == "forgotten":
                     del self.tasks[ts.key]
 
-            if ts.state == "forgotten":
+            if ts.state == "forgotten" and ts.group.name in self.task_groups:
                 # Remove TaskGroup if all tasks are in the forgotten state
                 tg = ts.group
                 if not any(tg.states.get(s) for s in ALL_TASK_STATES):
