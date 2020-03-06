@@ -1,6 +1,34 @@
 Changelog
 =========
 
+2.12.0 - 2020-03-06
+-------------------
+
+- Update ``TaskGroup`` remove logic (:pr:`3557`) `James Bourbeau`_
+- Fix-up CuPy sparse serialization (:pr:`3556`) `John Kirkham`_
+- API docs for ``LocalCluster`` and ``SpecCluster`` (:pr:`3548`) `Tom Augspurger`_
+- Serialize sparse arrays (:pr:`3545`) `John Kirkham`_
+- Allow tasks with restrictions to be stolen (:pr:`3069`) `Stan Seibert`_
+- Use UCX default configuration instead of raising (:pr:`3544`) `Peter Andreas Entschev`_
+- Support using other serializers with ``register_generic`` (:pr:`3536`) `John Kirkham`_
+- DOC: update to async await (:pr:`3543`) `Tom Augspurger`_
+- Use ``pytest.raises`` in ``test_ucx_config.py`` (:pr:`3541`) `John Kirkham`_
+- Fix/more ucx config options (:pr:`3539`) `Benjamin Zaitlen`_
+- Update heartbeat ``CommClosedError`` error handling (:pr:`3529`) `James Bourbeau`_
+- Use ``makedirs`` when constructing ``local_directory`` (:pr:`3538`) `John Kirkham`_
+- Mark ``None`` as MessagePack serializable (:pr:`3537`) `John Kirkham`_
+- Mark ``bool`` as MessagePack serializable (:pr:`3535`) `John Kirkham`_
+- Use 'temporary-directory' from ``dask.config`` for Nanny's directory (:pr:`3531`) `John Kirkham`_
+- Add try-except around getting source code in performance report (:pr:`3505`) `Matthew Rocklin`_
+- Fix typo in docstring (:pr:`3528`) `Davis Bennett`_
+- Make work stealing callback time configurable (:pr:`3523`) `Lucas Rademaker`_
+- RMM/UCX Config Flags (:pr:`3515`) `Benjamin Zaitlen`_
+- Revise develop-docs: conda env example (:pr:`3406`) `Darren Weber`_
+- Remove ``import ucp`` from the top of ``ucx.py`` (:pr:`3510`) `Peter Andreas Entschev`_
+- Rename ``logs`` to ``get_logs`` (:pr:`3473`) `Jacob Tomlinson`_
+- Stop keep alives when worker reconnecting to the scheduler (:pr:`3493`) `Jacob Tomlinson`_
+
+
 2.11.0 - 2020-02-19
 -------------------
 
@@ -1570,3 +1598,7 @@ significantly without many new features.
 .. _`Cyril Shcherbin`: https://github.com/shcherbin
 .. _`Søren Fuglede Jørgensen`: https://github.com/fuglede
 .. _`Igor Gotlibovych`: https://github.com/ig248
+.. _`Stan Seibert`: https://github.com/seibert
+.. _`Davis Bennett`: https://github.com/d-v-b
+.. _`Lucas Rademaker`: https://github.com/lr4d
+.. _`Darren Weber`: https://github.com/dazza-codes
