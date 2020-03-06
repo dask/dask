@@ -809,7 +809,7 @@ def insert(tup, loc, val):
 def dependency_depth(dsk):
     deps, _ = get_deps(dsk)
 
-    @lru_cache()
+    @lru_cache(maxsize=None)
     def max_depth_by_deps(key):
         if not deps[key]:
             return 1
