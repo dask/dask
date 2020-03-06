@@ -31,7 +31,6 @@ from ..context import globalmethod
 from ..utils import (
     random_state_data,
     pseudorandom,
-    pseudorandom_shuffle,
     derived_from,
     funcname,
     memory_repr,
@@ -932,7 +931,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             return func(self, *args, **kwargs)
 
-    def random_split(self, frac, random_state=None, shuffle=True):
+    def random_split(self, frac, random_state=None, shuffle=False):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
         Parameters
@@ -942,7 +941,7 @@ Dask Name: {name}, {task} tasks"""
         random_state : int or np.random.RandomState
             If int create a new RandomState with this as the seed.
             Otherwise draw from the passed RandomState.
-        shuffle : bool, default True
+        shuffle : bool, default False
             If set to True, the dataframe is shuffled (within partition)
              before the split.
 
@@ -5432,7 +5431,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
-def pd_split(df, p, random_state=None, shuffle=True):
+def pd_split(df, p, random_state=None, shuffle=False):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
@@ -5454,11 +5453,7 @@ def pd_split(df, p, random_state=None, shuffle=True):
     """
     p = list(p)
     if shuffle:
-        shuffle_index = pseudorandom_shuffle(
-            n=len(df),
-            random_state=random_state
-        )
-        df = df.iloc[shuffle_index]
+        df = df.sample(frac=1.0, random_state=random_state)
     index = pseudorandom(len(df), p, random_state)
     return [df.iloc[index == i] for i in range(len(p))]
 
