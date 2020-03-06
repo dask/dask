@@ -815,6 +815,19 @@ def test_sfqr(m, n, chunks, error_type):
             q, r = da.linalg.sfqr(data)
 
 
+def test_sparse_hstack_vstack_csr():
+    x = cupy.array([2., 1., 5., 2., 1.], dtype=cupy.float32)
+    x = cupy.expand_dims(x, axis=0)
+
+    sp = da.from_array(x, chunks=(1000), asarray=False, fancy=False)
+    sp = sp.map_blocks(cupy.sparse.csr_matrix, dtype=cupy.float32)
+
+    y = sp.compute()
+
+    assert cupy.sparse.isspmatrix(y)
+    assert_eq(x, y.todense())   
+
+
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
     np.__version__ < "1.17", reason="no shape argument for *_like functions"
