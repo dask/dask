@@ -115,8 +115,10 @@ def _execute_task(arg, cache, dsk=None):
         return [_execute_task(a, cache) for a in arg]
     elif istask(arg):
         func, args = arg[0], arg[1:]
-        args2 = [_execute_task(a, cache) for a in args]
-        return func(*args2)
+        # Note: Don't assign the subtask results to a variable. numpy detects
+        # temporaries by their reference count and can execute certain
+        # operations in-place.
+        return func(*(_execute_task(a, cache) for a in args))
     elif not ishashable(arg):
         return arg
     elif arg in cache:
