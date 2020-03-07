@@ -1348,17 +1348,6 @@ def test_concat_unknown_divisions():
         dd.concat([aa, cc], axis=1)
 
 
-def test_concat_unknown_divisions_errors():
-    a = pd.Series([1, 2, 3, 4, 5, 6])
-    b = pd.Series([4, 3, 2, 1])
-    aa = dd.from_pandas(a, npartitions=2, sort=False)
-    bb = dd.from_pandas(b, npartitions=2, sort=False)
-
-    with pytest.raises(ValueError):
-        with pytest.warns(UserWarning):  # Concat with unknown divisions
-            dd.concat([aa, bb], axis=1).compute()
-
-
 def test_concat2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),

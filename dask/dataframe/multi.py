@@ -859,18 +859,14 @@ def merge_asof(
 # Concat
 ###############################################################
 
-
-def concat_and_check(dfs):
-    if len(set(map(len, dfs))) != 1:
-        raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, axis=1)
+concat_axis1 = partial(methods.concat, axis=1)
 
 
 def concat_unindexed_dataframes(dfs):
     name = "concat-" + tokenize(*dfs)
 
     dsk = {
-        (name, i): (concat_and_check, [(df._name, i) for df in dfs])
+        (name, i): (concat_axis1, [(df._name, i) for df in dfs])
         for i in range(dfs[0].npartitions)
     }
 
