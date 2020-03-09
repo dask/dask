@@ -1382,7 +1382,7 @@ class Client(Node):
         """ Shut down the connected scheduler and workers
 
         Note, this may disrupt other clients that may be using the same
-        scheudler and workers.
+        scheduler and workers.
 
         See also
         --------
