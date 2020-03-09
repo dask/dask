@@ -153,13 +153,17 @@ def to_graphviz(
     seen = set()
     connected = set()
 
+    function_attributes = copy.copy(function_attributes)
+    data_attributes = copy.copy(data_attributes)
+    data_attributes = copy.copy(data_attributes)
+
     for k, v in dsk.items():
         k_name = name(k)
         if istask(v):
             func_name = name((k, "function")) if not collapse_outputs else k_name
             if collapse_outputs or func_name not in seen:
                 seen.add(func_name)
-                attrs = copy.copy(function_attributes.get(k, {}))
+                attrs = function_attributes.get(k, {})
                 attrs.setdefault("label", key_split(k))
                 attrs.setdefault("shape", "circle")
                 g.node(func_name, **attrs)
@@ -172,7 +176,7 @@ def to_graphviz(
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    attrs = copy.copy(data_attributes.get(dep, {}))
+                    attrs = data_attributes.get(dep, {})
                     attrs.setdefault("label", box_label(dep, verbose))
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
@@ -188,7 +192,7 @@ def to_graphviz(
 
         if (not collapse_outputs or k_name in connected) and k_name not in seen:
             seen.add(k_name)
-            attrs = copy.copy(data_attributes.get(k, {}))
+            attrs = data_attributes.get(k, {})
             attrs.setdefault("label", box_label(k, verbose))
             attrs.setdefault("shape", "box")
             g.node(k_name, **attrs)
