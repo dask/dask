@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-import toolz
+import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection

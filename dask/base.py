@@ -10,8 +10,8 @@ import threading
 import uuid
 from distutils.version import LooseVersion
 
-from toolz import merge, groupby, curry, identity
-from toolz.functoolz import Compose
+from tlz import merge, groupby, curry, identity
+from tlz.functoolz import Compose
 
 from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
