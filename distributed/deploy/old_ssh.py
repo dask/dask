@@ -209,11 +209,23 @@ def async_ssh(cmd_dict):
 
 
 def start_scheduler(
-    logdir, addr, port, ssh_username, ssh_port, ssh_private_key, remote_python=None
+    logdir,
+    addr,
+    port,
+    ssh_username,
+    ssh_port,
+    ssh_private_key,
+    remote_python=None,
+    local_directory=None,
 ):
     cmd = "{python} -m distributed.cli.dask_scheduler --port {port}".format(
         python=remote_python or sys.executable, port=port, logdir=logdir
     )
+
+    if local_directory is not None:
+        cmd += " --local-directory {local_directory}".format(
+            local_directory=local_directory
+        )
 
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:
@@ -270,6 +282,7 @@ def start_worker(
     nanny_port,
     remote_python=None,
     remote_dask_worker="distributed.cli.dask_worker",
+    local_directory=None,
 ):
 
     cmd = (
@@ -302,6 +315,11 @@ def start_worker(
         worker_port=worker_port,
         nanny_port=nanny_port,
     )
+
+    if local_directory is not None:
+        cmd += " --local-directory {local_directory}".format(
+            local_directory=local_directory
+        )
 
     # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
@@ -353,6 +371,7 @@ class SSHCluster:
         worker_port=None,
         nanny_port=None,
         remote_dask_worker="distributed.cli.dask_worker",
+        local_directory=None,
     ):
 
         self.scheduler_addr = scheduler_addr
@@ -372,6 +391,7 @@ class SSHCluster:
         self.worker_port = worker_port
         self.nanny_port = nanny_port
         self.remote_dask_worker = remote_dask_worker
+        self.local_directory = local_directory
 
         # Generate a universal timestamp to use for log files
         import datetime
@@ -402,6 +422,7 @@ class SSHCluster:
             ssh_port,
             ssh_private_key,
             remote_python,
+            local_directory,
         )
 
         # Start worker nodes
@@ -455,6 +476,7 @@ class SSHCluster:
                 self.nanny_port,
                 self.remote_python,
                 self.remote_dask_worker,
+                self.local_directory,
             )
         )
 

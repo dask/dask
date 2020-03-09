@@ -78,6 +78,14 @@ from distributed.cli.utils import check_python_3
     ),
 )
 @click.option(
+    "--local-directory",
+    default=None,
+    type=click.Path(exists=True),
+    help=(
+        "Directory to use on all cluster nodes to place workers " "and scheduler files."
+    ),
+)
+@click.option(
     "--remote-python", default=None, type=str, help="Path to Python on remote nodes."
 )
 @click.option(
@@ -126,6 +134,7 @@ def main(
     worker_port,
     nanny_port,
     remote_dask_worker,
+    local_directory,
 ):
     try:
         hostnames = list(hostnames)
@@ -157,6 +166,7 @@ def main(
         worker_port,
         nanny_port,
         remote_dask_worker,
+        local_directory,
     )
 
     import distributed
