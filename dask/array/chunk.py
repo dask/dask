@@ -2,7 +2,7 @@
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 
-from toolz import concat
+from tlz import concat
 import numpy as np
 from . import numpy_compat as npcompat
 

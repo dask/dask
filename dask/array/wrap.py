@@ -3,10 +3,7 @@ from itertools import product
 
 import numpy as np
 
-try:
-    from cytoolz import curry
-except ImportError:
-    from toolz import curry
+from tlz import curry
 
 from ..base import tokenize
 from ..utils import funcname
