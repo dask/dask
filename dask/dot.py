@@ -1,3 +1,4 @@
+import copy
 import re
 import os
 from functools import partial
@@ -158,7 +159,7 @@ def to_graphviz(
             func_name = name((k, "function")) if not collapse_outputs else k_name
             if collapse_outputs or func_name not in seen:
                 seen.add(func_name)
-                attrs = function_attributes.get(k, {})
+                attrs = copy.copy(function_attributes.get(k, {}))
                 attrs.setdefault("label", key_split(k))
                 attrs.setdefault("shape", "circle")
                 g.node(func_name, **attrs)
@@ -171,7 +172,7 @@ def to_graphviz(
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    attrs = data_attributes.get(dep, {})
+                    attrs = copy.copy(data_attributes.get(dep, {}))
                     attrs.setdefault("label", box_label(dep, verbose))
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
@@ -187,7 +188,7 @@ def to_graphviz(
 
         if (not collapse_outputs or k_name in connected) and k_name not in seen:
             seen.add(k_name)
-            attrs = data_attributes.get(k, {})
+            attrs = copy.copy(data_attributes.get(k, {}))
             attrs.setdefault("label", box_label(k, verbose))
             attrs.setdefault("shape", "box")
             g.node(k_name, **attrs)
