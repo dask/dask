@@ -140,8 +140,12 @@ def to_graphviz(
 ):
     if data_attributes is None:
         data_attributes = {}
+    else:
+        data_attributes = copy.copy(data_attributes)
     if function_attributes is None:
         function_attributes = {}
+    else:
+        function_attributes = copy.copy(function_attributes)
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
@@ -152,10 +156,6 @@ def to_graphviz(
 
     seen = set()
     connected = set()
-
-    function_attributes = copy.copy(function_attributes)
-    data_attributes = copy.copy(data_attributes)
-    data_attributes = copy.copy(data_attributes)
 
     for k, v in dsk.items():
         k_name = name(k)
