@@ -4,7 +4,7 @@ pytest.importorskip("numpy")
 
 import numpy as np
 import pytest
-from toolz import concat
+from tlz import concat
 
 import dask
 import dask.array as da
