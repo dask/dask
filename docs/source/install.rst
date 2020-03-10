@@ -86,39 +86,39 @@ These optional dependencies and their minimum supported versions are listed belo
 +-------------+----------+--------------------------------------------------------------+
 | Dependency  | Version  |                          Description                         |
 +=============+==========+==============================================================+
-|    bokeh    | >=1.0.0  |                Visualizing dask diagnostics                  |
+|     bokeh     | >=1.0.0  |                Visualizing dask diagnostics                  |
 +-------------+----------+--------------------------------------------------------------+
-| cloudpickle | >=0.2.1  |              Pickling support for Python objects             |
+|  cloudpickle  | >=0.2.2  |              Pickling support for Python objects             |
 +-------------+----------+--------------------------------------------------------------+
-|  cityhash   |          |                  Faster hashing of arrays                    |
+|   cityhash    |          |                  Faster hashing of arrays                    |
 +-------------+----------+--------------------------------------------------------------+
-| distributed | >=2.0    |               Distributed computing in Python                |
+|  distributed  | >=2.0    |               Distributed computing in Python                |
 +-------------+----------+--------------------------------------------------------------+
-| fastparquet |          |         Storing and reading data from parquet files          |
+|  fastparquet  |          |         Storing and reading data from parquet files          |
 +-------------+----------+--------------------------------------------------------------+
-|    fsspec   | >=0.6.0  |          Used for local, cluster and remote data IO          |
+|     fsspec    | >=0.6.0  |          Used for local, cluster and remote data IO          |
 +-------------+----------+--------------------------------------------------------------+
-|    gcsfs    | >=0.4.0  |        File-system interface to Google Cloud Storage         |
+|     gcsfs     | >=0.4.0  |        File-system interface to Google Cloud Storage         |
 +-------------+----------+--------------------------------------------------------------+
-|  murmurhash |          |                   Faster hashing of arrays                   |
+|   murmurhash  |          |                   Faster hashing of arrays                   |
 +-------------+----------+--------------------------------------------------------------+
-|    numpy    | >=1.13.0 |                   Required for dask.array                    |
+|     numpy     | >=1.13.0 |                   Required for dask.array                    |
 +-------------+----------+--------------------------------------------------------------+
-|    pandas   | >=0.21.0 |                  Required for dask.dataframe                 |
+|     pandas    | >=0.21.0 |                  Required for dask.dataframe                 |
 +-------------+----------+--------------------------------------------------------------+
-|    partd    | >=0.3.10 |            Concurrent appendable key-value storage           |
+|     partd     | >=0.3.10 |            Concurrent appendable key-value storage           |
 +-------------+----------+--------------------------------------------------------------+
-|    psutil   |          |             Enables a more accurate CPU count                |
+|     psutil    |          |             Enables a more accurate CPU count                |
 +-------------+----------+--------------------------------------------------------------+
-|    pyarrow  | >=0.14.0 |               Python library for Apache Arrow                |
+|     pyarrow   | >=0.14.0 |               Python library for Apache Arrow                |
 +-------------+----------+--------------------------------------------------------------+
-|    s3fs     | >=0.4.0  |                    Reading from Amazon S3                    |
+|     s3fs      | >=0.4.0  |                    Reading from Amazon S3                    |
 +-------------+----------+--------------------------------------------------------------+
-|  sqlalchemy |          |            Writing and reading from SQL databases            |
+|   sqlalchemy  |          |            Writing and reading from SQL databases            |
 +-------------+----------+--------------------------------------------------------------+
-|    toolz    | >=0.7.3  | Utility functions for iterators, functions, and dictionaries |
+| cytoolz/toolz | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
 +-------------+----------+--------------------------------------------------------------+
-|   xxhash    |          |                  Faster hashing of arrays                    |
+|    xxhash     |          |                  Faster hashing of arrays                    |
 +-------------+----------+--------------------------------------------------------------+
 
 Test
