@@ -26,8 +26,9 @@ def register_cupyx():
         from cupy.sparse import hstack
         from cupy.sparse import vstack
     except ImportError:
-        raise ImportError("Stacking of sparse arrays requires "
-                          "at least CuPy version 8.0.0")
+        raise ImportError(
+            "Stacking of sparse arrays requires " "at least CuPy version 8.0.0"
+        )
 
     def _concat_cupy_sparse(L, axis=0):
         if axis == 0:
