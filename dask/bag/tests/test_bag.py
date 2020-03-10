@@ -1173,7 +1173,6 @@ def test_repartition_names():
     assert b is c
 
 
-@pytest.mark.skipif("not db.core._implement_accumulate")
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
     dsk = dict((("test", i), p) for (i, p) in enumerate(parts))
