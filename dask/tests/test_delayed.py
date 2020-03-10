@@ -1,10 +1,12 @@
 from collections import namedtuple
 from operator import add, setitem
+from functools import partial
 import pickle
 from random import random
 import types
 
-from toolz import identity, partial, merge
+from tlz import merge
+from toolz import identity
 import pytest
 
 import dask
