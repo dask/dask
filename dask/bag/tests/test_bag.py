@@ -11,7 +11,7 @@ from itertools import repeat
 
 import partd
 import pytest
-from toolz import merge, join, filter, identity, valmap, groupby, pluck, unique
+from tlz import merge, join, identity, valmap, groupby, pluck, unique
 
 import dask
 import dask.bag as db
@@ -19,7 +19,6 @@ from dask.bag.core import (
     Bag,
     lazify,
     lazify_task,
-    map,
     collect,
     reduceby,
     reify,
@@ -605,8 +604,6 @@ def test_take_npartitions_warn():
 
 
 def test_map_is_lazy():
-    from dask.bag.core import map
-
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
 
 
@@ -1190,7 +1187,6 @@ def test_repartition_names():
     assert b is c
 
 
-@pytest.mark.skipif("not db.core._implement_accumulate")
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
     dsk = dict((("test", i), p) for (i, p) in enumerate(parts))

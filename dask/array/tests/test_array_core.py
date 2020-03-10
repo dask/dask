@@ -13,8 +13,8 @@ from operator import add, sub, getitem
 from threading import Lock
 import warnings
 
-from toolz import merge, countby, concat
-from toolz.curried import identity
+from tlz import merge, countby, concat
+from tlz.curried import identity
 
 import dask
 import dask.array as da

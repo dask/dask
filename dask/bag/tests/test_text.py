@@ -1,5 +1,6 @@
 import pytest
-from toolz import concat, partial
+from functools import partial
+from tlz import concat
 
 import dask
 from dask import compute

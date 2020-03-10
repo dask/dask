@@ -4,10 +4,7 @@ from collections.abc import Mapping
 
 import numpy as np
 
-try:
-    import cytoolz as toolz
-except ImportError:
-    import toolz
+import tlz as toolz
 
 from .core import reverse_dict
 from .delayed import to_task_dask

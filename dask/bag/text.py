@@ -1,7 +1,8 @@
 import io
 import os
+from functools import partial
 
-from toolz import concat, partial
+from tlz import concat
 
 from ..bytes import open_files, read_bytes
 from ..delayed import delayed

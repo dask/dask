@@ -5,7 +5,7 @@ from operator import add, getitem
 from numbers import Integral, Number
 
 import numpy as np
-from toolz import accumulate, sliding_window
+from tlz import accumulate, sliding_window
 
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize

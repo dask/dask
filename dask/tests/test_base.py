@@ -6,7 +6,7 @@ import sys
 import time
 from collections import OrderedDict
 
-from toolz import merge
+from tlz import merge
 
 import dask
 from dask import delayed
@@ -38,7 +38,7 @@ def import_or_none(path):
     return None
 
 
-tz = pytest.importorskip("toolz")
+tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
 db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")

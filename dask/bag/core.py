@@ -6,20 +6,16 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from distutils.version import LooseVersion
-from functools import wraps, partial
+from functools import wraps, partial, reduce
 from random import Random
 from urllib.request import urlopen
 
-import toolz
-from toolz import (
+import tlz as toolz
+from tlz import (
     merge,
     take,
-    reduce,
     valmap,
-    map,
     partition_all,
-    filter,
     remove,
     compose,
     curry,
@@ -27,39 +23,17 @@ from toolz import (
     second,
     accumulate,
     peek,
+    frequencies,
+    merge_with,
+    join,
+    reduceby,
+    count,
+    pluck,
+    groupby,
+    topk,
+    unique,
+    accumulate,
 )
-
-_implement_accumulate = LooseVersion(toolz.__version__) > "0.7.4"
-try:
-    import cytoolz
-    from cytoolz import (
-        frequencies,
-        merge_with,
-        join,
-        reduceby,
-        count,
-        pluck,
-        groupby,
-        topk,
-        unique,
-    )
-
-    if LooseVersion(cytoolz.__version__) > "0.7.3":
-        from cytoolz import accumulate  # noqa: F811
-
-        _implement_accumulate = True
-except ImportError:
-    from toolz import (
-        frequencies,
-        merge_with,
-        join,
-        reduceby,
-        count,
-        pluck,
-        groupby,
-        topk,
-        unique,
-    )
 
 from .. import config
 from .avro import to_avro
@@ -896,7 +870,7 @@ class Bag(DaskMethodsMixin):
                 out_type=out_type,
             )
         else:
-            from toolz.curried import reduce
+            from tlz.curried import reduce
 
             return self.reduction(
                 reduce(binop),
@@ -1676,10 +1650,6 @@ class Bag(DaskMethodsMixin):
         >>> b.accumulate(add, initial=-1)  # doctest: +SKIP
         [-1, 0, 2, 5, 9, 14]
         """
-        if not _implement_accumulate:
-            raise NotImplementedError(
-                "accumulate requires `toolz` > 0.7.4 or `cytoolz` > 0.7.3."
-            )
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)
         a = "%s-part-%s" % (binop_name, token)
