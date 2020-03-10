@@ -9,19 +9,14 @@ import uuid
 import warnings
 from bisect import bisect
 from collections.abc import Iterable, Iterator, Mapping
-from functools import partial, wraps
+from functools import partial, wraps, reduce
 from itertools import product, zip_longest
 from numbers import Number, Integral
 from operator import add, getitem, mul
 from threading import Lock
 
-try:
-    from cytoolz import partition, concat, first, groupby, accumulate
-    from cytoolz.curried import pluck
-except ImportError:
-    from toolz import partition, concat, first, groupby, accumulate
-    from toolz.curried import pluck
-from toolz import map, reduce, frequencies
+from tlz import partition, concat, first, groupby, accumulate, frequencies
+from tlz.curried import pluck
 import numpy as np
 
 from . import chunk

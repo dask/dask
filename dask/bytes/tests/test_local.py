@@ -3,9 +3,10 @@ import os
 import pathlib
 import sys
 from time import sleep
+from functools import partial
 
 import pytest
-from toolz import concat, valmap, partial
+from tlz import concat, valmap
 
 from dask import compute
 from dask.utils import filetexts

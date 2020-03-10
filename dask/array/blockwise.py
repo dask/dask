@@ -1,7 +1,7 @@
 import numbers
 import warnings
 
-import toolz
+import tlz as toolz
 
 from .. import base, utils
 from ..delayed import unpack_collections

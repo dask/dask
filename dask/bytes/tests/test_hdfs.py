@@ -2,7 +2,7 @@ import os
 import posixpath
 
 import pytest
-from toolz import concat
+from tlz import concat
 
 import dask
 from dask.bytes.core import read_bytes, open_files, get_fs_token_paths

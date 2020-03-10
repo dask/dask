@@ -5,10 +5,7 @@ import copy
 import json
 import warnings
 
-try:
-    import cytoolz as toolz
-except ModuleNotFoundError:
-    import toolz
+import tlz as toolz
 
 import numpy as np
 import pandas as pd

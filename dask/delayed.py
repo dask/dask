@@ -4,10 +4,7 @@ import uuid
 import warnings
 from collections.abc import Iterator
 
-try:
-    from cytoolz import curry, concat, unique, merge
-except ImportError:
-    from toolz import curry, concat, unique, merge
+from tlz import curry, concat, unique, merge
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin

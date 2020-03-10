@@ -5,7 +5,7 @@ from threading import Lock
 
 import pandas as pd
 import numpy as np
-from toolz import merge
+from tlz import merge
 
 from ...base import tokenize
 from ... import array as da

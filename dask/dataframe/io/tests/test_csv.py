@@ -9,7 +9,7 @@ import pytest
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
-from toolz import partition_all, valmap
+from tlz import partition_all, valmap
 
 import dask
 import dask.dataframe as dd

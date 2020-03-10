@@ -7,7 +7,7 @@ from numbers import Real, Integral
 from distutils.version import LooseVersion
 
 import numpy as np
-from toolz import concat, sliding_window, interleave
+from tlz import concat, sliding_window, interleave
 
 from ..compatibility import apply
 from ..core import flatten

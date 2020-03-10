@@ -358,7 +358,7 @@ def test_funcname_long():
 
 
 def test_funcname_toolz():
-    toolz = pytest.importorskip("toolz")
+    toolz = pytest.importorskip("tlz")
 
     @toolz.curry
     def foo(a, b, c):
