@@ -50,12 +50,12 @@ Suppose you had a custom Dask graph for doing a word counting task:
     ...        'count1': (str.count, 'words', 'val1'),
     ...        'count2': (str.count, 'words', 'val2'),
     ...        'count3': (str.count, 'words', 'val3'),
-    ...        'out1': (format_str, 'count1', 'val1', 'nwords'),
-    ...        'out2': (format_str, 'count2', 'val2', 'nwords'),
-    ...        'out3': (format_str, 'count3', 'val3', 'nwords'),
-    ...        'print1': (print_and_return, 'out1'),
-    ...        'print2': (print_and_return, 'out2'),
-    ...        'print3': (print_and_return, 'out3')}
+    ...        'format1': (format_str, 'count1', 'val1', 'nwords'),
+    ...        'format2': (format_str, 'count2', 'val2', 'nwords'),
+    ...        'format3': (format_str, 'count3', 'val3', 'nwords'),
+    ...        'print1': (print_and_return, 'format1'),
+    ...        'print2': (print_and_return, 'format2'),
+    ...        'print3': (print_and_return, 'format3')}
 
 .. image:: images/optimize_dask1.png
    :width: 65 %
