@@ -599,7 +599,7 @@ def test_concat_different_dtypes(join):
     result = dd.concat([ddf1, ddf2], join=join)
     assert_eq(expected, result)
 
-    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
+    dtypes_list = dask.compute(*[part.dtypes for part in result.to_delayed()])
     assert len(set(map(str, dtypes_list))) == 1  # all the same
 
 

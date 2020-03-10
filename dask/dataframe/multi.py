@@ -80,7 +80,7 @@ from .core import (
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories, is_series_like, asciitable
+from .utils import strip_unknown_categories, is_series_like, asciitable, is_dataframe_like
 
 
 def align_partitions(*dfs):
@@ -921,6 +921,10 @@ def stack_partitions(dfs, divisions, join="outer"):
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
+        if is_dataframe_like(df):
+            shared = df.columns.intersection(meta)
+            if not df._meta[shared].dtypes.equals(meta[shared].dtypes):
+                df = df.astype(meta[shared].dtypes)
         if is_series_like(df) and is_series_like(meta):
             if not df.dtype == meta.dtype and str(df.dtype) != "category":
                 df = df.astype(meta.dtype)
