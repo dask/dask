@@ -6,7 +6,6 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from distutils.version import LooseVersion
 from functools import wraps, partial, reduce
 from random import Random
 from urllib.request import urlopen
@@ -33,7 +32,7 @@ from tlz import (
     groupby,
     topk,
     unique,
-    accumulate
+    accumulate,
 )
 
 from .. import config
