@@ -113,7 +113,7 @@ tasks to improve efficiency using the ``inline`` function. For example:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask3.png
-   :width: 65 %
+   :width: 40 %
    :alt: After inlining
 
 Now we have two sets of *almost* linear task chains. The only link between them
@@ -133,7 +133,7 @@ can be used:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask4.png
-   :width: 60 %
+   :width: 30 %
    :alt: After inlining functions
 
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
@@ -150,7 +150,7 @@ One option is just to merge these linear chains into one big task using the
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask5.png
-   :width: 60 %
+   :width: 30 %
    :alt: After fusing
 
 
