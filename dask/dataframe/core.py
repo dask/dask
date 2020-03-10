@@ -15,7 +15,7 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_datetime64_any_dtype,
 )
-from toolz import merge, first, unique, partition_all, remove
+from tlz import merge, first, unique, partition_all, remove
 
 try:
     from chest import Chest as Cache

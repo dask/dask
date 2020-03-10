@@ -1,6 +1,6 @@
 from distutils.version import LooseVersion
 
-import toolz
+import tlz as toolz
 import warnings
 from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths

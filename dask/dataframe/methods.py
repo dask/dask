@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
-from toolz import partition
+from tlz import partition
 
 from .utils import (
     is_series_like,
