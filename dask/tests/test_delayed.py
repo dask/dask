@@ -500,7 +500,7 @@ def test_callable_obj():
 
 
 def identity(x):
-        return x
+    return x
 
 
 def test_name_consistent_across_instances():
