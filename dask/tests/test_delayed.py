@@ -6,7 +6,6 @@ from random import random
 import types
 
 from tlz import merge
-from toolz import identity
 import pytest
 
 import dask
@@ -500,15 +499,19 @@ def test_callable_obj():
     assert f().compute() == 2
 
 
+def identity(x):
+        return x
+
+
 def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-84c5e2194036c17d1d97c4e3a2b90482"
+    assert func(data)._key == "identity-02129ed1acaffa7039deee80c5da547c"
 
     data = {"x": 1, 1: "x"}
     assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-7126728842461bf3d2caecf7b954fa3b"
+    assert func(1)._key == "identity-ca2fae46a3b938016331acac1908ae45"
 
 
 def test_sensitive_to_partials():
