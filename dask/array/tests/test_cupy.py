@@ -818,7 +818,7 @@ def test_sfqr(m, n, chunks, error_type):
 def test_sparse_hstack_vstack_csr():
     pytest.importorskip("cupyx")
     x = cupy.array([2.0, 1.0, 5.0, 2.0, 1.0], dtype=cupy.float32)
-    x = cupy.expand_dims(x, axis=0)
+    x = cupy.arange(24, dtype=cupy.float32).reshape(4, 6)
 
     sp = da.from_array(x, chunks=(2, 3), asarray=False, fancy=False)
     sp = sp.map_blocks(cupy.sparse.csr_matrix, dtype=cupy.float32)
