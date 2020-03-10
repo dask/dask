@@ -362,12 +362,16 @@ def test_saves_file():
 @ignore_abc_warning
 def test_get_colors():
     from dask.diagnostics.profile_visualize import get_colors
-    from bokeh.palettes import Blues256, Blues5, Viridis
+    from bokeh.palettes import Blues5, Viridis
 
-    funcs = list(range(11))
-    cmap = get_colors("Blues", funcs)
-    assert set(cmap) < set(Blues256)
-    assert len(set(cmap)) == 11
+    # 256-color palettes were added in bokeh 1.4.0
+    if LooseVersion(bokeh.__version__) >= "1.4.0":
+        from bokeh.palettes import Blues256
+
+        funcs = list(range(11))
+        cmap = get_colors("Blues", funcs)
+        assert set(cmap) < set(Blues256)
+        assert len(set(cmap)) == 11
 
     funcs = list(range(5))
     cmap = get_colors("Blues", funcs)

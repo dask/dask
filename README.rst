@@ -1,7 +1,7 @@
 Dask
 ====
 
-|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|
+|Linux Build Status| |Windows Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|
 
 Dask is a flexible parallel computing library for analytics.  See
 documentation_ for more information.
@@ -13,8 +13,10 @@ LICENSE
 New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt>`__.
 
 .. _documentation: https://dask.org
-.. |Build Status| image:: https://travis-ci.org/dask/dask.svg?branch=master
+.. |Linux Build Status| image:: https://travis-ci.org/dask/dask.svg?branch=master
    :target: https://travis-ci.org/dask/dask
+.. |Windows Build Status| image:: https://github.com/dask/dask/workflows/Windows%20CI/badge.svg?branch=master
+   :target: https://github.com/dask/dask/actions?query=workflow%3A%22Windows+CI%22
 .. |Coverage| image:: https://coveralls.io/repos/dask/dask/badge.svg
    :target: https://coveralls.io/r/dask/dask
    :alt: Coverage status

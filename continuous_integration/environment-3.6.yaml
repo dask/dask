@@ -51,6 +51,8 @@ dependencies:
   - cachey
   - python-graphviz
   - pandas-datareader
-  - mmh3
-  - xxhash
   - pip
+  - pip:
+      - cityhash
+      - mmh3
+      - xxhash

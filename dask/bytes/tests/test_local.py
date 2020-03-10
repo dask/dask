@@ -192,6 +192,13 @@ def test_read_bytes_include_path():
         assert {os.path.split(path)[1] for path in paths} == set(files.keys())
 
 
+@pytest.mark.xfail(
+    os.environ.get("GITHUB_ACTIONS")
+    and sys.platform == "win32"
+    and sys.version_info[:2] == (3, 6),
+    reason="TODO: Fails on GitHub Actions when running Python 3.6 on Windows."
+    "See https://github.com/dask/dask/pull/5862.",
+)
 def test_with_urls():
     with filetexts(files, mode="b"):
         # OS-independent file:// URI with glob *
