@@ -89,11 +89,9 @@ def test_make_meta():
 
     # Categoricals
     meta = make_meta({"a": "category"})
-    assert len(meta.a.cat.categories) == 1
-    assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
+    assert meta.a.cat.categories == []
     meta = make_meta(("a", "category"))
-    assert len(meta.cat.categories) == 1
-    assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+    assert meta.cat.categories == []
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0))
@@ -230,7 +228,7 @@ def test_meta_nonempty_index():
     assert res.ordered == idx.ordered
     assert res.name == idx.name
 
-    idx = pd.CategoricalIndex([], [UNKNOWN_CATEGORIES], ordered=True, name="foo")
+    idx = pd.CategoricalIndex([], [], ordered=True, name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.CategoricalIndex
     assert res.ordered == idx.ordered

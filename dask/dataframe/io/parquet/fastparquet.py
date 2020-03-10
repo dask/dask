@@ -277,6 +277,10 @@ class FastParquetEngine(Engine):
 
         for cat in categories:
             if cat in meta:
+                import ipdb
+
+                ipdb.set_trace()
+
                 meta[cat] = pd.Series(
                     pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
                     index=meta.index,

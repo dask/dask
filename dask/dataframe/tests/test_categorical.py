@@ -132,7 +132,12 @@ def test_unknown_categoricals():
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
+    import ipdb
+
+    ipdb.set_trace()
     assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
+    # TODO: look at `ddf.groupby(ddf.w).obj.y`
+    # See `def nunique` in dataframe/groupby.py
     assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
     assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 
@@ -154,12 +159,19 @@ def test_categorize():
     # levels
     meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
     ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames3)},
+        {
+            ("unknown", i): df.rename(columns={"y": "y_"})
+            for (i, df) in enumerate(frames3)
+        },
         "unknown",
         meta,
         [None] * 4,
-    ).rename(columns={"y": "y_"})
+    )
+    import ipdb
+
+    ipdb.set_trace()
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
+
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
     assert not ddf.index.cat.known
@@ -397,12 +409,16 @@ class TestCategoricalAccessor:
         # GH 1705
 
         def make_empty():
-            return pd.DataFrame({"A": pd.Categorical([np.nan, np.nan])})
+            return pd.DataFrame(
+                {"A": pd.Categorical(pd.Index([np.nan, np.nan], dtype="object"))}
+            )
 
         def make_full():
             return pd.DataFrame({"A": pd.Categorical(["a", "a"])})
 
-        a = dd.from_delayed([dask.delayed(make_empty)(), dask.delayed(make_full)()])
+        a = dd.from_delayed(
+            [dask.delayed(make_empty)(), dask.delayed(make_full)()], meta=make_full()
+        )
         # Used to raise an IndexError
         a.A.cat.categories
 
