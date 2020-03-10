@@ -15,12 +15,12 @@ class ArrowDatasetSubgraph(Mapping):
     Enables optimiziations (see optimize_read_arrow_dataset).
     """
 
-    def __init__(self, name, parts, fs, schema, partitioning, format, columns, filter, meta):
+    def __init__(self, name, parts, fs, schema, format, columns, filter, meta):
         self.name = name
         self.parts = parts
         self.fs = fs
         self.schema = schema
-        self.partitioning = partitioning
+        # self.partitioning = partitioning
         self.format = format
         self.columns = columns
         self.filter = filter
@@ -47,13 +47,13 @@ class ArrowDatasetSubgraph(Mapping):
         part = self.parts[i]
 
         return (
-            read_arrow_dataset_part, 
+            read_arrow_dataset_part,
             part,
             self.fs,
-            self.schema, 
-            self.partitioning, 
-            self.format, 
-            self.columns, 
+            self.schema,
+            # self.partitioning,
+            self.format,
+            self.columns,
             self.filter,
         )
 
@@ -88,25 +88,78 @@ def get_paths_and_expressions(path, partitioning):
     return paths, exprs
 
 
+def destructure(fragment):
+    expr = fragment.partition_expression
+    path = fragment.path
+
+    segments = path.split('/')
+    basename = segments.pop()
+
+    segment_to_expr = {}
+    segment_to_expr[basename] = expr.left_operand
+    expr = expr.right_operand
+
+    while type(expr) is ds.AndExpression:
+        segment_to_expr[segments.pop()] = expr.left_operand
+        expr = expr.right_operand
+
+    segment_to_expr[segments.pop()] = expr
+
+    base_dir = '/'.join(segments)
+
+    paths = []
+    exprs = []
+
+    path = base_dir
+
+    for segment in list(segment_to_expr.keys())[::-1]:
+        path = "/".join([path, segment])
+        paths.append(path)
+        exprs.append(segment_to_expr[segment])
+
+    #return base_dir, segment_to_expr, basename
+    return paths, exprs
+
+
+
 def read_arrow_dataset_part(
-        path, fs, schema, partitioning, format, columns, filter
+        fragment, fs, schema, format, columns, filter
 ):
     if fs is None:
         from pyarrow.fs import LocalFileSystem
         fs = LocalFileSystem()
-    paths, exprs = get_paths_and_expressions(path, partitioning)
+
+    paths, exprs = destructure(fragment)
+
+    # paths, exprs = get_paths_and_expressions(path, partitioning)
     source = ds.FileSystemSource(schema, None, format, fs, paths, exprs)
     dataset = ds.Dataset([source], schema)
     table = dataset.to_table(columns=columns, filter=filter, use_threads=False)
     return table.to_pandas()
 
 
-def read_arrow_dataset(path, partitioning, columns=None, filter=None, filesystem=None, format="parquet"):
+
+def read_arrow_dataset(path, partitioning=None, columns=None, filter=None, filesystem=None, format="parquet"):
 
     dataset = ds.dataset(path, partitioning=partitioning, filesystem=filesystem, format=format)
     source = dataset.sources[0]
     schema = dataset.schema
-    files = source.files
+    if isinstance(format, str):
+        if format == "parquet":
+            format = ds.ParquetFileFormat()
+        elif format == "ipc":
+            format = ds.IpcFileFormat()
+            if filesystem is None:
+                from pyarrow.fs import LocalFileSystem, LocalFileSystemOptions
+                filesystem = LocalFileSystem(LocalFileSystemOptions(use_mmap=True))
+
+    if filesystem is None:
+        from pyarrow.fs import LocalFileSystem
+        filesystem = LocalFileSystem()
+
+    #files = source.files
+    fragments = list(source.GetFragments(filter=filter))
+
 
     # meta = next(dataset.to_batches()).to_pandas()
     meta = schema.empty_table().to_pandas()
@@ -118,8 +171,11 @@ def read_arrow_dataset(path, partitioning, columns=None, filter=None, filesystem
     # dsk = {(name, i): tasks[i] for i in range(len(tasks))}
     # return DataFrame(dsk, name, meta, tuple([None]*(len(dsk) + 1)))
 
+    # subgraph = ArrowDatasetSubgraph(
+    #     name, files, filesystem, schema, partitioning, format, columns, filter, meta,
+    # )
     subgraph = ArrowDatasetSubgraph(
-        name, files, filesystem, schema, partitioning, format, columns, filter, meta,
+        name, fragments, filesystem, schema, format, columns, filter, meta,
     )
 
-    return new_dd_object(subgraph, name, meta, tuple([None]*(len(files) + 1)))
+    return new_dd_object(subgraph, name, meta, tuple([None]*(len(fragments) + 1)))

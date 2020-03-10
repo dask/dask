@@ -203,7 +203,7 @@ def optimize_read_arrow_dataset(dsk, keys):
             columns = list(meta.columns)
 
         new = ArrowDatasetSubgraph(
-            name, old.parts, old.fs, old.schema, old.partitioning, old.format, columns, old.filter, meta
+            name, old.parts, old.fs, old.schema, old.format, columns, old.filter, meta
         )
         layers[name] = new
         if name != old.name:
