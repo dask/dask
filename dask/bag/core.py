@@ -7,19 +7,16 @@ import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from distutils.version import LooseVersion
-from functools import wraps, partial
+from functools import wraps, partial, reduce
 from random import Random
 from urllib.request import urlopen
 
-import toolz
-from toolz import (
+import tlz as toolz
+from tlz import (
     merge,
     take,
-    reduce,
     valmap,
-    map,
     partition_all,
-    filter,
     remove,
     compose,
     curry,
@@ -896,7 +893,7 @@ class Bag(DaskMethodsMixin):
                 out_type=out_type,
             )
         else:
-            from toolz.curried import reduce
+            from tlz.curried import reduce
 
             return self.reduction(
                 reduce(binop),
