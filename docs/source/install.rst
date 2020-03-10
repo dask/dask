@@ -83,7 +83,7 @@ Specific functionality in Dask may require additional optional dependencies.
 For example, reading from Amazon S3 requires ``s3fs``.
 These optional dependencies and their minimum supported versions are listed below.
 
-+-------------+----------+----------------------------------------------------------------+
++---------------+----------+--------------------------------------------------------------+
 | Dependency    | Version  |                          Description                         |
 +===============+==========+==============================================================+
 |     bokeh     | >=1.0.0  |                Visualizing dask diagnostics                  |
