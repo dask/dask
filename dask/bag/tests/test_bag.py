@@ -557,6 +557,20 @@ def test_inline_singleton_lists():
     assert inline_singleton_lists(inp, ["c"]) == inp
 
 
+def test_rename_fused_keys_bag():
+    inp = {"b": (list, "a"), "c": (f, "b", 1)}
+
+    outp = optimize(inp, ["c"], rename_fused_keys=False)
+    assert outp.keys() == {"c"}
+    assert outp["c"][1:] == ("a", 1)
+
+    with dask.config.set({"fuse_rename_keys": False}):
+        assert optimize(inp, ["c"]) == outp
+
+    # By default, fused keys are renamed
+    assert optimize(inp, ["c"]) != outp
+
+
 def test_take():
     assert list(b.take(2)) == [0, 1]
     assert b.take(2) == (0, 1)
