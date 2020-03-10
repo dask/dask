@@ -1041,7 +1041,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
-        self.name = name
+        self.name = str(name)
         meta = meta_from_array(meta, dtype=dtype)
 
         if (
