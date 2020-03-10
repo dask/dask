@@ -717,13 +717,13 @@ def normalize_function(func):
 
 
 def _normalize_function(func):
-    if isinstance(func, curry):
+    if isinstance(func, curry) and hasattr(func, '_partial'):
         func = func._partial
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
         return tuple(normalize_function(f) for f in funcs)
-    elif isinstance(func, partial):
+    elif isinstance(func, (partial, curry)):
         args = tuple(normalize_token(i) for i in func.args)
         if func.keywords:
             kws = tuple(
