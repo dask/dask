@@ -4179,7 +4179,7 @@ class DataFrame(_Frame):
                 axis=axis, dropna=dropna, split_every=split_every
             )
         elif axis == 0:
-            from .multi import concat
+            # from .multi import concat
 
             mode_series_list = []
             for col in self.columns:
@@ -4189,8 +4189,22 @@ class DataFrame(_Frame):
                     )
                 )
 
-            ddf = concat(mode_series_list, axis=1)
+            name = "concat-" + tokenize(*mode_series_list)
 
+            concat_axis1 = partial(methods.concat, axis=1)
+            dsk = {
+                (name, i): (concat_axis1, [(df._name, i) for df in mode_series_list])
+                for i in range(mode_series_list[0].npartitions)
+            }
+
+            meta = methods.concat([df._meta for df in mode_series_list], axis=1)
+
+            graph = HighLevelGraph.from_collections(
+                name, dsk, dependencies=mode_series_list
+            )
+            ddf = new_dd_object(graph, name, meta, mode_series_list[0].divisions)
+
+            # TODO: Clean up everything, make sure mode axis=1 works
             # TODO: Decide if I get globally increasing index
             # # calculate dataframe divisions
             # ddf['index'] = 1
