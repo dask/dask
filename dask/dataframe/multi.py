@@ -924,7 +924,7 @@ def stack_partitions(dfs, divisions, join="outer"):
         if is_dataframe_like(df):
             shared = df._meta.columns.intersection(meta.columns)
             for col in shared:
-                if not df[col].dtype == meta[col].dtype:
+                if df[col].dtype != meta[col].dtype and str(df[col].dtype) != "category":
                     df[col] = df[col].astype(meta[col].dtype)
         if is_series_like(df) and is_series_like(meta):
             if not df.dtype == meta.dtype and str(df.dtype) != "category":
