@@ -81,7 +81,12 @@ from .core import (
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories, is_series_like, asciitable, is_dataframe_like
+from .utils import (
+    strip_unknown_categories,
+    is_series_like,
+    asciitable,
+    is_dataframe_like,
+)
 
 
 def align_partitions(*dfs):
@@ -926,7 +931,10 @@ def stack_partitions(dfs, divisions, join="outer"):
         if is_dataframe_like(df_copy):
             shared = df_copy._meta.columns.intersection(meta.columns)
             for col in shared:
-                if df_copy[col].dtype != meta[col].dtype and str(df_copy[col].dtype) != "category":
+                if (
+                    df_copy[col].dtype != meta[col].dtype
+                    and str(df_copy[col].dtype) != "category"
+                ):
                     df_copy[col] = df_copy[col].astype(meta[col].dtype)
         if is_series_like(df_copy) and is_series_like(meta):
             if not df_copy.dtype == meta.dtype and str(df_copy.dtype) != "category":
