@@ -285,7 +285,7 @@ def test_immutable_attributes():
     to_graphviz(
         dsk,
         function_attributes=attrs_func,
-        datat_attributes=attrs_data,
+        data_attributes=attrs_data,
     )
 
     assert attrs_func_test == attrs_func
