@@ -55,6 +55,7 @@ We proceed with hash joins in the following stages:
 """
 from functools import wraps, partial
 import warnings
+from copy import deepcopy
 
 from toolz import merge_sorted, unique, first
 import numpy as np
@@ -919,29 +920,30 @@ def stack_partitions(dfs, divisions, join="outer"):
     dsk = {}
     i = 0
     for df in dfs:
+        df_copy = deepcopy(df)
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
-        if is_dataframe_like(df):
-            shared = df._meta.columns.intersection(meta.columns)
+        if is_dataframe_like(df_copy):
+            shared = df_copy._meta.columns.intersection(meta.columns)
             for col in shared:
-                if df[col].dtype != meta[col].dtype and str(df[col].dtype) != "category":
-                    df[col] = df[col].astype(meta[col].dtype)
-        if is_series_like(df) and is_series_like(meta):
-            if not df.dtype == meta.dtype and str(df.dtype) != "category":
-                df = df.astype(meta.dtype)
+                if df_copy[col].dtype != meta[col].dtype and str(df_copy[col].dtype) != "category":
+                    df_copy[col] = df_copy[col].astype(meta[col].dtype)
+        if is_series_like(df_copy) and is_series_like(meta):
+            if not df_copy.dtype == meta.dtype and str(df_copy.dtype) != "category":
+                df_copy = df_copy.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
-        dsk.update(df.dask)
+        dsk.update(df_copy.dask)
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
         try:
-            df._meta == meta
+            df_copy._meta == meta
             match = True
         except (ValueError, TypeError):
             match = False
 
-        for key in df.__dask_keys__():
+        for key in df_copy.__dask_keys__():
             if match:
                 dsk[(name, i)] = key
             else:
