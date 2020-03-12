@@ -1655,7 +1655,7 @@ Dask Name: {name}, {task} tasks"""
             return result
 
     @derived_from(pd.DataFrame)
-    def mode(self, axis=0, dropna=True, split_every=False):  # this is the series class
+    def mode(self, axis=0, dropna=True, split_every=False):
         if axis == 1:
             meta = self._meta_nonempty.count(axis=axis)
             result = map_partitions(
@@ -1683,10 +1683,6 @@ Dask Name: {name}, {task} tasks"""
                 .index.to_series()
                 .reset_index(drop=True)
             )
-            mode_series.name = self.name
-
-            # pandas sorts the values #TODO: Determine if I want to do this
-            # mode_series = mode_series.to_frame().set_index(mode_series.name).index.to_series().reset_index(drop=True)
             return mode_series
 
     @derived_from(pd.DataFrame)
@@ -4179,15 +4175,13 @@ class DataFrame(_Frame):
                 axis=axis, dropna=dropna, split_every=split_every
             )
         elif axis == 0:
-            # from .multi import concat
-
             mode_series_list = []
             for col in self.columns:
-                mode_series_list.append(
-                    super(Series, self[col]).mode(
-                        dropna=dropna, split_every=split_every
-                    )
+                mode_series = super(Series, self[col]).mode(
+                    dropna=dropna, split_every=split_every
                 )
+                mode_series.name = col
+                mode_series_list.append(mode_series)
 
             name = "concat-" + tokenize(*mode_series_list)
 
@@ -4198,18 +4192,11 @@ class DataFrame(_Frame):
             }
 
             meta = methods.concat([df._meta for df in mode_series_list], axis=1)
-
             graph = HighLevelGraph.from_collections(
                 name, dsk, dependencies=mode_series_list
             )
             ddf = new_dd_object(graph, name, meta, mode_series_list[0].divisions)
 
-            # TODO: Clean up everything, make sure mode axis=1 works
-            # TODO: Decide if I get globally increasing index
-            # # calculate dataframe divisions
-            # ddf['index'] = 1
-            # ddf['index'] = ddf['index'].cumsum() - 1
-            # ddf = ddf.set_index('index', drop=True)
             return ddf
 
     @derived_from(pd.DataFrame)

@@ -3615,36 +3615,36 @@ def test_dataframe_reductions_arithmetic(reduction):
     )
 
 
-@pytest.mark.filterwarnings("ignore:UserWarning")
+@pytest.mark.filterwarnings()
 def test_dataframe_mode():
-    data = [["ztom", 10, 7], ["bnick", 14, 7], ["xjuli", 14, 5], ["cjames", 10, 10]]
+    data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
 
     df = pd.DataFrame(data, columns=["Name", "Age", "Num"])
     ddf = dd.from_pandas(df, npartitions=3)
 
     # test series with object dtype
-    assert_eq(ddf.Name.mode(), df.Name.mode())
+    assert_eq(
+        ddf.Name.mode().compute().sort_values().reset_index(drop=True), (df.Name.mode())
+    )
 
     # test series with numeric dtype
-    assert_eq(ddf.Name.mode(), df.Name.mode())
+    assert_eq(
+        ddf.Name.mode().compute().sort_values().reset_index(drop=True), df.Name.mode()
+    )
 
     # test dataframe axis=0
-    assert_eq(ddf.mode(), df.mode())
+    dd_result = ddf.mode().compute()
+    pd_result = df.mode()
+    for col in dd_result.columns:
+        dd_sorted = dd_result[col].sort_values().reset_index(drop=True)
+        assert_eq(dd_sorted, pd_result[col])
 
-    # # test dataframe axis=1
-    # d = ddf.mode(axis=1)#.compute() # this line errors during pytest, but not otherwise
-    # p = df.mode(axis=1)
-    # assert assert_eq(d, p)
-
-
-if __name__ == "__main__":
-    data = [["ztom", 10, 7], ["bnick", 14, 7], ["xjuli", 14, 5], ["cjames", 10, 10]]
-
-    df = pd.DataFrame(data, columns=["Name", "Age", "Num"])
-    ddf = dd.from_pandas(df, npartitions=3)
-    d = ddf.mode(axis=1).compute()  # this line errors during pytest, but not otherwise
-    p = df.mode(axis=1)
-    assert d.equals(p)
+    # test dataframe axis=1
+    with pytest.warns(UserWarning):
+        dd_result = ddf.mode(axis=1).compute()
+    with pytest.warns(UserWarning):
+        pd_result = df.mode(axis=1)
+    assert_eq(dd_result, pd_result)
 
 
 def test_datetime_loc_open_slicing():
