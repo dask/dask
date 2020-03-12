@@ -49,7 +49,8 @@ Policy
 
 Work towards *small goals* with *big steps*.
 
-1.  **Small goals**: prefer tasks whose final dependents have few dependencies.
+1.  **Small goals**: prefer tasks that have few total dependents and whose final
+    dependents have few total dependencies.
 
     We prefer to prioritize those tasks that help branches of computation that
     can terminate quickly.
@@ -155,18 +156,21 @@ def order(dsk, dependencies=None):
     def dependents_key(x):
         """ Choose a path from our starting task to our tactical goal
 
-        This path is connected to a large goal, but focuses on completing a small goal.
+        This path is connected to a large goal, but focuses on completing
+        a small goal and being memory efficient.
         """
         return (
+            # Focus on being memory-efficient
             len(dependents[x]) - len(dependencies[x]) + num_needed[x],
             -metrics[x][3],  # min_heights
+            # tie-breaker
             StrComparable(x),
         )
 
     def dependencies_key(x):
         """ Choose which dependency to run as part of a reverse DFS
 
-        This is very similar to both ``initial_stack_key`` and ``dependents_key``.
+        This is very similar to both ``initial_stack_key``.
         """
         num_dependents = len(dependents[x])
         (
@@ -195,8 +199,10 @@ def order(dsk, dependencies=None):
         )
 
     def finish_now_key(x):
+        """ Determine the order of dependents that are ready to run and be released"""
         return (-len(dependencies[x]), StrComparable(x))
 
+    # Computing this for all keys can sometimes be relatively expensive :(
     partition_keys = {
         key: (min_dependencies - total_dependencies[key])
         * (total_dependents - min_heights)
@@ -212,27 +218,53 @@ def order(dsk, dependencies=None):
     result = {}
     i = 0
 
-    # Used to perform a DFS along dependencies.  Once emptied (when traversing dependencies),
-    # this continues (along dependents) along a path from the initial (leaf) node down to a
-    # root node (a tactical goal).  This ensures this root node will get calculated before
-    # we consider any other dependents from `outer_stack_seeds`.
+    # `inner_stask` is used to perform a DFS along dependencies.  Once emptied
+    # (when traversing dependencies), this continue down a path along dependents
+    # until a root node is reached.
+    #
+    # Sometimes, a better path along a dependent is discovered (i.e., something
+    # that is easier to compute and doesn't requiring holding too much in memory).
+    # In this case, the current `inner_stack` is appended to `inner_stacks` and
+    # we begin a new DFS from the better node.
+    #
+    # A "better path" is determined by comparing `partition_keys`.
     inner_stacks = [[min(init_stack, key=initial_stack_key)]]
     inner_stacks_append = inner_stacks.append
     inner_stacks_extend = inner_stacks.extend
     inner_stacks_pop = inner_stacks.pop
 
+    # Okay, now we get to the data structures used for fancy behavior.
+    #
+    # As we traverse nodes in the DFS along dependencies, we partition the dependents
+    # via `partition_key`.  A dependent goes to:
+    #    1) `inner_stack` if it's better than our current target,
+    #    2) `next_nodes` if the partition key is lower than it's parent,
+    #    3) `later_nodes` otherwise.
+    # When the inner stacks are depleted, we process `next_nodes`.  If `next_nodes` is
+    # empty (and `outer_stacks` is empty`), then we process `later_nodes` the same way.
+    # These dicts use `partition_keys` as keys.  We process them by placing the values
+    # in `outer_stack` so that the smallest keys will be processed first.
+    next_nodes = defaultdict(list)
+    later_nodes = defaultdict(list)
+
+    # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
+    # dependents of a node, we group them: one list per partition key per parent node.
+    # This likely results in many small lists.  We do this to avoid sorting many larger
+    # lists (i.e., to avoid n*log(n) behavior).  So, we have many small lists that we
+    # partitioned, and we keep them in the order that we saw them (we will process them
+    # in a FIFO manner).  By delaying sorting for as long as we can, we can first filter
+    # out nodes that have already been computed.  All this complexity is worth it!
     outer_stack = []
     outer_stack_extend = outer_stack.extend
     outer_stack_pop = outer_stack.pop
 
-    next_nodes = defaultdict(list)
-    later_nodes = defaultdict(list)
-
+    # Keep track of nodes that are in `inner_stack` or `inner_stacks` so we don't
+    # process them again.
     seen = set()  # seen in an inner_stack (and has dependencies)
     seen_update = seen.update
     seen_add = seen.add
 
-    # aliases for speed
+    # alias for speed
     set_difference = set.difference
 
     is_init_sorted = False
@@ -271,8 +303,7 @@ def order(dsk, dependencies=None):
                 add_to_inner_stack = True
                 if metrics[item][3] == 1:  # min_height
                     # Don't leave any dangling single nodes!  Finish all dependents that are
-                    # ready and are also root nodes.  Doing this here also lets us continue
-                    # down to a different root node.
+                    # ready and are also root nodes.
                     finish_now = {
                         dep
                         for dep in deps
@@ -299,6 +330,7 @@ def order(dsk, dependencies=None):
                         deps -= already_seen
 
                     if len(deps) == 1:
+                        # Fast path!  We trim down `deps` above hoping to reach here.
                         (dep,) = deps
                         if not inner_stack:
                             if add_to_inner_stack:
@@ -319,11 +351,13 @@ def order(dsk, dependencies=None):
                         else:
                             later_nodes[key].append(deps)
                     else:
+                        # Slow path :(.  This requires grouping by partition_key.
                         dep_pools = defaultdict(list)
                         for dep in deps:
                             dep_pools[partition_keys[dep]].append(dep)
                         item_key = partition_keys[item]
                         if inner_stack:
+                            # If we have an inner_stack, we need to look for a "better" path
                             prev_key = partition_keys[inner_stack[0]]
                             now_keys = []  # < inner_stack[0]
                             for key, vals in dep_pools.items():
@@ -346,6 +380,8 @@ def order(dsk, dependencies=None):
                                     seen_update(pool)
                                 inner_stack = inner_stacks_pop()
                         else:
+                            # If we don't have an inner_stack, then we don't need to look
+                            # for a "better" path, but we do need traverse along dependents.
                             if add_to_inner_stack:
                                 min_key = min(dep_pools)
                                 min_pool = dep_pools[min_key]
@@ -367,24 +403,33 @@ def order(dsk, dependencies=None):
             break  # all done!
 
         if next_nodes:
+            # We partition things into `next_nodes` to avoid large sorts, but what if
+            # `next_nodes` is large?  Answer: shrink it before sorting!
             if len(next_nodes) > 150:
-                # convert to log scale
+                # Convert to log scale.  The partition key is a product of two numbers.
+                # Sometimes the keys can be separated by a large multiple.
+                # Sometimes large keys can be close in magnitude, and it's okay to group those.
                 new_next_nodes = defaultdict(list)
                 for key, vals in next_nodes.items():
                     new_next_nodes[int(10 * log(key + 1))].extend(vals)
                 next_nodes = new_next_nodes
 
                 while len(next_nodes) > 150:
+                    # If it's still large, then continue shrinking
                     denom = len(next_nodes) // 75
                     new_next_nodes = defaultdict(list)
                     for key, vals in next_nodes.items():
                         new_next_nodes[key // denom].extend(vals)
                     next_nodes = new_next_nodes
             for key in sorted(next_nodes, reverse=True):
+                # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
+                # Since we pop things off of it (onto `inner_nodes`), this means we handle
+                # multiple `next_nodes` in a LIFO manner.
                 outer_stack_extend(reversed(next_nodes[key]))
             next_nodes = defaultdict(list)
 
         while outer_stack:
+            # Try to add a few items to `inner_stacks`
             deps = [x for x in outer_stack_pop() if x not in result]
             if deps:
                 if 1 < len(deps) < 100:
@@ -397,6 +442,8 @@ def order(dsk, dependencies=None):
             continue
 
         if later_nodes:
+            # You know all those dependents with large keys we've been hanging onto to run "later"?
+            # Well, "later" has finally come.
             next_nodes, later_nodes = later_nodes, next_nodes
             continue
 
