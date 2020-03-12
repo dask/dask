@@ -211,7 +211,8 @@ def read_parquet(
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
+    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options,
+                                      protocol="dask")
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
@@ -367,7 +368,8 @@ def to_parquet(
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
+    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options,
+                                  protocol="dask")
     # Trim any protocol information from the path before forwarding
     path = fs._strip_protocol(path)
 
