@@ -861,12 +861,8 @@ def merge_asof(
 
 
 def concat_and_check(dfs):
-    # if len(set(map(len, dfs))) != 1:
-    #     raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, axis=1)
-
-
-def concat_nocheck(dfs):
+    if len(set(map(len, dfs))) != 1:
+        raise ValueError("Concatenated DataFrames of different lengths")
     return methods.concat(dfs, axis=1)
 
 
