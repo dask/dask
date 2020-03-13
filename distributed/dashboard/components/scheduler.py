@@ -412,7 +412,10 @@ class BandwidthWorkers(DashboardComponent):
                 return
 
             def name(address):
-                ws = self.scheduler.workers[address]
+                try:
+                    ws = self.scheduler.workers[address]
+                except KeyError:
+                    return address
                 if ws.name is not None:
                     return str(ws.name)
                 else:
