@@ -1675,7 +1675,6 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
                 chunk_kwargs={"dropna": dropna},
             )
-
             max_val = value_count_series.max(skipna=dropna)
             mode_series = (
                 value_count_series[value_count_series == max_val]
