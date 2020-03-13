@@ -47,8 +47,6 @@ dependencies:
   - python-snappy
   - cachey
   - python-graphviz
+  - python-xxhash
+  - mmh3
   - pip
-  - pip:
-      # - cityhash
-      - mmh3
-      - xxhash
