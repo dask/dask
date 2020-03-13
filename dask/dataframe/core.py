@@ -1669,7 +1669,6 @@ Dask Name: {name}, {task} tasks"""
             )
             return result
         else:
-
             value_count_series = self.reduction(
                 chunk=M.value_counts,
                 aggregate=M.sum,
