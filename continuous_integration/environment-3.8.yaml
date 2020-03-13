@@ -51,6 +51,6 @@ dependencies:
   - pandas-datareader
   - pip
   - pip:
-      - cityhash
+      # - cityhash
       - mmh3
       - xxhash

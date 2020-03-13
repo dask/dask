@@ -49,6 +49,6 @@ dependencies:
   - python-graphviz
   - pip
   - pip:
-      - cityhash
+      # - cityhash
       - mmh3
       - xxhash
