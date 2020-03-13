@@ -32,13 +32,13 @@ jobs:
             conda install -c conda-forge tornado=5
           fi
 
-      - name: List packages in environment
-        shell: bash -l {0}
-        run: conda list
-
       - name: Install distributed from source
         shell: bash -l {0}
         run: python -m pip install -q --no-deps -e .
+
+      - name: List packages in environment
+        shell: bash -l {0}
+        run: conda list
 
       - name: Run tests
         shell: bash -l {0}

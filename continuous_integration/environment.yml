@@ -1,10 +1,9 @@
 name: testenv
 channels:
-  - defaults
   - conda-forge
 dependencies:
   - zstandard
-  - bokeh
+  - bokeh=1.4.0
   - click
   - cloudpickle
   - dask
