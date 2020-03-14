@@ -39,6 +39,7 @@ extensions = [
 
 numpydoc_show_class_members = False
 
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
@@ -382,7 +383,7 @@ extlinks = {
 # and the Numpy documentation.
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "numpy": ("http://docs.scipy.org/doc/numpy", None),
+    "numpy": ("https://docs.scipy.org/doc/numpy", None),
 }
 
 # Redirects

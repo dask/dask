@@ -1,8 +1,9 @@
+# We pin numpydoc to avoid doubly-escaped *args and **kwargs in rendered docs
+numpydoc==0.8.0
 tornado
 toolz
 cloudpickle
 dask
-numpydoc
 sphinx
 dask_sphinx_theme
 sphinx-click
