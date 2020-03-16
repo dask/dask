@@ -119,11 +119,14 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
-            pf = ParquetFile(
-                paths, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-            )
             if "_metadata" not in fns:
+                paths_use = paths
                 fast_metadata = False
+            else:
+                paths_use = base + fs.sep + "_metadata"
+            pf = ParquetFile(
+                paths_use, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
+            )
         else:
             if "_metadata" in fns:
                 # We have a _metadata file, lets use it
@@ -177,11 +180,12 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             parts = paths.copy()
     else:
         # There is only one file to read
+        base = None
         pf = ParquetFile(
             paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
         )
 
-    return parts, pf, gather_statistics, fast_metadata
+    return parts, pf, gather_statistics, fast_metadata, base
 
 
 class FastParquetEngine(Engine):
@@ -199,7 +203,7 @@ class FastParquetEngine(Engine):
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below).
-        parts, pf, gather_statistics, fast_metadata = _determine_pf_parts(
+        parts, pf, gather_statistics, fast_metadata, base_path = _determine_pf_parts(
             fs, paths, gather_statistics, **kwargs
         )
 
@@ -284,7 +288,6 @@ class FastParquetEngine(Engine):
                 meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
             elif meta.index.name == catcol:
                 meta.index = meta.index.set_categories(pf.cats[catcol])
-
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
@@ -346,21 +349,50 @@ class FastParquetEngine(Engine):
         # if we have a list of files and gather_statistics=False
         if not parts:
             partsin = pf.row_groups
-            if fast_metadata:
-                pf = (paths, gather_statistics)
+            partitions = pf.info.get("partitions", None)
+            if partitions and not fast_metadata:
+                pf_deps = pf
+            else:
+                pf_deps = (paths, gather_statistics)
         else:
+            partitions = None
+            pf_deps = None
             partsin = parts
-            pf = None
         parts = []
+        i_path = 0
+        path_last = None
+        if base_path:
+            base_path = base_path + fs.sep
+        else:
+            base_path = ""
         for i, piece in enumerate(partsin):
-            if pf and not fast_metadata:
-                for col in piece.columns:
-                    col.meta_data.statistics = None
-                    col.meta_data.encoding_stats = None
-            piece_item = i if pf else piece
+            file_path = paths
+            if (
+                pf_deps
+                and isinstance(piece.columns[0].file_path, str)
+                and not partitions
+            ):
+                path_curr = piece.columns[0].file_path
+                if path_last and path_curr == path_last:
+                    i_path += 1
+                else:
+                    i_path = 0
+                    path_last = path_curr
+                file_path = [base_path + piece.columns[0].file_path]
+            else:
+                file_path = paths
+                i_path = i
+            piece_item = i_path if pf_deps else piece
+            pf_piece = pf_deps
+            if pf_deps:
+                pf_piece = (
+                    (file_path, gather_statistics)
+                    if isinstance(pf_deps, tuple)
+                    else pf_deps
+                )
             part = {
                 "piece": piece_item,
-                "kwargs": {"pf": pf, "categories": categories_dict or categories},
+                "kwargs": {"pf": pf_piece, "categories": categories_dict or categories},
             }
             parts.append(part)
 
