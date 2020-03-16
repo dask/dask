@@ -348,13 +348,24 @@ class FastParquetEngine(Engine):
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         if not parts:
+            # Populate `partsin` with dataset row-groups
             partsin = pf.row_groups
             partitions = pf.info.get("partitions", None)
             if partitions and not fast_metadata:
+                # We have partitions, and do not have
+                # a "_metadata" file for the worker to read.
+                # Therefore, we need to pass the pf object in
+                # the task graph
                 pf_deps = pf
             else:
+                # We don't need to pass a pf object in the task graph.
+                # Instead, we can pass the path for each part. Start
+                # with `paths`, since the worker can find `_metadata`
+                # from there if `partitions=True`
                 pf_deps = (paths, gather_statistics)
         else:
+            # `parts` is just a list of path names.
+            # No tricky logic necessary
             partitions = None
             pf_deps = None
             partsin = parts
