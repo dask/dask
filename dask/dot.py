@@ -130,7 +130,7 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
+    graph_attr=None,
     node_attr=None,
     edge_attr=None,
     collapse_outputs=False,
@@ -141,6 +141,8 @@ def to_graphviz(
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
+    if graph_attr is None:
+        graph_attr = {}
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
