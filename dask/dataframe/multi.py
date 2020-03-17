@@ -338,7 +338,12 @@ def single_partition_join(left, right, **kwargs):
         else:
             divisions = [None for _ in right.divisions]
 
-    elif right.npartitions == 1 and kwargs["how"] in ("inner", "left"):
+    elif right.npartitions == 1 and kwargs["how"] in (
+        "inner",
+        "left",
+        "leftsemi",
+        "leftanti",
+    ):
         right_key = first(right.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
@@ -475,11 +480,12 @@ def merge(
         )
 
     # Single partition on one side
+    # Note that cudf supports "leftsemi" and "leftanti" joins
     elif (
         left.npartitions == 1
         and how in ("inner", "right")
         or right.npartitions == 1
-        and how in ("inner", "left")
+        and how in ("inner", "left", "leftsemi", "leftanti")
     ):
         return single_partition_join(
             left,
