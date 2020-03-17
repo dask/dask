@@ -57,7 +57,7 @@ from functools import wraps, partial
 import warnings
 from copy import deepcopy
 
-from toolz import merge_sorted, unique, first
+from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dtype_equal

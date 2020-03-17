@@ -2,7 +2,7 @@ import operator
 from numbers import Number
 
 import numpy as np
-import toolz
+import tlz as toolz
 
 from ..base import tokenize, wait
 from ..blockwise import blockwise

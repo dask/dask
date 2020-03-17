@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from toolz import partial
+from functools import partial
 
 from ..utils import derived_from
 

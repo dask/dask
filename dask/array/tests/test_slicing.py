@@ -2,7 +2,7 @@ import itertools
 from operator import getitem
 
 import pytest
-from toolz import merge
+from tlz import merge
 
 np = pytest.importorskip("numpy")
 

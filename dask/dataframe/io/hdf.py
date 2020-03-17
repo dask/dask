@@ -5,7 +5,7 @@ import uuid
 from warnings import warn
 
 import pandas as pd
-from toolz import merge
+from tlz import merge
 
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes  # noqa

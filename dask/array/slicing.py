@@ -7,7 +7,7 @@ import functools
 import bisect
 
 import numpy as np
-from toolz import memoize, merge, pluck, concat, accumulate
+from tlz import memoize, merge, pluck, concat, accumulate
 
 from .. import core
 from ..highlevelgraph import HighLevelGraph

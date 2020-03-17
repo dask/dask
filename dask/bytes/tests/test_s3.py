@@ -1,6 +1,7 @@
 import io
 import os
 from contextlib import contextmanager
+from functools import partial
 from distutils.version import LooseVersion
 
 import pytest
@@ -12,7 +13,7 @@ boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto")
 httpretty = pytest.importorskip("httpretty")
 
-from toolz import concat, valmap, partial
+from tlz import concat, valmap
 
 from dask import compute
 from dask.bytes.core import read_bytes, open_files

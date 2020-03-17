@@ -1,6 +1,6 @@
 from collections import defaultdict
 import pandas as pd
-from toolz import partition_all
+from tlz import partition_all
 from numbers import Integral
 
 from ..base import tokenize, compute_as_if_collection

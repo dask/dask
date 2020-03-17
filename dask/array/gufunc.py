@@ -1,10 +1,7 @@
 import numpy as np
 import re
 
-try:
-    from cytoolz import concat, merge, unique
-except ImportError:
-    from toolz import concat, merge, unique
+from tlz import concat, merge, unique
 
 from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
 from .utils import meta_from_array
