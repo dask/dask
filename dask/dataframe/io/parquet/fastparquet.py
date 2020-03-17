@@ -372,7 +372,11 @@ class FastParquetEngine(Engine):
         i_path = 0
         path_last = None
         for i, piece in enumerate(partsin):
-            if (
+            if partitions and fast_metadata:
+                # We can pass a "_metadata" path
+                file_path = base_path + "_metadata"
+                i_path = i
+            elif (
                 pf_deps
                 and isinstance(piece.columns[0].file_path, str)
                 and not partitions
@@ -384,14 +388,12 @@ class FastParquetEngine(Engine):
                 else:
                     i_path = 0
                     path_last = path_curr
-                file_path = base_path + piece.columns[0].file_path
+                file_path = base_path + path_curr
             else:
                 # We cannot pass a specific file/part path
                 file_path = paths
                 i_path = i
-            if partitions and fast_metadata:
-                # We can pass a "_metadata" path
-                file_path = base_path + "_metadata"
+
             piece_item = i_path if pf_deps else piece
             pf_piece = pf_deps
             if pf_deps:
