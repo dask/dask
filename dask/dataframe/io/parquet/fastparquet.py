@@ -344,35 +344,55 @@ class FastParquetEngine(Engine):
         pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
         pf.fmd.row_groups = None
 
+        # Constructing `piece` and `pf` for each dask partition. We will
+        # need to consider the following output scenarios:
+        #
+        #  1) Each `piece` is a file path, and `pf` is `None`
+        #      - `gather_statistics==False` and no "_metadata" available
+        #  2) Each `piece` is a row-group index, and `pf` is ParquetFile object
+        #      - We have parquet partitions and no "_metadata" available
+        #  3) Each `piece` is a row-group index, and `pf` is a `tuple`
+        #      - The value of the 0th tuple element depends on the following:
+        #      A) Dataset is partitioned and "_metadata" exists
+        #          - 0th tuple element will be the path to "_metadata"
+        #      B) Dataset is not partitioned
+        #          - 0th tuple element will be the path to the data
+        #      C) Dataset is partitioned and "_metadata" does not exist
+        #          - 0th tuple element will be the original `paths` argument
+        #            (We will let the workers use `_determine_pf_parts`)
+
         # Create `parts`
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
         base_path = (base_path or "") + fs.sep
-        if not parts:
+        if parts:
+            # Case (1)
+            # `parts` is just a list of path names.
+            partitions = None
+            pf_deps = None
+            partsin = parts
+        else:
             # Populate `partsin` with dataset row-groups
             partsin = pf.row_groups
             partitions = pf.info.get("partitions", None)
             if partitions and not fast_metadata:
+                # Case (2)
                 # We have partitions, and do not have
                 # a "_metadata" file for the worker to read.
                 # Therefore, we need to pass the pf object in
                 # the task graph
                 pf_deps = pf
             else:
+                # Case (3)
                 # We don't need to pass a pf object in the task graph.
                 # Instead, we can try to pass the path for each part.
                 pf_deps = "tuple"
-        else:
-            # `parts` is just a list of path names.
-            # No tricky logic necessary
-            partitions = None
-            pf_deps = None
-            partsin = parts
         parts = []
         i_path = 0
         path_last = None
         for i, piece in enumerate(partsin):
             if partitions and fast_metadata:
+                # Case (3A)
                 # We can pass a "_metadata" path
                 file_path = base_path + "_metadata"
                 i_path = i
@@ -381,6 +401,7 @@ class FastParquetEngine(Engine):
                 and isinstance(piece.columns[0].file_path, str)
                 and not partitions
             ):
+                # Case (3B)
                 # We can pass a specific file/part path
                 path_curr = piece.columns[0].file_path
                 if path_last and path_curr == path_last:
@@ -390,9 +411,17 @@ class FastParquetEngine(Engine):
                     path_last = path_curr
                 file_path = base_path + path_curr
             else:
+                # Case (3C)
                 # We cannot pass a specific file/part path
                 file_path = paths
                 i_path = i
+
+            # Strip down pf object
+            if pf_deps and pf_deps != "tuple":
+                # Case (2) -- Not sure if this helps (TODO)
+                for col in piece.columns:
+                    col.meta_data.statistics = None
+                    col.meta_data.encoding_stats = None
 
             piece_item = i_path if pf_deps else piece
             pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
