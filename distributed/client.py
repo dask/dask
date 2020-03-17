@@ -30,10 +30,8 @@ from dask.optimization import SubgraphCallable
 from dask.compatibility import apply
 from dask.utils import ensure_dict, format_bytes, funcname
 
-try:
-    from cytoolz import first, groupby, merge, valmap, keymap
-except ImportError:
-    from toolz import first, groupby, merge, valmap, keymap
+from tlz import first, groupby, merge, valmap, keymap
+
 try:
     from dask.delayed import single_key
 except ImportError:

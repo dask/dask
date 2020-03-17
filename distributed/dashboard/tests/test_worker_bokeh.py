@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("bokeh")
 import sys
-from toolz import first
+from tlz import first
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 

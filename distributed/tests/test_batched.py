@@ -2,7 +2,7 @@ import asyncio
 import random
 
 import pytest
-from toolz import assoc
+from tlz import assoc
 
 from distributed.batched import BatchedSend
 from distributed.core import listen, connect, CommClosedError

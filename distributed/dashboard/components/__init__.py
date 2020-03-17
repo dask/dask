@@ -26,7 +26,6 @@ from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 import dask
 from tornado import gen
-import toolz
 
 from distributed.dashboard.utils import without_property_validation, BOKEH_VERSION
 from distributed import profile

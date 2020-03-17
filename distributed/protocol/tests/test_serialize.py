@@ -4,7 +4,7 @@ import pickle
 import msgpack
 import numpy as np
 import pytest
-from toolz import identity
+from tlz import identity
 
 from distributed import wait
 from distributed.protocol import (

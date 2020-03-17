@@ -2,7 +2,7 @@ import collections
 import math
 
 from tornado.ioloop import IOLoop
-import toolz
+import tlz as toolz
 
 from ..metrics import time
 from ..utils import parse_timedelta, PeriodicCallback

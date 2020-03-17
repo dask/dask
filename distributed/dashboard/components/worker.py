@@ -20,7 +20,7 @@ from bokeh.plotting import figure
 from bokeh.palettes import RdBu
 from bokeh.themes import Theme
 from dask.utils import format_bytes
-from toolz import merge, partition_all
+from tlz import merge, partition_all
 
 from distributed.dashboard.components import add_periodic_callback
 from distributed.dashboard.components.shared import (

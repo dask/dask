@@ -1,7 +1,7 @@
 import concurrent.futures as cf
 import weakref
 
-from toolz import merge
+from tlz import merge
 
 from tornado import gen
 

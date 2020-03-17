@@ -3,7 +3,7 @@ from collections import defaultdict
 import logging
 from timeit import default_timer
 
-from toolz import groupby, valmap
+from tlz import groupby, valmap
 
 from .plugin import SchedulerPlugin
 from ..utils import key_split, key_split_group, log_errors, tokey

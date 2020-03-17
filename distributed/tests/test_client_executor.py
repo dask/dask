@@ -11,7 +11,7 @@ from concurrent.futures import (
 )
 
 import pytest
-from toolz import take
+from tlz import take
 
 from distributed import Client
 from distributed.utils import CancelledError

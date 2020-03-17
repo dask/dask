@@ -12,7 +12,7 @@ except ImportError:  # Python 2.7 fix
 
 from threading import Thread
 
-from toolz import merge
+from tlz import merge
 
 from tornado import gen
 

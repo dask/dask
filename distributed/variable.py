@@ -3,10 +3,7 @@ from collections import defaultdict
 import logging
 import uuid
 
-try:
-    from cytoolz import merge
-except ImportError:
-    from toolz import merge
+from tlz import merge
 
 from .client import Future, _get_global_client, Client
 from .utils import tokey, log_errors, TimeoutError, ignoring

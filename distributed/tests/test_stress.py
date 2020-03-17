@@ -6,7 +6,7 @@ import asyncio
 
 from dask import delayed
 import pytest
-from toolz import concat, sliding_window
+from tlz import concat, sliding_window
 
 from distributed import Client, wait, Nanny
 from distributed.config import config

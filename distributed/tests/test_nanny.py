@@ -9,7 +9,7 @@ import multiprocessing as mp
 import numpy as np
 
 import pytest
-from toolz import valmap, first
+from tlz import valmap, first
 from tornado import gen
 from tornado.ioloop import IOLoop
 

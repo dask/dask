@@ -22,7 +22,7 @@ from distributed.proctitle import (
 )
 from distributed.utils import deserialize_for_cli, import_term
 
-from toolz import valmap
+from tlz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
 
 logger = logging.getLogger("distributed.dask_worker")

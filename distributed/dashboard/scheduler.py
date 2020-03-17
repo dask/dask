@@ -8,10 +8,7 @@ import logging
 import dask
 from dask.utils import format_bytes
 
-try:
-    from cytoolz import merge, merge_with
-except ImportError:
-    from toolz import merge, merge_with
+from tlz import merge, merge_with
 
 from tornado import escape
 from tornado.websocket import WebSocketHandler

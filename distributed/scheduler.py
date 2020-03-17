@@ -19,11 +19,18 @@ import weakref
 import psutil
 import sortedcontainers
 
-try:
-    from cytoolz import frequencies, merge, pluck, merge_sorted, first, merge_with
-except ImportError:
-    from toolz import frequencies, merge, pluck, merge_sorted, first, merge_with
-from toolz import valmap, second, compose, groupby
+from tlz import (
+    frequencies,
+    merge,
+    pluck,
+    merge_sorted,
+    first,
+    merge_with,
+    valmap,
+    second,
+    compose,
+    groupby,
+)
 from tornado.ioloop import IOLoop
 
 import dask

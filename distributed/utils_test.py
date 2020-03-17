@@ -32,7 +32,7 @@ except ImportError:
 import pytest
 
 import dask
-from toolz import merge, memoize, assoc
+from tlz import merge, memoize, assoc
 from tornado import gen, queues
 from tornado.ioloop import IOLoop
 

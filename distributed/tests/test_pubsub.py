@@ -3,7 +3,7 @@ from time import sleep
 
 import pytest
 from tornado import gen
-import toolz
+import tlz as toolz
 
 from distributed import Pub, Sub, wait, get_worker, TimeoutError
 from distributed.utils_test import gen_cluster

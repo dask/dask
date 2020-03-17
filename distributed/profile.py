@@ -31,7 +31,7 @@ import sys
 import threading
 from time import sleep
 
-import toolz
+import tlz as toolz
 
 from .metrics import time
 from .utils import format_time, color_of, parse_timedelta

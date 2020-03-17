@@ -1,7 +1,7 @@
 import pytest
 import sys
 import time
-from toolz import first
+from tlz import first
 import threading
 
 from distributed.compatibility import WINDOWS

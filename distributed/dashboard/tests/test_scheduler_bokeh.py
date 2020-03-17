@@ -7,7 +7,7 @@ from time import sleep
 import pytest
 
 pytest.importorskip("bokeh")
-from toolz import first
+from tlz import first
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
@@ -624,7 +624,7 @@ def test_proxy_to_workers(c, s, a, b):
     },
 )
 async def test_lots_of_tasks(c, s, a, b):
-    import toolz
+    import tlz as toolz
 
     ts = TaskStream(s)
     ts.update()

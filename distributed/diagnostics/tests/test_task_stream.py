@@ -2,7 +2,7 @@ import os
 from time import sleep
 
 import pytest
-from toolz import frequencies
+from tlz import frequencies
 
 from distributed import get_task_stream
 from distributed.utils_test import gen_cluster, div, inc, slowinc

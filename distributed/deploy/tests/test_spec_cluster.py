@@ -8,7 +8,7 @@ from distributed.deploy.spec import close_clusters, ProcessInterface, run_spec
 from distributed.metrics import time
 from distributed.utils_test import loop, cleanup  # noqa: F401
 from distributed.utils import is_valid_xml
-import toolz
+import tlz as toolz
 import pytest
 
 

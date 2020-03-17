@@ -10,7 +10,7 @@ import weakref
 
 import dask
 import tblib
-from toolz import merge
+from tlz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop
 

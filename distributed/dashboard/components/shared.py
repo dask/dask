@@ -15,7 +15,7 @@ from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 import dask
 from tornado import gen
-import toolz
+import tlz as toolz
 
 from distributed.dashboard.components import DashboardComponent
 from distributed.dashboard.utils import (

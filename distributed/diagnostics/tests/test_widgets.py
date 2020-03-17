@@ -74,7 +74,7 @@ def record_display(*args):
 from operator import add
 import re
 
-from toolz import valmap
+from tlz import valmap
 
 from distributed.client import wait
 from distributed.worker import dumps_task

@@ -5,18 +5,14 @@ from numbers import Number
 import bokeh
 from bokeh.io import curdoc
 from tornado import web
-from toolz import partition
+from tlz import partition
+from tlz.curried import first
 
 try:
     import numpy as np
 except ImportError:
     np = False
 
-
-try:
-    from cytoolz.curried import first
-except ImportError:
-    from toolz.curried import first
 
 BOKEH_VERSION = LooseVersion(bokeh.__version__)
 dirname = os.path.dirname(__file__)

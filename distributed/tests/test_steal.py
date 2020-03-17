@@ -6,7 +6,7 @@ from time import sleep
 import weakref
 
 import pytest
-from toolz import sliding_window, concat
+from tlz import sliding_window, concat
 from tornado import gen
 
 import dask

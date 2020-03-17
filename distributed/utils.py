@@ -47,7 +47,7 @@ from dask.utils import (  # noqa
     parse_timedelta,
 )
 
-import toolz
+import tlz as toolz
 import tornado
 from tornado import gen
 from tornado.ioloop import IOLoop

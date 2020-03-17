@@ -3,7 +3,7 @@ import logging
 import os
 
 from bokeh.themes import Theme
-from toolz import merge
+from tlz import merge
 
 from .components.worker import (
     status_doc,

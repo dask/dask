@@ -3,7 +3,7 @@ import random
 from time import sleep
 
 import pytest
-from toolz import partition_all, first
+from tlz import partition_all, first
 from tornado import gen
 
 from dask import delayed

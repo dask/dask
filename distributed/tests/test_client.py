@@ -1,5 +1,6 @@
 import asyncio
 from collections import deque
+from functools import partial
 import gc
 import logging
 from operator import add
@@ -18,7 +19,7 @@ import weakref
 import zipfile
 
 import pytest
-from toolz import identity, isdistinct, concat, pluck, valmap, partial, first, merge
+from tlz import identity, isdistinct, concat, pluck, valmap, first, merge
 from tornado import gen
 
 import dask

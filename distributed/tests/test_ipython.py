@@ -1,7 +1,7 @@
 from unittest import mock
 
 import pytest
-from toolz import first
+from tlz import first
 import tornado
 
 from distributed import Client

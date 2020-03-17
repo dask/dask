@@ -8,7 +8,7 @@ import random
 from dask.optimization import SubgraphCallable
 import dask.config
 from dask.utils import parse_timedelta
-from toolz import merge, concat, groupby, drop
+from tlz import merge, concat, groupby, drop
 
 from .core import rpc
 from .utils import All, tokey

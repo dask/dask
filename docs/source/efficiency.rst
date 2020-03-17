@@ -67,7 +67,7 @@ A common solution is to batch your input into larger chunks.
    >>> def f_many(chunk):
    ...     return [f(x) for x in chunk]
 
-   >>> from toolz import partition_all
+   >>> from tlz import partition_all
    >>> chunks = partition_all(1000000, seq)  # Collect into groups of size 1000
 
    >>> futures = client.map(f_many, chunks)

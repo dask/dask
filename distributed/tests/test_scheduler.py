@@ -12,7 +12,7 @@ import logging
 
 import dask
 from dask import delayed
-from toolz import merge, concat, valmap, first, frequencies
+from tlz import merge, concat, valmap, first, frequencies
 from tornado import gen
 
 import pytest

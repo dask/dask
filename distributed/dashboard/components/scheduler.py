@@ -35,7 +35,8 @@ from bokeh.transform import factor_cmap, linear_cmap
 from bokeh.io import curdoc
 import dask
 from dask.utils import format_bytes, key_split
-from toolz import pipe
+from tlz import pipe
+from tlz.curried import map, concat, groupby
 from tornado import escape
 
 try:
@@ -62,11 +63,6 @@ from distributed.utils import log_errors, format_time, parse_timedelta
 from distributed.diagnostics.progress_stream import color_of, progress_quads
 from distributed.diagnostics.graph_layout import GraphLayout
 from distributed.diagnostics.task_stream import TaskStreamPlugin
-
-try:
-    from cytoolz.curried import map, concat, groupby
-except ImportError:
-    from toolz.curried import map, concat, groupby
 
 if dask.config.get("distributed.dashboard.export-tool"):
     from distributed.dashboard.export_tool import ExportTool

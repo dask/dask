@@ -1,6 +1,6 @@
 import logging
 
-from toolz import valmap, merge
+from tlz import valmap, merge
 
 from .progress import AllProgress
 

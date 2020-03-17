@@ -4,7 +4,7 @@ from timeit import default_timer
 import sys
 import weakref
 
-from toolz import valmap
+from tlz import valmap
 from tornado.ioloop import IOLoop
 
 from .progress import format_time, Progress, MultiProgress

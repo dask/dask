@@ -1,12 +1,8 @@
+from functools import reduce
 import logging
 import operator
 
 import msgpack
-
-try:
-    from cytoolz import reduce
-except ImportError:
-    from toolz import reduce
 
 from .compression import compressions, maybe_compress, decompress
 from .serialize import serialize, deserialize, Serialize, Serialized, extract_serialize

@@ -9,10 +9,7 @@ from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
 from .utils import log_errors, parse_timedelta, PeriodicCallback
 
-try:
-    from cytoolz import topk
-except ImportError:
-    from toolz import topk
+from tlz import topk
 
 LATENCY = 10e-3
 log_2 = log(2)

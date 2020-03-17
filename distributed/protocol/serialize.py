@@ -4,10 +4,7 @@ import traceback
 import dask
 from dask.base import normalize_token
 
-try:
-    from cytoolz import valmap, get_in
-except ImportError:
-    from toolz import valmap, get_in
+from tlz import valmap, get_in
 
 import msgpack
 
