@@ -395,11 +395,7 @@ class FastParquetEngine(Engine):
                 i_path = i
 
             piece_item = i_path if pf_deps else piece
-            pf_piece = pf_deps
-            if pf_deps:
-                pf_piece = (
-                    (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
-                )
+            pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
             part = {
                 "piece": piece_item,
                 "kwargs": {"pf": pf_piece, "categories": categories_dict or categories},
