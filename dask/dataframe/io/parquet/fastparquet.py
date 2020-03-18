@@ -344,14 +344,14 @@ class FastParquetEngine(Engine):
         pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
         pf.fmd.row_groups = None
 
-        # Constructing `piece` and `pf` for each dask partition. We will
+        # Constructing "piece" and "pf" for each dask partition. We will
         # need to consider the following output scenarios:
         #
-        #  1) Each `piece` is a file path, and `pf` is `None`
+        #  1) Each "piece" is a file path, and "pf" is `None`
         #      - `gather_statistics==False` and no "_metadata" available
-        #  2) Each `piece` is a row-group index, and `pf` is ParquetFile object
+        #  2) Each "piece" is a row-group index, and "pf" is ParquetFile object
         #      - We have parquet partitions and no "_metadata" available
-        #  3) Each `piece` is a row-group index, and `pf` is a `tuple`
+        #  3) Each "piece" is a row-group index, and "pf" is a `tuple`
         #      - The value of the 0th tuple element depends on the following:
         #      A) Dataset is partitioned and "_metadata" exists
         #          - 0th tuple element will be the path to "_metadata"
@@ -368,16 +368,16 @@ class FastParquetEngine(Engine):
         if parts:
             # Case (1)
             # `parts` is just a list of path names.
-            partitions = None
+            pqpartitions = None
             pf_deps = None
             partsin = parts
         else:
             # Populate `partsin` with dataset row-groups
             partsin = pf.row_groups
-            partitions = pf.info.get("partitions", None)
-            if partitions and not fast_metadata:
+            pqpartitions = pf.info.get("partitions", None)
+            if pqpartitions and not fast_metadata:
                 # Case (2)
-                # We have partitions, and do not have
+                # We have parquet partitions, and do not have
                 # a "_metadata" file for the worker to read.
                 # Therefore, we need to pass the pf object in
                 # the task graph
@@ -387,23 +387,27 @@ class FastParquetEngine(Engine):
                 # We don't need to pass a pf object in the task graph.
                 # Instead, we can try to pass the path for each part.
                 pf_deps = "tuple"
+
         parts = []
         i_path = 0
         path_last = None
-        for i, piece in enumerate(partsin):
-            if partitions and fast_metadata:
+
+        # Loop over DataFrame partitions.
+        # Each `part` will be a row-group or path ()
+        for i, part in enumerate(partsin):
+            if pqpartitions and fast_metadata:
                 # Case (3A)
                 # We can pass a "_metadata" path
                 file_path = base_path + "_metadata"
                 i_path = i
             elif (
                 pf_deps
-                and isinstance(piece.columns[0].file_path, str)
-                and not partitions
+                and isinstance(part.columns[0].file_path, str)
+                and not pqpartitions
             ):
                 # Case (3B)
                 # We can pass a specific file/part path
-                path_curr = piece.columns[0].file_path
+                path_curr = part.columns[0].file_path
                 if path_last and path_curr == path_last:
                     i_path += 1
                 else:
@@ -418,18 +422,19 @@ class FastParquetEngine(Engine):
 
             # Strip down pf object
             if pf_deps and pf_deps != "tuple":
-                # Case (2) -- Not sure if this helps (TODO)
-                for col in piece.columns:
+                # Case (2)
+                for col in part.columns:
                     col.meta_data.statistics = None
                     col.meta_data.encoding_stats = None
 
-            piece_item = i_path if pf_deps else piece
+            # Final definition of "piece" and "pf" for this output partition
+            piece = i_path if pf_deps else part
             pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
-            part = {
-                "piece": piece_item,
+            part_item = {
+                "piece": piece,
                 "kwargs": {"pf": pf_piece, "categories": categories_dict or categories},
             }
-            parts.append(part)
+            parts.append(part_item)
 
         return (meta, stats, parts)
 
