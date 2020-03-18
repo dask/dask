@@ -1106,7 +1106,10 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
     ddftest = dd.from_pandas(dftest, npartitions=4).set_index("dummy")
     ddftest.to_parquet(tmpdir, partition_on="DatePart", engine=write_engine)
     ddftest_read = dd.read_parquet(
-        tmpdir, engine=read_engine, filters=[(("DatePart", "<=", "2018-01-02"))]
+        tmpdir,
+        index="dummy",
+        engine=read_engine,
+        filters=[(("DatePart", "<=", "2018-01-02"))],
     )
     assert len(ddftest_read) == 2
 
@@ -2262,3 +2265,32 @@ def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
 
     ddf = dd.read_parquet(path, engine=engine)
     a, b = dask.optimize(ddf["A"], ddf)
+
+
+@pytest.mark.parametrize("gather_statistics", [None, True])
+@write_read_engines_xfail
+def test_filter_nonpartition_columns(
+    tmpdir, write_engine, read_engine, gather_statistics
+):
+    tmpdir = str(tmpdir)
+    df_write = pd.DataFrame(
+        {
+            "id": [1, 2, 3, 4] * 4,
+            "time": np.arange(16),
+            "random": np.random.choice(["cat", "dog"], size=16),
+        }
+    )
+    ddf_write = dd.from_pandas(df_write, npartitions=4)
+    ddf_write.to_parquet(
+        tmpdir, write_index=False, partition_on=["id"], engine=write_engine
+    )
+    ddf_read = dd.read_parquet(
+        tmpdir,
+        index=False,
+        engine=read_engine,
+        gather_statistics=gather_statistics,
+        filters=[(("time", "<", 5))],
+    )
+    df_read = ddf_read.compute()
+    assert len(df_read) == len(df_read[df_read["time"] < 5])
+    assert df_read["time"].max() < 5

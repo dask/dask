@@ -145,11 +145,16 @@ class ArrowEngine(Engine):
             partitions = [
                 n for n in dataset.partitions.partition_names if n is not None
             ]
-            if partitions:
-                # Dont use dataset.metadata if row-groups dont match pieces
-                if dataset.metadata.num_row_groups != len(dataset.pieces):
-                    dataset.schema = dataset.metadata.schema
-                    dataset.metadata = None
+            if partitions and dataset.metadata:
+                # Dont use dataset.metadata for partitioned datasets.
+                # The order of dataset.metadata.row_group items is often
+                # different than the order of `dataset.pieces`.
+                # TODO: Improve `_metadata` construction to include
+                #       correct "file_path" metadata. That would allow us
+                #       to reorder the row_groups (to align with `pieces`)
+                #       before filtering.
+                dataset.schema = dataset.metadata.schema
+                dataset.metadata = None
         else:
             partitions = []
 
@@ -491,7 +496,6 @@ class ArrowEngine(Engine):
             preserve_index = True
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
-            # TODO: Customize filename (so we can call `set_file_path`)
             pq.write_to_dataset(
                 t,
                 path,
