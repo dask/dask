@@ -6,7 +6,7 @@ import os
 import warnings
 
 import numpy as np
-from toolz import frequencies, concat
+from tlz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph

@@ -1,6 +1,114 @@
 Changelog
 =========
 
+2.12.0 / 2020-03-06
+-------------------
+
+Array
++++++
+
+- Improve reuse of temporaries with numpy (:pr:`5933`) `Bruce Merry`_
+- Make ``map_blocks`` with ``block_info`` produce a ``Blockwise`` (:pr:`5896`) `Bruce Merry`_
+- Optimize ``make_blockwise_graph`` (:pr:`5940`) `Bruce Merry`_
+- Fix axes ordering in ``da.tensordot`` (:pr:`5975`) `Gil Forsyth`_
+- Adds empty mode to ``array.pad`` (:pr:`5931`) `Thomas J Fan`_
+
+Core
+++++
+
+- Remove ``toolz.memoize`` dependency in ``dask.utils`` (:pr:`5978`) `Ryan Grout`_
+- Close pool leaking subprocess (:pr:`5979`) `Tom Augspurger`_
+- Pin ``numpydoc`` to ``0.8.0`` (fix double autoescape) (:pr:`5961`) `Gil Forsyth`_
+- Register deterministic tokenization for ``range`` objects (:pr:`5947`) `James Bourbeau`_
+- Unpin ``msgpack`` in CI (:pr:`5930`) `JAmes Bourbeau`_
+- Ensure dot results are placed in unique files. (:pr:`5937`) `Elliott Sales de Andrade`_
+- Add remaining optional dependencies to Travis 3.8 CI build environment (:pr:`5920`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+- Skip parquet ``getitem`` optimization for some keys (:pr:`5917`) `Tom Augspurger`_
+- Add ``ignore_index`` argument to ``rearrange_by_column`` code path (:pr:`5973`) `Richard J Zamora`_
+- Add DataFrame and Series ``memory_usage_per_partition`` methods (:pr:`5971`) `James Bourbeau`_
+- ``xfail`` test_describe when using Pandas 0.24.2 (:pr:`5948`) `James Bourbeau`_
+- Implement ``dask.dataframe.to_numeric`` (:pr:`5929`) `Julia Signell`_
+- Add new error message content when columns are in a different order (:pr:`5927`) `Julia Signell`_
+- Use shallow copy for assign operations when possible (:pr:`5740`) `Richard J Zamora`_
+
+Documentation
++++++++++++++
+
+- Changed above to below in ``dask.array.triu`` docs (:pr:`5984`) `Henrik Andersson`_
+- Array slicing: fix typo in ``slice_with_int_dask_array`` error message (:pr:`5981`) `Gabe Joseph`_
+- Grammar and formatting updates to docstrings (:pr:`5963`) `James Lamb`_
+- Update develop doc with conda option (:pr:`5939`) `Ray Bell`_
+- Update title of DataFrame extension docs (:pr:`5954`) `James Bourbeau`_
+- Fixed typos in documentation (:pr:`5962`) `James Lamb`_
+- Add original class or module as a ``kwarg`` on ``_bind_*`` methods (:pr:`5946`) `Julia Signell`_
+- Add collect list example (:pr:`5938`) `Ray Bell`_
+- Update optimization doc for python 3 (:pr:`5926`) `Julia Signell`_
+
+
+2.11.0 / 2020-02-19
+-------------------
+
+Array
++++++
+
+- Cache result of ``Array.shape`` (:pr:`5916`) `Bruce Merry`_
+- Improve accuracy of ``estimate_graph_size`` for ``rechunk`` (:pr:`5907`) `Bruce Merry`_
+- Skip rechunk steps that do not alter chunking (:pr:`5909`) `Bruce Merry`_
+- Support ``dtype`` and other ``kwargs`` in ``coarsen`` (:pr:`5903`) `Matthew Rocklin`_
+- Push chunk override from ``map_blocks`` into blockwise (:pr:`5895`) `Bruce Merry`_
+- Avoid using ``rewrite_blockwise`` for a singleton (:pr:`5890`) `Bruce Merry`_
+- Optimize ``slices_from_chunks`` (:pr:`5891`) `Bruce Merry`_
+- Avoid unnecessary ``__getitem__`` in ``block()`` when chunks have correct dimensionality (:pr:`5884`) `Thomas Robitaille`_
+
+Bag
++++
+
+- Add ``include_path`` option for ``dask.bag.read_text`` (:pr:`5836`) `Yifan Gu`_
+- Fixes ``ValueError`` in delayed execution of bagged NumPy array (:pr:`5828`) `Surya Avala`_
+
+Core
+++++
+
+- CI: Pin ``msgpack`` (:pr:`5923`) `Tom Augspurger`_
+- Rename ``test_inner`` to ``test_outer`` (:pr:`5922`) `Shiva Raisinghani`_
+- ``quote`` should quote dicts too (:pr:`5905`) `Bruce Merry`_
+- Register a normalizer for literal (:pr:`5898`) `Bruce Merry`_
+- Improve layer name synthesis for non-HLGs (:pr:`5888`) `Bruce Merry`_
+- Replace flake8 pre-commit-hook with upstream (:pr:`5892`) `Julia Signell`_
+- Call pip as a module to avoid warnings (:pr:`5861`) `Cyril Shcherbin`_
+- Close ``ThreadPool`` at exit (:pr:`5852`) `Tom Augspurger`_
+- Remove ``dask.dataframe`` import in tokenization code (:pr:`5855`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+- Require ``pandas>=0.23`` (:pr:`5883`) `Tom Augspurger`_
+- Remove lambda from dataframe aggregation (:pr:`5901`) `Matthew Rocklin`_
+- Fix exception chaining in ``dataframe/__init__.py`` (:pr:`5882`) `Ram Rachum`_
+- Add support for reductions on empty dataframes (:pr:`5804`) `Shiva Raisinghani`_
+- Expose ``sort=`` argument for groupby (:pr:`5801`) `Richard J Zamora`_
+- Add ``df.empty`` property (:pr:`5711`) `rockwellw`_
+- Use parquet read speed-ups from ``fastparquet.api.paths_to_cats``. (:pr:`5821`) `Igor Gotlibovych`_
+
+Documentation
++++++++++++++
+
+- Deprecate ``doc_wraps`` (:pr:`5912`) `Tom Augspurger`_
+- Update array internal design docs for HighLevelGraph era (:pr:`5889`) `Bruce Merry`_
+- Move over dashboard connection docs (:pr:`5877`) `Matthew Rocklin`_
+- Move prometheus docs from distributed.dask.org (:pr:`5876`) `Matthew Rocklin`_
+- Removing duplicated DO block at the end (:pr:`5878`) `K.-Michael Aye`_
+- ``map_blocks`` see also (:pr:`5874`) `Tom Augspurger`_
+- More derived from (:pr:`5871`) `Julia Signell`_
+- Fix typo (:pr:`5866`) `Yetunde Dada`_
+- Fix typo in ``cloud.rst`` (:pr:`5860`) `Andrew Thomas`_
+- Add note pointing to code of conduct and diversity statement (:pr:`5844`) `Matthew Rocklin`_
+
+
 2.10.1 / 2020-01-30
 -------------------
 
@@ -2875,3 +2983,17 @@ Other
 .. _`Chris Roat`: https://github.com/ChrisRoat
 .. _`H. Thomson Comer`: https://github.com/thomcom
 .. _`Gerrit Holl`: https://github.com/gerritholl
+.. _`Thomas Robitaille`: https://github.com/astrofrog
+.. _`Yifan Gu`: https://github.com/gyf304
+.. _`Surya Avala`: https://github.com/suryaavala
+.. _`Cyril Shcherbin`: https://github.com/shcherbin
+.. _`Ram Rachum`: https://github.com/cool-RR
+.. _`Igor Gotlibovych`: https://github.com/ig248
+.. _`K.-Michael Aye`: https://github.com/michaelaye
+.. _`Yetunde Dada`: https://github.com/yetudada
+.. _`Andrew Thomas`: https://github.com/amcnicho
+.. _`rockwellw`: https://github.com/rockwellw
+.. _`Gil Forsyth`: https://github.com/gforsyth
+.. _`Thomas J Fan`: https://github.com/thomasjpfan
+.. _`Henrik Andersson`: https://github.com/hnra
+.. _`James Lamb`: https://github.com/jameslamb

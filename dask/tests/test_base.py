@@ -6,7 +6,7 @@ import sys
 import time
 from collections import OrderedDict
 
-from toolz import merge
+from tlz import merge
 
 import dask
 from dask import delayed
@@ -25,6 +25,7 @@ from dask.base import (
     named_schedulers,
     get_scheduler,
 )
+from dask.core import literal
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -37,7 +38,7 @@ def import_or_none(path):
     return None
 
 
-tz = pytest.importorskip("toolz")
+tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
 db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
@@ -393,6 +394,13 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+def test_tokenize_range():
+    assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
+    assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 15, 2))  # Different stop
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 10, 1))  # Different step
+
+
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
     a = np.array([u"foo", u"Jos\xe9", np.nan], dtype="O")
@@ -404,6 +412,10 @@ def test_tokenize_object_array_with_nans():
 )
 def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
+
+
+def test_tokenize_literal():
+    assert tokenize(literal(["x", 1])) == tokenize(literal(["x", 1]))
 
 
 @pytest.mark.skipif("not np")

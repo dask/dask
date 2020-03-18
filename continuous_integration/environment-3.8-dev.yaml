@@ -1,23 +1,20 @@
+# This job tests against upstream dev
 name: test-environment
 channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.6.*
-  - numpy=1.15.*
-  - pandas=0.23.*
+  - python=3.8.*
+  # For the dependencies. These will be re-installed later.
+  - numpy
+  - pandas
   # test dependencies
   - pytest
   - pytest-xdist
   - moto
-  - coverage
-  - codecov
-  # Issue with conda package for NumPy 1.15?
-  # See fastparquet-444
-  # - fastparquet
+  - fastparquet
   - h5py
   - pytables
-  - fsspec==0.6.0
   - zarr
   - tiledb-py
   - sqlalchemy
@@ -26,6 +23,7 @@ dependencies:
   - bcolz
   - blosc
   - s3fs
+  - fsspec>=0.6.0
   - boto3
   - botocore
   - bokeh
@@ -34,7 +32,7 @@ dependencies:
   - cloudpickle
   - crick
   - cytoolz
-  - distributed==2.0.1
+  - distributed
   - graphviz
   - ipython
   - lz4
@@ -47,10 +45,8 @@ dependencies:
   - scipy
   - toolz
   - python-snappy
-  - sparse
   - cachey
   - python-graphviz
-  - pandas-datareader
+  - python-xxhash
   - mmh3
-  - xxhash
   - pip

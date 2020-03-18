@@ -1,6 +1,6 @@
 from distutils.version import LooseVersion
 
-import toolz
+import tlz as toolz
 import warnings
 from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
@@ -31,7 +31,7 @@ class ParquetSubgraph(Mapping):
     """
     Subgraph for reading Parquet files.
 
-    Enables optimiziations (see optimize_read_parquet_getitem).
+    Enables optimizations (see optimize_read_parquet_getitem).
     """
 
     def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):

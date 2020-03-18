@@ -304,6 +304,31 @@ def test_tensordot_2(axes):
     assert_eq(da.tensordot(y, y, axes=axes), np.tensordot(x, x, axes=axes))
 
 
+@pytest.mark.parametrize("chunks", ["auto", (4, 6), (2, 3), (4, 3), (2, 6)])
+def test_tensordot_double_contraction_neq2(chunks):
+    # Regression test for https://github.com/dask/dask/issues/5472
+    x = np.arange(24).reshape(4, 6)
+    y = da.from_array(x, chunks=chunks)
+    assert_eq(da.tensordot(y, y, axes=2), np.tensordot(x, x, axes=2))
+
+
+def test_tensordot_double_contraction_ngt2():
+    # Regression test for https://github.com/dask/dask/issues/5472
+    x = np.arange(60.0).reshape(3, 4, 5)
+    y = np.arange(60.0).reshape(4, 5, 3)
+    u = da.from_array(x)
+    v = da.from_array(y)
+
+    assert_eq(da.tensordot(u, v, axes=2), np.tensordot(x, y, axes=2))
+
+    x = np.arange(60.0).reshape(3, 4, 5)
+    y = np.arange(60.0).reshape(4, 5, 3)
+    u = da.from_array(x, chunks=3)
+    v = da.from_array(y)
+
+    assert_eq(da.tensordot(u, v, axes=2), np.tensordot(x, y, axes=2))
+
+
 def test_tensordot_more_than_26_dims():
     ndim = 27
     x = np.broadcast_to(1, [2] * ndim)
@@ -339,7 +364,7 @@ def test_vdot(shape, chunks):
 
 
 @pytest.mark.parametrize("shape1, shape2", [((20,), (6,)), ((4, 5), (2, 3))])
-def test_inner(shape1, shape2):
+def test_outer(shape1, shape2):
     np.random.random(1337)
 
     x = 2 * np.random.random(shape1) - 1
@@ -1390,6 +1415,10 @@ def test_coarsen():
     )
     assert_eq(
         da.chunk.coarsen(np.sum, x, {0: 2, 1: 4}), da.coarsen(da.sum, d, {0: 2, 1: 4})
+    )
+    assert_eq(
+        da.chunk.coarsen(np.mean, x, {0: 2, 1: 4}, dtype="float32"),
+        da.coarsen(da.mean, d, {0: 2, 1: 4}, dtype="float32"),
     )
 
 

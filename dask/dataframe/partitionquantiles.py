@@ -73,7 +73,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_datetime64tz_dtype
 
-from toolz import merge, merge_sorted, take
+from tlz import merge, merge_sorted, take
 
 from ..utils import random_state_data
 from ..base import tokenize

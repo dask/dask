@@ -289,10 +289,20 @@ Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
 
-To build the documentation locally, first install the necessary requirements::
+To build the documentation locally, clone this repository and install 
+the necessary requirements using ``pip`` or ``conda``::
 
-   cd docs/
-   python -m pip install -r requirements-docs.txt
+  git clone https://github.com/dask/dask.git
+  cd dask/docs
+
+``pip``::
+
+  python -m pip install -r requirements-docs.txt
+
+``conda``::
+
+  conda create -n daskdocs -c conda-forge --file requirements-docs.txt
+  conda activate daskdocs
 
 Then build the documentation with ``make``::
 

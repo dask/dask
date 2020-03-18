@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_ns_dtype
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_100
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_VERSION
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
@@ -548,6 +548,10 @@ def test_scalar_arithmetics_with_dask_instances():
     assert_eq(result, pdf + e)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION >= "1.0.2",
+    reason="https://github.com/pandas-dev/pandas/issues/32685",
+)
 def test_frame_series_arithmetic_methods():
     pdf1 = pd.DataFrame(
         {
@@ -1346,3 +1350,20 @@ def test_moment():
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(stats.moment(ddf, 2, 0), scipy.stats.moment(df, 2, 0))
+
+
+@pytest.mark.parametrize("func", ["sum", "count", "mean", "var", "sem"])
+def test_empty_df_reductions(func):
+    pdf = pd.DataFrame()
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    dsk_func = getattr(ddf.__class__, func)
+    pd_func = getattr(pdf.__class__, func)
+
+    assert_eq(dsk_func(ddf), pd_func(pdf))
+
+    idx = pd.date_range("2000", periods=4)
+    pdf = pd.DataFrame(index=idx)
+    ddf = dd.from_pandas(pdf, npartitions=1)
+
+    assert_eq(dsk_func(ddf), pd_func(pdf))

@@ -3,7 +3,7 @@ from functools import wraps
 from numbers import Number
 
 import numpy as np
-from toolz import merge, merge_sorted
+from tlz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize

@@ -13,8 +13,8 @@ from operator import add, sub, getitem
 from threading import Lock
 import warnings
 
-from toolz import merge, countby, concat
-from toolz.curried import identity
+from tlz import merge, countby, concat
+from tlz.curried import identity
 
 import dask
 import dask.array as da
@@ -45,7 +45,11 @@ from dask.array.core import (
     common_blockdim,
     concatenate_axes,
 )
-from dask.blockwise import make_blockwise_graph as top, broadcast_dimensions
+from dask.blockwise import (
+    make_blockwise_graph as top,
+    broadcast_dimensions,
+    optimize_blockwise,
+)
 from dask.array.utils import assert_eq, same_keys
 
 from numpy import nancumsum, nancumprod
@@ -1370,6 +1374,14 @@ def test_map_blocks_with_kwargs():
     assert_eq(result, np.array([4, 9]))
 
 
+def test_map_blocks_infer_chunks_broadcast():
+    dx = da.from_array([[1, 2, 3, 4]], chunks=((1,), (2, 2)))
+    dy = da.from_array([[10, 20], [30, 40]], chunks=((1, 1), (2,)))
+    result = da.map_blocks(lambda x, y: x + y, dx, dy)
+    assert result.chunks == ((1, 1), (2, 2),)
+    assert_eq(result, np.array([[11, 22, 13, 24], [31, 42, 33, 44]]))
+
+
 def test_map_blocks_with_chunks():
     dx = da.ones((5, 3), chunks=(2, 2))
     dy = da.ones((5, 3), chunks=(2, 2))
@@ -1419,6 +1431,19 @@ def test_map_blocks_no_array_args():
     x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
     assert x.chunks == ((5, 3),)
     assert_eq(x, np.arange(8, dtype=np.float32))
+
+
+@pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
+def test_map_blocks_optimize_blockwise(func):
+    # Check that map_blocks layers can merge with elementwise layers
+    base = [da.full((1,), i, chunks=1) for i in range(4)]
+    a = base[0] + base[1]
+    b = da.map_blocks(func, a, base[2], dtype=np.int8)
+    c = b + base[3]
+    dsk = c.__dask_graph__()
+    optimized = optimize_blockwise(dsk)
+    # The two additions and the map_blocks should be fused together
+    assert len(optimized.layers) == len(dsk.layers) - 2
 
 
 def test_repr():
@@ -2872,6 +2897,9 @@ def test_map_blocks_with_changed_dimension():
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
+
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=1), chunks=((3, 4),), drop_axis=1)
 
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)

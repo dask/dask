@@ -12,7 +12,7 @@ import dask.array as da
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_0230, PANDAS_GT_100
+from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
@@ -42,6 +42,27 @@ def test_dataframe_doc():
     doc = d.add.__doc__
     disclaimer = "Some inconsistencies with the Dask version may exist."
     assert disclaimer in doc
+
+
+def test_dataframe_doc_from_non_pandas():
+    class Foo:
+        def foo(self):
+            """This is a new docstring that I just made up
+
+            Parameters:
+            ----------
+            None
+            """
+
+    d._bind_operator_method("foo", Foo.foo, original=Foo)
+    try:
+        doc = d.foo.__doc__
+        disclaimer = "Some inconsistencies with the Dask version may exist."
+        assert disclaimer in doc
+        assert "new docstring that I just made up" in doc
+    finally:
+        # make sure to clean up this alteration of the dd.DataFrame class
+        del dd.DataFrame.foo
 
 
 def test_Dataframe():
@@ -351,6 +372,10 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION == "0.24.2",
+    reason="Known bug in Pandas. See https://github.com/pandas-dev/pandas/issues/24011.",
+)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -1577,11 +1602,19 @@ def test_random_partitions():
     assert isinstance(a, dd.DataFrame)
     assert isinstance(b, dd.DataFrame)
     assert a._name != b._name
+    np.testing.assert_array_equal(a.index, sorted(a.index))
 
     assert len(a.compute()) + len(b.compute()) == len(full)
     a2, b2 = d.random_split([0.5, 0.5], 42)
     assert a2._name == a._name
     assert b2._name == b._name
+
+    a, b = d.random_split([0.5, 0.5], 42, True)
+    a2, b2 = d.random_split([0.5, 0.5], 42, True)
+    assert_eq(a, a2)
+    assert_eq(b, b2)
+    with pytest.raises(AssertionError):
+        np.testing.assert_array_equal(a.index, sorted(a.index))
 
     parts = d.random_split([0.4, 0.5, 0.1], 42)
     names = set([p._name for p in parts])
@@ -1777,7 +1810,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
     assert_eq(a, b, check_divisions=False)
-    assert np.alltrue(b.map_partitions(total_mem_usage).compute() <= 1024)
+    assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
 
@@ -2119,10 +2152,7 @@ def test_select_dtypes(include, exclude):
 
     if not PANDAS_GT_100:
         # removed in pandas 1.0
-        if PANDAS_GT_0230:
-            ctx = pytest.warns(FutureWarning)
-        else:
-            ctx = pytest.warns(None)
+        ctx = pytest.warns(FutureWarning)
 
         with ctx:
             tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
@@ -3590,6 +3620,34 @@ def test_memory_usage(index, deep):
         df.x.memory_usage(index=index, deep=deep)
         == ddf.x.memory_usage(index=index, deep=deep).compute()
     )
+
+
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("deep", [True, False])
+def test_memory_usage_per_partition(index, deep):
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4, 5],
+            "y": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "z": ["a", "b", "c", "d", "e"],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # DataFrame.memory_usage_per_partition
+    expected = pd.Series(
+        part.compute().memory_usage(index=index, deep=deep).sum()
+        for part in ddf.partitions
+    )
+    result = ddf.memory_usage_per_partition(index=index, deep=deep)
+    assert_eq(expected, result)
+
+    # Series.memory_usage_per_partition
+    expected = pd.Series(
+        part.x.compute().memory_usage(index=index, deep=deep) for part in ddf.partitions
+    )
+    result = ddf.x.memory_usage_per_partition(index=index, deep=deep)
+    assert_eq(expected, result)
 
 
 @pytest.mark.parametrize(

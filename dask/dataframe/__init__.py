@@ -29,6 +29,7 @@ try:
         to_json,
         read_fwf,
     )
+    from .numeric import to_numeric
     from .optimize import optimize
     from .multi import merge, concat, merge_asof
     from . import rolling, backends
@@ -52,4 +53,4 @@ except ImportError as e:
         "  conda install dask                     # either conda install\n"
         "  python -m pip install dask[dataframe] --upgrade  # or python -m pip install"
     )
-    raise ImportError(str(e) + "\n\n" + msg)
+    raise ImportError(msg) from e

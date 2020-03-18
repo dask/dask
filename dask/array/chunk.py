@@ -2,7 +2,7 @@
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 
-from toolz import concat
+from tlz import concat
 import numpy as np
 from . import numpy_compat as npcompat
 
@@ -86,7 +86,7 @@ with ignoring(AttributeError):
     nanstd = np.nanstd
 
 
-def coarsen(reduction, x, axes, trim_excess=False):
+def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     """ Coarsen array by applying reduction to fixed size neighborhoods
 
     Parameters
@@ -140,7 +140,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     # (10, 10) -> (5, 2, 5, 2)
     newshape = tuple(concat([(x.shape[i] // axes[i], axes[i]) for i in range(x.ndim)]))
 
-    return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim * 2, 2)))
+    return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim * 2, 2)), **kwargs)
 
 
 def trim(x, axes=None):

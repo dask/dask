@@ -22,7 +22,6 @@ from pandas.api.types import (
 # include these here for compat
 from ._compat import (  # noqa: F401
     PANDAS_VERSION,
-    PANDAS_GT_0230,
     PANDAS_GT_0240,
     PANDAS_GT_0250,
     PANDAS_GT_100,
@@ -478,7 +477,7 @@ group_split_dispatch = Dispatch("group_split_dispatch")
 
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def group_split_pandas(df, c, k):
+def group_split_pandas(df, c, k, ignore_index=False):
     indexer, locations = pd._libs.algos.groupsort_indexer(c, k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
@@ -639,10 +638,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             typename(type(x)),
         )
     elif is_dataframe_like(meta):
-        kwargs = dict()
-        if PANDAS_VERSION >= "0.23.0":
-            kwargs["sort"] = True
-        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, **kwargs)
+        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, sort=True)
         bad_dtypes = [
             (col, a, b)
             for col, a, b in dtypes.fillna("-").itertuples()
@@ -675,11 +671,14 @@ def check_matching_columns(meta, actual):
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
         extra = actual.columns.difference(meta.columns).tolist()
         missing = meta.columns.difference(actual.columns).tolist()
+        if extra or missing:
+            extra_info = f"  Extra:   {extra}\n  Missing: {missing}"
+        else:
+            extra_info = "Order of columns does not match"
         raise ValueError(
             "The columns in the computed data do not match"
             " the columns in the provided metadata\n"
-            "  Extra:   %s\n"
-            "  Missing: %s" % (extra, missing)
+            f"{extra_info}"
         )
 
 
@@ -785,7 +784,7 @@ def assert_eq(
     check_dtypes=True,
     check_divisions=True,
     check_index=True,
-    **kwargs
+    **kwargs,
 ):
     if check_divisions:
         assert_divisions(a)

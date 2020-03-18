@@ -15,7 +15,7 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_datetime64_any_dtype,
 )
-from toolz import merge, first, unique, partition_all, remove
+from tlz import merge, first, unique, partition_all, remove
 
 try:
     from chest import Chest as Cache
@@ -77,7 +77,7 @@ no_default = "__no_default__"
 pd.set_option("compute.use_numexpr", False)
 
 
-def _concat(args):
+def _concat(args, ignore_index=False):
     if not args:
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
@@ -92,7 +92,11 @@ def _concat(args):
     # Ideally this would be handled locally for each operation, but in practice
     # this seems easier. TODO: don't do this.
     args2 = [i for i in args if len(i)]
-    return args[0] if not args2 else methods.concat(args2, uniform=True)
+    return (
+        args[0]
+        if not args2
+        else methods.concat(args2, uniform=True, ignore_index=ignore_index)
+    )
 
 
 def finalize(results):
@@ -744,6 +748,29 @@ Dask Name: {name}, {task} tasks"""
 
         return map_overlap(func, self, before, after, *args, **kwargs)
 
+    def memory_usage_per_partition(self, index=True, deep=False):
+        """ Return the memory usage of each partition
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index in
+            returned Series.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            ``object`` dtypes for system-level memory consumption, and include
+            it in the returned values.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the parition number and whose values
+            are the memory usage of each partition in bytes.
+        """
+        return self.map_partitions(
+            total_mem_usage, index=index, deep=deep
+        ).clear_divisions()
+
     @insert_meta_param_description(pad=12)
     def reduction(
         self,
@@ -904,16 +931,19 @@ Dask Name: {name}, {task} tasks"""
         else:
             return func(self, *args, **kwargs)
 
-    def random_split(self, frac, random_state=None):
+    def random_split(self, frac, random_state=None, shuffle=False):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
         Parameters
         ----------
         frac : list
             List of floats that should sum to one.
-        random_state: int or np.random.RandomState
-            If int create a new RandomState with this as the seed
-        Otherwise draw from the passed RandomState
+        random_state : int or np.random.RandomState
+            If int create a new RandomState with this as the seed.
+            Otherwise draw from the passed RandomState.
+        shuffle : bool, default False
+            If set to True, the dataframe is shuffled (within partition)
+            before the split.
 
         Examples
         --------
@@ -936,7 +966,7 @@ Dask Name: {name}, {task} tasks"""
         token = tokenize(self, frac, random_state)
         name = "split-" + token
         layer = {
-            (name, i): (pd_split, (self._name, i), frac, state)
+            (name, i): (pd_split, (self._name, i), frac, state, shuffle)
             for i, state in enumerate(state_data)
         }
 
@@ -1491,7 +1521,7 @@ Dask Name: {name}, {task} tasks"""
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1641,15 +1671,17 @@ Dask Name: {name}, {task} tasks"""
             )
         else:
             meta = self._meta_nonempty.count()
+
+            # Need the astype(int) for empty dataframes, which sum to float dtype
             result = self.reduction(
                 M.count,
-                aggregate=M.sum,
+                aggregate=_count_aggregate,
                 meta=meta,
                 token=token,
                 split_every=split_every,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     @derived_from(pd.DataFrame)
@@ -1682,7 +1714,7 @@ Dask Name: {name}, {task} tasks"""
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1723,7 +1755,7 @@ Dask Name: {name}, {task} tasks"""
                 result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
     def _var_numeric(self, skipna=True, ddof=1, split_every=False):
@@ -1885,7 +1917,7 @@ Dask Name: {name}, {task} tasks"""
             )
 
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.divisions = (self.columns.min(), self.columns.max())
             return result
 
     def quantile(self, q=0.5, axis=0, method="default"):
@@ -2325,7 +2357,7 @@ Dask Name: {name}, {task} tasks"""
         return self.map_partitions(M.combine_first, other)
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
+    def _bind_operator_method(cls, name, op, original=pd.DataFrame):
         """ bind operator method like DataFrame.add to this class """
         raise NotImplementedError
 
@@ -2944,7 +2976,7 @@ Dask Name: {name}, {task} tasks""".format(
         return self._repr_data().to_string(max_rows=max_rows)
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
+    def _bind_operator_method(cls, name, op, original=pd.Series):
         """ bind operator method like Series.add to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
@@ -2957,10 +2989,10 @@ Dask Name: {name}, {task} tasks""".format(
             )
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.Series)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @classmethod
-    def _bind_comparison_method(cls, name, comparison):
+    def _bind_comparison_method(cls, name, comparison, original=pd.Series):
         """ bind comparison method like Series.eq to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
@@ -2974,7 +3006,7 @@ Dask Name: {name}, {task} tasks""".format(
                 return elemwise(op, self, other, axis=axis)
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.Series)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
@@ -3316,6 +3348,15 @@ class DataFrame(_Frame):
             return super().__len__()
         else:
             return len(s)
+
+    @property
+    def empty(self):
+        raise NotImplementedError(
+            "Checking whether a Dask DataFrame has any rows may be expensive. "
+            "However, checking the number of columns is fast. "
+            "Depending on which of these results you need, use either "
+            "`len(df.index) == 0` or `len(df.columns) == 0`"
+        )
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
@@ -3953,7 +3994,7 @@ class DataFrame(_Frame):
                 yield row
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
+    def _bind_operator_method(cls, name, op, original=pd.DataFrame):
         """ bind operator method like DataFrame.add to this class """
 
         # name must be explicitly passed for div method whose name is truediv
@@ -3999,10 +4040,10 @@ class DataFrame(_Frame):
             )
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.DataFrame)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @classmethod
-    def _bind_comparison_method(cls, name, comparison):
+    def _bind_comparison_method(cls, name, comparison, original=pd.DataFrame):
         """ bind comparison method like DataFrame.eq to this class """
 
         def meth(self, other, axis="columns", level=None):
@@ -4012,7 +4053,7 @@ class DataFrame(_Frame):
             return elemwise(comparison, self, other, axis=axis)
 
         meth.__name__ = name
-        setattr(cls, name, derived_from(pd.DataFrame)(meth))
+        setattr(cls, name, derived_from(original)(meth))
 
     @insert_meta_param_description(pad=12)
     def apply(
@@ -4674,6 +4715,7 @@ def apply_concat_apply(
     split_out=None,
     split_out_setup=None,
     split_out_setup_kwargs=None,
+    sort=None,
     **kwargs
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -4713,6 +4755,8 @@ def apply_concat_apply(
         as is.
     split_out_setup_kwargs : dict, optional
         Keywords for the `split_out_setup` function only.
+    sort : bool, default None
+        If allowed, sort the keys of the output aggregation.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -4829,6 +4873,15 @@ def apply_concat_apply(
         k = part_i + 1
         a = b
         depth += 1
+
+    if sort is not None:
+        if sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarentee sorted keys for `split_out>1`."
+                " Try using split_out=1, or grouping with sort=False."
+            )
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
 
     # Aggregate
     for j in range(split_out):
@@ -5378,25 +5431,31 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
-def pd_split(df, p, random_state=None):
+def pd_split(df, p, random_state=None, shuffle=False):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
     ...                    'b': [2, 3, 4, 5, 6, 7]})
 
-    >>> a, b = pd_split(df, [0.5, 0.5], random_state=123)  # roughly 50/50 split
+    >>> a, b = pd_split(
+    ...     df, [0.5, 0.5], random_state=123, shuffle=True
+    ... )  # roughly 50/50 split
     >>> a
        a  b
-    1  2  3
-    2  3  4
+    3  4  5
+    0  1  2
     5  6  7
     >>> b
        a  b
-    0  1  2
-    3  4  5
+    1  2  3
     4  5  6
+    2  3  4
     """
     p = list(p)
+    if shuffle:
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        df = df.sample(frac=1.0, random_state=random_state)
     index = pseudorandom(len(df), p, random_state)
     return [df.iloc[index == i] for i in range(len(p))]
 
@@ -5631,7 +5690,7 @@ def repartition_size(df, size):
         size = parse_bytes(size)
     size = int(size)
 
-    mem_usages = df.map_partitions(total_mem_usage).compute()
+    mem_usages = df.map_partitions(total_mem_usage, deep=True).compute()
 
     # 1. split each partition that is larger than partition_size
     nsplits = 1 + mem_usages // size
@@ -5652,8 +5711,8 @@ def repartition_size(df, size):
     return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
 
 
-def total_mem_usage(df):
-    mem_usage = df.memory_usage(deep=True)
+def total_mem_usage(df, index=True, deep=False):
+    mem_usage = df.memory_usage(index=index, deep=deep)
     if is_series_like(mem_usage):
         mem_usage = mem_usage.sum()
     return mem_usage
@@ -5903,6 +5962,10 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
         return res[0]
     res.name = None
     return res
+
+
+def _count_aggregate(x):
+    return x.sum().astype("int64")
 
 
 def safe_head(df, n):
