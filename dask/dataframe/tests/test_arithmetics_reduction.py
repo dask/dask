@@ -549,7 +549,7 @@ def test_scalar_arithmetics_with_dask_instances():
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION >= "1.0.2",
+    PANDAS_VERSION == "1.0.2",
     reason="https://github.com/pandas-dev/pandas/issues/32685",
 )
 def test_frame_series_arithmetic_methods():
