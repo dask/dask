@@ -146,7 +146,10 @@ class ArrowEngine(Engine):
                 n for n in dataset.partitions.partition_names if n is not None
             ]
             if partitions:
-                split_row_groups = False
+                # Dont use dataset.metadata if row-groups dont match pieces
+                if dataset.metadata.num_row_groups != len(dataset.pieces):
+                    dataset.schema = dataset.metadata.schema
+                    dataset.metadata = None
         else:
             partitions = []
 
@@ -218,9 +221,6 @@ class ArrowEngine(Engine):
             and dataset.metadata.num_row_groups >= len(pieces)
         ):
             gather_statistics = True
-            # Don't gather stats by default if this is a partitioned dataset
-            if dataset.metadata.num_row_groups != len(pieces) and partitions:
-                gather_statistics = False
         if not pieces:
             gather_statistics = False
 
@@ -491,6 +491,7 @@ class ArrowEngine(Engine):
             preserve_index = True
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
+            # TODO: Customize filename (so we can call `set_file_path`)
             pq.write_to_dataset(
                 t,
                 path,
@@ -499,6 +500,10 @@ class ArrowEngine(Engine):
                 metadata_collector=md_list,
                 **kwargs,
             )
+            if md_list:
+                _meta = md_list[0]
+                for i in range(1, len(md_list)):
+                    _meta.append_row_groups(md_list[i])
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                 pq.write_table(
@@ -509,10 +514,11 @@ class ArrowEngine(Engine):
                     **kwargs,
                 )
             if md_list:
-                md_list[0].set_file_path(filename)
+                _meta = md_list[0]
+                _meta.set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
-            return [{"schema": t.schema, "meta": md_list[0]}]
+            return [{"schema": t.schema, "meta": _meta}]
         else:
             return []
 

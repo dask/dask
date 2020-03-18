@@ -639,7 +639,9 @@ def test_append_with_partition(tmpdir, engine):
         engine=engine,
     )
 
-    out = dd.read_parquet(tmp, engine=engine, gather_statistics=True).compute()
+    out = dd.read_parquet(
+        tmp, engine=engine, index="index", gather_statistics=True
+    ).compute()
     out["lon"] = out.lon.astype("int")  # just to pass assert
     # sort required since partitioning breaks index order
     assert_eq(
