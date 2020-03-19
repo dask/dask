@@ -374,3 +374,17 @@ async def test_profile_nested_sizeof():
 
     msg = {"data": original}
     frames = await to_frames(msg)
+
+
+def test_compression_numpy_list():
+    class MyObj:
+        pass
+
+    @dask_serialize.register(MyObj)
+    def _(x):
+        header = {"compression": [False]}
+        frames = [b""]
+        return header, frames
+
+    header, frames = serialize([MyObj(), MyObj()])
+    assert header["compression"] == [False, False]

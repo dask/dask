@@ -166,10 +166,12 @@ def serialize(x, serializers=None, on_error="message", context=None):
 
         frames = []
         lengths = []
+        compressions = []
         for _header, _frames in headers_frames:
             frames.extend(_frames)
             length = len(_frames)
             lengths.append(length)
+            compressions.extend(_header.get("compression") or [None] * len(_frames))
 
         headers = [obj[0] for obj in headers_frames]
         headers = {
@@ -178,6 +180,8 @@ def serialize(x, serializers=None, on_error="message", context=None):
             "frame-lengths": lengths,
             "type-serialized": type(x).__name__,
         }
+        if any(compression is not None for compression in compressions):
+            headers["compression"] = compressions
         return headers, frames
 
     tb = ""
@@ -436,7 +440,7 @@ def nested_deserialize(x):
 
 def serialize_bytelist(x, **kwargs):
     header, frames = serialize(x, **kwargs)
-    frames = frame_split_size(frames)
+    frames = sum(map(frame_split_size, frames), [])
     if frames:
         compression, frames = zip(*map(maybe_compress, frames))
     else:

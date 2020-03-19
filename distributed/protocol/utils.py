@@ -19,9 +19,9 @@ except TypeError:
     msgpack_opts["encoding"] = "utf-8"
 
 
-def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
+def frame_split_size(frame, n=BIG_BYTES_SHARD_SIZE) -> list:
     """
-    Split a list of frames into a list of frames of maximum size
+    Split a frame into a list of frames of maximum size
 
     This helps us to avoid passing around very large bytestrings.
 
@@ -30,26 +30,21 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
     >>> frame_split_size([b'12345', b'678'], n=3)  # doctest: +SKIP
     [b'123', b'45', b'678']
     """
-    if not frames:
-        return frames
+    if nbytes(frame) <= n:
+        return [frame]
 
-    if max(map(nbytes, frames)) <= n:
-        return frames
+    if nbytes(frame) > n:
+        if isinstance(frame, (bytes, bytearray)):
+            frame = memoryview(frame)
+        try:
+            itemsize = frame.itemsize
+        except AttributeError:
+            itemsize = 1
 
-    out = []
-    for frame in frames:
-        if nbytes(frame) > n:
-            if isinstance(frame, (bytes, bytearray)):
-                frame = memoryview(frame)
-            try:
-                itemsize = frame.itemsize
-            except AttributeError:
-                itemsize = 1
-            for i in range(0, nbytes(frame) // itemsize, n // itemsize):
-                out.append(frame[i : i + n // itemsize])
-        else:
-            out.append(frame)
-    return out
+        return [
+            frame[i : i + n // itemsize]
+            for i in range(0, nbytes(frame) // itemsize, n // itemsize)
+        ]
 
 
 def merge_frames(header, frames):

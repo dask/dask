@@ -88,7 +88,7 @@ def serialize_numpy_ndarray(x):
         header["broadcast_to"] = broadcast_to
 
     if x.nbytes > 1e5:
-        frames = frame_split_size([data])
+        frames = frame_split_size(data)
     else:
         frames = [data]
 
