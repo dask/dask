@@ -60,7 +60,7 @@ from copy import deepcopy
 from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal
+from pandas.api.types import is_dtype_equal, is_categorical_dtype
 
 from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
@@ -933,14 +933,14 @@ def stack_partitions(dfs, divisions, join="outer"):
             for col in shared:
                 if (
                     df[col].dtype != meta[col].dtype
-                    and str(df[col].dtype) != "category"
+                    and not is_categorical_dtype(df[col].dtype)
                 ):
                     if not copied:
                         df = df.copy()
                         copied = True
                     df[col] = df[col].astype(meta[col].dtype)
         if is_series_like(df) and is_series_like(meta):
-            if not df.dtype == meta.dtype and str(df.dtype) != "category":
+            if not df.dtype == meta.dtype and not is_categorical_dtype(df.dtype):
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
