@@ -364,3 +364,10 @@ def test_doc_wraps_deprecated():
         @da.random.doc_wraps(np.random.normal)
         def f():
             pass
+
+
+def test_raises_bad_kwarg():
+    with pytest.raises(Exception) as info:
+        da.random.standard_normal(size=(10,), dtype="float64")
+
+    assert "dtype" in str(info.value)
