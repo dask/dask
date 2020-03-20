@@ -54,7 +54,6 @@ We proceed with hash joins in the following stages:
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 import warnings
-from copy import deepcopy
 from functools import partial, wraps
 
 import numpy as np
