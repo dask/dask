@@ -75,15 +75,13 @@ class RandomState(object):
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
 
-    def _wrap(self, funcname, *args, **kwargs):
+    def _wrap(
+        self, funcname, *args, size=None, chunks="auto", extra_chunks=(), **kwargs
+    ):
         """ Wrap numpy random function to produce dask.array random function
 
         extra_chunks should be a chunks tuple to append to the end of chunks
         """
-        size = kwargs.pop("size", None)
-        chunks = kwargs.pop("chunks", "auto")
-        extra_chunks = kwargs.pop("extra_chunks", ())
-
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
