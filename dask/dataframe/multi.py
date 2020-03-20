@@ -53,39 +53,39 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
-from functools import wraps, partial
 import warnings
 from copy import deepcopy
+from functools import partial, wraps
 
-from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
+from tlz import first, merge_sorted, unique
 
-from ..base import tokenize, is_dask_collection
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import apply
+from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
-    _Frame,
     DataFrame,
-    Series,
-    map_partitions,
     Index,
+    Series,
+    _Frame,
     _maybe_from_pandas,
-    new_dd_object,
     is_broadcastable,
+    map_partitions,
+    new_dd_object,
     prefix_reduction,
     suffix_reduction,
 )
 from .io import from_pandas
-from . import methods
-from .shuffle import shuffle, rearrange_by_divisions
+from .shuffle import rearrange_by_divisions, shuffle
 from .utils import (
-    strip_unknown_categories,
-    is_series_like,
     asciitable,
     is_dataframe_like,
+    is_series_like,
+    strip_unknown_categories,
 )
 
 
@@ -927,13 +927,13 @@ def stack_partitions(dfs, divisions, join="outer"):
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
+        # and https://github.com/dask/dask/issues/5968.
         if is_dataframe_like(df):
             copied = False
             shared = df._meta.columns.intersection(meta.columns)
             for col in shared:
-                if (
-                    df[col].dtype != meta[col].dtype
-                    and not is_categorical_dtype(df[col].dtype)
+                if df[col].dtype != meta[col].dtype and not is_categorical_dtype(
+                    df[col].dtype
                 ):
                     if not copied:
                         df = df.copy()
