@@ -4169,7 +4169,7 @@ class DataFrame(_Frame):
     def mode(self, axis=0, numeric_only=False, dropna=True, split_every=False):
         axis = self._validate_axis(axis)
         if axis == 1:
-            if dropna is False and PANDAS_VERSION >= "0.24.0":
+            if dropna and PANDAS_VERSION >= "0.24.0":
                 return super(DataFrame, self).mode(
                     axis=axis, dropna=dropna, split_every=split_every
                 )
