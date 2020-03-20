@@ -174,7 +174,7 @@ class UCX(Comm):
                 # We synchronize the default stream because UCX is not stream-ordered and
                 #  syncing the default stream will wait for other non-blocking CUDA streams.
                 # Note this is only sufficient if the memory being sent is not currently in use on
-                # non-blocking CUDA streams. 
+                # non-blocking CUDA streams.
                 synchronize_stream(0)
 
                 for frame in frames:
@@ -223,7 +223,9 @@ class UCX(Comm):
                 # It is necessary to first populate `frames` with CUDA arrays and synchronize
                 # the default stream before starting receiving to ensure buffers have been allocated
                 synchronize_stream(0)
-                for i, (is_cuda, size) in enumerate(zip(is_cudas.tolist(), sizes.tolist())):
+                for i, (is_cuda, size) in enumerate(
+                    zip(is_cudas.tolist(), sizes.tolist())
+                ):
                     if size > 0:
                         await self.ep.recv(frames[i])
 
