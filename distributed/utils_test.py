@@ -33,7 +33,7 @@ import pytest
 
 import dask
 from tlz import merge, memoize, assoc
-from tornado import gen, queues
+from tornado import gen
 from tornado.ioloop import IOLoop
 
 from . import system
@@ -429,7 +429,7 @@ async def readone(comm):
     try:
         q = _readone_queues[comm]
     except KeyError:
-        q = _readone_queues[comm] = queues.Queue()
+        q = _readone_queues[comm] = asyncio.Queue()
 
         async def background_read():
             while True:
