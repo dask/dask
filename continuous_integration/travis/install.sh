@@ -33,7 +33,6 @@ conda install -c conda-forge -q \
     click \
     coverage \
     dask \
-    dill \
     flake8 \
     h5py \
     ipykernel \

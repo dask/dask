@@ -7,7 +7,6 @@ dependencies:
   - click
   - cloudpickle
   - dask
-  - dill
   - lz4
   - ipykernel
   - ipywidgets
