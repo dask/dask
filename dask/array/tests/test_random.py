@@ -371,3 +371,11 @@ def test_raises_bad_kwarg():
         da.random.standard_normal(size=(10,), dtype="float64")
 
     assert "dtype" in str(info.value)
+
+
+def test_randomstate_kwargs():
+    cupy = pytest.importorskip("cupy")
+
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.standard_normal((10, 5), dtype=np.float32)
+    assert x.dtype == np.float32
