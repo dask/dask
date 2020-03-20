@@ -17,6 +17,34 @@ def register_cupy():
         return cupy.einsum(*args, **kwargs)
 
 
+@concatenate_lookup.register_lazy("cupyx")
+def register_cupyx():
+
+    from cupyx.scipy.sparse import spmatrix
+
+    try:
+        from cupy.sparse import hstack
+        from cupy.sparse import vstack
+    except ImportError:
+        raise ImportError(
+            "Stacking of sparse arrays requires at least CuPy version 8.0.0"
+        )
+
+    def _concat_cupy_sparse(L, axis=0):
+        if axis == 0:
+            return vstack(L)
+        elif axis == 1:
+            return hstack(L)
+        else:
+            msg = (
+                "Can only concatenate cupy sparse matrices for axis in "
+                "{0, 1}.  Got %s" % axis
+            )
+            raise ValueError(msg)
+
+    concatenate_lookup.register(spmatrix, _concat_cupy_sparse)
+
+
 @tensordot_lookup.register_lazy("sparse")
 @concatenate_lookup.register_lazy("sparse")
 def register_sparse():
