@@ -1658,15 +1658,25 @@ Dask Name: {name}, {task} tasks"""
     def mode(self, axis=0, dropna=True, split_every=False):
         if axis == 1:
             meta = self._meta_nonempty.count(axis=axis)
-            result = map_partitions(
-                M.mode,
-                self,
-                meta=meta,
-                token=self._token_prefix + "mode",
-                axis=axis,
-                dropna=dropna,
-                enforce_metadata=False,
-            )
+            if PANDAS_VERSION <= "0.24.0":
+                result = map_partitions(
+                    M.mode,
+                    self,
+                    meta=meta,
+                    token=self._token_prefix + "mode",
+                    axis=axis,
+                    enforce_metadata=False,
+                )
+            else:
+                result = map_partitions(
+                    M.mode,
+                    self,
+                    meta=meta,
+                    token=self._token_prefix + "mode",
+                    axis=axis,
+                    dropna=dropna,
+                    enforce_metadata=False,
+                )
             return result
         else:
             value_count_series = self.reduction(

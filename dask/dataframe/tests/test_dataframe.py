@@ -3615,7 +3615,6 @@ def test_dataframe_reductions_arithmetic(reduction):
     )
 
 
-@pytest.mark.filterwarnings()
 def test_dataframe_mode():
     data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
 
@@ -3645,6 +3644,10 @@ def test_dataframe_mode():
     with pytest.warns(UserWarning):
         pd_result = df.mode(axis=1)
     assert_eq(dd_result, pd_result)
+
+    if PANDAS_VERSION <= "0.24.0":
+        with pytest.raises(ValueError):
+            ddf.mode(axis=1, dropna=False).compute()
 
 
 def test_datetime_loc_open_slicing():
