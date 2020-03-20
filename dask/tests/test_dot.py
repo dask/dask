@@ -3,6 +3,7 @@ from functools import partial
 import re
 from operator import add, neg
 import sys
+import copy
 import pytest
 
 
@@ -271,3 +272,21 @@ def test_delayed_kwargs_apply():
     label = task_label(x.dask[x.key])
     assert "f" in label
     assert "apply" not in label
+
+
+def test_immutable_attributes():
+    def inc(x):
+        return x + 1
+
+    dsk = {"a": (inc, 1), "b": (inc, 2), "c": (add, "a", "b")}
+    attrs_func = {"a": {}}
+    attrs_data = {"b": {}}
+    attrs_func_test = copy.deepcopy(attrs_func)
+    attrs_data_test = copy.deepcopy(attrs_data)
+
+    to_graphviz(
+        dsk, function_attributes=attrs_func, data_attributes=attrs_data,
+    )
+
+    assert attrs_func_test == attrs_func
+    assert attrs_data_test == attrs_data
