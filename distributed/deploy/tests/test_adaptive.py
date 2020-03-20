@@ -1,3 +1,4 @@
+import math
 from time import sleep
 
 import dask
@@ -415,3 +416,14 @@ async def test_adapt_cores_memory(cleanup):
         )
         assert adapt.minimum == 3
         assert adapt.maximum == 5
+
+
+def test_adaptive_config():
+    with dask.config.set(
+        {"distributed.adaptive.minimum": 10, "distributed.adaptive.wait-count": 8}
+    ):
+        adapt = Adaptive(interval="5s")
+        assert adapt.minimum == 10
+        assert adapt.maximum == math.inf
+        assert adapt.interval == 5
+        assert adapt.wait_count == 8

@@ -74,6 +74,13 @@ distributed:
   deploy:
     lost-worker-timeout: 15s  # Interval after which to hard-close a lost worker job
 
+  adaptive:
+    interval: 1s         # Interval between scaling evaluations
+    target-duration: 5s  # Time an entire graph calculation is desired to take ("1m", "30m")
+    minimum: 0           # Minimum number of workers
+    maximum: .inf        # Maximum number of workers
+    wait-count: 3        # Number of times a worker should be suggested for removal before removing it
+
   comm:
     retry:  # some operations (such as gathering data) are subject to re-tries with the below parameters
       count: 0  # the maximum retry attempts. 0 disables re-trying.
@@ -141,4 +148,3 @@ ucx:
   infiniband: null # enable Infiniband
   cuda_copy: null  # enable cuda-copy
   net-devices: null  # define which Infiniband device to use
-

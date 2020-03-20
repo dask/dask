@@ -1,6 +1,6 @@
 from inspect import isawaitable
 import logging
-import math
+import dask.config
 
 from .adaptive_core import AdaptiveCore
 from ..utils import log_errors, parse_timedelta
@@ -71,22 +71,36 @@ class Adaptive(AdaptiveCore):
     resized. The default implementation checks if there are too many tasks
     per worker or too little memory available (see
     :meth:`Scheduler.adaptive_target`).
+    The values for interval, min, max, wait_count and target_duration can be
+    specified in the dask config under the distributed.adaptive key.
     '''
 
     def __init__(
         self,
         cluster=None,
-        interval="1s",
-        minimum=0,
-        maximum=math.inf,
-        wait_count=3,
-        target_duration="5s",
+        interval=None,
+        minimum=None,
+        maximum=None,
+        wait_count=None,
+        target_duration=None,
         worker_key=None,
         **kwargs
     ):
         self.cluster = cluster
         self.worker_key = worker_key
         self._workers_to_close_kwargs = kwargs
+
+        if interval is None:
+            interval = dask.config.get("distributed.adaptive.interval")
+        if minimum is None:
+            minimum = dask.config.get("distributed.adaptive.minimum")
+        if maximum is None:
+            maximum = dask.config.get("distributed.adaptive.maximum")
+        if wait_count is None:
+            wait_count = dask.config.get("distributed.adaptive.wait-count")
+        if target_duration is None:
+            target_duration = dask.config.get("distributed.adaptive.target-duration")
+
         self.target_duration = parse_timedelta(target_duration)
 
         super().__init__(
