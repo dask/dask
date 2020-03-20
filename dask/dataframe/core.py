@@ -1659,14 +1659,20 @@ Dask Name: {name}, {task} tasks"""
         if axis == 1:
             meta = self._meta_nonempty.count(axis=axis)
             if PANDAS_VERSION <= "0.24.0":
-                result = map_partitions(
-                    M.mode,
-                    self,
-                    meta=meta,
-                    token=self._token_prefix + "mode",
-                    axis=axis,
-                    enforce_metadata=False,
-                )
+                if dropna is False:
+                    raise ValueError(
+                        "The 'dropna' keyword was added in pandas 0.24.0. "
+                        "Your version of pandas is '{}'.".format(PANDAS_VERSION)
+                    )
+                else:
+                    result = map_partitions(
+                        M.mode,
+                        self,
+                        meta=meta,
+                        token=self._token_prefix + "mode",
+                        axis=axis,
+                        enforce_metadata=False,
+                    )
             else:
                 result = map_partitions(
                     M.mode,
@@ -4179,20 +4185,9 @@ class DataFrame(_Frame):
     def mode(self, axis=0, numeric_only=False, dropna=True, split_every=False):
         axis = self._validate_axis(axis)
         if axis == 1:
-            if PANDAS_VERSION <= "0.24.0":
-                if dropna is False:
-                    raise ValueError(
-                        "The 'dropna' keyword was added in pandas 0.24.0. "
-                        "Your version of pandas is '{}'.".format(PANDAS_VERSION)
-                    )
-                else:
-                    return super(DataFrame, self).mode(
-                        axis=axis, split_every=split_every
-                    )
-            else:
-                return super(DataFrame, self).mode(
-                    axis=axis, dropna=dropna, split_every=split_every
-                )
+            return super(DataFrame, self).mode(
+                axis=axis, dropna=dropna, split_every=split_every
+            )
         elif axis == 0:
             mode_series_list = []
             for col in self.columns:
