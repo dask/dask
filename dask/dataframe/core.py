@@ -4169,9 +4169,15 @@ class DataFrame(_Frame):
     def mode(self, axis=0, numeric_only=False, dropna=True, split_every=False):
         axis = self._validate_axis(axis)
         if axis == 1:
-            return super(DataFrame, self).mode(
-                axis=axis, dropna=dropna, split_every=split_every
-            )
+            if dropna is False and PANDAS_VERSION >= "0.24.0":
+                return super(DataFrame, self).mode(
+                    axis=axis, dropna=dropna, split_every=split_every
+                )
+            else:
+                raise ValueError(
+                    "The 'dropna' keyword was added in pandas 0.24.0. "
+                    "Your version of pandas is '{}'.".format(PANDAS_VERSION)
+                )
         elif axis == 0:
             mode_series_list = []
             for col in self.columns:
