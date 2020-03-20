@@ -3647,7 +3647,7 @@ def test_dataframe_mode():
 
     if PANDAS_VERSION <= "0.24.0":
         with pytest.raises(ValueError):
-            ddf.mode(axis=1, dropna=False).compute()
+            ddf.mode(axis=1, dropna=False)
 
 
 def test_datetime_loc_open_slicing():
