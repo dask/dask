@@ -78,6 +78,7 @@ env = Environment(
 )
 
 BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), "..", "theme.yaml"))
+TICKS_1024 = {"base": 1024, "mantissas": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]}
 
 nan = float("nan")
 inf = float("inf")
@@ -233,7 +234,7 @@ class NBytesHistogram(DashboardComponent):
             )
 
             self.root.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
-            self.root.xaxis.ticker = AdaptiveTicker(mantissas=[1, 256, 512], base=1024)
+            self.root.xaxis.ticker = AdaptiveTicker(**TICKS_1024)
             self.root.xaxis.major_label_orientation = -math.pi / 12
 
             self.root.xaxis.minor_tick_line_alpha = 0
@@ -296,7 +297,7 @@ class BandwidthTypes(DashboardComponent):
             )
             fig.x_range.start = 0
             fig.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
-            fig.xaxis.ticker = AdaptiveTicker(mantissas=[1, 256, 512], base=1024)
+            fig.xaxis.ticker = AdaptiveTicker(**TICKS_1024)
             rect.nonselection_glyph = None
 
             fig.xaxis.minor_tick_line_alpha = 0
@@ -379,9 +380,7 @@ class BandwidthWorkers(DashboardComponent):
                 location=(0, 0),
             )
             color_bar.formatter = NumeralTickFormatter(format="0.0 b")
-            color_bar.ticker = AdaptiveTicker(
-                mantissas=[1, 64, 128, 256, 512], base=1024
-            )
+            color_bar.ticker = AdaptiveTicker(**TICKS_1024)
             fig.add_layout(color_bar, "right")
 
             fig.toolbar.logo = None
@@ -464,7 +463,7 @@ class MemoryByKey(DashboardComponent):
                 source=self.source, x="name", top="nbytes", width=0.9, color="color"
             )
             fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
-            fig.yaxis.ticker = AdaptiveTicker(mantissas=[1, 256, 512], base=1024)
+            fig.yaxis.ticker = AdaptiveTicker(**TICKS_1024)
             fig.xaxis.major_label_orientation = -math.pi / 12
             rect.nonselection_glyph = None
 
@@ -593,7 +592,7 @@ class CurrentLoad(DashboardComponent):
             )
             rect.nonselection_glyph = None
 
-            nbytes.axis[0].ticker = BasicTicker(mantissas=[1, 256, 512], base=1024)
+            nbytes.axis[0].ticker = BasicTicker(**TICKS_1024)
             nbytes.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
             nbytes.xaxis.major_label_orientation = -math.pi / 12
             nbytes.x_range.start = 0

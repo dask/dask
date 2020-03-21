@@ -14,7 +14,7 @@ from bokeh.models import (
 from tornado import escape
 from dask.utils import format_bytes
 from distributed.utils import log_errors
-from distributed.dashboard.components.scheduler import BOKEH_THEME
+from distributed.dashboard.components.scheduler import BOKEH_THEME, TICKS_1024
 from distributed.dashboard.utils import without_property_validation, update
 
 
@@ -83,7 +83,7 @@ class GPUCurrentLoad(DashboardComponent):
             )
             rect.nonselection_glyph = None
 
-            memory.axis[0].ticker = BasicTicker(mantissas=[1, 256, 512], base=1024)
+            memory.axis[0].ticker = BasicTicker(**TICKS_1024)
             memory.xaxis[0].formatter = NumeralTickFormatter(format="0.0 b")
             memory.xaxis.major_label_orientation = -math.pi / 12
             memory.x_range.start = 0
