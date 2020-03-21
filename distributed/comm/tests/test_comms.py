@@ -83,8 +83,9 @@ async def get_comm_pair(listen_addr, listen_args=None, connect_args=None, **kwar
     async def handle_comm(comm):
         await q.put(comm)
 
-    listener = listen(listen_addr, handle_comm, connection_args=listen_args, **kwargs)
-    await listener.start()
+    listener = await listen(
+        listen_addr, handle_comm, connection_args=listen_args, **kwargs
+    )
 
     comm = await connect(
         listener.contact_address, connection_args=connect_args, **kwargs
@@ -221,8 +222,7 @@ async def test_tcp_specific():
         await comm.write(msg)
         await comm.close()
 
-    listener = tcp.TCPListener("localhost", handle_comm)
-    await listener.start()
+    listener = await tcp.TCPListener("localhost", handle_comm)
     host, port = listener.get_host_port()
     assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
@@ -269,8 +269,7 @@ async def test_tls_specific():
     server_ctx = get_server_ssl_context()
     client_ctx = get_client_ssl_context()
 
-    listener = tcp.TLSListener("localhost", handle_comm, ssl_context=server_ctx)
-    await listener.start()
+    listener = await tcp.TLSListener("localhost", handle_comm, ssl_context=server_ctx)
     host, port = listener.get_host_port()
     assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
@@ -361,8 +360,7 @@ async def check_inproc_specific(run_client):
             await comm.write(msg)
         await comm.close()
 
-    listener = inproc.InProcListener(listener_addr, handle_comm)
-    await listener.start()
+    listener = await inproc.InProcListener(listener_addr, handle_comm)
     assert (
         listener.listen_address
         == listener.contact_address
@@ -468,8 +466,7 @@ async def check_client_server(
     listen_args = listen_args or {"xxx": "bar"}
     connect_args = connect_args or {"xxx": "foo"}
 
-    listener = listen(addr, handle_comm, connection_args=listen_args)
-    await listener.start()
+    listener = await listen(addr, handle_comm, connection_args=listen_args)
 
     # Check listener properties
     bound_addr = listener.listen_address
@@ -647,8 +644,9 @@ async def test_tls_reject_certificate():
         await comm.close()
 
     # Listener refuses a connector not signed by the CA
-    listener = listen("tls://", handle_comm, connection_args={"ssl_context": serv_ctx})
-    await listener.start()
+    listener = await listen(
+        "tls://", handle_comm, connection_args={"ssl_context": serv_ctx}
+    )
 
     with pytest.raises(EnvironmentError) as excinfo:
         comm = await connect(
@@ -678,10 +676,9 @@ async def test_tls_reject_certificate():
     await comm.close()
 
     # Connector refuses a listener not signed by the CA
-    listener = listen(
+    listener = await listen(
         "tls://", handle_comm, connection_args={"ssl_context": bad_serv_ctx}
     )
-    await listener.start()
 
     with pytest.raises(EnvironmentError) as excinfo:
         await connect(
@@ -705,8 +702,7 @@ async def check_comm_closed_implicit(
     async def handle_comm(comm):
         await comm.close()
 
-    listener = listen(addr, handle_comm, connection_args=listen_args)
-    await listener.start()
+    listener = await listen(addr, handle_comm, connection_args=listen_args)
     contact_addr = listener.contact_address
 
     comm = await connect(contact_addr, connection_args=connect_args)
@@ -785,8 +781,7 @@ async def test_inproc_comm_closed_explicit_2():
         else:
             await comm.close()
 
-    listener = listen("inproc://", handle_comm)
-    await listener.start()
+    listener = await listen("inproc://", handle_comm)
     contact_addr = listener.contact_address
 
     comm = await connect(contact_addr)
@@ -854,8 +849,7 @@ async def check_many_listeners(addr):
     N = 100
 
     for i in range(N):
-        listener = listen(addr, handle_comm)
-        await listener.start()
+        listener = await listen(addr, handle_comm)
         listeners.append(listener)
 
     assert len(set(l.listen_address for l in listeners)) == N

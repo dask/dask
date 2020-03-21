@@ -162,6 +162,13 @@ class Listener(ABC):
     async def __aexit__(self, *exc):
         self.stop()
 
+    def __await__(self):
+        async def _():
+            await self.start()
+            return self
+
+        return _().__await__()
+
 
 class Connector(ABC):
     @abstractmethod

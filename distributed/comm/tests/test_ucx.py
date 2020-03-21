@@ -96,8 +96,7 @@ def test_ucx_specific():
             await comm.close()
             assert comm.closed
 
-        listener = ucx.UCXListener(address, handle_comm)
-        await listener.start()
+        listener = await ucx.UCXListener(address, handle_comm)
         host, port = listener.get_host_port()
         assert host.count(".") == 3
         assert port > 0

@@ -312,13 +312,12 @@ class Server:
         else:
             addr = port_or_addr
             assert isinstance(addr, str)
-        listener = listen(
+        listener = await listen(
             addr,
             self.handle_comm,
             deserialize=self.deserialize,
             connection_args=listen_args,
         )
-        await listener.start()
         self.listeners.append(listener)
 
     async def handle_comm(self, comm, shutting_down=shutting_down):
