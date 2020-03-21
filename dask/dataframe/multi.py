@@ -53,38 +53,38 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
+from functools import wraps, partial
 import warnings
-from functools import partial, wraps
 
+from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal
-from tlz import first, merge_sorted, unique
+from pandas.api.types import is_dtype_equal, is_categorical_dtype
 
-from ..base import is_dask_collection, tokenize
+from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
 from ..utils import apply
-from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
-    DataFrame,
-    Index,
-    Series,
     _Frame,
-    _maybe_from_pandas,
-    is_broadcastable,
+    DataFrame,
+    Series,
     map_partitions,
+    Index,
+    _maybe_from_pandas,
     new_dd_object,
+    is_broadcastable,
     prefix_reduction,
     suffix_reduction,
 )
 from .io import from_pandas
-from .shuffle import rearrange_by_divisions, shuffle
+from . import methods
+from .shuffle import shuffle, rearrange_by_divisions
 from .utils import (
+    strip_unknown_categories,
+    is_series_like,
     asciitable,
     is_dataframe_like,
-    is_series_like,
-    strip_unknown_categories,
 )
 
 
