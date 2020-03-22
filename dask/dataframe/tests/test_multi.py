@@ -1,6 +1,5 @@
 import warnings
 
-import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -581,26 +580,36 @@ def test_concat(join):
         assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("join", ["inner", "outer"])
-def test_concat_different_dtypes(join):
+values = [1, 1.0, "one", pd.to_datetime("1970-01-01")]
+
+
+@pytest.mark.parametrize(
+    "value_pair",
+    [
+        (values[i], values[j])
+        for i in range(len(values))
+        for j in range(len(values))
+        if i < j
+    ],
+)
+def test_concat_different_dtypes(value_pair):
     # check that the resulting dataframe has coherent dtypes
     # refer to https://github.com/dask/dask/issues/4685
-    pdf1 = pd.DataFrame(
-        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
-    )
-    ddf1 = dd.from_pandas(pdf1, 2)
-    pdf2 = pd.DataFrame(
-        {"x": [1.0, 2.0, 3.0, 4.0, 6.0, 7.0], "y": list("abcdef")},
-        index=[8, 9, 10, 11, 12, 13],
-    )
-    ddf2 = dd.from_pandas(pdf2, 2)
+    df_1 = pd.DataFrame({"x": [value_pair[0]]})
+    df_2 = pd.DataFrame({"x": [value_pair[1]]})
+    df = pd.concat([df_1, df_2], axis=0)
 
-    expected = pd.concat([pdf1, pdf2], join=join)
-    result = dd.concat([ddf1, ddf2], join=join)
-    assert_eq(expected, result)
+    pandas_dtype = df["x"].dtype
 
-    dtypes_list = dask.compute(*[part.dtypes for part in result.to_delayed()])
-    assert len(set(map(str, dtypes_list))) == 1  # all the same
+    ddf_1 = dd.from_pandas(df_1, npartitions=1)
+    ddf_2 = dd.from_pandas(df_2, npartitions=1)
+    ddf = dd.concat([ddf_1, ddf_2], axis=0)
+
+    dask_dtypes = ddf.map_partitions(lambda x: x.dtypes).compute().to_list()
+
+    assert (
+        dask_dtypes == ["datetime64[ns]", "datetime64[ns]"] and pandas_dtype == "object"
+    ) or dask_dtypes == [pandas_dtype, pandas_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
