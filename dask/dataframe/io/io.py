@@ -183,8 +183,6 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     if chunksize is None:
         chunksize = int(ceil(nrows / npartitions))
-    else:
-        npartitions = int(ceil(nrows / chunksize))
 
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
