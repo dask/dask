@@ -605,7 +605,7 @@ def test_concat_different_dtypes(value_pair):
     ddf_2 = dd.from_pandas(df_2, npartitions=1)
     ddf = dd.concat([ddf_1, ddf_2], axis=0)
 
-    dask_dtypes = ddf.map_partitions(lambda x: x.dtypes).compute().to_list()
+    dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
 
     assert (
         dask_dtypes == ["datetime64[ns]", "datetime64[ns]"] and pandas_dtype == "object"
