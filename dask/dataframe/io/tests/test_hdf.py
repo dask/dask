@@ -830,16 +830,17 @@ def test_hdf_filenames():
     os.remove("foo0.hdf5")
     os.remove("foo1.hdf5")
 
+
 def test_hdf_path_exceptions():
 
     # single file doesn't exist
     with pytest.raises(IOError):
-        dd.read_hdf('nonexistant_store_X34HJK', '/tmp')
+        dd.read_hdf("nonexistant_store_X34HJK", "/tmp")
 
     # a file from a list of files doesn't exist
     with pytest.raises(IOError):
-        dd.read_hdf(['nonexistant_store_X34HJK', 'nonexistant_store_UY56YH'], '/tmp')
+        dd.read_hdf(["nonexistant_store_X34HJK", "nonexistant_store_UY56YH"], "/tmp")
 
     # list of files is empty
     with pytest.raises(ValueError):
-        dd.read_hdf([], '/tmp')
+        dd.read_hdf([], "/tmp")
