@@ -210,7 +210,16 @@ def require(divisions, parts, required=None):
 ###############################################################
 
 
-required = {"left": [0], "right": [1], "inner": [0, 1], "outer": []}
+required = {
+    "left": [0],
+    "leftsemi": [0],
+    "leftanti": [0],
+    "right": [1],
+    "inner": [0, 1],
+    "outer": [],
+}
+allowed_left = ("inner", "left", "leftsemi", "leftanti")
+allowed_right = ("inner", "right")
 
 
 def merge_chunk(lhs, *args, **kwargs):
@@ -324,7 +333,7 @@ def single_partition_join(left, right, **kwargs):
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
     name = "merge-" + tokenize(left, right, **kwargs)
-    if left.npartitions == 1 and kwargs["how"] in ("inner", "right"):
+    if left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
@@ -338,7 +347,7 @@ def single_partition_join(left, right, **kwargs):
         else:
             divisions = [None for _ in right.divisions]
 
-    elif right.npartitions == 1 and kwargs["how"] in ("inner", "left"):
+    elif right.npartitions == 1 and kwargs["how"] in allowed_left:
         right_key = first(right.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
@@ -475,11 +484,12 @@ def merge(
         )
 
     # Single partition on one side
+    # Note that cudf supports "leftsemi" and "leftanti" joins
     elif (
         left.npartitions == 1
-        and how in ("inner", "right")
+        and how in allowed_right
         or right.npartitions == 1
-        and how in ("inner", "left")
+        and how in allowed_left
     ):
         return single_partition_join(
             left,

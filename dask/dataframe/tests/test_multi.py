@@ -720,6 +720,58 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+@pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
+@pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "cudf",
+        pytest.param(
+            "pandas",
+            marks=pytest.mark.xfail(
+                reason="Pandas does not support leftsemi or leftanti"
+            ),
+        ),
+    ],
+)
+def test_merge_tasks_semi_anti_cudf(engine, how, parts):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+    emp = pd.DataFrame(
+        {
+            "emp_id": np.arange(101, stop=106),
+            "name": ["John", "Tom", "Harry", "Rahul", "Sakil"],
+            "city": ["Cal", "Mum", "Del", "Ban", "Del"],
+            "salary": [50000, 40000, 80000, 60000, 90000],
+        }
+    )
+    skills = pd.DataFrame(
+        {
+            "skill_id": [404, 405, 406, 407, 408],
+            "emp_id": [103, 101, 105, 102, 101],
+            "skill_name": ["Dask", "Spark", "C", "Python", "R"],
+        }
+    )
+
+    if engine == "cudf":
+        emp = cudf.from_pandas(emp)
+        skills = cudf.from_pandas(skills)
+        dd_emp = dask_cudf.from_cudf(emp, npartitions=parts[0])
+        dd_skills = dask_cudf.from_cudf(skills, npartitions=parts[1])
+    else:
+        dd_emp = dd.from_pandas(emp, npartitions=parts[0])
+        dd_skills = dd.from_pandas(skills, npartitions=parts[1])
+
+    expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
+    result = dd_emp.merge(dd_skills, on="emp_id", how=how).sort_values(["emp_id"])
+    assert_eq(result, expect, check_index=False)
+
+
 def test_merge_tasks_passes_through():
     a = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
     b = pd.DataFrame({"c": [1, 2, 3, 4, 5, 6, 7], "d": [7, 6, 5, 4, 3, 2, 1]})
