@@ -291,7 +291,7 @@ class ArrowEngine(Engine):
                     for i in range(dataset.metadata.num_row_groups)
                 ]
 
-                # Alight row-group paths with pieces
+                # Re-order row-groups by path name if known
                 if col_chunk_paths:
                     row_groups = sorted(
                         row_groups,
