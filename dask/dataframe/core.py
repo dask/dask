@@ -1685,17 +1685,13 @@ Dask Name: {name}, {task} tasks"""
                 )
             return result
         else:
-            value_count_series = self.reduction(
+            mode_series = self.reduction(
                 chunk=M.value_counts,
-                aggregate=M.sum,
+                combine=M.sum,
+                aggregate=_mode_aggregate,
                 split_every=split_every,
                 chunk_kwargs={"dropna": dropna},
-            )
-            max_val = value_count_series.max(skipna=dropna)
-            mode_series = (
-                value_count_series[value_count_series == max_val]
-                .index.to_series()
-                .reset_index(drop=True)
+                aggregate_kwargs={"dropna": dropna},
             )
             return mode_series
 
@@ -6007,6 +6003,17 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
         return res[0]
     res.name = None
     return res
+
+
+def _mode_aggregate(df, dropna):
+    value_count_series = df.sum()
+    max_val = value_count_series.max(skipna=dropna)
+    mode_series = (
+        value_count_series[value_count_series == max_val]
+        .index.to_series()
+        .reset_index(drop=True)
+    )
+    return mode_series
 
 
 def _count_aggregate(x):
