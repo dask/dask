@@ -1,3 +1,4 @@
+import itertools
 import warnings
 
 import dask.dataframe as dd
@@ -585,12 +586,7 @@ values = [1, 1.0, "one", pd.to_datetime("1970-01-01")]
 
 @pytest.mark.parametrize(
     "value_pair",
-    [
-        (values[i], values[j])
-        for i in range(len(values))
-        for j in range(len(values))
-        if i < j
-    ],
+    list(itertools.combinations(values, 2))
 )
 def test_concat_different_dtypes(value_pair):
     # check that the resulting dataframe has coherent dtypes
