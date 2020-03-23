@@ -59,7 +59,7 @@ import warnings
 from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal
+from pandas.api.types import is_dtype_equal, is_categorical_dtype
 
 from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
@@ -80,7 +80,12 @@ from .core import (
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories, is_series_like, asciitable
+from .utils import (
+    strip_unknown_categories,
+    is_series_like,
+    asciitable,
+    is_dataframe_like,
+)
 
 
 def align_partitions(*dfs):
@@ -931,8 +936,24 @@ def stack_partitions(dfs, divisions, join="outer"):
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
+        # and https://github.com/dask/dask/issues/5968.
+        if is_dataframe_like(df):
+
+            shared_columns = df.columns.intersection(meta.columns)
+            needs_astype = [
+                col
+                for col in shared_columns
+                if df[col].dtype != meta[col].dtype
+                and not is_categorical_dtype(df[col].dtype)
+            ]
+
+            if needs_astype:
+                # Copy to avoid mutating the caller inplace
+                df = df.copy()
+                df[needs_astype] = df[needs_astype].astype(meta[needs_astype].dtypes)
+
         if is_series_like(df) and is_series_like(meta):
-            if not df.dtype == meta.dtype and str(df.dtype) != "category":
+            if not df.dtype == meta.dtype and not is_categorical_dtype(df.dtype):
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
