@@ -84,7 +84,7 @@ class WorkStealing(SchedulerPlugin):
         if start == "processing":
             self.remove_key_from_stealable(ts)
             if finish == "memory":
-                for tts in self.stealable_unknown_durations.pop(ts.prefix, ()):
+                for tts in self.stealable_unknown_durations.pop(ts.prefix.name, ()):
                     if tts not in self.in_flight and tts.state == "processing":
                         self.put_key_in_stealable(tts)
             else:
@@ -132,7 +132,7 @@ class WorkStealing(SchedulerPlugin):
         nbytes = sum(dep.get_nbytes() for dep in ts.dependencies)
 
         transfer_time = nbytes / self.scheduler.bandwidth + LATENCY
-        split = ts.prefix
+        split = ts.prefix.name
         if split in fast_tasks:
             return None, None
         ws = ts.processing_on
