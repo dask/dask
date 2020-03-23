@@ -141,7 +141,7 @@ def _write_partitioned(table, root_path, partition_cols, filesystem=None, **kwar
         if col in partition_cols:
             subschema = subschema.remove(subschema.get_field_index(col))
 
-    new_paths = []
+    md_list = []
     for keys, subgroup in data_df.groupby(partition_keys):
         if not isinstance(keys, tuple):
             keys = (keys,)
@@ -159,10 +159,10 @@ def _write_partitioned(table, root_path, partition_cols, filesystem=None, **kwar
         outfile = guid() + ".parquet"
         full_path = "/".join([prefix, outfile])
         with fs.open(full_path, "wb") as f:
-            pq.write_table(subtable, f, **kwargs)
-        new_paths.append("/".join([subdir, outfile]))
+            pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
+        md_list[-1].set_file_path("/".join([subdir, outfile]))
 
-    return new_paths
+    return md_list
 
 
 class ArrowEngine(Engine):
@@ -203,7 +203,9 @@ class ArrowEngine(Engine):
                 # the column-chunk metadata includes the `"file_path"`.
                 # The order of dataset.metadata.row_group items is often
                 # different than the order of `dataset.pieces`.
-                if not col_chunk_paths:
+                if not col_chunk_paths or (
+                    len(dataset.pieces) != dataset.metadata.num_row_groups
+                ):
                     dataset.schema = dataset.metadata.schema
                     dataset.metadata = None
         else:
@@ -557,19 +559,10 @@ class ArrowEngine(Engine):
             preserve_index = True
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
-            file_paths = _write_partitioned(
-                t,
-                path,
-                partition_on,
-                filesystem=fs,
-                metadata_collector=md_list,
-                **kwargs,
-            )
+            md_list = _write_partitioned(t, path, partition_on, filesystem=fs, **kwargs)
             if md_list:
                 _meta = md_list[0]
-                _meta.set_file_path(file_paths[0])
                 for i in range(1, len(md_list)):
-                    md_list[i].set_file_path(file_paths[i])
                     _meta.append_row_groups(md_list[i])
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:

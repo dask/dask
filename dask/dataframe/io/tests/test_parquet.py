@@ -1093,7 +1093,7 @@ def test_partition_on_string(tmpdir, partition_on):
         assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_filters_categorical(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     cats = ["2018-01-01", "2018-01-02", "2018-01-03", "2018-01-04"]
@@ -1767,9 +1767,9 @@ def test_arrow_partitioning(tmpdir):
     }
     pdf = pd.DataFrame(data)
     ddf = dd.from_pandas(pdf, npartitions=2)
-    ddf.to_parquet(path, engine="pyarrow", partition_on="p")
+    ddf.to_parquet(path, engine="pyarrow", write_index=False, partition_on="p")
 
-    ddf = dd.read_parquet(path, engine="pyarrow")
+    ddf = dd.read_parquet(path, index=False, engine="pyarrow")
 
     ddf.astype({"b": np.float32}).compute()
 
@@ -2268,7 +2268,7 @@ def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
 
 
 @pytest.mark.parametrize("gather_statistics", [None, True])
-@write_read_engines_xfail
+@write_read_engines()
 def test_filter_nonpartition_columns(
     tmpdir, write_engine, read_engine, gather_statistics
 ):
