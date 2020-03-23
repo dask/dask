@@ -1,7 +1,7 @@
 import asyncio
 from collections import defaultdict, deque
 from functools import partial
-from inspect import isawaitable
+import inspect
 import logging
 import threading
 import traceback
@@ -405,7 +405,7 @@ class Server:
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
                         result = handler(comm, **msg)
-                        if isawaitable(result):
+                        if inspect.isawaitable(result):
                             result = asyncio.ensure_future(result)
                             self._ongoing_coroutines.add(result)
                             result = await result
@@ -495,7 +495,9 @@ class Server:
         for pc in self.periodic_callbacks.values():
             pc.stop()
         for listener in self.listeners:
-            self.listener.stop()
+            future = self.listener.stop()
+            if inspect.isawaitable(future):
+                yield future
         for i in range(20):  # let comms close naturally for a second
             if not self._comms:
                 break

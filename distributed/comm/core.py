@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod, abstractproperty
 import asyncio
+import inspect
 import logging
 import weakref
 
@@ -160,7 +161,9 @@ class Listener(ABC):
         return self
 
     async def __aexit__(self, *exc):
-        self.stop()
+        future = self.stop()
+        if inspect.isawaitable(future):
+            await future
 
     def __await__(self):
         async def _():
