@@ -5,6 +5,7 @@ import json
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from pyarrow.compat import guid
 from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
@@ -119,6 +120,51 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     return parts, dataset
 
 
+def _write_partitioned(table, root_path, partition_cols, filesystem=None, **kwargs):
+    """ Write table to a partitioned dataset with pyarrow.
+
+        Logic copied from pyarrow.parquet.
+        (arrow/python/pyarrow/parquet.py::write_to_dataset)
+    """
+    fs, root_path = pq._get_filesystem_and_path(filesystem, root_path)
+    pq._mkdir_if_not_exists(fs, root_path)
+
+    df = table.to_pandas(ignore_metadata=True)
+    partition_keys = [df[col] for col in partition_cols]
+    data_df = df.drop(partition_cols, axis="columns")
+    data_cols = df.columns.drop(partition_cols)
+    if len(data_cols) == 0:
+        raise ValueError("No data left to save outside partition columns")
+
+    subschema = table.schema
+    for col in table.schema.names:
+        if col in partition_cols:
+            subschema = subschema.remove(subschema.get_field_index(col))
+
+    new_paths = []
+    for keys, subgroup in data_df.groupby(partition_keys):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        subdir = "/".join(
+            [
+                "{colname}={value}".format(colname=name, value=val)
+                for name, val in zip(partition_cols, keys)
+            ]
+        )
+        subtable = pa.Table.from_pandas(
+            subgroup, preserve_index=False, schema=subschema, safe=False
+        )
+        prefix = "/".join([root_path, subdir])
+        pq._mkdir_if_not_exists(fs, prefix)
+        outfile = guid() + ".parquet"
+        full_path = "/".join([prefix, outfile])
+        with fs.open(full_path, "wb") as f:
+            pq.write_table(subtable, f, **kwargs)
+        new_paths.append("/".join([subdir, outfile]))
+
+    return new_paths
+
+
 class ArrowEngine(Engine):
     @staticmethod
     def read_metadata(
@@ -138,6 +184,13 @@ class ArrowEngine(Engine):
         parts, dataset = _determine_dataset_parts(
             fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
+        col_chunk_paths = False
+        if dataset.metadata:
+            col_chunk_paths = all(
+                dataset.metadata.row_group(i).column(0).file_path is not None
+                for i in range(dataset.metadata.num_row_groups)
+            )
+
         # TODO: Call to `_determine_dataset_parts` uses `pq.ParquetDataset`
         # to define the `dataset` object. `split_row_groups` should be passed
         # to that constructor once it is supported (see ARROW-2801).
@@ -146,15 +199,13 @@ class ArrowEngine(Engine):
                 n for n in dataset.partitions.partition_names if n is not None
             ]
             if partitions and dataset.metadata:
-                # Dont use dataset.metadata for partitioned datasets.
+                # Dont use dataset.metadata for partitioned datasets, unless
+                # the column-chunk metadata includes the `"file_path"`.
                 # The order of dataset.metadata.row_group items is often
                 # different than the order of `dataset.pieces`.
-                # TODO: Improve `_metadata` construction to include
-                #       correct "file_path" metadata. That would allow us
-                #       to reorder the row_groups (to align with `pieces`)
-                #       before filtering.
-                dataset.schema = dataset.metadata.schema
-                dataset.metadata = None
+                if not col_chunk_paths:
+                    dataset.schema = dataset.metadata.schema
+                    dataset.metadata = None
         else:
             partitions = []
 
@@ -237,6 +288,16 @@ class ArrowEngine(Engine):
                     dataset.metadata.row_group(i)
                     for i in range(dataset.metadata.num_row_groups)
                 ]
+
+                # Alight row-group paths with pieces
+                if col_chunk_paths:
+                    row_groups = sorted(
+                        row_groups,
+                        key=lambda row_group: natural_sort_key(
+                            row_group.column(0).file_path
+                        ),
+                    )
+
                 if split_row_groups and len(dataset.paths) == 1:
                     row_groups_per_piece = _get_row_groups_per_piece(
                         pieces, dataset.metadata, dataset.paths[0], fs
@@ -496,17 +557,19 @@ class ArrowEngine(Engine):
             preserve_index = True
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
-            pq.write_to_dataset(
+            file_paths = _write_partitioned(
                 t,
                 path,
-                partition_cols=partition_on,
+                partition_on,
                 filesystem=fs,
                 metadata_collector=md_list,
                 **kwargs,
             )
             if md_list:
                 _meta = md_list[0]
+                _meta.set_file_path(file_paths[0])
                 for i in range(1, len(md_list)):
+                    md_list[i].set_file_path(file_paths[i])
                     _meta.append_row_groups(md_list[i])
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
