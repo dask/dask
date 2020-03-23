@@ -4281,6 +4281,11 @@ class as_completed:
         with self.lock:
             return len(self.futures) + len(self.queue.queue)
 
+    def __repr__(self):
+        return "<as_completed: waiting={} done={}>".format(
+            len(self.futures), len(self.queue.queue)
+        )
+
     def __iter__(self):
         return self
 
