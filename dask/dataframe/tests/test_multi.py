@@ -1,4 +1,3 @@
-import itertools
 import warnings
 
 import dask.dataframe as dd
@@ -581,18 +580,25 @@ def test_concat(join):
         assert_eq(result, expected)
 
 
-values = [1, 1.0, "one", pd.to_datetime("1970-01-01")]
-
-
 @pytest.mark.parametrize(
-    "value_pair",
-    list(itertools.combinations(values, 2))
+    "value_1, value_2",
+    [
+        (1.0, 1),
+        (1.0, "one"),
+        # See https://github.com/dask/dask/issues/5968 and
+        # https://github.com/pandas-dev/pandas/issues/32934
+        pytest.param(1.0, pd.to_datetime("1970-01-01"), marks=pytest.mark.xfail),
+        (1, "one"),
+        (1, pd.to_datetime("1970-01-01")),
+        ("one", pd.to_datetime("1970-01-01")),
+    ],
 )
-def test_concat_different_dtypes(value_pair):
+def test_concat_different_dtypes(value_1, value_2):
     # check that the resulting dataframe has coherent dtypes
-    # refer to https://github.com/dask/dask/issues/4685
-    df_1 = pd.DataFrame({"x": [value_pair[0]]})
-    df_2 = pd.DataFrame({"x": [value_pair[1]]})
+    # refer to https://github.com/dask/dask/issues/4685 and
+    # https://github.com/dask/dask/issues/5968
+    df_1 = pd.DataFrame({"x": [value_1]})
+    df_2 = pd.DataFrame({"x": [value_2]})
     df = pd.concat([df_1, df_2], axis=0)
 
     pandas_dtype = df["x"].dtype
@@ -603,9 +609,7 @@ def test_concat_different_dtypes(value_pair):
 
     dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
 
-    assert (
-        dask_dtypes == ["datetime64[ns]", "datetime64[ns]"] and pandas_dtype == "object"
-    ) or dask_dtypes == [pandas_dtype, pandas_dtype]
+    assert dask_dtypes == [pandas_dtype, pandas_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
