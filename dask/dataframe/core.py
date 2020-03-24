@@ -1655,45 +1655,16 @@ Dask Name: {name}, {task} tasks"""
             return result
 
     @derived_from(pd.DataFrame)
-    def mode(self, axis=0, dropna=True, split_every=False):
-        if axis == 1:
-            meta = self._meta_nonempty.count(axis=axis)
-            if PANDAS_VERSION <= "0.24.0":
-                if dropna is False:
-                    raise ValueError(
-                        "The 'dropna' keyword was added in pandas 0.24.0. "
-                        "Your version of pandas is '{}'.".format(PANDAS_VERSION)
-                    )
-                else:
-                    result = map_partitions(
-                        M.mode,
-                        self,
-                        meta=meta,
-                        token=self._token_prefix + "mode",
-                        axis=axis,
-                        enforce_metadata=False,
-                    )
-            else:
-                result = map_partitions(
-                    M.mode,
-                    self,
-                    meta=meta,
-                    token=self._token_prefix + "mode",
-                    axis=axis,
-                    dropna=dropna,
-                    enforce_metadata=False,
-                )
-            return result
-        else:
-            mode_series = self.reduction(
-                chunk=M.value_counts,
-                combine=M.sum,
-                aggregate=_mode_aggregate,
-                split_every=split_every,
-                chunk_kwargs={"dropna": dropna},
-                aggregate_kwargs={"dropna": dropna},
-            )
-            return mode_series
+    def mode(self, dropna=True, split_every=False):
+        mode_series = self.reduction(
+            chunk=M.value_counts,
+            combine=M.sum,
+            aggregate=_mode_aggregate,
+            split_every=split_every,
+            chunk_kwargs={"dropna": dropna},
+            aggregate_kwargs={"dropna": dropna},
+        )
+        return mode_series
 
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
@@ -4178,36 +4149,30 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
-    def mode(self, axis=0, numeric_only=False, dropna=True, split_every=False):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            return super(DataFrame, self).mode(
-                axis=axis, dropna=dropna, split_every=split_every
+    def mode(self, dropna=True, split_every=False):
+        mode_series_list = []
+        for col in self.columns:
+            mode_series = super(Series, self[col]).mode(
+                dropna=dropna, split_every=split_every
             )
-        elif axis == 0:
-            mode_series_list = []
-            for col in self.columns:
-                mode_series = super(Series, self[col]).mode(
-                    dropna=dropna, split_every=split_every
-                )
-                mode_series.name = col
-                mode_series_list.append(mode_series)
+            mode_series.name = col
+            mode_series_list.append(mode_series)
 
-            name = "concat-" + tokenize(*mode_series_list)
+        name = "concat-" + tokenize(*mode_series_list)
 
-            concat_axis1 = partial(methods.concat, axis=1)
-            dsk = {
-                (name, i): (concat_axis1, [(df._name, i) for df in mode_series_list])
-                for i in range(mode_series_list[0].npartitions)
-            }
+        concat_axis1 = partial(methods.concat, axis=1)
+        dsk = {
+            (name, i): (concat_axis1, [(df._name, i) for df in mode_series_list])
+            for i in range(mode_series_list[0].npartitions)
+        }
 
-            meta = methods.concat([df._meta for df in mode_series_list], axis=1)
-            graph = HighLevelGraph.from_collections(
-                name, dsk, dependencies=mode_series_list
-            )
-            ddf = new_dd_object(graph, name, meta, mode_series_list[0].divisions)
+        meta = methods.concat([df._meta for df in mode_series_list], axis=1)
+        graph = HighLevelGraph.from_collections(
+            name, dsk, dependencies=mode_series_list
+        )
+        ddf = new_dd_object(graph, name, meta, mode_series_list[0].divisions)
 
-            return ddf
+        return ddf
 
     @derived_from(pd.DataFrame)
     def cov(self, min_periods=None, split_every=False):
@@ -6011,6 +5976,7 @@ def _mode_aggregate(df, dropna):
     mode_series = (
         value_count_series[value_count_series == max_val]
         .index.to_series()
+        .sort_values()
         .reset_index(drop=True)
     )
     return mode_series

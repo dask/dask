@@ -3621,33 +3621,8 @@ def test_dataframe_mode():
     df = pd.DataFrame(data, columns=["Name", "Age", "Num"])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    # test series with object dtype
-    assert_eq(
-        ddf.Name.mode().compute().sort_values().reset_index(drop=True), (df.Name.mode())
-    )
-
-    # test series with numeric dtype
-    assert_eq(
-        ddf.Name.mode().compute().sort_values().reset_index(drop=True), df.Name.mode()
-    )
-
-    # test dataframe axis=0
-    dd_result = ddf.mode().compute()
-    pd_result = df.mode()
-    for col in dd_result.columns:
-        dd_sorted = dd_result[col].sort_values().reset_index(drop=True)
-        assert_eq(dd_sorted, pd_result[col])
-
-    # test dataframe axis=1
-    with pytest.warns(UserWarning):
-        dd_result = ddf.mode(axis=1).compute()
-    with pytest.warns(UserWarning):
-        pd_result = df.mode(axis=1)
-    assert_eq(dd_result, pd_result)
-
-    if PANDAS_VERSION <= "0.24.0":
-        with pytest.raises(ValueError):
-            ddf.mode(axis=1, dropna=False)
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.Name.mode(), df.Name.mode())
 
 
 def test_datetime_loc_open_slicing():
