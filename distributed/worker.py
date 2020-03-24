@@ -1836,13 +1836,16 @@ class Worker(ServerNode):
 
     def send_task_state_to_scheduler(self, key):
         if key in self.data or self.actors.get(key):
-            try:
-                value = self.data[key]
-            except KeyError:
-                value = self.actors[key]
-            nbytes = self.nbytes[key] or sizeof(value)
-            typ = self.types.get(key) or type(value)
-            del value
+            nbytes = self.nbytes.get(key)
+            typ = self.types.get(key)
+            if nbytes is None or typ is None:
+                try:
+                    value = self.data[key]
+                except KeyError:
+                    value = self.actors[key]
+                nbytes = self.nbytes[key] = sizeof(value)
+                typ = self.types[key] = type(value)
+                del value
             try:
                 typ_serialized = dumps_function(typ)
             except PicklingError:
