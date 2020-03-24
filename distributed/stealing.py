@@ -29,8 +29,6 @@ class WorkStealing(SchedulerPlugin):
         self.stealable = dict()
         # { task state: (worker, level) }
         self.key_stealable = dict()
-        # { prefix: { task states } }
-        self.stealable_unknown_durations = defaultdict(set)
 
         self.cost_multipliers = [1 + 2 ** (i - 6) for i in range(15)]
         self.cost_multipliers[0] = 1
@@ -83,11 +81,7 @@ class WorkStealing(SchedulerPlugin):
 
         if start == "processing":
             self.remove_key_from_stealable(ts)
-            if finish == "memory":
-                for tts in self.stealable_unknown_durations.pop(ts.prefix.name, ()):
-                    if tts not in self.in_flight and tts.state == "processing":
-                        self.put_key_in_stealable(tts)
-            else:
+            if finish != "memory":
                 self.in_flight.pop(ts, None)
 
     def put_key_in_stealable(self, ts):
@@ -136,20 +130,16 @@ class WorkStealing(SchedulerPlugin):
         if split in fast_tasks:
             return None, None
         ws = ts.processing_on
-        if ws is None:
-            self.stealable_unknown_durations[split].add(ts)
+        compute_time = ws.processing[ts]
+        if compute_time < 0.005:  # 5ms, just give up
             return None, None
-        else:
-            compute_time = ws.processing[ts]
-            if compute_time < 0.005:  # 5ms, just give up
-                return None, None
-            cost_multiplier = transfer_time / compute_time
-            if cost_multiplier > 100:
-                return None, None
+        cost_multiplier = transfer_time / compute_time
+        if cost_multiplier > 100:
+            return None, None
 
-            level = int(round(log(cost_multiplier) / log_2 + 6, 0))
-            level = max(1, level)
-            return cost_multiplier, level
+        level = int(round(log(cost_multiplier) / log_2 + 6, 0))
+        level = max(1, level)
+        return cost_multiplier, level
 
     def move_task_request(self, ts, victim, thief):
         try:
@@ -418,7 +408,6 @@ class WorkStealing(SchedulerPlugin):
         for s in self.stealable_all:
             s.clear()
         self.key_stealable.clear()
-        self.stealable_unknown_durations.clear()
 
     def story(self, *keys):
         keys = set(keys)
