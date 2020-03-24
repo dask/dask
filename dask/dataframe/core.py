@@ -4160,10 +4160,13 @@ class DataFrame(_Frame):
 
         name = "concat-" + tokenize(*mode_series_list)
 
-        concat_axis1 = partial(methods.concat, axis=1)
         dsk = {
-            (name, i): (concat_axis1, [(df._name, i) for df in mode_series_list])
-            for i in range(mode_series_list[0].npartitions)
+            (name, 0): (
+                apply,
+                methods.concat,
+                [[(df._name, 0) for df in mode_series_list]],
+                {"axis": 1},
+            )
         }
 
         meta = methods.concat([df._meta for df in mode_series_list], axis=1)
