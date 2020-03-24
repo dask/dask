@@ -835,8 +835,6 @@ class ConnectionPool:
         self.connection_args = connection_args
         self.timeout = timeout
         self._n_connecting = 0
-        # Invariant: semaphore._value == limit - open - _n_connecting
-        self.semaphore = asyncio.Semaphore(self.limit)
         self.server = weakref.ref(server) if server else None
         self._created = weakref.WeakSet()
         self._instances.add(self)
@@ -870,6 +868,17 @@ class ConnectionPool:
         return PooledRPCCall(
             addr, self, serializers=self.serializers, deserializers=self.deserializers
         )
+
+    def __await__(self):
+        async def _():
+            await self.start()
+            return self
+
+        return _().__await__()
+
+    async def start(self):
+        # Invariant: semaphore._value == limit - open - _n_connecting
+        self.semaphore = asyncio.Semaphore(self.limit)
 
     async def connect(self, addr, timeout=None):
         """

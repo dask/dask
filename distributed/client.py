@@ -923,6 +923,9 @@ class Client(Node):
             )
 
     async def _start(self, timeout=no_default, **kwargs):
+
+        await super().start()
+
         if timeout == no_default:
             timeout = self._timeout
         if timeout is not None:

@@ -38,6 +38,9 @@ class Node:
             server=self,
         )
 
+    async def start(self):
+        await self.rpc.start()
+
 
 class ServerNode(Node, Server):
     """
@@ -182,5 +185,7 @@ class ServerNode(Node, Server):
                 future = wait_for(future, timeout=timeout)
             return future.__await__()
 
-    async def start(self):  # subclasses should implement this
+    async def start(self):
+        # subclasses should implement their own start method whichs calls super().start()
+        await Node.start(self)
         return self

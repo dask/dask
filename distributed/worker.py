@@ -1012,6 +1012,8 @@ class Worker(ServerNode):
             return
         assert self.status is None, self.status
 
+        await super().start()
+
         enable_gc_diagnosis()
         thread_state.on_event_loop_thread = True
 

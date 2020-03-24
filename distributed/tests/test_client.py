@@ -5943,3 +5943,8 @@ def test_as_completed_condition_loop(c, s, a, b):
     seq = c.map(inc, range(5))
     ac = as_completed(seq)
     assert ac.condition._loop == c.loop.asyncio_loop
+
+
+def test_client_connectionpool_semaphore_loop(s, a, b):
+    with Client(s["address"]) as c:
+        assert c.rpc.semaphore._loop is c.loop.asyncio_loop

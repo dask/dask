@@ -30,11 +30,11 @@ def test_subs_multiple():
 
 
 @gen_cluster(client=True)
-def test_gather_from_workers_permissive(c, s, a, b):
-    rpc = ConnectionPool()
-    x = yield c.scatter({"x": 1}, workers=a.address)
+async def test_gather_from_workers_permissive(c, s, a, b):
+    rpc = await ConnectionPool()
+    x = await c.scatter({"x": 1}, workers=a.address)
 
-    data, missing, bad_workers = yield gather_from_workers(
+    data, missing, bad_workers = await gather_from_workers(
         {"x": [a.address], "y": [b.address]}, rpc=rpc
     )
 
@@ -68,11 +68,11 @@ class BrokenConnectionPool(ConnectionPool):
 
 
 @gen_cluster(client=True)
-def test_gather_from_workers_permissive_flaky(c, s, a, b):
-    x = yield c.scatter({"x": 1}, workers=a.address)
+async def test_gather_from_workers_permissive_flaky(c, s, a, b):
+    x = await c.scatter({"x": 1}, workers=a.address)
 
-    rpc = BrokenConnectionPool()
-    data, missing, bad_workers = yield gather_from_workers({"x": [a.address]}, rpc=rpc)
+    rpc = await BrokenConnectionPool()
+    data, missing, bad_workers = await gather_from_workers({"x": [a.address]}, rpc=rpc)
 
     assert missing == {"x": [a.address]}
     assert bad_workers == [a.address]

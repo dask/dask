@@ -526,7 +526,7 @@ async def test_connection_pool():
     for server in servers:
         await server.listen(0)
 
-    rpc = ConnectionPool(limit=5)
+    rpc = await ConnectionPool(limit=5)
 
     # Reuse connections
     await asyncio.gather(
@@ -583,7 +583,7 @@ async def test_connection_pool_respects_limit():
     for server in servers:
         await server.listen(0)
 
-    pool = ConnectionPool(limit=limit)
+    pool = await ConnectionPool(limit=limit)
 
     await asyncio.gather(*[do_ping(pool, s.port) for s in servers])
 
@@ -605,7 +605,7 @@ async def test_connection_pool_tls():
     for server in servers:
         await server.listen("tls://", listen_args=listen_args)
 
-    rpc = ConnectionPool(limit=5, connection_args=connection_args)
+    rpc = await ConnectionPool(limit=5, connection_args=connection_args)
 
     await asyncio.gather(*[rpc(s.address).ping() for s in servers[:5]])
     await asyncio.gather(*[rpc(s.address).ping() for s in servers[::2]])
@@ -625,7 +625,7 @@ async def test_connection_pool_remove():
     for server in servers:
         await server.listen(0)
 
-    rpc = ConnectionPool(limit=10)
+    rpc = await ConnectionPool(limit=10)
     serv = servers.pop()
     await asyncio.gather(*[rpc(s.address).ping() for s in servers])
     await asyncio.gather(*[rpc(serv.address).ping() for i in range(3)])
@@ -758,7 +758,7 @@ async def test_connection_pool_detects_remote_close():
     await server.listen("tcp://")
 
     # open a connection, use it and give it back to the pool
-    p = ConnectionPool(limit=10)
+    p = await ConnectionPool(limit=10)
     conn = await p.connect(server.address)
     await send_recv(conn, op="ping")
     p.reuse(server.address, conn)
