@@ -158,13 +158,12 @@ class UCX(Comm):
                 )
 
                 # Send meta data
-                await self.ep.send(np.array([len(frames)], dtype=np.uint64))
-                await self.ep.send(
-                    np.array(
-                        [hasattr(f, "__cuda_array_interface__") for f in frames],
-                        dtype=np.bool,
-                    )
+                cuda_frames = np.array(
+                    [hasattr(f, "__cuda_array_interface__") for f in frames],
+                    dtype=np.bool,
                 )
+                await self.ep.send(np.array([len(frames)], dtype=np.uint64))
+                await self.ep.send(cuda_frames)
                 await self.ep.send(
                     np.array([nbytes(f) for f in frames], dtype=np.uint64)
                 )
@@ -175,7 +174,8 @@ class UCX(Comm):
                 #  syncing the default stream will wait for other non-blocking CUDA streams.
                 # Note this is only sufficient if the memory being sent is not currently in use on
                 # non-blocking CUDA streams.
-                synchronize_stream(0)
+                if cuda_frames.any():
+                    synchronize_stream(0)
 
                 for frame in frames:
                     if nbytes(frame) > 0:
@@ -222,7 +222,8 @@ class UCX(Comm):
 
                 # It is necessary to first populate `frames` with CUDA arrays and synchronize
                 # the default stream before starting receiving to ensure buffers have been allocated
-                synchronize_stream(0)
+                if is_cudas.any():
+                    synchronize_stream(0)
                 for i, (is_cuda, size) in enumerate(
                     zip(is_cudas.tolist(), sizes.tolist())
                 ):
