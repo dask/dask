@@ -1,6 +1,41 @@
 Changelog
 =========
 
+2.13.0 - 2020-03-25
+-------------------
+
+- UCX synchronize default stream only on CUDA frames (:pr:`3638`) `Peter Andreas Entschev`_
+- Add ``as_completed.clear`` method (:pr:`3617`) `Matthew Rocklin`_
+- Drop unused line from ``pack_frames_prelude`` (:pr:`3634`) `John Kirkham`_
+- Add logging message when closing idle dask scheduler (:pr:`3632`) `Matthew Rocklin`_
+- Include frame lengths of CUDA objects in ``header["lengths"]`` (:pr:`3631`) `John Kirkham`_
+- Ensure ``Client`` connection pool semaphore attaches to the ``Client`` event loop (:pr:`3546`) `James Bourbeau`_
+- Remove dead stealing code (:pr:`3619`) `Florian Jetter`_
+- Check ``nbytes`` and ``types`` before reading ``data`` (:pr:`3628`) `John Kirkham`_
+- Ensure that we don't steal blacklisted fast tasks (:pr:`3591`) `Florian Jetter`_
+- Support async ``Listener.stop`` functions (:pr:`3613`) `Matthew Rocklin`_
+- Add str/repr methods to ``as_completed`` (:pr:`3618`) `Matthew Rocklin`_
+- Add backoff to comm connect attempts. (:pr:`3496`) `Matthias Urlichs`_
+- Make ``Listeners`` awaitable (:pr:`3611`) `Matthew Rocklin`_
+- Increase number of visible mantissas in dashboard plots (:pr:`3585`) `Scott Sievert`_
+- Pin openssl to 1.1.1d for Travis (:pr:`3602`) `Jacob Tomlinson`_
+- Replace ``tornado.queues`` with ``asyncio.queues`` (:pr:`3607`) `James Bourbeau`_
+- Remove ``dill`` from CI environments (:pr:`3608`) `Loïc Estève`_
+- Fix linting errors (:pr:`3604`) `James Bourbeau`_
+- Synchronize default CUDA stream before UCX send/recv (:pr:`3598`) `Peter Andreas Entschev`_
+- Add configuration for ``Adaptive`` arguments (:pr:`3509`) `Gabriel Sailer`_
+- Change ``Adaptive`` docs to reference ``adaptive_target`` (:pr:`3597`) `Julia Signell`_
+- Optionally compress on a frame-by-frame basis (:pr:`3586`) `Matthew Rocklin`_
+- Add Python version to version check (:pr:`3567`) `James Bourbeau`_
+- Import ``tlz`` (:pr:`3579`) `John Kirkham`_
+- Pin ``numpydoc`` to avoid double escaped ``*`` (:pr:`3530`) `Gil Forsyth`_
+- Avoid ``performance_report`` crashing when a worker dies mid-compute (:pr:`3575`) `Krishan Bhasin`_
+- Pin ``bokeh`` in CI builds (:pr:`3570`) `James Bourbeau`_
+- Disable fast fail on GitHub Actions Windows CI (:pr:`3569`) `James Bourbeau`_
+- Fix typo in ``Client.shutdown`` docstring (:pr:`3562`) `John Kirkham`_
+- Add ``local_directory`` option to ``dask-ssh`` (:pr:`3554`) `Abdulelah Bin Mahfoodh`_
+
+
 2.12.0 - 2020-03-06
 -------------------
 
@@ -1583,6 +1618,7 @@ significantly without many new features.
 .. _`He Jia`: https://github.com/HerculesJack
 .. _`Jim Crist-Harif`: https://github.com/jcrist
 .. _`fjetter`: https://github.com/fjetter
+.. _`Florian Jetter`: https://github.com/fjetter
 .. _`Patrick Sodré`: https://github.com/sodre
 .. _`Stephan Erb`: https://github.com/StephanErb
 .. _`Benedikt Reinartz`: https://github.com/filmor
@@ -1602,3 +1638,6 @@ significantly without many new features.
 .. _`Davis Bennett`: https://github.com/d-v-b
 .. _`Lucas Rademaker`: https://github.com/lr4d
 .. _`Darren Weber`: https://github.com/dazza-codes
+.. _`Matthias Urlichs`: https://github.com/smurfix
+.. _`Krishan Bhasin`: https://github.com/KrishanBhasin
+.. _`Abdulelah Bin Mahfoodh`: https://github.com/abduhbm
