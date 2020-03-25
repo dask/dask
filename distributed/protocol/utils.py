@@ -92,7 +92,6 @@ def merge_frames(header, frames):
 
 
 def pack_frames_prelude(frames):
-    lengths = [len(f) for f in frames]
     lengths = [struct.pack("Q", len(frames))] + [
         struct.pack("Q", nbytes(frame)) for frame in frames
     ]
