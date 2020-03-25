@@ -1,9 +1,12 @@
 import io
+from contextlib import contextmanager
+
 import pytest
 
+# import dask
 from dask.dataframe.io.sql import read_sql_table
-from dask.utils import tmpfile
 from dask.dataframe.utils import assert_eq
+from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
@@ -332,3 +335,101 @@ def test_no_character_index_without_divisions(db):
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
+
+
+def test_to_sql():
+    df_by_age = df.set_index("age")
+    df_appended = pd.concat([df, df,])
+
+    # Set this to False to use a sqlite DB file under the current directory, and not delete it (for easier debugging
+    # after tests have run)
+    rm_tmpdir = True
+    if rm_tmpdir:
+
+        @contextmanager
+        def tmp():
+            with tmpfile() as f:
+                yield "sqlite:///%s" % f
+
+    else:
+        from pathlib import Path
+
+        path = Path.cwd() / "tmp" / "sqlite"
+        path.parent.mkdir(exist_ok=True, parents=True)
+        uri = f"sqlite:///{path}"
+
+        @contextmanager
+        def tmp():
+            if path.exists():
+                path.unlink()
+            yield uri
+
+    for npartitions in [1, 2, 10]:
+        ddf = dd.from_pandas(df, npartitions)
+        ddf_by_age = ddf.set_index("age")
+
+        # Simple round trip test: use existing "number" index_col
+        with tmp() as uri:
+            ddf.to_sql(
+                "test", uri,
+            )
+            actual_ddf = read_sql_table("test", uri, "number").compute()
+            assert_eq(df, actual_ddf)
+
+        # DF.to_sql's "index" parameter is not allowed; DDFs in SQL require an index column
+        with tmp() as uri, pytest.raises(Exception):
+            ddf.to_sql(
+                "test", uri, index=False,
+            )
+
+        # Index by "age" instead
+        with tmp() as uri:
+            ddf_by_age.to_sql(
+                "test", uri,
+            )
+            actual_ddf = read_sql_table("test", uri, "age").compute()
+            assert_eq(df_by_age, actual_ddf)
+
+        # Index column can't have "object" dtype if no partitions are provided
+        with tmp() as uri:
+            ddf.set_index("name").to_sql(
+                "test", uri,
+            )
+            with pytest.raises(Exception):
+                read_sql_table("test", uri, "name").compute()
+
+        # Test various "if_exists" values
+        with tmp() as uri:
+            ddf.to_sql(
+                "test", uri,
+            )
+
+            # Writing a table that already exists fails
+            with pytest.raises(Exception):
+                ddf.to_sql(
+                    "test", uri,
+                )
+
+            ddf.to_sql("test", uri, if_exists="append")
+            ddf_appended = read_sql_table("test", uri, "number").compute()
+
+            assert_eq(df_appended, ddf_appended)
+
+            ddf_by_age.to_sql("test", uri, if_exists="replace")
+            actual_ddf = read_sql_table("test", uri, "age").compute()
+            assert_eq(df_by_age, actual_ddf)
+
+        # Verify number of partitions returned, when compute=False
+        with tmp() as uri:
+            delayeds = ddf.to_sql("test", uri, compute=False,)
+
+            # A quirk of how dd.from_pandas computes partitions is that when all partitions should be size 1 (i.e. the
+            # requested npartitions is greater than number of elements), it instead puts two elements in the last
+            # partition.
+            if npartitions >= len(df):
+                expected = len(df) - 1
+            else:
+                expected = npartitions
+
+            actual = len(delayeds)
+            assert actual == expected

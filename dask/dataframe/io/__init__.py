@@ -12,7 +12,7 @@ from .io import (
 )
 from .csv import read_csv, to_csv, read_table, read_fwf
 from .hdf import read_hdf, to_hdf
-from .sql import read_sql_table
+from .sql import read_sql_table, to_sql
 from .json import read_json, to_json
 from . import demo
 

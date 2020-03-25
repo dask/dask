@@ -1348,6 +1348,12 @@ Dask Name: {name}, {task} tasks"""
 
         return to_csv(self, filename, **kwargs)
 
+    def to_sql(self, *args, **kwargs):
+        """ See dd.to_sql docstring for more information """
+        from .io import to_sql
+
+        return to_sql(self, *args, **kwargs)
+
     def to_json(self, filename, *args, **kwargs):
         """ See dd.to_json docstring for more information """
         from .io import to_json

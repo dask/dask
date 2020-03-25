@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from ... import delayed
+from ... import compute, delayed
 from .io import from_delayed, from_pandas
 
 
@@ -211,3 +211,24 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
         return meta
     else:
         return df.astype(meta.dtypes.to_dict(), copy=False)
+
+
+ddf_to_sql = delayed(pd.DataFrame.to_sql)
+
+
+def to_sql(df, *args, **kwargs):
+    do_compute = kwargs.pop("compute", True)
+    index = kwargs.pop("index", True)
+    if not index:
+        raise Exception("`index` is required when saving a Dask Dataframe to SQL")
+
+    df._meta.to_sql(*args, **kwargs)
+
+    # Partitions should always append to the empty table created from `meta` above
+    kwargs["if_exists"] = "append"
+
+    values = [ddf_to_sql(d, *args, **kwargs) for d in df.to_delayed()]
+    if do_compute:
+        return compute(*values)
+    else:
+        return values
