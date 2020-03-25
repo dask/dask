@@ -134,7 +134,7 @@ def _write_partitioned(table, root_path, partition_cols, filesystem=None, **kwar
         (arrow/python/pyarrow/parquet.py::write_to_dataset)
     """
     fs, root_path = _get_filesystem_and_path(filesystem, root_path)
-    fs.mkdir(root_path, exists_ok=True)
+    fs.mkdirs(root_path, exist_ok=True)
 
     df = table.to_pandas(ignore_metadata=True)
     partition_keys = [df[col] for col in partition_cols]
