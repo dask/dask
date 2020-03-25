@@ -4236,17 +4236,18 @@ class as_completed:
             except CancelledError as exc:
                 result = exc
         with self.lock:
-            self.futures[future] -= 1
-            if not self.futures[future]:
-                del self.futures[future]
-            if self.with_results:
-                self.queue.put_nowait((future, result))
-            else:
-                self.queue.put_nowait(future)
-            async with self.condition:
-                self.condition.notify()
-            with self.thread_condition:
-                self.thread_condition.notify()
+            if future in self.futures:
+                self.futures[future] -= 1
+                if not self.futures[future]:
+                    del self.futures[future]
+                if self.with_results:
+                    self.queue.put_nowait((future, result))
+                else:
+                    self.queue.put_nowait(future)
+                async with self.condition:
+                    self.condition.notify()
+                with self.thread_condition:
+                    self.thread_condition.notify()
 
     def update(self, futures):
         """ Add multiple futures to the collection.
@@ -4379,6 +4380,13 @@ class as_completed:
                 yield self.next_batch(block=True)
             except StopIteration:
                 return
+
+    def clear(self):
+        """ Clear out all submitted futures """
+        with self.lock:
+            self.futures.clear()
+            while not self.queue.empty():
+                self.queue.get()
 
 
 def AsCompleted(*args, **kwargs):
