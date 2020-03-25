@@ -6,6 +6,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.compat import guid
+from pyarrow.filesystem import resolve_filesystem_and_path
 from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
@@ -120,14 +121,20 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     return parts, dataset
 
 
+def _get_filesystem_and_path(passed_filesystem, path):
+    if passed_filesystem is None:
+        return resolve_filesystem_and_path(path, passed_filesystem)
+    return passed_filesystem, path
+
+
 def _write_partitioned(table, root_path, partition_cols, filesystem=None, **kwargs):
     """ Write table to a partitioned dataset with pyarrow.
 
         Logic copied from pyarrow.parquet.
         (arrow/python/pyarrow/parquet.py::write_to_dataset)
     """
-    fs, root_path = pq._get_filesystem_and_path(filesystem, root_path)
-    pq._mkdir_if_not_exists(fs, root_path)
+    fs, root_path = _get_filesystem_and_path(filesystem, root_path)
+    fs.mkdir(root_path, exists_ok=True)
 
     df = table.to_pandas(ignore_metadata=True)
     partition_keys = [df[col] for col in partition_cols]
@@ -155,7 +162,7 @@ def _write_partitioned(table, root_path, partition_cols, filesystem=None, **kwar
             subgroup, preserve_index=False, schema=subschema, safe=False
         )
         prefix = "/".join([root_path, subdir])
-        pq._mkdir_if_not_exists(fs, prefix)
+        fs.mkdir(prefix, exists_ok=True)
         outfile = guid() + ".parquet"
         full_path = "/".join([prefix, outfile])
         with fs.open(full_path, "wb") as f:
