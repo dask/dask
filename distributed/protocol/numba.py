@@ -21,6 +21,7 @@ def cuda_serialize_numba_ndarray(x):
 
     header = x.__cuda_array_interface__.copy()
     header["strides"] = tuple(x.strides)
+    header["lengths"] = [x.nbytes]
     frames = [
         numba.cuda.cudadrv.devicearray.DeviceNDArray(
             shape=(x.nbytes,), strides=(1,), dtype=np.dtype("u1"), gpu_data=x.gpu_data,

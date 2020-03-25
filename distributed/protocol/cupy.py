@@ -47,6 +47,7 @@ def cuda_serialize_cupy_ndarray(x):
 
     header = x.__cuda_array_interface__.copy()
     header["strides"] = tuple(x.strides)
+    header["lengths"] = [x.nbytes]
     frames = [
         cupy.ndarray(
             shape=(x.nbytes,), dtype=cupy.dtype("u1"), memptr=x.data, strides=(1,)
