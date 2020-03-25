@@ -1542,15 +1542,20 @@ async def test_idle_timeout(c, s, a, b):
 
     assert s.status != "closed"
 
-    start = time()
-    while s.status != "closed":
-        await gen.sleep(0.01)
-        assert time() < start + 3
+    with captured_logger("distributed.scheduler") as logs:
+        start = time()
+        while s.status != "closed":
+            await gen.sleep(0.01)
+            assert time() < start + 3
 
-    start = time()
-    while not (a.status == "closed" and b.status == "closed"):
-        await gen.sleep(0.01)
-        assert time() < start + 1
+        start = time()
+        while not (a.status == "closed" and b.status == "closed"):
+            await gen.sleep(0.01)
+            assert time() < start + 1
+
+    assert "idle" in logs.getvalue()
+    assert "500" in logs.getvalue()
+    assert "ms" in logs.getvalue()
 
 
 @gen_cluster(client=True, config={"distributed.scheduler.bandwidth": "100 GB"})
