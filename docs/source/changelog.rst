@@ -1,6 +1,47 @@
 Changelog
 =========
 
+2.13.0 / 2020-03-25
+-------------------
+
+Array
++++++
+
+- Support ``dtype`` and other keyword arguments in ``da.random`` (:pr:`6030`) `Matthew Rocklin`_
+- Register support for ``cupy`` sparse ``hstack``/``vstack`` (:pr:`5735`) `Corey J. Nolet`_
+- Force ``self.name`` to ``str`` in ``dask.array`` (:pr:`6002`) `Chuanzhu Xu`_
+
+Bag
++++
+
+- Set ``rename_fused_keys`` to ``None`` by default in ``bag.optimize`` (:pr:`6000`) `Lucas Rademaker`_
+
+Core
+++++
+
+- Copy dict in ``to_graphviz`` to prevent overwriting (:pr:`5996`) `JulianWgs`_
+- Stricter pandas ``xfail`` (:pr:`6024`) `Tom Augspurger`_
+- Fix CI failures (:pr:`6013`) `James Bourbeau`_
+- Update ``toolz`` to 0.8.2 and use ``tlz`` (:pr:`5997`) `Ryan Grout`_
+- Move Windows CI builds to GitHub Actions (:pr:`5862`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+- Improve path-related exceptions in ``read_hdf`` (:pr:`6032`) `psimaj`_
+- Fix ``dtype`` handling in ``dd.concat`` (:pr:`6006`) `mlondschien`_
+- Handle cudf's leftsemi and leftanti joins (:pr:`6025`) `Richard J Zamora`_
+- Remove unused ``npartitions`` variable in ``dd.from_pandas`` (:pr:`6019`) `Daniel Saxton`_
+- Added shuffle to ``DataFrame.random_split`` (:pr:`5980`) `petiop`_
+
+Documentation
++++++++++++++
+
+- Fix indentation in scheduler-overview docs (:pr:`6022`) `Matthew Rocklin`_
+- Update task graphs in optimize docs (:pr:`5928`) `Julia Signell`_
+- Optionally get rid of intermediary boxes in visualize, and add more labels (:pr:`5976`) `Julia Signell`_
+
+
 2.12.0 / 2020-03-06
 -------------------
 
@@ -2997,3 +3038,10 @@ Other
 .. _`Thomas J Fan`: https://github.com/thomasjpfan
 .. _`Henrik Andersson`: https://github.com/hnra
 .. _`James Lamb`: https://github.com/jameslamb
+.. _`Corey J. Nolet`: https://github.com/cjnolet
+.. _`Chuanzhu Xu`: https://github.com/xcz011
+.. _`Lucas Rademaker`: https://github.com/lr4d
+.. _`JulianWgs`: https://github.com/JulianWgs
+.. _`psimaj`: https://github.com/psimaj
+.. _`mlondschien`: https://github.com/mlondschien
+.. _`petiop`: https://github.com/petiop
