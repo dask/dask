@@ -232,7 +232,8 @@ class ArrowEngine(Engine):
         # Therefore, we cannot perform filtering with split_row_groups=False.
         # For "partitioned" datasets, each file (usually) corresponds to a
         # row-group anyway.
-        # TODO: Map row-group statistics onto the file-level statistics.
+        # TODO: Map row-group statistics onto file pieces for filtering.
+        #       This shouldn't be difficult if `col_chunk_paths==True`
         if not split_row_groups:
             if gather_statistics is None and not partitions:
                 gather_statistics = False
