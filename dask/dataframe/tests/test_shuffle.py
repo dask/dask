@@ -2,6 +2,7 @@ import itertools
 import os
 import random
 import tempfile
+from unittest import mock
 
 import pandas as pd
 import pytest
@@ -287,6 +288,28 @@ def test_rearrange_cleanup():
     with dask.config.set(temporay_directory=str(tmpdir)):
         result = rearrange_by_column(ddf2, "_partitions", max_branch=32, shuffle="disk")
         result.compute(scheduler="processes")
+
+    assert len(os.listdir(tmpdir)) == 0
+
+
+def test_rearrange_disk_cleanup_with_exception():
+    # ensure temporary files are cleaned up when there's an internal exception.
+    def mock_shuffle_group_3(df, col, npartitions, p):
+        raise ValueError("Mock exception!")
+
+    with mock.patch("dask.dataframe.shuffle.shuffle_group_3", new=mock_shuffle_group_3):
+        df = pd.DataFrame({"x": np.random.random(10)})
+        ddf = dd.from_pandas(df, npartitions=4)
+        ddf2 = ddf.assign(_partitions=ddf.x % 4)
+
+        tmpdir = tempfile.mkdtemp()
+
+        with dask.config.set(temporay_directory=str(tmpdir)):
+            with pytest.raises(ValueError, match="Mock exception!"):
+                result = rearrange_by_column(
+                    ddf2, "_partitions", max_branch=32, shuffle="disk"
+                )
+                result.compute(scheduler="processes")
 
     assert len(os.listdir(tmpdir)) == 0
 

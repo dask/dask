@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import math
 import shutil
@@ -655,8 +656,9 @@ def cleanup_partd_files(p, keys):
 
 def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    res = p.get(part)
-    return res if len(res) > 0 else meta
+    with ensure_cleanup_on_exception(p):
+        res = p.get(part)
+        return res if len(res) > 0 else meta
 
 
 def set_partitions_pre(s, divisions):
@@ -725,17 +727,25 @@ def shuffle_group(df, col, stage, k, npartitions, ignore_index):
     return group_split_dispatch(df, c.astype(np.int64), k, ignore_index=ignore_index)
 
 
-def shuffle_group_3(df, col, npartitions, p):
+@contextlib.contextmanager
+def ensure_cleanup_on_exception(p):
     try:
-        g = df.groupby(col)
-        d = {i: g.get_group(i) for i in g.groups}
-        p.append(d, fsync=True)
+        yield
     except Exception:
+        # the function (e.g. shuffle_group_3) had an internal exception.
+        # We'll cleanup our temporary files and re-raise.
         try:
             p.drop()
         except Exception:
-            logger.exception("ignoring exception dask.dataframe.shuffle.collect")
+            logger.exception("ignoring exception in ensure_cleanup_on_exception")
         raise
+
+
+def shuffle_group_3(df, col, npartitions, p):
+    with ensure_cleanup_on_exception(p):
+        g = df.groupby(col)
+        d = {i: g.get_group(i) for i in g.groups}
+        p.append(d, fsync=True)
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):
