@@ -412,7 +412,7 @@ def map_blocks(
     drop_axis=[],
     new_axis=None,
     meta=None,
-    **kwargs
+    **kwargs,
 ):
     """ Map a function across all blocks of a dask array.
 
@@ -811,7 +811,7 @@ def store(
     regions=None,
     compute=True,
     return_stored=False,
-    **kwargs
+    **kwargs,
 ):
     """ Store dask arrays in array-like objects, overwrite data in target
 
@@ -2696,6 +2696,15 @@ def from_array(
         changed by installing cityhash, xxhash or murmurhash. If installed,
         a large-factor speedup can be obtained in the tokenisation step.
         Use ``name=False`` to generate a random name instead of hashing (fast)
+
+        .. note::
+
+           Because this ``name`` is used as the key in task graphs, you should
+           ensure that it uniquely identifies the data contained within. If
+           you'd like to provide a descriptive name that is still unique, combine
+           the descriptive name with :func:`dask.base.tokenize` of the
+           ``array_like``. See :ref:`graphs` for more.
+
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
         pass in True to have dask.array create one for you.
@@ -2731,6 +2740,12 @@ def from_array(
     >>> a = da.from_array(x, chunks='auto')  # doctest: +SKIP
     >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
     >>> a = da.from_array(x)  # doctest: +SKIP
+
+    If providing a name, ensure that it is unique
+
+    >>> import dask.base
+    >>> token = dask.base.tokenize(x)
+    >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
     """
     if isinstance(x, Array):
         raise ValueError(
@@ -2852,7 +2867,7 @@ def to_zarr(
     overwrite=False,
     compute=True,
     return_stored=False,
-    **kwargs
+    **kwargs,
 ):
     """Save array to the zarr storage format
 

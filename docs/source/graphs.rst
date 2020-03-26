@@ -1,3 +1,5 @@
+.. _graphs:
+
 Task Graphs
 ===========
 
