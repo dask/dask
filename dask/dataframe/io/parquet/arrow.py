@@ -129,13 +129,7 @@ def _get_filesystem_and_path(passed_filesystem, path):
 
 
 def _write_partitioned(
-    df,
-    schema,
-    root_path,
-    partition_cols,
-    preserve_index=True,
-    filesystem=None,
-    **kwargs,
+    table, root_path, partition_cols, preserve_index=True, filesystem=None, **kwargs
 ):
     """ Write table to a partitioned dataset with pyarrow.
 
@@ -145,14 +139,15 @@ def _write_partitioned(
     fs, root_path = _get_filesystem_and_path(filesystem, root_path)
     fs.mkdirs(root_path, exist_ok=True)
 
+    df = table.to_pandas(ignore_metadata=True)
     partition_keys = [df[col] for col in partition_cols]
     data_df = df.drop(partition_cols, axis="columns")
     data_cols = df.columns.drop(partition_cols)
     if len(data_cols) == 0 and not preserve_index:
         raise ValueError("No data left to save outside partition columns")
 
-    subschema = schema
-    for col in schema.names:
+    subschema = table.schema
+    for col in table.schema.names:
         if col in partition_cols:
             subschema = subschema.remove(subschema.get_field_index(col))
 
@@ -167,7 +162,7 @@ def _write_partitioned(
             ]
         )
         subtable = pa.Table.from_pandas(
-            subgroup, preserve_index=preserve_index, schema=subschema, safe=False
+            subgroup, preserve_index=False, schema=subschema, safe=False
         )
         prefix = "/".join([root_path, subdir])
         fs.mkdir(prefix, exists_ok=True)
@@ -607,8 +602,7 @@ class ArrowEngine(Engine):
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
             md_list = _write_partitioned(
-                df,
-                t.schema,
+                t,
                 path,
                 partition_on,
                 preserve_index=preserve_index,
