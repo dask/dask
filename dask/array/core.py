@@ -2744,7 +2744,7 @@ def from_array(
     If providing a name, ensure that it is unique
 
     >>> import dask.base
-    >>> token = dask.base.tokenize(x)
+    >>> token = dask.base.tokenize(x)  # doctest: +SKIP
     >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
     """
     if isinstance(x, Array):
