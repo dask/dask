@@ -1002,9 +1002,14 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
             ("partition_column", pa.int64()),
         ]
     )
-    ddf.to_parquet(
-        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
+    fut = ddf.to_parquet(
+        str(tmpdir),
+        compute=False,
+        engine="pyarrow",
+        partition_on="partition_column",
+        schema=schema,
     )
+    fut.compute(scheduler="single-threaded")
     ddf_after_write = (
         dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
         .compute()

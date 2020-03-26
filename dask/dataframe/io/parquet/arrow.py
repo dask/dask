@@ -145,13 +145,10 @@ def _write_partitioned(
     fs.mkdirs(root_path, exist_ok=True)
 
     df = part.copy(deep=False)
-    if preserve_index:
-        df.reset_index(drop=False, inplace=True)
-
     partition_keys = [df[col] for col in partition_cols]
     data_df = df.drop(partition_cols, axis="columns")
     data_cols = df.columns.drop(partition_cols)
-    if len(data_cols) == 0:
+    if len(data_cols) == 0 and not preserve_index:
         raise ValueError("No data left to save outside partition columns")
 
     subschema = schema
@@ -170,7 +167,7 @@ def _write_partitioned(
             ]
         )
         subtable = pa.Table.from_pandas(
-            subgroup, preserve_index=False, schema=subschema, safe=False
+            subgroup, preserve_index=preserve_index, schema=subschema, safe=False
         )
         prefix = "/".join([root_path, subdir])
         fs.mkdir(prefix, exists_ok=True)
@@ -570,7 +567,7 @@ class ArrowEngine(Engine):
         schema=None,
         **kwargs,
     ):
-        md_list = []
+        _meta = None
         preserve_index = False
         if index_cols:
             df = df.set_index(index_cols)
@@ -591,6 +588,7 @@ class ArrowEngine(Engine):
                 for i in range(1, len(md_list)):
                     _meta.append_row_groups(md_list[i])
         else:
+            md_list = []
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                 pq.write_table(
                     t,
