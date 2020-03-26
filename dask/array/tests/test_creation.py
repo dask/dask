@@ -719,6 +719,34 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r, da_r)
 
 
+@pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
+@pytest.mark.parametrize("pad_widths", [2, (2,), ((2, 3),), ((3, 1), (0, 0), (2, 0))])
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "constant",
+        "edge",
+        "linear_ramp",
+        "maximum",
+        "mean",
+        "minimum",
+        "reflect",
+        "symmetric",
+        "wrap",
+        pytest.param("median", marks=pytest.mark.xfail(reason="Not implemented"),),
+        pytest.param("empty", marks=pytest.mark.xfail(reason=""),),
+    ],
+)
+def test_pad_3d_data(dtype, pad_widths, mode):
+    np_a = np.arange(2 * 3 * 4).reshape(2, 3, 4).astype(dtype)
+    da_a = da.from_array(np_a, chunks="auto")
+
+    np_r = np.pad(np_a, pad_widths, mode=mode)
+    da_r = da.pad(da_a, pad_widths, mode=mode)
+
+    assert_eq(np_r, da_r)
+
+
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
 def test_pad_udf(kwargs):
     def udf_pad(vector, pad_width, iaxis, kwargs):
