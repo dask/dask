@@ -64,6 +64,37 @@ def _get_row_groups_per_piece(pieces, metadata, path, fs):
     return tuple(result.values())
 
 
+def _merge_statistics(stats, s):
+    """ Update `stats` with vaules in `s`
+    """
+    stats[-1]["total_byte_size"] += s["total_byte_size"]
+    stats[-1]["num-rows"] += s["num-rows"]
+    ncols = len(stats[-1]["columns"])
+    ncols_n = len(s["columns"])
+    if ncols != ncols_n:
+        raise ValueError(f"Column count not equal ({ncols} vs {ncols_n})")
+    for i in range(ncols):
+        name = stats[-1]["columns"][i]["name"]
+        j = i
+        for ii in range(ncols):
+            if name == s["columns"][j]["name"]:
+                break
+            if ii == ncols - 1:
+                raise KeyError(f"Column statistics missing for {name}")
+            j = (j + 1) % ncols
+
+        min_n = s["columns"][j]["min"]
+        max_n = s["columns"][j]["max"]
+        null_count_n = s["columns"][j]["null_count"]
+
+        min_i = stats[-1]["columns"][i]["min"]
+        max_i = stats[-1]["columns"][i]["max"]
+        stats[-1]["columns"][i]["min"] = min(min_i, min_n)
+        stats[-1]["columns"][i]["max"] = min(max_i, max_n)
+        stats[-1]["columns"][i]["null_count"] += null_count_n
+    return True
+
+
 def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
     """ Determine how to access metadata and break read into ``parts``
 
@@ -129,13 +160,7 @@ def _get_filesystem_and_path(passed_filesystem, path):
 
 
 def _write_partitioned(
-    part,
-    schema,
-    root_path,
-    partition_cols,
-    preserve_index=True,
-    filesystem=None,
-    **kwargs,
+    table, root_path, partition_cols, preserve_index=True, filesystem=None, **kwargs
 ):
     """ Write table to a partitioned dataset with pyarrow.
 
@@ -145,18 +170,15 @@ def _write_partitioned(
     fs, root_path = _get_filesystem_and_path(filesystem, root_path)
     fs.mkdirs(root_path, exist_ok=True)
 
-    df = part.copy(deep=False)
-    if preserve_index:
-        df = df.reset_index()
-
+    df = table.to_pandas(ignore_metadata=True)
     partition_keys = [df[col] for col in partition_cols]
     data_df = df.drop(partition_cols, axis="columns")
     data_cols = df.columns.drop(partition_cols)
     if len(data_cols) == 0 and not preserve_index:
         raise ValueError("No data left to save outside partition columns")
 
-    subschema = schema
-    for col in schema.names:
+    subschema = table.schema
+    for col in table.schema.names:
         if col in partition_cols:
             subschema = subschema.remove(subschema.get_field_index(col))
 
@@ -238,16 +260,18 @@ class ArrowEngine(Engine):
         # row-group anyway.
         # TODO: Map row-group statistics onto file pieces for filtering.
         #       This shouldn't be difficult if `col_chunk_paths==True`
-        if not split_row_groups:
+        if not split_row_groups and not col_chunk_paths:
             if gather_statistics is None and not partitions:
                 gather_statistics = False
                 if filters:
                     raise ValueError(
-                        "Filters not supported with split_row_groups=False."
+                        "Filters not supported with split_row_groups=False "
+                        "(unless proper _metadata is available)."
                     )
             if gather_statistics and not partitions:
                 raise ValueError(
                     "Statistics not supported with split_row_groups=False."
+                    "(unless proper _metadata is available)."
                 )
 
         if dataset.metadata:
@@ -369,6 +393,7 @@ class ArrowEngine(Engine):
         if gather_statistics:
             stats = []
             skip_cols = set()  # Columns with min/max = None detected
+            path_last = None
             for ri, row_group in enumerate(row_groups):
                 s = {"num-rows": row_group.num_rows, "columns": []}
                 for i, name in enumerate(names):
@@ -393,6 +418,17 @@ class ArrowEngine(Engine):
                             )
                         s["columns"].append(d)
                 s["total_byte_size"] = row_group.total_byte_size
+                if col_chunk_paths:
+                    s["file_path_0"] = row_group.column(0).file_path
+                    if not split_row_groups and (s["file_path_0"] == path_last):
+                        # Rather than appending a new "row-group", just merge
+                        # new `s` statistics into last element of `stats`.
+                        # Note that each stats element will now correspond to an
+                        # entire file (rather than actual "row-groups")
+                        _merge_statistics(stats, s)
+                        continue
+                    else:
+                        path_last = s["file_path_0"]
                 stats.append(s)
         else:
             stats = None
@@ -426,7 +462,8 @@ class ArrowEngine(Engine):
                         parts.append((piece.path, rg, piece.partition_keys))
                         # Setting file_path here, because it may be
                         # missing from the row-group/column-chunk stats
-                        stats[rg_tot]["file_path_0"] = piece.path
+                        if "file_path_0" not in stats[rg_tot]:
+                            stats[rg_tot]["file_path_0"] = piece.path
                         rg_tot += 1
             else:
                 parts = [
@@ -611,8 +648,7 @@ class ArrowEngine(Engine):
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
             md_list = _write_partitioned(
-                df,
-                t.schema,
+                t,
                 path,
                 partition_on,
                 preserve_index=preserve_index,

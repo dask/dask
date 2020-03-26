@@ -2109,7 +2109,7 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=False, split_row_groups=False
+        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 2
 
@@ -2127,9 +2127,39 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 12
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=False, split_row_groups=False
+        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
+
+
+def test_split_row_groups_filter_pyarrow(tmpdir):
+    check_pyarrow()
+    tmp = str(tmpdir)
+    df = pd.DataFrame(
+        {"i32": np.arange(800, dtype=np.int32), "f": np.arange(800, dtype=np.float64)}
+    )
+    df.index.name = "index"
+    search_val = 600
+    filters = [("f", "==", search_val)]
+
+    dd.from_pandas(df, npartitions=4).to_parquet(
+        tmp, append=True, engine="pyarrow", row_group_size=50
+    )
+
+    ddf2 = dd.read_parquet(tmp, engine="pyarrow")
+    ddf3 = dd.read_parquet(
+        tmp,
+        engine="pyarrow",
+        gather_statistics=True,
+        split_row_groups=False,
+        filters=filters,
+    )
+
+    assert search_val in ddf3["i32"]
+    assert_eq(
+        ddf2[ddf2["i32"] == search_val].compute(),
+        ddf3[ddf3["i32"] == search_val].compute(),
+    )
 
 
 def test_optimize_getitem_and_nonblockwise(tmpdir):
