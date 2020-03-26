@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - zstandard
-  - bokeh=1.4.0
+  - bokeh!=2.0.0
   - click
   - cloudpickle
   - dask
