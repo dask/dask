@@ -25,7 +25,6 @@ from dask.dataframe.shuffle import (
     remove_nans,
 )
 from dask.dataframe.utils import assert_eq, make_meta
-from dask.compatibility import PY_VERSION
 
 
 dsk = {
@@ -258,8 +257,8 @@ def test_shuffle_sort(shuffle):
     assert_eq(ddf2.loc[2:3], df2.loc[2:3])
 
 
-@pytest.mark.parametrize("shuffle", ["disk"])
-@pytest.mark.parametrize("scheduler", ["processes"])
+@pytest.mark.parametrize("shuffle", ["tasks", "disk"])
+@pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_rearrange(shuffle, scheduler):
     df = pd.DataFrame({"x": np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
@@ -792,34 +791,6 @@ def test_compute_divisions():
     # Partitions overlap warning
     with pytest.warns(UserWarning):
         compute_divisions(c)
-
-
-# TODO: Fix sporadic failure on Python 3.8 and remove this xfail mark
-@pytest.mark.xfail(PY_VERSION >= "3.8", reason="Flaky test", strict=False)
-def test_temporary_directory(tmpdir):
-    from multiprocessing.pool import Pool
-
-    df = pd.DataFrame(
-        {
-            "x": np.random.random(100),
-            "y": np.random.random(100),
-            "z": np.random.random(100),
-        }
-    )
-    ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
-
-    # We use a pool to avoid a race condition between the pool close
-    # cleaning up files, and the assert below.
-    pool = Pool(4)
-    with pool:
-        with dask.config.set(
-            temporary_directory=str(tmpdir), scheduler="processes", pool=pool
-        ):
-            ddf2 = ddf.set_index("x", shuffle="disk")
-            ddf2.compute()
-            assert any(
-                fn.endswith(".partd") for fn in os.listdir(str(tmpdir))
-            ), os.listdir(str(tmpdir))
 
 
 def test_empty_partitions():
