@@ -7,7 +7,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.compat import guid
-from pyarrow.filesystem import resolve_filesystem_and_path
 from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
@@ -153,21 +152,14 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     return parts, dataset
 
 
-def _get_filesystem_and_path(passed_filesystem, path):
-    if passed_filesystem is None:
-        return resolve_filesystem_and_path(path, passed_filesystem)
-    return passed_filesystem, path
-
-
 def _write_partitioned(
-    table, root_path, partition_cols, preserve_index=True, filesystem=None, **kwargs
+    table, root_path, partition_cols, fs, preserve_index=True, **kwargs
 ):
     """ Write table to a partitioned dataset with pyarrow.
 
         Logic copied from pyarrow.parquet.
         (arrow/python/pyarrow/parquet.py::write_to_dataset)
     """
-    fs, root_path = _get_filesystem_and_path(filesystem, root_path)
     fs.mkdirs(root_path, exist_ok=True)
 
     df = table.to_pandas(ignore_metadata=True)
@@ -186,7 +178,7 @@ def _write_partitioned(
     for keys, subgroup in data_df.groupby(partition_keys):
         if not isinstance(keys, tuple):
             keys = (keys,)
-        subdir = "/".join(
+        subdir = fs.sep.join(
             [
                 "{colname}={value}".format(colname=name, value=val)
                 for name, val in zip(partition_cols, keys)
@@ -195,13 +187,13 @@ def _write_partitioned(
         subtable = pa.Table.from_pandas(
             subgroup, preserve_index=False, schema=subschema, safe=False
         )
-        prefix = "/".join([root_path, subdir])
+        prefix = fs.sep.join([root_path, subdir])
         fs.mkdir(prefix, exists_ok=True)
         outfile = guid() + ".parquet"
-        full_path = "/".join([prefix, outfile])
+        full_path = fs.sep.join([prefix, outfile])
         with fs.open(full_path, "wb") as f:
             pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
-        md_list[-1].set_file_path("/".join([subdir, outfile]))
+        md_list[-1].set_file_path(fs.sep.join([subdir, outfile]))
 
     return md_list
 
@@ -648,12 +640,7 @@ class ArrowEngine(Engine):
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
             md_list = _write_partitioned(
-                t,
-                path,
-                partition_on,
-                preserve_index=preserve_index,
-                filesystem=fs,
-                **kwargs,
+                t, path, partition_on, fs, preserve_index=preserve_index, **kwargs
             )
             if md_list:
                 _meta = md_list[0]
