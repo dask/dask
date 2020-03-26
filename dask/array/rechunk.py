@@ -7,13 +7,14 @@ The rechunk module defines:
 """
 import math
 import heapq
+from functools import reduce
 
 from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
 
 import numpy as np
-import toolz
-from toolz import accumulate, reduce
+import tlz as toolz
+from tlz import accumulate
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph

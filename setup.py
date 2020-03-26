@@ -8,23 +8,23 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-    "array": ["numpy >= 1.13.0", "toolz >= 0.7.3"],
+    "array": ["numpy >= 1.13.0", "toolz >= 0.8.2"],
     "bag": [
-        "cloudpickle >= 0.2.1",
+        "cloudpickle >= 0.2.2",
         "fsspec >= 0.6.0",
-        "toolz >= 0.7.3",
+        "toolz >= 0.8.2",
         "partd >= 0.3.10",
     ],
     "dataframe": [
         "numpy >= 1.13.0",
         "pandas >= 0.23.0",
-        "toolz >= 0.7.3",
+        "toolz >= 0.8.2",
         "partd >= 0.3.10",
         "fsspec >= 0.6.0",
     ],
     "distributed": ["distributed >= 2.0"],
     "diagnostics": ["bokeh >= 1.0.0"],
-    "delayed": ["cloudpickle >= 0.2.1", "toolz >= 0.7.3"],
+    "delayed": ["cloudpickle >= 0.2.2", "toolz >= 0.8.2"],
 }
 extras_require["complete"] = sorted(
     {"PyYaml"} | {v for req in extras_require.values() for v in req}

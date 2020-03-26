@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_ns_dtype
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_100
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_VERSION
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
@@ -548,6 +548,10 @@ def test_scalar_arithmetics_with_dask_instances():
     assert_eq(result, pdf + e)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION == "1.0.2",
+    reason="https://github.com/pandas-dev/pandas/issues/32685",
+)
 def test_frame_series_arithmetic_methods():
     pdf1 = pd.DataFrame(
         {

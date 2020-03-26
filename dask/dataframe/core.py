@@ -15,7 +15,7 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_datetime64_any_dtype,
 )
-from toolz import merge, first, unique, partition_all, remove
+from tlz import merge, first, unique, partition_all, remove
 
 try:
     from chest import Chest as Cache
@@ -931,16 +931,19 @@ Dask Name: {name}, {task} tasks"""
         else:
             return func(self, *args, **kwargs)
 
-    def random_split(self, frac, random_state=None):
+    def random_split(self, frac, random_state=None, shuffle=False):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
         Parameters
         ----------
         frac : list
             List of floats that should sum to one.
-        random_state: int or np.random.RandomState
-            If int create a new RandomState with this as the seed
-        Otherwise draw from the passed RandomState
+        random_state : int or np.random.RandomState
+            If int create a new RandomState with this as the seed.
+            Otherwise draw from the passed RandomState.
+        shuffle : bool, default False
+            If set to True, the dataframe is shuffled (within partition)
+            before the split.
 
         Examples
         --------
@@ -963,7 +966,7 @@ Dask Name: {name}, {task} tasks"""
         token = tokenize(self, frac, random_state)
         name = "split-" + token
         layer = {
-            (name, i): (pd_split, (self._name, i), frac, state)
+            (name, i): (pd_split, (self._name, i), frac, state, shuffle)
             for i, state in enumerate(state_data)
         }
 
@@ -5428,25 +5431,31 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     return pd.DataFrame(mat, columns=cols, index=cols)
 
 
-def pd_split(df, p, random_state=None):
+def pd_split(df, p, random_state=None, shuffle=False):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
     ...                    'b': [2, 3, 4, 5, 6, 7]})
 
-    >>> a, b = pd_split(df, [0.5, 0.5], random_state=123)  # roughly 50/50 split
+    >>> a, b = pd_split(
+    ...     df, [0.5, 0.5], random_state=123, shuffle=True
+    ... )  # roughly 50/50 split
     >>> a
        a  b
-    1  2  3
-    2  3  4
+    3  4  5
+    0  1  2
     5  6  7
     >>> b
        a  b
-    0  1  2
-    3  4  5
+    1  2  3
     4  5  6
+    2  3  4
     """
     p = list(p)
+    if shuffle:
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        df = df.sample(frac=1.0, random_state=random_state)
     index = pseudorandom(len(df), p, random_state)
     return [df.iloc[index == i] for i in range(len(p))]
 

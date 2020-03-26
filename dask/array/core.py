@@ -1,4 +1,3 @@
-import copy
 import math
 import operator
 import os
@@ -10,19 +9,14 @@ import uuid
 import warnings
 from bisect import bisect
 from collections.abc import Iterable, Iterator, Mapping
-from functools import partial, wraps
+from functools import partial, wraps, reduce
 from itertools import product, zip_longest
 from numbers import Number, Integral
 from operator import add, getitem, mul
 from threading import Lock
 
-try:
-    from cytoolz import partition, concat, first, groupby, accumulate
-    from cytoolz.curried import pluck
-except ImportError:
-    from toolz import partition, concat, first, groupby, accumulate
-    from toolz.curried import pluck
-from toolz import map, reduce, frequencies
+from tlz import partition, concat, first, groupby, accumulate, frequencies
+from tlz.curried import pluck
 import numpy as np
 
 from . import chunk
@@ -35,7 +29,7 @@ from ..base import (
     persist,
     is_dask_collection,
 )
-from ..blockwise import broadcast_dimensions, subs
+from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
 from ..utils import (
     ndeepmap,
@@ -397,6 +391,17 @@ def normalize_arg(x):
         return x
 
 
+def _pass_extra_kwargs(func, keys, *args, **kwargs):
+    """ Helper for :func:`map_blocks` to pass `block_info` or `block_id`.
+
+    For each element of `keys`, a corresponding element of args is changed
+    to a keyword argument with that key, before all arguments re passed on
+    to `func`.
+    """
+    kwargs.update(zip(keys, args))
+    return func(*args[len(keys) :], **kwargs)
+
+
 def map_blocks(
     func,
     *args,
@@ -585,11 +590,6 @@ def map_blocks(
     else:
         out_ind = ()
 
-    if has_keyword(func, "block_id"):
-        kwargs["block_id"] = "__block_id_dummy__"
-    if has_keyword(func, "block_info"):
-        kwargs["block_info"] = "__block_info_dummy__"
-
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
@@ -637,21 +637,27 @@ def map_blocks(
         **kwargs,
     )
 
-    if has_keyword(func, "block_id") or has_keyword(func, "block_info") or drop_axis:
-        dsk = out.dask.layers[out.name]
-        dsk = dict(dsk)
-        out.dask.layers[out.name] = dsk
-
+    extra_argpairs = []
+    extra_names = []
+    # If func has block_id as an argument, construct an array of block IDs and
+    # prepare to inject it.
     if has_keyword(func, "block_id"):
-        for k, vv in dsk.items():
-            v = copy.copy(vv[0])  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__block_id_dummy__": k[1:]})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
+        block_id_name = "block-id-" + out.name
+        block_id_dsk = {
+            (block_id_name,) + block_id: block_id
+            for block_id in product(*(range(len(c)) for c in out.chunks))
+        }
+        block_id_array = Array(
+            block_id_dsk,
+            block_id_name,
+            chunks=tuple((1,) * len(c) for c in out.chunks),
+            dtype=np.object_,
+        )
+        extra_argpairs.append((block_id_array, out_ind))
+        extra_names.append("block_id")
 
-    # If func has block_info as an argument, add it to the kwargs for each call
+    # If func has block_info as an argument, construct an array of block info
+    # objects and prepare to inject it.
     if has_keyword(func, "block_info"):
         starts = {}
         num_chunks = {}
@@ -679,13 +685,11 @@ def map_blocks(
                     num_chunks[i] = arg.numblocks
         out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
-        for k, v in dsk.items():
-            vv = v
-            v = v[0]
-            [(key, task)] = v.dsk.items()  # unpack subgraph callable
-
+        block_info_name = "block-info-" + out.name
+        block_info_dsk = {}
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
             # Get position of chunk, indexed by axis labels
-            location = {out_ind[i]: loc for i, loc in enumerate(k[1:])}
+            location = {out_ind[i]: loc for i, loc in enumerate(block_id)}
             info = {}
             for i, shape in shapes.items():
                 # Compute chunk key in the array, taking broadcasting into
@@ -711,19 +715,47 @@ def map_blocks(
                 "num-chunks": out.numblocks,
                 "array-location": [
                     (out_starts[ij][j], out_starts[ij][j + 1])
-                    for ij, j in enumerate(k[1:])
+                    for ij, j in enumerate(block_id)
                 ],
-                "chunk-location": k[1:],
-                "chunk-shape": tuple(out.chunks[ij][j] for ij, j in enumerate(k[1:])),
+                "chunk-location": block_id,
+                "chunk-shape": tuple(
+                    out.chunks[ij][j] for ij, j in enumerate(block_id)
+                ),
                 "dtype": dtype,
             }
+            block_info_dsk[(block_info_name,) + block_id] = info
 
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__block_info_dummy__": info})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
+        block_info = Array(
+            block_info_dsk,
+            block_info_name,
+            chunks=tuple((1,) * len(c) for c in out.chunks),
+            dtype=np.object_,
+        )
+        extra_argpairs.append((block_info, out_ind))
+        extra_names.append("block_info")
+
+    if extra_argpairs:
+        # Rewrite the Blockwise layer. It would be nice to find a way to
+        # avoid doing it twice, but it's currently needed to determine
+        # out.chunks from the first pass. Since it constructs a Blockwise
+        # rather than an expanded graph, it shouldn't be too expensive.
+        out = blockwise(
+            _pass_extra_kwargs,
+            out_ind,
+            func,
+            None,
+            tuple(extra_names),
+            None,
+            *concat(extra_argpairs),
+            *concat(argpairs),
+            name=out.name,
+            dtype=out.dtype,
+            concatenate=True,
+            align_arrays=False,
+            adjust_chunks=dict(zip(out_ind, out.chunks)),
+            meta=meta,
+            **kwargs,
+        )
 
     return out
 
@@ -1004,7 +1036,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
-        self.name = name
+        self.name = str(name)
         meta = meta_from_array(meta, dtype=dtype)
 
         if (

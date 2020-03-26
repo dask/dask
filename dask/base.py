@@ -10,8 +10,8 @@ import threading
 import uuid
 from distutils.version import LooseVersion
 
-from toolz import merge, groupby, curry, identity
-from toolz.functoolz import Compose
+from tlz import merge, groupby, curry, identity
+from tlz.functoolz import Compose
 
 from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
@@ -458,9 +458,15 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color: {None, 'order'}, optional
+    color : {None, 'order'}, optional
         Options to color nodes.  Provide ``cmap=`` keyword for additional
         colormap
+    collapse_outputs : bool, optional
+        Whether to collapse output boxes, which often have empty labels.
+        Default is False.
+    verbose : bool, optional
+        Whether to label output and input boxes even if the data aren't chunked.
+        Beware: these labels can get very long. Default is False.
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
 
@@ -717,13 +723,11 @@ def normalize_function(func):
 
 
 def _normalize_function(func):
-    if isinstance(func, curry):
-        func = func._partial
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
         return tuple(normalize_function(f) for f in funcs)
-    elif isinstance(func, partial):
+    elif isinstance(func, (partial, curry)):
         args = tuple(normalize_token(i) for i in func.args)
         if func.keywords:
             kws = tuple(

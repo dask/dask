@@ -4,9 +4,9 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
+  - python=3.8.*
   - numpy=1.17.*
-  - pandas=0.25.*
+  - pandas=1.0.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -49,8 +49,6 @@ dependencies:
   - cachey
   - python-graphviz
   - pandas-datareader
+  - python-xxhash
+  - mmh3
   - pip
-  - pip:
-      - cityhash
-      - mmh3
-      - xxhash

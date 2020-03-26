@@ -6,7 +6,7 @@ import uuid
 import tempfile
 import warnings
 
-import toolz
+import tlz as toolz
 import numpy as np
 import pandas as pd
 
