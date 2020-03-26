@@ -222,13 +222,6 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    if filters:
-        # Filters require us to gather statistics
-        if gather_statistics is False:
-            raise ValueError("Cannot apply filters with gather_statistics=False")
-        elif not gather_statistics:
-            gather_statistics = True
-
     meta, statistics, parts = engine.read_metadata(
         fs,
         paths,

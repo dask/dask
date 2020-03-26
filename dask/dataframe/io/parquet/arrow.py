@@ -1,6 +1,7 @@
 from functools import partial
 from collections import OrderedDict
 import json
+import warnings
 
 import pandas as pd
 import pyarrow as pa
@@ -128,7 +129,7 @@ def _get_filesystem_and_path(passed_filesystem, path):
 
 
 def _write_partitioned(
-    part,
+    df,
     schema,
     root_path,
     partition_cols,
@@ -144,7 +145,6 @@ def _write_partitioned(
     fs, root_path = _get_filesystem_and_path(filesystem, root_path)
     fs.mkdirs(root_path, exist_ok=True)
 
-    df = part.copy(deep=False)
     partition_keys = [df[col] for col in partition_cols]
     data_df = df.drop(partition_cols, axis="columns")
     data_cols = df.columns.drop(partition_cols)
@@ -199,6 +199,8 @@ class ArrowEngine(Engine):
         parts, dataset = _determine_dataset_parts(
             fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
         )
+        # Check if the column-chunk file_path's are set in "_metadata".
+        # If available, we can use the path to sort the row-groups
         col_chunk_paths = False
         if dataset.metadata:
             col_chunk_paths = all(
@@ -225,6 +227,23 @@ class ArrowEngine(Engine):
                     dataset.metadata = None
         else:
             partitions = []
+
+        # Statistics are currently collected at the row-group level only.
+        # Therefore, we cannot perform filtering with split_row_groups=False.
+        # For "partitioned" datasets, each file (usually) corresponds to a
+        # row-group anyway.
+        # TODO: Map row-group statistics onto the file-level statistics.
+        if not split_row_groups:
+            if gather_statistics is None and not partitions:
+                gather_statistics = False
+                if filters:
+                    raise ValueError(
+                        "Filters not supported with split_row_groups=False."
+                    )
+            if gather_statistics and not partitions:
+                raise ValueError(
+                    "Statistics not supported with split_row_groups=False."
+                )
 
         if dataset.metadata:
             schema = dataset.metadata.schema.to_arrow_schema()
@@ -296,6 +315,18 @@ class ArrowEngine(Engine):
             gather_statistics = True
         if not pieces:
             gather_statistics = False
+
+        if filters:
+            # Filters may require us to gather statistics
+            if gather_statistics is False and partitions:
+                warnings.warn(
+                    "Filtering with gather_statistics=False. "
+                    "Only partition columns will be filtered correctly."
+                )
+            elif gather_statistics is False:
+                raise ValueError("Cannot apply filters with gather_statistics=False")
+            elif not gather_statistics:
+                gather_statistics = True
 
         row_groups_per_piece = None
         if gather_statistics:

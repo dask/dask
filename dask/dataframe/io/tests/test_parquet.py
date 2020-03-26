@@ -2109,7 +2109,7 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
+        tmp, engine="pyarrow", gather_statistics=False, split_row_groups=False
     )
     assert ddf3.npartitions == 2
 
@@ -2127,7 +2127,7 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 12
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
+        tmp, engine="pyarrow", gather_statistics=False, split_row_groups=False
     )
     assert ddf3.npartitions == 4
 
