@@ -159,6 +159,9 @@ def _write_partitioned(
 
         Logic copied from pyarrow.parquet.
         (arrow/python/pyarrow/parquet.py::write_to_dataset)
+
+        TODO: Remove this in favor of pyarrow's `write_to_dataset`
+              once ARROW-8244 is addressed.
     """
     fs.mkdirs(root_path, exist_ok=True)
 
