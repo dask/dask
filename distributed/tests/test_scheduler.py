@@ -2071,3 +2071,14 @@ async def test_worker_name_collision(s, a):
     s.validate_state()
     assert set(s.workers) == {a.address}
     assert s.aliases == {a.name: a.address}
+
+
+@gen_cluster(client=True, config={"distributed.scheduler.unknown-task-duration": "1h"})
+async def test_unknown_task_duration_config(client, s, a, b):
+    future = client.submit(slowinc, 1)
+    while not s.tasks:
+        await asyncio.sleep(0.001)
+    assert sum(s.get_task_duration(ts) for ts in s.tasks.values()) == 3600
+    assert len(s.unknown_durations) == 1
+    await wait(future)
+    assert len(s.unknown_durations) == 0

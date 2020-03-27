@@ -3700,7 +3700,7 @@ class Scheduler(ServerNode):
         """
         return sum(dts.nbytes for dts in ts.dependencies - ws.has_what) / self.bandwidth
 
-    def get_task_duration(self, ts, default=0.5):
+    def get_task_duration(self, ts, default=None):
         """
         Get the estimated computation cost of the given task
         (not including any communication cost).
@@ -3708,6 +3708,10 @@ class Scheduler(ServerNode):
         duration = ts.prefix.duration_average
         if duration is None:
             self.unknown_durations[ts.prefix.name].add(ts)
+            if default is None:
+                default = parse_timedelta(
+                    dask.config.get("distributed.scheduler.unknown-task-duration")
+                )
             return default
 
         return duration
