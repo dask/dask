@@ -419,8 +419,9 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     }
     cleanup_token = "cleanup-" + always_new_token
     barrier_token2 = "barrier2-" + always_new_token
+    # A task that depends on `cleanup-`, but has a small output
     dsk5 = {(barrier_token2, i): (barrier, part) for i, part in enumerate(dsk4)}
-
+    # This indirectly depends on `cleanup-` and so runs after we're done using the disk
     dsk6 = {cleanup_token: (cleanup_partd_files, p, list(dsk5))}
 
     name = "shuffle-collect-2" + token
@@ -635,8 +636,8 @@ def cleanup_partd_files(p, keys):
     ----------
     p : partd.Interface
         File or Encode wrapping a file should be OK.
-    exc_only : bool, default True
-        Whether to cleanup if and only if there's an exception.
+    keys: List
+        Just for scheduling purposes, not actually used.
     """
     import partd
 
@@ -729,6 +730,12 @@ def shuffle_group(df, col, stage, k, npartitions, ignore_index):
 
 @contextlib.contextmanager
 def ensure_cleanup_on_exception(p):
+    """Ensure a partd.File is cleaned up.
+
+    We have several tasks referring to a `partd.File` instance. We want to
+    ensure that the file is cleaned up if and only if there's an exception
+    in the tasks using the `partd.File`.
+    """
     try:
         yield
     except Exception:
