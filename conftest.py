@@ -12,7 +12,10 @@ try:
 except ImportError:
     pass
 else:
-    faulthandler.enable()
+    try:
+        faulthandler.enable()
+    except Exception:
+        pass
 
 
 def pytest_addoption(parser):
