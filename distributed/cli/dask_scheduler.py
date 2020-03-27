@@ -3,9 +3,7 @@ import logging
 import gc
 import os
 import re
-import shutil
 import sys
-import tempfile
 import warnings
 
 import click
@@ -105,9 +103,6 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
     "cluster is on a shared network file system.",
 )
 @click.option(
-    "--local-directory", default="", type=str, help="Directory to place scheduler files"
-)
-@click.option(
     "--preload",
     type=str,
     multiple=True,
@@ -136,7 +131,6 @@ def main(
     dashboard_prefix,
     use_xheaders,
     pid_file,
-    local_directory,
     tls_ca_file,
     tls_cert,
     tls_key,
@@ -194,17 +188,6 @@ def main(
 
         atexit.register(del_pid_file)
 
-    local_directory_created = False
-    if local_directory:
-        if not os.path.exists(local_directory):
-            os.mkdir(local_directory)
-            local_directory_created = True
-    else:
-        local_directory = tempfile.mkdtemp(prefix="scheduler-")
-        local_directory_created = True
-    if local_directory not in sys.path:
-        sys.path.insert(0, local_directory)
-
     if sys.platform.startswith("linux"):
         import resource  # module fails importing on Windows
 
@@ -224,7 +207,6 @@ def main(
         service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
         **kwargs
     )
-    logger.info("Local Directory: %26s", local_directory)
     logger.info("-" * 47)
 
     install_signal_handlers(loop)
@@ -237,8 +219,6 @@ def main(
         loop.run_sync(run)
     finally:
         scheduler.stop()
-        if local_directory_created:
-            shutil.rmtree(local_directory)
 
         logger.info("End scheduler at %r", scheduler.address)
 
