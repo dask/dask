@@ -5449,6 +5449,9 @@ def test_mixing_clients(s, a, b):
     future = c1.submit(inc, 1)
     with pytest.raises(ValueError):
         c2.submit(inc, future)
+
+    assert not c2.futures  # Don't create Futures on second Client
+
     yield c1.close()
     yield c2.close()
 

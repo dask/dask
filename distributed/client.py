@@ -2452,8 +2452,6 @@ class Client(Node):
                 actors = list(self._expand_key(actors))
 
             keyset = set(keys)
-            flatkeys = list(map(tokey, keys))
-            futures = {key: Future(key, self, inform=False) for key in keyset}
 
             values = {
                 k: v
@@ -2506,12 +2504,13 @@ class Client(Node):
             if isinstance(retries, Number) and retries > 0:
                 retries = {k: retries for k in dsk3}
 
+            futures = {key: Future(key, self, inform=False) for key in keyset}
             self._send_to_scheduler(
                 {
                     "op": "update-graph",
                     "tasks": valmap(dumps_task, dsk3),
                     "dependencies": dependencies,
-                    "keys": list(flatkeys),
+                    "keys": list(map(tokey, keys)),
                     "restrictions": restrictions or {},
                     "loose_restrictions": loose_restrictions,
                     "priority": priority,
