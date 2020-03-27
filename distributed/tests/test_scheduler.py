@@ -787,6 +787,7 @@ def test_retire_workers_no_suspicious_tasks(c, s, a, b):
     yield s.retire_workers(workers=[a.address])
 
     assert all(ts.suspicious == 0 for ts in s.tasks.values())
+    assert all(tp.suspicious == 0 for tp in s.task_prefixes.values())
 
 
 @pytest.mark.slow
@@ -1808,6 +1809,19 @@ async def test_task_prefix(c, s, a, b):
     b = await b
 
     assert s.task_prefixes["sum-aggregate"].states["memory"] == 2
+
+
+@gen_cluster(
+    client=True, Worker=Nanny, config={"distributed.scheduler.allowed-failures": 0}
+)
+async def test_failing_task_increments_suspicious(client, s, a, b):
+    future = client.submit(sys.exit, 0)
+    await wait(future)
+
+    assert s.task_prefixes["exit"].suspicious == 1
+    assert sum(tp.suspicious for tp in s.task_prefixes.values()) == sum(
+        ts.suspicious for ts in s.tasks.values()
+    )
 
 
 @gen_cluster(client=True)

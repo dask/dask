@@ -289,6 +289,16 @@ class _PrometheusCollector:
             sum, (tp.states for tp in self.server.task_prefixes.values())
         )
 
+        suspicious_tasks = CounterMetricFamily(
+            "dask_scheduler_tasks_suspicious",
+            "Total number of times a task has been marked suspicious",
+            labels=["task_prefix_name"],
+        )
+
+        for tp in self.server.task_prefixes.values():
+            suspicious_tasks.add_metric([tp.name], tp.suspicious)
+        yield suspicious_tasks
+
         yield CounterMetricFamily(
             "dask_scheduler_tasks_forgotten",
             (

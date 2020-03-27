@@ -789,6 +789,11 @@ class TaskPrefix:
 
        An exponentially weighted moving average duration of all tasks with this prefix
 
+    .. attribute:: suspicious: int
+
+       Numbers of times a task was marked as suspicious with this prefix
+
+
     See Also
     --------
     TaskGroup
@@ -805,6 +810,7 @@ class TaskPrefix:
             )
         else:
             self.duration_average = None
+        self.suspicious = 0
 
     @property
     def states(self):
@@ -2190,6 +2196,7 @@ class Scheduler(ServerNode):
                 recommendations[k] = "released"
                 if not safe:
                     ts.suspicious += 1
+                    ts.prefix.suspicious += 1
                     if ts.suspicious > self.allowed_failures:
                         del recommendations[k]
                         e = pickle.dumps(
