@@ -5916,22 +5916,34 @@ async def test_run_scheduler_async_def_wait(c, s, a, b):
     assert b.foo == "bar"
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, nthreads=[("127.0.0.1", 2)] * 2)
 async def test_performance_report(c, s, a, b):
     da = pytest.importorskip("dask.array")
-    x = da.random.random((1000, 1000), chunks=(100, 100))
 
-    with tmpfile(extension="html") as fn:
-        async with performance_report(filename=fn):
-            await c.compute((x + x.T).sum())
+    async def f():
+        """
+        We wrap this in a function so that the assertions aren't in the
+        performanace report itself
 
-        with open(fn) as f:
-            data = f.read()
+        Also, we want this comment to appear
+        """
+        x = da.random.random((1000, 1000), chunks=(100, 100))
+        with tmpfile(extension="html") as fn:
+            async with performance_report(filename=fn):
+                await c.compute((x + x.T).sum())
 
-        assert "bokeh" in data
-        assert "random" in data
-        assert "Dask Performance Report" in data
-        assert "x = da.random" in data
+            with open(fn) as f:
+                data = f.read()
+        return data
+
+    data = await f()
+
+    assert "Also, we want this comment to appear" in data
+    assert "bokeh" in data
+    assert "random" in data
+    assert "Dask Performance Report" in data
+    assert "x = da.random" in data
+    assert "Threads: 4" in data
 
 
 @pytest.mark.asyncio
