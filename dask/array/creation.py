@@ -1125,7 +1125,7 @@ def pad(array, pad_width, mode, **kwargs):
     pad_width = expand_pad_value(array, pad_width)
 
     if mode in ["maximum", "mean", "median", "minimum"]:
-        kwargs.setdefault("stat_length", array.shape)
+        kwargs.setdefault("stat_length", tuple((n, n) for n in array.shape))
     elif mode == "constant":
         kwargs.setdefault("constant_values", 0)
     elif mode == "linear_ramp":
