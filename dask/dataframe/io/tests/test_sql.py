@@ -364,7 +364,7 @@ def test_to_sql():
                 path.unlink()
             yield uri
 
-    for npartitions in [1, 2, 10]:
+    for npartitions in [1, 2]:
         ddf = dd.from_pandas(df, npartitions)
         ddf_by_age = ddf.set_index("age")
 
@@ -428,5 +428,5 @@ def test_to_sql():
             else:
                 expected = npartitions
 
-            actual = len(delayeds)
-            assert actual == expected
+            actual = len(delayeds.compute()) - 1  # the first result is from the "meta" insert
+            assert actual == npartitions

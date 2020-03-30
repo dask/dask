@@ -24,6 +24,7 @@ try:
         demo,
         to_hdf,
         to_records,
+        to_sql,
         to_bag,
         read_json,
         to_json,
