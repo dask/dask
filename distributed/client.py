@@ -3489,9 +3489,11 @@ class Client(Node):
         Examples
         --------
         You can get information about active workers using the following:
+
         >>> workers = client.scheduler_info()['workers']
 
         From that list you may want to select some workers to close
+
         >>> client.retire_workers(workers=['tcp://address:port', ...])
 
         See Also
