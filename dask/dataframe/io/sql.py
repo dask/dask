@@ -340,7 +340,9 @@ def to_sql(
                     % ",".join([k for k in kwargs.keys() if k != "method"])
                 )
         else:
-            raise ValueError("Invalid kwargs: %s" % kwargs)
+            raise ValueError(
+                "Invalid kwargs: %s" % ",".join([k for k in kwargs.keys()])
+            )
 
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
