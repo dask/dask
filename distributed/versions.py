@@ -82,7 +82,7 @@ def version_of_package(pkg):
 def get_package_info(pkgs):
     """ get package versions for the passed required & optional packages """
 
-    pversions = []
+    pversions = [("python", ".".join(map(str, sys.version_info)))]
     for pkg in pkgs:
         if isinstance(pkg, (tuple, list)):
             modname, ver_f = pkg
@@ -121,9 +121,6 @@ def error_message(scheduler, workers, client, client_name="client"):
             for pkg, version in info["packages"].items():
                 node_packages[node][pkg] = version
                 packages.add(pkg)
-            # Collect Python version for each node
-            node_packages[node]["python"] = info["host"]["python"]
-            packages.add("python")
 
     errs = []
     for pkg in sorted(packages):

@@ -1,5 +1,5 @@
 import re
-import uuid
+import sys
 
 import pytest
 
@@ -120,17 +120,7 @@ async def test_version_warning_in_cluster(s, a, b):
         )
 
 
-@gen_cluster()
-async def test_python_version_mismatch_warning(s, a, b):
-    # Set random Python version for one worker
-    random_version = uuid.uuid4().hex
-    orig = s.workers[a.address].versions["host"]["python"] = random_version
-
-    with pytest.warns(None) as record:
-        async with Client(s.address, asynchronous=True) as client:
-            pass
-
-    assert record
-    assert any("python" in str(r.message) for r in record)
-    assert any(random_version in str(r.message) for r in record)
-    assert any(a.address in str(r.message) for r in record)
+def test_python_version():
+    required = get_versions()["packages"]
+    assert "python" in required
+    assert required["python"] == ".".join(map(str, sys.version_info))
