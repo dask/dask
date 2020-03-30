@@ -224,7 +224,6 @@ def to_sql(
     index_label=None,
     chunksize=None,
     dtype=None,
-    method=None,
     compute=True,
     parallel=False,
 ):
@@ -272,15 +271,6 @@ def to_sql(
         keys should be the column names and the values should be the
         SQLAlchemy types or strings for the sqlite3 legacy mode. If a
         scalar is provided, it will be applied to all columns.
-    method : {None, 'multi', callable}, optional
-        Controls the SQL insertion clause used:
-
-        * None : Uses standard SQL ``INSERT`` clause (one per row).
-        * 'multi': Pass multiple values in a single ``INSERT`` clause.
-        * callable with signature ``(pd_table, conn, keys, data_iter)``.
-
-        Details and a sample callable implementation can be found in the
-        section :ref:`insert method <io.sql.method>`.
     compute : bool, default True
         When true, call dask.compute and perform the load into SQL; otherwise, return a Dask object (or array of
         per-block objects when parallel=True)
@@ -378,7 +368,6 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
-        method=method,
     )
 
     def make_meta(meta):
