@@ -1376,50 +1376,36 @@ from operator import add
 
 
 def sequence(a, b, combine=None):
-    '''Given two delayeds, return a new delayed that combines their values but is guaranteed to execute them in sequence
-    (not in parallel)'''
+    """Given two delayeds, return a new delayed that combines their values but is guaranteed to execute them in sequence
+    (not in parallel)"""
     combine = combine or add  # default to __add__
 
     # Helper which receives a computed `a`, and in turn computes `b`
-    def _sequence(_a): return combine(_a, b.compute())
+    def _sequence(_a):
+        return combine(_a, b.compute())
 
-    name = f'combine_{b._key}'
+    name = f"combine_{b._key}"
     return delayed(_sequence)(a, dask_key_name=name)
 
 
 def chain(delayeds):
-    '''Construct a Delayed representing a list of delayed values, but with linear dependency graph (the constituent
-    Delayeds are evaluated, in serial, in the order they appear in the `delayeds` parameter.'''
-    return _chain(
-        delayeds,
-        init=[],
-        combine=lambda l, r: l + [r],
-        first=True,
-    )
+    """Construct a Delayed representing a list of delayed values, but with linear dependency graph (the constituent
+    Delayeds are evaluated, in serial, in the order they appear in the `delayeds` parameter."""
+    return _chain(delayeds, init=[], combine=lambda l, r: l + [r], first=True,)
 
 
 def _chain(
-    delayeds,
-    init=None,
-    combine=None,
-    first=False,
+    delayeds, init=None, combine=None, first=False,
 ):
-    if len(delayeds) == 0: return delayeds
+    if len(delayeds) == 0:
+        return delayeds
     delayeds = list(delayeds)
     if first:
-        delayeds = [delayed(init, 'init')] + delayeds
+        delayeds = [delayed(init, "init")] + delayeds
     elif len(delayeds) == 1:
         return delayeds[0]
 
-    ( _first, _second, *rest ) = delayeds
+    (_first, _second, *rest) = delayeds
     return _chain(
-        [
-            sequence(
-                _first,
-                _second,
-                combine=combine,
-            )
-        ] + \
-        rest,
-        combine=combine,
+        [sequence(_first, _second, combine=combine,)] + rest, combine=combine,
     )

@@ -428,5 +428,7 @@ def test_to_sql():
             else:
                 expected = npartitions
 
-            actual = len(delayeds.compute()) - 1  # the first result is from the "meta" insert
+            actual = (
+                len(delayeds.compute()) - 1
+            )  # the first result is from the "meta" insert
             assert actual == npartitions

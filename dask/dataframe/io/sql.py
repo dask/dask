@@ -220,7 +220,7 @@ def to_sql(
     name: str,
     con,
     schema=None,
-    if_exists: str = 'fail',
+    if_exists: str = "fail",
     index: bool = True,
     index_label=None,
     chunksize=None,
@@ -381,7 +381,10 @@ def to_sql(
         dtype=dtype,
         method=method,
     )
-    def make_meta(meta): return meta.to_sql(**kwargs)
+
+    def make_meta(meta):
+        return meta.to_sql(**kwargs)
+
     make_meta = delayed(make_meta)
     meta_task = make_meta(df._meta)
 
@@ -389,20 +392,16 @@ def to_sql(
 
     values = [
         d.to_sql(
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if k is not 'if_exists'
-            },
+            **{k: v for k, v in kwargs.items() if k is not "if_exists"},
             # Partitions should always append to the empty table created from `meta` above
-            if_exists='append'
+            if_exists="append",
         )
         for d in df.to_delayed()
     ]
 
     if parallel:
         # One wrapper that inserts all blocks concurrently, but that must come after the "meta" insert
-        values = chain([ meta_task, delayed(values) ])
+        values = chain([meta_task, delayed(values)])
         result = values
     else:
         # Chain the "meta" insert and each block's insert

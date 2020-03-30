@@ -1353,7 +1353,7 @@ Dask Name: {name}, {task} tasks"""
         name: str,
         con,
         schema=None,
-        if_exists: str = 'fail',
+        if_exists: str = "fail",
         index: bool = True,
         index_label=None,
         chunksize=None,
