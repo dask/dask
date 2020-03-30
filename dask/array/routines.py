@@ -808,6 +808,12 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
+@implements(np.iscomplexobj)
+@derived_from(np)
+def iscomplexobj(x):
+    return issubclass(x.dtype.type, np.complexfloating)
+
+
 def _unique_internal(ar, indices, counts, return_inverse=False):
     """
     Helper/wrapper function for :func:`numpy.unique`.

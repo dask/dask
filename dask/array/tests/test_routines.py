@@ -1740,3 +1740,11 @@ def test_average_raises():
 
     with pytest.warns(RuntimeWarning):
         da.average(d_a, weights=da.zeros_like(d_a)).compute()
+
+
+def test_iscomplexobj():
+    a = da.from_array(np.array([1, 2]), 2)
+    assert np.iscomplexobj(a) is False
+
+    a = da.from_array(np.array([1, 2 + 0j]), 2)
+    assert np.iscomplexobj(a) is True
