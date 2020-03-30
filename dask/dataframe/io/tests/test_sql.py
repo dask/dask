@@ -379,7 +379,10 @@ def test_to_sql(npartitions):
     # Index column can't have "object" dtype if no partitions are provided
     with tmp_db_uri() as uri:
         ddf.set_index("name").to_sql("test", uri)
-        with pytest.raises(Exception):
+        with pytest.raises(
+            TypeError,
+            match='Provided index column is of type "object".  If divisions is not provided the index column type must be numeric or datetime.',
+        ):
             read_sql_table("test", uri, "name")
 
     # Test various "if_exists" values
@@ -387,7 +390,7 @@ def test_to_sql(npartitions):
         ddf.to_sql("test", uri)
 
         # Writing a table that already exists fails
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError, match="Table 'test' already exists"):
             ddf.to_sql("test", uri)
 
         ddf.to_sql("test", uri, if_exists="append")
@@ -420,5 +423,5 @@ def test_to_sql_kwargs():
                 ddf.to_sql("test", uri, method=None)
 
         # Other, unknown keywords always disallowed
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid kwargs: unknown"):
             ddf.to_sql("test", uri, unknown=None)
