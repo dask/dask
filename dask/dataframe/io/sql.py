@@ -217,7 +217,7 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
 def to_sql(
     df,
     name: str,
-    con,
+    uri: str,
     schema=None,
     if_exists: str = "fail",
     index: bool = True,
@@ -239,13 +239,8 @@ def to_sql(
     ----------
     name : str
         Name of SQL table.
-    con : sqlalchemy.engine.Engine or sqlite3.Connection
-        Using SQLAlchemy makes it possible to use any DB supported by that
-        library. Legacy support is provided for sqlite3.Connection objects. The user
-        is responsible for engine disposal and connection closure for the SQLAlchemy
-        connectable See `here \
-            <https://docs.sqlalchemy.org/en/13/core/connections.html>`_.
-
+    uri : string
+        Full sqlalchemy URI for the database connection
     schema : str, optional
         Specify the schema (if database flavor supports this). If None, use
         default schema.
@@ -336,7 +331,7 @@ def to_sql(
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
         name=name,
-        con=con,
+        con=uri,
         schema=schema,
         if_exists=if_exists,
         index=index,
@@ -353,12 +348,11 @@ def to_sql(
 
     from dask.utils import chain
 
+    # Partitions should always append to the empty table created from `meta` above
+    worker_kwargs = dict(kwargs, if_exists='append')
+
     values = [
-        d.to_sql(
-            **{k: v for k, v in kwargs.items() if k != "if_exists"},
-            # Partitions should always append to the empty table created from `meta` above
-            if_exists="append",
-        )
+        d.to_sql(**worker_kwargs)
         for d in df.to_delayed()
     ]
 

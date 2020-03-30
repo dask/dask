@@ -369,9 +369,7 @@ def test_to_sql():
 
         # Index by "age" instead
         with tmp() as uri:
-            ddf_by_age.to_sql(
-                "test", uri,
-            )
+            ddf_by_age.to_sql("test", uri)
             result = read_sql_table("test", uri, "age")
             assert_eq(df_by_age, result)
 

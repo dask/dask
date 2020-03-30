@@ -1351,7 +1351,7 @@ Dask Name: {name}, {task} tasks"""
     def to_sql(
         self,
         name: str,
-        con,
+        uri: str,
         schema=None,
         if_exists: str = "fail",
         index: bool = True,
@@ -1367,7 +1367,7 @@ Dask Name: {name}, {task} tasks"""
         return to_sql(
             self,
             name=name,
-            con=con,
+            uri=uri,
             schema=schema,
             if_exists=if_exists,
             index=index,
