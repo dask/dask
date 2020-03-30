@@ -1,4 +1,3 @@
-from functools import reduce
 import numpy as np
 import pandas as pd
 
@@ -392,7 +391,7 @@ def to_sql(
 
     values = [
         d.to_sql(
-            **{k: v for k, v in kwargs.items() if k is not "if_exists"},
+            **{k: v for k, v in kwargs.items() if k != "if_exists"},
             # Partitions should always append to the empty table created from `meta` above
             if_exists="append",
         )
