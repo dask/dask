@@ -229,8 +229,7 @@ def to_sql(
     compute=True,
     parallel=False,
 ):
-    """
-    Write records stored in a Dask DataFrame to a SQL database.
+    """ Store Dask Dataframe to a SQL table
 
     An empty table is created based on the "meta" DataFrame (and conforming to the caller's "if_exists" preference), and
     then each block calls pd.DataFrame.to_sql (with `if_exists="append"`).

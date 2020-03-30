@@ -34,6 +34,7 @@ File Formats:
     to_csv
     to_parquet
     to_hdf
+    to_sql
 
 Dask Collections:
 
