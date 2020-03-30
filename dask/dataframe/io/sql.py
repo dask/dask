@@ -307,55 +307,30 @@ def to_sql(
 
     Examples
     --------
-    Create an in-memory SQLite database.
+    Create a table from scratch with 4 rows.
 
+    >>> import pandas as pd
+    >>> df = pd.DataFrame([ {'i':i, 's':str(i)*2 } for i in range(4) ])
+    >>> from dask.dataframe import from_pandas
+    >>> ddf = from_pandas(df, npartitions=2)
+    >>> ddf  # doctest: +SKIP
+    Dask DataFrame Structure:
+                       i       s
+    npartitions=2
+    0              int64  object
+    2                ...     ...
+    3                ...     ...
+    Dask Name: from_pandas, 2 tasks
+
+    >>> from dask.utils import tmpfile
     >>> from sqlalchemy import create_engine
-    >>> engine = create_engine('sqlite://', echo=False)
-
-    Create a table from scratch with 3 rows.
-
-    >>> df = pd.DataFrame({'name' : ['User 1', 'User 2', 'User 3']})
-    >>> df
-         name
-    0  User 1
-    1  User 2
-    2  User 3
-
-    >>> df.to_sql('users', con=engine)
-    >>> engine.execute("SELECT * FROM users").fetchall()
-    [(0, 'User 1'), (1, 'User 2'), (2, 'User 3')]
-
-    >>> df1 = pd.DataFrame({'name' : ['User 4', 'User 5']})
-    >>> df1.to_sql('users', con=engine, if_exists='append')
-    >>> engine.execute("SELECT * FROM users").fetchall()
-    [(0, 'User 1'), (1, 'User 2'), (2, 'User 3'),
-     (0, 'User 4'), (1, 'User 5')]
-
-    Overwrite the table with just ``df1``.
-
-    >>> df1.to_sql('users', con=engine, if_exists='replace',
-    ...            index_label='id')
-    >>> engine.execute("SELECT * FROM users").fetchall()
-    [(0, 'User 4'), (1, 'User 5')]
-
-    Specify the dtype (especially useful for integers with missing values).
-    Notice that while pandas is forced to store the data as floating point,
-    the database supports nullable integers. When fetching the data with
-    Python, we get back integer scalars.
-
-    >>> df = pd.DataFrame({"A": [1, None, 2]})
-    >>> df
-         A
-    0  1.0
-    1  NaN
-    2  2.0
-
-    >>> from sqlalchemy.types import Integer
-    >>> df.to_sql('integers', con=engine, index=False,
-    ...           dtype={"A": Integer()})
-
-    >>> engine.execute("SELECT * FROM integers").fetchall()
-    [(1,), (None,), (2,)]
+    >>> with tmpfile() as f:
+    ...     db = 'sqlite:///%s' % f
+    ...     ddf.to_sql('test', db)
+    ...     engine = create_engine(db, echo=False)
+    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    >>> result
+    [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
 
     # This is the only argument we add on top of what Pandas supports
