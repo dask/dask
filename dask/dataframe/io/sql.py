@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 import dask
+from dask.dataframe.utils import PANDAS_GT_0240
 from .io import from_delayed, from_pandas
 from ... import delayed
 
@@ -19,7 +20,7 @@ def read_sql_table(
     schema=None,
     meta=None,
     engine_kwargs=None,
-    **kwargs,
+    **kwargs
 ):
     """
     Create dataframe from an SQL table.
@@ -226,6 +227,7 @@ def to_sql(
     dtype=None,
     compute=True,
     parallel=False,
+    **kwargs
 ):
     """ Store Dask Dataframe to a SQL table
 
@@ -273,6 +275,8 @@ def to_sql(
         When true, have each block append itself to the DB table concurrently. This can result in DB rows being in a
         different order than the source DataFrame's corresponding rows. When false, load each block into the SQL DB in
         sequence.
+    kwargs : dict
+        If Pandas version is >= 0.24.0, a "method" value may be passed here; no other kwargs are allowed.
 
         .. versionadded:: 0.24.0
 
@@ -328,6 +332,16 @@ def to_sql(
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
 
+    if kwargs:
+        if PANDAS_GT_0240:
+            if list(kwargs.keys()) != ["method"]:
+                raise ValueError(
+                    "Invalid kwargs: %s"
+                    % ",".join([k for k in kwargs.keys() if k != "method"])
+                )
+        else:
+            raise ValueError("Invalid kwargs: %s" % kwargs)
+
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
         name=name,
@@ -338,6 +352,7 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
+        **kwargs
     )
 
     def make_meta(meta):
@@ -349,12 +364,9 @@ def to_sql(
     from dask.utils import chain
 
     # Partitions should always append to the empty table created from `meta` above
-    worker_kwargs = dict(kwargs, if_exists='append')
+    worker_kwargs = dict(kwargs, if_exists="append")
 
-    values = [
-        d.to_sql(**worker_kwargs)
-        for d in df.to_delayed()
-    ]
+    values = [d.to_sql(**worker_kwargs) for d in df.to_delayed()]
 
     if parallel:
         # One wrapper that inserts all blocks concurrently, but that must come after the "meta" insert

@@ -5,7 +5,7 @@ import pytest
 
 # import dask
 from dask.dataframe.io.sql import read_sql_table
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_GT_0240
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -337,70 +337,88 @@ def test_no_character_index_without_divisions(db):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
 
 
-def test_to_sql():
+@contextmanager
+def tmp_db_uri():
+    with tmpfile() as f:
+        yield "sqlite:///%s" % f
+
+
+@pytest.mark.parametrize("npartitions", (1, 2))
+def test_to_sql(npartitions):
     df_by_age = df.set_index("age")
     df_appended = pd.concat([df, df,])
 
-    @contextmanager
-    def tmp():
-        with tmpfile() as f:
-            yield "sqlite:///%s" % f
+    ddf = dd.from_pandas(df, npartitions)
+    ddf_by_age = ddf.set_index("age")
 
-    for npartitions in [1, 2]:
-        ddf = dd.from_pandas(df, npartitions)
-        ddf_by_age = ddf.set_index("age")
+    # Simple round trip test: use existing "number" index_col
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri)
+        result = read_sql_table("test", uri, "number")
+        assert_eq(df, result)
 
-        # Simple round trip test: use existing "number" index_col
-        with tmp() as uri:
+    # Test writing no index, and reading back in with one of the other columns as index (`read_sql_table` requires
+    # an index_col)
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, index=False)
+
+        result = read_sql_table("test", uri, "negish")
+        assert_eq(df.set_index("negish"), result)
+
+        result = read_sql_table("test", uri, "age")
+        assert_eq(df_by_age, result)
+
+    # Index by "age" instead
+    with tmp_db_uri() as uri:
+        ddf_by_age.to_sql(
+            "test", uri,
+        )
+        result = read_sql_table("test", uri, "age")
+        assert_eq(df_by_age, result)
+
+    # Index column can't have "object" dtype if no partitions are provided
+    with tmp_db_uri() as uri:
+        ddf.set_index("name").to_sql("test", uri)
+        with pytest.raises(Exception):
+            read_sql_table("test", uri, "name")
+
+    # Test various "if_exists" values
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri)
+
+        # Writing a table that already exists fails
+        with pytest.raises(Exception):
             ddf.to_sql("test", uri)
-            result = read_sql_table("test", uri, "number")
-            assert_eq(df, result)
 
-        # Test writing no index, and reading back in with one of the other columns as index (`read_sql_table` requires
-        # an index_col)
-        with tmp() as uri:
-            ddf.to_sql("test", uri, index=False)
+        ddf.to_sql("test", uri, if_exists="append")
+        result = read_sql_table("test", uri, "number")
 
-            result = read_sql_table("test", uri, "negish")
-            assert_eq(df.set_index("negish"), result)
+        assert_eq(df_appended, result)
 
-            result = read_sql_table("test", uri, "age")
-            assert_eq(df_by_age, result)
+        ddf_by_age.to_sql("test", uri, if_exists="replace")
+        result = read_sql_table("test", uri, "age")
+        assert_eq(df_by_age, result)
 
-        # Index by "age" instead
-        with tmp() as uri:
-            ddf_by_age.to_sql("test", uri)
-            result = read_sql_table("test", uri, "age")
-            assert_eq(df_by_age, result)
+    # Verify number of partitions returned, when compute=False
+    with tmp_db_uri() as uri:
+        delayeds = ddf.to_sql("test", uri, compute=False,)
 
-        # Index column can't have "object" dtype if no partitions are provided
-        with tmp() as uri:
-            ddf.set_index("name").to_sql("test", uri)
-            with pytest.raises(Exception):
-                read_sql_table("test", uri, "name")
+        actual = (
+            len(delayeds.compute()) - 1
+        )  # the first result is from the "meta" insert
+        assert actual == npartitions
 
-        # Test various "if_exists" values
-        with tmp() as uri:
-            ddf.to_sql("test", uri)
 
-            # Writing a table that already exists fails
-            with pytest.raises(Exception):
-                ddf.to_sql("test", uri)
+def test_to_sql_kwargs():
+    ddf = dd.from_pandas(df, 2)
+    with tmp_db_uri() as uri:
+        # "method" keyword is allowed iff pandas>=0.24.0
+        if PANDAS_GT_0240:
+            ddf.to_sql("test", uri, method=None)
+        else:
+            with pytest.raises(ValueError):
+                ddf.to_sql("test", uri, method=None)
 
-            ddf.to_sql("test", uri, if_exists="append")
-            result = read_sql_table("test", uri, "number")
-
-            assert_eq(df_appended, result)
-
-            ddf_by_age.to_sql("test", uri, if_exists="replace")
-            result = read_sql_table("test", uri, "age")
-            assert_eq(df_by_age, result)
-
-        # Verify number of partitions returned, when compute=False
-        with tmp() as uri:
-            delayeds = ddf.to_sql("test", uri, compute=False,)
-
-            actual = (
-                len(delayeds.compute()) - 1
-            )  # the first result is from the "meta" insert
-            assert actual == npartitions
+        # Other, unknown keywords always disallowed
+        with pytest.raises(ValueError):
+            ddf.to_sql("test", uri, unknown=None)

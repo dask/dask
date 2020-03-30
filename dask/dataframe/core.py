@@ -1360,6 +1360,7 @@ Dask Name: {name}, {task} tasks"""
         dtype=None,
         compute=True,
         parallel=False,
+        **kwargs
     ):
         """ See dd.to_sql docstring for more information """
         from .io import to_sql
@@ -1376,6 +1377,7 @@ Dask Name: {name}, {task} tasks"""
             dtype=dtype,
             compute=compute,
             parallel=parallel,
+            **kwargs
         )
 
     def to_json(self, filename, *args, **kwargs):
