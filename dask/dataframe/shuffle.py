@@ -425,7 +425,7 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk6 = {cleanup_token: (cleanup_partd_files, p, list(dsk5))}
 
     name = "shuffle-collect-2" + token
-    dsk7 = {(name, i): (noop, (name1, i), cleanup_token) for i in range(npartitions)}
+    dsk7 = {(name, i): (_noop, (name1, i), cleanup_token) for i in range(npartitions)}
     divisions = (None,) * (npartitions + 1)
 
     layer = toolz.merge(dsk1, dsk2, dsk3, dsk4, dsk5, dsk6, dsk7)
@@ -433,7 +433,10 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     return DataFrame(graph, name, df._meta, divisions)
 
 
-def noop(x, cleanup_token):
+def _noop(x, cleanup_token):
+    """
+    A task that does nothing.
+    """
     return x
 
 
