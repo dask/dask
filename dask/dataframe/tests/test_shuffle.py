@@ -292,10 +292,12 @@ def test_rearrange_cleanup():
     assert len(os.listdir(tmpdir)) == 0
 
 
+def mock_shuffle_group_3(df, col, npartitions, p):
+    raise ValueError("Mock exception!")
+
+
 def test_rearrange_disk_cleanup_with_exception():
     # ensure temporary files are cleaned up when there's an internal exception.
-    def mock_shuffle_group_3(df, col, npartitions, p):
-        raise ValueError("Mock exception!")
 
     with mock.patch("dask.dataframe.shuffle.shuffle_group_3", new=mock_shuffle_group_3):
         df = pd.DataFrame({"x": np.random.random(10)})
