@@ -142,6 +142,7 @@ thread pool.
 A task either errs or its result is put into memory.  In either case a response
 is sent back to the scheduler.
 
+.. _memman::
 
 Memory Management
 -----------------

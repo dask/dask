@@ -82,3 +82,11 @@ subprocess, head to `this section`_ of the supervisor documentation to see
 how to pass the ``$HOME`` and ``$USER`` variables through.
 
 .. _this section: http://supervisord.org/subprocess.html#subprocess-environment
+
+
+KilledWorker, CommsClosed, etc.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the case that workers disappear unexpectedly from your cluster, you may see
+a range of error messages. After checking the logs of the workers affected, you
+should read the section :doc:`killed`.

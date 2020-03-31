@@ -37,6 +37,7 @@ This is possible with the Client.become_dask_ method::
 
 .. _Client.become_dask: https://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.become_dask
 
+.. _ipylaunch:
 
 Launch IPython within Dask Workers
 ----------------------------------

@@ -100,6 +100,7 @@ Contents
    scheduling-state
    worker
    work-stealing
+   killed
 
 .. toctree::
    :maxdepth: 1
