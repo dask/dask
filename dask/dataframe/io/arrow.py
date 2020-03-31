@@ -108,15 +108,25 @@ def read_arrow_dataset_part(
         from pyarrow.fs import LocalFileSystem
         fs = LocalFileSystem()
 
-    paths, exprs = destructure(fragment)
+    # paths, exprs = destructure(fragment)
 
-    dataset = ds.FileSystemDataset(schema, None, format, fs, paths, exprs)
-    table = dataset.to_table(columns=columns, filter=filter, use_threads=False)
-    return table.to_pandas()
+    # dataset = ds.FileSystemDataset(schema, None, format, fs, paths, exprs)
+    # table = dataset.to_table(columns=columns, filter=filter, use_threads=False)
+    
+    # using fragments
+    # TODO need to make new fragment to pass new columns selection for now
+    # fragment.to_table().to_pandas() #use_threads=False)
+    new_fragment = format.make_fragment(
+        fragment.path, fs, schema=schema, columns=columns, filter=filter,
+        partition_expression=fragment.partition_expression,
+        row_groups=fragment.row_groups)
+    return new_fragment.to_table().to_pandas()
+
+    # return table.to_pandas()
 
 
 def read_arrow_dataset(path, partitioning=None, columns=None, filter=None,
-                       filesystem=None, format="parquet"):
+                       filesystem=None, format="parquet", split_row_groups=True):
 
     if format == "ipc" and filesystem is None:
         from pyarrow.fs import LocalFileSystem
@@ -134,6 +144,9 @@ def read_arrow_dataset(path, partitioning=None, columns=None, filter=None,
 
     # files = source.files
     fragments = list(dataset.get_fragments(filter=filter))
+
+    if isinstance(format, ds.ParquetFileFormat) and split_row_groups:
+        fragments = [f_rg for f in fragments for f_rg in f.get_row_group_fragments()]
 
     # meta = next(dataset.to_batches()).to_pandas()
     meta = schema.empty_table().to_pandas()
