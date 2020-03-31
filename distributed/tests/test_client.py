@@ -5465,12 +5465,11 @@ def test_tuple_keys(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_multiple_scatter(c, s, a, b):
-    for i in range(5):
-        x = c.scatter(1, direct=True)
+async def test_multiple_scatter(c, s, a, b):
+    futures = await asyncio.gather(*[c.scatter(1, direct=True) for _ in range(5)])
 
-    x = yield x
-    x = yield x
+    x = await futures[0]
+    x = await futures[0]
 
 
 @gen_cluster(client=True)

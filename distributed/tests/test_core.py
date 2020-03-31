@@ -781,4 +781,4 @@ async def test_connection_pool_detects_remote_close():
     # check connection pool invariants hold even after it detects a closed connection
     # while creating conn2:
     p._validate()
-    p.close()
+    await p.close()

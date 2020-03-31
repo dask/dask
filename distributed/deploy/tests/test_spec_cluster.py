@@ -278,7 +278,7 @@ async def test_logs(cleanup):
         cluster.scale(2)
         await cluster
 
-        logs = await cluster.logs()
+        logs = await cluster.get_logs()
         assert is_valid_xml("<div>" + logs._repr_html_() + "</div>")
         assert "Scheduler" in logs
         for worker in cluster.scheduler.workers:
@@ -286,17 +286,17 @@ async def test_logs(cleanup):
 
         assert "Registered" in str(logs)
 
-        logs = await cluster.logs(scheduler=True, workers=False)
+        logs = await cluster.get_logs(scheduler=True, workers=False)
         assert list(logs) == ["Scheduler"]
 
-        logs = await cluster.logs(scheduler=False, workers=False)
+        logs = await cluster.get_logs(scheduler=False, workers=False)
         assert list(logs) == []
 
-        logs = await cluster.logs(scheduler=False, workers=True)
+        logs = await cluster.get_logs(scheduler=False, workers=True)
         assert set(logs) == set(cluster.scheduler.workers)
 
         w = toolz.first(cluster.scheduler.workers)
-        logs = await cluster.logs(scheduler=False, workers=[w])
+        logs = await cluster.get_logs(scheduler=False, workers=[w])
         assert set(logs) == {w}
 
 
