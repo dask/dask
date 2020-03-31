@@ -1,6 +1,8 @@
 import itertools
 import os
 import random
+import tempfile
+from unittest import mock
 
 import pandas as pd
 import pytest
@@ -24,7 +26,6 @@ from dask.dataframe.shuffle import (
     remove_nans,
 )
 from dask.dataframe.utils import assert_eq, make_meta
-from dask.compatibility import PY_VERSION
 
 
 dsk = {
@@ -275,6 +276,42 @@ def test_rearrange(shuffle, scheduler):
 
     for i in a._partitions.drop_duplicates():
         assert sum(i in set(part._partitions) for part in parts) == 1
+
+
+def test_rearrange_cleanup():
+    df = pd.DataFrame({"x": np.random.random(10)})
+    ddf = dd.from_pandas(df, npartitions=4)
+    ddf2 = ddf.assign(_partitions=ddf.x % 4)
+
+    tmpdir = tempfile.mkdtemp()
+
+    with dask.config.set(temporay_directory=str(tmpdir)):
+        result = rearrange_by_column(ddf2, "_partitions", max_branch=32, shuffle="disk")
+        result.compute(scheduler="processes")
+
+    assert len(os.listdir(tmpdir)) == 0
+
+
+def test_rearrange_disk_cleanup_with_exception():
+    # ensure temporary files are cleaned up when there's an internal exception.
+    def mock_shuffle_group_3(df, col, npartitions, p):
+        raise ValueError("Mock exception!")
+
+    with mock.patch("dask.dataframe.shuffle.shuffle_group_3", new=mock_shuffle_group_3):
+        df = pd.DataFrame({"x": np.random.random(10)})
+        ddf = dd.from_pandas(df, npartitions=4)
+        ddf2 = ddf.assign(_partitions=ddf.x % 4)
+
+        tmpdir = tempfile.mkdtemp()
+
+        with dask.config.set(temporay_directory=str(tmpdir)):
+            with pytest.raises(ValueError, match="Mock exception!"):
+                result = rearrange_by_column(
+                    ddf2, "_partitions", max_branch=32, shuffle="disk"
+                )
+                result.compute(scheduler="processes")
+
+    assert len(os.listdir(tmpdir)) == 0
 
 
 def test_rearrange_by_column_with_narrow_divisions():
@@ -777,34 +814,6 @@ def test_compute_divisions():
     # Partitions overlap warning
     with pytest.warns(UserWarning):
         compute_divisions(c)
-
-
-# TODO: Fix sporadic failure on Python 3.8 and remove this xfail mark
-@pytest.mark.xfail(PY_VERSION >= "3.8", reason="Flaky test", strict=False)
-def test_temporary_directory(tmpdir):
-    from multiprocessing.pool import Pool
-
-    df = pd.DataFrame(
-        {
-            "x": np.random.random(100),
-            "y": np.random.random(100),
-            "z": np.random.random(100),
-        }
-    )
-    ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
-
-    # We use a pool to avoid a race condition between the pool close
-    # cleaning up files, and the assert below.
-    pool = Pool(4)
-    with pool:
-        with dask.config.set(
-            temporary_directory=str(tmpdir), scheduler="processes", pool=pool
-        ):
-            ddf2 = ddf.set_index("x", shuffle="disk")
-            ddf2.compute()
-            assert any(
-                fn.endswith(".partd") for fn in os.listdir(str(tmpdir))
-            ), os.listdir(str(tmpdir))
 
 
 def test_empty_partitions():
