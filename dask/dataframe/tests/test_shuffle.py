@@ -270,7 +270,7 @@ def test_rearrange(shuffle, scheduler):
     assert set(ddf.dask).issubset(result.dask)
 
     # Every value in exactly one partition
-    a = result.compute(scheduler=scheduler, optimize_graph=False)
+    a = result.compute(scheduler=scheduler)
     get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
 
