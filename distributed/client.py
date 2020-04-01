@@ -3367,9 +3367,10 @@ class Client(Node):
                 filename = "dask-profile.html"
 
             if filename:
-                from bokeh.plotting import save
+                from bokeh.plotting import output_file, save
 
-                save(figure, title="Dask Profile", filename=filename)
+                output_file(filename=filename, title="Dask Profile")
+                save(figure, filename=filename)
             return (state, figure)
 
         else:
@@ -3852,7 +3853,13 @@ class Client(Node):
         return collections_to_dsk(collections, *args, **kwargs)
 
     def get_task_stream(
-        self, start=None, stop=None, count=None, plot=False, filename="task-stream.html"
+        self,
+        start=None,
+        stop=None,
+        count=None,
+        plot=False,
+        filename="task-stream.html",
+        bokeh_resources=None,
     ):
         """ Get task stream data from scheduler
 
@@ -3881,6 +3888,8 @@ class Client(Node):
             If plot == 'save' then save the figure to a file
         filename: str (optional)
             The filename to save to if you set ``plot='save'``
+        bokeh_resources: bokeh.resources.Resources (optional)
+            Specifies if the resource component is INLINE or CDN
 
         Examples
         --------
@@ -3920,10 +3929,17 @@ class Client(Node):
             count=count,
             plot=plot,
             filename=filename,
+            bokeh_resources=bokeh_resources,
         )
 
     async def _get_task_stream(
-        self, start=None, stop=None, count=None, plot=False, filename="task-stream.html"
+        self,
+        start=None,
+        stop=None,
+        count=None,
+        plot=False,
+        filename="task-stream.html",
+        bokeh_resources=None,
     ):
         msgs = await self.scheduler.get_task_stream(start=start, stop=stop, count=count)
         if plot:
@@ -3935,9 +3951,10 @@ class Client(Node):
             source, figure = task_stream_figure(sizing_mode="stretch_both")
             source.data.update(rects)
             if plot == "save":
-                from bokeh.plotting import save
+                from bokeh.plotting import save, output_file
 
-                save(figure, title="Dask Task Stream", filename=filename)
+                output_file(filename=filename, title="Dask Task Stream")
+                save(figure, filename=filename, resources=bokeh_resources)
             return (msgs, figure)
         else:
             return msgs
