@@ -76,6 +76,7 @@ from . import versions as version_module
 
 from .publish import PublishExtension
 from .queues import QueueExtension
+from .semaphore import SemaphoreExtension
 from .recreate_exceptions import ReplayExceptionScheduler
 from .lock import LockExtension
 from .pubsub import PubSubSchedulerExtension
@@ -96,6 +97,7 @@ DEFAULT_EXTENSIONS = [
     QueueExtension,
     VariableExtension,
     PubSubSchedulerExtension,
+    SemaphoreExtension,
 ]
 
 ALL_TASK_STATES = {"released", "waiting", "no-worker", "processing", "erred", "memory"}

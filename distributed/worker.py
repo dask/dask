@@ -1160,7 +1160,7 @@ class Worker(ServerNode):
         await self.scheduler.retire_workers(workers=[self.address], remove=False)
         await self.close(safe=True, nanny=not self.lifetime_restart)
 
-    async def terminate(self, comm, report=True, **kwargs):
+    async def terminate(self, comm=None, report=True, **kwargs):
         await self.close(report=report, **kwargs)
         return "OK"
 

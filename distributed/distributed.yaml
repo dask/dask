@@ -38,6 +38,8 @@ distributed:
         ca-file: null
         key: null
         cert: null
+    locks:
+      lease-validation-interval: 10s
 
   worker:
     blocked-handlers: []

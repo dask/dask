@@ -22,6 +22,7 @@ from .lock import Lock
 from .nanny import Nanny
 from .pubsub import Pub, Sub
 from .queues import Queue
+from .semaphore import Semaphore
 from .scheduler import Scheduler
 from .threadpoolexecutor import rejoin
 from .utils import sync, TimeoutError, CancelledError
