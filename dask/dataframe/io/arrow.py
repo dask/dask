@@ -2,8 +2,6 @@
 
 from collections.abc import Mapping
 
-import pyarrow.dataset as ds
-
 from ...base import tokenize
 from ..core import DataFrame, new_dd_object
 
@@ -15,15 +13,15 @@ class ArrowDatasetSubgraph(Mapping):
     Enables optimiziations (see optimize_read_arrow_dataset).
     """
 
-    def __init__(self, name, parts, fs, schema, format, columns, filter, meta):
+    def __init__(self, name, parts, fs, schema, format, columns, filter, kwargs, meta):
         self.name = name
         self.parts = parts
         self.fs = fs
         self.schema = schema
-        # self.partitioning = partitioning
         self.format = format
         self.columns = columns
         self.filter = filter
+        self.kwargs = kwargs
         self.meta = meta
 
     def __repr__(self):
@@ -45,16 +43,17 @@ class ArrowDatasetSubgraph(Mapping):
             raise KeyError(key)
 
         part = self.parts[i]
+        kwargs = self.kwargs[i]
 
         return (
             read_arrow_dataset_part,
             part,
             self.fs,
             self.schema,
-            # self.partitioning,
             self.format,
             self.columns,
             self.filter,
+            kwargs,
         )
 
     def __len__(self):
@@ -65,97 +64,72 @@ class ArrowDatasetSubgraph(Mapping):
             yield (self.name, i)
 
 
-def destructure(fragment):
-    """
-    Convert file path and partition expression in list of corresponding
-    paths / expressions as expected by the FileSystemDataset constructor.
-    """
-    expr = fragment.partition_expression
-    path = fragment.path
+def read_arrow_dataset_part(fragment, fs, schema, format, columns, filter, kwargs):
+    from pyarrow.fs import LocalFileSystem
 
-    segments = path.split('/')
-    basename = segments.pop()
-
-    segment_to_expr = {}
-    segment_to_expr[basename] = ds.ScalarExpression(True)
-
-    while type(expr) is ds.AndExpression:
-        segment_to_expr[segments.pop()] = expr.right_operand
-        expr = expr.left_operand
-
-    segment_to_expr[segments.pop()] = expr
-
-    base_dir = '/'.join(segments)
-
-    paths = []
-    exprs = []
-
-    path = base_dir
-
-    for segment in list(segment_to_expr.keys())[::-1]:
-        path = "/".join([path, segment])
-        paths.append(path)
-        exprs.append(segment_to_expr[segment])
-
-    #return base_dir, segment_to_expr, basename
-    return paths, exprs
-
-
-def read_arrow_dataset_part(
-        fragment, fs, schema, format, columns, filter
-):
     if fs is None:
-        from pyarrow.fs import LocalFileSystem
         fs = LocalFileSystem()
 
-    # paths, exprs = destructure(fragment)
-
-    # dataset = ds.FileSystemDataset(schema, None, format, fs, paths, exprs)
-    # table = dataset.to_table(columns=columns, filter=filter, use_threads=False)
-    
-    # using fragments
     # TODO need to make new fragment to pass new columns selection for now
-    # fragment.to_table().to_pandas() #use_threads=False)
     new_fragment = format.make_fragment(
-        fragment.path, fs, schema=schema, columns=columns, filter=filter,
+        fragment.path,
+        fs,
+        schema=schema,
+        columns=columns,
+        filter=filter,
         partition_expression=fragment.partition_expression,
-        row_groups=fragment.row_groups)
-    return new_fragment.to_table().to_pandas()
+        **kwargs,
+    )
+    return new_fragment.to_table(use_threads=False).to_pandas()
 
-    # return table.to_pandas()
 
+def read_arrow_dataset(
+    path,
+    partitioning=None,
+    columns=None,
+    filter=None,
+    filesystem=None,
+    format="parquet",
+    split_row_groups=True,
+):
+    """
+    Read a dataset using Arrow Datasets.
 
-def read_arrow_dataset(path, partitioning=None, columns=None, filter=None,
-                       filesystem=None, format="parquet", split_row_groups=True):
+    Support the formats supported by pyarrow, which right now is Parquet
+    and Feather.
+    """
+    import pyarrow.dataset as ds
+    from pyarrow.fs import LocalFileSystem
 
     if format == "ipc" and filesystem is None:
-        from pyarrow.fs import LocalFileSystem
         filesystem = LocalFileSystem(use_mmap=True)
 
+    # dataset discovery
     dataset = ds.dataset(
         path, partitioning=partitioning, filesystem=filesystem, format=format
     )
+
+    # get all fragments and properties
     schema = dataset.schema
     format = dataset.format
 
-    if filesystem is None:
-        from pyarrow.fs import LocalFileSystem
-        filesystem = LocalFileSystem()
-
-    # files = source.files
     fragments = list(dataset.get_fragments(filter=filter))
-
+    kwargs = [{}] * len(fragments)
     if isinstance(format, ds.ParquetFileFormat) and split_row_groups:
         fragments = [f_rg for f in fragments for f_rg in f.get_row_group_fragments()]
+        kwargs = [dict(row_groups=f.row_groups) for f in fragments]
 
-    # meta = next(dataset.to_batches()).to_pandas()
+    if len(fragments):
+        filesystem = fragments[0].filesystem
+
+    # create dask object
     meta = schema.empty_table().to_pandas()
     if columns is not None:
         meta = meta[columns]
     name = "read-arrow-dataset-" + tokenize(path, partitioning, columns, filter)
 
     subgraph = ArrowDatasetSubgraph(
-        name, fragments, filesystem, schema, format, columns, filter, meta,
+        name, fragments, filesystem, schema, format, columns, filter, kwargs, meta,
     )
 
-    return new_dd_object(subgraph, name, meta, tuple([None]*(len(fragments) + 1)))
+    return new_dd_object(subgraph, name, meta, tuple([None] * (len(fragments) + 1)))

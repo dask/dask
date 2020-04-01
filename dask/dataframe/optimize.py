@@ -129,7 +129,9 @@ def optimize_read_arrow_dataset(dsk, keys):
     # find the keys to optimize
     from .io.arrow import ArrowDatasetSubgraph
 
-    read_arrows = [k for k, v in dsk.layers.items() if isinstance(v, ArrowDatasetSubgraph)]
+    read_arrows = [
+        k for k, v in dsk.layers.items() if isinstance(v, ArrowDatasetSubgraph)
+    ]
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
@@ -153,7 +155,7 @@ def optimize_read_arrow_dataset(dsk, keys):
             if list(block.dsk.values())[0][0] != operator.getitem:
                 # ... where this value is __getitem__...
                 return dsk
-            
+
             if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
                 # if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
                 # ... but bail on the optimization if the getitem is what's requested
@@ -203,7 +205,15 @@ def optimize_read_arrow_dataset(dsk, keys):
             columns = list(meta.columns)
 
         new = ArrowDatasetSubgraph(
-            name, old.parts, old.fs, old.schema, old.format, columns, old.filter, meta
+            name,
+            old.parts,
+            old.fs,
+            old.schema,
+            old.format,
+            columns,
+            old.filter,
+            old.kwargs,
+            meta,
         )
         layers[name] = new
         if name != old.name:
