@@ -231,6 +231,15 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         to hashing content. Note that this only affects the name of the object
         wrapped by this call to delayed, and *not* the output of delayed
         function calls - for that use ``dask_key_name=`` as described below.
+
+        .. note::
+
+           Because this ``name`` is used as the key in task graphs, you should
+           ensure that it uniquely identifies ``obj``. If you'd like to provide
+           a descriptive name that is still unique, combine the descriptive name
+           with :func:`dask.base.tokenize` of the ``array_like``. See
+           :ref:`graphs` for more.
+
     pure : bool, optional
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
@@ -338,11 +347,15 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     The key name of a delayed object is hashed by default if ``pure=True`` or
     is generated randomly if ``pure=False`` (default).  To explicitly set the
-    name, you can use the ``name`` keyword:
+    name, you can use the ``name`` keyword. To ensure that the key is unique
+    you should include the tokenized value as well, or otherwise ensure that
+    it's unique:
 
-    >>> a = delayed([1, 2, 3], name='mylist')
-    >>> a
-    Delayed('mylist')
+    >>> from dask.base import tokenize
+    >>> data = [1, 2, 3]
+    >>> a = delayed(data, name='mylist-' + tokenize(data))
+    >>> a  # doctest: +SKIP
+    Delayed('mylist-55af65871cb378a4fa6de1660c3e8fb7')
 
     Delayed results act as a proxy to the underlying object. Many operators
     are supported:
