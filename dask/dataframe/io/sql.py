@@ -370,15 +370,17 @@ def to_sql(
     values = [d.to_sql(**worker_kwargs) for d in df.to_delayed()]
 
     if parallel:
-        # One wrapper that inserts all blocks concurrently, but that must come after the "meta" insert
-        values = _chain([meta_task, delayed(values)])
-        result = values
+        # Perform the meta insert, then one task that inserts all blocks concurrently:
+        result = _chain([meta_task, delayed(values)])
+        # Only grab the results array from the blocks-insert task:
+        result = result[1]
     else:
         # Chain the "meta" insert and each block's insert
         result = _chain([meta_task] + values)
-        values = (result,)
+        # Only grab the results array from the block-insert tasks:
+        result = result[1:]
 
     if compute:
-        dask.compute(*values)
+        dask.compute(result)
     else:
         return result
