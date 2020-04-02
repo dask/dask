@@ -5,12 +5,9 @@ def annotate_func(func: callable, annotation: dict) -> callable:
     ret = functools.partial(func)
     if not hasattr(ret, "_dask_annotation_dict"):
         ret._dask_annotation_dict = {}
-        if hasattr(func, "__name__"):
-            ret.__name__ = func
-        if hasattr(func, "__repr__"):
-            ret.__repr__ = func
-        if hasattr(func, "__str__"):
-            ret.__str__ = func
+        functools.update_wrapper(
+            ret, func, functools.WRAPPER_ASSIGNMENTS + ("__repr__",)
+        )
     ret._dask_annotation_dict.update(annotation)
     return ret
 
