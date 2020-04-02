@@ -418,7 +418,10 @@ def test_to_sql_kwargs():
         if PANDAS_GT_0240:
             ddf.to_sql("test", uri, method="multi")
         else:
-            with pytest.raises(ValueError):
+            with pytest.raises(
+                NotImplementedError,
+                match=r"'method' requires pandas>=0.24.0. You have version 0.23.\d)",
+            ):
                 ddf.to_sql("test", uri, method="multi")
 
         # Other, unknown keywords always disallowed
