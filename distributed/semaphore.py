@@ -204,6 +204,26 @@ class SemaphoreExtension:
 class Semaphore:
     """ Semaphore
 
+    This `semaphore <https://en.wikipedia.org/wiki/Semaphore_(programming)>`_
+    will track leases on the scheduler which can be acquired and
+    released by an instance of this class. If the maximum amount of leases are
+    already acquired, it is not possible to acquire more and the caller waits
+    until another lease has been released.
+
+    The lifetime of a lease is coupled to the ``Client`` it was acquired with.
+    Once the Client goes out of scope, the leases associated to it are freed.
+    This behavior can be controlled with the
+    ``distributed.scheduler.locks.lease-validation-interval`` configuration
+    option.
+
+    A noticeable difference to the Semaphore of the python standard library is
+    that this implementation does not allow to release more often than it was
+    acquired. If this happens, a warning is emitted but the internal state is
+    not modified.
+
+    This implementation is still in an experimental state and subtle changes in
+    behavior may occur without any change in the major version of this library.
+
     Parameters
     ----------
     max_leases: int (optional)
@@ -222,6 +242,7 @@ class Semaphore:
     --------
     >>> from distributed import Semaphore
     >>> sem = Semaphore(max_leases=2, name='my_database')
+    >>>
     >>> def access_resource(s, sem):
     >>>     # This automatically acquires a lease from the semaphore (if available) which will be
     >>>     # released when leaving the context manager.

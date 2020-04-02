@@ -39,7 +39,7 @@ distributed:
         key: null
         cert: null
     locks:
-      lease-validation-interval: 10s
+      lease-validation-interval: 10s  # The time to wait until an acquired semaphore is released if the Client goes out of scope
 
   worker:
     blocked-handlers: []

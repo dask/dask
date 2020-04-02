@@ -194,6 +194,8 @@ Other
 
 .. autoclass:: Lock
    :members:
+.. autoclass:: Semaphore
+   :members:
 .. autoclass:: Queue
    :members:
 .. autoclass:: Variable
