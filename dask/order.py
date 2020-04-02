@@ -75,7 +75,14 @@ Work towards *small goals* with *big steps*.
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
 from math import log
-from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
+from .annotation import get_annotation
+from .core import (
+    get_dependencies,
+    reverse_dict,
+    get_deps,
+    getcycle,
+    istask,
+)  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -348,6 +355,14 @@ def order(dsk, dependencies=None):
         item = init_stack_pop()
         while item in result:
             item = init_stack_pop()
+
+    # Check task annotations
+    for k, v in dsk.items():
+        if istask(v):
+            f = v[0]  # We prioritize based on the first task function
+            priority = get_annotation(f).get("priority", None)
+            if priority is not None:
+                result[k] = priority
 
     return result
 
