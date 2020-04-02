@@ -76,13 +76,8 @@ Work towards *small goals* with *big steps*.
 """
 from math import log
 from .annotation import get_annotation
-from .core import (
-    get_dependencies,
-    reverse_dict,
-    get_deps,
-    getcycle,
-    istask,
-)  # noqa: F401
+from .core import get_dependencies, reverse_dict, getcycle, istask
+from .core import get_deps  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
 
 
