@@ -602,6 +602,7 @@ def to_csv(
     mode="wt",
     name_function=None,
     compression=None,
+    compute_kwargs=None,
     compute=True,
     scheduler=None,
     storage_options=None,
@@ -672,6 +673,11 @@ def to_csv(
         String like 'gzip' or 'xz'.  Must support efficient random access.
         Filenames with extensions corresponding to known compression
         algorithms (gz, bz2) will be compressed accordingly automatically
+    compute: bool
+        If true, immediately executes. If False, returns a set of delayed
+        objects, which can be computed at a later time.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
     sep : character, default ','
         Field delimiter for the output file
     na_rep : string, default ''
@@ -786,7 +792,7 @@ def to_csv(
             [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
         )
     if compute:
-        delayed(values).compute(scheduler=scheduler)
+        delayed(values).compute(scheduler=scheduler, **compute_kwargs)
         return [f.path for f in files]
     else:
         return values

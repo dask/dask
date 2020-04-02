@@ -11,6 +11,7 @@ def to_json(
     orient="records",
     lines=None,
     storage_options=None,
+    compute_kwargs=None,
     compute=True,
     encoding="utf-8",
     errors="strict",
@@ -46,6 +47,8 @@ def to_json(
     compute: bool
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
     encoding, errors:
         Text conversion, ``see str.encode()``
     compression : string or None
@@ -74,7 +77,7 @@ def to_json(
         for outfile, d in zip(outfiles, df.to_delayed())
     ]
     if compute:
-        dask.compute(parts)
+        dask.compute(parts, **compute_kwargs)
         return [f.path for f in outfiles]
     else:
         return parts
