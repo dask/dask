@@ -1358,9 +1358,9 @@ Dask Name: {name}, {task} tasks"""
         index_label=None,
         chunksize=None,
         dtype=None,
+        method=None,
         compute=True,
         parallel=False,
-        **kwargs
     ):
         """ See dd.to_sql docstring for more information """
         from .io import to_sql
@@ -1375,9 +1375,9 @@ Dask Name: {name}, {task} tasks"""
             index_label=index_label,
             chunksize=chunksize,
             dtype=dtype,
+            method=method,
             compute=compute,
             parallel=parallel,
-            **kwargs
         )
 
     def to_json(self, filename, *args, **kwargs):

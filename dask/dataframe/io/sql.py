@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 
 import dask
-from dask.dataframe.utils import PANDAS_GT_0240
+from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
+from dask.chain import _chain
 from .io import from_delayed, from_pandas
 from ... import delayed
 
@@ -225,9 +226,9 @@ def to_sql(
     index_label=None,
     chunksize=None,
     dtype=None,
+    method=None,
     compute=True,
     parallel=False,
-    **kwargs
 ):
     """ Store Dask Dataframe to a SQL table
 
@@ -268,6 +269,15 @@ def to_sql(
         keys should be the column names and the values should be the
         SQLAlchemy types or strings for the sqlite3 legacy mode. If a
         scalar is provided, it will be applied to all columns.
+    method : {None, 'multi', callable}, optional
+        Controls the SQL insertion clause used:
+
+        * None : Uses standard SQL ``INSERT`` clause (one per row).
+        * 'multi': Pass multiple values in a single ``INSERT`` clause.
+        * callable with signature ``(pd_table, conn, keys, data_iter)``.
+
+        Details and a sample callable implementation can be found in the
+        section :ref:`insert method <io.sql.method>`.
     compute : bool, default True
         When true, call dask.compute and perform the load into SQL; otherwise, return a Dask object (or array of
         per-block objects when parallel=True)
@@ -275,10 +285,6 @@ def to_sql(
         When true, have each block append itself to the DB table concurrently. This can result in DB rows being in a
         different order than the source DataFrame's corresponding rows. When false, load each block into the SQL DB in
         sequence.
-    kwargs : dict
-        If Pandas version is >= 0.24.0, a "method" value may be passed here; no other kwargs are allowed.
-
-        .. versionadded:: 0.24.0
 
     Raises
     ------
@@ -332,18 +338,6 @@ def to_sql(
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
 
-    if kwargs:
-        if PANDAS_GT_0240:
-            if list(kwargs.keys()) != ["method"]:
-                raise ValueError(
-                    "Invalid kwargs: %s"
-                    % ",".join([k for k in kwargs.keys() if k != "method"])
-                )
-        else:
-            raise ValueError(
-                "Invalid kwargs: %s" % ",".join([k for k in kwargs.keys()])
-            )
-
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
         name=name,
@@ -354,16 +348,21 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
-        **kwargs
     )
+
+    if method:
+        if not PANDAS_GT_0240:
+            raise NotImplementedError(
+                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
+            )
+        else:
+            kwargs["method"] = method
 
     def make_meta(meta):
         return meta.to_sql(**kwargs)
 
     make_meta = delayed(make_meta)
     meta_task = make_meta(df._meta)
-
-    from dask.utils import chain
 
     # Partitions should always append to the empty table created from `meta` above
     worker_kwargs = dict(kwargs, if_exists="append")
@@ -372,11 +371,11 @@ def to_sql(
 
     if parallel:
         # One wrapper that inserts all blocks concurrently, but that must come after the "meta" insert
-        values = chain([meta_task, delayed(values)])
+        values = _chain([meta_task, delayed(values)])
         result = values
     else:
         # Chain the "meta" insert and each block's insert
-        result = chain([meta_task] + values)
+        result = _chain([meta_task] + values)
         values = (result,)
 
     if compute:
