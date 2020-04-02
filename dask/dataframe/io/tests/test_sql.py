@@ -406,9 +406,7 @@ def test_to_sql(npartitions, parallel):
         result = ddf.to_sql("test", uri, parallel=parallel, compute=False)
 
         # the first result is from the "meta" insert
-        res = result.compute()
-        print(res)
-        actual = len(res)
+        actual = len(result.compute())
 
         assert actual == npartitions
 
@@ -424,5 +422,7 @@ def test_to_sql_kwargs():
                 ddf.to_sql("test", uri, method="multi")
 
         # Other, unknown keywords always disallowed
-        with pytest.raises(ValueError, match="Invalid kwargs: unknown"):
+        with pytest.raises(
+            TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
+        ):
             ddf.to_sql("test", uri, unknown=None)
