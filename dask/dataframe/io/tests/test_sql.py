@@ -420,7 +420,7 @@ def test_to_sql_kwargs():
         else:
             with pytest.raises(
                 NotImplementedError,
-                match=r"'method' requires pandas>=0.24.0. You have version 0.23.\d)",
+                match=r"'method' requires pandas>=0.24.0. You have version 0.23.\d",
             ):
                 ddf.to_sql("test", uri, method="multi")
 
