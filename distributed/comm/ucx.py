@@ -6,6 +6,7 @@ See :ref:`communications` for more.
 .. _UCX: https://github.com/openucx/ucx
 """
 import logging
+import weakref
 
 import dask
 import numpy as np
@@ -65,12 +66,24 @@ def init_once():
         if hasattr(rmm, "DeviceBuffer"):
             cuda_array = lambda n: rmm.DeviceBuffer(size=n)
         else:  # pre-0.11.0
-            cuda_array = lambda n: rmm.device_array(n, dtype=np.uint8)
+            import numba.cuda
+
+            def rmm_cuda_array(n):
+                a = rmm.device_array(n, dtype=np.uint8)
+                weakref.finalize(a, numba.cuda.current_context)
+                return a
+
+            cuda_array = rmm_cuda_array
     except ImportError:
         try:
             import numba.cuda
 
-            cuda_array = lambda n: numba.cuda.device_array((n,), dtype=np.uint8)
+            def numba_cuda_array(n):
+                a = numba.cuda.device_array((n,), dtype=np.uint8)
+                weakref.finalize(a, numba.cuda.current_context)
+                return a
+
+            cuda_array = numba_cuda_array
         except ImportError:
 
             def cuda_array(n):
