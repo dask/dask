@@ -19,6 +19,7 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
+from ..annotation import annotate_func
 from .utils import hash_object_dispatch, group_split_dispatch
 
 logger = logging.getLogger(__name__)
@@ -515,6 +516,11 @@ def rearrange_by_column_tasks(
         for i, inp in enumerate(inputs)
     }
 
+    # We know that it is _always_ beneficial to prioritize the
+    # getitem() task because it makes it possible for Dask to free
+    # the output of shuffle_group() as fast as possible.
+    getitem_annotated = annotate_func(getitem, {"priority": 0})
+
     for stage in range(1, stages + 1):
         group = {  # Convert partition into dict of dataframe pieces
             ("shuffle-group-" + token, stage, inp): (
@@ -531,7 +537,7 @@ def rearrange_by_column_tasks(
 
         split = {  # Get out each individual dataframe piece from the dicts
             ("shuffle-split-" + token, stage, i, inp): (
-                getitem,
+                getitem_annotated,
                 ("shuffle-group-" + token, stage, inp),
                 i,
             )
