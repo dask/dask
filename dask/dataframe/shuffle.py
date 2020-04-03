@@ -265,8 +265,8 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
 
-    if shuffle == "tasks" and (not npartitions or npartitions == df.npartitions):
-        # Avoid creating the "_partitions" column
+    if shuffle == "tasks":
+        # Avoid creating the "_partitions" column if possible
         if isinstance(index, DataFrame):
             names = list(index.columns)
         else:
@@ -460,7 +460,7 @@ def _noop(x, cleanup_token):
 def rearrange_by_column_tasks(
     df, column, max_branch=32, npartitions=None, ignore_index=False
 ):
-    """ Order divisions of DataFrame so that all values within column align
+    """ Order divisions of DataFrame so that all values within column(s) align
 
     This enacts a task-based shuffle.  It contains most of the tricky logic
     around the complex network of tasks.  Typically before this function is
@@ -482,6 +482,12 @@ def rearrange_by_column_tasks(
     around, concatenate back down to 1000, and then do the same process again.
     This has the same result as the full transfer, but now we've moved data
     twice (expensive) but done so with only 60 000 tasks (cheap).
+
+    Note that the `column` input may correspond to a list of columns (rather
+    than just a single column name).  In this case, the `shuffle_group` and
+    `shuffle_group_2` functions will use hashing to map each row to an output
+    partition. This approach may require the same rows to be hased multiple
+    times, but avoids the need to assign a new "_partitions" column.
 
     Parameters
     ----------
@@ -543,6 +549,7 @@ def rearrange_by_column_tasks(
                 k,
                 n,
                 ignore_index,
+                npartitions,
             )
             for inp in inputs
         }
@@ -690,37 +697,23 @@ def set_partitions_pre(s, divisions):
     return partitions
 
 
-def shuffle_group_2(df, col, ignore_index, npartitions):
+def shuffle_group_2(df, cols, ignore_index, nparts):
     if not len(df):
         return {}, df
-    ind = df[col].astype(np.int64)
-    # n = ind.max() + 1
-    n = npartitions
-    result2 = group_split_dispatch(
-        df, ind.values.view(np.int64), n, ignore_index=ignore_index
-    )
+
+    if isinstance(cols, str):
+        cols = [cols]
+
+    if cols and cols[0] == "_partitions":
+        ind = df[cols[0]].astype(np.int64)
+    else:
+        ind = (
+            hash_object_dispatch(df[cols] if cols else df, index=False) % int(nparts)
+        ).astype(np.int64)
+
+    n = ind.max() + 1
+    result2 = group_split_dispatch(df, ind.values, n, ignore_index=ignore_index)
     return result2, df.iloc[:0]
-
-
-# def shuffle_group_2(df, cols, ignore_index, npartitions):
-#     if not len(df):
-#         return {}, df
-
-#     if isinstance(cols, str):
-#         cols = [cols]
-
-#     if len(cols) == 1 and cols[0] == "_partitions":
-#         ind = df[cols[0]].astype(np.int64)
-#     else:
-#         ind = hash_object_dispatch(df[cols], index=False) % npartitions
-#         #ind = np.mod(ind, npartitions).astype(np.int64, copy=False)
-
-#     #n = ind.max() + 1
-#     n = npartitions
-#     result2 = group_split_dispatch(
-#         df, ind.values.view(np.int64), n, ignore_index=ignore_index
-#     )
-#     return result2, df.iloc[:0]
 
 
 def shuffle_group_get(g_head, i):
@@ -731,7 +724,7 @@ def shuffle_group_get(g_head, i):
         return head
 
 
-def shuffle_group(df, cols, stage, k, npartitions, ignore_index):
+def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     """ Splits dataframe into groups
 
     The group is determined by their final partition, and which stage we are in
@@ -751,6 +744,8 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index):
         Desired number of splits from this dataframe
     npartition: int
         Total number of output partitions for the full dataframe
+    nfinal: int
+        Total number of output partitions after repartitioning
 
     Returns
     -------
@@ -761,12 +756,12 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index):
     if isinstance(cols, str):
         cols = [cols]
 
-    if cols is None:
-        ind = hash_object_dispatch(df, index=False)
-    elif len(cols) == 1 and cols[0] == "_partitions":
+    if cols and cols[0] == "_partitions":
         ind = df[cols[0]]
     else:
-        ind = hash_object_dispatch(df[cols], index=False)
+        ind = hash_object_dispatch(df[cols] if cols else df, index=False)
+        if nfinal and nfinal != npartitions:
+            ind = ind % int(nfinal)
 
     c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
@@ -775,7 +770,7 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    return group_split_dispatch(df, c.astype(np.int64), k, ignore_index=ignore_index)
+    return group_split_dispatch(df, c.astype(np.int32), k, ignore_index=ignore_index)
 
 
 @contextlib.contextmanager
