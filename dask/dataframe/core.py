@@ -1108,6 +1108,7 @@ Dask Name: {name}, {task} tasks"""
         partition_size=None,
         freq=None,
         force=False,
+        columns=None,
     ):
         """ Repartition dataframe along new divisions
 
@@ -1136,19 +1137,43 @@ Dask Name: {name}, {task} tasks"""
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
             the same as the old divisions.
+        columns : list, optional
+            If set, the DataFrame will be repartitioned by the hash of the
+            specified columns. The `npartitions` argument can also be set
+            to specify the number of output partitions.
 
         Notes
         -----
-        Exactly one of `divisions`, `npartitions`, `partition_size`, or `freq`
-        should be specified. A ``ValueError`` will be raised when that is
-        not the case.
+        If `columns` is not specified, exactly one of `divisions`,
+        `npartitions`, `partition_size`, `freq` should be specified.
+        A ``ValueError`` will be raised when this is not the case.
 
         Examples
         --------
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
+        >>> df = df.repartition(columns=['a','b'])  # doctest: +SKIP
         """
+
+        if columns:
+            if (
+                sum(
+                    [
+                        partition_size is not None,
+                        divisions is not None,
+                        freq is not None,
+                    ]
+                )
+                != 0
+            ):
+                raise ValueError(
+                    "Only ``npartitions=`` can be combined with ``columns=``."
+                )
+            from .shuffle import shuffle
+
+            return shuffle(self, columns, shuffle="tasks", npartitions=npartitions)
+
         if (
             sum(
                 [
