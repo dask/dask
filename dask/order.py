@@ -384,15 +384,12 @@ def order(dsk, dependencies=None):
                             # for a "better" path, but we do need traverse along dependents.
                             if add_to_inner_stack:
                                 min_key = min(dep_pools)
-                                min_pool = dep_pools[min_key]
+                                min_pool = dep_pools.pop(min_key)
                                 if 1 < len(min_pool) < 100:
-                                    dep = min(min_pool, key=dependents_key)
-                                else:
-                                    dep = min_pool.pop()
-                                    if not min_pool:
-                                        del dep_pools[min_key]
-                                inner_stack = [dep]
-                                seen_add(dep)
+                                    min_pool.sort(key=dependents_key, reverse=True)
+                                inner_stacks_extend([dep] for dep in min_pool)
+                                inner_stack = inner_stacks_pop()
+                                seen_update(min_pool)
                             for key, vals in dep_pools.items():
                                 if key < item_key:
                                     next_nodes[key].append(vals)

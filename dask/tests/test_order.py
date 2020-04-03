@@ -711,3 +711,46 @@ def test_switching_dependents(abcde):
     assert o[(a, 5)] > o[(c, 5)]
     assert o[(a, 5)] > o[(d, 5)]
     assert o[(a, 5)] > o[(e, 6)]
+
+
+def test_order_with_equal_dependents(abcde):
+    """ From https://github.com/dask/dask/issues/5859#issuecomment-608422198
+
+    See the visualization of `(maxima, argmax)` example from the above comment.
+
+    This DAG has enough structure to exercise more parts of `order`
+
+    """
+    a, b, c, d, e = abcde
+    dsk = {}
+    for x in [a, b, c]:
+        dsk.update(
+            {
+                (x, 0): 0,
+                (x, 1): (f, (x, 0)),
+                (x, 2, 0): (f, (x, 0)),
+                (x, 2, 1): (f, (x, 1)),
+                (x, 3, 0): (f, (x, 2, 0), (a, 2, 1)),
+                (x, 3, 1): (f, (x, 2, 0), (b, 2, 1)),
+                (x, 3, 2): (f, (x, 2, 0), (c, 2, 1)),
+                (x, 4, 0): (f, (x, 3, 0)),
+                (x, 4, 1): (f, (x, 3, 1)),
+                (x, 4, 2): (f, (x, 3, 2)),
+                (x, 5, 0, 0): (f, (x, 4, 0)),
+                (x, 5, 0, 1): (f, (x, 4, 0)),
+                (x, 5, 1, 0): (f, (x, 4, 1)),
+                (x, 5, 1, 1): (f, (x, 4, 1)),
+                (x, 5, 2, 0): (f, (x, 4, 2)),
+                (x, 5, 2, 1): (f, (x, 4, 2)),
+                (x, 6, 0, 0): (f, (x, 5, 0, 0)),
+                (x, 6, 0, 1): (f, (x, 5, 0, 1)),
+                (x, 6, 1, 0): (f, (x, 5, 1, 0)),
+                (x, 6, 1, 1): (f, (x, 5, 1, 1)),
+                (x, 6, 2, 0): (f, (x, 5, 2, 0)),
+                (x, 6, 2, 1): (f, (x, 5, 2, 1)),
+            }
+        )
+    o = order(dsk)
+    for i in [a, b, c]:
+        for j in range(3):
+            assert o[(i, 6, j, 1)] - o[(i, 6, j, 0)] == 2
