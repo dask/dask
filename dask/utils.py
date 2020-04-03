@@ -583,7 +583,11 @@ def ignore_warning(doc, cls, name, extra=""):
     if i != -1:
         # Insert our warning
         head = doc[: i + 2]
-        tail = doc[i + 2 :]
+        tail = doc[i + 2:]
+        if cls.__name__ == "RandomState":
+            i = tail.find("\n\n")
+            head = tail[: i + 2]
+            tail = tail[i + 2:]
         # Indentation of next line
         indent = re.match(r"\s*", tail).group(0)
         # Insert the warning, indented, with a blank line before and after
