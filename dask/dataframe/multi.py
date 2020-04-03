@@ -928,6 +928,8 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer"):
 
 def stack_partitions(dfs, divisions, join="outer"):
     """Concatenate partitions on axis=0 by doing a simple stack"""
+    # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
+    # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
     meta = make_meta(
         methods.concat(
             [df._meta_nonempty for df in dfs], join=join, filter_warning=False
