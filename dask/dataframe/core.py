@@ -4151,11 +4151,12 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False):
         mode_series_list = []
-        for col in self.columns:
-            mode_series = super(Series, self[col]).mode(
-                dropna=dropna, split_every=split_every
+        for col_index in range(len(self.columns)):
+            col_series = self.iloc[:, col_index]
+            mode_series = Series.mode(
+                col_series, dropna=dropna, split_every=split_every
             )
-            mode_series.name = col
+            mode_series.name = col_series.name
             mode_series_list.append(mode_series)
 
         name = "concat-" + tokenize(*mode_series_list)
@@ -4173,7 +4174,7 @@ class DataFrame(_Frame):
         graph = HighLevelGraph.from_collections(
             name, dsk, dependencies=mode_series_list
         )
-        ddf = new_dd_object(graph, name, meta, mode_series_list[0].divisions)
+        ddf = new_dd_object(graph, name, meta, divisions=(None, None))
 
         return ddf
 
