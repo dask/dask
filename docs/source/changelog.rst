@@ -1,6 +1,32 @@
 Changelog
 =========
 
+2.14.0 / 2020-04-03
+-------------------
+
+Array
++++++
+
+- Added ``np.iscomplexobj`` implementation (:pr:`6045`) `Tom Augspurger`_
+
+Core
+++++
+
+- Update ``test_rearrange_disk_cleanup_with_exception`` to pass without cloudpickle installed (:pr:`6052`) `James Bourbeau`_
+- Fixed flaky ``test-rearrange`` (:pr:`5977`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Use ``_meta_nonempty`` for dtype casting in ``stack_partitions`` (:pr:`6061`) `mlondschien`_
+- Fix bugs in ``_metadata`` creation and filtering in parquet ``ArrowEngine`` (:pr:`6023`) `Richard (Rick) Zamora`_
+
+Documentation
++++++++++++++
+
+- DOC: Add name caveats (:pr:`6040`) `Tom Augspurger`_
+
+
 2.13.0 / 2020-03-25
 -------------------
 
@@ -3045,3 +3071,4 @@ Other
 .. _`psimaj`: https://github.com/psimaj
 .. _`mlondschien`: https://github.com/mlondschien
 .. _`petiop`: https://github.com/petiop
+.. _`Richard (Rick) Zamora`: https://github.com/rjzamora
