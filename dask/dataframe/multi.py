@@ -85,6 +85,7 @@ from .utils import (
     is_series_like,
     asciitable,
     is_dataframe_like,
+    make_meta,
 )
 
 
@@ -927,7 +928,11 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer"):
 
 def stack_partitions(dfs, divisions, join="outer"):
     """Concatenate partitions on axis=0 by doing a simple stack"""
-    meta = methods.concat([df._meta for df in dfs], join=join, filter_warning=False)
+    meta = make_meta(
+        methods.concat(
+            [df._meta_nonempty for df in dfs], join=join, filter_warning=False
+        )
+    )
     empty = strip_unknown_categories(meta)
 
     name = "concat-{0}".format(tokenize(*dfs))
