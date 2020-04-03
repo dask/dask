@@ -649,7 +649,17 @@ def partitioning_index(df, npartitions):
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    return hash_object_dispatch(df, index=False) % int(npartitions)
+    typ = np.min_scalar_type(npartitions * 2)
+    # if typ.kind == "u": # CuDF doesn't support unsigned types
+    #     if typ == np.uint8:
+    #         typ = np.int16
+    #     elif typ == np.uint16:
+    #         typ = np.int32
+    #     else:
+    #         typ = np.int64
+    return (hash_object_dispatch(df, index=False) % int(npartitions)).astype(
+        typ, errors="ignore"
+    )
 
 
 def barrier(args):
@@ -705,14 +715,14 @@ def shuffle_group_2(df, cols, ignore_index, nparts):
         cols = [cols]
 
     if cols and cols[0] == "_partitions":
-        ind = df[cols[0]].astype(np.int64)
+        ind = df[cols[0]].astype(np.int32)
     else:
         ind = (
             hash_object_dispatch(df[cols] if cols else df, index=False) % int(nparts)
-        ).astype(np.int64)
+        ).astype(np.int32)
 
     n = ind.max() + 1
-    result2 = group_split_dispatch(df, ind.values, n, ignore_index=ignore_index)
+    result2 = group_split_dispatch(df, ind.values.view(), n, ignore_index=ignore_index)
     return result2, df.iloc[:0]
 
 
