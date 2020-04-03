@@ -585,9 +585,7 @@ def test_concat(join):
     [
         (1.0, 1),
         (1.0, "one"),
-        # See https://github.com/dask/dask/issues/5968 and
-        # https://github.com/pandas-dev/pandas/issues/32934
-        pytest.param(1.0, pd.to_datetime("1970-01-01"), marks=pytest.mark.xfail),
+        (1.0, pd.to_datetime("1970-01-01")),
         (1, "one"),
         (1, pd.to_datetime("1970-01-01")),
         ("one", pd.to_datetime("1970-01-01")),
