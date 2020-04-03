@@ -1,6 +1,33 @@
 Changelog
 =========
 
+2.14.0 - 2020-04-03
+-------------------
+
+- Enable more UCX tests (:pr:`3667`) `jakirkham`_
+- Remove openssl 1.1.1d pin for Travis (:pr:`3668`) `Jonathan J. Helmus`_
+- More documentation for ``Semaphore`` (:pr:`3664`) `Florian Jetter`_
+- Get CUDA context to finalize Numba ``DeviceNDArray`` (:pr:`3666`) `jakirkham`_
+- Add Resouces option to ``get_task_stream`` and call ``output_file`` (:pr:`3653`) `Prasun Anand`_
+- Add ``Semaphore`` extension (:pr:`3573`) `Lucas Rademaker`_
+- Replace ``ncores`` with ``nthreads`` in work stealing tests (:pr:`3615`) `James Bourbeau`_
+- Clean up some test warnings (:pr:`3662`) `Matthew Rocklin`_
+- Write "why killed" docs (:pr:`3596`) `Martin Durant`_
+- Update Python version checking (:pr:`3660`) `James Bourbeau`_
+- Add newlines to ensure code formatting for ``retire_workers`` (:pr:`3661`) `Rami Chowdhury`_
+- Clean up performance report test (:pr:`3655`) `Matthew Rocklin`_
+- Avoid diagnostics time in performance report (:pr:`3654`) `Matthew Rocklin`_
+- Introduce config for default task duration (:pr:`3642`) `Gabriel Sailer`_
+- UCX simplify receiving frames in ``comm`` (:pr:`3651`) `jakirkham`_
+- Bump checkout GitHub action to v2 (:pr:`3649`) `James Bourbeau`_
+- Handle exception in ``faulthandler`` (:pr:`3646`) `Jacob Tomlinson`_
+- Add prometheus metric for suspicious tasks (:pr:`3550`) `Gabriel Sailer`_
+- Remove ``local-directory`` keyword (:pr:`3620`) `Prasun Anand`_
+- Don't create output Futures in Client when there are mixed Client Futures (:pr:`3643`) `James Bourbeau`_
+- Add link to ``contributing.md`` (:pr:`3621`) `Prasun Anand`_
+- Update bokeh dependency in CI builds (:pr:`3637`) `James Bourbeau`_
+
+
 2.13.0 - 2020-03-25
 -------------------
 
@@ -1641,3 +1668,7 @@ significantly without many new features.
 .. _`Matthias Urlichs`: https://github.com/smurfix
 .. _`Krishan Bhasin`: https://github.com/KrishanBhasin
 .. _`Abdulelah Bin Mahfoodh`: https://github.com/abduhbm
+.. _`jakirkham`: https://github.com/jakirkham
+.. _`Prasun Anand`: https://github.com/prasunanand
+.. _`Jonathan J. Helmus`: https://github.com/jjhelmus
+.. _`Rami Chowdhury`: https://github.com/necaris
