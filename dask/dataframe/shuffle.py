@@ -265,6 +265,23 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
 
+    if shuffle == "tasks" and (not npartitions or npartitions == df.npartitions):
+        # Avoid creating the "_partitions" column
+        if isinstance(index, DataFrame):
+            names = list(index.columns)
+        else:
+            names = [index.name]
+        nset = set(names)
+        if nset.intersection(set(df.columns)) == nset:
+            return rearrange_by_column(
+                df,
+                names,
+                npartitions=npartitions,
+                max_branch=max_branch,
+                shuffle="tasks",
+                compute=compute,
+            )
+
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
@@ -469,9 +486,10 @@ def rearrange_by_column_tasks(
     Parameters
     ----------
     df: dask.dataframe.DataFrame
-    column: str
+    column: str or list
         A column name on which we want to split, commonly ``"_partitions"``
-        which is assigned by functions upstream
+        which is assigned by functions upstream.  This could also be a list of
+        columns (in which case shuffle_group will create a hash array/column).
     max_branch: int
         The maximum number of splits per input partition.  Defaults to 32.
         If there are more partitions than this then the shuffling will occur in
@@ -578,6 +596,7 @@ def rearrange_by_column_tasks(
                 k,
                 column,
                 ignore_index,
+                npartitions,
             )
             for i, k in enumerate(df2.__dask_keys__())
         }
@@ -671,15 +690,37 @@ def set_partitions_pre(s, divisions):
     return partitions
 
 
-def shuffle_group_2(df, col, ignore_index):
+def shuffle_group_2(df, col, ignore_index, npartitions):
     if not len(df):
         return {}, df
     ind = df[col].astype(np.int64)
-    n = ind.max() + 1
+    # n = ind.max() + 1
+    n = npartitions
     result2 = group_split_dispatch(
         df, ind.values.view(np.int64), n, ignore_index=ignore_index
     )
     return result2, df.iloc[:0]
+
+
+# def shuffle_group_2(df, cols, ignore_index, npartitions):
+#     if not len(df):
+#         return {}, df
+
+#     if isinstance(cols, str):
+#         cols = [cols]
+
+#     if len(cols) == 1 and cols[0] == "_partitions":
+#         ind = df[cols[0]].astype(np.int64)
+#     else:
+#         ind = hash_object_dispatch(df[cols], index=False) % npartitions
+#         #ind = np.mod(ind, npartitions).astype(np.int64, copy=False)
+
+#     #n = ind.max() + 1
+#     n = npartitions
+#     result2 = group_split_dispatch(
+#         df, ind.values.view(np.int64), n, ignore_index=ignore_index
+#     )
+#     return result2, df.iloc[:0]
 
 
 def shuffle_group_get(g_head, i):
@@ -690,7 +731,7 @@ def shuffle_group_get(g_head, i):
         return head
 
 
-def shuffle_group(df, col, stage, k, npartitions, ignore_index):
+def shuffle_group(df, cols, stage, k, npartitions, ignore_index):
     """ Splits dataframe into groups
 
     The group is determined by their final partition, and which stage we are in
@@ -699,8 +740,9 @@ def shuffle_group(df, col, stage, k, npartitions, ignore_index):
     Parameters
     ----------
     df: DataFrame
-    col: str
-        Column name on which to split the dataframe
+    cols: str or list
+        Column name(s) on which to split the dataframe. If ``cols`` is not
+        "_partitions", hashing will be used to determine target partition
     stage: int
         We shuffle dataframes with many partitions we in a few stages to avoid
         a quadratic number of tasks.  This number corresponds to which stage
@@ -716,10 +758,15 @@ def shuffle_group(df, col, stage, k, npartitions, ignore_index):
         A dictionary mapping integers in {0..k} to dataframes such that the
         hash values of ``df[col]`` are well partitioned.
     """
-    if col == "_partitions":
-        ind = df[col]
-    else:
+    if isinstance(cols, str):
+        cols = [cols]
+
+    if cols is None:
         ind = hash_object_dispatch(df, index=False)
+    elif len(cols) == 1 and cols[0] == "_partitions":
+        ind = df[cols[0]]
+    else:
+        ind = hash_object_dispatch(df[cols], index=False)
 
     c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
