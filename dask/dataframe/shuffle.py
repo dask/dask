@@ -650,16 +650,14 @@ def partitioning_index(df, npartitions):
         An array of int64 values mapping each record to a partition.
     """
     typ = np.min_scalar_type(npartitions * 2)
-    # if typ.kind == "u": # CuDF doesn't support unsigned types
-    #     if typ == np.uint8:
-    #         typ = np.int16
-    #     elif typ == np.uint16:
-    #         typ = np.int32
-    #     else:
-    #         typ = np.int64
-    return (hash_object_dispatch(df, index=False) % int(npartitions)).astype(
-        typ, errors="ignore"
-    )
+    if typ.kind == "u":  # CuDF doesn't support unsigned types
+        if typ == np.uint8:
+            typ = np.int16
+        elif typ == np.uint16:
+            typ = np.int32
+        else:
+            typ = np.int64
+    return (hash_object_dispatch(df, index=False) % int(npartitions)).astype(typ)
 
 
 def barrier(args):
