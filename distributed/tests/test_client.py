@@ -2877,6 +2877,15 @@ def test_rebalance_unprepared(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_rebalance_raises_missing_data(c, s, a, b):
+    with pytest.raises(ValueError, match=f"keys were found to be missing"):
+        futures = await c.scatter(range(100))
+        keys = [f.key for f in futures]
+        del futures
+        await c.rebalance(keys)
+
+
+@gen_cluster(client=True)
 def test_receive_lost_key(c, s, a, b):
     x = c.submit(inc, 1, workers=[a.address])
     result = yield x
@@ -4864,8 +4873,8 @@ def test_bytes_keys(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_unicode_ascii_keys(c, s, a, b):
-    uni_type = type(u"")
-    key = u"inc-123"
+    uni_type = type("")
+    key = "inc-123"
     future = c.submit(inc, 1, key=key)
     result = yield future
     assert type(future.key) is uni_type
@@ -4876,8 +4885,8 @@ def test_unicode_ascii_keys(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_unicode_keys(c, s, a, b):
-    uni_type = type(u"")
-    key = u"inc-123\u03bc"
+    uni_type = type("")
+    key = "inc-123\u03bc"
     future = c.submit(inc, 1, key=key)
     result = yield future
     assert type(future.key) is uni_type
@@ -4889,8 +4898,8 @@ def test_unicode_keys(c, s, a, b):
     result2 = yield future2
     assert result2 == 3
 
-    future3 = yield c.scatter({u"data-123": 123})
-    result3 = yield future3[u"data-123"]
+    future3 = yield c.scatter({"data-123": 123})
+    result3 = yield future3["data-123"]
     assert result3 == 123
 
 
