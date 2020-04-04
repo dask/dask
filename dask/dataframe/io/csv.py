@@ -602,11 +602,11 @@ def to_csv(
     mode="wt",
     name_function=None,
     compression=None,
-    compute_kwargs=None,
     compute=True,
     scheduler=None,
     storage_options=None,
     header_first_partition_only=None,
+    compute_kwargs=None,
     **kwargs
 ):
     """

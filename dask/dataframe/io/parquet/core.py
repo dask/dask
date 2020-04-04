@@ -288,8 +288,8 @@ def to_parquet(
     partition_on=None,
     storage_options=None,
     write_metadata_file=True,
-    compute_kwargs=None,
     compute=True,
+    compute_kwargs=None,
     **kwargs
 ):
     """Store Dask.dataframe to Parquet files

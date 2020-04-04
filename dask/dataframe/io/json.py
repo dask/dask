@@ -11,11 +11,11 @@ def to_json(
     orient="records",
     lines=None,
     storage_options=None,
-    compute_kwargs=None,
     compute=True,
     encoding="utf-8",
     errors="strict",
     compression=None,
+    compute_kwargs=None,
     **kwargs
 ):
     """Write dataframe into JSON text files
