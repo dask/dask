@@ -793,7 +793,7 @@ def to_csv(
         )
     if compute:
         if scheduler is not None:
-            warnings.warn(
+            warn(
                 "passing 'scheduler' directly into `to_csv()` is deprecated and will be removed in a future version"
                 "pass the scheduler in as part of `compute_kwargs` instead.",
             FutureWarning,
