@@ -7,6 +7,6 @@ sphinx-click
 toolz
 cloudpickle
 pandas>=0.23.0
-distributed
+distributed>=2.14.0
 fsspec
 scipy

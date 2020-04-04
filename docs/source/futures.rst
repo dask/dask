@@ -440,6 +440,7 @@ Coordination Primitives
    Queue
    Variable
    Lock
+   Semaphore
    Pub
    Sub
 
@@ -621,6 +622,32 @@ locks for a particular situation:
 
 This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
+
+
+Semaphore
+~~~~~~~~~
+
+.. autosummary::
+   Semaphore
+
+Similar to the single-valued ``Lock`` it is also possible to use a cluster-wide
+semaphore to coordinate and limit access to a sensitive resource like a
+database.
+
+.. code-block:: python
+
+   from dask.distributed import Semaphore
+
+   sem = Semaphore(max_leases=2, name="database")
+
+   def access_limited(val, sem):
+      with sem:
+         # Interact with the DB
+         return
+
+   futures = client.map(access_limited, range(10), sem=sem)
+   client.gather(futures)
+   sem.close()
 
 
 Publish-Subscribe
