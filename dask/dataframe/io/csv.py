@@ -792,6 +792,8 @@ def to_csv(
             [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
         )
     if compute:
+        if compute_kwargs is None:
+            compute_kwargs = dict()
         delayed(values).compute(scheduler=scheduler, **compute_kwargs)
         return [f.path for f in files]
     else:

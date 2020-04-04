@@ -456,6 +456,8 @@ def to_parquet(
         )
 
     if compute:
+        if compute_kwargs is None:
+            compute_kwargs = dict()
         out = out.compute(**compute_kwargs)
     return out
 

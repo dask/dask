@@ -77,6 +77,8 @@ def to_json(
         for outfile, d in zip(outfiles, df.to_delayed())
     ]
     if compute:
+        if compute_kwargs is None:
+            compute_kwargs = dict()
         dask.compute(parts, **compute_kwargs)
         return [f.path for f in outfiles]
     else:
