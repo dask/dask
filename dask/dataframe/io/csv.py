@@ -803,7 +803,7 @@ def to_csv(
             raise ValueError(
                 f"Differing values for 'scheduler' have been passed in.\n"
                 f"scheduler argument: {scheduler}\n"
-                f"via compute_kwargs: {compute_kwargs.get("scheduler")}"
+                f"via compute_kwargs: {compute_kwargs.get('scheduler')}"
             )
 
         if compute_kwargs is None:
