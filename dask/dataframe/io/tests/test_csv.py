@@ -1400,7 +1400,7 @@ def test_to_csv_with_get():
     ddf = dd.from_pandas(df, npartitions=2)
 
     with tmpdir() as dn:
-        ddf.to_csv(dn, index=False, compute_kwargs={"scheduler":my_get})
+        ddf.to_csv(dn, index=False, compute_kwargs={"scheduler": my_get})
         assert flag[0]
         result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
         assert_eq(result, df)

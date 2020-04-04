@@ -328,7 +328,7 @@ def read_pandas(
     assume_missing=False,
     storage_options=None,
     include_path_column=False,
-    **kwargs
+    **kwargs,
 ):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
@@ -402,7 +402,7 @@ def read_pandas(
         sample=sample,
         compression=compression,
         include_path=include_path_column,
-        **(storage_options or {})
+        **(storage_options or {}),
     )
 
     if include_path_column:
@@ -561,7 +561,7 @@ def make_reader(reader, reader_name, file_type):
         assume_missing=False,
         storage_options=None,
         include_path_column=False,
-        **kwargs
+        **kwargs,
     ):
         return read_pandas(
             reader,
@@ -575,7 +575,7 @@ def make_reader(reader, reader_name, file_type):
             assume_missing=assume_missing,
             storage_options=storage_options,
             include_path_column=include_path_column,
-            **kwargs
+            **kwargs,
         )
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
@@ -607,7 +607,7 @@ def to_csv(
     storage_options=None,
     header_first_partition_only=None,
     compute_kwargs=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Store Dask DataFrame to CSV files
@@ -761,7 +761,7 @@ def to_csv(
         compression=compression,
         encoding=encoding,
         newline="",
-        **(storage_options or {})
+        **(storage_options or {}),
     )
     to_csv_chunk = delayed(_write_csv, pure=False)
     dfs = df.to_delayed()
@@ -783,7 +783,7 @@ def to_csv(
             mode=mode,
             name_function=name_function,
             num=df.npartitions,
-            **file_options
+            **file_options,
         )
         values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
         if header_first_partition_only:
@@ -796,10 +796,14 @@ def to_csv(
             warn(
                 "passing 'scheduler' directly into `to_csv()` is deprecated and will be removed in a future version"
                 "pass the scheduler in as part of `compute_kwargs` instead.",
-            FutureWarning,
+                FutureWarning,
             )
 
-        if compute_kwargs is not None and scheduler is not None and compute_kwargs.get("scheduler") != scheduler:
+        if (
+            compute_kwargs is not None
+            and scheduler is not None
+            and compute_kwargs.get("scheduler") != scheduler
+        ):
             raise ValueError(
                 f"Differing values for 'scheduler' have been passed in.\n"
                 f"scheduler argument: {scheduler}\n"
@@ -807,7 +811,7 @@ def to_csv(
             )
 
         if compute_kwargs is None:
-            compute_kwargs = {'scheduler':scheduler}
+            compute_kwargs = {"scheduler": scheduler}
 
         delayed(values).compute(**compute_kwargs)
         return [f.path for f in files]
