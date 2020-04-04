@@ -794,6 +794,13 @@ def to_csv(
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
+
+        if scheduler is not None:
+            warnings.warn(
+                "passing 'scheduler' directly into `to_csv()` is deprecated and will be removed in a future version"
+                "pass the scheduler in as part of `compute_kwargs` instead.",
+            FutureWarning,
+            )
         delayed(values).compute(scheduler=scheduler, **compute_kwargs)
         return [f.path for f in files]
     else:
