@@ -10,7 +10,7 @@ import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_118
 
 
 @pytest.mark.parametrize(
@@ -728,13 +728,38 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     [
         "constant",
         "edge",
-        "linear_ramp",
+        pytest.param(
+            "linear_ramp",
+            marks=pytest.mark.skipif(
+                not _numpy_118, reason="numpy changed pad behaviour"
+            ),
+        ),
         "maximum",
-        # "mean", TODO bug: dask changes the dtype to float
+        pytest.param(
+            "mean",
+            marks=pytest.mark.skip(
+                reason="Bug dask changes the dtype to float: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
         "minimum",
-        # "reflect", TODO bug: reflect, symmetric and wrap do not work when the pad_width is larger than the dimension
-        # "symmetric",
-        # "wrap",
+        pytest.param(
+            "reflect",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "symmetric",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "wrap",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
         pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
         pytest.param(
             "empty",
