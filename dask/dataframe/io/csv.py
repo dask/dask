@@ -807,9 +807,9 @@ def to_csv(
             )
 
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {'scheduler':scheduler}
 
-        delayed(values).compute(scheduler=scheduler, **compute_kwargs)
+        delayed(values).compute(**compute_kwargs)
         return [f.path for f in files]
     else:
         return values
