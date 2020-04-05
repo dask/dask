@@ -383,7 +383,7 @@ def plot_figure(data, **kwargs):
 
     source = ColumnDataSource(data=data)
 
-    fig = figure(tools="tap", **kwargs)
+    fig = figure(tools="tap,box_zoom,xwheel_zoom,reset", **kwargs)
     r = fig.quad(
         "left",
         "right",
