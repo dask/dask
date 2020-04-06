@@ -689,17 +689,68 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             "See the numpy.histogram docstring for more information."
         )
 
+    dependencies = [a]
+
+    if range is not None:
+        try:
+            if len(range) != 2:
+                raise ValueError(
+                    f"range must be a sequence of length 2, but got {len(range)} items"
+                )
+        except TypeError:
+            raise TypeError(f"expected a sequence for range, not {range}") from None
+
+        range_refs = []
+        for elem in range:
+            if isinstance(elem, Array):
+                if elem.shape != ():
+                    raise ValueError(
+                        f"Dask arrays passed in the range argument to histogram must be scalars "
+                        f"(shape of `()`); got one with shape {elem.shape}."
+                    )
+                dependencies.append(elem)
+                key = elem.__dask_keys__()[0]
+                range_refs.append(key)
+            else:
+                range_refs.append(elem)
+
     if not np.iterable(bins):
         bin_token = bins
         mn, mx = range
-        if mn == mx:
-            mn -= 0.5
-            mx += 0.5
+        if len(dependencies) == 1 and mn == mx:
+            # ^ `len(dependencies) == 1` here iff neither element in `range` was a Dask array.
+            # `mn == mx` could be an expensive implicit compute otherwise.
+            mn = mn - 0.5
+            mx = mx + 0.5
 
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+        # ^ will dispatch to `da.linspace` if `mn` or `mx` are Dask arrays
     else:
         bin_token = bins
+
     token = tokenize(a, bin_token, range, weights, density)
+
+    if isinstance(bins, Array):
+        if bins.ndim != 1:
+            raise ValueError(f"bins must have 1 dimension, got {bins.ndim}")
+        dependencies.append(bins)
+        bins_ref = ("histogram-bins-" + token, 0)
+
+        def logger(x):
+            print(x)
+            res = np.concatenate(x)
+            if not isinstance(res, np.ndarray):
+                raise RuntimeError(res)
+            return res
+
+        bins_dsk = {bins_ref: (logger, bins.__dask_keys__())}
+        bins_graph = HighLevelGraph.from_collections(
+            bins_ref[0], bins_dsk, dependencies=[bins]
+        )
+    else:
+        bins_ref = bins
+        bins_graph = None
+        # bins_dsk = {}
 
     nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
@@ -707,27 +758,29 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     name = "histogram-sum-" + token
 
     # Map the histogram to all bins
-    def block_hist(x, range=None, weights=None):
+    def block_hist(x, bins, range=None, weights=None):
         return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
 
     if weights is None:
         dsk = {
-            (name, i, 0): (block_hist, k, range)
+            (name, i, 0): (block_hist, k, bins_ref, range_refs)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
     else:
+        dependencies.append(weights)
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (block_hist, k, range, w)
+            (name, i, 0): (block_hist, k, bins_ref, range_refs, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
 
-    graph = HighLevelGraph.from_collections(
-        name, dsk, dependencies=[a] if weights is None else [a, weights]
-    )
+    # dsk.update(bins_dsk)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    if bins_graph:
+        graph = HighLevelGraph.merge(graph, bins_graph)
 
     mapped = Array(graph, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
@@ -1294,7 +1347,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
         name="piecewise",
         funclist=funclist,
         func_args=args,
-        func_kw=kw
+        func_kw=kw,
     )
 
 
