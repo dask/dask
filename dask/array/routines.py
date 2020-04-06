@@ -691,6 +691,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     dependencies = [a]
 
+    range_refs = None
     if range is not None:
         try:
             if len(range) != 2:
@@ -715,16 +716,32 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 range_refs.append(elem)
 
     if not np.iterable(bins):
+        assert not isinstance(
+            bins, Array
+        ), "The number of bins cannot be a Dask array, it must be an actual value"
         bin_token = bins
-        mn, mx = range
-        if len(dependencies) == 1 and mn == mx:
+        if len(dependencies) == 1:
             # ^ `len(dependencies) == 1` here iff neither element in `range` was a Dask array.
             # `mn == mx` could be an expensive implicit compute otherwise.
-            mn = mn - 0.5
-            mx = mx + 0.5
+            mn, mx = range
+            if mn == mx:
+                mn = mn - 0.5
+                mx = mx + 0.5
 
-        bins = np.linspace(mn, mx, bins + 1, endpoint=True)
-        # ^ will dispatch to `da.linspace` if `mn` or `mx` are Dask arrays
+            bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+        else:
+            linspace_name = tokenize(bins, *range_refs)
+            linspace_dsk = {
+                (linspace_name, 0): (
+                    np.linspace,
+                    range_refs[0],
+                    range_refs[1],
+                    bins + 1,
+                )
+            }
+            # ^ TODO: dask linspace doesn't support delayed values
+            bins = Array(linspace_dsk, linspace_name, [(bins + 1,)], dtype=float)
+
     else:
         bin_token = bins
 
@@ -736,14 +753,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         dependencies.append(bins)
         bins_ref = ("histogram-bins-" + token, 0)
 
-        def logger(x):
-            print(x)
-            res = np.concatenate(x)
-            if not isinstance(res, np.ndarray):
-                raise RuntimeError(res)
-            return res
-
-        bins_dsk = {bins_ref: (logger, bins.__dask_keys__())}
+        bins_dsk = {bins_ref: (np.concatenate, bins.__dask_keys__())}
         bins_graph = HighLevelGraph.from_collections(
             bins_ref[0], bins_dsk, dependencies=[bins]
         )
