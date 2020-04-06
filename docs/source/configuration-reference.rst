@@ -8,6 +8,14 @@ Scheduler
 ---------
 The scheduler can be tuned for performance and debugging.
 
+This is a generated table below
+
+.. yamltotable:: scheduler
+    :header: "Key", "Default", "Description"
+    :widths: 20, 10, 20
+
+This is a manually created table
+
 .. csv-table::
    :header: "Key", "Default", "Description"
    :widths: 20, 10, 20
