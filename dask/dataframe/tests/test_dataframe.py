@@ -3676,6 +3676,22 @@ def test_dataframe_reductions_arithmetic(reduction):
     )
 
 
+def test_dataframe_mode():
+    data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
+
+    df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.Name.mode(), df.Name.mode())
+
+    # test empty
+    df = pd.DataFrame(columns=["a", "b"])
+    ddf = dd.from_pandas(df, npartitions=1)
+    # check_index=False should be removed once https://github.com/pandas-dev/pandas/issues/33321 is resolved.
+    assert_eq(ddf.mode(), df.mode(), check_index=False)
+
+
 def test_datetime_loc_open_slicing():
     dtRange = pd.date_range("01.01.2015", "05.05.2015")
     df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)
