@@ -1090,7 +1090,7 @@ def task_stream_figure(clear_interval="20s", **kwargs):
             """,
     )
 
-    tap = TapTool(callback=OpenURL(url="/profile?key=@name"))
+    tap = TapTool(callback=OpenURL(url="./profile?key=@name"))
 
     root.add_tools(
         hover,
