@@ -11,8 +11,7 @@ import click
 import dask
 from dask.utils import ignoring
 from dask.system import CPU_COUNT
-from distributed import Nanny
-from distributed.security import Security
+from distributed import Nanny, Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
 from distributed.preloading import validate_preload_argv

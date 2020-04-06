@@ -22,6 +22,7 @@ from .lock import Lock
 from .nanny import Nanny
 from .pubsub import Pub, Sub
 from .queues import Queue
+from .security import Security
 from .semaphore import Semaphore
 from .scheduler import Scheduler
 from .threadpoolexecutor import rejoin

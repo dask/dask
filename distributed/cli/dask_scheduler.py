@@ -11,9 +11,8 @@ import dask
 
 from tornado.ioloop import IOLoop
 
-from distributed import Scheduler
+from distributed import Scheduler, Security
 from distributed.preloading import validate_preload_argv
-from distributed.security import Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.utils import deserialize_for_cli
 from distributed.proctitle import (
