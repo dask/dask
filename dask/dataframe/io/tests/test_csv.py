@@ -1364,15 +1364,15 @@ def test_to_csv_gzip():
 
 
 def test_to_csv_nodir():
-    #See #6062 https://github.com/intake/filesystem_spec/pull/271 and
+    # See #6062 https://github.com/intake/filesystem_spec/pull/271 and
     df0 = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
     df = dd.from_pandas(df0, npartitions=2)
     with tmpdir() as dir:
-        dir0 = os.path.join(str(dir), 'createme')
+        dir0 = os.path.join(str(dir), "createme")
         df.to_csv(dir0)
-        assert 'createme' in os.listdir(dir)
+        assert "createme" in os.listdir(dir)
         assert os.listdir(dir0)
         result = dd.read_csv(os.path.join(dir0, "*")).compute()
     assert (result.x.values == df0.x.values).all()
