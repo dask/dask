@@ -672,6 +672,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
+    if not isinstance(a, Array):
+        a = from_array(a)
+
     if not np.iterable(bins) and (range is None or bins is None):
         raise ValueError(
             "dask.array.histogram requires either specifying "
@@ -739,8 +742,11 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                     bins + 1,
                 )
             }
+            linspace_graph = HighLevelGraph.from_collections(
+                linspace_name, linspace_dsk, dependencies=dependencies[1:]
+            )
             # ^ TODO: dask linspace doesn't support delayed values
-            bins = Array(linspace_dsk, linspace_name, [(bins + 1,)], dtype=float)
+            bins = Array(linspace_graph, linspace_name, [(bins + 1,)], dtype=float)
 
     else:
         bin_token = bins
@@ -798,7 +804,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     # We need to replicate normed and density options from numpy
     if density is not None:
         if density:
-            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            db = asarray(np.diff(bins).astype(float), chunks=n.chunks)
             return n / db / n.sum(), bins
         else:
             return n, bins
