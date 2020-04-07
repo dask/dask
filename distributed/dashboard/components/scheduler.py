@@ -34,6 +34,7 @@ from bokeh.themes import Theme
 from bokeh.transform import factor_cmap, linear_cmap
 from bokeh.io import curdoc
 import dask
+from dask import config
 from dask.utils import format_bytes, key_split
 from tlz import pipe
 from tlz.curried import map, concat, groupby
@@ -1171,6 +1172,7 @@ class TaskGraph(DashboardComponent):
         tap = TapTool(callback=OpenURL(url="info/task/@key.html"), renderers=[rect])
         rect.nonselection_glyph = None
         self.root.add_tools(hover, tap)
+        self.max_items = config.get("distributed.dashboard.graph-max-items", 5000)
 
     @without_property_validation
     def update(self):
@@ -1206,6 +1208,10 @@ class TaskGraph(DashboardComponent):
             y = self.layout.y
 
             tasks = self.scheduler.tasks
+            if len(tasks) > self.max_items:
+                # graph to big - no update, reset for next time
+                self.invisible_count = len(tasks)
+                return
             for key in new:
                 try:
                     task = tasks[key]

@@ -129,6 +129,7 @@ distributed:
   dashboard:
     link: "{scheme}://{host}:{port}/status"
     export-tool: False
+    graph-max-items: 5000  # maximum number of tasks to try to plot in graph view
 
   ##################
   # Administrative #

@@ -36,6 +36,7 @@ from distributed.dashboard.components.scheduler import (
     ProfileServer,
     MemoryByKey,
 )
+from distributed.utils_test import async_wait_for
 
 from distributed.dashboard import scheduler
 
@@ -499,6 +500,35 @@ def test_TaskGraph_clear(c, s, a, b):
         yield gen.sleep(0.1)
         gp.update()
         assert time() < start + 5
+
+
+@gen_cluster(
+    client=True, config={"distributed.dashboard.graph-max-items": 2,},
+)
+def test_TaskGraph_limit(c, s, a, b):
+    gp = TaskGraph(s)
+
+    def func(x):
+        return x
+
+    f1 = c.submit(func, 1)
+    yield wait(f1)
+    gp.update()
+    assert len(gp.node_source.data["x"]) == 1
+    f2 = c.submit(func, 2)
+    yield wait(f2)
+    gp.update()
+    assert len(gp.node_source.data["x"]) == 2
+    f3 = c.submit(func, 3)
+    yield wait(f3)
+    gp.update()
+    assert len(gp.node_source.data["x"]) == 2
+    del f1
+    del f2
+    del f3
+    _ = c.submit(func, 1)
+
+    async_wait_for(lambda: len(gp.node_source.data["x"]) == 1, timeout=1)
 
 
 @gen_cluster(client=True, timeout=30)
