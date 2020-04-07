@@ -184,7 +184,7 @@ class Connector(ABC):
         """
 
 
-async def connect(addr, timeout=None, deserialize=True, connection_args=None):
+async def connect(addr, timeout=None, deserialize=True, **connection_args):
     """
     Connect to the given address (a URI such as ``tcp://127.0.0.1:1234``)
     and yield a ``Comm`` object.  If the connection attempt fails, it is
@@ -221,7 +221,7 @@ async def connect(addr, timeout=None, deserialize=True, connection_args=None):
         try:
             while deadline - time() > 0:
                 future = connector.connect(
-                    loc, deserialize=deserialize, **(connection_args or {})
+                    loc, deserialize=deserialize, **connection_args
                 )
                 with ignoring(TimeoutError):
                     comm = await asyncio.wait_for(
@@ -247,7 +247,7 @@ async def connect(addr, timeout=None, deserialize=True, connection_args=None):
     return comm
 
 
-def listen(addr, handle_comm, deserialize=True, connection_args=None):
+def listen(addr, handle_comm, deserialize=True, **kwargs):
     """
     Create a listener object with the given parameters.  When its ``start()``
     method is called, the listener will listen on the given address
@@ -259,7 +259,7 @@ def listen(addr, handle_comm, deserialize=True, connection_args=None):
     try:
         scheme, loc = parse_address(addr, strict=True)
     except ValueError:
-        if connection_args and connection_args.get("ssl_context"):
+        if kwargs.get("ssl_context"):
             addr = "tls://" + addr
         else:
             addr = "tcp://" + addr
@@ -267,6 +267,4 @@ def listen(addr, handle_comm, deserialize=True, connection_args=None):
 
     backend = registry.get_backend(scheme)
 
-    return backend.get_listener(
-        loc, handle_comm, deserialize, **(connection_args or {})
-    )
+    return backend.get_listener(loc, handle_comm, deserialize, **kwargs)

@@ -230,12 +230,10 @@ async def test_server_listen():
 
     sec = tls_security()
     async with listen_on(
-        Server, "tls://", listen_args=sec.get_listen_args("scheduler")
+        Server, "tls://", **sec.get_listen_args("scheduler")
     ) as server:
         assert server.address.startswith("tls://")
-        await assert_can_connect(
-            server.address, connection_args=sec.get_connection_args("client")
-        )
+        await assert_can_connect(server.address, **sec.get_connection_args("client"))
 
     # InProc
 
@@ -253,9 +251,9 @@ async def test_server_listen():
         await assert_cannot_connect(inproc_addr2)
 
 
-async def check_rpc(listen_addr, rpc_addr=None, listen_args=None, connection_args=None):
+async def check_rpc(listen_addr, rpc_addr=None, listen_args={}, connection_args={}):
     server = Server({"ping": pingpong})
-    await server.listen(listen_addr, listen_args=listen_args)
+    await server.listen(listen_addr, **listen_args)
     if rpc_addr is None:
         rpc_addr = server.address
 
@@ -603,7 +601,7 @@ async def test_connection_pool_tls():
 
     servers = [Server({"ping": ping}) for i in range(10)]
     for server in servers:
-        await server.listen("tls://", listen_args=listen_args)
+        await server.listen("tls://", **listen_args)
 
     rpc = await ConnectionPool(limit=5, connection_args=connection_args)
 

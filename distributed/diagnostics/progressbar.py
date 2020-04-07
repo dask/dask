@@ -63,8 +63,7 @@ class ProgressBar:
             return result
 
         self.comm = await connect(
-            self.scheduler,
-            connection_args=self.client().connection_args if self.client else None,
+            self.scheduler, **(self.client().connection_args if self.client else {}),
         )
         logger.debug("Progressbar Connected to scheduler")
 

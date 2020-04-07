@@ -1111,7 +1111,6 @@ class Scheduler(ServerNode):
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("scheduler")
-        self.listen_args = self.security.get_listen_args("scheduler")
 
         if dashboard_address is not None:
             try:
@@ -1431,7 +1430,7 @@ class Scheduler(ServerNode):
 
         if self.status != "running":
             for addr in self._start_address:
-                await self.listen(addr, listen_args=self.listen_args)
+                await self.listen(addr, **self.security.get_listen_args("scheduler"))
                 self.ip = get_address_host(self.listen_address)
                 listen_ip = self.ip
 

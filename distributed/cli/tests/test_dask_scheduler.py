@@ -32,7 +32,9 @@ def test_defaults(loop):
         @gen.coroutine
         def f():
             # Default behaviour is to listen on all addresses
-            yield [assert_can_connect_from_everywhere_4_6(8786, 5.0)]  # main port
+            yield [
+                assert_can_connect_from_everywhere_4_6(8786, timeout=5.0)
+            ]  # main port
 
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
             c.sync(f)
@@ -50,7 +52,7 @@ def test_hostport(loop):
         def f():
             yield [
                 # The scheduler's main port can't be contacted from the outside
-                assert_can_connect_locally_4(8978, 5.0)
+                assert_can_connect_locally_4(8978, timeout=5.0)
             ]
 
         with Client("127.0.0.1:8978", loop=loop) as c:

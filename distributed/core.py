@@ -302,7 +302,7 @@ class Server:
     def identity(self, comm=None):
         return {"type": type(self).__name__, "id": self.id}
 
-    async def listen(self, port_or_addr=None, listen_args=None):
+    async def listen(self, port_or_addr=None, **kwargs):
         if port_or_addr is None:
             port_or_addr = self.default_port
         if isinstance(port_or_addr, int):
@@ -313,10 +313,7 @@ class Server:
             addr = port_or_addr
             assert isinstance(addr, str)
         listener = await listen(
-            addr,
-            self.handle_comm,
-            deserialize=self.deserialize,
-            connection_args=listen_args,
+            addr, self.handle_comm, deserialize=self.deserialize, **kwargs,
         )
         self.listeners.append(listener)
 
@@ -606,7 +603,7 @@ class rpc:
         self.deserialize = deserialize
         self.serializers = serializers
         self.deserializers = deserializers if deserializers is not None else serializers
-        self.connection_args = connection_args
+        self.connection_args = connection_args or {}
         self._created = weakref.WeakSet()
         rpc.active.add(self)
 
@@ -644,7 +641,7 @@ class rpc:
                 self.address,
                 self.timeout,
                 deserialize=self.deserialize,
-                connection_args=self.connection_args,
+                **self.connection_args,
             )
             comm.name = "rpc"
         self.comms[comm] = False  # mark as taken
@@ -832,7 +829,7 @@ class ConnectionPool:
         self.deserialize = deserialize
         self.serializers = serializers
         self.deserializers = deserializers if deserializers is not None else serializers
-        self.connection_args = connection_args
+        self.connection_args = connection_args or {}
         self.timeout = timeout
         self._n_connecting = 0
         self.server = weakref.ref(server) if server else None
@@ -905,7 +902,7 @@ class ConnectionPool:
                 addr,
                 timeout=timeout or self.timeout,
                 deserialize=self.deserialize,
-                connection_args=self.connection_args,
+                **self.connection_args,
             )
             comm.name = "ConnectionPool"
             comm._pool = weakref.ref(self)

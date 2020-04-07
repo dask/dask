@@ -1044,9 +1044,7 @@ class Client(Node):
 
         try:
             comm = await connect(
-                self.scheduler.address,
-                timeout=timeout,
-                connection_args=self.connection_args,
+                self.scheduler.address, timeout=timeout, **self.connection_args,
             )
             comm.name = "Client->Scheduler"
             if timeout is not None:

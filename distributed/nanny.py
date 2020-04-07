@@ -95,7 +95,6 @@ class Nanny(ServerNode):
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("worker")
-        self.listen_args = self.security.get_listen_args("worker")
 
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
@@ -244,7 +243,9 @@ class Nanny(ServerNode):
 
         await super().start()
 
-        await self.listen(self._start_address, listen_args=self.listen_args)
+        await self.listen(
+            self._start_address, **self.security.get_listen_args("worker")
+        )
         self.ip = get_address_host(self.address)
 
         logger.info("        Start Nanny at: %r", self.address)

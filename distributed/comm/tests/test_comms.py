@@ -77,19 +77,15 @@ tls_kwargs = dict(
 
 
 @pytest.mark.asyncio
-async def get_comm_pair(listen_addr, listen_args=None, connect_args=None, **kwargs):
+async def get_comm_pair(listen_addr, listen_args={}, connect_args={}, **kwargs):
     q = asyncio.Queue()
 
     async def handle_comm(comm):
         await q.put(comm)
 
-    listener = await listen(
-        listen_addr, handle_comm, connection_args=listen_args, **kwargs
-    )
+    listener = await listen(listen_addr, handle_comm, **listen_args, **kwargs)
 
-    comm = await connect(
-        listener.contact_address, connection_args=connect_args, **kwargs
-    )
+    comm = await connect(listener.contact_address, **connect_args, **kwargs)
     serv_comm = await q.get()
     return (comm, serv_comm)
 
@@ -332,9 +328,7 @@ async def test_comm_failure_threading():
     sleep_future = sleep_for_60ms()
     with pytest.raises(IOError):
         await connect(
-            "tls://localhost:28400",
-            0.052,
-            connection_args={"ssl_context": get_client_ssl_context()},
+            "tls://localhost:28400", 0.052, ssl_context=get_client_ssl_context(),
         )
     max_thread_count = await sleep_future
     assert max_thread_count <= 2 + original_thread_count
@@ -441,8 +435,8 @@ async def check_client_server(
     addr,
     check_listen_addr=None,
     check_contact_addr=None,
-    listen_args=None,
-    connect_args=None,
+    listen_args={},
+    connect_args={},
 ):
     """
     Abstract client / server test.
@@ -466,7 +460,7 @@ async def check_client_server(
     listen_args = listen_args or {"xxx": "bar"}
     connect_args = connect_args or {"xxx": "foo"}
 
-    listener = await listen(addr, handle_comm, connection_args=listen_args)
+    listener = await listen(addr, handle_comm, **listen_args)
 
     # Check listener properties
     bound_addr = listener.listen_address
@@ -490,7 +484,7 @@ async def check_client_server(
     l = []
 
     async def client_communicate(key, delay=0):
-        comm = await connect(listener.contact_address, connection_args=connect_args)
+        comm = await connect(listener.contact_address, **connect_args)
         assert comm.peer_address == listener.contact_address
 
         await comm.write({"op": "ping", "data": key})
@@ -644,15 +638,11 @@ async def test_tls_reject_certificate():
         await comm.close()
 
     # Listener refuses a connector not signed by the CA
-    listener = await listen(
-        "tls://", handle_comm, connection_args={"ssl_context": serv_ctx}
-    )
+    listener = await listen("tls://", handle_comm, ssl_context=serv_ctx)
 
     with pytest.raises(EnvironmentError) as excinfo:
         comm = await connect(
-            listener.contact_address,
-            timeout=0.5,
-            connection_args={"ssl_context": bad_cli_ctx},
+            listener.contact_address, timeout=0.5, ssl_context=bad_cli_ctx,
         )
         await comm.write({"x": "foo"})  # TODO: why is this necessary in Tornado 6 ?
 
@@ -670,21 +660,15 @@ async def test_tls_reject_certificate():
                 raise
 
     # Sanity check
-    comm = await connect(
-        listener.contact_address, timeout=2, connection_args={"ssl_context": cli_ctx}
-    )
+    comm = await connect(listener.contact_address, timeout=2, ssl_context=cli_ctx,)
     await comm.close()
 
     # Connector refuses a listener not signed by the CA
-    listener = await listen(
-        "tls://", handle_comm, connection_args={"ssl_context": bad_serv_ctx}
-    )
+    listener = await listen("tls://", handle_comm, ssl_context=bad_serv_ctx)
 
     with pytest.raises(EnvironmentError) as excinfo:
         await connect(
-            listener.contact_address,
-            timeout=2,
-            connection_args={"ssl_context": cli_ctx},
+            listener.contact_address, timeout=2, ssl_context=cli_ctx,
         )
     # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
     if sys.version_info >= (3,):
@@ -696,20 +680,18 @@ async def test_tls_reject_certificate():
 #
 
 
-async def check_comm_closed_implicit(
-    addr, delay=None, listen_args=None, connect_args=None
-):
+async def check_comm_closed_implicit(addr, delay=None, listen_args={}, connect_args={}):
     async def handle_comm(comm):
         await comm.close()
 
-    listener = await listen(addr, handle_comm, connection_args=listen_args)
+    listener = await listen(addr, handle_comm, **listen_args)
     contact_addr = listener.contact_address
 
-    comm = await connect(contact_addr, connection_args=connect_args)
+    comm = await connect(contact_addr, **connect_args)
     with pytest.raises(CommClosedError):
         await comm.write({})
 
-    comm = await connect(contact_addr, connection_args=connect_args)
+    comm = await connect(contact_addr, **connect_args)
     with pytest.raises(CommClosedError):
         await comm.read()
 
@@ -729,7 +711,7 @@ async def test_inproc_comm_closed_implicit():
     await check_comm_closed_implicit(inproc.new_address())
 
 
-async def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
+async def check_comm_closed_explicit(addr, listen_args={}, connect_args={}):
     a, b = await get_comm_pair(addr, listen_args=listen_args, connect_args=connect_args)
     a_read = a.read()
     b_read = b.read()

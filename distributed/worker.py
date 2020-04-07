@@ -512,7 +512,6 @@ class Worker(ServerNode):
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("worker")
-        self.listen_args = self.security.get_listen_args("worker")
 
         self.memory_limit = parse_memory_limit(memory_limit, self.nthreads)
 
@@ -816,9 +815,7 @@ class Worker(ServerNode):
         while True:
             try:
                 _start = time()
-                comm = await connect(
-                    self.scheduler.address, connection_args=self.connection_args
-                )
+                comm = await connect(self.scheduler.address, **self.connection_args)
                 comm.name = "Worker->Scheduler"
                 comm._server = weakref.ref(self)
                 await comm.write(
@@ -1022,7 +1019,9 @@ class Worker(ServerNode):
         enable_gc_diagnosis()
         thread_state.on_event_loop_thread = True
 
-        await self.listen(self._start_address, listen_args=self.listen_args)
+        await self.listen(
+            self._start_address, **self.security.get_listen_args("worker")
+        )
         self.ip = get_address_host(self.address)
 
         if self.name is None:
@@ -1185,7 +1184,7 @@ class Worker(ServerNode):
 
             async def batched_send_connect():
                 comm = await connect(
-                    address, connection_args=self.connection_args  # TODO, serialization
+                    address, **self.connection_args  # TODO, serialization
                 )
                 comm.name = "Worker->Worker"
                 await comm.write({"op": "connection_stream"})

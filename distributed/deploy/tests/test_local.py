@@ -734,9 +734,9 @@ def test_local_tls(loop, temporary):
             loop,
             assert_can_connect_from_everywhere_4,
             c.scheduler.port,
-            connection_args=c.security.get_connection_args("client"),
             protocol="tls",
             timeout=3,
+            **c.security.get_connection_args("client"),
         )
 
         # If we connect to a TLS localculster without ssl information we should fail
@@ -744,8 +744,8 @@ def test_local_tls(loop, temporary):
             loop,
             assert_cannot_connect,
             addr="tcp://127.0.0.1:%d" % c.scheduler.port,
-            connection_args=c.security.get_connection_args("client"),
             exception_class=RuntimeError,
+            **c.security.get_connection_args("client"),
         )
 
 

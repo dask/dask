@@ -798,7 +798,7 @@ async def start_cluster(
         security=security,
         port=0,
         host=scheduler_addr,
-        **scheduler_kwargs
+        **scheduler_kwargs,
     )
     workers = [
         Worker(
@@ -809,7 +809,7 @@ async def start_cluster(
             loop=loop,
             validate=True,
             host=ncore[0],
-            **(merge(worker_kwargs, ncore[2]) if len(ncore) > 2 else worker_kwargs)
+            **(merge(worker_kwargs, ncore[2]) if len(ncore) > 2 else worker_kwargs),
         )
         for i, ncore in enumerate(nthreads)
     ]
@@ -917,7 +917,7 @@ def gen_cluster(
                                 loop=loop,
                                 security=security,
                                 asynchronous=True,
-                                **client_kwargs
+                                **client_kwargs,
                             )
                             args = [c] + args
                         try:
@@ -1108,115 +1108,106 @@ else:
     requires_ipv6 = pytest.mark.skip("ipv6 required")
 
 
-async def assert_can_connect(addr, timeout=None, connection_args=None):
+async def assert_can_connect(addr, timeout=0.5, **kwargs):
     """
     Check that it is possible to connect to the distributed *addr*
     within the given *timeout*.
     """
-    if timeout is None:
-        timeout = 0.5
-    comm = await connect(addr, timeout=timeout, connection_args=connection_args)
+    comm = await connect(addr, timeout=timeout, **kwargs)
     comm.abort()
 
 
 async def assert_cannot_connect(
-    addr, timeout=None, connection_args=None, exception_class=EnvironmentError
+    addr, timeout=0.5, exception_class=EnvironmentError, **kwargs
 ):
     """
     Check that it is impossible to connect to the distributed *addr*
     within the given *timeout*.
     """
-    if timeout is None:
-        timeout = 0.5
     with pytest.raises(exception_class):
-        comm = await connect(addr, timeout=timeout, connection_args=connection_args)
+        comm = await connect(addr, timeout=timeout, **kwargs)
         comm.abort()
 
 
-async def assert_can_connect_from_everywhere_4_6(
-    port, timeout=None, connection_args=None, protocol="tcp"
-):
+async def assert_can_connect_from_everywhere_4_6(port, protocol="tcp", **kwargs):
     """
     Check that the local *port* is reachable from all IPv4 and IPv6 addresses.
     """
-    args = (timeout, connection_args)
     futures = [
-        assert_can_connect("%s://127.0.0.1:%d" % (protocol, port), *args),
-        assert_can_connect("%s://%s:%d" % (protocol, get_ip(), port), *args),
+        assert_can_connect("%s://127.0.0.1:%d" % (protocol, port), **kwargs),
+        assert_can_connect("%s://%s:%d" % (protocol, get_ip(), port), **kwargs),
     ]
     if has_ipv6():
         futures += [
-            assert_can_connect("%s://[::1]:%d" % (protocol, port), *args),
-            assert_can_connect("%s://[%s]:%d" % (protocol, get_ipv6(), port), *args),
+            assert_can_connect("%s://[::1]:%d" % (protocol, port), **kwargs),
+            assert_can_connect("%s://[%s]:%d" % (protocol, get_ipv6(), port), **kwargs),
         ]
     await asyncio.gather(*futures)
 
 
 async def assert_can_connect_from_everywhere_4(
-    port, timeout=None, connection_args=None, protocol="tcp"
+    port, protocol="tcp", **kwargs,
 ):
     """
     Check that the local *port* is reachable from all IPv4 addresses.
     """
-    args = (timeout, connection_args)
     futures = [
-        assert_can_connect("%s://127.0.0.1:%d" % (protocol, port), *args),
-        assert_can_connect("%s://%s:%d" % (protocol, get_ip(), port), *args),
+        assert_can_connect("%s://127.0.0.1:%d" % (protocol, port), **kwargs),
+        assert_can_connect("%s://%s:%d" % (protocol, get_ip(), port), **kwargs),
     ]
     if has_ipv6():
         futures += [
-            assert_cannot_connect("%s://[::1]:%d" % (protocol, port), *args),
-            assert_cannot_connect("%s://[%s]:%d" % (protocol, get_ipv6(), port), *args),
+            assert_cannot_connect("%s://[::1]:%d" % (protocol, port), **kwargs),
+            assert_cannot_connect(
+                "%s://[%s]:%d" % (protocol, get_ipv6(), port), **kwargs
+            ),
         ]
     await asyncio.gather(*futures)
 
 
-async def assert_can_connect_locally_4(port, timeout=None, connection_args=None):
+async def assert_can_connect_locally_4(port, **kwargs):
     """
     Check that the local *port* is only reachable from local IPv4 addresses.
     """
-    args = (timeout, connection_args)
-    futures = [assert_can_connect("tcp://127.0.0.1:%d" % port, *args)]
+    futures = [assert_can_connect("tcp://127.0.0.1:%d" % port, **kwargs)]
     if get_ip() != "127.0.0.1":  # No outside IPv4 connectivity?
-        futures += [assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), *args)]
+        futures += [assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), **kwargs)]
     if has_ipv6():
         futures += [
-            assert_cannot_connect("tcp://[::1]:%d" % port, *args),
-            assert_cannot_connect("tcp://[%s]:%d" % (get_ipv6(), port), *args),
+            assert_cannot_connect("tcp://[::1]:%d" % port, **kwargs),
+            assert_cannot_connect("tcp://[%s]:%d" % (get_ipv6(), port), **kwargs),
         ]
     await asyncio.gather(*futures)
 
 
-async def assert_can_connect_from_everywhere_6(
-    port, timeout=None, connection_args=None
-):
+async def assert_can_connect_from_everywhere_6(port, **kwargs):
     """
     Check that the local *port* is reachable from all IPv6 addresses.
     """
     assert has_ipv6()
-    args = (timeout, connection_args)
     futures = [
-        assert_cannot_connect("tcp://127.0.0.1:%d" % port, *args),
-        assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), *args),
-        assert_can_connect("tcp://[::1]:%d" % port, *args),
-        assert_can_connect("tcp://[%s]:%d" % (get_ipv6(), port), *args),
+        assert_cannot_connect("tcp://127.0.0.1:%d" % port, **kwargs),
+        assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), **kwargs),
+        assert_can_connect("tcp://[::1]:%d" % port, **kwargs),
+        assert_can_connect("tcp://[%s]:%d" % (get_ipv6(), port), **kwargs),
     ]
     await asyncio.gather(*futures)
 
 
-async def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
+async def assert_can_connect_locally_6(port, **kwargs):
     """
     Check that the local *port* is only reachable from local IPv6 addresses.
     """
     assert has_ipv6()
-    args = (timeout, connection_args)
     futures = [
-        assert_cannot_connect("tcp://127.0.0.1:%d" % port, *args),
-        assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), *args),
-        assert_can_connect("tcp://[::1]:%d" % port, *args),
+        assert_cannot_connect("tcp://127.0.0.1:%d" % port, **kwargs),
+        assert_cannot_connect("tcp://%s:%d" % (get_ip(), port), **kwargs),
+        assert_can_connect("tcp://[::1]:%d" % port, **kwargs),
     ]
     if get_ipv6() != "::1":  # No outside IPv6 connectivity?
-        futures += [assert_cannot_connect("tcp://[%s]:%d" % (get_ipv6(), port), *args)]
+        futures += [
+            assert_cannot_connect("tcp://[%s]:%d" % (get_ipv6(), port), **kwargs)
+        ]
     await asyncio.gather(*futures)
 
 

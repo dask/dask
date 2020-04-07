@@ -26,18 +26,16 @@ def test_registered():
 
 
 async def get_comm_pair(
-    listen_addr="ucx://" + HOST, listen_args=None, connect_args=None, **kwargs
+    listen_addr="ucx://" + HOST, listen_args={}, connect_args={}, **kwargs
 ):
     q = asyncio.queues.Queue()
 
     async def handle_comm(comm):
         await q.put(comm)
 
-    listener = listen(listen_addr, handle_comm, connection_args=listen_args, **kwargs)
+    listener = listen(listen_addr, handle_comm, **listen_args, **kwargs)
     async with listener:
-        comm = await connect(
-            listener.contact_address, connection_args=connect_args, **kwargs
-        )
+        comm = await connect(listener.contact_address, **connect_args, **kwargs)
         serv_comm = await q.get()
         return (comm, serv_comm)
 
