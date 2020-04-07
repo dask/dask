@@ -633,8 +633,9 @@ def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
 
     # Insert disclaimer that this is a copied docstring
     if doc:
-        doc = ignore_warning(doc, cls, method.__name__, extra=extra,
-                             skipblocks=skipblocks)
+        doc = ignore_warning(
+            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks
+        )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
 
@@ -656,8 +657,7 @@ def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[],
-                 skipblocks=0):
+def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -683,8 +683,11 @@ def derived_from(original_klass, version=None, ua_args=[],
         try:
             extra = getattr(method, "__doc__", None) or ""
             method.__doc__ = _derived_from(
-                original_klass, method, ua_args=ua_args, extra=extra,
-                skipblocks=skipblocks
+                original_klass,
+                method,
+                ua_args=ua_args,
+                extra=extra,
+                skipblocks=skipblocks,
             )
             return method
 
