@@ -95,3 +95,22 @@ def test_worker_preload_module(loop):
     finally:
         sys.path.remove(tmpdir)
         shutil.rmtree(tmpdir)
+
+
+@pytest.mark.asyncio
+async def test_preload_import_time(cleanup):
+    text = """
+from distributed.comm.registry import backends
+from distributed.comm.tcp import TCPBackend
+
+backends["foo"] = TCPBackend()
+""".strip()
+    try:
+        async with Scheduler(port=0, preload=text, protocol="foo") as s:
+            async with Nanny(s.address, preload=text, protocol="foo") as n:
+                async with Client(s.address, asynchronous=True) as c:
+                    await c.wait_for_workers(1)
+    finally:
+        from distributed.comm.registry import backends
+
+        del backends["foo"]

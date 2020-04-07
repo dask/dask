@@ -3,7 +3,7 @@ from collections import defaultdict, deque, OrderedDict
 from collections.abc import Mapping, Set
 from datetime import timedelta
 from functools import partial
-from inspect import isawaitable
+import inspect
 import itertools
 import json
 import logging
@@ -49,7 +49,7 @@ from .diagnostics.plugin import SchedulerPlugin
 from . import profile
 from .metrics import time
 from .node import ServerNode
-from .preloading import preload_modules
+from . import preloading
 from .proctitle import setproctitle
 from .security import Security
 from .utils import (
@@ -1106,6 +1106,7 @@ class Scheduler(ServerNode):
             preload_argv = dask.config.get("distributed.scheduler.preload-argv")
         self.preload = preload
         self.preload_argv = preload_argv
+        self._preload_modules = preloading.on_creation(self.preload)
 
         self.security = security or Security()
         assert isinstance(self.security, Security)
@@ -1463,7 +1464,7 @@ class Scheduler(ServerNode):
 
             weakref.finalize(self, del_scheduler_file)
 
-        preload_modules(self.preload, parameter=self, argv=self.preload_argv)
+        await preloading.on_start(self._preload_modules, self, argv=self.preload_argv)
 
         await asyncio.gather(*[plugin.start(self) for plugin in self.plugins])
 
@@ -1486,6 +1487,8 @@ class Scheduler(ServerNode):
 
         logger.info("Scheduler closing...")
         setproctitle("dask-scheduler [closing]")
+
+        await preloading.on_teardown(self._preload_modules, self)
 
         if close_workers:
             await self.broadcast(msg={"op": "close_gracefully"}, nanny=True)
@@ -3584,7 +3587,7 @@ class Scheduler(ServerNode):
             if teardown:
                 teardown = pickle.loads(teardown)
             state = setup(self) if setup else None
-            if isawaitable(state):
+            if inspect.isawaitable(state):
                 state = await state
             try:
                 while self.status == "running":

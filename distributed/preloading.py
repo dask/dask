@@ -1,4 +1,4 @@
-import atexit
+import inspect
 import logging
 import os
 import shutil
@@ -111,38 +111,65 @@ def _import_module(name, file_dir=None):
     }
 
 
-def preload_modules(names, parameter=None, file_dir=None, argv=None):
-    """ Imports modules, handles `dask_setup` and `dask_teardown`.
+def on_creation(names, file_dir: str = None) -> dict:
+    """ Imports each of the preload modules
 
     Parameters
     ----------
     names: list of strings
         Module names or file paths
-    parameter: object
-        Parameter passed to `dask_setup` and `dask_teardown`
-    argv: [string]
-        List of string arguments passed to click-configurable `dask_setup`.
     file_dir: string
         Path of a directory where files should be copied
     """
     if isinstance(names, str):
         names = [names]
 
-    for name in names:
-        interface = _import_module(name, file_dir=file_dir)
+    return {name: _import_module(name, file_dir=file_dir) for name in names}
 
+
+async def on_start(modules: dict, dask_server=None, argv=None):
+    """ Run when the server finishes its start method
+
+    Parameters
+    ----------
+    modules: Dict[str, module]
+        The imported modules, from on_creation
+    dask_server: dask.distributed.Server
+        The Worker or Scheduler
+    argv: [string]
+        List of string arguments passed to click-configurable `dask_setup`.
+    file_dir: string
+        Path of a directory where files should be copied
+    """
+    for name, interface in modules.items():
         dask_setup = interface.get("dask_setup", None)
-        dask_teardown = interface.get("dask_teardown", None)
 
         if dask_setup:
             if isinstance(dask_setup, click.Command):
                 context = dask_setup.make_context(
                     "dask_setup", list(argv), allow_extra_args=False
                 )
-                dask_setup.callback(parameter, *context.args, **context.params)
+                dask_setup.callback(dask_server, *context.args, **context.params)
             else:
-                dask_setup(parameter)
+                future = dask_setup(dask_server)
+                if inspect.isawaitable(future):
+                    await future
                 logger.info("Run preload setup function: %s", name)
 
+
+async def on_teardown(modules: dict, dask_server=None):
+    """ Run when the server starts its close method
+
+    Parameters
+    ----------
+    modules: Dict[str, module]
+        The imported modules, from on_creation
+    dask_server: dask.distributed.Server
+        The Worker or Scheduler
+    """
+    for name, interface in modules.items():
+        dask_teardown = interface.get("dask_teardown", None)
         if dask_teardown:
-            atexit.register(interface["dask_teardown"], parameter)
+            future = dask_teardown(dask_server)
+            if inspect.isawaitable(future):
+                await future
