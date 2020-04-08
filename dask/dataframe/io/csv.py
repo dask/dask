@@ -676,8 +676,6 @@ def to_csv(
     compute: bool
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
-    compute_kwargs : dict, optional
-        Options to be passed in to the compute method
     sep : character, default ','
         Field delimiter for the output file
     na_rep : string, default ''
@@ -737,6 +735,8 @@ def to_csv(
         European data
     storage_options: dict
         Parameters passed on to the backend filesystem class.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
 
     Returns
     -------
