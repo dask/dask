@@ -757,16 +757,15 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         if bins.ndim != 1:
             raise ValueError(f"bins must have 1 dimension, got {bins.ndim}")
         dependencies.append(bins)
-        bins_ref = ("histogram-bins-" + token, 0)
+        bins_ref = "histogram-bins-" + token
 
         bins_dsk = {bins_ref: (np.concatenate, bins.__dask_keys__())}
         bins_graph = HighLevelGraph.from_collections(
-            bins_ref[0], bins_dsk, dependencies=[bins]
+            bins_ref, bins_dsk, dependencies=[bins]
         )
     else:
         bins_ref = bins
         bins_graph = None
-        # bins_dsk = {}
 
     nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
@@ -793,7 +792,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         }
         dtype = weights.dtype
 
-    # dsk.update(bins_dsk)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     if bins_graph:
         graph = HighLevelGraph.merge(graph, bins_graph)
