@@ -83,11 +83,9 @@ class SemaphoreExtension:
                     % (max_leases, self.max_leases[name])
                 )
 
-    async def _get_lease(self, client, name, identifier):
+    def _get_lease(self, client, name, identifier):
         result = True
         if len(self.leases[name]) < self.max_leases[name]:
-            # naive: self.leases[resource] += 1
-            # not naive:
             self.leases[name].append(identifier)
             self.leases_per_client[client][name].append(identifier)
         else:
@@ -116,15 +114,7 @@ class SemaphoreExtension:
                 # is changed and helps to identify when it is worth to retry an acquire
                 self.events[name].clear()
 
-                # If we hit the timeout, this cancels the _get_lease
-                future = asyncio.wait_for(
-                    self._get_lease(client, name, identifier), timeout=w.leftover()
-                )
-
-                try:
-                    result = await future
-                except TimeoutError:
-                    result = False
+                result = self._get_lease(client, name, identifier)
 
                 # If acquiring fails, we wait for the event to be set, i.e. something has
                 # been released and we can try to acquire again (continue loop)
