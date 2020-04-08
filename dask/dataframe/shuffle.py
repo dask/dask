@@ -1,6 +1,10 @@
+import contextlib
+import logging
 import math
+import shutil
 from operator import getitem
 import uuid
+import tempfile
 import warnings
 
 import tlz as toolz
@@ -16,6 +20,8 @@ from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
+
+logger = logging.getLogger(__name__)
 
 
 def set_index(
@@ -340,6 +346,8 @@ class maybe_buffered_partd(object):
     def __call__(self, *args, **kwargs):
         import partd
 
+        path = tempfile.mkdtemp(suffix=".partd", dir=self.tempdir)
+
         try:
             partd_compression = (
                 getattr(partd.compressed, self.compression)
@@ -353,10 +361,8 @@ class maybe_buffered_partd(object):
                     self.compression
                 )
             )
-        if self.tempdir:
-            file = partd.File(dir=self.tempdir)
-        else:
-            file = partd.File()
+        file = partd.File(path)
+        partd.file.cleanup_files.append(path)
         # Envelope partd file with compression, if set and available
         if partd_compression:
             file = partd_compression(file)
@@ -407,17 +413,31 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = "shuffle-collect-" + token
+    name1 = "shuffle-collect-1" + token
     dsk4 = {
-        (name, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
+        (name1, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
     }
+    cleanup_token = "cleanup-" + always_new_token
+    barrier_token2 = "barrier2-" + always_new_token
+    # A task that depends on `cleanup-`, but has a small output
+    dsk5 = {(barrier_token2, i): (barrier, part) for i, part in enumerate(dsk4)}
+    # This indirectly depends on `cleanup-` and so runs after we're done using the disk
+    dsk6 = {cleanup_token: (cleanup_partd_files, p, list(dsk5))}
 
+    name = "shuffle-collect-2" + token
+    dsk7 = {(name, i): (_noop, (name1, i), cleanup_token) for i in range(npartitions)}
     divisions = (None,) * (npartitions + 1)
 
-    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
+    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4, dsk5, dsk6, dsk7)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
-
     return DataFrame(graph, name, df._meta, divisions)
+
+
+def _noop(x, cleanup_token):
+    """
+    A task that does nothing.
+    """
+    return x
 
 
 def rearrange_by_column_tasks(
@@ -611,10 +631,38 @@ def barrier(args):
     return 0
 
 
+def cleanup_partd_files(p, keys):
+    """
+    Cleanup the files in a partd.File dataset.
+
+    Parameters
+    ----------
+    p : partd.Interface
+        File or Encode wrapping a file should be OK.
+    keys: List
+        Just for scheduling purposes, not actually used.
+    """
+    import partd
+
+    if isinstance(p, partd.Encode):
+        maybe_file = p.partd
+    else:
+        maybe_file
+
+    if isinstance(maybe_file, partd.File):
+        path = maybe_file.path
+    else:
+        path = None
+
+    if path:
+        shutil.rmtree(path, ignore_errors=True)
+
+
 def collect(p, part, meta, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    res = p.get(part)
-    return res if len(res) > 0 else meta
+    with ensure_cleanup_on_exception(p):
+        res = p.get(part)
+        return res if len(res) > 0 else meta
 
 
 def set_partitions_pre(s, divisions):
@@ -683,10 +731,31 @@ def shuffle_group(df, col, stage, k, npartitions, ignore_index):
     return group_split_dispatch(df, c.astype(np.int64), k, ignore_index=ignore_index)
 
 
+@contextlib.contextmanager
+def ensure_cleanup_on_exception(p):
+    """Ensure a partd.File is cleaned up.
+
+    We have several tasks referring to a `partd.File` instance. We want to
+    ensure that the file is cleaned up if and only if there's an exception
+    in the tasks using the `partd.File`.
+    """
+    try:
+        yield
+    except Exception:
+        # the function (e.g. shuffle_group_3) had an internal exception.
+        # We'll cleanup our temporary files and re-raise.
+        try:
+            p.drop()
+        except Exception:
+            logger.exception("ignoring exception in ensure_cleanup_on_exception")
+        raise
+
+
 def shuffle_group_3(df, col, npartitions, p):
-    g = df.groupby(col)
-    d = {i: g.get_group(i) for i in g.groups}
-    p.append(d, fsync=True)
+    with ensure_cleanup_on_exception(p):
+        g = df.groupby(col)
+        d = {i: g.get_group(i) for i in g.groups}
+        p.append(d, fsync=True)
 
 
 def set_index_post_scalar(df, index_name, drop, column_dtype):

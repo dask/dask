@@ -1,6 +1,5 @@
 import warnings
 
-import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -581,26 +580,34 @@ def test_concat(join):
         assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("join", ["inner", "outer"])
-def test_concat_different_dtypes(join):
+@pytest.mark.parametrize(
+    "value_1, value_2",
+    [
+        (1.0, 1),
+        (1.0, "one"),
+        (1.0, pd.to_datetime("1970-01-01")),
+        (1, "one"),
+        (1, pd.to_datetime("1970-01-01")),
+        ("one", pd.to_datetime("1970-01-01")),
+    ],
+)
+def test_concat_different_dtypes(value_1, value_2):
     # check that the resulting dataframe has coherent dtypes
-    # refer to https://github.com/dask/dask/issues/4685
-    pdf1 = pd.DataFrame(
-        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
-    )
-    ddf1 = dd.from_pandas(pdf1, 2)
-    pdf2 = pd.DataFrame(
-        {"x": [1.0, 2.0, 3.0, 4.0, 6.0, 7.0], "y": list("abcdef")},
-        index=[8, 9, 10, 11, 12, 13],
-    )
-    ddf2 = dd.from_pandas(pdf2, 2)
+    # refer to https://github.com/dask/dask/issues/4685 and
+    # https://github.com/dask/dask/issues/5968
+    df_1 = pd.DataFrame({"x": [value_1]})
+    df_2 = pd.DataFrame({"x": [value_2]})
+    df = pd.concat([df_1, df_2], axis=0)
 
-    expected = pd.concat([pdf1, pdf2], join=join)
-    result = dd.concat([ddf1, ddf2], join=join)
-    assert_eq(expected, result)
+    pandas_dtype = df["x"].dtype
 
-    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
-    assert len(set(map(str, dtypes_list))) == 1  # all the same
+    ddf_1 = dd.from_pandas(df_1, npartitions=1)
+    ddf_2 = dd.from_pandas(df_2, npartitions=1)
+    ddf = dd.concat([ddf_1, ddf_2], axis=0)
+
+    dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
+
+    assert dask_dtypes == [pandas_dtype, pandas_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -718,6 +725,58 @@ def test_merge(how, shuffle):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+@pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
+@pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "cudf",
+        pytest.param(
+            "pandas",
+            marks=pytest.mark.xfail(
+                reason="Pandas does not support leftsemi or leftanti"
+            ),
+        ),
+    ],
+)
+def test_merge_tasks_semi_anti_cudf(engine, how, parts):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+    emp = pd.DataFrame(
+        {
+            "emp_id": np.arange(101, stop=106),
+            "name": ["John", "Tom", "Harry", "Rahul", "Sakil"],
+            "city": ["Cal", "Mum", "Del", "Ban", "Del"],
+            "salary": [50000, 40000, 80000, 60000, 90000],
+        }
+    )
+    skills = pd.DataFrame(
+        {
+            "skill_id": [404, 405, 406, 407, 408],
+            "emp_id": [103, 101, 105, 102, 101],
+            "skill_name": ["Dask", "Spark", "C", "Python", "R"],
+        }
+    )
+
+    if engine == "cudf":
+        emp = cudf.from_pandas(emp)
+        skills = cudf.from_pandas(skills)
+        dd_emp = dask_cudf.from_cudf(emp, npartitions=parts[0])
+        dd_skills = dask_cudf.from_cudf(skills, npartitions=parts[1])
+    else:
+        dd_emp = dd.from_pandas(emp, npartitions=parts[0])
+        dd_skills = dd.from_pandas(skills, npartitions=parts[1])
+
+    expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
+    result = dd_emp.merge(dd_skills, on="emp_id", how=how).sort_values(["emp_id"])
+    assert_eq(result, expect, check_index=False)
 
 
 def test_merge_tasks_passes_through():

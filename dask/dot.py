@@ -130,7 +130,7 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
+    graph_attr=None,
     node_attr=None,
     edge_attr=None,
     collapse_outputs=False,
@@ -141,6 +141,8 @@ def to_graphviz(
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
+    if graph_attr is None:
+        graph_attr = {}
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
@@ -158,7 +160,7 @@ def to_graphviz(
             func_name = name((k, "function")) if not collapse_outputs else k_name
             if collapse_outputs or func_name not in seen:
                 seen.add(func_name)
-                attrs = function_attributes.get(k, {})
+                attrs = function_attributes.get(k, {}).copy()
                 attrs.setdefault("label", key_split(k))
                 attrs.setdefault("shape", "circle")
                 g.node(func_name, **attrs)
@@ -171,7 +173,7 @@ def to_graphviz(
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    attrs = data_attributes.get(dep, {})
+                    attrs = data_attributes.get(dep, {}).copy()
                     attrs.setdefault("label", box_label(dep, verbose))
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
@@ -187,7 +189,7 @@ def to_graphviz(
 
         if (not collapse_outputs or k_name in connected) and k_name not in seen:
             seen.add(k_name)
-            attrs = data_attributes.get(k, {})
+            attrs = data_attributes.get(k, {}).copy()
             attrs.setdefault("label", box_label(k, verbose))
             attrs.setdefault("shape", "box")
             g.node(k_name, **attrs)
