@@ -19,6 +19,7 @@ from .comm.addressing import address_from_user_args
 from .core import RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
 from .node import ServerNode
+from . import preloading
 from .process import AsyncProcess
 from .proctitle import enable_proctitle_on_children
 from .security import Security
@@ -78,6 +79,8 @@ class Nanny(ServerNode):
         death_timeout=None,
         preload=None,
         preload_argv=None,
+        preload_nanny=None,
+        preload_nanny_argv=None,
         security=None,
         contact_address=None,
         listen_address=None,
@@ -121,12 +124,21 @@ class Nanny(ServerNode):
         self.validate = validate
         self.resources = resources
         self.death_timeout = parse_timedelta(death_timeout)
+
         self.preload = preload
         if self.preload is None:
             self.preload = dask.config.get("distributed.worker.preload")
         self.preload_argv = preload_argv
         if self.preload_argv is None:
             self.preload_argv = dask.config.get("distributed.worker.preload-argv")
+
+        self.preload_nanny = preload_nanny
+        if self.preload_nanny is None:
+            self.preload_nanny = dask.config.get("distributed.nanny.preload")
+        self.preload_nanny_argv = preload_nanny_argv
+        if self.preload_nanny_argv is None:
+            self.preload_nanny_argv = dask.config.get("distributed.nanny.preload-argv")
+
         self.Worker = Worker if worker_class is None else worker_class
         self.env = env or {}
         self.config = config or {}
@@ -156,6 +168,10 @@ class Nanny(ServerNode):
             local_directory = os.path.join(local_directory, "dask-worker-space")
 
         self.local_directory = local_directory
+
+        self._preload_modules = preloading.on_creation(
+            self.preload_nanny, file_dir=self.local_directory
+        )
 
         self.services = services
         self.name = name
@@ -247,6 +263,10 @@ class Nanny(ServerNode):
             self._start_address, **self.security.get_listen_args("worker")
         )
         self.ip = get_address_host(self.address)
+
+        await preloading.on_start(
+            self._preload_modules, self, argv=self.preload_nanny_argv,
+        )
 
         logger.info("        Start Nanny at: %r", self.address)
         response = await self.instantiate()
@@ -445,6 +465,9 @@ class Nanny(ServerNode):
 
         self.status = "closing"
         logger.info("Closing Nanny at %r", self.address)
+
+        await preloading.on_teardown(self._preload_modules, self)
+
         self.stop()
         try:
             if self.process is not None:
@@ -519,6 +542,7 @@ class WorkerProcess:
         self.running = asyncio.Event()
         self.stopped = asyncio.Event()
         self.status = "starting"
+
         try:
             await self.process.start()
         except OSError:

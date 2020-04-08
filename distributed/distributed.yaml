@@ -22,8 +22,8 @@ distributed:
     work-stealing-interval: 100ms  # Callback time for work stealing
     worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this
     pickle: True            # Is the scheduler allowed to deserialize arbitrary bytestrings
-    preload: []
-    preload-argv: []
+    preload: []             # Run custom modules with Scheduler
+    preload-argv: []        # See https://docs.dask.org/en/latest/setup/custom-startup.html
     unknown-task-duration: 500ms  # Default duration for all tasks with unknown durations ("15m", "2h")
     default-task-durations:  # How long we expect function names to run ("1h", "1s") (helps for long tasks)
       rechunk-split: 1us
@@ -48,8 +48,8 @@ distributed:
     connections:            # Maximum concurrent connections for data
       outgoing: 50          # This helps to control network saturation
       incoming: 10
-    preload: []
-    preload-argv: []
+    preload: []             # Run custom modules with Worker
+    preload-argv: []        # See https://docs.dask.org/en/latest/setup/custom-startup.html
     daemon: True
     validate: False         # Check worker state at every step for debugging
     lifetime:
@@ -70,6 +70,10 @@ distributed:
       spill: 0.70  # fraction at which we spill to disk
       pause: 0.80  # fraction at which we pause worker threads
       terminate: 0.95  # fraction at which we terminate the worker
+
+  nanny:
+    preload: []             # Run custom modules with Nanny
+    preload-argv: []        # See https://docs.dask.org/en/latest/setup/custom-startup.html
 
   client:
     heartbeat: 5s  # time between client heartbeats

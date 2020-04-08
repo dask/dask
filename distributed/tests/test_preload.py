@@ -62,13 +62,20 @@ async def test_worker_preload_config(cleanup):
     text = """
 def dask_setup(worker):
     worker.foo = 'setup'
+
+def dask_teardown(worker):
+    worker.foo = 'teardown'
 """
-    with dask.config.set({"distributed.worker.preload": text}):
+    with dask.config.set(
+        {"distributed.worker.preload": text, "distributed.nanny.preload": text,}
+    ):
         async with Scheduler(port=0) as s:
             async with Nanny(s.address) as w:
+                assert w.foo == "setup"
                 async with Client(s.address, asynchronous=True) as c:
                     d = await c.run(lambda dask_worker: dask_worker.foo)
                     assert d == {w.worker_address: "setup"}
+            assert w.foo == "teardown"
 
 
 def test_worker_preload_module(loop):
