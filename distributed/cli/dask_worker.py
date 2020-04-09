@@ -397,8 +397,8 @@ def main(
             contact_address=contact_address,
             host=host,
             port=port,
-            dashboard_address=dashboard_address if dashboard else None,
-            service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
+            dashboard=dashboard,
+            dashboard_address=dashboard_address,
             name=name
             if nprocs == 1 or name is None or name == ""
             else str(name) + "-" + str(i),

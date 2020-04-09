@@ -4,12 +4,17 @@ import warnings
 import weakref
 
 from tornado.ioloop import IOLoop
+from tornado.httpserver import HTTPServer
 from tornado import gen
+import tlz
 import dask
 
+from .comm import get_tcp_server_address
+from .comm import get_address_host
 from .core import Server, ConnectionPool
+from .http.routing import RoutingApplication
 from .versions import get_versions
-from .utils import DequeHandler, TimeoutError
+from .utils import DequeHandler, TimeoutError, clean_dashboard_address, ignoring
 
 
 class Node:
@@ -189,3 +194,53 @@ class ServerNode(Node, Server):
         # subclasses should implement their own start method whichs calls super().start()
         await Node.start(self)
         return self
+
+    def start_http_server(
+        self, routes, dashboard_address, default_port=0, ssl_options=None,
+    ):
+        """ This creates an HTTP Server running on this node """
+
+        self.http_application = RoutingApplication(routes,)
+
+        # TLS configuration
+        tls_key = dask.config.get("distributed.scheduler.dashboard.tls.key")
+        tls_cert = dask.config.get("distributed.scheduler.dashboard.tls.cert")
+        tls_ca_file = dask.config.get("distributed.scheduler.dashboard.tls.ca-file")
+        if tls_cert:
+            import ssl
+
+            ssl_options = ssl.create_default_context(
+                cafile=tls_ca_file, purpose=ssl.Purpose.SERVER_AUTH
+            )
+            ssl_options.load_cert_chain(tls_cert, keyfile=tls_key)
+            # We don't care about auth here, just encryption
+            ssl_options.check_hostname = False
+            ssl_options.verify_mode = ssl.CERT_NONE
+
+        self.http_server = HTTPServer(self.http_application, ssl_options=ssl_options)
+        http_address = clean_dashboard_address(dashboard_address or default_port)
+
+        if not http_address["address"]:
+            address = self._start_address
+            if isinstance(address, (list, tuple)):
+                address = address[0]
+            if address:
+                with ignoring(ValueError):
+                    http_address["address"] = get_address_host(address)
+        changed_port = False
+        try:
+            self.http_server.listen(**http_address)
+        except Exception:
+            changed_port = True
+            self.http_server.listen(**tlz.merge(http_address, {"port": 0}))
+        self.http_server.port = get_tcp_server_address(self.http_server)[1]
+        self.services["dashboard"] = self.http_server
+
+        if changed_port and dashboard_address:
+            warnings.warn(
+                "Port {} is already in use.\n"
+                "Perhaps you already have a cluster running?\n"
+                "Hosting the HTTP server on port {} instead".format(
+                    http_address["port"], self.http_server.port
+                )
+            )

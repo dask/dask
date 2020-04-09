@@ -36,6 +36,7 @@ from tornado.ioloop import IOLoop
 
 import dask
 
+from . import profile
 from .batched import BatchedSend
 from .comm import (
     normalize_address,
@@ -46,7 +47,8 @@ from .comm import (
 from .comm.addressing import addresses_from_user_args
 from .core import rpc, connect, send_recv, clean_exception, CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
-from . import profile
+
+from .http import get_handlers
 from .metrics import time
 from .node import ServerNode
 from . import preloading
@@ -1060,6 +1062,8 @@ class Scheduler(ServerNode):
         port=0,
         protocol=None,
         dashboard_address=None,
+        dashboard=None,
+        http_prefix="/",
         preload=None,
         preload_argv=(),
         plugins=(),
@@ -1112,15 +1116,30 @@ class Scheduler(ServerNode):
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("scheduler")
 
-        if dashboard_address is not None:
+        self._start_address = addresses_from_user_args(
+            host=host,
+            port=port,
+            interface=interface,
+            protocol=protocol,
+            security=security,
+            default_port=self.default_port,
+        )
+
+        routes = get_handlers(
+            server=self,
+            modules=dask.config.get("distributed.scheduler.http.routes"),
+            prefix=http_prefix,
+        )
+        self.start_http_server(routes, dashboard_address, default_port=8787)
+
+        if dashboard:
             try:
-                from distributed.dashboard import BokehScheduler
+                import distributed.dashboard.scheduler
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
-                self.service_specs[("dashboard", dashboard_address)] = (
-                    BokehScheduler,
-                    (service_kwargs or {}).get("dashboard", {}),
+                distributed.dashboard.scheduler.connect(
+                    self.http_application, self.http_server, self, prefix=http_prefix,
                 )
 
         # Communication state
@@ -1327,15 +1346,6 @@ class Scheduler(ServerNode):
 
         connection_limit = get_fileno_limit() / 2
 
-        self._start_address = addresses_from_user_args(
-            host=host,
-            port=port,
-            interface=interface,
-            protocol=protocol,
-            security=security,
-            default_port=self.default_port,
-        )
-
         super(Scheduler, self).__init__(
             handlers=self.handlers,
             stream_handlers=merge(worker_handlers, client_handlers),
@@ -1506,6 +1516,7 @@ class Scheduler(ServerNode):
         self.periodic_callbacks.clear()
 
         self.stop_services()
+
         for ext in self.extensions.values():
             with ignoring(AttributeError):
                 ext.teardown()

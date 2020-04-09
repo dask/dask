@@ -268,12 +268,12 @@ class SpecCluster(Cluster):
 
         if self.scheduler_spec is None:
             try:
-                from distributed.dashboard import BokehScheduler
+                import distributed.dashboard  # noqa: F401
             except ImportError:
-                services = {}
+                pass
             else:
-                services = {("dashboard", 8787): BokehScheduler}
-            self.scheduler_spec = {"cls": Scheduler, "options": {"services": services}}
+                options = {"dashboard": True}
+            self.scheduler_spec = {"cls": Scheduler, "options": options}
 
         cls = self.scheduler_spec["cls"]
         if isinstance(cls, str):

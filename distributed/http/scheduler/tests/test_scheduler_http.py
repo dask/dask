@@ -6,20 +6,14 @@ import pytest
 pytest.importorskip("bokeh")
 
 from tornado.escape import url_escape
-from tornado.httpclient import AsyncHTTPClient, HTTPClientError, HTTPRequest
-from tornado.websocket import websocket_connect
+from tornado.httpclient import AsyncHTTPClient, HTTPClientError
 
 from dask.sizeof import sizeof
 from distributed.utils import is_valid_xml
 from distributed.utils_test import gen_cluster, slowinc, inc
-from distributed.dashboard import BokehScheduler, BokehWorker
 
 
-@gen_cluster(
-    client=True,
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
-    worker_kwargs={"services": {"dashboard": BokehWorker}},
-)
+@gen_cluster(client=True)
 async def test_connect(c, s, a, b):
     future = c.submit(lambda x: x + 1, 1)
     x = c.submit(slowinc, 1, delay=1, retries=5)
@@ -39,7 +33,7 @@ async def test_connect(c, s, a, b):
         "individual-plots.json",
     ]:
         response = await http_client.fetch(
-            "http://localhost:%d/%s" % (s.services["dashboard"].port, suffix)
+            "http://localhost:%d/%s" % (s.http_server.port, suffix)
         )
         assert response.code == 200
         body = response.body.decode()
@@ -50,36 +44,27 @@ async def test_connect(c, s, a, b):
             assert not re.search("href=./", body)  # no absolute links
 
 
-@gen_cluster(
-    client=True,
-    nthreads=[],
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
-)
+@gen_cluster(client=True, nthreads=[])
 async def test_worker_404(c, s):
     http_client = AsyncHTTPClient()
     with pytest.raises(HTTPClientError) as err:
         await http_client.fetch(
-            "http://localhost:%d/info/worker/unknown" % s.services["dashboard"].port
+            "http://localhost:%d/info/worker/unknown" % s.http_server.port
         )
     assert err.value.code == 404
     with pytest.raises(HTTPClientError) as err:
         await http_client.fetch(
-            "http://localhost:%d/info/task/unknown" % s.services["dashboard"].port
+            "http://localhost:%d/info/task/unknown" % s.http_server.port
         )
     assert err.value.code == 404
 
 
-@gen_cluster(
-    client=True,
-    scheduler_kwargs={
-        "services": {("dashboard", 0): (BokehScheduler, {"prefix": "/foo"})}
-    },
-)
+@gen_cluster(client=True, scheduler_kwargs={"http_prefix": "/foo", "dashboard": True})
 async def test_prefix(c, s, a, b):
     http_client = AsyncHTTPClient()
     for suffix in ["foo/info/main/workers.html", "foo/json/index.html", "foo/system"]:
         response = await http_client.fetch(
-            "http://localhost:%d/%s" % (s.services["dashboard"].port, suffix)
+            "http://localhost:%d/%s" % (s.http_server.port, suffix)
         )
         assert response.code == 200
         body = response.body.decode()
@@ -89,11 +74,7 @@ async def test_prefix(c, s, a, b):
             assert is_valid_xml(body)
 
 
-@gen_cluster(
-    client=True,
-    clean_kwargs={"threads": False},
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
-)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 async def test_prometheus(c, s, a, b):
     pytest.importorskip("prometheus_client")
     from prometheus_client.parser import text_string_to_metric_families
@@ -104,7 +85,7 @@ async def test_prometheus(c, s, a, b):
     # prometheus_client errors
     for _ in range(2):
         response = await http_client.fetch(
-            "http://localhost:%d/metrics" % s.services["dashboard"].port
+            "http://localhost:%d/metrics" % s.http_server.port
         )
         assert response.code == 200
         assert response.headers["Content-Type"] == "text/plain; version=0.0.4"
@@ -114,11 +95,7 @@ async def test_prometheus(c, s, a, b):
         assert "dask_scheduler_workers" in families
 
 
-@gen_cluster(
-    client=True,
-    clean_kwargs={"threads": False},
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
-)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 async def test_prometheus_collect_task_states(c, s, a, b):
     pytest.importorskip("prometheus_client")
     from prometheus_client.parser import text_string_to_metric_families
@@ -126,11 +103,8 @@ async def test_prometheus_collect_task_states(c, s, a, b):
     http_client = AsyncHTTPClient()
 
     async def fetch_metrics():
-        bokeh_scheduler = s.services["dashboard"]
-        assert s.services["dashboard"].scheduler is s
-        response = await http_client.fetch(
-            f"http://{bokeh_scheduler.server.address}:{bokeh_scheduler.port}/metrics"
-        )
+        port = s.http_server.port
+        response = await http_client.fetch(f"http://localhost:{port}/metrics")
         txt = response.body.decode("utf8")
         families = {
             family.name: family for family in text_string_to_metric_families(txt)
@@ -174,16 +148,12 @@ async def test_prometheus_collect_task_states(c, s, a, b):
     assert sum(forgotten_tasks) == 0.0
 
 
-@gen_cluster(
-    client=True,
-    clean_kwargs={"threads": False},
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
-)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 async def test_health(c, s, a, b):
     http_client = AsyncHTTPClient()
 
     response = await http_client.fetch(
-        "http://localhost:%d/health" % s.services["dashboard"].port
+        "http://localhost:%d/health" % s.http_server.port
     )
     assert response.code == 200
     assert response.headers["Content-Type"] == "text/plain"
@@ -192,9 +162,7 @@ async def test_health(c, s, a, b):
     assert txt == "ok"
 
 
-@gen_cluster(
-    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
-)
+@gen_cluster(client=True)
 async def test_task_page(c, s, a, b):
     future = c.submit(lambda x: x + 1, 1, workers=a.address)
     x = c.submit(inc, 1)
@@ -203,7 +171,7 @@ async def test_task_page(c, s, a, b):
 
     "info/task/" + url_escape(future.key) + ".html",
     response = await http_client.fetch(
-        "http://localhost:%d/info/task/" % s.services["dashboard"].port
+        "http://localhost:%d/info/task/" % s.http_server.port
         + url_escape(future.key)
         + ".html"
     )
@@ -218,22 +186,34 @@ async def test_task_page(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={
-        "services": {
-            ("dashboard", 0): (
-                BokehScheduler,
-                {"allow_websocket_origin": ["good.invalid"]},
-            )
-        }
+    scheduler_kwargs={"dashboard": True},
+    config={
+        "distributed.scheduler.dashboard.bokeh-application.allow_websocket_origin": [
+            "good.invalid"
+        ]
     },
 )
 async def test_allow_websocket_origin(c, s, a, b):
+    from tornado.httpclient import HTTPRequest
+    from tornado.websocket import websocket_connect
+
     url = (
         "ws://localhost:%d/status/ws?bokeh-protocol-version=1.0&bokeh-session-id=1"
-        % s.services["dashboard"].port
+        % s.http_server.port
     )
     with pytest.raises(HTTPClientError) as err:
         await websocket_connect(
             HTTPRequest(url, headers={"Origin": "http://evil.invalid"})
         )
     assert err.value.code == 403
+
+
+@gen_cluster(client=True)
+async def test_eventstream(c, s, a, b):
+    from tornado.websocket import websocket_connect
+
+    ws_client = await websocket_connect(
+        "ws://localhost:%d/%s" % (s.http_server.port, "eventstream")
+    )
+    assert "websocket" in str(s.plugins).lower()
+    ws_client.close()

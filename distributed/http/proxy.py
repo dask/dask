@@ -13,8 +13,8 @@ try:
         from a port to any valid endpoint'.
         """
 
-        def initialize(self, server=None, extra=None):
-            self.scheduler = server
+        def initialize(self, dask_server=None, extra=None):
+            self.scheduler = dask_server
             self.extra = extra or {}
 
         async def http_get(self, port, host, proxied_path):
@@ -77,8 +77,8 @@ except ImportError:
         """Minimal Proxy handler when jupyter-server-proxy is not installed
         """
 
-        def initialize(self, server=None, extra=None):
-            self.server = server
+        def initialize(self, dask_server=None, extra=None):
+            self.server = dask_server
             self.extra = extra or {}
 
         def get(self, port, host, proxied_path):
@@ -128,3 +128,8 @@ def check_worker_dashboard_exits(scheduler, worker):
         if addr == w.host and port == str(bokeh_port):
             return True
     return False
+
+
+routes = [
+    (r"proxy/(\d+)/(.*?)/(.*)", GlobalProxyHandler, {}),
+]

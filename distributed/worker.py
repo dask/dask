@@ -32,6 +32,7 @@ from .comm import get_address_host, connect
 from .comm.addressing import address_from_user_args
 from .core import error_message, CommClosedError, send_recv, pingpong, coerce_to_address
 from .diskutils import WorkSpace
+from .http import get_handlers
 from .metrics import time
 from .node import ServerNode
 from . import preloading
@@ -318,6 +319,8 @@ class Worker(ServerNode):
         port=None,
         protocol=None,
         dashboard_address=None,
+        dashboard=False,
+        http_prefix="/",
         nanny=None,
         plugins=(),
         low_level_profiler=dask.config.get("distributed.worker.profile.low-level"),
@@ -587,15 +590,21 @@ class Worker(ServerNode):
         self.services = {}
         self.service_specs = services or {}
 
-        if dashboard_address is not None:
+        routes = get_handlers(
+            server=self,
+            modules=dask.config.get("distributed.worker.http.routes"),
+            prefix=http_prefix,
+        )
+        self.start_http_server(routes, dashboard_address)
+
+        if dashboard:
             try:
-                from distributed.dashboard import BokehWorker
+                import distributed.dashboard.worker
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
-                self.service_specs[("dashboard", dashboard_address)] = (
-                    BokehWorker,
-                    (service_kwargs or {}).get("dashboard", {}),
+                distributed.dashboard.worker.connect(
+                    self.http_application, self.http_server, self, prefix=http_prefix,
                 )
 
         self.metrics = dict(metrics) if metrics else {}
@@ -1116,8 +1125,7 @@ class Worker(ServerNode):
             await self.scheduler.close_rpc()
             self._workdir.release()
 
-            for k, v in self.services.items():
-                v.stop()
+            self.stop_services()
 
             if (
                 self.batched_stream

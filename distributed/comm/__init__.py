@@ -10,6 +10,7 @@ from .addressing import (
     get_local_address_for,
 )
 from .core import connect, listen, Comm, CommClosedError
+from .utils import get_tcp_server_address
 
 
 def _register_transports():

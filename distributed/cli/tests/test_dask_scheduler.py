@@ -39,8 +39,9 @@ def test_defaults(loop):
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
             c.sync(f)
 
-    with pytest.raises(Exception):
-        requests.get("http://127.0.0.1:8787/status/")
+        response = requests.get("http://127.0.0.1:8787/status/")
+        assert response.status_code == 404
+
     with pytest.raises(Exception):
         response = requests.get("http://127.0.0.1:9786/info.json")
 
@@ -64,11 +65,8 @@ def test_no_dashboard(loop):
     pytest.importorskip("bokeh")
     with popen(["dask-scheduler", "--no-dashboard"]) as proc:
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
-            for i in range(3):
-                line = proc.stderr.readline()
-                assert b"dashboard" not in line.lower()
-            with pytest.raises(Exception):
-                requests.get("http://127.0.0.1:8787/status/")
+            response = requests.get("http://127.0.0.1:8787/status/")
+            assert response.status_code == 404
 
 
 def test_dashboard(loop):

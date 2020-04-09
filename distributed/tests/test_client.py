@@ -5247,14 +5247,9 @@ def test_quiet_scheduler_loss(c, s):
 
 
 def test_dashboard_link(loop, monkeypatch):
-    pytest.importorskip("bokeh")
-    from distributed.dashboard import BokehScheduler
-
     monkeypatch.setenv("USER", "myusername")
 
-    with cluster(
-        scheduler_kwargs={"services": {("dashboard", 12355): BokehScheduler}}
-    ) as (s, [a, b]):
+    with cluster(scheduler_kwargs={"dashboard_address": ":12355"}) as (s, [a, b]):
         with Client(s["address"], loop=loop) as c:
             with dask.config.set(
                 {"distributed.dashboard.link": "{scheme}://foo-{USER}:{port}/status"}

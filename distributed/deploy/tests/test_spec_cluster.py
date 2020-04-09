@@ -4,6 +4,7 @@ from time import sleep
 
 import dask
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
+from distributed.compatibility import WINDOWS
 from distributed.deploy.spec import close_clusters, ProcessInterface, run_spec
 from distributed.metrics import time
 from distributed.utils_test import loop, cleanup  # noqa: F401
@@ -84,9 +85,10 @@ def test_spec_sync(loop):
 
 
 def test_loop_started():
-    cluster = SpecCluster(
+    with SpecCluster(
         worker_spec, scheduler={"cls": Scheduler, "options": {"port": 0}}
-    )
+    ) as cluster:
+        pass
 
 
 @pytest.mark.asyncio
@@ -212,6 +214,7 @@ async def test_restart(cleanup):
                 assert len(cluster.workers) == 2
 
 
+@pytest.mark.skipif(WINDOWS, reason="HTTP Server doesn't close out")
 @pytest.mark.asyncio
 async def test_broken_worker():
     with pytest.raises(Exception) as info:
@@ -225,6 +228,7 @@ async def test_broken_worker():
     assert "Broken" in str(info.value)
 
 
+@pytest.mark.skipif(WINDOWS, reason="HTTP Server doesn't close out")
 @pytest.mark.slow
 def test_spec_close_clusters(loop):
     workers = {0: {"cls": Worker}}

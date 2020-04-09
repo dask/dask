@@ -1190,19 +1190,14 @@ def test_correct_bad_time_estimate(c, s, *workers):
 
 @gen_test()
 async def test_service_hosts():
-    pytest.importorskip("bokeh")
-    from distributed.dashboard import BokehScheduler
-
     port = 0
     for url, expected in [
         ("tcp://0.0.0.0", ("::", "0.0.0.0")),
         ("tcp://127.0.0.1", "127.0.0.1"),
         ("tcp://127.0.0.1:38275", "127.0.0.1"),
     ]:
-        services = {("dashboard", port): BokehScheduler}
-
-        async with Scheduler(host=url, services=services) as s:
-            sock = first(s.services["dashboard"].server._http._sockets.values())
+        async with Scheduler(host=url) as s:
+            sock = first(s.http_server._sockets.values())
             if isinstance(expected, tuple):
                 assert sock.getsockname()[0] in expected
             else:
@@ -1210,10 +1205,8 @@ async def test_service_hosts():
 
     port = ("127.0.0.1", 0)
     for url in ["tcp://0.0.0.0", "tcp://127.0.0.1", "tcp://127.0.0.1:38275"]:
-        services = {("dashboard", port): BokehScheduler}
-
-        async with Scheduler(services=services, host=url) as s:
-            sock = first(s.services["dashboard"].server._http._sockets.values())
+        async with Scheduler(dashboard_address="127.0.0.1:0", host=url) as s:
+            sock = first(s.http_server._sockets.values())
             assert sock.getsockname()[0] == "127.0.0.1"
 
 

@@ -5,7 +5,6 @@ from numbers import Number
 from operator import add
 import os
 import psutil
-import shutil
 import sys
 from time import sleep
 import traceback
@@ -58,12 +57,11 @@ from distributed.utils_test import (  # noqa: F401
 )
 
 
-def test_worker_nthreads():
-    w = Worker("127.0.0.1", 8019)
-    try:
-        assert w.executor._max_workers == CPU_COUNT
-    finally:
-        shutil.rmtree(w.local_directory)
+@pytest.mark.asyncio
+async def test_worker_nthreads(cleanup):
+    async with Scheduler() as s:
+        async with Worker(s.address) as w:
+            assert w.executor._max_workers == CPU_COUNT
 
 
 @gen_cluster()
@@ -75,13 +73,15 @@ def test_str(s, a, b):
     assert str(len(a.executing)) in repr(a)
 
 
-def test_identity():
-    w = Worker("127.0.0.1", 8019)
-    ident = w.identity(None)
-    assert "Worker" in ident["type"]
-    assert ident["scheduler"] == "tcp://127.0.0.1:8019"
-    assert isinstance(ident["nthreads"], int)
-    assert isinstance(ident["memory_limit"], Number)
+@pytest.mark.asyncio
+async def test_identity(cleanup):
+    async with Scheduler() as s:
+        async with Worker(s.address) as w:
+            ident = w.identity(None)
+            assert "Worker" in ident["type"]
+            assert ident["scheduler"] == s.address
+            assert isinstance(ident["nthreads"], int)
+            assert isinstance(ident["memory_limit"], Number)
 
 
 @gen_cluster(client=True)
@@ -320,20 +320,17 @@ def test_worker_with_port_zero():
 
 
 @pytest.mark.slow
-def test_worker_waits_for_scheduler(loop):
-    @gen.coroutine
-    def f():
-        w = Worker("127.0.0.1", 8007)
-        try:
-            yield asyncio.wait_for(w, 3)
-        except TimeoutError:
-            pass
-        else:
-            assert False
-        assert w.status not in ("closed", "running")
-        yield w.close(timeout=0.1)
-
-    loop.run_sync(f)
+@pytest.mark.asyncio
+async def test_worker_waits_for_scheduler(cleanup):
+    w = Worker("127.0.0.1:8724")
+    try:
+        await asyncio.wait_for(w, 3)
+    except TimeoutError:
+        pass
+    else:
+        assert False
+    assert w.status not in ("closed", "running")
+    await w.close(timeout=0.1)
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)])
@@ -532,19 +529,21 @@ def test_close_on_disconnect(s, w):
         assert time() < start + 5
 
 
-def test_memory_limit_auto():
-    a = Worker("127.0.0.1", 8099, nthreads=1)
-    b = Worker("127.0.0.1", 8099, nthreads=2)
-    c = Worker("127.0.0.1", 8099, nthreads=100)
-    d = Worker("127.0.0.1", 8099, nthreads=200)
+@pytest.mark.asyncio
+async def test_memory_limit_auto():
+    async with Scheduler() as s:
+        async with Worker(s.address, nthreads=1) as a, Worker(
+            s.address, nthreads=2
+        ) as b, Worker(s.address, nthreads=100) as c, Worker(
+            s.address, nthreads=200
+        ) as d:
+            assert isinstance(a.memory_limit, Number)
+            assert isinstance(b.memory_limit, Number)
 
-    assert isinstance(a.memory_limit, Number)
-    assert isinstance(b.memory_limit, Number)
+            if CPU_COUNT > 1:
+                assert a.memory_limit < b.memory_limit
 
-    if CPU_COUNT > 1:
-        assert a.memory_limit < b.memory_limit
-
-    assert c.memory_limit == d.memory_limit
+            assert c.memory_limit == d.memory_limit
 
 
 @gen_cluster(client=True)
@@ -782,13 +781,13 @@ def test_hold_onto_dependents(c, s, a, b):
 
 @pytest.mark.slow
 @gen_cluster(client=False, nthreads=[])
-def test_worker_death_timeout(s):
+async def test_worker_death_timeout(s):
     with dask.config.set({"distributed.comm.timeouts.connect": "1s"}):
-        yield s.close()
+        await s.close()
         w = Worker(s.address, death_timeout=1)
 
     with pytest.raises(TimeoutError) as info:
-        yield w
+        await w
 
     assert "Worker" in str(info.value)
     assert "timed out" in str(info.value) or "failed to start" in str(info.value)
@@ -1024,39 +1023,25 @@ def test_worker_fds(s):
 
 @gen_cluster(nthreads=[])
 async def test_service_hosts_match_worker(s):
-    pytest.importorskip("bokeh")
-    from distributed.dashboard import BokehWorker
-
-    async with Worker(
-        s.address, services={("dashboard", ":0"): BokehWorker}, host="tcp://0.0.0.0"
-    ) as w:
-        sock = first(w.services["dashboard"].server._http._sockets.values())
+    async with Worker(s.address, host="tcp://0.0.0.0") as w:
+        sock = first(w.http_server._sockets.values())
         assert sock.getsockname()[0] in ("::", "0.0.0.0")
 
     async with Worker(
-        s.address, services={("dashboard", ":0"): BokehWorker}, host="tcp://127.0.0.1"
+        s.address, host="tcp://127.0.0.1", dashboard_address="0.0.0.0:0"
     ) as w:
-        sock = first(w.services["dashboard"].server._http._sockets.values())
+        sock = first(w.http_server._sockets.values())
         assert sock.getsockname()[0] in ("::", "0.0.0.0")
 
-    async with Worker(
-        s.address, services={("dashboard", 0): BokehWorker}, host="tcp://127.0.0.1"
-    ) as w:
-        sock = first(w.services["dashboard"].server._http._sockets.values())
+    async with Worker(s.address, host="tcp://127.0.0.1") as w:
+        sock = first(w.http_server._sockets.values())
         assert sock.getsockname()[0] == "127.0.0.1"
 
 
 @gen_cluster(nthreads=[])
-def test_start_services(s):
-    pytest.importorskip("bokeh")
-    from distributed.dashboard import BokehWorker
-
-    services = {("dashboard", ":1234"): BokehWorker}
-
-    w = yield Worker(s.address, services=services)
-
-    assert w.services["dashboard"].server.port == 1234
-    yield w.close()
+async def test_start_services(s):
+    async with Worker(s.address, dashboard_address=1234) as w:
+        assert w.http_server.port == 1234
 
 
 @gen_test()
@@ -1234,16 +1219,18 @@ def test_reschedule(c, s, a, b):
     assert all(f.key in b.data for f in futures)
 
 
-def test_deque_handler():
+@pytest.mark.asyncio
+async def test_deque_handler(cleanup):
     from distributed.worker import logger
 
-    w = Worker("127.0.0.1", 8019)
-    deque_handler = w._deque_handler
-    logger.info("foo456")
-    assert deque_handler.deque
-    msg = deque_handler.deque[-1]
-    assert "distributed.worker" in deque_handler.format(msg)
-    assert any(msg.msg == "foo456" for msg in deque_handler.deque)
+    async with Scheduler() as s:
+        async with Worker(s.address) as w:
+            deque_handler = w._deque_handler
+            logger.info("foo456")
+            assert deque_handler.deque
+            msg = deque_handler.deque[-1]
+            assert "distributed.worker" in deque_handler.format(msg)
+            assert any(msg.msg == "foo456" for msg in deque_handler.deque)
 
 
 @gen_cluster(nthreads=[], client=True)

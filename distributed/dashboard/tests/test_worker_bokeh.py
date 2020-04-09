@@ -5,7 +5,6 @@ from time import sleep
 import pytest
 
 pytest.importorskip("bokeh")
-import sys
 from tlz import first
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
@@ -13,8 +12,6 @@ from tornado.httpclient import AsyncHTTPClient
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
-from distributed.dashboard.scheduler import BokehScheduler
-from distributed.dashboard.worker import BokehWorker
 from distributed.dashboard.components.worker import (
     StateTable,
     CrossFilter,
@@ -28,13 +25,11 @@ from distributed.dashboard.components.worker import (
 
 @gen_cluster(
     client=True,
-    worker_kwargs={"services": {("dashboard", 0): BokehWorker}},
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    worker_kwargs={"dashboard": True},
+    scheduler_kwargs={"dashboard": True},
 )
 def test_routes(c, s, a, b):
-    assert isinstance(a.services["dashboard"], BokehWorker)
-    assert isinstance(b.services["dashboard"], BokehWorker)
-    port = a.services["dashboard"].port
+    port = a.http_server.port
 
     future = c.submit(sleep, 1)
     yield gen.sleep(0.1)
@@ -47,37 +42,33 @@ def test_routes(c, s, a, b):
         assert not re.search("href=./", body)  # no absolute links
 
     response = yield http_client.fetch(
-        "http://localhost:%d/info/main/workers.html" % s.services["dashboard"].port
+        "http://localhost:%d/info/main/workers.html" % s.http_server.port
     )
 
     assert str(port) in response.body.decode()
 
 
-@pytest.mark.skipif(
-    sys.version_info[0] == 2, reason="https://github.com/bokeh/bokeh/issues/5494"
-)
-@gen_cluster(client=True, worker_kwargs={"services": {("dashboard", 0): BokehWorker}})
+@gen_cluster(client=True, worker_kwargs={"dashboard": True})
 def test_simple(c, s, a, b):
-    assert s.workers[a.address].services == {"dashboard": a.services["dashboard"].port}
-    assert s.workers[b.address].services == {"dashboard": b.services["dashboard"].port}
+    assert s.workers[a.address].services == {"dashboard": a.http_server.port}
+    assert s.workers[b.address].services == {"dashboard": b.http_server.port}
 
     future = c.submit(sleep, 1)
     yield gen.sleep(0.1)
 
     http_client = AsyncHTTPClient()
-    for suffix in ["main", "crossfilter", "system"]:
+    for suffix in ["crossfilter", "system"]:
         response = yield http_client.fetch(
-            "http://localhost:%d/%s" % (a.services["dashboard"].port, suffix)
+            "http://localhost:%d/%s" % (a.http_server.port, suffix)
         )
         assert "bokeh" in response.body.decode().lower()
 
 
 @gen_cluster(
-    client=True, worker_kwargs={"services": {("dashboard", 0): (BokehWorker, {})}}
+    client=True, worker_kwargs={"dashboard": True},
 )
 def test_services_kwargs(c, s, a, b):
-    assert s.workers[a.address].services == {"dashboard": a.services["dashboard"].port}
-    assert isinstance(a.services["dashboard"], BokehWorker)
+    assert s.workers[a.address].services == {"dashboard": a.http_server.port}
 
 
 @gen_cluster(client=True)
@@ -166,17 +157,14 @@ def test_CommunicatingStream(c, s, a, b):
 
 
 @gen_cluster(
-    client=True,
-    clean_kwargs={"threads": False},
-    worker_kwargs={"services": {("dashboard", 0): BokehWorker}},
+    client=True, clean_kwargs={"threads": False}, worker_kwargs={"dashboard": True},
 )
 def test_prometheus(c, s, a, b):
     pytest.importorskip("prometheus_client")
-    assert s.workers[a.address].services == {"dashboard": a.services["dashboard"].port}
 
     http_client = AsyncHTTPClient()
     for suffix in ["metrics"]:
         response = yield http_client.fetch(
-            "http://localhost:%d/%s" % (a.services["dashboard"].port, suffix)
+            "http://localhost:%d/%s" % (a.http_server.port, suffix)
         )
         assert response.code == 200

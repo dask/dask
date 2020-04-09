@@ -843,7 +843,7 @@ class Client(Node):
 
         if info and "dashboard" in info["services"]:
             text += (
-                "  <li><b>Dashboard: </b><a href='%(web)s' target='_blank'>%(web)s</a>\n"
+                "  <li><b>Dashboard: </b><a href='%(web)s' target='_blank'>%(web)s</a></li>\n"
                 % {"web": self.dashboard_link}
             )
 

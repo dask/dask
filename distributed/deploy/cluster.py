@@ -48,7 +48,7 @@ class Cluster:
     _supports_scaling = True
 
     def __init__(self, asynchronous):
-        self.scheduler_info = {}
+        self.scheduler_info = {"workers": {}}
         self.periodic_callbacks = {}
         self._asynchronous = asynchronous
 

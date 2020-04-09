@@ -83,7 +83,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 )
 @click.option("--show/--no-show", default=False, help="Show web UI [default: --show]")
 @click.option(
-    "--dashboard-prefix", type=str, default=None, help="Prefix for the dashboard app"
+    "--dashboard-prefix", type=str, default="", help="Prefix for the dashboard app"
 )
 @click.option(
     "--use-xheaders",
@@ -202,8 +202,9 @@ def main(
         security=sec,
         host=host,
         port=port,
-        dashboard_address=dashboard_address if dashboard else None,
-        service_kwargs={"dashboard": {"prefix": dashboard_prefix}},
+        dashboard=dashboard,
+        dashboard_address=dashboard_address,
+        http_prefix=dashboard_prefix,
         **kwargs
     )
     logger.info("-" * 47)

@@ -75,7 +75,9 @@ logger = logging.getLogger(__name__)
 from jinja2 import Environment, FileSystemLoader
 
 env = Environment(
-    loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), "..", "templates"))
+    loader=FileSystemLoader(
+        os.path.join(os.path.dirname(__file__), "..", "..", "http", "templates")
+    )
 )
 
 BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), "..", "theme.yaml"))

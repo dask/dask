@@ -1523,3 +1523,45 @@ class LRU(UserDict):
         if len(self) >= self.maxsize:
             self.data.popitem(last=False)
         super().__setitem__(key, value)
+
+
+def clean_dashboard_address(addr, default_listen_ip=""):
+    """
+
+    Examples
+    --------
+    >>> clean_dashboard_address(8787)
+    {'address': '', 'port': 8787}
+    >>> clean_dashboard_address(":8787")
+    {'address': '', 'port': 8787}
+    >>> clean_dashboard_address("8787")
+    {'address': '', 'port': 8787}
+    >>> clean_dashboard_address("8787")
+    {'address': '', 'port': 8787}
+    >>> clean_dashboard_address("foo:8787")
+    {'address': 'foo', 'port': 8787}
+    """
+
+    if default_listen_ip == "0.0.0.0":
+        default_listen_ip = ""  # for IPV6
+
+    try:
+        addr = int(addr)
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(addr, str):
+        addr = addr.split(":")
+
+    if isinstance(addr, (tuple, list)):
+        if len(addr) == 2:
+            host, port = (addr[0], int(addr[1]))
+        elif len(addr) == 1:
+            [host], port = addr, 0
+        else:
+            raise ValueError(addr)
+    elif isinstance(addr, int):
+        host = default_listen_ip
+        port = addr
+
+    return {"address": host, "port": port}

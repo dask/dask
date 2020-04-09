@@ -6,6 +6,7 @@ import weakref
 
 from dask.utils import factors
 from dask.system import CPU_COUNT
+import toolz
 
 from .spec import SpecCluster
 from ..nanny import Nanny
@@ -110,6 +111,7 @@ class LocalCluster(SpecCluster):
         blocked_handlers=None,
         interface=None,
         worker_class=None,
+        scheduler_kwargs=None,
         **worker_kwargs
     ):
         if ip is not None:
@@ -172,6 +174,7 @@ class LocalCluster(SpecCluster):
                 "nthreads": threads_per_worker,
                 "services": worker_services,
                 "dashboard_address": worker_dashboard_address,
+                "dashboard": worker_dashboard_address is not None,
                 "interface": interface,
                 "protocol": protocol,
                 "security": security,
@@ -181,16 +184,20 @@ class LocalCluster(SpecCluster):
 
         scheduler = {
             "cls": Scheduler,
-            "options": dict(
-                host=host,
-                services=services,
-                service_kwargs=service_kwargs,
-                security=security,
-                port=scheduler_port,
-                interface=interface,
-                protocol=protocol,
-                dashboard_address=dashboard_address,
-                blocked_handlers=blocked_handlers,
+            "options": toolz.merge(
+                dict(
+                    host=host,
+                    services=services,
+                    service_kwargs=service_kwargs,
+                    security=security,
+                    port=scheduler_port,
+                    interface=interface,
+                    protocol=protocol,
+                    dashboard=dashboard_address is not None,
+                    dashboard_address=dashboard_address,
+                    blocked_handlers=blocked_handlers,
+                ),
+                scheduler_kwargs or {},
             ),
         }
 

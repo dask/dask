@@ -12,6 +12,7 @@ from distutils.version import LooseVersion
 from tornado.ioloop import IOLoop
 from tornado import gen
 import tornado
+from tornado.httpclient import AsyncHTTPClient
 import pytest
 
 from dask.system import CPU_COUNT
@@ -196,11 +197,18 @@ def test_Client_solo(loop):
 
 
 @gen_test()
-def test_duplicate_clients():
+async def test_duplicate_clients():
     pytest.importorskip("bokeh")
-    c1 = yield Client(processes=False, silence_logs=False, dashboard_address=9876)
+    c1 = await Client(
+        processes=False, silence_logs=False, dashboard_address=9876, asynchronous=True
+    )
     with pytest.warns(Warning) as info:
-        c2 = yield Client(processes=False, silence_logs=False, dashboard_address=9876)
+        c2 = await Client(
+            processes=False,
+            silence_logs=False,
+            dashboard_address=9876,
+            asynchronous=True,
+        )
 
     assert "dashboard" in c1.cluster.scheduler.services
     assert "dashboard" in c2.cluster.scheduler.services
@@ -212,8 +220,8 @@ def test_duplicate_clients():
         )
         for msg in info.list
     )
-    yield c1.close()
-    yield c2.close()
+    await c1.close()
+    await c2.close()
 
 
 def test_Client_kwargs(loop):
@@ -405,7 +413,7 @@ def test_bokeh(loop, processes):
         processes=processes,
         dashboard_address=0,
     ) as c:
-        bokeh_port = c.scheduler.services["dashboard"].port
+        bokeh_port = c.scheduler.http_server.port
         url = "http://127.0.0.1:%d/status/" % bokeh_port
         start = time()
         while True:
@@ -543,19 +551,22 @@ def test_death_timeout_raises(loop):
 
 
 @pytest.mark.skipif(sys.version_info < (3, 6), reason="Unknown")
-def test_bokeh_kwargs(loop):
+@pytest.mark.asyncio
+async def test_bokeh_kwargs(cleanup):
     pytest.importorskip("bokeh")
-    with LocalCluster(
+    async with LocalCluster(
         n_workers=0,
         scheduler_port=0,
         silence_logs=False,
-        loop=loop,
         dashboard_address=0,
-        service_kwargs={"dashboard": {"prefix": "/foo"}},
+        asynchronous=True,
+        scheduler_kwargs={"http_prefix": "/foo"},
     ) as c:
-
-        bs = c.scheduler.services["dashboard"]
-        assert bs.prefix == "/foo"
+        client = AsyncHTTPClient()
+        response = await client.fetch(
+            "http://localhost:{}/foo/status".format(c.scheduler.http_server.port)
+        )
+        assert "bokeh" in response.body.decode()
 
 
 def test_io_loop_periodic_callbacks(loop):

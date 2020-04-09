@@ -17,9 +17,8 @@ from distributed.utils import tokey, format_dashboard_link
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, slowinc, div, get_cert
-from distributed.dashboard.worker import BokehWorker
 from distributed.dashboard.components.worker import Counters
-from distributed.dashboard.scheduler import applications, BokehScheduler
+from distributed.dashboard.scheduler import applications
 from distributed.dashboard.components.scheduler import (
     SystemMonitor,
     Occupancy,
@@ -46,12 +45,9 @@ scheduler.PROFILING = False
 @pytest.mark.skipif(
     sys.version_info[0] == 2, reason="https://github.com/bokeh/bokeh/issues/5494"
 )
-@gen_cluster(
-    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
-)
+@gen_cluster(client=True, scheduler_kwargs={"dashboard": True})
 def test_simple(c, s, a, b):
-    assert isinstance(s.services["dashboard"], BokehScheduler)
-    port = s.services["dashboard"].port
+    port = s.http_server.port
 
     future = c.submit(sleep, 1)
     yield gen.sleep(0.1)
@@ -70,7 +66,7 @@ def test_simple(c, s, a, b):
     assert response
 
 
-@gen_cluster(client=True, worker_kwargs=dict(services={"dashboard": BokehWorker}))
+@gen_cluster(client=True, worker_kwargs={"dashboard": True})
 def test_basic(c, s, a, b):
     for component in [TaskStream, SystemMonitor, Occupancy, StealingTimeSeries]:
         ss = component(s)
@@ -592,21 +588,19 @@ def test_profile_server(c, s, a, b):
 
 
 @gen_cluster(
-    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
+    client=True, scheduler_kwargs={"dashboard": True},
 )
 def test_root_redirect(c, s, a, b):
     http_client = AsyncHTTPClient()
-    response = yield http_client.fetch(
-        "http://localhost:%d/" % s.services["dashboard"].port
-    )
+    response = yield http_client.fetch("http://localhost:%d/" % s.http_server.port)
     assert response.code == 200
     assert "/status" in response.effective_url
 
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
-    worker_kwargs={"services": {"dashboard": BokehWorker}},
+    scheduler_kwargs={"dashboard": True},
+    worker_kwargs={"dashboard": True},
     timeout=180,
 )
 def test_proxy_to_workers(c, s, a, b):
@@ -617,7 +611,7 @@ def test_proxy_to_workers(c, s, a, b):
     except ImportError:
         proxy_exists = False
 
-    dashboard_port = s.services["dashboard"].port
+    dashboard_port = s.http_server.port
     http_client = AsyncHTTPClient()
     response = yield http_client.fetch("http://localhost:%d/" % dashboard_port)
     assert response.code == 200
@@ -625,7 +619,7 @@ def test_proxy_to_workers(c, s, a, b):
 
     for w in [a, b]:
         host = w.ip
-        port = w.service_ports["dashboard"]
+        port = w.http_server.port
         proxy_url = "http://localhost:%d/proxy/%s/%s/status" % (
             dashboard_port,
             port,
@@ -647,7 +641,7 @@ def test_proxy_to_workers(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    scheduler_kwargs={"dashboard": True},
     config={
         "distributed.scheduler.dashboard.tasks.task-stream-length": 10,
         "distributed.scheduler.dashboard.status.task-stream-length": 10,
@@ -675,7 +669,7 @@ async def test_lots_of_tasks(c, s, a, b):
 
 @gen_cluster(
     client=True,
-    scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}},
+    scheduler_kwargs={"dashboard": True},
     config={
         "distributed.scheduler.dashboard.tls.key": get_cert("tls-key.pem"),
         "distributed.scheduler.dashboard.tls.cert": get_cert("tls-cert.pem"),
@@ -683,8 +677,7 @@ async def test_lots_of_tasks(c, s, a, b):
     },
 )
 def test_https_support(c, s, a, b):
-    assert isinstance(s.services["dashboard"], BokehScheduler)
-    port = s.services["dashboard"].port
+    port = s.http_server.port
 
     assert (
         format_dashboard_link("localhost", port) == "https://localhost:%d/status" % port
@@ -717,9 +710,7 @@ def test_https_support(c, s, a, b):
         assert not re.search("href=./", body)  # no absolute links
 
 
-@gen_cluster(
-    client=True, scheduler_kwargs={"services": {("dashboard", 0): BokehScheduler}}
-)
+@gen_cluster(client=True, scheduler_kwargs={"dashboard": True})
 async def test_memory_by_key(c, s, a, b):
     mbk = MemoryByKey(s)
 
