@@ -63,6 +63,24 @@ def test_defer_to_old(loop):
             assert isinstance(c, OldSSHCluster)
 
 
+@pytest.mark.avoid_travis
+def test_old_ssh_wih_local_dir(loop):
+    with pytest.warns(Warning):
+        from distributed.deploy.old_ssh import SSHCluster as OldSSHCluster
+
+        with OldSSHCluster(
+            scheduler_addr="127.0.0.1",
+            scheduler_port=7437,
+            worker_addrs=["127.0.0.1", "127.0.0.1"],
+            local_directory="/tmp",
+        ) as c:
+            assert len(c.workers) == 2
+            with Client(c) as client:
+                result = client.submit(lambda x: x + 1, 10)
+                result = result.result()
+                assert result == 11
+
+
 @pytest.mark.asyncio
 async def test_config_inherited_by_subprocess(loop):
     def f(x):
