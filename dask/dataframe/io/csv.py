@@ -792,25 +792,25 @@ def to_csv(
             [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
         )
     if compute:
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+
         if scheduler is not None:
             warn(
                 "passing 'scheduler' directly into `to_csv()` is deprecated and will be removed in a future version"
-                "pass the scheduler in as part of `compute_kwargs` instead.",
+                "pass the scheduler in as part of `compute_kwargs` instead."
+                f"e.g. df.to_csv(compute=True, compute_kwargs={{scheduler={scheduler}}})",
                 FutureWarning,
             )
 
-        if (
-            compute_kwargs is not None
-            and scheduler is not None
-            and compute_kwargs.get("scheduler") != scheduler
-        ):
+        if scheduler is not None and compute_kwargs.get("scheduler") != scheduler:
             raise ValueError(
                 f"Differing values for 'scheduler' have been passed in.\n"
                 f"scheduler argument: {scheduler}\n"
                 f"via compute_kwargs: {compute_kwargs.get('scheduler')}"
             )
 
-        if compute_kwargs is None:
+        if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs = {"scheduler": scheduler}
 
         delayed(values).compute(**compute_kwargs)
