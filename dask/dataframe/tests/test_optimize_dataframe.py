@@ -37,3 +37,20 @@ def test_optimize_blockwise():
     graph = optimize_blockwise(ddf.dask)
 
     assert len(graph) <= 4
+
+
+def test_config():
+    ran = False
+
+    def optimize(dsk, keys):
+        nonlocal ran
+        ran = True
+        return dsk
+
+    a = dd.from_pandas(pd.Series(range(10)), npartitions=2)
+    b = a + 1 + 2
+
+    with dask.config.set({"dataframe": {"optimization": optimize}}):
+        (bb,) = dask.optimize(b)
+        assert len(bb.dask) == a.npartitions * 3
+        assert ran

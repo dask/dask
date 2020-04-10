@@ -39,7 +39,6 @@ from .. import config
 from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
-from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict, flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -56,6 +55,7 @@ from ..utils import (
     ensure_bytes,
     ensure_unicode,
     key_split,
+    import_term,
 )
 from . import chunk
 
@@ -351,7 +351,17 @@ class Item(DaskMethodsMixin):
     def __dask_tokenize__(self):
         return self.key
 
-    __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
+    @staticmethod
+    def __dask_optimize__(dsk, keys, **kwargs):
+        if "bag_optimize" in config.config:  # legacy value
+            func = config.get("bag_optimize")
+        else:
+            func = config.get("bag.optimization", dont_optimize)
+        if isinstance(func, str):
+            func = import_term(func)
+
+        return func(dsk, keys, **kwargs)
+
     __dask_scheduler__ = staticmethod(mpget)
 
     def __dask_postcompute__(self):
@@ -457,7 +467,21 @@ class Bag(DaskMethodsMixin):
     def __dask_tokenize__(self):
         return self.name
 
-    __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
+    @staticmethod
+    def __dask_optimize__(dsk, keys, **kwargs):
+        if "bag_optimize" in config.config:  # legacy value
+            func = config.get("bag_optimize")
+        else:
+            func = config.get("bag.optimization", optimize)
+
+        if isinstance(func, str):
+            func = import_term(func)
+
+        if not func:
+            func = dont_optimize
+
+        return func(dsk, keys, **kwargs)
+
     __dask_scheduler__ = staticmethod(mpget)
 
     def __dask_postcompute__(self):

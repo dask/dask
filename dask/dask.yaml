@@ -6,3 +6,13 @@ dataframe:
 array:
   svg:
     size: 120  # pixels
+  optimization: dask.array.optimization.optimize
+
+dataframe:
+  optimization: dask.dataframe.optimize.optimize
+
+bag:
+  optimization: dask.bag.core.optimize
+
+delayed:
+  optimiztion: dask.delayed.optimize

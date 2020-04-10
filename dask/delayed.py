@@ -12,9 +12,15 @@ from .base import tokenize as _tokenize
 from .compatibility import is_dataclass, dataclass_fields
 
 from .core import quote
-from .context import globalmethod
 from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
+from .utils import (
+    funcname,
+    methodcaller,
+    OperatorMethodMixin,
+    ensure_dict,
+    apply,
+    import_term,
+)
 from .highlevelgraph import HighLevelGraph
 
 __all__ = ["Delayed", "delayed"]
@@ -490,7 +496,21 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return self.key
 
     __dask_scheduler__ = staticmethod(threaded.get)
-    __dask_optimize__ = globalmethod(optimize, key="delayed_optimize")
+
+    @staticmethod
+    def __dask_optimize__(dsk, keys, **kwargs):
+        if "delayed_optimize" in config.config:  # legacy value
+            func = config.get("delayed_optimize")
+        else:
+            func = config.get("delayed.optimization", optimize)
+
+        if isinstance(func, str):
+            func = import_term(func)
+
+        if not func:
+            func = dont_optimize
+
+        return func(dsk, keys, **kwargs)
 
     def __dask_postcompute__(self):
         return single_key, ()

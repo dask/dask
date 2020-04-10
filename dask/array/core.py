@@ -30,12 +30,12 @@ from ..base import (
     is_dask_collection,
 )
 from ..blockwise import broadcast_dimensions
-from ..context import globalmethod
 from ..utils import (
     ndeepmap,
     ignoring,
     concrete,
     derived_from,
+    import_term,
     is_integer,
     IndexCallable,
     funcname,
@@ -1092,9 +1092,21 @@ class Array(DaskMethodsMixin):
     def __dask_tokenize__(self):
         return self.name
 
-    __dask_optimize__ = globalmethod(
-        optimize, key="array_optimize", falsey=dont_optimize
-    )
+    @staticmethod
+    def __dask_optimize__(dsk, keys, **kwargs):
+        if "array_optimize" in config.config:  # legacy value
+            func = config.get("array_optimize")
+        else:
+            func = config.get("array.optimization", optimize)
+
+        if isinstance(func, str):
+            func = import_term(func)
+
+        if not func:
+            func = dont_optimize
+
+        return func(dsk, keys, **kwargs)
+
     __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):

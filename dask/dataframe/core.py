@@ -23,11 +23,10 @@ except ImportError:
     Cache = dict
 
 from .. import array as da
-from .. import core
+from .. import core, config
 
 from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
 from .. import threaded
-from ..context import globalmethod
 from ..utils import (
     random_state_data,
     pseudorandom,
@@ -40,6 +39,7 @@ from ..utils import (
     OperatorMethodMixin,
     is_arraylike,
     typename,
+    import_term,
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import empty_like_safe, zeros_like_safe
@@ -133,9 +133,21 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_layers__(self):
         return (self.key,)
 
-    __dask_optimize__ = globalmethod(
-        optimize, key="dataframe_optimize", falsey=dont_optimize
-    )
+    @staticmethod
+    def __dask_optimize__(dsk, keys, **kwargs):
+        if "dataframe_optimize" in config.config:  # legacy value
+            func = config.get("dataframe_optimize")
+        else:
+            func = config.get("dataframe.optimization", optimize)
+
+        if isinstance(func, str):
+            func = import_term(func)
+
+        if not func:
+            func = dont_optimize
+
+        return func(dsk, keys, **kwargs)
+
     __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):
@@ -309,9 +321,21 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_tokenize__(self):
         return self._name
 
-    __dask_optimize__ = globalmethod(
-        optimize, key="dataframe_optimize", falsey=dont_optimize
-    )
+    @staticmethod
+    def __dask_optimize__(dsk, keys):
+        if "dataframe_optimize" in config.config:  # legacy value
+            func = config.get("dataframe_optimize")
+        else:
+            func = config.get("dataframe.optimization", optimize)
+
+        if isinstance(func, str):
+            func = import_term(func)
+
+        if not func:
+            func = dont_optimize
+
+        return func(dsk, keys)
+
     __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):
