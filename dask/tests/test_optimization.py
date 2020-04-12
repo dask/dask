@@ -4,6 +4,7 @@ from functools import partial
 
 import pytest
 
+import dask
 from dask.utils_test import add, inc
 from dask.core import get_dependencies
 from dask.local import get_sync
@@ -1297,3 +1298,13 @@ def test_dont_fuse_numpy_arrays():
     dsk = {"x": np.arange(5), "y": (inc, "x")}
 
     assert fuse(dsk, "y")[0] == dsk
+
+
+def test_fuse_config():
+    with dask.config.set({"optimization.fuse.active": False}):
+        d = {
+            "a": 1,
+            "b": (inc, "a"),
+        }
+        dependencies = {"b": ("a",)}
+        assert fuse(d, "b", dependencies=dependencies) == (d, dependencies)
