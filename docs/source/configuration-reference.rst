@@ -10,9 +10,9 @@ The scheduler can be tuned for performance and debugging.
 
 This is a generated table below
 
-.. yamltotable:: scheduler
+.. yamltotable:: distributed https://raw.githubusercontent.com/dask/distributed/8dbb28d762cba050dd45d8eca08dd1f3c7e373a9/distributed/distributed.yaml https://raw.githubusercontent.com/dask/distributed/8dbb28d762cba050dd45d8eca08dd1f3c7e373a9/distributed/distributed-schema.yaml
     :header: "Key", "Default", "Description"
-    :widths: 20, 10, 20
+    :widths: 20, 10, 40
 
 This is a manually created table
 

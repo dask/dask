@@ -1,15 +1,21 @@
 import os
+import requests
 from docutils.parsers.rst.directives import tables
 import distributed
 from docutils import statemachine
 
 distributed_path = os.path.dirname(distributed.__file__)
 distributed_config = os.path.join(distributed_path, "distributed.yaml")
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+import yaml
+# from ruamel.yaml import YAML
+# from ruamel.yaml.comments import CommentedMap
 
-yaml = YAML()
-yaml.preserve_quotes = True
+# yaml = YAML()
+# yaml.preserve_quotes = True
+
+def get_remote_yaml(url):
+    r = requests.get(url)
+    return yaml.safe_load(r.text)
 
 with open(distributed_config) as f:
     _data = f.read()
@@ -21,36 +27,47 @@ class YamlToTable(tables.CSVTable):
     required_arguments = 1
 
     def __init__(self, *args, **kwargs):
-        # .. yamltotable:: scheduler argument
-        self.key = args[1][0]
-
+        # .. yamltotable:: SECTION CONFIG-FILE JSONSCHEMA
+        self.section = args[1][0]
+        self.config, self.schema = args[1][1].split()
         super().__init__(*args, **kwargs)
-        self.data = yaml_conf["distributed"][self.key]
+
+        self.config = get_remote_yaml(self.config)
+        self.schema = get_remote_yaml(self.schema)
+
+        for k in self.section.split('.'):
+            self.config = self.config[k]
+            self.schema = self.schema['properties'][k]
+
+        # self.data = yaml_conf["distributed"][[self.key]
 
     def get_csv_data(self):
         return 1, self.state_machine.get_source(self.lineno - 1)
 
+    def process_thing(self, key, value, schema, prefix=""):
+        if isinstance(value, dict):
+            return sum([self.process_thing(k, v, schema['properties'].get(k, {"properties": {}}), prefix=prefix+'.'+key) for k, v in value.items()], [])
+
+        else:
+
+            try:
+                description = schema['description']
+                description = description.strip()
+            except KeyError:
+                description = "No Comment"
+
+            key = (0, 0, 0, statemachine.StringList([prefix+"."+key], source=None))
+
+            value = str(value)
+            value = (0, 0, 0, statemachine.StringList([value], source=None))
+
+            description = (0, 0, 0, statemachine.StringList([description], source=None))
+            # breakpoint()
+            return [[key, value, description]]
+
     def parse_csv_data_into_rows(self, csv_data, dialect, source):
-        rows = []
-        for idx in self.data:
-            if not isinstance(self.data[idx], CommentedMap):
-                comment_token = self.data.ca.items.get(idx)
-                if comment_token is None:
-                    comment = ""
-                else:
-                    comment = comment_token[2].value
-
-                comment = comment.replace("#", "")
-                comment = comment.strip()
-
-                key = (0, 0, 0, statemachine.StringList([idx], source=None))
-
-                val = str(self.data[idx])
-                value = (0, 0, 0, statemachine.StringList([val], source=None))
-
-                comment = (0, 0, 0, statemachine.StringList([comment], source=None))
-                rows.append([key, value, comment])
-
+        rows = self.process_thing(key="", value=self.config, schema=self.schema)
+        # breakpoint()
         max_cols = 3  # size of each row
         return rows, max_cols
 
