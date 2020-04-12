@@ -575,7 +575,7 @@ def test_repeat():
     x = np.random.random((10, 11, 13))
     d = da.from_array(x, chunks=(4, 5, 3))
 
-    repeats = [1, 2, 5]
+    repeats = [0, 1, 2, 5]
     axes = [-3, -2, -1, 0, 1, 2]
 
     for r in repeats:
