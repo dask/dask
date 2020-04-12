@@ -50,7 +50,7 @@ def test_config():
     a = dd.from_pandas(pd.Series(range(10)), npartitions=2)
     b = a + 1 + 2
 
-    with dask.config.set({"dataframe": {"optimization": optimize}}):
+    with dask.config.set({"dataframe.optimization.function": optimize}):
         (bb,) = dask.optimize(b)
         assert len(bb.dask) == a.npartitions * 3
         assert ran

@@ -138,7 +138,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         if "dataframe_optimize" in config.config:  # legacy value
             func = config.get("dataframe_optimize")
         else:
-            func = config.get("dataframe.optimization", optimize)
+            func = config.get("dataframe.optimization.function", optimize)
 
         if isinstance(func, str):
             func = import_term(func)

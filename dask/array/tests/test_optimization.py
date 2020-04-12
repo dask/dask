@@ -408,6 +408,6 @@ def test_config():
     x = da.ones(10, chunks=(2,))
     y = x + 1 + 2
 
-    with dask.config.set({"array": {"optimization": optimize}}):
+    with dask.config.set({"array.optimization.function": optimize}):
         (yy,) = dask.optimize(y)
         assert len(yy.dask) == x.npartitions * 3

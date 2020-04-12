@@ -502,7 +502,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         if "delayed_optimize" in config.config:  # legacy value
             func = config.get("delayed_optimize")
         else:
-            func = config.get("delayed.optimization", optimize)
+            func = config.get("delayed.optimization.function", optimize)
 
         if isinstance(func, str):
             func = import_term(func)

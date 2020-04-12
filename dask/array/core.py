@@ -1097,7 +1097,7 @@ class Array(DaskMethodsMixin):
         if "array_optimize" in config.config:  # legacy value
             func = config.get("array_optimize")
         else:
-            func = config.get("array.optimization", optimize)
+            func = config.get("array.optimization.function", optimize)
 
         if isinstance(func, str):
             func = import_term(func)

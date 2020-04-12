@@ -356,7 +356,7 @@ class Item(DaskMethodsMixin):
         if "bag_optimize" in config.config:  # legacy value
             func = config.get("bag_optimize")
         else:
-            func = config.get("bag.optimization", dont_optimize)
+            func = config.get("bag.optimization.function", dont_optimize)
         if isinstance(func, str):
             func = import_term(func)
 
