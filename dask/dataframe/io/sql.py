@@ -3,7 +3,8 @@ import pandas as pd
 
 import dask
 from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
-from dask.chain import _chain
+from dask.chain import _extra_deps
+from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
 
@@ -367,18 +368,32 @@ def to_sql(
     # Partitions should always append to the empty table created from `meta` above
     worker_kwargs = dict(kwargs, if_exists="append")
 
-    values = [d.to_sql(**worker_kwargs) for d in df.to_delayed()]
-
     if parallel:
         # Perform the meta insert, then one task that inserts all blocks concurrently:
-        result = _chain([meta_task, delayed(values)])
-        # Only grab the results array from the blocks-insert task:
-        result = result[1]
+        result = [
+            _extra_deps(
+                d.to_sql,
+                extras=meta_task,
+                **worker_kwargs,
+                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+            )
+            for d in df.to_delayed()
+        ]
     else:
         # Chain the "meta" insert and each block's insert
-        result = _chain([meta_task] + values)
-        # Only grab the results array from the block-insert tasks:
-        result = result[1:]
+        result = []
+        last = meta_task
+        for d in df.to_delayed():
+            result.append(
+                _extra_deps(
+                    d.to_sql,
+                    extras=last,
+                    **worker_kwargs,
+                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                )
+            )
+            last = result[-1]
+    result = dask.delayed(result)
 
     if compute:
         dask.compute(result)
