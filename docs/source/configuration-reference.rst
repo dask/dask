@@ -4,6 +4,42 @@ Configuration Reference
 When defining nested configurations, the top level default value will be **blank**, with subsequent keys and values listed below
 
 
+Client
+------
+
+.. yamltohtml::
+    distributed.client
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+Comm
+----
+
+.. yamltohtml::
+    distributed.comm
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+
+Dashboard
+---------
+
+.. yamltohtml::
+    distributed.dashboard
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+
+Deploy
+------
+
+.. yamltohtml::
+    distributed.deploy
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+
+
 Scheduler
 ---------
 The scheduler can be tuned for performance and debugging.
@@ -15,36 +51,39 @@ This is a generated table below
     https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
     https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
 
-.. yamltotable:: distributed.scheduler https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
-    :header: Key, Default, Description
-    :widths: 10, 5, 85
-
-This is a manually created table
-
-.. csv-table::
-   :header: "Key", "Default", "Description"
-   :widths: 20, 20, 40
-   :escape: \
-
-   "allowed-failures", "3", Number of retries before a task is considered bad
-   "bandwidth", "100000000", Estimated worker-worker bandwidth (100 MB/s) -- used is work-stealing calculations
-   "blocked-handlers", "[]", A list of handlers to restricted from running on the scheduler -- Issue #2550
-   "default-task-durations", "", How long we expect function names to run '1h'\, '1s' -- helps for long tasks
-   "default-task-durations.rechunk-split", "1us", Expect ``rechunk-split`` to run in 1 us
-   "default-task-durations.shuffle-split", "1us", Expect ``rechunk-split``' to run in 1 us
-
-
 
 Worker
 ------
-The worker can be tuned for performance and debugging.
 
-.. csv-table::
-   :header: "Key", "Default", "Description"
-   :widths: 20, 10, 20
-   :escape: \
+.. yamltohtml::
+    distributed.worker
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
 
-   "blocked-handlers", "[]", A list of handlers to restricted from running on the scheduler -- Issue #2550
-   "multiprocessing-method", "spawn", Method to create worker processes (spawn\, forkserver\, fork)
-   "use-file-locking", True, Use file locks with temporary worker directories PR #1543
+
+Admin
+-----
+
+.. yamltohtml::
+    distributed.admin
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+
+UCX
+---
+
+.. yamltohtml::
+    ucx
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+
+RMM
+---
+
+.. yamltohtml::
+    rmm
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
 

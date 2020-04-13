@@ -22,9 +22,8 @@ class DaskConfigDirective(Directive):
 
         for k in location.split("."):
             config = config[k]
-            schema = schema["properties"][k]
+            schema = schema["properties"].get(k, {})
         html = generate_html(config, schema, location)
-
         return [nodes.raw('', html, format="html")]
 
 def setup(app):
