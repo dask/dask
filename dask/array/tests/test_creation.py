@@ -62,7 +62,13 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
 
 
 @pytest.mark.parametrize(
-    "funcname", ["empty_like", "ones_like", "zeros_like", "full_like",],
+    "funcname, kwargs",
+    [
+        ("empty_like", {}),
+        ("ones_like", {}),
+        ("zeros_like", {}),
+        ("full_like", {"fill_value": 5}),
+    ],
 )
 @pytest.mark.parametrize(
     "shape, chunks, out_shape",
@@ -78,22 +84,18 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
     ],
 )
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like_shape(funcname, shape, dtype, chunks, out_shape):
+def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
-    if "full" in funcname:
-        old_np_func = np_func
-        old_da_func = da_func
-
-        np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
-        da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
-
-    dtype = np.dtype(dtype)
     a = np.random.randint(0, 10, shape).astype(dtype)
-    np_r = np_func(a, shape=out_shape)
-    da_r = da_func(a, chunks=chunks, shape=out_shape)
+    np_r = np_func(a, shape=out_shape, **kwargs)
+    da_r = da_func(a, chunks=chunks, shape=out_shape, **kwargs)
+
     assert np_r.shape == da_r.shape
     assert np_r.dtype == da_r.dtype
+
+    if "empty" not in funcname:
+        assert_eq(np_r, da_r)
 
 
 @pytest.mark.parametrize("endpoint", [True, False])

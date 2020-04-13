@@ -108,15 +108,8 @@ def ones_like(a, dtype=None, chunks=None, shape=None):
     """
 
     a = asarray(a, name=False)
-    return ones(
-        (shape or a.shape),
-        dtype=(dtype or a.dtype),
-        chunks=(
-            "auto"
-            if shape and (chunks is None)
-            else (chunks if chunks is not None else a.chunks)
-        ),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return ones(shape, dtype=(dtype or a.dtype), chunks=chunks)
 
 
 def zeros_like(a, dtype=None, chunks=None, shape=None):
@@ -151,15 +144,8 @@ def zeros_like(a, dtype=None, chunks=None, shape=None):
     """
 
     a = asarray(a, name=False)
-    return zeros(
-        (shape or a.shape),
-        dtype=(dtype or a.dtype),
-        chunks=(
-            "auto"
-            if shape and (chunks is None)
-            else (chunks if chunks is not None else a.chunks)
-        ),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return zeros(shape, dtype=(dtype or a.dtype), chunks=chunks)
 
 
 def full_like(a, fill_value, dtype=None, chunks=None, shape=None):
@@ -198,16 +184,23 @@ def full_like(a, fill_value, dtype=None, chunks=None, shape=None):
     """
 
     a = asarray(a, name=False)
-    return full(
-        (shape or a.shape),
-        fill_value,
-        dtype=(dtype or a.dtype),
-        chunks=(
-            "auto"
-            if shape and (chunks is None)
-            else (chunks if chunks is not None else a.chunks)
-        ),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return full(shape, fill_value, dtype=(dtype or a.dtype), chunks=chunks)
+
+
+def _get_like_function_shapes_chunks(a, chunks, shape):
+    """
+    Helper function for finding shapes and chunks for *_like()
+    array creation functions.
+    """
+    if shape is None:
+        shape = a.shape
+    if chunks is None:
+        if shape is None:
+            chunks = a.chunks
+        else:
+            chunks = "auto"
+    return shape, chunks
 
 
 def linspace(
