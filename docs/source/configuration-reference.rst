@@ -10,15 +10,20 @@ The scheduler can be tuned for performance and debugging.
 
 This is a generated table below
 
-.. yamltotable:: distributed https://raw.githubusercontent.com/dask/distributed/8dbb28d762cba050dd45d8eca08dd1f3c7e373a9/distributed/distributed.yaml https://raw.githubusercontent.com/dask/distributed/8dbb28d762cba050dd45d8eca08dd1f3c7e373a9/distributed/distributed-schema.yaml
-    :header: "Key", "Default", "Description"
-    :widths: 20, 10, 40
+.. yamltohtml::
+    distributed.scheduler
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml
+    https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+
+.. yamltotable:: distributed.scheduler https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed.yaml https://raw.githubusercontent.com/dask/distributed/fa005bf25079bc978895c38ea6fc781b3673c887/distributed/distributed-schema.yaml
+    :header: Key, Default, Description
+    :widths: 10, 5, 85
 
 This is a manually created table
 
 .. csv-table::
    :header: "Key", "Default", "Description"
-   :widths: 20, 10, 20
+   :widths: 20, 20, 40
    :escape: \
 
    "allowed-failures", "3", Number of retries before a task is considered bad

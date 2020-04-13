@@ -7,15 +7,18 @@ from docutils import statemachine
 distributed_path = os.path.dirname(distributed.__file__)
 distributed_config = os.path.join(distributed_path, "distributed.yaml")
 import yaml
+
 # from ruamel.yaml import YAML
 # from ruamel.yaml.comments import CommentedMap
 
 # yaml = YAML()
 # yaml.preserve_quotes = True
 
+
 def get_remote_yaml(url):
     r = requests.get(url)
     return yaml.safe_load(r.text)
+
 
 with open(distributed_config) as f:
     _data = f.read()
@@ -35,28 +38,37 @@ class YamlToTable(tables.CSVTable):
         self.config = get_remote_yaml(self.config)
         self.schema = get_remote_yaml(self.schema)
 
-        for k in self.section.split('.'):
+        for k in self.section.split("."):
             self.config = self.config[k]
-            self.schema = self.schema['properties'][k]
-
-        # self.data = yaml_conf["distributed"][[self.key]
+            self.schema = self.schema["properties"][k]
 
     def get_csv_data(self):
         return 1, self.state_machine.get_source(self.lineno - 1)
 
     def process_thing(self, key, value, schema, prefix=""):
         if isinstance(value, dict):
-            return sum([self.process_thing(k, v, schema['properties'].get(k, {"properties": {}}), prefix=prefix+'.'+key) for k, v in value.items()], [])
+            return sum(
+                [
+                    self.process_thing(
+                        k,
+                        v,
+                        schema.get("properties", {}).get(k, {"properties": {}}),
+                        prefix=prefix + key + ".",
+                    )
+                    for k, v in value.items()
+                ],
+                [],
+            )
 
         else:
 
             try:
-                description = schema['description']
+                description = schema["description"]
                 description = description.strip()
             except KeyError:
                 description = "No Comment"
 
-            key = (0, 0, 0, statemachine.StringList([prefix+"."+key], source=None))
+            key = (0, 0, 0, statemachine.StringList([prefix + key], source=None))
 
             value = str(value)
             value = (0, 0, 0, statemachine.StringList([value], source=None))
@@ -66,8 +78,7 @@ class YamlToTable(tables.CSVTable):
             return [[key, value, description]]
 
     def parse_csv_data_into_rows(self, csv_data, dialect, source):
-        rows = self.process_thing(key="", value=self.config, schema=self.schema)
-        # breakpoint()
+        rows = self.process_thing(key="", value=self.config, schema=self.schema, prefix=self.section)
         max_cols = 3  # size of each row
         return rows, max_cols
 

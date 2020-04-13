@@ -37,6 +37,7 @@ extensions = [
     "numpydoc",
     "sphinx_click.ext",
     "yamltotable",
+    "yamltohtml",
 ]
 
 numpydoc_show_class_members = False
