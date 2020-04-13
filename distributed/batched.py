@@ -22,8 +22,8 @@ class BatchedSend:
     Batching several messages at once helps performance when sending
     a myriad of tiny messages.
 
-    Example
-    -------
+    Examples
+    --------
     >>> stream = yield connect(address)
     >>> bstream = BatchedSend(interval='10 ms')
     >>> bstream.start(stream)

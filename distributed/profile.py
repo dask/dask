@@ -79,8 +79,8 @@ def process(frame, child, state, stop=None, omit=None):
     This recursively adds counts to the existing state dictionary and creates
     new entries for new functions.
 
-    Example
-    -------
+    Examples
+    --------
     >>> import sys, threading
     >>> ident = threading.get_ident()  # replace with your thread of interest
     >>> frame = sys._current_frames()[ident]

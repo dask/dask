@@ -135,8 +135,8 @@ class Cluster:
         n: int
             Target number of workers
 
-        Example
-        -------
+        Examples
+        --------
         >>> cluster.scale(10)  # scale cluster to ten workers
         """
         raise NotImplementedError()

@@ -272,8 +272,8 @@ def deserialize(header, frames, deserializers=None):
 class Serialize:
     """ Mark an object that should be serialized
 
-    Example
-    -------
+    Examples
+    --------
     >>> msg = {'op': 'update', 'data': to_serialize(123)}
     >>> msg  # doctest: +SKIP
     {'op': 'update', 'data': <Serialize: 123>}
