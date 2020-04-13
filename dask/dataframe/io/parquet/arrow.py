@@ -546,9 +546,10 @@ class ArrowEngine(Engine):
             use_pandas_metadata=True,
             use_threads=False,
             **kwargs.get("read", {}),
-        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
-            list(columns_and_parts)
-        ]
+        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=False)
+        if not isinstance(df.index, pd.RangeIndex):
+            df.reset_index(drop=False, inplace=True)
+        df = df[list(columns_and_parts)]
 
         if index:
             df = df.set_index(index)

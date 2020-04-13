@@ -2358,3 +2358,21 @@ def test_filter_nonpartition_columns(
     df_read = ddf_read.compute()
     assert len(df_read) == len(df_read[df_read["time"] < 5])
     assert df_read["time"].max() < 5
+
+
+@pytest.mark.parametrize("dtype", ["Int64", "str"])
+def test_pandas_metadata_nullable_pyarrow(tmpdir, dtype):
+
+    check_pyarrow()
+    if pa.__version__ < LooseVersion("0.16.0"):
+        pytest.skip("PyArrow 0.16 Required.")
+    tmpdir = str(tmpdir)
+
+    ddf1 = dd.from_pandas(
+        pd.DataFrame({"A": ["dog" if dtype == "str" else 1, None]}, dtype=dtype),
+        npartitions=1,
+    )
+    ddf1.to_parquet(tmpdir, engine="pyarrow")
+    ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
+
+    assert_eq(ddf1, ddf2, check_index=False)
