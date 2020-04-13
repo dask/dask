@@ -58,6 +58,8 @@ class Worker(Process):
         The python module to run to start the worker.
     connect_options: dict
         kwargs to be passed to asyncssh connections
+    remote_python: str
+        Path to Python on remote node to run this worker.
     kwargs: dict
         These will be passed through the dask-worker CLI to the
         dask.distributed.Worker class
@@ -70,6 +72,7 @@ class Worker(Process):
         connect_options: dict,
         kwargs: dict,
         worker_module="distributed.cli.dask_worker",
+        remote_python=None,
         loop=None,
         name=None,
     ):
@@ -81,6 +84,7 @@ class Worker(Process):
         self.connect_options = connect_options
         self.kwargs = kwargs
         self.name = name
+        self.remote_python = remote_python
 
     async def start(self):
         import asyncssh  # import now to avoid adding to module startup time
@@ -141,17 +145,22 @@ class Scheduler(Process):
         The hostname where we should run this worker
     connect_options: dict
         kwargs to be passed to asyncssh connections
+    remote_python: str
+        Path to Python on remote node to run this scheduler.
     kwargs: dict
         These will be passed through the dask-scheduler CLI to the
         dask.distributed.Scheduler class
     """
 
-    def __init__(self, address: str, connect_options: dict, kwargs: dict):
+    def __init__(
+        self, address: str, connect_options: dict, kwargs: dict, remote_python=None
+    ):
         super().__init__()
 
         self.address = address
         self.kwargs = kwargs
         self.connect_options = connect_options
+        self.remote_python = remote_python
 
     async def start(self):
         import asyncssh  # import now to avoid adding to module startup time
@@ -220,6 +229,7 @@ def SSHCluster(
     worker_options: dict = {},
     scheduler_options: dict = {},
     worker_module: str = "distributed.cli.dask_worker",
+    remote_python: str = None,
     **kwargs
 ):
     """ Deploy a Dask cluster using SSH
@@ -254,6 +264,8 @@ def SSHCluster(
         Keywords to pass on to scheduler.
     worker_module: str, optional
         Python module to call to start the worker.
+    remote_python: str, optional
+        Path to Python on remote nodes.
 
     Examples
     --------
@@ -300,6 +312,7 @@ def SSHCluster(
             "address": hosts[0],
             "connect_options": connect_options,
             "kwargs": scheduler_options,
+            "remote_python": remote_python,
         },
     }
     workers = {
@@ -310,6 +323,7 @@ def SSHCluster(
                 "connect_options": connect_options,
                 "kwargs": worker_options,
                 "worker_module": worker_module,
+                "remote_python": remote_python,
             },
         }
         for i, host in enumerate(hosts[1:])
