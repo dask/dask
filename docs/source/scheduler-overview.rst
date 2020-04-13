@@ -4,10 +4,10 @@ Scheduler Overview
 After we create a dask graph, we use a scheduler to run it. Dask currently
 implements a few different schedulers:
 
-- ``dask.threaded.get``: a scheduler backed by a thread pool
-- ``dask.multiprocessing.get``: a scheduler backed by a process pool
-- ``dask.get``: a synchronous scheduler, good for debugging
-- ``distributed.Client.get``: a distributed scheduler for executing graphs
+-  ``dask.threaded.get``: a scheduler backed by a thread pool
+-  ``dask.multiprocessing.get``: a scheduler backed by a process pool
+-  ``dask.get``: a synchronous scheduler, good for debugging
+-  ``distributed.Client.get``: a distributed scheduler for executing graphs
    on multiple machines.  This lives in the external distributed_ project.
 
 .. _distributed: https://distributed.dask.org/en/latest/

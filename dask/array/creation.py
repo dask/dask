@@ -763,7 +763,9 @@ def repeat(a, repeats, axis=None):
     elif not 0 <= axis <= a.ndim - 1:
         raise ValueError("axis(=%d) out of bounds" % axis)
 
-    if repeats == 1:
+    if repeats == 0:
+        return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]
+    elif repeats == 1:
         return a
 
     cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
