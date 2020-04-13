@@ -352,6 +352,12 @@ class Cluster:
             data = {"text/plain": repr(self), "text/html": self._repr_html_()}
             display(data, raw=True)
 
+    def __enter__(self):
+        return self.sync(self.__aenter__)
+
+    def __exit__(self, typ, value, traceback):
+        return self.sync(self.__aexit__, typ, value, traceback)
+
     async def __aenter__(self):
         await self
         return self
