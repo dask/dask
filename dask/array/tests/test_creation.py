@@ -61,6 +61,11 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
         assert (np_r == np.asarray(da_r)).all()
 
 
+pytest.mark.skipif(
+    not _numpy_117, reason="requires NumPy>=1.17 for shape argument support"
+)
+
+
 @pytest.mark.parametrize(
     "funcname, kwargs",
     [
