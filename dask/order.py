@@ -204,8 +204,10 @@ def order(dsk, dependencies=None):
 
     # Computing this for all keys can sometimes be relatively expensive :(
     partition_keys = {
-        key: (min_dependencies - total_dependencies[key])
-        * (total_dependents - min_heights)
+        key: (
+            (min_dependencies - total_dependencies[key] + 1)
+            * (total_dependents - min_heights)
+        )
         for key, (
             total_dependents,
             min_dependencies,
@@ -271,9 +273,10 @@ def order(dsk, dependencies=None):
     while True:
         while inner_stacks:
             inner_stack = inner_stacks_pop()
+            inner_stack_pop = inner_stack.pop
             while inner_stack:
                 # Perform a DFS along dependencies until we complete our tactical goal
-                item = inner_stack.pop()
+                item = inner_stack_pop()
                 if item in result:
                     continue
                 if num_needed[item]:
@@ -335,6 +338,7 @@ def order(dsk, dependencies=None):
                         if not inner_stack:
                             if add_to_inner_stack:
                                 inner_stack = [dep]
+                                inner_stack_pop = inner_stack.pop
                                 seen_add(dep)
                                 continue
                             key = partition_keys[dep]
@@ -344,6 +348,7 @@ def order(dsk, dependencies=None):
                                 # Run before `inner_stack` (change tactical goal!)
                                 inner_stacks_append(inner_stack)
                                 inner_stack = [dep]
+                                inner_stack_pop = inner_stack.pop
                                 seen_add(dep)
                                 continue
                         if key < partition_keys[item]:
@@ -379,17 +384,46 @@ def order(dsk, dependencies=None):
                                     inner_stacks_extend([dep] for dep in pool)
                                     seen_update(pool)
                                 inner_stack = inner_stacks_pop()
+                                inner_stack_pop = inner_stack.pop
                         else:
                             # If we don't have an inner_stack, then we don't need to look
                             # for a "better" path, but we do need traverse along dependents.
                             if add_to_inner_stack:
                                 min_key = min(dep_pools)
                                 min_pool = dep_pools.pop(min_key)
-                                if 1 < len(min_pool) < 100:
-                                    min_pool.sort(key=dependents_key, reverse=True)
-                                inner_stacks_extend([dep] for dep in min_pool)
-                                inner_stack = inner_stacks_pop()
-                                seen_update(min_pool)
+                                if len(min_pool) == 1:
+                                    inner_stack = min_pool
+                                    seen_update(inner_stack)
+                                elif (
+                                    10 * item_key
+                                    > 11 * len(min_pool) * len(min_pool) * min_key
+                                ):
+                                    # Put all items in min_pool onto inner_stacks.
+                                    # I know this is a weird comparison.  Hear me out.
+                                    # Although it is often beneficial to put all of the items in `min_pool`
+                                    # onto `inner_stacks` to process next, it is very easy to be overzealous.
+                                    # Sometimes it is actually better to defer until `next_nodes` is handled.
+                                    # We should only put items onto `inner_stacks` that we're reasonably
+                                    # confident about.  The above formula is a best effort heuristic given
+                                    # what we have easily available.  It is obviously very specific to our
+                                    # choice of partition_key.  Dask tests take this route about 40%.
+                                    if len(min_pool) < 100:
+                                        min_pool.sort(key=dependents_key, reverse=True)
+                                    inner_stacks_extend([dep] for dep in min_pool)
+                                    inner_stack = inner_stacks_pop()
+                                    seen_update(min_pool)
+                                else:
+                                    # Put one item in min_pool onto inner_stack and the rest into next_nodes.
+                                    if len(min_pool) < 100:
+                                        inner_stack = [
+                                            min(min_pool, key=dependents_key)
+                                        ]
+                                    else:
+                                        inner_stack = [min_pool.pop()]
+                                    next_nodes[min_key].append(min_pool)
+                                    seen_update(inner_stack)
+
+                                inner_stack_pop = inner_stack.pop
                             for key, vals in dep_pools.items():
                                 if key < item_key:
                                     next_nodes[key].append(vals)
@@ -408,7 +442,7 @@ def order(dsk, dependencies=None):
                 # Sometimes large keys can be close in magnitude, and it's okay to group those.
                 new_next_nodes = defaultdict(list)
                 for key, vals in next_nodes.items():
-                    new_next_nodes[int(10 * log(key + 1))].extend(vals)
+                    new_next_nodes[int(10 * log(key))].extend(vals)
                 next_nodes = new_next_nodes
 
                 while len(next_nodes) > 150:
