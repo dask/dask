@@ -51,7 +51,7 @@ abstractions like Dask Array or Dask DataFrame.  Consider the following example:
         return x + 1
 
     def double(x):
-        return x + 2
+        return x * 2
 
     def add(x, y):
         return x + y
@@ -138,7 +138,7 @@ reproduction of our original problem as a parallel code:
 
     @dask.delayed
     def double(x):
-        return x + 2
+        return x * 2
 
     @dask.delayed
     def add(x, y):
