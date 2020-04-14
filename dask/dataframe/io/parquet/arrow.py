@@ -550,8 +550,8 @@ class ArrowEngine(Engine):
 
         # Note that `to_pandas(ignore_metadata=False)` means
         # pyarrow will use the pandas metadata to set the index.
-        index_in_columns_and_parts = bool(
-            set(df.index.names).intersection(set(columns_and_parts))
+        index_in_columns_and_parts = set(df.index.names).issubset(
+            set(columns_and_parts)
         )
         if not index:
             if index_in_columns_and_parts:
