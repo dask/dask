@@ -2366,6 +2366,8 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir, dtype):
     check_pyarrow()
     if pa.__version__ < LooseVersion("0.16.0"):
         pytest.skip("PyArrow 0.16 Required.")
+    if pd.__version__ < LooseVersion("1.0.0"):
+        pytest.skip("Pandas 1.0.0 Required.")
     tmpdir = str(tmpdir)
 
     ddf1 = dd.from_pandas(
