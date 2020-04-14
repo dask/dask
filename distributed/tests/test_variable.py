@@ -2,6 +2,7 @@ import asyncio
 import random
 from time import sleep
 import sys
+import logging
 
 import pytest
 from tornado import gen
@@ -12,6 +13,7 @@ from distributed.metrics import time
 from distributed.compatibility import WINDOWS
 from distributed.utils_test import gen_cluster, inc, div
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
+from distributed.utils_test import captured_logger
 
 
 @gen_cluster(client=True)
@@ -37,6 +39,17 @@ def test_variable(c, s, a, b):
     while s.tasks:
         yield gen.sleep(0.01)
         assert time() < start + 5
+
+
+@gen_cluster(client=True)
+async def test_delete_unset_variable(c, s, a, b):
+    x = Variable()
+    assert x.client is c
+    with captured_logger(logging.getLogger("distributed.utils")) as logger:
+        x.delete()
+        await c.close()
+    text = logger.getvalue()
+    assert "KeyError" not in text
 
 
 @gen_cluster(client=True)
