@@ -7,7 +7,6 @@ import operator
 import re
 import sys
 from time import sleep
-from unittest import mock
 import logging
 
 import dask
@@ -1900,7 +1899,7 @@ async def test_gather_failing_cnn_recover(c, s, a, b):
     x = await c.scatter({"x": 1}, workers=a.address)
 
     s.rpc = await FlakyConnectionPool(failing_connections=1)
-    with mock.patch("distributed.utils_comm.retry_count", 1):
+    with dask.config.set({"distributed.comm.retry.count": 1}):
         res = await s.gather(keys=["x"])
     assert res["status"] == "OK"
 
@@ -1963,20 +1962,19 @@ async def test_gather_allow_worker_reconnect(c, s, a, b):
 
     s.rpc = await FlakyConnectionPool(failing_connections=4)
 
-    with captured_logger(
-        logging.getLogger("distributed.scheduler")
-    ) as sched_logger, captured_logger(
-        logging.getLogger("distributed.client")
-    ) as client_logger, captured_logger(
-        logging.getLogger("distributed.utils_comm")
-    ) as utils_comm_logger, mock.patch(
-        "distributed.utils_comm.retry_count", 3
-    ), mock.patch(
-        "distributed.utils_comm.retry_delay_min", 0.5
+    with dask.config.set(
+        {"distributed.comm.retry.delay_min": 0.5, "distributed.comm.retry.count": 3,}
     ):
-        # Gather using the client (as an ordinary user would)
-        # Upon a missing key, the client will reschedule the computations
-        res = await c.gather(z)
+        with captured_logger(
+            logging.getLogger("distributed.scheduler")
+        ) as sched_logger, captured_logger(
+            logging.getLogger("distributed.client")
+        ) as client_logger, captured_logger(
+            logging.getLogger("distributed.utils_comm")
+        ) as utils_comm_logger:
+            # Gather using the client (as an ordinary user would)
+            # Upon a missing key, the client will reschedule the computations
+            res = await c.gather(z)
 
     assert res == 5
 
