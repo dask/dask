@@ -2360,18 +2360,22 @@ def test_filter_nonpartition_columns(
     assert df_read["time"].max() < 5
 
 
-@pytest.mark.parametrize("dtype", ["Int64", "str"])
-def test_pandas_metadata_nullable_pyarrow(tmpdir, dtype):
+def test_pandas_metadata_nullable_pyarrow(tmpdir):
 
     check_pyarrow()
-    if pa.__version__ < LooseVersion("0.16.0"):
-        pytest.skip("PyArrow 0.16 Required.")
-    if pd.__version__ < LooseVersion("1.0.0"):
-        pytest.skip("Pandas 1.0.0 Required.")
+    if pa.__version__ < LooseVersion("0.16.0") or pd.__version__ < LooseVersion(
+        "1.0.0"
+    ):
+        pytest.skip("PyArrow>=0.16 and Pandas>=1.0.0 Required.")
     tmpdir = str(tmpdir)
 
     ddf1 = dd.from_pandas(
-        pd.DataFrame({"A": ["dog" if dtype == "str" else 1, None]}, dtype=dtype),
+        pd.DataFrame(
+            {
+                "A": pd.array([1, None, 2], dtype="Int64"),
+                "B": pd.array(["dog", "cat", None], dtype="str"),
+            }
+        ),
         npartitions=1,
     )
     ddf1.to_parquet(tmpdir, engine="pyarrow")
