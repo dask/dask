@@ -11,7 +11,7 @@ from distributed.utils_test import gen_cluster
 from distributed.utils_test import client, cluster_fixture, loop  # noqa F401
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
+import pandas.testing as tm
 
 
 dfs = [
@@ -126,28 +126,37 @@ def test_dataframe_set_index_sync(wait, client):
     assert len(df2)
 
 
+def make_time_dataframe():
+    return pd.DataFrame(
+        np.random.randn(30, 4),
+        columns=list("ABCD"),
+        index=pd.date_range("2000", periods=30, freq="B"),
+    )
+
+
 def test_loc_sync(client):
-    df = pd.util.testing.makeTimeDataFrame()
+    df = make_time_dataframe()
     ddf = dd.from_pandas(df, npartitions=10)
     ddf.loc["2000-01-17":"2000-01-24"].compute()
 
 
 def test_rolling_sync(client):
-    df = pd.util.testing.makeTimeDataFrame()
+    df = make_time_dataframe()
     ddf = dd.from_pandas(df, npartitions=10)
     ddf.A.rolling(2).mean().compute()
 
 
 @gen_cluster(client=True)
 def test_loc(c, s, a, b):
-    df = pd.util.testing.makeTimeDataFrame()
+    df = make_time_dataframe()
     ddf = dd.from_pandas(df, npartitions=10)
     future = c.compute(ddf.loc["2000-01-17":"2000-01-24"])
     yield future
 
 
 def test_dataframe_groupby_tasks(client):
-    df = pd.util.testing.makeTimeDataFrame()
+    df = make_time_dataframe()
+
     df["A"] = df.A // 0.1
     df["B"] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
