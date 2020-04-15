@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 from distutils.version import LooseVersion
 
@@ -43,8 +44,12 @@ if pq and pa.__version__ < LooseVersion("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
-    SKIP_PYARROW = not pq
-    SKIP_PYARROW_REASON = "pyarrow not found"
+    if sys.platform == "win32" and pa.__version__ == LooseVersion("0.16.0"):
+        SKIP_PYARROW = True
+        SKIP_PYARROW_REASON = "https://github.com/dask/dask/issues/6093"
+    else:
+        SKIP_PYARROW = not pq
+        SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
 
@@ -661,6 +666,23 @@ def test_partition_on_cats(tmpdir, engine):
     d = dd.from_pandas(d, 2)
     d.to_parquet(tmp, partition_on=["b"], engine=engine)
     df = dd.read_parquet(tmp, engine=engine)
+    assert set(df.b.cat.categories) == {"x", "y", "z"}
+
+
+@pytest.mark.parametrize("meta", [False, True])
+@pytest.mark.parametrize("stats", [False, True])
+def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
+    tmp = str(tmpdir)
+    d = pd.DataFrame(
+        {
+            "a": np.random.rand(50),
+            "b": np.random.choice(["x", "y", "z"], size=50),
+            "c": np.random.choice(["x", "y", "z"], size=50),
+        }
+    )
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=["b"], engine="pyarrow", write_metadata_file=meta)
+    df = dd.read_parquet(tmp, engine="pyarrow", gather_statistics=stats)
     assert set(df.b.cat.categories) == {"x", "y", "z"}
 
 
@@ -1910,13 +1932,25 @@ def test_categories_large(tmpdir, engine):
 
 
 @write_read_engines()
-def test_read_glob_nostats(tmpdir, write_engine, read_engine):
+def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
 
     ddf2 = dd.read_parquet(
         os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
     )
+    assert_eq(ddf, ddf2, check_divisions=False)
+
+
+@write_read_engines()
+def test_read_glob_yes_stats(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    import glob
+
+    paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
+    paths.append(os.path.join(tmp_path, "_metadata"))
+    ddf2 = dd.read_parquet(paths, engine=read_engine, gather_statistics=False)
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
