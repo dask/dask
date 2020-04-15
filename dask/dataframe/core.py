@@ -5068,14 +5068,11 @@ def map_partitions(
             args2.append(arg)
 
     kwargs3 = {}
-    simple = True
     for k, v in kwargs.items():
         v = normalize_arg(v)
         v, collections = unpack_collections(v)
         dependencies.extend(collections)
         kwargs3[k] = v
-        if collections:
-            simple = False
 
     if enforce_metadata:
         dsk = partitionwise_graph(
@@ -5086,10 +5083,6 @@ def map_partitions(
             _func=func,
             _meta=meta,
             **kwargs3
-        )
-    elif not simple:
-        dsk = partitionwise_graph(
-            apply, name, func, *args2, **kwargs3, dependencies=dependencies
         )
     else:
         dsk = partitionwise_graph(

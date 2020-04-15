@@ -907,6 +907,14 @@ def test_map_partitions_keeps_kwargs_readable():
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
 
 
+def test_map_partitions_with_delayed_collection():
+    # https://github.com/dask/dask/issues/5854
+    df = pd.DataFrame(columns=list("abcdefghijk"))
+    ddf = dd.from_pandas(df, 2)
+    ddf.dropna(subset=list("abcdefghijk")).compute()
+    # no error!
+
+
 def test_metadata_inference_single_partition_aligned_args():
     # https://github.com/dask/dask/issues/3034
     # Previously broadcastable series functionality broke this
