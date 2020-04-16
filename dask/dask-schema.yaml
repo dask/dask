@@ -1,0 +1,38 @@
+
+properties:
+  temporary-directory:
+    type:
+      - string
+      - "null"
+    description: |
+      Temporary directory for local disk storage /tmp, /scratch,
+      or /local.  This directory is used during dask spill-to-disk operations.
+
+      When the value is "null" (default), dask will create a directory from
+      where dask was launched: `cwd/dask-worker-space`
+
+  dataframe:
+    type: object
+    properties:
+
+      shuffle-compression:
+        type:
+          - string
+          - "null"
+        description: |
+          Compression algorithm used for on disk-shuffling. Partd, the library used
+          for compression supports ZLib, BZ2, SNAPPY, and BLOSC
+
+    array:
+      type: object
+      properties:
+
+        svg:
+          type: object
+          properties:
+
+            size:
+              type: integer
+              description: |
+                The size of pixels used when displaying a dask array as an SVG image.
+                This is used, for example, for nice rendering in an ipython notebook

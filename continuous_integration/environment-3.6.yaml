@@ -12,6 +12,7 @@ dependencies:
   - moto
   - coverage
   - codecov
+  - jsonschema
   # Issue with conda package for NumPy 1.15?
   # See fastparquet-444
   # - fastparquet

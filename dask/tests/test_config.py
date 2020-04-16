@@ -418,3 +418,16 @@ def test_core_file():
     assert "temporary-directory" in dask.config.config
     assert "dataframe" in dask.config.config
     assert "shuffle-compression" in dask.config.get("dataframe")
+
+def test_schema():
+    jsonschema = pytest.importorskip("jsonschema")
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    jsonschema.validate(config, schema)
