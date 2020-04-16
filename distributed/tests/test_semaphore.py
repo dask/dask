@@ -1,17 +1,24 @@
 import pickle
-
 import dask
+import pytest
 from dask.distributed import Client
 
 from distributed import Semaphore
+from distributed.comm import Comm
+from distributed.core import ConnectionPool
 from distributed.metrics import time
-from distributed.utils_test import cluster, gen_cluster
-from distributed.utils_test import client, loop, cluster_fixture  # noqa: F401
-import pytest
+from distributed.utils_test import (  # noqa: F401
+    client,
+    cluster,
+    cluster_fixture,
+    gen_cluster,
+    slowidentity,
+    loop,
+)
 
 
 @gen_cluster(client=True)
-async def test_semaphore(c, s, a, b):
+async def test_semaphore_trivial(c, s, a, b):
     semaphore = await Semaphore(max_leases=2, name="resource_we_want_to_limit")
 
     result = await semaphore.acquire()  # allowed_leases: 2 - 1 -> 1
@@ -81,36 +88,37 @@ def test_timeout_sync(client):
         assert s.acquire(timeout=0.025) is False
 
 
-@pytest.mark.slow
-@gen_cluster(client=True, timeout=20)
+@gen_cluster(
+    client=True,
+    timeout=20,
+    config={
+        "distributed.scheduler.locks.lease-validation-interval": "500ms",
+        "distributed.scheduler.locks.lease-timeout": "500ms",
+    },
+)
 async def test_release_semaphore_after_timeout(c, s, a, b):
-    with dask.config.set(
-        {"distributed.scheduler.locks.lease-validation-interval": "50ms"}
-    ):
-        sem = await Semaphore(name="x", max_leases=2)
-        await sem.acquire()  # leases: 2 - 1 = 1
-        semY = await Semaphore(name="y")
+    sem = await Semaphore(name="x", max_leases=2)
+    await sem.acquire()  # leases: 2 - 1 = 1
+    semY = await Semaphore(name="y")
 
-        async with Client(s.address, asynchronous=True, name="ClientB") as clientB:
-            semB = await Semaphore(name="x", max_leases=2, client=clientB)
-            semYB = await Semaphore(name="y", client=clientB)
+    async with Client(s.address, asynchronous=True, name="ClientB") as clientB:
+        semB = await Semaphore(name="x", max_leases=2, client=clientB)
+        semYB = await Semaphore(name="y", client=clientB)
 
-            assert await semB.acquire()  # leases: 1 - 1 = 0
-            assert await semYB.acquire()
+        assert await semB.acquire()  # leases: 1 - 1 = 0
+        assert await semYB.acquire()
 
-            assert not (await sem.acquire(timeout=0.01))
-            assert not (await semB.acquire(timeout=0.01))
-            assert not (await semYB.acquire(timeout=0.01))
-
-        # `ClientB` goes out of scope, leases should be released
-        # At this point, we should be able to acquire x and y once
-        assert await sem.acquire()
-        assert await semY.acquire()
-
-        assert not (await semY.acquire(timeout=0.01))
         assert not (await sem.acquire(timeout=0.01))
+        assert not (await semB.acquire(timeout=0.01))
+        assert not (await semYB.acquire(timeout=0.01))
 
-        assert clientB.id not in s.extensions["semaphores"].leases_per_client
+    # `ClientB` goes out of scope, leases should be released
+    # At this point, we should be able to acquire x and y once
+    assert await sem.acquire()
+    assert await semY.acquire()
+
+    assert not (await semY.acquire(timeout=0.5))
+    assert not (await sem.acquire(timeout=0.5))
 
 
 @gen_cluster()
@@ -185,7 +193,8 @@ async def test_close_async(c, s, a, b):
 
     assert await sem.acquire()
     with pytest.warns(
-        RuntimeWarning, match="Closing semaphore .* but client .* still has a lease"
+        RuntimeWarning,
+        match="Closing semaphore .* but there remain unreleased leases .*",
     ):
         await sem.close()
 
@@ -198,7 +207,6 @@ async def test_close_async(c, s, a, b):
     assert not semaphore_object.max_leases
     assert not semaphore_object.leases
     assert not semaphore_object.events
-    assert not any(semaphore_object.leases_per_client.values())
 
 
 def test_close_sync(client):
@@ -215,9 +223,7 @@ async def test_release_once_too_many(c, s, a, b):
     assert await sem.acquire()
     await sem.release()
 
-    with pytest.raises(
-        ValueError, match="Tried to release semaphore but it was already released"
-    ):
+    with pytest.raises(RuntimeError, match="Released too often"):
         await sem.release()
 
     assert await sem.acquire()
@@ -229,9 +235,7 @@ async def test_release_once_too_many_resilience(c, s, a, b):
     def f(x, sem):
         sem.acquire()
         sem.release()
-        with pytest.raises(
-            ValueError, match="Tried to release semaphore but it was already released"
-        ):
+        with pytest.raises(RuntimeError, match="Released too often"):
             sem.release()
         return x
 
@@ -244,3 +248,160 @@ async def test_release_once_too_many_resilience(c, s, a, b):
     assert not s.extensions["semaphores"].leases["x"]
     await sem.acquire()
     assert len(s.extensions["semaphores"].leases["x"]) == 1
+
+
+class BrokenComm(Comm):
+    peer_address = None
+    local_address = None
+
+    def close(self):
+        pass
+
+    def closed(self):
+        return True
+
+    def abort(self):
+        pass
+
+    def read(self, deserializers=None):
+        raise EnvironmentError
+
+    def write(self, msg, serializers=None, on_error=None):
+        raise EnvironmentError
+
+
+class FlakyConnectionPool(ConnectionPool):
+    def __init__(self, *args, failing_connections=0, **kwargs):
+        self.cnn_count = 0
+        self.failing_connections = failing_connections
+        self._flaky_active = False
+        super().__init__(*args, **kwargs)
+
+    def activate(self):
+        self._flaky_active = True
+
+    async def connect(self, *args, **kwargs):
+        if self.cnn_count >= self.failing_connections or not self._flaky_active:
+            return await super().connect(*args, **kwargs)
+        else:
+            self.cnn_count += 1
+            return BrokenComm()
+
+
+@gen_cluster(client=True)
+async def test_retry_acquire(c, s, a, b):
+    with dask.config.set({"distributed.comm.retry.count": 1}):
+
+        pool = await FlakyConnectionPool(failing_connections=1)
+        rpc = pool(s.address)
+        c.scheduler = rpc
+        semaphore = await Semaphore(
+            max_leases=2, name="resource_we_want_to_limit", client=c
+        )
+        pool.activate()
+
+        result = await semaphore.acquire()
+        assert result is True
+
+        second = await semaphore.acquire()
+        assert second is True
+        start = time()
+        result = await semaphore.acquire(timeout=0.025)
+        stop = time()
+        assert stop - start < 0.2
+        assert result is False
+
+
+@gen_cluster(
+    client=True,
+    config={
+        "distributed.scheduler.locks.lease-timeout": "100ms",
+        "distributed.scheduler.locks.lease-validation-interval": "10ms",
+    },
+)
+async def test_oversubscribing_leases(c, s, a, b):
+    """
+    This test ensures that we detect oversubscription scenarios and will not
+    accept new leases as long as the semaphore is oversubscribed.
+
+    Oversubscription may occur if tasks hold the GIL for a longer time than the
+    lease-timeout is configured causing the lease refreshs to go stale and
+    timeout.
+
+    We cannot protect ourselves entirely from this but we can ensure that while
+    a task with a timed out lease is still running, we block further
+    acquisitions until we return to normal.
+
+    An example would be a task which continuously locks the GIL for a longer
+    time than the lease timeout but this continous lock only makes up a
+    fraction of the tasks runtime.
+
+    """
+    # GH3705
+
+    from distributed.worker import Worker, get_client
+
+    # Using the metadata as a crude "asyncio.Event" since the proper event
+    # implementation cannot be serialized. For the purpose of this test a
+    # metadata check with a sleep loop is not elegant but practical.
+    await c.set_metadata("release", False)
+    sem = await Semaphore()
+
+    def guaranteed_lease_timeout(x, sem):
+        """
+        This function simulates a payload computation with some GIL
+        locking in the beginning.
+
+        To simulate this we will manually disable the refresh callback, i.e.
+        all leases will eventually timeout. The function will only
+        release/return once the "Event" is set, i.e. our observer is done.
+        """
+        sem.refresh_callback.stop()
+        client = get_client()
+
+        with sem:
+            # This simulates a task which holds the GIL for longer than the
+            # lease-timeout.
+            slowidentity(delay=0.2)
+            old_value = client.set_metadata(x, "locked")
+
+            # Now the GIL is free again, i.e. we enable the callback again
+            sem.refresh_callback.start()
+
+            # This is the poormans Event.wait()
+            while not client.get_metadata("release"):
+                slowidentity(delay=0.02)
+            return x
+
+    def observe_state(sem):
+        """
+        This function is 100% artificial and acts as an observer to verify
+        our assumptions. The function will wait until both payload tasks are
+        executing, i.e. we're in an oversubscription scenario. It will then
+        try to acquire and hopefully fail showing that the semaphore is
+        protected if the oversubscription is recognized.
+        """
+        client = get_client()
+        x_locked = False
+        y_locked = False
+        # We wait until we're in an oversubscribed state, i.e. both tasks
+        # are executed although there should only be one allowed
+        while not x_locked and y_locked:
+            slowidentity(delay=0.005)
+            x_locked = client.get_metadata(0) == "locked"
+            y_locked = client.get_metadata(1) == "locked"
+
+        # Once we're in an oversubscribed state, we must not be able to
+        # acquire a lease.
+        assert not sem.acquire(timeout=0.05)
+        client.set_metadata("release", True)
+
+    observer = await Worker(s.address)
+
+    futures = c.map(
+        guaranteed_lease_timeout, range(2), sem=sem, workers=[a.address, b.address]
+    )
+    fut_observe = c.submit(observe_state, sem=sem, workers=[observer.address])
+
+    payload, observer = await c.gather([futures, fut_observe])
+    assert sorted(payload) == [0, 1]
