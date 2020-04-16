@@ -1,3 +1,4 @@
+import gc
 import math
 from time import sleep
 
@@ -151,6 +152,7 @@ def test_min_max():
         processes=False,
         dashboard_address=None,
         asynchronous=True,
+        threads_per_worker=1,
     )
     try:
         adapt = cluster.adapt(minimum=1, maximum=2, interval="20 ms", wait_count=10)
@@ -179,6 +181,7 @@ def test_min_max():
         assert len(adapt.log) == 2 and all(d["status"] == "up" for _, d in adapt.log)
 
         del futures
+        gc.collect()
 
         start = time()
         while len(cluster.scheduler.workers) != 1:
