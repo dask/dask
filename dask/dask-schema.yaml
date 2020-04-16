@@ -23,16 +23,16 @@ properties:
           Compression algorithm used for on disk-shuffling. Partd, the library used
           for compression supports ZLib, BZ2, SNAPPY, and BLOSC
 
-    array:
-      type: object
-      properties:
+  array:
+    type: object
+    properties:
 
-        svg:
-          type: object
-          properties:
+      svg:
+        type: object
+        properties:
 
-            size:
-              type: integer
-              description: |
-                The size of pixels used when displaying a dask array as an SVG image.
-                This is used, for example, for nice rendering in an ipython notebook
+          size:
+            type: integer
+            description: |
+              The size of pixels used when displaying a dask array as an SVG image.
+              This is used, for example, for nice rendering in an ipython notebook
