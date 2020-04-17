@@ -2,6 +2,7 @@ from collections import defaultdict
 import pandas as pd
 from tlz import partition_all
 from numbers import Integral
+import sys
 
 from ..base import tokenize, compute_as_if_collection
 from .accessor import Accessor
@@ -11,7 +12,7 @@ from .utils import (
     is_scalar,
     is_categorical_dtype,
 )
-
+from . import methods
 
 def _categorize_block(df, categories, index):
     """ Categorize a dataframe with given categories
@@ -20,16 +21,19 @@ def _categorize_block(df, categories, index):
     categories: dict mapping column name to iterable of categories
     """
     df = df.copy()
+    package_name = df.__class__.__module__.split(".")[0]
     for col, vals in categories.items():
         if is_categorical_dtype(df[col]):
             df[col] = df[col].cat.set_categories(vals)
         else:
-            df[col] = pd.Categorical(df[col], categories=vals, ordered=False)
+            cat_dtype = sys.modules[package_name].CategoricalDtype(categories=vals, ordered=False)
+            df[col] = sys.modules[package_name].Series(df[col], dtype=cat_dtype)
     if index is not None:
         if is_categorical_dtype(df.index):
             ind = df.index.set_categories(index)
         else:
-            ind = pd.Categorical(df.index, categories=index, ordered=False)
+            cat_dtype = sys.modules[package_name].CategoricalDtype(categories=index, ordered=False)
+            ind = sys.modules[package_name].Series(df.index,dtype=cat_dtype)
         ind.name = df.index.name
         df.index = ind
     return df
@@ -57,7 +61,7 @@ def _get_categories_agg(parts):
         for k, v in p[0].items():
             res[k].append(v)
         res_ind.append(p[1])
-    res = {k: pd.concat(v, ignore_index=True).drop_duplicates() for k, v in res.items()}
+    res = {k: methods.concat(v, ignore_index=True).drop_duplicates() for k, v in res.items()}
     if res_ind[0] is None:
         return res, None
     return res, res_ind[0].append(res_ind[1:]).drop_duplicates()
