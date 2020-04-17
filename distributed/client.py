@@ -30,7 +30,7 @@ from dask.optimization import SubgraphCallable
 from dask.compatibility import apply
 from dask.utils import ensure_dict, format_bytes, funcname
 
-from tlz import first, groupby, merge, valmap, keymap
+from tlz import first, groupby, merge, valmap, keymap, partition_all
 
 try:
     from dask.delayed import single_key
@@ -1044,7 +1044,7 @@ class Client(Node):
 
         try:
             comm = await connect(
-                self.scheduler.address, timeout=timeout, **self.connection_args,
+                self.scheduler.address, timeout=timeout, **self.connection_args
             )
             comm.name = "Client->Scheduler"
             if timeout is not None:
@@ -1540,6 +1540,7 @@ class Client(Node):
         actor=False,
         actors=False,
         pure=None,
+        batch_size=None,
         **kwargs,
     ):
         """ Map a function on a sequence of arguments
@@ -1579,6 +1580,11 @@ class Client(Node):
             See :doc:`actors` for additional details.
         actors: bool (default False)
             Alias for `actor`
+        batch_size : int, optional
+            Submit tasks to the scheduler in batches of (at most) ``batch_size``.
+            Larger batch sizes can be useful for very large ``iterables``,
+            as the cluster can start processing tasks while later ones are
+            submitted asynchronously.
         **kwargs: dict
             Extra keywords to send to the function.
             Large values will be included explicitly in the task graph.
@@ -1596,11 +1602,6 @@ class Client(Node):
         --------
         Client.submit: Submit a single function
         """
-        key = key or funcname(func)
-        actor = actor or actors
-        if pure is None:
-            pure = not actor
-
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
 
@@ -1611,6 +1612,38 @@ class Client(Node):
                 "Dask no longer supports mapping over Iterators or Queues."
                 "Consider using a normal for loop and Client.submit"
             )
+        total_length = sum(len(x) for x in iterables)
+
+        if batch_size and batch_size > 1 and total_length > batch_size:
+            batches = list(
+                zip(*[partition_all(batch_size, iterable) for iterable in iterables])
+            )
+            return sum(
+                [
+                    self.map(
+                        func,
+                        *batch,
+                        key=key,
+                        workers=workers,
+                        retries=retries,
+                        priority=priority,
+                        allow_other_workers=allow_other_workers,
+                        fifo_timeout=fifo_timeout,
+                        resources=resources,
+                        actor=actor,
+                        actors=actors,
+                        pure=pure,
+                        **kwargs,
+                    )
+                    for batch in batches
+                ],
+                [],
+            )
+
+        key = key or funcname(func)
+        actor = actor or actors
+        if pure is None:
+            pure = not actor
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
