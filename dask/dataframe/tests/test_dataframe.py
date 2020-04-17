@@ -1062,6 +1062,8 @@ def test_len():
     assert len(d.a) == len(full.a)
     assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
     assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
+    # Regression test for https://github.com/dask/dask/issues/6110
+    assert len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1)) == 0
 
 
 def test_size():
