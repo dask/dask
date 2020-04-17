@@ -361,7 +361,8 @@ async def test_oversubscribing_leases(c, s, a, b):
 
         with sem:
             # This simulates a task which holds the GIL for longer than the
-            # lease-timeout.
+            # lease-timeout. This is twice the lease timeout to ensurre that the
+            # leases are actually timed out
             slowidentity(delay=0.2)
             old_value = client.set_metadata(x, "locked")
 
@@ -391,9 +392,12 @@ async def test_oversubscribing_leases(c, s, a, b):
             x_locked = client.get_metadata(0) == "locked"
             y_locked = client.get_metadata(1) == "locked"
 
+        # Once both are locked we should give the refresh time to notify the scheduler
+        # This parameter should be larger than ``lease-validation-interval``
+        slowidentity(delay=0.15)
         # Once we're in an oversubscribed state, we must not be able to
         # acquire a lease.
-        assert not sem.acquire(timeout=0.05)
+        assert not sem.acquire(timeout=0)
         client.set_metadata("release", True)
 
     observer = await Worker(s.address)
@@ -405,3 +409,16 @@ async def test_oversubscribing_leases(c, s, a, b):
 
     payload, observer = await c.gather([futures, fut_observe])
     assert sorted(payload) == [0, 1]
+
+
+@gen_cluster(client=True,)
+async def test_timeout_zero(c, s, a, b):
+    # Depending on the internals a timeout zero cannot work, e.g. when the
+    # initial try already includes a wait. Since some test cases use this, it is
+    # worth testing against.
+
+    sem = await Semaphore()
+
+    assert await sem.acquire(timeout=0)
+    assert not await sem.acquire(timeout=0)
+    await sem.release()
