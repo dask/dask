@@ -837,7 +837,7 @@ def expand_pad_value(array, pad_value):
         and len(pad_value) == 2
         and all(isinstance(pw, Number) for pw in pad_value)
     ):
-        pad_value = tuple((pad_value[0], pad_value[1]) for _ in range(array.ndim))
+        pad_value = array.ndim * (tuple(pad_value),)
     elif (
         isinstance(pad_value, Sequence)
         and len(pad_value) == array.ndim
@@ -845,7 +845,15 @@ def expand_pad_value(array, pad_value):
         and all((len(pw) == 2) for pw in pad_value)
         and all(all(isinstance(w, Number) for w in pw) for pw in pad_value)
     ):
-        pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
+        pad_value = tuple(tuple(pw) for pw in pad_value)
+    elif (
+        isinstance(pad_value, Sequence)
+        and len(pad_value) == 1
+        and isinstance(pad_value[0], Sequence)
+        and len(pad_value[0]) == 2
+        and all(isinstance(pw, Number) for pw in pad_value[0])
+    ):
+        pad_value = array.ndim * (tuple(pad_value[0]),)
     else:
         raise TypeError("`pad_value` must be composed of integral typed values.")
 
@@ -1119,7 +1127,7 @@ def pad(array, pad_width, mode, **kwargs):
     pad_width = expand_pad_value(array, pad_width)
 
     if mode in ["maximum", "mean", "median", "minimum"]:
-        kwargs.setdefault("stat_length", array.shape)
+        kwargs.setdefault("stat_length", tuple((n, n) for n in array.shape))
     elif mode == "constant":
         kwargs.setdefault("constant_values", 0)
     elif mode == "linear_ramp":
