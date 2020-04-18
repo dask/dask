@@ -210,7 +210,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple(
-            [sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks]
+            sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks
         )
         graph = HighLevelGraph(layers, dependencies)
         # dsk.dependencies[name_r_stacked] = {data.name}

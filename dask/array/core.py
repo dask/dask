@@ -249,7 +249,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
-def _concatenate2(arrays, axes=[]):
+def _concatenate2(arrays, axes=None):
     """ Recursively Concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
@@ -284,6 +284,8 @@ def _concatenate2(arrays, axes=[]):
     array([[1, 2],
            [3, 4]])
     """
+    if axes is None:
+        axes = []
     if axes == ():
         if isinstance(arrays, list):
             return arrays[0]
@@ -3034,7 +3036,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
-def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
+def from_func(func, shape, dtype=None, name=None, args=(), kwargs=None):
     """ Create dask array in a single block by calling a function
 
     Calling the provided function with func(*args, **kwargs) should return a
@@ -3054,6 +3056,8 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> stack(arrays).compute()
     array([0, 1, 2, 3, 4])
     """
+    if kwargs is None:
+        kwargs = {}
     name = name or "from_func-" + tokenize(func, shape, dtype, args, kwargs)
     if args or kwargs:
         func = partial(func, *args, **kwargs)
@@ -4139,7 +4143,7 @@ def chunks_from_arrays(arrays):
             return (1,)
 
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple([shape(deepfirst(a))[dim] for a in arrays]))
+        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
         arrays = arrays[0]
         dim += 1
     return tuple(result)
@@ -4430,7 +4434,7 @@ def to_hdf5(filename, *args, **kwargs):
                 dp,
                 shape=x.shape,
                 dtype=x.dtype,
-                chunks=tuple([c[0] for c in x.chunks]) if chunks is True else chunks,
+                chunks=tuple(c[0] for c in x.chunks) if chunks is True else chunks,
                 **kwargs,
             )
             for dp, x in data.items()

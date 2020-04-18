@@ -10,3 +10,4 @@ include dask/dask.yaml
 
 include versioneer.py
 include dask/_version.py
+include *.toml

@@ -296,7 +296,7 @@ def nested_get(ind, coll):
     (('b', 'a'), ('a', 'b'))
     """
     if isinstance(ind, list):
-        return tuple([nested_get(i, coll) for i in ind])
+        return tuple(nested_get(i, coll) for i in ind)
     else:
         return coll[ind]
 
@@ -409,7 +409,7 @@ def get_async(
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
-        result_flat = set([result])
+        result_flat = {result}
     results = set(result_flat)
 
     dsk = dict(dsk)
@@ -511,8 +511,10 @@ GIL
 """
 
 
-def apply_sync(func, args=(), kwds={}, callback=None):
+def apply_sync(func, args=(), kwds=None, callback=None):
     """ A naive synchronous version of apply_async """
+    if kwds is None:
+        kwds = {}
     res = func(*args, **kwds)
     if callback is not None:
         callback(res)

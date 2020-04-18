@@ -198,11 +198,13 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
+    graph_attr=None,
     node_attr=None,
     edge_attr=None,
     **kwargs
 ):
+    if graph_attr is None:
+        graph_attr = {}
     from .dot import graphviz, name, label
 
     if data_attributes is None:

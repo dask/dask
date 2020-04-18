@@ -168,7 +168,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     Strips out Nones then hands off to slice_wrap_lists
     """
     # Strip Nones from index
-    index2 = tuple([ind for ind in index if ind is not None])
+    index2 = tuple(ind for ind in index if ind is not None)
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):

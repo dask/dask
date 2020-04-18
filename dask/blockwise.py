@@ -34,7 +34,7 @@ def index_subs(ind, substitution):
     if ind is None:
         return ind
     else:
-        return tuple([substitution.get(c, c) for c in ind])
+        return tuple(substitution.get(c, c) for c in ind)
 
 
 def blockwise_token(i, prefix="_"):
@@ -81,8 +81,8 @@ def blockwise(
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     # separate argpairs into two separate tuples
-    inputs = tuple([name for name, _ in argpairs])
-    inputs_indices = tuple([index for _, index in argpairs])
+    inputs = tuple(name for name, _ in argpairs)
+    inputs_indices = tuple(index for _, index in argpairs)
 
     # Unpack delayed objects in kwargs
     new_keys = {n for c in dependencies for n in c.__dask_layers__()}

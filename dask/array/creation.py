@@ -589,7 +589,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             chunk_offsets[-1].append(k)
 
     dsk = {}
-    idx_set = set(range(a.ndim)) - set([axis1, axis2])
+    idx_set = set(range(a.ndim)) - {axis1, axis2}
     n1 = len(a.chunks[axis1])
     n2 = len(a.chunks[axis2])
     for idx in product(*(range(len(a.chunks[i])) for i in idx_set)):
