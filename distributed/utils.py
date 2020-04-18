@@ -202,6 +202,7 @@ def ignoring(*exceptions):
         pass
 
 
+# FIXME: this breaks if changed to async def...
 @gen.coroutine
 def ignore_exceptions(coroutines, *exceptions):
     """ Process list of coroutines, ignoring certain exceptions

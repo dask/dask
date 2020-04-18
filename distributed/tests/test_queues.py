@@ -1,8 +1,7 @@
-from time import sleep
 import asyncio
+from time import sleep
 
 import pytest
-from tornado import gen
 
 from distributed import Client, Queue, Nanny, worker_client, wait, TimeoutError
 from distributed.metrics import time
@@ -11,47 +10,47 @@ from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 
 
 @gen_cluster(client=True)
-def test_queue(c, s, a, b):
-    x = yield Queue("x")
-    y = yield Queue("y")
-    xx = yield Queue("x")
+async def test_queue(c, s, a, b):
+    x = await Queue("x")
+    y = await Queue("y")
+    xx = await Queue("x")
     assert x.client is c
 
     future = c.submit(inc, 1)
 
-    yield x.put(future)
-    yield y.put(future)
-    future2 = yield xx.get()
+    await x.put(future)
+    await y.put(future)
+    future2 = await xx.get()
     assert future.key == future2.key
 
     with pytest.raises(TimeoutError):
-        yield x.get(timeout=0.1)
+        await x.get(timeout=0.1)
 
     del future, future2
 
-    yield gen.sleep(0.1)
+    await asyncio.sleep(0.1)
     assert s.tasks  # future still present in y's queue
-    yield y.get()  # burn future
+    await y.get()  # burn future
 
     start = time()
     while s.tasks:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 5
 
 
 @gen_cluster(client=True)
-def test_queue_with_data(c, s, a, b):
-    x = yield Queue("x")
-    xx = yield Queue("x")
+async def test_queue_with_data(c, s, a, b):
+    x = await Queue("x")
+    xx = await Queue("x")
     assert x.client is c
 
-    yield x.put((1, "hello"))
-    data = yield xx.get()
+    await x.put((1, "hello"))
+    data = await xx.get()
 
     assert data == (1, "hello")
 
     with pytest.raises(TimeoutError):
-        yield x.get(timeout=0.1)
+        await x.get(timeout=0.1)
 
 
 def test_sync(client):
@@ -67,35 +66,35 @@ def test_sync(client):
 
 
 @gen_cluster()
-def test_hold_futures(s, a, b):
-    c1 = yield Client(s.address, asynchronous=True)
+async def test_hold_futures(s, a, b):
+    c1 = await Client(s.address, asynchronous=True)
     future = c1.submit(lambda x: x + 1, 10)
-    q1 = yield Queue("q")
-    yield q1.put(future)
+    q1 = await Queue("q")
+    await q1.put(future)
     del q1
-    yield c1.close()
+    await c1.close()
 
-    yield gen.sleep(0.1)
+    await asyncio.sleep(0.1)
 
-    c2 = yield Client(s.address, asynchronous=True)
-    q2 = yield Queue("q")
-    future2 = yield q2.get()
-    result = yield future2
+    c2 = await Client(s.address, asynchronous=True)
+    q2 = await Queue("q")
+    future2 = await q2.get()
+    result = await future2
 
     assert result == 11
-    yield c2.close()
+    await c2.close()
 
 
 @pytest.mark.skip(reason="getting same client from main thread")
 @gen_cluster(client=True)
-def test_picklability(c, s, a, b):
+async def test_picklability(c, s, a, b):
     q = Queue()
 
     def f(x):
         q.put(x + 1)
 
-    yield c.submit(f, 10)
-    result = yield q.get()
+    await c.submit(f, 10)
+    result = await q.get()
     assert result == 11
 
 
@@ -112,7 +111,7 @@ def test_picklability_sync(client):
 
 @pytest.mark.slow
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
-def test_race(c, s, *workers):
+async def test_race(c, s, *workers):
     def f(i):
         with worker_client() as c:
             q = Queue("x", client=c)
@@ -126,144 +125,144 @@ def test_race(c, s, *workers):
             return result
 
     q = Queue("x", client=c)
-    L = yield c.scatter(range(5))
+    L = await c.scatter(range(5))
     for future in L:
-        yield q.put(future)
+        await q.put(future)
 
     futures = c.map(f, range(5))
-    results = yield c.gather(futures)
+    results = await c.gather(futures)
     assert all(r > 50 for r in results)
     assert sum(results) == 510
-    qsize = yield q.qsize()
+    qsize = await q.qsize()
     assert not qsize
 
 
 @gen_cluster(client=True)
-def test_same_futures(c, s, a, b):
+async def test_same_futures(c, s, a, b):
     q = Queue("x")
-    future = yield c.scatter(123)
+    future = await c.scatter(123)
 
     for i in range(5):
-        yield q.put(future)
+        await q.put(future)
 
     assert s.wants_what["queue-x"] == {future.key}
 
     for i in range(4):
-        future2 = yield q.get()
+        future2 = await q.get()
         assert s.wants_what["queue-x"] == {future.key}
-        yield gen.sleep(0.05)
+        await asyncio.sleep(0.05)
         assert s.wants_what["queue-x"] == {future.key}
 
-    yield q.get()
+    await q.get()
 
     start = time()
     while s.wants_what["queue-x"]:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() - start < 2
 
 
 @gen_cluster(client=True)
-def test_get_many(c, s, a, b):
-    x = yield Queue("x")
-    xx = yield Queue("x")
+async def test_get_many(c, s, a, b):
+    x = await Queue("x")
+    xx = await Queue("x")
 
-    yield x.put(1)
-    yield x.put(2)
-    yield x.put(3)
+    await x.put(1)
+    await x.put(2)
+    await x.put(3)
 
-    data = yield xx.get(batch=True)
+    data = await xx.get(batch=True)
     assert data == [1, 2, 3]
 
-    yield x.put(1)
-    yield x.put(2)
-    yield x.put(3)
+    await x.put(1)
+    await x.put(2)
+    await x.put(3)
 
-    data = yield xx.get(batch=2)
+    data = await xx.get(batch=2)
     assert data == [1, 2]
 
     with pytest.raises(TimeoutError):
-        data = yield asyncio.wait_for(xx.get(batch=2), 0.1)
+        await asyncio.wait_for(xx.get(batch=2), 0.1)
 
 
 @gen_cluster(client=True)
-def test_Future_knows_status_immediately(c, s, a, b):
-    x = yield c.scatter(123)
-    q = yield Queue("q")
-    yield q.put(x)
+async def test_Future_knows_status_immediately(c, s, a, b):
+    x = await c.scatter(123)
+    q = await Queue("q")
+    await q.put(x)
 
-    c2 = yield Client(s.address, asynchronous=True)
-    q2 = yield Queue("q", client=c2)
-    future = yield q2.get()
+    c2 = await Client(s.address, asynchronous=True)
+    q2 = await Queue("q", client=c2)
+    future = await q2.get()
     assert future.status == "finished"
 
     x = c.submit(div, 1, 0)
-    yield wait(x)
-    yield q.put(x)
+    await wait(x)
+    await q.put(x)
 
-    future2 = yield q2.get()
+    future2 = await q2.get()
     assert future2.status == "error"
     with pytest.raises(Exception):
-        yield future2
+        await future2
 
     start = time()
     while True:  # we learn about the true error eventually
         try:
-            yield future2
+            await future2
         except ZeroDivisionError:
             break
         except Exception:
             assert time() < start + 5
-            yield gen.sleep(0.05)
+            await asyncio.sleep(0.05)
 
-    yield c2.close()
+    await c2.close()
 
 
 @gen_cluster(client=True)
-def test_erred_future(c, s, a, b):
+async def test_erred_future(c, s, a, b):
     future = c.submit(div, 1, 0)
-    q = yield Queue()
-    yield q.put(future)
-    yield gen.sleep(0.1)
-    future2 = yield q.get()
+    q = await Queue()
+    await q.put(future)
+    await asyncio.sleep(0.1)
+    future2 = await q.get()
     with pytest.raises(ZeroDivisionError):
-        yield future2.result()
+        await future2.result()
 
-    exc = yield future2.exception()
+    exc = await future2.exception()
     assert isinstance(exc, ZeroDivisionError)
 
 
 @gen_cluster(client=True)
-def test_close(c, s, a, b):
-    q = yield Queue()
+async def test_close(c, s, a, b):
+    q = await Queue()
 
     q.close()
     q.close()
 
     while q.name in s.extensions["queues"].queues:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
 
 
 @gen_cluster(client=True)
-def test_timeout(c, s, a, b):
-    q = yield Queue("v", maxsize=1)
+async def test_timeout(c, s, a, b):
+    q = await Queue("v", maxsize=1)
 
     start = time()
     with pytest.raises(TimeoutError):
-        yield q.get(timeout=0.3)
+        await q.get(timeout=0.3)
     stop = time()
     assert 0.2 < stop - start < 2.0
 
-    yield q.put(1)
+    await q.put(1)
 
     start = time()
     with pytest.raises(TimeoutError):
-        yield q.put(2, timeout=0.3)
+        await q.put(2, timeout=0.3)
     stop = time()
     assert 0.1 < stop - start < 2.0
 
 
 @gen_cluster(client=True)
-def test_2220(c, s, a, b):
+async def test_2220(c, s, a, b):
     q = Queue()
 
     def put():
@@ -275,4 +274,4 @@ def test_2220(c, s, a, b):
     fut = c.submit(put)
     res = c.submit(get)
 
-    yield [res, fut]
+    await c.gather([res, fut])

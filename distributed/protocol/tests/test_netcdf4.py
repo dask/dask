@@ -82,12 +82,12 @@ import dask.array as da
 
 
 @gen_cluster(client=True)
-def test_netcdf4_serialize(c, s, a, b):
+async def test_netcdf4_serialize(c, s, a, b):
     with tmpfile() as fn:
         create_test_dataset(fn)
         with netCDF4.Dataset(fn, mode="r") as f:
             dset = f.variables["x"]
             x = da.from_array(dset, chunks=2)
             y = c.compute(x)
-            y = yield y
+            y = await y
             assert (y[:] == dset[:]).all()

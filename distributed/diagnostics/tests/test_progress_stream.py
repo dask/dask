@@ -56,7 +56,7 @@ def test_progress_quads_too_many():
 
 
 @gen_cluster(client=True)
-def test_progress_stream(c, s, a, b):
+async def test_progress_stream(c, s, a, b):
     futures = c.map(div, [1] * 10, range(10))
 
     x = 1
@@ -64,10 +64,10 @@ def test_progress_stream(c, s, a, b):
         x = delayed(inc)(x)
     future = c.compute(x)
 
-    yield wait(futures + [future])
+    await wait(futures + [future])
 
-    comm = yield progress_stream(s.address, interval=0.010)
-    msg = yield comm.read()
+    comm = await progress_stream(s.address, interval=0.010)
+    msg = await comm.read()
     nbytes = msg.pop("nbytes")
     assert msg == {
         "all": {"div": 10, "inc": 5},
@@ -81,7 +81,7 @@ def test_progress_stream(c, s, a, b):
 
     assert progress_quads(msg)
 
-    yield comm.close()
+    await comm.close()
 
 
 def test_progress_quads_many_functions():

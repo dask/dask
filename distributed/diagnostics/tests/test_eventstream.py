@@ -1,7 +1,7 @@
+import asyncio
 import collections
 
 import pytest
-from tornado import gen
 
 from distributed.client import wait
 from distributed.diagnostics.eventstream import EventStream, eventstream
@@ -10,7 +10,7 @@ from distributed.utils_test import div, gen_cluster
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
-def test_eventstream(c, s, *workers):
+async def test_eventstream(c, s, *workers):
     pytest.importorskip("bokeh")
 
     es = EventStream()
@@ -19,8 +19,8 @@ def test_eventstream(c, s, *workers):
 
     futures = c.map(div, [1] * 10, range(10))
     total = c.submit(sum, futures[1:])
-    yield wait(total)
-    yield wait(futures)
+    await wait(total)
+    await wait(futures)
 
     assert len(es.buffer) == 11
 
@@ -43,13 +43,13 @@ def test_eventstream(c, s, *workers):
 
 
 @gen_cluster(client=True)
-def test_eventstream_remote(c, s, a, b):
+async def test_eventstream_remote(c, s, a, b):
     base_plugins = len(s.plugins)
-    comm = yield eventstream(s.address, interval=0.010)
+    comm = await eventstream(s.address, interval=0.010)
 
     start = time()
     while len(s.plugins) == base_plugins:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 5
 
     futures = c.map(div, [1] * 10, range(10))
@@ -57,13 +57,13 @@ def test_eventstream_remote(c, s, a, b):
     start = time()
     total = []
     while len(total) < 10:
-        msgs = yield comm.read()
+        msgs = await comm.read()
         assert isinstance(msgs, tuple)
         total.extend(msgs)
         assert time() < start + 5
 
-    yield comm.close()
+    await comm.close()
     start = time()
     while len(s.plugins) > base_plugins:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 5

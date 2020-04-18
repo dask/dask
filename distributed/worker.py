@@ -2310,6 +2310,7 @@ class Worker(ServerNode):
     # Execute Task #
     ################
 
+    # FIXME: this breaks if changed to async def...
     @gen.coroutine
     def executor_submit(self, key, function, args=(), kwargs=None, executor=None):
         """ Safely run function in thread pool executor

@@ -10,7 +10,6 @@ import sys
 import tempfile
 from time import sleep
 
-from tornado import gen
 from click.testing import CliRunner
 
 import distributed
@@ -29,12 +28,9 @@ import distributed.cli.dask_scheduler
 def test_defaults(loop):
     with popen(["dask-scheduler", "--no-dashboard"]) as proc:
 
-        @gen.coroutine
-        def f():
+        async def f():
             # Default behaviour is to listen on all addresses
-            yield [
-                assert_can_connect_from_everywhere_4_6(8786, timeout=5.0)
-            ]  # main port
+            await assert_can_connect_from_everywhere_4_6(8786, timeout=5.0)
 
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
             c.sync(f)
@@ -49,12 +45,9 @@ def test_defaults(loop):
 def test_hostport(loop):
     with popen(["dask-scheduler", "--no-dashboard", "--host", "127.0.0.1:8978"]):
 
-        @gen.coroutine
-        def f():
-            yield [
-                # The scheduler's main port can't be contacted from the outside
-                assert_can_connect_locally_4(8978, timeout=5.0)
-            ]
+        async def f():
+            # The scheduler's main port can't be contacted from the outside
+            await assert_can_connect_locally_4(8978, timeout=5.0)
 
         with Client("127.0.0.1:8978", loop=loop) as c:
             assert len(c.nthreads()) == 0

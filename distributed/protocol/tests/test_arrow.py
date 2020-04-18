@@ -28,10 +28,10 @@ def echo(arg):
 @pytest.mark.parametrize("obj", [batch, tbl], ids=["RecordBatch", "Table"])
 def test_scatter(obj):
     @gen_cluster(client=True)
-    def run_test(client, scheduler, worker1, worker2):
-        obj_fut = yield client.scatter(obj)
+    async def run_test(client, scheduler, worker1, worker2):
+        obj_fut = await client.scatter(obj)
         fut = client.submit(echo, obj_fut)
-        result = yield fut
+        result = await fut
         assert obj.equals(result)
 
     run_test()

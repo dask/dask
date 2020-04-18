@@ -732,7 +732,7 @@ def test_rpc_serialization(loop):
 
 
 @gen_cluster()
-def test_thread_id(s, a, b):
+async def test_thread_id(s, a, b):
     assert s.thread_id == a.thread_id == b.thread_id == threading.get_ident()
 
 

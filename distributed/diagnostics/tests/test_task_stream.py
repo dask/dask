@@ -13,13 +13,13 @@ from distributed.metrics import time
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 3)
-def test_TaskStreamPlugin(c, s, *workers):
+async def test_TaskStreamPlugin(c, s, *workers):
     es = TaskStreamPlugin(s)
     assert not es.buffer
 
     futures = c.map(div, [1] * 10, range(10))
     total = c.submit(sum, futures[1:])
-    yield wait(total)
+    await wait(total)
 
     assert len(es.buffer) == 11
 
@@ -45,19 +45,19 @@ def test_TaskStreamPlugin(c, s, *workers):
 
 
 @gen_cluster(client=True)
-def test_maxlen(c, s, a, b):
+async def test_maxlen(c, s, a, b):
     tasks = TaskStreamPlugin(s, maxlen=5)
     futures = c.map(inc, range(10))
-    yield wait(futures)
+    await wait(futures)
     assert len(tasks.buffer) == 5
 
 
 @gen_cluster(client=True)
-def test_collect(c, s, a, b):
+async def test_collect(c, s, a, b):
     tasks = TaskStreamPlugin(s)
     start = time()
     futures = c.map(slowinc, range(10), delay=0.1)
-    yield wait(futures)
+    await wait(futures)
 
     L = tasks.collect()
     assert len(L) == len(futures)
@@ -82,15 +82,15 @@ def test_collect(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_client(c, s, a, b):
-    L = yield c.get_task_stream()
+async def test_client(c, s, a, b):
+    L = await c.get_task_stream()
     assert L == ()
 
     futures = c.map(slowinc, range(10), delay=0.1)
-    yield wait(futures)
+    await wait(futures)
 
     tasks = [p for p in s.plugins if isinstance(p, TaskStreamPlugin)][0]
-    L = yield c.get_task_stream()
+    L = await c.get_task_stream()
     assert L == tuple(tasks.buffer)
 
 
@@ -105,14 +105,14 @@ def test_client_sync(client):
 
 
 @gen_cluster(client=True)
-def test_get_task_stream_plot(c, s, a, b):
+async def test_get_task_stream_plot(c, s, a, b):
     bokeh = pytest.importorskip("bokeh")
-    yield c.get_task_stream()
+    await c.get_task_stream()
 
     futures = c.map(slowinc, range(10), delay=0.1)
-    yield wait(futures)
+    await wait(futures)
 
-    data, figure = yield c.get_task_stream(plot=True)
+    data, figure = await c.get_task_stream(plot=True)
     assert isinstance(figure, bokeh.plotting.Figure)
 
 

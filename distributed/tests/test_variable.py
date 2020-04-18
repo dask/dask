@@ -1,11 +1,9 @@
 import asyncio
 import random
 from time import sleep
-import sys
 import logging
 
 import pytest
-from tornado import gen
 from tornado.ioloop import IOLoop
 
 from distributed import Client, Variable, worker_client, Nanny, wait, TimeoutError
@@ -17,27 +15,27 @@ from distributed.utils_test import captured_logger
 
 
 @gen_cluster(client=True)
-def test_variable(c, s, a, b):
+async def test_variable(c, s, a, b):
     x = Variable("x")
     xx = Variable("x")
     assert x.client is c
 
     future = c.submit(inc, 1)
 
-    yield x.set(future)
-    future2 = yield xx.get()
+    await x.set(future)
+    future2 = await xx.get()
     assert future.key == future2.key
 
     del future, future2
 
-    yield gen.sleep(0.1)
+    await asyncio.sleep(0.1)
     assert s.tasks  # future still present
 
     x.delete()
 
     start = time()
     while s.tasks:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 5
 
 
@@ -53,13 +51,13 @@ async def test_delete_unset_variable(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_queue_with_data(c, s, a, b):
+async def test_queue_with_data(c, s, a, b):
     x = Variable("x")
     xx = Variable("x")
     assert x.client is c
 
-    yield x.set((1, "hello"))
-    data = yield xx.get()
+    await x.set((1, "hello"))
+    data = await xx.get()
 
     assert data == (1, "hello")
 
@@ -75,32 +73,32 @@ def test_sync(client):
 
 
 @gen_cluster()
-def test_hold_futures(s, a, b):
-    c1 = yield Client(s.address, asynchronous=True)
+async def test_hold_futures(s, a, b):
+    c1 = await Client(s.address, asynchronous=True)
     future = c1.submit(lambda x: x + 1, 10)
     x1 = Variable("x")
-    yield x1.set(future)
+    await x1.set(future)
     del x1
-    yield c1.close()
+    await c1.close()
 
-    yield gen.sleep(0.1)
+    await asyncio.sleep(0.1)
 
-    c2 = yield Client(s.address, asynchronous=True)
+    c2 = await Client(s.address, asynchronous=True)
     x2 = Variable("x")
-    future2 = yield x2.get()
-    result = yield future2
+    future2 = await x2.get()
+    result = await future2
 
     assert result == 11
-    yield c2.close()
+    await c2.close()
 
 
 @gen_cluster(client=True)
-def test_timeout(c, s, a, b):
+async def test_timeout(c, s, a, b):
     v = Variable("v")
 
     start = IOLoop.current().time()
     with pytest.raises(TimeoutError):
-        yield v.get(timeout=0.2)
+        await v.get(timeout=0.2)
     stop = IOLoop.current().time()
 
     if WINDOWS:  # timing is weird with asyncio and Windows
@@ -109,7 +107,7 @@ def test_timeout(c, s, a, b):
         assert 0.2 < stop - start < 2.0
 
     with pytest.raises(TimeoutError):
-        yield v.get(timeout=0.01)
+        await v.get(timeout=0.01)
 
 
 def test_timeout_sync(client):
@@ -139,10 +137,10 @@ async def test_cleanup(c, s, a, b):
 
     await v.set(x)
     del x
-    await gen.sleep(0.1)
+    await asyncio.sleep(0.1)
 
     t_future = xx = asyncio.ensure_future(vv._get())
-    await gen.sleep(0)
+    await asyncio.sleep(0)
     asyncio.ensure_future(v.set(y))
 
     future = await t_future
@@ -162,22 +160,21 @@ def test_pickleable(client):
 
 
 @gen_cluster(client=True)
-def test_timeout_get(c, s, a, b):
+async def test_timeout_get(c, s, a, b):
     v = Variable("v")
 
     tornado_future = v.get()
 
     vv = Variable("v")
-    yield vv.set(1)
+    await vv.set(1)
 
-    result = yield tornado_future
+    result = await tornado_future
     assert result == 1
 
 
-@pytest.mark.skipif(sys.version_info[0] == 2, reason="Multi-client issues")
 @pytest.mark.slow
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 2)] * 5, Worker=Nanny, timeout=None)
-def test_race(c, s, *workers):
+async def test_race(c, s, *workers):
     NITERS = 50
 
     def f(i):
@@ -194,63 +191,63 @@ def test_race(c, s, *workers):
             return result
 
     v = Variable("x", client=c)
-    x = yield c.scatter(1)
-    yield v.set(x)
+    x = await c.scatter(1)
+    await v.set(x)
 
     futures = c.map(f, range(15))
-    results = yield c.gather(futures)
+    results = await c.gather(futures)
     assert all(r > NITERS * 0.8 for r in results)
 
     start = time()
     while len(s.wants_what["variable-x"]) != 1:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() - start < 2
 
 
 @gen_cluster(client=True)
-def test_Future_knows_status_immediately(c, s, a, b):
-    x = yield c.scatter(123)
+async def test_Future_knows_status_immediately(c, s, a, b):
+    x = await c.scatter(123)
     v = Variable("x")
-    yield v.set(x)
+    await v.set(x)
 
-    c2 = yield Client(s.address, asynchronous=True)
+    c2 = await Client(s.address, asynchronous=True)
     v2 = Variable("x", client=c2)
-    future = yield v2.get()
+    future = await v2.get()
     assert future.status == "finished"
 
     x = c.submit(div, 1, 0)
-    yield wait(x)
-    yield v.set(x)
+    await wait(x)
+    await v.set(x)
 
-    future2 = yield v2.get()
+    future2 = await v2.get()
     assert future2.status == "error"
     with pytest.raises(Exception):
-        yield future2
+        await future2
 
     start = time()
     while True:  # we learn about the true error eventually
         try:
-            yield future2
+            await future2
         except ZeroDivisionError:
             break
         except Exception:
             assert time() < start + 5
-            yield gen.sleep(0.05)
+            await asyncio.sleep(0.05)
 
-    yield c2.close()
+    await c2.close()
 
 
 @gen_cluster(client=True)
-def test_erred_future(c, s, a, b):
+async def test_erred_future(c, s, a, b):
     future = c.submit(div, 1, 0)
     var = Variable()
-    yield var.set(future)
-    yield gen.sleep(0.1)
-    future2 = yield var.get()
+    await var.set(future)
+    await asyncio.sleep(0.1)
+    future2 = await var.get()
     with pytest.raises(ZeroDivisionError):
-        yield future2.result()
+        await future2.result()
 
-    exc = yield future2.exception()
+    exc = await future2.exception()
     assert isinstance(exc, ZeroDivisionError)
 
 

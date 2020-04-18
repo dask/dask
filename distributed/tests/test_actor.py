@@ -1,6 +1,6 @@
+import asyncio
 import operator
 from time import sleep
-from tornado import gen
 
 import pytest
 
@@ -50,20 +50,20 @@ class ParameterServer:
 @pytest.mark.parametrize("direct_to_workers", [True, False])
 def test_client_actions(direct_to_workers):
     @gen_cluster(client=True)
-    def test(c, s, a, b):
-        c = yield Client(
+    async def test(c, s, a, b):
+        c = await Client(
             s.address, asynchronous=True, direct_to_workers=direct_to_workers
         )
 
         counter = c.submit(Counter, workers=[a.address], actor=True)
         assert isinstance(counter, Future)
-        counter = yield counter
+        counter = await counter
         assert counter._address
         assert hasattr(counter, "increment")
         assert hasattr(counter, "add")
         assert hasattr(counter, "n")
 
-        n = yield counter.n
+        n = await counter.n
         assert n == 0
 
         assert counter._address == a.address
@@ -71,17 +71,17 @@ def test_client_actions(direct_to_workers):
         assert isinstance(a.actors[counter.key], Counter)
         assert s.tasks[counter.key].actor
 
-        yield [counter.increment(), counter.increment()]
+        await asyncio.gather(counter.increment(), counter.increment())
 
-        n = yield counter.n
+        n = await counter.n
         assert n == 2
 
         counter.add(10)
-        while (yield counter.n) != 10 + 2:
-            n = yield counter.n
-            yield gen.sleep(0.01)
+        while (await counter.n) != 10 + 2:
+            n = await counter.n
+            await asyncio.sleep(0.01)
 
-        yield c.close()
+        await c.close()
 
     test()
 
@@ -89,7 +89,7 @@ def test_client_actions(direct_to_workers):
 @pytest.mark.parametrize("separate_thread", [False, True])
 def test_worker_actions(separate_thread):
     @gen_cluster(client=True)
-    def test(c, s, a, b):
+    async def test(c, s, a, b):
         counter = c.submit(Counter, workers=[a.address], actor=True)
         a_address = a.address
 
@@ -106,17 +106,17 @@ def test_worker_actions(separate_thread):
             assert end > start
 
         futures = [c.submit(f, counter, pure=False) for _ in range(10)]
-        yield futures
+        await c.gather(futures)
 
-        counter = yield counter
-        assert (yield counter.n) == 10
+        counter = await counter
+        assert await counter.n == 10
 
     test()
 
 
 @gen_cluster(client=True)
-def test_Actor(c, s, a, b):
-    counter = yield c.submit(Counter, actor=True)
+async def test_Actor(c, s, a, b):
+    counter = await c.submit(Counter, actor=True)
 
     assert counter._cls == Counter
 
@@ -132,22 +132,22 @@ def test_Actor(c, s, a, b):
     + "Should rely on sending small messages rather than rpc"
 )
 @gen_cluster(client=True)
-def test_linear_access(c, s, a, b):
+async def test_linear_access(c, s, a, b):
     start = time()
     future = c.submit(sleep, 0.2)
     actor = c.submit(List, actor=True, dummy=future)
-    actor = yield actor
+    actor = await actor
 
     for i in range(100):
         actor.append(i)
 
     while True:
-        yield gen.sleep(0.1)
-        L = yield actor.L
+        await asyncio.sleep(0.1)
+        L = await actor.L
         if len(L) == 100:
             break
 
-    L = yield actor.L
+    L = await actor.L
     stop = time()
     assert L == tuple(range(100))
 
@@ -155,7 +155,7 @@ def test_linear_access(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_exceptions_create(c, s, a, b):
+async def test_exceptions_create(c, s, a, b):
     class Foo:
         x = 0
 
@@ -163,62 +163,62 @@ def test_exceptions_create(c, s, a, b):
             raise ValueError("bar")
 
     with pytest.raises(ValueError) as info:
-        future = yield c.submit(Foo, actor=True)
+        await c.submit(Foo, actor=True)
 
     assert "bar" in str(info.value)
 
 
 @gen_cluster(client=True)
-def test_exceptions_method(c, s, a, b):
+async def test_exceptions_method(c, s, a, b):
     class Foo:
         def throw(self):
             1 / 0
 
-    foo = yield c.submit(Foo, actor=True)
+    foo = await c.submit(Foo, actor=True)
     with pytest.raises(ZeroDivisionError):
-        yield foo.throw()
+        await foo.throw()
 
 
 @gen_cluster(client=True)
-def test_gc(c, s, a, b):
+async def test_gc(c, s, a, b):
     actor = c.submit(Counter, actor=True)
-    yield wait(actor)
+    await wait(actor)
     del actor
 
     while a.actors or b.actors:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
 
 
 @gen_cluster(client=True)
-def test_track_dependencies(c, s, a, b):
+async def test_track_dependencies(c, s, a, b):
     actor = c.submit(Counter, actor=True)
-    yield wait(actor)
+    await wait(actor)
     x = c.submit(sleep, 0.5)
     y = c.submit(lambda x, y: x, x, actor)
     del actor
 
-    yield gen.sleep(0.3)
+    await asyncio.sleep(0.3)
 
     assert a.actors or b.actors
 
 
 @gen_cluster(client=True)
-def test_future(c, s, a, b):
+async def test_future(c, s, a, b):
     counter = c.submit(Counter, actor=True, workers=[a.address])
     assert isinstance(counter, Future)
-    yield wait(counter)
+    await wait(counter)
     assert isinstance(a.actors[counter.key], Counter)
 
-    counter = yield counter
+    counter = await counter
     assert isinstance(counter, Actor)
     assert counter._address
 
-    yield gen.sleep(0.1)
+    await asyncio.sleep(0.1)
     assert counter.key in c.futures  # don't lose future
 
 
 @gen_cluster(client=True)
-def test_future_dependencies(c, s, a, b):
+async def test_future_dependencies(c, s, a, b):
     counter = c.submit(Counter, actor=True, workers=[a.address])
 
     def f(a):
@@ -226,13 +226,13 @@ def test_future_dependencies(c, s, a, b):
         assert a._cls == Counter
 
     x = c.submit(f, counter, workers=[b.address])
-    yield x
+    await x
 
     assert {ts.key for ts in s.tasks[x.key].dependencies} == {counter.key}
     assert {ts.key for ts in s.tasks[counter.key].dependents} == {x.key}
 
     y = c.submit(f, counter, workers=[a.address], pure=False)
-    yield y
+    await y
 
     assert {ts.key for ts in s.tasks[y.key].dependencies} == {counter.key}
     assert {ts.key for ts in s.tasks[counter.key].dependents} == {x.key, y.key}
@@ -256,15 +256,15 @@ def test_sync(client):
 
 
 @gen_cluster(client=True, config={"distributed.comm.timeouts.connect": "1s"})
-def test_failed_worker(c, s, a, b):
+async def test_failed_worker(c, s, a, b):
     future = c.submit(Counter, actor=True, workers=[a.address])
-    yield wait(future)
-    counter = yield future
+    await wait(future)
+    counter = await future
 
-    yield a.close()
+    await a.close()
 
     with pytest.raises(Exception) as info:
-        yield counter.increment()
+        await counter.increment()
 
     assert "actor" in str(info.value).lower()
     assert "worker" in str(info.value).lower()
@@ -272,45 +272,45 @@ def test_failed_worker(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def bench(c, s, a, b):
-    counter = yield c.submit(Counter, actor=True)
+async def bench(c, s, a, b):
+    counter = await c.submit(Counter, actor=True)
 
     for i in range(1000):
-        yield counter.increment()
+        await counter.increment()
 
 
 @gen_cluster(client=True)
-def test_numpy_roundtrip(c, s, a, b):
+async def test_numpy_roundtrip(c, s, a, b):
     np = pytest.importorskip("numpy")
 
-    server = yield c.submit(ParameterServer, actor=True)
+    server = await c.submit(ParameterServer, actor=True)
 
     x = np.random.random(1000)
-    yield server.put("x", x)
+    await server.put("x", x)
 
-    y = yield server.get("x")
+    y = await server.get("x")
 
     assert (x == y).all()
 
 
 @gen_cluster(client=True)
-def test_numpy_roundtrip_getattr(c, s, a, b):
+async def test_numpy_roundtrip_getattr(c, s, a, b):
     np = pytest.importorskip("numpy")
 
-    counter = yield c.submit(Counter, actor=True)
+    counter = await c.submit(Counter, actor=True)
 
     x = np.random.random(1000)
 
-    yield counter.add(x)
+    await counter.add(x)
 
-    y = yield counter.n
+    y = await counter.n
 
     assert (x == y).all()
 
 
 @gen_cluster(client=True)
-def test_repr(c, s, a, b):
-    counter = yield c.submit(Counter, actor=True)
+async def test_repr(c, s, a, b):
+    counter = await c.submit(Counter, actor=True)
 
     assert "Counter" in repr(counter)
     assert "Actor" in repr(counter)
@@ -319,8 +319,8 @@ def test_repr(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_dir(c, s, a, b):
-    counter = yield c.submit(Counter, actor=True)
+async def test_dir(c, s, a, b):
+    counter = await c.submit(Counter, actor=True)
 
     d = set(dir(counter))
 
@@ -330,8 +330,8 @@ def test_dir(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_many_computations(c, s, a, b):
-    counter = yield c.submit(Counter, actor=True)
+async def test_many_computations(c, s, a, b):
+    counter = await c.submit(Counter, actor=True)
 
     def add(n, counter):
         for i in range(n):
@@ -342,13 +342,13 @@ def test_many_computations(c, s, a, b):
 
     while not done.done():
         assert len(s.processing) <= a.nthreads + b.nthreads
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
 
-    yield done
+    await done
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 5)] * 2)
-def test_thread_safety(c, s, a, b):
+async def test_thread_safety(c, s, a, b):
     class Unsafe:
         def __init__(self):
             self.n = 0
@@ -362,32 +362,32 @@ def test_thread_safety(c, s, a, b):
                 assert self.n == 1
             self.n = 0
 
-    unsafe = yield c.submit(Unsafe, actor=True)
+    unsafe = await c.submit(Unsafe, actor=True)
 
     futures = [unsafe.f() for i in range(10)]
-    yield futures
+    await c.gather(futures)
 
 
 @gen_cluster(client=True)
-def test_Actors_create_dependencies(c, s, a, b):
-    counter = yield c.submit(Counter, actor=True)
+async def test_Actors_create_dependencies(c, s, a, b):
+    counter = await c.submit(Counter, actor=True)
     future = c.submit(lambda x: None, counter)
-    yield wait(future)
+    await wait(future)
     assert s.tasks[future.key].dependencies == {s.tasks[counter.key]}
 
 
 @gen_cluster(client=True)
-def test_load_balance(c, s, a, b):
+async def test_load_balance(c, s, a, b):
     class Foo:
         def __init__(self, x):
             pass
 
     b = c.submit(operator.mul, "b", 1000000)
-    yield wait(b)
+    await wait(b)
     [ws] = s.tasks[b.key].who_has
 
-    x = yield c.submit(Foo, b, actor=True)
-    y = yield c.submit(Foo, b, actor=True)
+    x = await c.submit(Foo, b, actor=True)
+    y = await c.submit(Foo, b, actor=True)
     assert x.key != y.key  # actors assumed not pure
 
     assert s.tasks[x.key].who_has == {ws}  # first went to best match
@@ -395,28 +395,28 @@ def test_load_balance(c, s, a, b):
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 5)
-def test_load_balance_map(c, s, *workers):
+async def test_load_balance_map(c, s, *workers):
     class Foo:
         def __init__(self, x, y=None):
             pass
 
     b = c.submit(operator.mul, "b", 1000000)
-    yield wait(b)
+    await wait(b)
 
     actors = c.map(Foo, range(10), y=b, actor=True)
-    yield wait(actors)
+    await wait(actors)
 
     assert all(len(w.actors) == 2 for w in workers)
 
 
 @gen_cluster(client=True, nthreads=[("127.0.0.1", 1)] * 4, Worker=Nanny)
-def bench_param_server(c, s, *workers):
+async def bench_param_server(c, s, *workers):
     import dask.array as da
     import numpy as np
 
     x = da.random.random((500000, 1000), chunks=(1000, 1000))
     x = x.persist()
-    yield wait(x)
+    await wait(x)
 
     class ParameterServer:
         data = None
@@ -443,17 +443,17 @@ def bench_param_server(c, s, *workers):
     from distributed.utils import format_time
 
     start = time()
-    ps = yield c.submit(ParameterServer, x.shape[1], actor=True)
+    ps = await c.submit(ParameterServer, x.shape[1], actor=True)
     y = x.map_blocks(f, ps=ps, dtype=x.dtype)
-    # result = yield c.compute(y.mean())
-    yield wait(y.persist())
+    # result = await c.compute(y.mean())
+    await wait(y.persist())
     end = time()
     print(format_time(end - start))
 
 
 @pytest.mark.xfail(reason="unknown")
 @gen_cluster(client=True)
-def test_compute(c, s, a, b):
+async def test_compute(c, s, a, b):
     @dask.delayed
     def f(n, counter):
         assert isinstance(counter, Actor)
@@ -468,12 +468,12 @@ def test_compute(c, s, a, b):
     values = [f(i, counter) for i in range(5)]
     final = check(counter, values)
 
-    result = yield c.compute(final, actors=counter)
+    result = await c.compute(final, actors=counter)
     assert result == 0 + 1 + 2 + 3 + 4
 
     start = time()
     while a.data or b.data:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 5
 
 
@@ -509,15 +509,15 @@ def test_compute_sync(client):
     nthreads=[("127.0.0.1", 1)],
     config={"distributed.worker.profile.interval": "1ms"},
 )
-def test_actors_in_profile(c, s, a):
+async def test_actors_in_profile(c, s, a):
     class Sleeper:
         def sleep(self, time):
             sleep(time)
 
-    sleeper = yield c.submit(Sleeper, actor=True)
+    sleeper = await c.submit(Sleeper, actor=True)
 
     for i in range(5):
-        yield sleeper.sleep(0.200)
+        await sleeper.sleep(0.200)
         if (
             list(a.profile_recent["children"])[0].startswith("sleep")
             or "Sleeper.sleep" in a.profile_keys
@@ -527,28 +527,26 @@ def test_actors_in_profile(c, s, a):
 
 
 @gen_cluster(client=True)
-def test_waiter(c, s, a, b):
+async def test_waiter(c, s, a, b):
     from tornado.locks import Event
 
     class Waiter:
         def __init__(self):
             self.event = Event()
 
-        @gen.coroutine
-        def set(self):
+        async def set(self):
             self.event.set()
 
-        @gen.coroutine
-        def wait(self):
-            yield self.event.wait()
+        async def wait(self):
+            await self.event.wait()
 
-    waiter = yield c.submit(Waiter, actor=True)
+    waiter = await c.submit(Waiter, actor=True)
 
-    futures = [waiter.wait() for i in range(5)]  # way more than we have actor threads
+    futures = [waiter.wait() for _ in range(5)]  # way more than we have actor threads
 
-    yield gen.sleep(0.1)
+    await asyncio.sleep(0.1)
     assert not any(future.done() for future in futures)
 
-    yield waiter.set()
+    await waiter.set()
 
-    yield futures
+    await c.gather(futures)

@@ -1,10 +1,10 @@
+import asyncio
 from contextlib import contextmanager
 import socket
 import threading
 from time import sleep
 
 import pytest
-from tornado import gen
 
 from distributed import Scheduler, Worker, Client, config, default_client
 from distributed.core import rpc
@@ -43,7 +43,7 @@ def test_cluster(loop):
 
 
 @gen_cluster(client=True)
-def test_gen_cluster(c, s, a, b):
+async def test_gen_cluster(c, s, a, b):
     assert isinstance(c, Client)
     assert isinstance(s, Scheduler)
     for w in [a, b]:
@@ -58,9 +58,9 @@ def test_gen_cluster_cleans_up_client(loop):
     assert not dask.config.get("get", None)
 
     @gen_cluster(client=True)
-    def f(c, s, a, b):
+    async def f(c, s, a, b):
         assert dask.config.get("get", None)
-        yield c.submit(inc, 1)
+        await c.submit(inc, 1)
 
     f()
 
@@ -68,11 +68,16 @@ def test_gen_cluster_cleans_up_client(loop):
 
 
 @gen_cluster(client=False)
-def test_gen_cluster_without_client(s, a, b):
+async def test_gen_cluster_without_client(s, a, b):
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
+
+    async with Client(s.address, asynchronous=True) as c:
+        future = c.submit(lambda x: x + 1, 1)
+        result = await future
+        assert result == 2
 
 
 @gen_cluster(
@@ -81,7 +86,7 @@ def test_gen_cluster_without_client(s, a, b):
     nthreads=[("tls://127.0.0.1", 1), ("tls://127.0.0.1", 2)],
     security=tls_only_security(),
 )
-def test_gen_cluster_tls(e, s, a, b):
+async def test_gen_cluster_tls(e, s, a, b):
     assert isinstance(e, Client)
     assert isinstance(s, Scheduler)
     assert s.address.startswith("tls://")
@@ -92,8 +97,8 @@ def test_gen_cluster_tls(e, s, a, b):
 
 
 @gen_test()
-def test_gen_test():
-    yield gen.sleep(0.01)
+async def test_gen_test():
+    await asyncio.sleep(0.01)
 
 
 @contextmanager
@@ -154,8 +159,8 @@ def test_new_config():
 
 def test_lingering_client():
     @gen_cluster()
-    def f(s, a, b):
-        c = yield Client(s.address, asynchronous=True)
+    async def f(s, a, b):
+        await Client(s.address, asynchronous=True)
 
     f()
 
@@ -177,16 +182,3 @@ def test_tls_cluster(tls_client):
 async def test_tls_scheduler(security, cleanup):
     async with Scheduler(security=security, host="localhost") as s:
         assert s.address.startswith("tls")
-
-
-@gen_cluster()
-async def test_gen_cluster_async(s, a, b):  # flake8: noqa
-    async with Client(s.address, asynchronous=True) as c:
-        future = c.submit(lambda x: x + 1, 1)
-        result = await future
-        assert result == 2
-
-
-@gen_test()
-async def test_gen_test_async():  # flake8: noqa
-    await gen.sleep(0.001)

@@ -34,26 +34,26 @@ class MyPlugin(WorkerPlugin):
 
 
 @gen_cluster(client=True, nthreads=[])
-def test_create_with_client(c, s):
-    yield c.register_worker_plugin(MyPlugin(123))
+async def test_create_with_client(c, s):
+    await c.register_worker_plugin(MyPlugin(123))
 
-    worker = yield Worker(s.address, loop=s.loop)
+    worker = await Worker(s.address, loop=s.loop)
     assert worker._my_plugin_status == "setup"
     assert worker._my_plugin_data == 123
 
-    yield worker.close()
+    await worker.close()
     assert worker._my_plugin_status == "teardown"
 
 
 @gen_cluster(client=True, worker_kwargs={"plugins": [MyPlugin(5)]})
-def test_create_on_construction(c, s, a, b):
+async def test_create_on_construction(c, s, a, b):
     assert len(a.plugins) == len(b.plugins) == 1
     assert a._my_plugin_status == "setup"
     assert a._my_plugin_data == 5
 
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
-def test_normal_task_transitions_called(c, s, w):
+async def test_normal_task_transitions_called(c, s, w):
     expected_transitions = [
         ("task", "waiting", "ready"),
         ("task", "ready", "executing"),
@@ -62,12 +62,12 @@ def test_normal_task_transitions_called(c, s, w):
 
     plugin = MyPlugin(1, expected_transitions=expected_transitions)
 
-    yield c.register_worker_plugin(plugin)
-    yield c.submit(lambda x: x, 1, key="task")
+    await c.register_worker_plugin(plugin)
+    await c.submit(lambda x: x, 1, key="task")
 
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
-def test_failing_task_transitions_called(c, s, w):
+async def test_failing_task_transitions_called(c, s, w):
     def failing(x):
         raise Exception()
 
@@ -79,10 +79,10 @@ def test_failing_task_transitions_called(c, s, w):
 
     plugin = MyPlugin(1, expected_transitions=expected_transitions)
 
-    yield c.register_worker_plugin(plugin)
+    await c.register_worker_plugin(plugin)
 
     with pytest.raises(Exception):
-        yield c.submit(failing, 1, key="task")
+        await c.submit(failing, 1, key="task")
 
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)

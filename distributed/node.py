@@ -3,9 +3,9 @@ import logging
 import warnings
 import weakref
 
+from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
-from tornado import gen
 import tlz
 import dask
 

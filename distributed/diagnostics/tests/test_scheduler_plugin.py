@@ -4,7 +4,7 @@ from distributed.utils_test import inc, gen_cluster, cleanup  # noqa: F401
 
 
 @gen_cluster(client=True)
-def test_simple(c, s, a, b):
+async def test_simple(c, s, a, b):
     class Counter(SchedulerPlugin):
         def start(self, scheduler):
             self.scheduler = scheduler
@@ -25,7 +25,7 @@ def test_simple(c, s, a, b):
     y = c.submit(inc, x)
     z = c.submit(inc, y)
 
-    yield z
+    await z
 
     assert counter.count == 3
     s.remove_plugin(counter)
@@ -33,7 +33,7 @@ def test_simple(c, s, a, b):
 
 
 @gen_cluster(nthreads=[], client=False)
-def test_add_remove_worker(s):
+async def test_add_remove_worker(s):
     events = []
 
     class MyPlugin(SchedulerPlugin):
@@ -51,10 +51,10 @@ def test_add_remove_worker(s):
 
     a = Worker(s.address)
     b = Worker(s.address)
-    yield a
-    yield b
-    yield a.close()
-    yield b.close()
+    await a
+    await b
+    await a.close()
+    await b.close()
 
     assert events == [
         ("add_worker", a.address),
@@ -65,8 +65,8 @@ def test_add_remove_worker(s):
 
     events[:] = []
     s.remove_plugin(plugin)
-    a = yield Worker(s.address)
-    yield a.close()
+    a = await Worker(s.address)
+    await a.close()
     assert events == []
 
 

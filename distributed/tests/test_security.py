@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-import sys
 
 try:
     import ssl
@@ -149,14 +148,14 @@ def test_tls_config_for_role():
         sec.get_tls_config_for_role("supervisor")
 
 
+def assert_many_ciphers(ctx):
+    assert len(ctx.get_ciphers()) > 2  # Most likely
+
+
 def test_connection_args():
     def basic_checks(ctx):
         assert ctx.verify_mode == ssl.CERT_REQUIRED
         assert ctx.check_hostname is False
-
-    def many_ciphers(ctx):
-        if sys.version_info >= (3, 6):
-            assert len(ctx.get_ciphers()) > 2  # Most likely
 
     c = {
         "distributed.comm.tls.ca-file": ca_file,
@@ -171,12 +170,12 @@ def test_connection_args():
     assert not d["require_encryption"]
     ctx = d["ssl_context"]
     basic_checks(ctx)
-    many_ciphers(ctx)
+    assert_many_ciphers(ctx)
 
     d = sec.get_connection_args("worker")
     ctx = d["ssl_context"]
     basic_checks(ctx)
-    many_ciphers(ctx)
+    assert_many_ciphers(ctx)
 
     # No cert defined => no TLS
     d = sec.get_connection_args("client")
@@ -193,23 +192,18 @@ def test_connection_args():
     assert d["require_encryption"]
     ctx = d["ssl_context"]
     basic_checks(ctx)
-    if sys.version_info >= (3, 6):
-        supported_ciphers = ctx.get_ciphers()
-        tls_12_ciphers = [c for c in supported_ciphers if "TLSv1.2" in c["description"]]
-        assert len(tls_12_ciphers) == 1
-        tls_13_ciphers = [c for c in supported_ciphers if "TLSv1.3" in c["description"]]
-        if len(tls_13_ciphers):
-            assert len(tls_13_ciphers) == 3
+
+    supported_ciphers = ctx.get_ciphers()
+    tls_12_ciphers = [c for c in supported_ciphers if "TLSv1.2" in c["description"]]
+    assert len(tls_12_ciphers) == 1
+    tls_13_ciphers = [c for c in supported_ciphers if "TLSv1.3" in c["description"]]
+    assert len(tls_13_ciphers) in (0, 3)
 
 
 def test_listen_args():
     def basic_checks(ctx):
         assert ctx.verify_mode == ssl.CERT_REQUIRED
         assert ctx.check_hostname is False
-
-    def many_ciphers(ctx):
-        if sys.version_info >= (3, 6):
-            assert len(ctx.get_ciphers()) > 2  # Most likely
 
     c = {
         "distributed.comm.tls.ca-file": ca_file,
@@ -224,12 +218,12 @@ def test_listen_args():
     assert not d["require_encryption"]
     ctx = d["ssl_context"]
     basic_checks(ctx)
-    many_ciphers(ctx)
+    assert_many_ciphers(ctx)
 
     d = sec.get_listen_args("worker")
     ctx = d["ssl_context"]
     basic_checks(ctx)
-    many_ciphers(ctx)
+    assert_many_ciphers(ctx)
 
     # No cert defined => no TLS
     d = sec.get_listen_args("client")
@@ -246,13 +240,12 @@ def test_listen_args():
     assert d["require_encryption"]
     ctx = d["ssl_context"]
     basic_checks(ctx)
-    if sys.version_info >= (3, 6):
-        supported_ciphers = ctx.get_ciphers()
-        tls_12_ciphers = [c for c in supported_ciphers if "TLSv1.2" in c["description"]]
-        assert len(tls_12_ciphers) == 1
-        tls_13_ciphers = [c for c in supported_ciphers if "TLSv1.3" in c["description"]]
-        if len(tls_13_ciphers):
-            assert len(tls_13_ciphers) == 3
+
+    supported_ciphers = ctx.get_ciphers()
+    tls_12_ciphers = [c for c in supported_ciphers if "TLSv1.2" in c["description"]]
+    assert len(tls_12_ciphers) == 1
+    tls_13_ciphers = [c for c in supported_ciphers if "TLSv1.3" in c["description"]]
+    assert len(tls_13_ciphers) in (0, 3)
 
 
 @pytest.mark.asyncio

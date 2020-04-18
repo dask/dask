@@ -17,3 +17,4 @@ dask-worker-space/
 *.swp
 .ycm_extra_conf.py
 tags
+.ipynb_checkpoints

@@ -2,7 +2,6 @@ import asyncio
 from time import sleep
 
 import pytest
-from tornado import gen
 import tlz as toolz
 
 from distributed import Pub, Sub, wait, get_worker, TimeoutError
@@ -11,7 +10,7 @@ from distributed.metrics import time
 
 
 @gen_cluster(client=True, timeout=None)
-def test_speed(c, s, a, b):
+async def test_speed(c, s, a, b):
     """
     This tests how quickly we can move messages back and forth
 
@@ -45,13 +44,13 @@ def test_speed(c, s, a, b):
     y = c.submit(pingpong, "b", "a", n=100)
 
     start = time()
-    yield c.gather([x, y])
+    await c.gather([x, y])
     stop = time()
     # print('duration', stop - start)  # I get around 3ms/roundtrip on my laptop
 
 
 @gen_cluster(client=True, nthreads=[])
-def test_client(c, s):
+async def test_client(c, s):
     with pytest.raises(Exception):
         get_worker()
     sub = Sub("a")
@@ -62,17 +61,17 @@ def test_client(c, s):
 
     start = time()
     while not set(sps.client_subscribers["a"]) == {c.id}:
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 3
 
     pub.put(123)
 
-    result = yield sub.__anext__()
+    result = await sub.__anext__()
     assert result == 123
 
 
 @gen_cluster(client=True)
-def test_client_worker(c, s, a, b):
+async def test_client_worker(c, s, a, b):
     sub = Sub("a", client=c, worker=None)
 
     def f(x):
@@ -80,11 +79,11 @@ def test_client_worker(c, s, a, b):
         pub.put(x)
 
     futures = c.map(f, range(10))
-    yield wait(futures)
+    await wait(futures)
 
     L = []
     for i in range(10):
-        result = yield sub.get()
+        result = await sub.get()
         L.append(result)
 
     assert set(L) == set(range(10))
@@ -101,7 +100,7 @@ def test_client_worker(c, s, a, b):
         or bps.publishers["a"]
         or len(sps.client_subscribers["a"]) != 1
     ):
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 3
 
     del sub
@@ -112,20 +111,20 @@ def test_client_worker(c, s, a, b):
         or any(aps.publish_to_scheduler.values())
         or any(bps.publish_to_scheduler.values())
     ):
-        yield gen.sleep(0.01)
+        await asyncio.sleep(0.01)
         assert time() < start + 3
 
 
 @gen_cluster(client=True)
-def test_timeouts(c, s, a, b):
+async def test_timeouts(c, s, a, b):
     sub = Sub("a", client=c, worker=None)
     start = time()
     with pytest.raises(TimeoutError):
-        yield sub.get(timeout=0.1)
+        await sub.get(timeout=0.1)
     stop = time()
     assert stop - start < 1
     with pytest.raises(TimeoutError):
-        yield sub.get(timeout=0.01)
+        await sub.get(timeout=0.01)
 
 
 @gen_cluster(client=True)
@@ -140,13 +139,13 @@ async def test_repr(c, s, a, b):
 
 @pytest.mark.xfail(reason="out of order execution")
 @gen_cluster(client=True)
-def test_basic(c, s, a, b):
+async def test_basic(c, s, a, b):
     async def publish():
         pub = Pub("a")
 
         i = 0
         while True:
-            await gen.sleep(0.01)
+            await asyncio.sleep(0.01)
             pub._put(i)
             i += 1
 
@@ -157,7 +156,7 @@ def test_basic(c, s, a, b):
     asyncio.ensure_future(c.run(publish, workers=[a.address]))
 
     tasks = [c.submit(f, i) for i in range(4)]
-    results = yield c.gather(tasks)
+    results = await c.gather(tasks)
 
     for r in results:
         x = r[0]

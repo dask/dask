@@ -327,17 +327,15 @@ async def test_oversubscribing_leases(c, s, a, b):
     accept new leases as long as the semaphore is oversubscribed.
 
     Oversubscription may occur if tasks hold the GIL for a longer time than the
-    lease-timeout is configured causing the lease refreshs to go stale and
-    timeout.
+    lease-timeout is configured causing the lease refresh to go stale and timeout.
 
     We cannot protect ourselves entirely from this but we can ensure that while
     a task with a timed out lease is still running, we block further
     acquisitions until we return to normal.
 
     An example would be a task which continuously locks the GIL for a longer
-    time than the lease timeout but this continous lock only makes up a
+    time than the lease timeout but this continuous lock only makes up a
     fraction of the tasks runtime.
-
     """
     # GH3705
 

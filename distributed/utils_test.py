@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import gc
 from contextlib import contextmanager
 import copy
 import functools
@@ -33,7 +34,6 @@ import pytest
 
 import dask
 from tlz import merge, memoize, assoc
-from tornado import gen
 from tornado.ioloop import IOLoop
 
 from . import system
@@ -761,18 +761,16 @@ def gen_test(timeout=10):
     """ Coroutine test
 
     @gen_test(timeout=5)
-    def test_foo():
-        yield ...  # use tornado coroutines
+    async def test_foo():
+        await ...  # use tornado coroutines
     """
 
     def _(func):
         def test_func():
             with clean() as loop:
-                if iscoroutinefunction(func):
-                    cor = func
-                else:
-                    cor = gen.coroutine(func)
-                loop.run_sync(cor, timeout=timeout)
+                if not iscoroutinefunction(func):
+                    raise ValueError("@gen_test should wrap async def functions")
+                loop.run_sync(func, timeout=timeout)
 
         return test_func
 
@@ -856,14 +854,15 @@ def gen_cluster(
     active_rpc_timeout=1,
     config={},
     clean_kwargs={},
+    allow_unclosed=False,
 ):
     from distributed import Client
 
     """ Coroutine test with small cluster
 
     @gen_cluster()
-    def test_foo(scheduler, worker1, worker2):
-        yield ...  # use tornado coroutines
+    async def test_foo(scheduler, worker1, worker2):
+        await ...  # use tornado coroutines
 
     See also:
         start
@@ -878,10 +877,10 @@ def gen_cluster(
     )
 
     def _(func):
-        if not iscoroutinefunction(func):
-            func = gen.coroutine(func)
-
         def test_func():
+            if not iscoroutinefunction(func):
+                raise ValueError("@gen_cluster should wrap async def functions")
+
             result = None
             workers = []
             with clean(timeout=active_rpc_timeout, **clean_kwargs) as loop:
@@ -905,6 +904,7 @@ def gen_cluster(
                                     "Failed to start gen_cluster, retrying",
                                     exc_info=True,
                                 )
+                                await asyncio.sleep(1)
                             else:
                                 workers[:] = ws
                                 args = [s] + workers
@@ -940,16 +940,28 @@ def gen_cluster(
                         else:
                             await c._close(fast=True)
 
-                        for i in range(5):
-                            if all(c.closed() for c in Comm._instances):
-                                break
-                            else:
+                        def get_unclosed():
+                            return [c for c in Comm._instances if not c.closed()] + [
+                                c
+                                for c in _global_clients.values()
+                                if c.status != "closed"
+                            ]
+
+                        try:
+                            start = time()
+                            while time() < start + 5:
+                                gc.collect()
+                                if not get_unclosed():
+                                    break
                                 await asyncio.sleep(0.05)
-                        else:
-                            L = [c for c in Comm._instances if not c.closed()]
+                            else:
+                                if allow_unclosed:
+                                    print(f"Unclosed Comms: {get_unclosed()}")
+                                else:
+                                    raise RuntimeError("Unclosed Comms", get_unclosed())
+                        finally:
                             Comm._instances.clear()
-                            # raise ValueError("Unclosed Comms", L)
-                            print("Unclosed Comms", L)
+                            _global_clients.clear()
 
                         return result
 
