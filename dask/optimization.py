@@ -464,37 +464,27 @@ def fuse(
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    if ave_width is None:
-        if config.get("fuse_ave_width", None) is None:
-            ave_width = 1
-        else:
-            ave_width = config.get("fuse_ave_width", None)
-
-    if max_height is None:
-        if config.get("fuse_max_height", None) is None:
-            max_height = len(dsk)
-        else:
-            max_height = config.get("fuse_max_height", None)
-
+    ave_width = ave_width or config.get("optimization.fuse.ave-width", 1)
+    max_height = (
+        max_height or config.get("optimization.fuse.max-height", None) or len(dsk)
+    )
     max_depth_new_edges = (
         max_depth_new_edges
-        or config.get("fuse_max_depth_new_edges", None)
-        or ave_width + 1.5
+        or config.get("optimization.fuse.max-depth-new-edges", None)
+        or ave_width * 1.5
     )
     max_width = (
         max_width
-        or config.get("fuse_max_width", None)
+        or config.get("optimization.fuse.max-width", None)
         or 1.5 + ave_width * math.log(ave_width + 1)
     )
-
-    if fuse_subgraphs is None:
-        fuse_subgraphs = config.get("fuse_subgraphs", False)
+    fuse_subgraphs = fuse_subgraphs or config.get("optimization.fuse.subgraphs", False)
 
     if not ave_width or not max_height:
         return dsk, dependencies
 
     if rename_keys is None:
-        rename_keys = config.get("fuse_rename_keys", True)
+        rename_keys = config.get("optimization.fuse.rename-keys", True)
     if rename_keys is True:
         key_renamer = default_fused_keys_renamer
     elif rename_keys is False:

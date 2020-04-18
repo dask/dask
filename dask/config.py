@@ -301,10 +301,13 @@ class set(object):
 
             if arg is not None:
                 for key, value in arg.items():
+                    key = check_deprecations(key)
                     self._assign(key.split("."), value, config)
             if kwargs:
                 for key, value in kwargs.items():
-                    self._assign(key.split("__"), value, config)
+                    key = key.replace("__", ".")
+                    key = check_deprecations(key)
+                    self._assign(key.split("."), value, config)
 
     def __enter__(self):
         return self.config
@@ -342,16 +345,6 @@ class set(object):
             Whether this operation needs to be recorded to allow for rollback.
         """
         key = canonical_name(keys[0], d)
-        if key in deprecations:
-            new = deprecations[key]
-            if new:
-                warnings.warn(
-                    "Configuration key {} has been deprecated."
-                    "Please use {} instead".format(key, new)
-                )
-                key = new
-            else:
-                raise ValueError("Configuration value {} has been removed".format(key))
 
         path = path + (key,)
 
@@ -542,6 +535,50 @@ deprecations = {
     "fuse_rename_keys": "optimization.fuse.rename-keys",
     "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
 }
+
+
+def check_deprecations(key: str, deprecations: dict = deprecations):
+    """ Check if the provided value has been renamed or removed
+
+    Parameters
+    ----------
+    key : str
+        The configuration key to check
+    deprecations : Dict[str, str]
+        The mapping of aliases
+
+    Examples
+    --------
+    >>> deprecations = {"old_key": "new_key", "invalid": None}
+    >>> check_deprecations("old_key", deprecations=deprecations)  # doctest: +SKIP
+    UserWarning: Configuration key "old_key" has been deprecated. Please use "new_key" instead.
+
+    >>> check_deprecations("invalid", deprecations=deprecations)
+    Traceback (most recent call last):
+        ...
+    ValueError: Configuration value "invalid" has been removed
+
+    >>> check_deprecations("another_key", deprecations=deprecations)
+    'another_key'
+
+    Returns
+    -------
+    new: str
+        The proper key, whether the original (if no deprecation) or the aliased
+        value
+    """
+    if key in deprecations:
+        new = deprecations[key]
+        if new:
+            warnings.warn(
+                'Configuration key "{}" has been deprecated. '
+                'Please use "{}" instead'.format(key, new)
+            )
+            return new
+        else:
+            raise ValueError('Configuration value "{}" has been removed'.format(key))
+    else:
+        return key
 
 
 refresh()

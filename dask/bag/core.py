@@ -352,7 +352,6 @@ class Item(DaskMethodsMixin):
         return self.key
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-
     __dask_scheduler__ = staticmethod(mpget)
 
     def __dask_postcompute__(self):

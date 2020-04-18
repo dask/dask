@@ -10,3 +10,6 @@ array:
 optimization:
   fuse:
     active: true
+    ave-width: 1
+    subraphs: false
+    rename-keys: true
