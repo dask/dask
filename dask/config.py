@@ -1,9 +1,10 @@
 import ast
 import builtins
+from collections.abc import Mapping
 import os
 import sys
 import threading
-from collections.abc import Mapping
+import warnings
 
 try:
     import yaml
@@ -341,6 +342,17 @@ class set(object):
             Whether this operation needs to be recorded to allow for rollback.
         """
         key = canonical_name(keys[0], d)
+        if key in deprecations:
+            new = deprecations[key]
+            if new:
+                warnings.warn(
+                    "Configuration key {} has been deprecated."
+                    "Please use {} instead".format(key, new)
+                )
+                key = new
+            else:
+                raise ValueError("Configuration value {} has been removed".format(key))
+
         path = path + (key,)
 
         if len(keys) == 1:
@@ -520,6 +532,16 @@ def expand_environment_variables(config):
         return type(config)([expand_environment_variables(v) for v in config])
     else:
         return config
+
+
+deprecations = {
+    "fuse_ave_width": "optimization.fuse.ave-width",
+    "fuse_max_height": "optimization.fuse.max-height",
+    "fuse_max_width": "optimization.fuse.max-width",
+    "fuse_subgraphs": "optimization.fuse.subgraphs",
+    "fuse_rename_keys": "optimization.fuse.rename-keys",
+    "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
+}
 
 
 refresh()
