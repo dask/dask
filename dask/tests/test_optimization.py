@@ -1308,3 +1308,39 @@ def test_fuse_config():
         }
         dependencies = {"b": ("a",)}
         assert fuse(d, "b", dependencies=dependencies) == (d, dependencies)
+
+
+def test_fused_keys_max_length():  # generic fix for gh-5999
+    d = {
+        "u-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "v-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "v-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "w-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "w-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "x-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "x-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "y-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "y-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "z-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "z-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            add,
+            "a",
+            "b",
+        ),
+        "a": 1,
+        "b": 2,
+    }
+
+    fused, deps = fuse(d, rename_keys=True)
+    for key in fused:
+        assert len(key) < 150

@@ -3359,7 +3359,7 @@ class DataFrame(_Frame):
 
     def __len__(self):
         try:
-            s = self[self.columns[0]]
+            s = self.iloc[:, 0]
         except IndexError:
             return super().__len__()
         else:
