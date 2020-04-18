@@ -480,10 +480,10 @@ def fuse(
         keys = set(flatten(keys))
 
     # Assign reasonable, not too restrictive defaults
-    ave_width = ave_width or config.get("optimization.fuse.ave-width", 1)
-    max_height = (
-        max_height or config.get("optimization.fuse.max-height", None) or len(dsk)
-    )
+    if ave_width is None:
+        ave_width = config.get("optimization.fuse.ave-width", 1)
+    if max_height is None:
+        max_height = config.get("optimization.fuse.max-height", None) or len(dsk)
     max_depth_new_edges = (
         max_depth_new_edges
         or config.get("optimization.fuse.max-depth-new-edges", None)
