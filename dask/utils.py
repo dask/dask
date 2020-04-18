@@ -9,7 +9,7 @@ import re
 from errno import ENOENT
 from collections.abc import Iterator
 from contextlib import contextmanager
-from importlib import import_module
+import importlib
 from numbers import Integral, Number
 from threading import Lock
 import uuid
@@ -94,7 +94,7 @@ def import_required(mod_name, error_msg):
     Raises a RuntimeError if the requested module is not available.
     """
     try:
-        return import_module(mod_name)
+        return importlib.import_module(mod_name)
     except ImportError:
         raise RuntimeError(error_msg)
 
@@ -1383,3 +1383,20 @@ def ndimlist(seq):
         return 1
     else:
         return 1 + ndimlist(seq[0])
+
+
+def import_term(name: str):
+    """ Return the fully qualified term
+
+    Examples
+    --------
+    >>> import_term("math.sin")
+    <function math.sin(x, /)>
+    """
+    try:
+        module_name, attr_name = name.rsplit(".", 1)
+    except ValueError:
+        return importlib.import_module(name)
+
+    module = importlib.import_module(module_name)
+    return getattr(module, attr_name)

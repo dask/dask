@@ -1,8 +1,21 @@
 temporary-directory: null     # Directory for local disk like /tmp, /scratch, or /local
 
 dataframe:
+  optimization:
+    function: dask.dataframe.optimize.optimize
   shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
 
 array:
   svg:
     size: 120  # pixels
+  optimization:
+    function: dask.array.optimization.optimize
+
+
+bag:
+  optimization:
+    function: dask.bag.core.optimize
+
+delayed:
+  optimiztion:
+    function: dask.delayed.optimize

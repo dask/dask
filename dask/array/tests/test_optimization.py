@@ -399,3 +399,15 @@ def test_fuse_roots():
     # assert len(zz.dask) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
+
+
+def test_config():
+    def optimize(dsk, keys):
+        return dsk
+
+    x = da.ones(10, chunks=(2,))
+    y = x + 1 + 2
+
+    with dask.config.set({"array.optimization.function": optimize}):
+        (yy,) = dask.optimize(y)
+        assert len(yy.dask) == x.npartitions * 3
