@@ -59,7 +59,7 @@ import warnings
 from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal
+from pandas.api.types import is_dtype_equal, is_categorical_dtype
 
 from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
@@ -80,7 +80,13 @@ from .core import (
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
-from .utils import strip_unknown_categories, is_series_like, asciitable
+from .utils import (
+    strip_unknown_categories,
+    is_series_like,
+    asciitable,
+    is_dataframe_like,
+    make_meta,
+)
 
 
 def align_partitions(*dfs):
@@ -210,7 +216,16 @@ def require(divisions, parts, required=None):
 ###############################################################
 
 
-required = {"left": [0], "right": [1], "inner": [0, 1], "outer": []}
+required = {
+    "left": [0],
+    "leftsemi": [0],
+    "leftanti": [0],
+    "right": [1],
+    "inner": [0, 1],
+    "outer": [],
+}
+allowed_left = ("inner", "left", "leftsemi", "leftanti")
+allowed_right = ("inner", "right")
 
 
 def merge_chunk(lhs, *args, **kwargs):
@@ -324,7 +339,7 @@ def single_partition_join(left, right, **kwargs):
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
     name = "merge-" + tokenize(left, right, **kwargs)
-    if left.npartitions == 1 and kwargs["how"] in ("inner", "right"):
+    if left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
@@ -338,7 +353,7 @@ def single_partition_join(left, right, **kwargs):
         else:
             divisions = [None for _ in right.divisions]
 
-    elif right.npartitions == 1 and kwargs["how"] in ("inner", "left"):
+    elif right.npartitions == 1 and kwargs["how"] in allowed_left:
         right_key = first(right.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
@@ -475,11 +490,12 @@ def merge(
         )
 
     # Single partition on one side
+    # Note that cudf supports "leftsemi" and "leftanti" joins
     elif (
         left.npartitions == 1
-        and how in ("inner", "right")
+        and how in allowed_right
         or right.npartitions == 1
-        and how in ("inner", "left")
+        and how in allowed_left
     ):
         return single_partition_join(
             left,
@@ -912,7 +928,13 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer"):
 
 def stack_partitions(dfs, divisions, join="outer"):
     """Concatenate partitions on axis=0 by doing a simple stack"""
-    meta = methods.concat([df._meta for df in dfs], join=join, filter_warning=False)
+    # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
+    # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
+    meta = make_meta(
+        methods.concat(
+            [df._meta_nonempty for df in dfs], join=join, filter_warning=False
+        )
+    )
     empty = strip_unknown_categories(meta)
 
     name = "concat-{0}".format(tokenize(*dfs))
@@ -921,8 +943,24 @@ def stack_partitions(dfs, divisions, join="outer"):
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
+        # and https://github.com/dask/dask/issues/5968.
+        if is_dataframe_like(df):
+
+            shared_columns = df.columns.intersection(meta.columns)
+            needs_astype = [
+                col
+                for col in shared_columns
+                if df[col].dtype != meta[col].dtype
+                and not is_categorical_dtype(df[col].dtype)
+            ]
+
+            if needs_astype:
+                # Copy to avoid mutating the caller inplace
+                df = df.copy()
+                df[needs_astype] = df[needs_astype].astype(meta[needs_astype].dtypes)
+
         if is_series_like(df) and is_series_like(meta):
-            if not df.dtype == meta.dtype and str(df.dtype) != "category":
+            if not df.dtype == meta.dtype and not is_categorical_dtype(df.dtype):
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
