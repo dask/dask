@@ -60,6 +60,7 @@ class SemaphoreExtension:
                 "semaphore_release": self.release,
                 "semaphore_close": self.close,
                 "semaphore_refresh_leases": self.refresh_leases,
+                "semaphore_value": self.get_value,
             }
         )
 
@@ -78,6 +79,9 @@ class SemaphoreExtension:
         self.lease_timeout = parse_timedelta(
             dask.config.get("distributed.scheduler.locks.lease-timeout"), default="s",
         )
+
+    async def get_value(self, comm=None, name=None):
+        return len(self.leases[name])
 
     # `comm` here is required by the handler interface
     def create(self, comm=None, name=None, max_leases=None):
@@ -102,7 +106,7 @@ class SemaphoreExtension:
             for id_ in lease_ids:
                 if id_ not in self.leases[name]:
                     logger.critical(
-                        f"Trying to refresh an unknown lease ID {id_} for {name}. This might be due to leases "
+                        f"Refreshing an unknown lease ID {id_} for {name}. This might be due to leases "
                         f"timing out and may cause overbooking of the semaphore!"
                         f"This is often caused by long-running GIL-holding in the task which acquired the lease."
                     )
@@ -349,6 +353,7 @@ class Semaphore:
         self._periodic_callback_name = f"refresh_semaphores_{self.id}"
         self.client._periodic_callbacks[self._periodic_callback_name] = pc
         pc.start()
+        self.refresh_leases = True
 
     def __await__(self):
         async def create_semaphore():
@@ -358,19 +363,16 @@ class Semaphore:
         return create_semaphore().__await__()
 
     async def _refresh_leases(self):
-        if self.client.scheduler is not None and not self._refreshing_leases:
-            self._refreshing_leases = True
-            if self._leases:
-                logger.debug(
-                    "%s refreshing leases for %s with IDs %s",
-                    self.client.id,
-                    self.name,
-                    self._leases,
-                )
-                await self.client.scheduler.semaphore_refresh_leases(
-                    lease_ids=list(self._leases), name=self.name
-                )
-            self._refreshing_leases = False
+        if self.refresh_leases and self._leases:
+            logger.debug(
+                "%s refreshing leases for %s with IDs %s",
+                self.client.id,
+                self.name,
+                self._leases,
+            )
+            await self.client.scheduler.semaphore_refresh_leases(
+                lease_ids=list(self._leases), name=self.name
+            )
 
     async def _acquire(self, timeout=None):
         lease_id = uuid.uuid4().hex
@@ -416,6 +418,12 @@ class Semaphore:
         return self.client.sync(
             self.client.scheduler.semaphore_release, name=self.name, lease_id=lease_id,
         )
+
+    def get_value(self):
+        """
+        Return the number of currently registered leases.
+        """
+        return self.client.sync(self.client.scheduler.semaphore_value, name=self.name)
 
     def __enter__(self):
         self.acquire()
