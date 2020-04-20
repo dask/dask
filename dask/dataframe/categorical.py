@@ -2,7 +2,6 @@ from collections import defaultdict
 import pandas as pd
 from tlz import partition_all
 from numbers import Integral
-import sys
 
 from ..base import tokenize, compute_as_if_collection
 from .accessor import Accessor
@@ -21,19 +20,15 @@ def _categorize_block(df, categories, index):
     categories: dict mapping column name to iterable of categories
     """
     df = df.copy()
-    package_name = df.__class__.__module__.split(".")[0]
     for col, vals in categories.items():
-        if is_categorical_dtype(df[col]):
-            df[col] = df[col].cat.set_categories(vals)
-        else:
-            cat_dtype = sys.modules[package_name].CategoricalDtype(categories=vals, ordered=False)
-            df[col] = sys.modules[package_name].Series(df[col], dtype=cat_dtype)
+        import pdb;pdb.set_trace()
+        if not is_categorical_dtype(df[col]):
+            df[col] = df[col].astype('category')
+        df[col] = df[col].cat.set_categories(vals)
     if index is not None:
-        if is_categorical_dtype(df.index):
-            ind = df.index.set_categories(index)
-        else:
-            cat_dtype = sys.modules[package_name].CategoricalDtype(categories=index, ordered=False)
-            ind = sys.modules[package_name].Series(df.index,dtype=cat_dtype)
+        if not is_categorical_dtype(df.index):
+            ind = df.index.astype(dtype='category')
+        ind = ind.set_categories(index)
         ind.name = df.index.name
         df.index = ind
     return df
