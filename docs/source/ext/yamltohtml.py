@@ -10,7 +10,6 @@ def get_remote_yaml(url):
     return yaml.safe_load(r.text)
 
 
-
 class DaskConfigDirective(Directive):
     optional_arguments = 3
 
@@ -24,15 +23,16 @@ class DaskConfigDirective(Directive):
             config = config[k]
             schema = schema["properties"].get(k, {})
         html = generate_html(config, schema, location)
-        return [nodes.raw('', html, format="html")]
+        return [nodes.raw("", html, format="html")]
+
 
 def setup(app):
     app.add_directive("yamltohtml", DaskConfigDirective)
 
     return {
-        'version': '0.1',
-        'parallel_read_safe': True,
-        'parallel_write_safe': True,
+        "version": "0.1",
+        "parallel_read_safe": True,
+        "parallel_write_safe": True,
     }
 
 
@@ -44,7 +44,7 @@ def process_thing(key, value, schema, prefix=""):
                     k,
                     v,
                     schema.get("properties", {}).get(k, {"properties": {}}),
-                    prefix = prefix + key + ".",
+                    prefix=prefix + key + ".",
                 )
                 for k, v in value.items()
             ],
@@ -73,6 +73,7 @@ def process_thing(key, value, schema, prefix=""):
                 """
         return [node]
 
+
 def generate_html(config, schema, location):
     nested_html = process_thing(key="", value=config, schema=schema, prefix=location)
-    return ''.join(nested_html)
+    return "".join(nested_html)

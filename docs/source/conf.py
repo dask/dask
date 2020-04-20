@@ -26,7 +26,9 @@ import os
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
-sys.path.append(os.path.abspath("./ext"))
+
+source_dir = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(source_dir, "ext"))
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -36,7 +38,6 @@ extensions = [
     "sphinx.ext.extlinks",
     "numpydoc",
     "sphinx_click.ext",
-    "yamltotable",
     "yamltohtml",
 ]
 
