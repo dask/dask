@@ -551,7 +551,7 @@ class SpecCluster(Cluster):
         minimum_memory : str
             Minimum amount of memory to keep around in the cluster
             Expressed as a string like "100 GiB"
-        maximum_cores : int
+        maximum_memory : str
             Maximum amount of memory to keep around in the cluster
             Expressed as a string like "100 GiB"
 
