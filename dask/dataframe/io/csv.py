@@ -1,5 +1,4 @@
-from __future__ import print_function, division, absolute_import
-
+from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
 
@@ -19,17 +18,14 @@ from pandas.api.types import (
 )
 
 # this import checks for the importability of fsspec
-from ...bytes import read_bytes, open_files
-
-# from ...bytes.compression import seekable_files, files as cfiles
-from fsspec.compression import compr
-from ...compatibility import PY2, PY3, Mapping, unicode
+from ...bytes import read_bytes, open_file, open_files
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
-
 from ..utils import clear_known_categories
-
 from .io import from_delayed
+
+import fsspec.implementations.local
+from fsspec.compression import compr
 
 
 def pandas_read_text(
@@ -219,7 +215,7 @@ def text_blocks_to_pandas(
     """
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues
-    # in coerce_dtypes for non-uniform categories accross partitions.
+    # in coerce_dtypes for non-uniform categories across partitions.
     # We will modify `dtype` (which is inferred) to
     # 1. contain instances of CategoricalDtypes for user-provided types
     # 2. contain 'category' for data inferred types
@@ -378,7 +374,7 @@ def read_pandas(
     else:
         path_converter = None
 
-    if isinstance(blocksize, (str, unicode)):
+    if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:
         # NONE of the compressions should use chunking
@@ -444,7 +440,7 @@ def read_pandas(
 
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
-    # Use sample to infer dtypes and check for presense of include_path_column
+    # Use sample to infer dtypes and check for presence of include_path_column
     head = reader(BytesIO(b_sample), **kwargs)
     if include_path_column and (include_path_column in head.columns):
         raise ValueError(
@@ -592,20 +588,24 @@ read_table = make_reader(pd.read_table, "read_table", "delimited")
 read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 
 
-def _write_csv(df, fil, **kwargs):
+def _write_csv(df, fil, *, depend_on=None, **kwargs):
     with fil as f:
         df.to_csv(f, **kwargs)
+    return None
 
 
 def to_csv(
     df,
     filename,
+    single_file=False,
+    encoding="utf-8",
+    mode="wt",
     name_function=None,
     compression=None,
     compute=True,
     scheduler=None,
     storage_options=None,
-    header_first_partition_only=False,
+    header_first_partition_only=None,
     **kwargs
 ):
     """
@@ -659,7 +659,15 @@ def to_csv(
     name_function : callable, default None
         Function accepting an integer (partition index) and producing a
         string to replace the asterisk in the given filename globstring.
-        Should preserve the lexicographic order of partitions
+        Should preserve the lexicographic order of partitions. Not
+        supported when `single_file` is `True`.
+    single_file : bool, default False
+        Whether to save everything into a single CSV file. Under the
+        single file mode, each partition is appended at the end of the
+        specified CSV file. Note that not all filesystems support the
+        append mode and thus the single file mode, especially on cloud
+        storage systems such as S3 or GCS. A warning will be issued when
+        writing to a file that is not backed by a local filesystem.
     compression : string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
         Filenames with extensions corresponding to known compression
@@ -675,8 +683,12 @@ def to_csv(
     header : boolean or list of string, default True
         Write out column names. If a list of string is given it is assumed
         to be aliases for the column names
-    header_first_partition_only : boolean, default False
-        If set, only write the header row in the first output file
+    header_first_partition_only : boolean, default None
+        If set to `True`, only write the header row in the first output
+        file. By default, headers are written to all partitions under
+        the multiple file mode (`single_file` is `False`) and written
+        only once under the single file mode (`single_file` is `True`).
+        It must not be `False` under the single file mode.
     index : boolean, default True
         Write row names (index)
     index_label : string or sequence, or False, default None
@@ -724,43 +736,55 @@ def to_csv(
     -------
     The names of the file written if they were computed right away
     If not, the delayed tasks associated to the writing of the files
+
+    Raises
+    ------
+    ValueError
+        If `header_first_partition_only` is set to `False` or
+        `name_function` is specified when `single_file` is `True`.
     """
-    if PY2:
-        default_encoding = None
-        mode = "wb"
-    else:
-        default_encoding = "utf-8"
-        mode = "wt"
-
-    encoding = kwargs.get("encoding", default_encoding)
-
-    files = open_files(
-        filename,
+    if single_file and name_function is not None:
+        raise ValueError("name_function is not supported under the single file mode")
+    if header_first_partition_only is None:
+        header_first_partition_only = single_file
+    elif not header_first_partition_only and single_file:
+        raise ValueError(
+            "header_first_partition_only cannot be False in the single file mode."
+        )
+    file_options = dict(
         compression=compression,
-        mode=mode,
         encoding=encoding,
-        name_function=name_function,
-        num=df.npartitions,
         newline="",
         **(storage_options or {})
     )
-
     to_csv_chunk = delayed(_write_csv, pure=False)
-
     dfs = df.to_delayed()
-
-    # If we only want headers in the first file, turn headers off after the
-    # first partition
-
-    values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
-
-    if len(dfs) > 1:
+    if single_file:
+        first_file = open_file(filename, mode=mode, **file_options)
+        if not isinstance(first_file.fs, fsspec.implementations.local.LocalFileSystem):
+            warn("Appending data to a network storage system may not work.")
+        value = to_csv_chunk(dfs[0], first_file, **kwargs)
+        append_mode = mode.replace("w", "") + "a"
+        append_file = open_file(filename, mode=append_mode, **file_options)
+        kwargs["header"] = False
+        for d in dfs[1:]:
+            value = to_csv_chunk(d, append_file, depend_on=value, **kwargs)
+        values = [value]
+        files = [first_file]
+    else:
+        files = open_files(
+            filename,
+            mode=mode,
+            name_function=name_function,
+            num=df.npartitions,
+            **file_options
+        )
+        values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
         if header_first_partition_only:
             kwargs["header"] = False
         values.extend(
             [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
         )
-
     if compute:
         delayed(values).compute(scheduler=scheduler)
         return [f.path for f in files]
@@ -768,7 +792,6 @@ def to_csv(
         return values
 
 
-if PY3:
-    from ..core import _Frame
+from ..core import _Frame
 
-    _Frame.to_csv.__doc__ = to_csv.__doc__
+_Frame.to_csv.__doc__ = to_csv.__doc__

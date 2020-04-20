@@ -1,8 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import defaultdict
 import pandas as pd
-from toolz import partition_all
+from tlz import partition_all
 from numbers import Integral
 
 from ..base import tokenize, compute_as_if_collection

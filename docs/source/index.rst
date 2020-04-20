@@ -29,9 +29,9 @@ Dask emphasizes the following virtues:
    feedback and diagnostics to aid humans
 
 
-.. image:: images/collections-schedulers.png
+.. image:: images/dask-overview.svg
    :alt: Dask collections and schedulers
-   :width: 80%
+   :width: 100%
    :align: center
 
 See the `dask.distributed documentation (separate website)
@@ -179,6 +179,7 @@ messy situations in everyday problems.
    develop.rst
    changelog.rst
    configuration.rst
+   educational-resources.rst
    presentations.rst
    cheatsheet.rst
    spark.rst

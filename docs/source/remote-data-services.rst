@@ -38,7 +38,7 @@ codebase:
   Azure platform, using azure-data-lake-store-python_, is unavailable in the current release of
   ``fsspec``, but a new version using Microsoft's "protocol 2" should come soon.
 
-``fsspec`` also provides other file sytstems that may be of interest to Dask users, such as
+``fsspec`` also provides other file systems that may be of interest to Dask users, such as
 ssh, ftp and webhdfs. See the documentation for more information.
 
 When specifying a storage location, a URL should be provided using the general
@@ -229,13 +229,13 @@ details.
 
 General recommendations for distributed clusters, in order:
 
-- use 'anon' for public data
-- use 'cloud' if this is available
+- use ``anon`` for public data
+- use ``cloud`` if this is available
 - use `gcloud`_ to generate a JSON file, and distribute this to all workers, and
   supply the path to the file
 
-- use gcsfs directly with the 'browser' method to generate a token cache file
-  (``~/.gcs_tokens``) and distribute this to all workers, thereafter using method "cache"
+- use gcsfs directly with the ``browser`` method to generate a token cache file
+  (``~/.gcs_tokens``) and distribute this to all workers, thereafter using method ``cache``
 
 .. _gcloud: https://cloud.google.com/sdk/docs/
 
@@ -346,8 +346,8 @@ these delayed values with expected behavior.
 These delimiters are useful both for typical line-based formats (log files,
 CSV, JSON) as well as other delimited formats like Avro, which may separate
 logical chunks by a complex sentinel string. Note that the delimiter finding
-algorithm is simple, and will not accound for characters that are escaped,
-part of a UTF8 code sequence or within the quote marks of a string.
+algorithm is simple, and will not account for characters that are escaped,
+part of a UTF-8 code sequence or within the quote marks of a string.
 
 Compression
 ^^^^^^^^^^^

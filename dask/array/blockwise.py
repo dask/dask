@@ -1,7 +1,7 @@
 import numbers
 import warnings
 
-import toolz
+import tlz as toolz
 
 from .. import base, utils
 from ..delayed import unpack_collections
@@ -145,11 +145,15 @@ def blockwise(
         chunkss, arrays = unify_chunks(*args)
     else:
         arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
-        if arginds:
-            arg, ind = max(arginds, key=lambda ai: len(ai[1]))
-            chunkss = dict(zip(ind, arg.chunks))
-        else:
-            chunkss = {}
+        chunkss = {}
+        # For each dimension, use the input chunking that has the most blocks;
+        # this will ensure that broadcasting works as expected, and in
+        # particular the number of blocks should be correct if the inputs are
+        # consistent.
+        for arg, ind in arginds:
+            for c, i in zip(arg.chunks, ind):
+                if i not in chunkss or len(c) > len(chunkss[i]):
+                    chunkss[i] = c
         arrays = args[::2]
 
     for k, v in new_axes.items():
@@ -220,6 +224,14 @@ def blockwise(
                 elif isinstance(adjust_chunks[ind], numbers.Integral):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
+                    if len(adjust_chunks[ind]) != len(chunks[i]):
+                        raise ValueError(
+                            "Dimension {0} has {1} blocks, "
+                            "adjust_chunks specified with "
+                            "{2} blocks".format(
+                                i, len(chunks[i]), len(adjust_chunks[ind])
+                            )
+                        )
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
                     raise NotImplementedError(

@@ -1,8 +1,10 @@
-import toolz
+from collections.abc import Mapping
+
+import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .compatibility import Mapping
+from .core import reverse_dict
 
 
 class HighLevelGraph(Mapping):
@@ -74,6 +76,10 @@ class HighLevelGraph(Mapping):
         self.dependencies = dependencies
 
     @property
+    def dependents(self):
+        return reverse_dict(self.dependencies)
+
+    @property
     def dicts(self):
         # Backwards compatibility for now
         return self.layers
@@ -125,7 +131,10 @@ class HighLevelGraph(Mapping):
                     with ignoring(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
-                    key = id(graph)
+                    try:
+                        [key] = collection.__dask_layers__()
+                    except AttributeError:
+                        key = id(graph)
                     layers[key] = graph
                     deps[name].add(key)
                     deps[key] = set()

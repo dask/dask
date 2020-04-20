@@ -207,3 +207,16 @@ Finally, we create and use the aggregation
    a
    a  2
    b  4
+
+Another example of a custom aggregation is the Dask DataFrame version of 
+Pandas' ``groupby('g').agg(list)``:
+
+.. code-block:: python
+
+   >>> import itertools as it
+   >>> collect_list = dd.Aggregation(
+   ...     name="collect_list",
+   ...     chunk=lambda s: s.apply(list),
+   ...     agg=lambda s0: s0.apply(lambda chunks: list(it.chain.from_iterable(chunks))),
+   ... )
+   >>> df.groupby('g').agg(collect_list)

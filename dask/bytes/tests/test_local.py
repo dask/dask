@@ -1,15 +1,14 @@
-from __future__ import print_function, division, absolute_import
-
 import gzip
 import os
-from time import sleep
+import pathlib
 import sys
+from time import sleep
+from functools import partial
 
 import pytest
-from toolz import concat, valmap, partial
+from tlz import concat, valmap
 
 from dask import compute
-from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
@@ -41,19 +40,8 @@ csv_files = {
 }
 
 
-try:
-    # used only in test_with_urls - may be more generally useful
-    import pathlib
-
-    def to_uri(path):
-        return pathlib.Path(os.path.abspath(path)).as_uri()
-
-
-except (ImportError, NameError):
-    import urlparse, urllib
-
-    def to_uri(path):
-        return urlparse.urljoin("file:", urllib.pathname2url(os.path.abspath(path)))
+def to_uri(path):
+    return pathlib.Path(os.path.abspath(path)).as_uri()
 
 
 def test_urlpath_inference_strips_protocol(tmpdir):
@@ -116,9 +104,6 @@ def test_urlpath_expand_read():
         assert len(paths) == 2
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 5), reason="Recursive glob is new in Python 3.5"
-)
 def test_recursive_glob_expand():
     """Make sure * is expanded in file paths when reading."""
     with filetexts(
@@ -208,6 +193,13 @@ def test_read_bytes_include_path():
         assert {os.path.split(path)[1] for path in paths} == set(files.keys())
 
 
+@pytest.mark.xfail(
+    os.environ.get("GITHUB_ACTIONS")
+    and sys.platform == "win32"
+    and sys.version_info[:2] == (3, 6),
+    reason="TODO: Fails on GitHub Actions when running Python 3.6 on Windows."
+    "See https://github.com/dask/dask/pull/5862.",
+)
 def test_with_urls():
     with filetexts(files, mode="b"):
         # OS-independent file:// URI with glob *
@@ -218,7 +210,6 @@ def test_with_urls():
 
 @pytest.mark.skipif(sys.platform == "win32", reason="pathlib and moto clash on windows")
 def test_with_paths():
-    pathlib = pytest.importorskip("pathlib")
     with filetexts(files, mode="b"):
         url = pathlib.Path("./.test.accounts.*")
         sample, values = read_bytes(url, blocksize=None)
@@ -274,8 +265,6 @@ fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_compression(fmt, blocksize):
-    if fmt == "zip" and sys.version_info.minor == 5:
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")
     files2 = valmap(compress[fmt], files)
@@ -327,8 +316,6 @@ def test_open_files_text_mode(encoding):
 @pytest.mark.parametrize("mode", ["rt", "rb"])
 @pytest.mark.parametrize("fmt", list(compr))
 def test_open_files_compression(mode, fmt):
-    if fmt == "zip" and sys.version_info.minor == 5:
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")
     files2 = valmap(compress[fmt], files)
@@ -418,7 +405,7 @@ def test_py2_local_bytes(tmpdir):
     files = open_files(fn, compression="gzip", mode="rt")
 
     with files[0] as f:
-        assert all(isinstance(line, unicode) for line in f)
+        assert all(isinstance(line, str) for line in f)
 
 
 def test_abs_paths(tmpdir):

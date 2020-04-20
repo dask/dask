@@ -37,7 +37,7 @@ to computing resources in a way that is native to both the users and IT.
 institutions today, and it is a common entry point for Dask usage.
 
 
-Is Dask Mature?  Why should we trust it?
+Is Dask mature?  Why should we trust it?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Yes.  While Dask itself is relatively new (it began in 2015) it is built by the
@@ -151,13 +151,13 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     To help with this, you'll likely want to use `Dask-Yarn <https://yarn.dask.org>`_.
 
 2.  **HPC**: If you have an HPC machine that runs resource managers like SGE,
-    SLLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
+    SLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
     users can launch Dask on these systems today using either:
 
-    -  `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
+    - `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
       ``qsub``, ``sbatch``, ``bsub`` or other submission tools in interactive
       settings.
-    -  `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
+    - `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
       batch settings
 
     For more information see :doc:`setup/hpc`
@@ -167,16 +167,16 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     all of which provide hosted Kubernetes as a service.  People today use Dask
     on Kubernetes using either of the following:
 
-    -  **Helm**: an easy way to stand up a long-running Dask cluster and
+    - **Helm**: an easy way to stand up a long-running Dask cluster and
       Jupyter notebook
 
-    -  **Dask-Kubernetes**: for native Kubernetes integration for fast moving
+    - **Dask-Kubernetes**: for native Kubernetes integration for fast moving
       or ephemeral deployments.
 
     For more information see :doc:`setup/kubernetes`
 
 
-Is Dask Secure?
+Is Dask secure?
 ~~~~~~~~~~~~~~~
 
 Dask is deployed today within highly secure institutions,
@@ -189,7 +189,7 @@ your institution likely already does this and uses standard technologies like
 SSL/TLS, Kerberos, and other systems with which Dask can integrate.
 
 
-Do I need to purchase a new Cluster?
+Do I need to purchase a new cluster?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 No.  It is easy to run Dask today on most clusters.
@@ -234,7 +234,7 @@ In each case Dask integrates with existing processes and technologies
 that are well understood and familiar to the institution.
 
 
-How Does Dask communicate data between machines?
+How does Dask communicate data between machines?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Dask usually communicates over TCP, using msgpack for small administrative
@@ -294,7 +294,7 @@ The *vast majority* of institutional users though do not reach this limit.
 For more information you may want to peruse our :doc:`best practices
 <best-practices>`
 
-Is Dask Resilient?  What happens when a machine goes down?
+Is Dask resilient?  What happens when a machine goes down?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Yes, Dask is resilient to the failure of worker nodes.  It knows how it came to
@@ -315,7 +315,7 @@ No, but it's very close.  That being said your data scientists will still
 have to learn some things.
 
 What we find is that the Numpy/Pandas/Scikit-Learn APIs aren't the challenge
-when institutions adopt Dask.  When API consistencies do exist, even
+when institutions adopt Dask.  When API inconsistencies do exist, even
 modestly skilled programmers are able to understand why and work around them
 without much pain.
 
@@ -331,7 +331,7 @@ accumulated experience, is Dask's :doc:`Diagnostic Dashboard
 The dashboard delivers a ton of visual feedback to users as they are running
 their computation to help them understand what is going on.  This both helps
 them to identify and resolve immediate bottlenecks, and also builds up that
-parallel performance intuition suprisingly quickly.
+parallel performance intuition surprisingly quickly.
 
 
 How much performance tuning does Dask require?

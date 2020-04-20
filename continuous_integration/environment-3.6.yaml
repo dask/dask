@@ -1,25 +1,27 @@
-# This file intends to test the oldest supported versions
-# of dependencies
 name: test-environment
 channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.5.*
-  - numpy=1.13.*
-  - pandas=0.21.*
+  - python=3.6.*
+  - numpy=1.15.*
+  - pandas=0.23.*
   # test dependencies
   - pytest
   - pytest-xdist
   - moto
-  - fastparquet
+  - coverage
+  - codecov
+  # Issue with conda package for NumPy 1.15?
+  # See fastparquet-444
+  # - fastparquet
   - h5py
   - pytables
+  - fsspec==0.6.0
   - zarr
-  - fsspec
   - tiledb-py
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
   # other -- IO
   - bcolz
   - blosc
@@ -32,7 +34,7 @@ dependencies:
   - cloudpickle
   - crick
   - cytoolz
-  - distributed==2.0.1
+  - distributed
   - graphviz
   - ipython
   - lz4
@@ -49,8 +51,6 @@ dependencies:
   - cachey
   - python-graphviz
   - pandas-datareader
+  - python-xxhash
+  - mmh3
   - pip
-  - pip:
-      - cityhash
-      - mmh3
-      - xxhash

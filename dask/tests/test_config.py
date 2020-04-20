@@ -1,4 +1,3 @@
-import yaml
 import os
 import stat
 import sys
@@ -26,6 +25,8 @@ from dask.config import (
 )
 
 from dask.utils import tmpfile
+
+yaml = pytest.importorskip("yaml")
 
 
 def test_canonical_name():
@@ -415,3 +416,5 @@ def test_merge_None_to_dict():
 
 def test_core_file():
     assert "temporary-directory" in dask.config.config
+    assert "dataframe" in dask.config.config
+    assert "shuffle-compression" in dask.config.get("dataframe")

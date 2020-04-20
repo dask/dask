@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 try:
     from .blockwise import blockwise, atop
     from .core import (
@@ -21,6 +19,7 @@ try:
         broadcast_to,
         from_zarr,
         to_zarr,
+        unify_chunks,
     )
     from .tiledb_io import from_tiledb, to_tiledb
     from .numpy_compat import rollaxis, moveaxis
@@ -191,12 +190,14 @@ try:
         all,
         min,
         max,
+        median,
         moment,
         trace,
         argmin,
         argmax,
         nansum,
         nanmean,
+        nanmedian,
         nanstd,
         nanvar,
         nanmin,
@@ -244,6 +245,6 @@ except ImportError as e:
         "Dask array requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install dask                 # either conda install\n"
-        "  pip install dask[array] --upgrade  # or pip install"
+        "  python -m pip install dask[array] --upgrade  # or python -m pip install"
     )
     raise ImportError(str(e) + "\n\n" + msg)

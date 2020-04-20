@@ -8,7 +8,6 @@ from distutils.version import LooseVersion
 
 from dask.bytes.core import open_files
 from dask.bytes._compatibility import FSSPEC_042
-from dask.compatibility import PY2
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -22,10 +21,7 @@ def dir_server():
             with open(os.path.join(d, fn), "wb") as f:
                 f.write(b"a" * 10000)
 
-        if PY2:
-            cmd = [sys.executable, "-m", "SimpleHTTPServer", "8999"]
-        else:
-            cmd = [sys.executable, "-m", "http.server", "8999"]
+        cmd = [sys.executable, "-m", "http.server", "8999"]
         p = subprocess.Popen(cmd, cwd=d)
         timeout = 10
         while True:
@@ -109,7 +105,7 @@ def test_ops_blocksize(dir_server):
     fn = files[1]
     f = open_files(root + fn, block_size=2)[0]
     with f as f:
-        # fails becasue we want only 12 bytes
+        # fails because we want only 12 bytes
         with pytest.raises(ValueError):
             assert f.read(10) == data[:10]
 
@@ -161,7 +157,7 @@ def test_open_glob(dir_server):
 def test_parquet():
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
-    pytest.importorskip("fastparquet")  # no pyarrow compatability FS yet
+    pytest.importorskip("fastparquet")  # no pyarrow compatibility FS yet
     df = dd.read_parquet(
         [
             "https://github.com/Parquet/parquet-compatibility/raw/"

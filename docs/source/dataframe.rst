@@ -21,6 +21,22 @@ for larger-than-memory computing on a single machine, or on many different
 machines in a cluster.  One Dask DataFrame operation triggers many operations
 on the constituent Pandas DataFrames.
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/AT2XtFehFSQ"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
+Examples
+--------
+
+Visit https://examples.dask.org/dataframe.html to see and run examples using
+Dask DataFrame.
+
 Design
 ------
 

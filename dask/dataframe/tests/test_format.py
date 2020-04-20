@@ -1,4 +1,3 @@
-# coding: utf-8
 import pandas as pd
 from textwrap import dedent
 
@@ -528,3 +527,41 @@ def test_duplicate_columns_repr():
     arr = da.from_array(np.arange(10).reshape(5, 2), chunks=(5, 2))
     frame = dd.from_dask_array(arr, columns=["a", "a"])
     repr(frame)
+
+
+def test_empty_repr():
+    df = pd.DataFrame()
+    ddf = dd.from_pandas(df, npartitions=1)
+    exp = (
+        "Empty Dask DataFrame Structure:\n"
+        "Columns: []\n"
+        "Divisions: [, ]\n"
+        "Dask Name: from_pandas, 1 tasks"
+    )
+    assert repr(ddf) == exp
+    exp_table = """<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+    </tr>
+    <tr>
+      <th>npartitions=1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th></th>
+    </tr>
+    <tr>
+      <th></th>
+    </tr>
+  </tbody>
+</table>"""
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
+<div>
+{style}{exp_table}
+</div>
+<div>Dask Name: from_pandas, 1 tasks</div>""".format(
+        style=style, exp_table=exp_table
+    )
+    assert ddf._repr_html_() == exp

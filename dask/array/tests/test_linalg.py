@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import pytest
 
 pytest.importorskip("numpy")
@@ -19,12 +17,7 @@ from dask.array.utils import assert_eq, same_keys
         (20, 10, 10, None),  # tall-skinny regular blocks
         (20, 10, (3, 10), None),  # tall-skinny regular fat layers
         (20, 10, ((8, 4, 8), 10), None),  # tall-skinny irregular fat layers
-        (
-            40,
-            10,
-            ((15, 5, 5, 8, 7), (10)),
-            None,
-        ),  # tall-skinny non-uniform chunks (why?)
+        (40, 10, ((15, 5, 5, 8, 7), 10), None),  # tall-skinny non-uniform chunks (why?)
         (128, 2, (16, 2), None),  # tall-skinny regular thin layers; recursion_depth=1
         (
             129,
@@ -55,7 +48,7 @@ from dask.array.utils import assert_eq, same_keys
         (
             10,
             40,
-            ((10), (15, 5, 5, 8, 7)),
+            (10, (15, 5, 5, 8, 7)),
             ValueError,
         ),  # short-fat non-uniform chunks (why?)
         (20, 20, 10, ValueError),  # 2x2 regular blocks
@@ -268,7 +261,7 @@ def test_tsqr_zero_height_chunks():
     assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
 
     # uncertainty
-    mat2 = np.vstack([mat, -np.ones((10, 5))])
+    mat2 = np.vstack([mat, -(np.ones((10, 5)))])
     v2 = mat2[:, 0]
     x2 = da.from_array(mat2, chunks=5)
     c = da.from_array(v2, chunks=5)
@@ -292,7 +285,7 @@ def test_tsqr_zero_height_chunks():
         (
             40,
             10,
-            ((15, 5, 5, 8, 7), (10)),
+            ((15, 5, 5, 8, 7), 10),
             ValueError,
         ),  # tall-skinny non-uniform chunks (why?)
         (
@@ -342,7 +335,7 @@ def test_tsqr_zero_height_chunks():
         (10, 10, 10, None),  # single block square
         (10, 40, (10, 10), None),  # short-fat regular blocks
         (10, 40, (10, 15), None),  # short-fat irregular blocks
-        (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+        (10, 40, (10, (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
         (20, 20, 10, ValueError),  # 2x2 regular blocks
     ],
 )
@@ -373,12 +366,7 @@ def test_sfqr(m, n, chunks, error_type):
         (20, 10, 10, None),  # tall-skinny regular blocks
         (20, 10, (3, 10), None),  # tall-skinny regular fat layers
         (20, 10, ((8, 4, 8), 10), None),  # tall-skinny irregular fat layers
-        (
-            40,
-            10,
-            ((15, 5, 5, 8, 7), (10)),
-            None,
-        ),  # tall-skinny non-uniform chunks (why?)
+        (40, 10, ((15, 5, 5, 8, 7), 10), None),  # tall-skinny non-uniform chunks (why?)
         (128, 2, (16, 2), None),  # tall-skinny regular thin layers; recursion_depth=1
         (
             129,
@@ -406,7 +394,7 @@ def test_sfqr(m, n, chunks, error_type):
         (10, 10, 10, None),  # single block square
         (10, 40, (10, 10), None),  # short-fat regular blocks
         (10, 40, (10, 15), None),  # short-fat irregular blocks
-        (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+        (10, 40, (10, (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
         (20, 20, 10, NotImplementedError),  # 2x2 regular blocks
     ],
 )

@@ -34,22 +34,29 @@ the ``config`` dictionary or the ``get`` function:
    >>> import dask.distributed  # populate config with distributed defaults
    >>> dask.config.config
    {
-     'logging': {
-       'distributed': 'info',
-       'bokeh': 'critical',
-       'tornado': 'critical',
-     }
-     'admin': {
-       'log-format': '%(name)s - %(levelname)s - %(message)s'
-     }
+       "array": {
+           "chunk-size": "128 MiB",
+       }
+       "distributed": {
+           "logging": {
+               "distributed": "info",
+               "bokeh": "critical",
+               "tornado": "critical"
+            },
+            "admin": {
+                "log-format": "%(name)s - %(levelname)s - %(message)s"
+            }
+       }
    }
 
-   >>> dask.config.get('logging')
-   {'distributed': 'info',
-    'bokeh': 'critical',
-    'tornado': 'critical'}
+   >>> dask.config.get("distributed.logging")
+   {
+       'distributed': 'info',
+       'bokeh': 'critical',
+       'tornado': 'critical'
+   }
 
-   >>> dask.config.get('logging.bokeh')  # use `.` for nested access
+   >>> dask.config.get('distributed.logging.bokeh')  # use `.` for nested access
    'critical'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
@@ -59,6 +66,8 @@ Note that the ``get`` function treats underscores and hyphens identically.
 For example, ``dask.config.get('num_workers')`` is equivalent to
 ``dask.config.get('num-workers')``.
 
+Values like ``"128 MiB"`` and ``"10s"`` are parsed using the functions in
+:ref:`api.utilities`.
 
 Specify Configuration
 ---------------------
@@ -70,17 +79,21 @@ You can specify configuration values in YAML files like the following:
 
 .. code-block:: yaml
 
-   logging:
-     distributed: info
-     bokeh: critical
-     tornado: critical
+   array:
+      chunk-size: 128 MiB
 
-   scheduler:
-     work-stealing: True
-     allowed-failures: 5
+   distributed:
+     logging:
+       distributed: info
+       bokeh: critical
+       tornado: critical
 
-    admin:
-      log-format: '%(name)s - %(levelname)s - %(message)s'
+     scheduler:
+       work-stealing: True
+       allowed-failures: 5
+
+      admin:
+        log-format: '%(name)s - %(levelname)s - %(message)s'
 
 These files can live in any of the following locations:
 
@@ -118,11 +131,13 @@ resulting in configuration values like the following:
 
 .. code-block:: python
 
-   {'distributed':
-     {'scheduler':
-       {'work-stealing': True,
-        'allowed-failures': 5}
-     }
+   {
+       'distributed': {
+           'scheduler': {
+               'work-stealing': True,
+               'allowed-failures': 5
+           }
+       }
    }
 
 Dask searches for all environment variables that start with ``DASK_``, then
@@ -153,9 +168,11 @@ or environment variables mentioned above:
 
    >>> import dask.distributed
    >>> dask.config.config  # New values have been added
-   {'scheduler': ...,
-    'worker': ...,
-    'tls': ...}
+   {
+       'scheduler': ...,
+       'worker': ...,
+       'tls': ...
+   }
 
 
 Directly within Python

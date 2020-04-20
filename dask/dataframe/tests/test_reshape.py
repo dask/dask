@@ -1,22 +1,11 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
-
-
-skip_if_no_get_dummies_sparse = pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0", reason="sparse added."
-)
-skip_if_no_get_dummies_dtype = pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0", reason="dtype added."
-)
-skip_if_get_dummies_dtype = pytest.mark.skipif(
-    PANDAS_VERSION >= "0.23.0", reason="dtype added."
-)
+from dask.dataframe._compat import tm
+from dask.dataframe.utils import assert_eq, make_meta, PANDAS_GT_0240
 
 
 @pytest.mark.parametrize(
@@ -119,7 +108,6 @@ def test_get_dummies_sparse():
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
-@skip_if_no_get_dummies_sparse
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
         {
@@ -141,7 +129,6 @@ def test_get_dummies_sparse_mix():
     assert pd.api.types.is_sparse(res.A_a.compute())
 
 
-@skip_if_no_get_dummies_dtype
 def test_get_dummies_dtype():
     df = pd.DataFrame(
         {
@@ -159,22 +146,6 @@ def test_get_dummies_dtype():
     # dask's get_dummies on a pandas dataframe.
     assert_eq(dd.get_dummies(df, dtype="float64"), exp)
     assert res.compute().A_a.dtype == "float64"
-
-
-@skip_if_get_dummies_dtype
-def test_get_dummies_dtype_raises():
-    df = pd.DataFrame(
-        {
-            "A": pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]),
-            "B": [0, 0, 1],
-        }
-    )
-    ddf = dd.from_pandas(df, 2)
-
-    with pytest.raises(ValueError) as m:
-        dd.get_dummies(ddf, dtype="float64")
-
-    assert m.match("0.23.0")
 
 
 def test_get_dummies_errors():
@@ -244,6 +215,20 @@ def test_pivot_table_dtype():
     ).astype(np.float64)
 
     assert_eq(res, exp)
+
+
+def test_pivot_table_index_dtype():
+    df = pd.DataFrame(
+        {
+            "A": pd.date_range(start="2019-08-01", periods=3, freq="1D"),
+            "B": pd.Categorical(list("abc")),
+            "C": [1, 2, 3],
+        }
+    )
+    ddf = dd.from_pandas(df, 2)
+    res = dd.pivot_table(ddf, index="A", columns="B", values="C", aggfunc="count")
+
+    assert res.index.dtype == np.dtype("datetime64[ns]")
 
 
 def test_pivot_table_errors():

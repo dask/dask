@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
