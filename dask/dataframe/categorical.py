@@ -21,7 +21,6 @@ def _categorize_block(df, categories, index):
     """
     df = df.copy()
     for col, vals in categories.items():
-        import pdb;pdb.set_trace()
         if not is_categorical_dtype(df[col]):
             df[col] = df[col].astype('category')
         df[col] = df[col].cat.set_categories(vals)
