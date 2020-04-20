@@ -25,8 +25,9 @@ def _categorize_block(df, categories, index):
             df[col] = df[col].astype('category')
         df[col] = df[col].cat.set_categories(vals)
     if index is not None:
-        if not is_categorical_dtype(df.index):
-            ind = df.index.astype(dtype='category')
+        ind = df.index
+        if not is_categorical_dtype(ind):
+            ind = ind.astype(dtype='category')
         ind = ind.set_categories(index)
         ind.name = df.index.name
         df.index = ind
