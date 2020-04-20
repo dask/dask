@@ -672,6 +672,8 @@ def test_partition_on_cats(tmpdir, engine):
 @pytest.mark.parametrize("meta", [False, True])
 @pytest.mark.parametrize("stats", [False, True])
 def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
+    check_pyarrow()
+
     tmp = str(tmpdir)
     d = pd.DataFrame(
         {
