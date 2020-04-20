@@ -110,7 +110,7 @@ class Worker(Process):
         cmd = " ".join(
             [
                 set_env,
-                sys.executable,
+                self.remote_python or sys.executable,
                 "-m",
                 self.worker_module,
                 self.scheduler,
@@ -186,7 +186,12 @@ class Scheduler(Process):
                 )
 
         cmd = " ".join(
-            [set_env, sys.executable, "-m", "distributed.cli.dask_scheduler",]
+            [
+                set_env,
+                self.remote_python or sys.executable,
+                "-m",
+                "distributed.cli.dask_scheduler",
+            ]
             + cli_keywords(self.kwargs, cls=_Scheduler)
         )
         self.proc = await self.connection.create_process(cmd)
