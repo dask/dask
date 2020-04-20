@@ -1,3 +1,8 @@
+def pandas_ewm_method(df, ewm_kwargs, name, *args, **kwargs):
+    ewm = df.ewm(**ewm_kwargs)
+    return getattr(ewm, name)(*args, **kwargs)
+
+
 class EWM(object):
     """Provides exponentially weighted calculations."""
 
