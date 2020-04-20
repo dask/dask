@@ -96,10 +96,12 @@ distributed:
     preload-argv: []        # See https://docs.dask.org/en/latest/setup/custom-startup.html
 
   client:
-    heartbeat: 5s  # time between client heartbeats
+    heartbeat: 5s  # Interval between client heartbeats
+    scheduler-info-interval: 2s  # Interval between scheduler-info updates
 
   deploy:
     lost-worker-timeout: 15s  # Interval after which to hard-close a lost worker job
+    cluster-repr-interval: 500ms  # Interval between calls to update cluster-repr for the widget
 
   adaptive:
     interval: 1s         # Interval between scaling evaluations
