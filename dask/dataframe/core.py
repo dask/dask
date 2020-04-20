@@ -1441,6 +1441,34 @@ Dask Name: {name}, {task} tasks"""
             axis=axis,
         )
 
+    def ewm(
+        self,
+        com=None,
+        span=None,
+        halflife=None,
+        alpha=None,
+        min_periods=0,
+        adjust=True,
+        ignore_na=False,
+        axis=0,
+    ):
+        """Provides ewm transformations.
+            TODO: rest of the docs
+        """
+        from dask.dataframe.EWM import EWM
+
+        return EWM(
+            self,
+            com=com,
+            span=span,
+            halflife=halflife,
+            alpha=alpha,
+            min_periods=min_periods,
+            adjust=adjust,
+            ignore_na=ignore_na,
+            axis=0,
+        )
+
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
         """
