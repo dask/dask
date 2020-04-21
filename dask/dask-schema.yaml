@@ -1,4 +1,3 @@
-
 properties:
   temporary-directory:
     type:
@@ -56,7 +55,7 @@ properties:
               Upper limit for width, where width = num_nodes / height, a good measure
               of parallelizability
 
-          subgraphs:
+          subraphs:
             type: boolean
             description: |
               Configuration setting to control whether to fuse multiple tasks into

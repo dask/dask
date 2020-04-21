@@ -447,11 +447,21 @@ def test_schema_is_complete():
 
     def test_matches(c, s):
         for k, v in c.items():
+            if list(c) != list(s["properties"]):
+                raise ValueError(
+                    "\nThe dask.yaml and dask-schema.yaml files are not in sync.\n"
+                    "This usually happens when we add a new configuration value,\n"
+                    "but don't add the schema of that value to the dask-schema.yaml file\n"
+                    "Please modify these files to include the missing values: \n\n"
+                    "    dask.yaml:        {}\n"
+                    "    dask-schema.yaml: {}\n\n"
+                    "Examples in these files should be a good start, \n"
+                    "even if you are not familiar with the jsonschema spec".format(
+                        sorted(c), sorted(s["properties"])
+                    )
+                )
             if isinstance(v, dict):
-                try:
-                    test_matches(c[k], s["properties"][k])
-                except KeyError:
-                    breakpoint()
+                test_matches(c[k], s["properties"][k])
 
     test_matches(config, schema)
 
