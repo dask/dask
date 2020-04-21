@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 import os
+import yaml
 
 import pytest
 
@@ -265,3 +266,50 @@ qualname=foo.bar
             """
         subprocess.check_call([sys.executable, "-c", code])
     os.remove(logging_config.name)
+
+
+def test_schema():
+    jsonschema = pytest.importorskip("jsonschema")
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "distributed.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "distributed-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    jsonschema.validate(config, schema)
+
+
+def test_schema_is_complete():
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "distributed.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "distributed-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    skip = {"default-task-durations", "bokeh-application"}
+
+    def test_matches(c, s):
+        if set(c) != set(s["properties"]):
+            raise ValueError(
+                "\nThe distributed.yaml and distributed-schema.yaml files are not in sync.\n"
+                "This usually happens when we add a new configuration value,\n"
+                "but don't add the schema of that value to the distributed-schema.yaml file\n"
+                "Please modify these files to include the missing values: \n\n"
+                "    distributed.yaml:        {}\n"
+                "    distributed-schema.yaml: {}\n\n"
+                "Examples in these files should be a good start, \n"
+                "even if you are not familiar with the jsonschema spec".format(
+                    sorted(c), sorted(s["properties"])
+                )
+            )
+        for k, v in c.items():
+            if isinstance(v, dict) and k not in skip:
+                test_matches(c[k], s["properties"][k])
+
+    test_matches(config, schema)

@@ -90,7 +90,9 @@ logger = logging.getLogger(__name__)
 
 
 LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
-DEFAULT_DATA_SIZE = dask.config.get("distributed.scheduler.default-data-size")
+DEFAULT_DATA_SIZE = parse_bytes(
+    dask.config.get("distributed.scheduler.default-data-size")
+)
 
 DEFAULT_EXTENSIONS = [
     LockExtension,

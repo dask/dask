@@ -1,0 +1,796 @@
+properties:
+  distributed:
+    type: object
+    properties:
+
+      version:
+        type: integer
+
+      scheduler:
+        type: object
+        properties:
+
+          allowed-failures:
+            type: integer
+            minimum: 0
+            description: |
+              The number of retries before a task is considered bad
+
+              When a worker dies when a task is running that task is rerun elsewhere.
+              If many workers die while running this same task then we call the task bad, and raise a KilledWorker exception.
+              This is the number of workers that are allowed to die before this task is marked as bad.
+
+          bandwidth:
+            type:
+            - integer
+            - string
+            description: |
+              The expected bandwidth between any pair of workers
+
+              This is used when making scheduling decisions.
+              The scheduler will use this value as a baseline, but also learn it over time.
+
+          blocked-handlers:
+            type: array
+            description: |
+              A list of handlers to exclude
+
+              The scheduler operates by receiving messages from various workers and clients
+              and then performing operations based on those messages.
+              Each message has an operation like "close-worker" or "task-finished".
+              In some high security situations administrators may choose to block certain handlers
+              from running.  Those handlers can be listed here.
+
+              For a list of handlers see the `dask.distributed.Scheduler.handlers` attribute.
+
+          default-data-size:
+            type:
+            - string
+            - integer
+            description: |
+              The default size of a piece of data if we don't know anything about it.
+
+              This is used by the scheduler in some scheduling decisions
+
+          events-cleanup-delay:
+            type: string
+            description: |
+              The amount of time to wait until workers or clients are removed from the event log
+              after they have been removed from the scheduler
+
+          idle-timeout:
+            type:
+            - string
+            - "null"
+            description: |
+              Shut down the scheduler after this duration if no activity has occured
+
+              This can be helpful to reduce costs and stop zombie processes from roaming the earth.
+
+          transition-log-length:
+            type: integer
+            minimum: 0
+            description: |
+              How long should we keep the transition log
+
+              Every time a task transitions states (like "waiting", "processing", "memory", "released")
+              we record that transition in a log.
+
+              To make sure that we don't run out of memory
+              we will clear out old entries after a certain length.
+              This is that length.
+
+          work-stealing:
+            type: boolean
+            description: |
+              Whether or not to balance work between workers dynamically
+
+              Some times one worker has more work than we expected.
+              The scheduler will move these tasks around as necessary by default.
+              Set this to false to disable this behavior
+
+          work-stealing-interval:
+            type: string
+            description: |
+              How frequently to balance worker loads
+
+          worker-ttl:
+            type:
+            - string
+            - "null"
+            description: |
+              Time to live for workers.
+
+              If we don't receive a heartbeat faster than this then we assume that the worker has died.
+
+          pickle:
+            type: boolean
+            description: |
+              Is the scheduler allowed to deserialize arbitrary bytestrings?
+
+              The scheduler almost never deserializes user data.
+              However there are some cases where the user can submit functions to run directly on the scheduler.
+              This can be convenient for debugging, but also introduces some security risk.
+              By setting this to false we ensure that the user is unable to run arbitrary code on the scheduler.
+
+          preload:
+            type: array
+            description: |
+              Run custom modules during the lifetime of the scheduler
+
+              You can run custom modules when the scheduler starts up and closes down.
+              See https://docs.dask.org/en/latest/setup/custom-startup.html for more information
+
+          preload-argv:
+            type: array
+            description: |
+              Arguments to pass into the preload scripts described above
+
+              See https://docs.dask.org/en/latest/setup/custom-startup.html for more information
+
+          unknown-task-duration:
+            type: string
+            description: |
+              Default duration for all tasks with unknown durations
+
+              Over time the scheduler learns a duration for tasks.
+              However when it sees a new type of task for the first time it has to make a guess
+              as to how long it will take.  This value is that guess.
+
+          default-task-durations:
+            type: object
+            description: |
+              How long we expect function names to run
+
+              Over time the scheduler will learn these values, but these give it a good starting point.
+
+          validate:
+            type: boolean
+            description: |
+              Whether or not to run consistency checks during execution.
+              This is typically only used for debugging.
+
+          dashboard:
+            type: object
+            description: |
+              Configuration options for Dask's real-time dashboard
+
+            properties:
+              status:
+                type: object
+                description: The main status page of the dashboard
+                properties:
+                  task-stream-length:
+                    type: integer
+                    minimum: 0
+                    description: |
+                      The maximum number of tasks to include in the task stream plot
+              tasks:
+                type: object
+                description: |
+                  The page which includes the full task stream history
+                properties:
+                  task-stream-length:
+                    type: integer
+                    minimum: 0
+                    description: |
+                      The maximum number of tasks to include in the task stream plot
+              tls:
+                type: object
+                description: |
+                  Settings around securing the dashboard
+                properties:
+                  ca-file:
+                    type:
+                    - string
+                    - "null"
+                  key:
+                    type:
+                    - string
+                    - "null"
+                  cert:
+                    type:
+                    - string
+                    - "null"
+              bokeh-application:
+                type: object
+                description: |
+                  Keywords to pass to the BokehTornado application
+          locks:
+            type: object
+            description: |
+              Settings for Dask's distributed Lock object
+
+              See https://docs.dask.org/en/latest/futures.html#locks for more information
+            properties:
+              lease-validation-interval:
+                type: string
+                description: |
+                  The time to wait until an acquired semaphore is released if the Client goes out of scope
+              lease-timeout:
+                type: string
+                description: |
+                  The timeout after which a lease will be released if not refreshed
+
+          http:
+            type: object
+            decription: Settings for Dask's embedded HTTP Server
+            properties:
+              routes:
+                type: array
+                description: |
+                  A list of modules like "prometheus" and "health" that can be included or excluded as desired
+
+                  These modules will have a ``routes`` keyword that gets added to the main HTTP Server.
+                  This is also a list that can be extended with user defined modules.
+
+
+      worker:
+        type: object
+        description: |
+          Configuration settings for Dask Workers
+        properties:
+          blocked-handlers:
+            type: array
+            description: |
+              A list of handlers to exclude
+
+              The scheduler operates by receiving messages from various workers and clients
+              and then performing operations based on those messages.
+              Each message has an operation like "close-worker" or "task-finished".
+              In some high security situations administrators may choose to block certain handlers
+              from running.  Those handlers can be listed here.
+
+              For a list of handlers see the `dask.distributed.Scheduler.handlers` attribute.
+
+          multiprocessing-method:
+            type: string
+            description: |
+              How we create new workers, one of "spawn", "forkserver", or "fork"
+
+              This is passed to the ``multiprocessing.get_context`` function.
+          use-file-locking:
+            type: boolean
+            description: |
+              Whether or not to use lock files when creating workers
+
+              Workers create a local directory in which to place temporary files.
+              When many workers are created on the same process at once
+              these workers can conflict with each other by trying to create this directory all at the same time.
+
+              To avoid this, Dask usually used a file-based lock.
+              However, on some systems file-based locks don't work.
+              This is particularly common on HPC NFS systems, where users may want to set this to false.
+          connections:
+            type: object
+            description: |
+              The number of concurrent connections to allow to other workers
+            properties:
+              incoming:
+                type: integer
+                minimum: 0
+              outgoing:
+                type: integer
+                minimum: 0
+
+          preload:
+            type: array
+            description: |
+              Run custom modules during the lifetime of the worker
+
+              You can run custom modules when the worker starts up and closes down.
+              See https://docs.dask.org/en/latest/setup/custom-startup.html for more information
+
+          preload-argv:
+            type: array
+            description: |
+              Arguments to pass into the preload scripts described above
+
+              See https://docs.dask.org/en/latest/setup/custom-startup.html for more information
+
+          daemon:
+            type: boolean
+            description: |
+              Whether or not to run our process as a daemon process
+
+          validate:
+            type: boolean
+            description: |
+              Whether or not to run consistency checks during execution.
+              This is typically only used for debugging.
+
+          lifetime:
+            type: object
+            description: |
+              The worker may choose to gracefully close itself down after some pre-determined time.
+
+              This is particularly useful if you know that your worker job has a time limit on it.
+              This is particularly common in HPC job schedulers.
+
+              For example if your worker has a walltime of one hour,
+              then you may want to set the lifetime.duration to "55 minutes"
+            properties:
+              duration:
+                type:
+                - string
+                - "null"
+                description: |
+                  The time after creation to close the worker, like "1 hour"
+              stagger:
+                type: string
+                description: |
+                  Random amount by which to stagger lifetimes
+
+                  If you create many workers at the same time,
+                  you may want to avoid having them kill themselves all at the same time.
+                  To avoid this you might want to set a stagger time,
+                  so that they close themselves with some random variation, like "5 minutes"
+
+                  That way some workers can die, new ones can be brought up,
+                  and data can be transferred over smoothly.
+              restart:
+                type: boolean
+                description: |
+                  Do we try to resurrect the worker after the lifetime deadline?
+
+
+          profile:
+            type: object
+            description: |
+              The workers periodically poll every worker thread to see what they are working on.
+              This data gets collected into statistical profiling information,
+              which is then periodically bundled together and sent along to the scheduler.
+            properties:
+              interval:
+                type: string
+                description: |
+                  The time between polling the worker threads, typically short like 10ms
+              cycle:
+                type: string
+                description: |
+                  The time between bundling together this data and sending it to the scheduler
+
+                  This controls the granularity at which people can query the profile information
+                  on the time axis.
+              low-level:
+                type: boolean
+                description: |
+                  Whether or not to use the libunwind and stacktrace libraries
+                  to gather profiling information at the lower level (beneath Python)
+
+                  To get this to work you will need to install the experimental stacktrace library at
+
+                  conda install -c numba stacktrace
+
+                  See https://github.com/numba/stacktrace
+
+          memory:
+            type: object
+            description: |
+              When Dask workers have more data than memory they spill this data to disk.
+              They do this at a few conditions.
+            properties:
+              target:
+                type: number
+                minimum: 0
+                maximum: 1
+                description: |
+                  Target fraction below which to try to keep memory
+
+              spill:
+                type: number
+                minimum: 0
+                maximum: 1
+                description: |
+                  When the process memory (as observed by the operating system) gets above this amount we spill data to disk.
+
+              pause:
+                type: number
+                minimum: 0
+                maximum: 1
+                description: |
+                  When the process memory (as observed by the operating system) gets above this amount
+                  we no longer start new tasks on this worker.
+
+              terminate:
+                type: number
+                minimum: 0
+                maximum: 1
+                description: |
+                  When the process memory reaches this level the nanny process will kill the worker
+                  (if a nanny is present)
+
+          http:
+            type: object
+            decription: Settings for Dask's embedded HTTP Server
+            properties:
+              routes:
+                type: array
+                description: |
+                  A list of modules like "prometheus" and "health" that can be included or excluded as desired
+
+                  These modules will have a ``routes`` keyword that gets added to the main HTTP Server.
+                  This is also a list that can be extended with user defined modules.
+          http:
+            type: object
+            decription: Settings for Dask's embedded HTTP Server
+            properties:
+              routes:
+                type: array
+                description: |
+                  A list of modules like "prometheus" and "health" that can be included or excluded as desired
+
+                  These modules will have a ``routes`` keyword that gets added to the main HTTP Server.
+                  This is also a list that can be extended with user defined modules.
+
+      nanny:
+        type: object
+        description: |
+          Configuration settings for Dask Nannies
+        properties:
+
+          preload:
+            type: array
+            description: |
+              Run custom modules during the lifetime of the scheduler
+
+              You can run custom modules when the scheduler starts up and closes down.
+              See https://docs.dask.org/en/latest/setup/custom-startup.html for more information
+
+          preload-argv:
+            type: array
+            description: |
+              Arguments to pass into the preload scripts described above
+
+              See https://docs.dask.org/en/latest/setup/custom-startup.html for more information
+
+      client:
+        type: object
+        description: |
+          Configuration settings for Dask Clients
+
+        properties:
+          heartbeat:
+            type: string
+            description:
+              This value is the time between heartbeats
+
+              The client sends a periodic heartbeat message to the scheduler.
+              If it misses enough of these then the scheduler assumes that it has gone.
+
+          scheduler-info-interval:
+            type: string
+            description: Interval between scheduler-info updates
+
+      deploy:
+        type: object
+        description: Configuration settings for general Dask deployment
+        properties:
+          lost-worker-timeout:
+            type: string
+            description: |
+              Interval after which to hard-close a lost worker job
+
+              Otherwise we wait for a while to see if a worker will reappear
+
+          cluster-repr-interval:
+            type: string
+            description: Interval between calls to update cluster-repr for the widget
+
+      adaptive:
+        type: object
+        description: Configuration settings for Dask's adaptive scheduling
+        properties:
+          interval:
+            type: string
+            description: |
+              The duration between checking in with adaptive scheduling load
+
+              The adaptive system periodically checks scheduler load and determines
+              if it should scale the cluster up or down.
+              This is the timing between those checks.
+
+          target-duration:
+            type: string
+            description: |
+              The desired time for the entire computation to run
+
+              The adaptive system will try to start up enough workers to run
+              the computation in about this time.
+
+          minimum:
+            type: integer
+            minimum: 0
+            description: |
+              The minimum number of workers to keep around
+
+          maximum:
+            type: number
+            minimum: 0
+            description: |
+              The maximum number of workers to keep around
+
+          wait-count:
+            type: integer
+            minimum: 1
+            description: |
+              The number of times a worker should be suggested for removal before removing it
+
+              This helps to smooth out the number of deployed workers
+
+      comm:
+        type: object
+        description: Configuration settings for Dask communications
+        properties:
+
+          retry:
+            type: object
+            description: |
+              Some operations (such as gathering data) are subject to re-tries with the below parameters
+            properties:
+
+              count:
+                type: integer
+                minimum: 0
+                description: |
+                  The number of times to retry a connection
+
+              delay:
+                type: object
+                properties:
+                  min:
+                    type: string
+                    description: The first non-zero delay between retry attempts
+                  max:
+                    type: string
+                    description: The maximum delay between retries
+
+          compression:
+            type: string
+            description: |
+              The compression algorithm to use
+
+              This could be one of lz4, snappy, zstd, or blosc
+
+          offload:
+            type:
+            - boolean
+            - string
+            description: |
+              The size of message after which we choose to offload serialization to another thread
+
+              In some cases, you may also choose to disable this altogether with the value false
+              This is useful if you want to include serialization in profiling data,
+              or if you have data types that are particularly sensitive to deserialization
+
+          socket-backlog:
+            type: integer
+            description: |
+              When shuffling data between workers, there can
+              really be O(cluster size) connection requests
+              on a single worker socket, make sure the backlog
+              is large enough not to lose any.
+
+          zstd:
+            type: object
+            description: Options for the Z Standard compression scheme
+            properties:
+              level:
+                type: integer
+                minimum: 1
+                maximum: 22
+                description: Compression level, between 1 and 22.
+              threads:
+                type: integer
+                minimum: -1
+                description: |
+                  Number of threads to use.
+
+                  0 for single-threaded, -1 to infer from cpu count.
+
+          timeouts:
+            type: object
+            properties:
+              connect:
+                type: string
+              tcp:
+                type: string
+
+          require-encryption:
+            type: boolean
+            description: |
+              Whether to require encryption on non-local comms
+
+          default-scheme:
+            type: string
+            description: The default protocol to use, like tcp or tls
+
+          recent-messages-log-length:
+            type: integer
+            minimum: 0
+            description: number of messages to keep for debugging
+
+          tls:
+            type: object
+            properties:
+              ciphers:
+                type:
+                - string
+                - "null"
+                descsription: Allowed ciphers, specified as an OpenSSL cipher string.
+
+              ca-file:
+                type:
+                - string
+                - "null"
+                description: Path to a CA file, in pem format
+
+              scheduler:
+                type: object
+                description: TLS information for the scheduler
+                properties:
+                  cert:
+                    type:
+                    - string
+                    - "null"
+                    description: Path to certificate file
+                  key:
+                    type:
+                    - string
+                    - "null"
+                    description: |
+                      Path to key file.
+
+                      Alternatively, the key can be appended to the cert file
+                      above, and this field left blank
+
+              worker:
+                type: object
+                description: TLS information for the worker
+                properties:
+                  cert:
+                    type:
+                    - string
+                    - "null"
+                    description: Path to certificate file
+                  key:
+                    type:
+                    - string
+                    - "null"
+                    description: |
+                      Path to key file.
+
+                      Alternatively, the key can be appended to the cert file
+                      above, and this field left blank
+
+              client:
+                type: object
+                description: TLS information for the client
+                properties:
+                  cert:
+                    type:
+                    - string
+                    - "null"
+                    description: Path to certificate file
+                  key:
+                    type:
+                    - string
+                    - "null"
+                    description: |
+                      Path to key file.
+
+                      Alternatively, the key can be appended to the cert file
+                      above, and this field left blank
+
+      dashboard:
+        type: object
+        properties:
+          link:
+            type: string
+            description: |
+              The form for the dashboard links
+
+              This is used wherever we print out the link for the dashboard
+              It is filled in with relevant information like the schema, host, and port number
+          graph-max-items:
+            type: integer
+            minimum: 0
+            description: maximum number of tasks to try to plot in "graph" view
+
+          export-tool:
+            type: boolean
+
+      admin:
+        type: object
+        description: |
+          Options for logs, event loops, and so on
+        properties:
+          tick:
+            type: object
+            description: |
+              Time between event loop health checks
+
+              We set up a periodic callback to run on the event loop and check in fairly frequently.
+              (by default, this is every 20 milliseconds)
+
+              If this periodic callback sees that the last time it checked in was several seconds ago
+              (by default, this is 3 seconds)
+              then it logs a warning saying that something has been stopping the event loop from smooth operation.
+              This is typically caused by GIL holding operations,
+              but could also be several other things.
+
+            properties:
+              interval:
+                type: string
+                description: The time between ticks, default 20ms
+              limit :
+                type: string
+                description: The time allowed before triggering a warning
+
+          max-error-length:
+            type: integer
+            minimum: 0
+            description: |
+              Maximum length of traceback as text
+
+              Some Python tracebacks can be very very long
+              (particularly in stack overflow errors)
+
+              If the traceback is larger than this size (in bytes) then we truncate it.
+
+          log-length:
+            type: integer
+            minimum: 0
+            description: |
+              Default length of logs to keep in memory
+
+              The scheduler and workers keep the last 10000 or so log entries in memory.
+
+          log-format:
+            type: string
+            description: |
+              The log format to emit.
+
+              See https://docs.python.org/3/library/logging.html#logrecord-attributes
+
+          pdb-on-err:
+            type: boolean
+            description: Enter Python Debugger on scheduling error
+
+  rmm:
+    type: object
+    description: |
+      Configuration options for the RAPIDS Memory Manager
+    properties:
+      pool-size:
+        type:
+        - integer
+        - "null"
+        description:
+          The size of the memory pool in bytes
+  ucx:
+    type: object
+    description: |
+      UCX provides access to other network interconnects like Infiniband and NVLINK
+    properties:
+      tcp:
+        type:
+        - boolean
+        - "null"
+      nvlink:
+        type:
+        - boolean
+        - "null"
+      infiniband:
+        type:
+        - boolean
+        - "null"
+      cuda_copy:
+        type:
+        - boolean
+        - "null"
+      net-devices:
+        type:
+        - string
+        - "null"
+        description: Define which Infiniband device to use
