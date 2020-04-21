@@ -27,7 +27,7 @@ class DaskConfigDirective(Directive):
 
 
 def setup(app):
-    app.add_directive("yamltohtml", DaskConfigDirective)
+    app.add_directive("dask-config-block", DaskConfigDirective)
 
     return {
         "version": "0.1",
