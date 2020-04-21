@@ -627,7 +627,7 @@ Dask Name: {name}, {task} tasks"""
         In the case where the metadata doesn't change, you can also pass in
         the object itself directly:
 
-        >>> res = ddf.map_partitions(lambda df: df.head(), meta=df)
+        >>> res = ddf.map_partitions(lambda df: df.head(), meta=ddf)
 
         Also note that the index and divisions are assumed to remain unchanged.
         If the function you're mapping changes the index/divisions, you'll need
@@ -3359,7 +3359,7 @@ class DataFrame(_Frame):
 
     def __len__(self):
         try:
-            s = self[self.columns[0]]
+            s = self.iloc[:, 0]
         except IndexError:
             return super().__len__()
         else:
