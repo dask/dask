@@ -546,9 +546,34 @@ class ArrowEngine(Engine):
             use_pandas_metadata=True,
             use_threads=False,
             **kwargs.get("read", {}),
-        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
-            list(columns_and_parts)
-        ]
+        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=False)
+
+        # Note that `to_pandas(ignore_metadata=False)` means
+        # pyarrow will use the pandas metadata to set the index.
+        index_in_columns_and_parts = set(df.index.names).issubset(
+            set(columns_and_parts)
+        )
+        if not index:
+            if index_in_columns_and_parts:
+                # User does not want to set index and a desired
+                # column/partition has been set to the index
+                df.reset_index(drop=False, inplace=True)
+            else:
+                # User does not want to set index and an
+                # "unwanted" column has been set to the index
+                df.reset_index(drop=True, inplace=True)
+        else:
+            if set(df.index.names) != set(index) and index_in_columns_and_parts:
+                # The wrong index has been set and it contains
+                # one or more desired columns/partitions
+                df.reset_index(drop=False, inplace=True)
+            elif index_in_columns_and_parts:
+                # The correct index has already been set
+                index = False
+                columns_and_parts = list(
+                    set(columns_and_parts).difference(set(df.index.names))
+                )
+        df = df[list(columns_and_parts)]
 
         if index:
             df = df.set_index(index)
