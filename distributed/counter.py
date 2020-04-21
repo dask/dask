@@ -1,8 +1,6 @@
 from collections import defaultdict
 
-from tornado.ioloop import IOLoop
-
-from .utils import PeriodicCallback
+from tornado.ioloop import IOLoop, PeriodicCallback
 
 
 try:

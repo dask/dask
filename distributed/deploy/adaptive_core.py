@@ -1,11 +1,11 @@
 import collections
 import math
 
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 import tlz as toolz
 
 from ..metrics import time
-from ..utils import parse_timedelta, PeriodicCallback
+from ..utils import parse_timedelta
 
 
 class AdaptiveCore:

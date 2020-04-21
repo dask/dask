@@ -32,7 +32,7 @@ from tlz import (
     groupby,
     concat,
 )
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 
 import dask
 
@@ -64,7 +64,6 @@ from .utils import (
     no_default,
     parse_timedelta,
     parse_bytes,
-    PeriodicCallback,
     shutting_down,
     key_split_group,
     empty_context,
@@ -1357,11 +1356,11 @@ class Scheduler(ServerNode):
         )
 
         if self.worker_ttl:
-            pc = PeriodicCallback(self.check_worker_ttl, self.worker_ttl, io_loop=loop)
+            pc = PeriodicCallback(self.check_worker_ttl, self.worker_ttl)
             self.periodic_callbacks["worker-ttl"] = pc
 
         if self.idle_timeout:
-            pc = PeriodicCallback(self.check_idle, self.idle_timeout / 4, io_loop=loop)
+            pc = PeriodicCallback(self.check_idle, self.idle_timeout / 4)
             self.periodic_callbacks["idle-timeout"] = pc
 
         if extensions is None:
