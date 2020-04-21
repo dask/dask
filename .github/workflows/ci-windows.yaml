@@ -19,8 +19,8 @@ jobs:
         with:
           miniconda-version: "latest"
           python-version: ${{ matrix.python-version }}
-          environment-file: continuous_integration/environment.yml
-          activate-environment: testenv
+          environment-file: continuous_integration/environment-windows.yml
+          activate-environment: dask-distributed
           auto-activate-base: false
 
       - name: Install tornado

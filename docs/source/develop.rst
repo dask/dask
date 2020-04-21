@@ -12,25 +12,26 @@ guidelines`_ in the main documentation.
 Install
 -------
 
-After setting up an environment as described in the `Dask developer
-guidelines`_ you can clone this repository with git::
+Clone this repository with git::
 
    git clone git@github.com:dask/distributed.git
-
-and install it from source::
-
    cd distributed
-   python setup.py install
 
-Using conda, for example::
+Install all dependencies:
 
-   git clone git@github.com:{your-fork}/distributed.git
-   cd distributed
-   conda create -y -n distributed python=3.6
-   conda activate distributed
-   python -m pip install -U -r requirements.txt
-   python -m pip install -U -r dev-requirements.txt
-   python -m pip install -e .
+On Linux / MacOSX::
+
+    source continuous_integration/travis/install.sh
+
+On Windows:
+
+1. Install anaconda or miniconda
+2. ::
+
+    conda create -n dask-distributed -c conda-forge -c defaults python=3.8 tornado=6
+    conda activate dask-distributed
+    conda env update --file continuous_integration/environment-windows.yml
+    python -m pip install .
 
 To keep a fork in sync with the upstream source::
 

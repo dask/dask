@@ -19,7 +19,7 @@ echo "--"
 ulimit -a -H
 
 if [[ $COVERAGE == true ]]; then
-    coverage run $(which py.test) distributed -m "not avoid_travis" $PYTEST_OPTIONS;
+    coverage run $(which py.test) distributed -m "not avoid_travis" $PYTEST_OPTIONS
 else
-    py.test -m "not avoid_travis" distributed $PYTEST_OPTIONS;
-fi;
+    py.test -m "not avoid_travis" distributed $PYTEST_OPTIONS
+fi

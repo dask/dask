@@ -1,6 +1,7 @@
-name: testenv
+name: dask-distributed
 channels:
   - conda-forge
+  - defaults
 dependencies:
   - zstandard
   - bokeh!=2.0.0
@@ -16,18 +17,18 @@ dependencies:
   - prometheus_client
   - psutil
   - pytest
+  - pytest-asyncio
+  - pytest-repeat
+  - pytest-timeout
+  - pytest-faulthandler
   - requests
+  - sortedcollections
   - toolz
   - tblib
   - zict
   - fsspec
   - pip
   - pip:
-      - pytest-repeat
-      - pytest-timeout
-      - pytest-faulthandler
-      - sortedcollections
-      - pytest-asyncio
       - git+https://github.com/dask/dask
       - git+https://github.com/joblib/joblib.git
       - git+https://github.com/dask/zict
