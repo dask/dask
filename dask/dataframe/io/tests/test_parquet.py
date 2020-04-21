@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 from distutils.version import LooseVersion
 
@@ -43,8 +44,12 @@ if pq and pa.__version__ < LooseVersion("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
-    SKIP_PYARROW = not pq
-    SKIP_PYARROW_REASON = "pyarrow not found"
+    if sys.platform == "win32" and pa.__version__ == LooseVersion("0.16.0"):
+        SKIP_PYARROW = True
+        SKIP_PYARROW_REASON = "https://github.com/dask/dask/issues/6093"
+    else:
+        SKIP_PYARROW = not pq
+        SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
 
@@ -667,6 +672,8 @@ def test_partition_on_cats(tmpdir, engine):
 @pytest.mark.parametrize("meta", [False, True])
 @pytest.mark.parametrize("stats", [False, True])
 def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
+    check_pyarrow()
+
     tmp = str(tmpdir)
     d = pd.DataFrame(
         {

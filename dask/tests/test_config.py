@@ -418,3 +418,11 @@ def test_core_file():
     assert "temporary-directory" in dask.config.config
     assert "dataframe" in dask.config.config
     assert "shuffle-compression" in dask.config.get("dataframe")
+
+
+def test_deprecations():
+    with pytest.warns(Warning) as info:
+        with dask.config.set(fuse_ave_width=123):
+            assert dask.config.get("optimization.fuse.ave-width") == 123
+
+    assert "optimization.fuse.ave-width" in str(info[0].message)
