@@ -38,7 +38,7 @@ extensions = [
     "sphinx.ext.extlinks",
     "numpydoc",
     "sphinx_click.ext",
-    "yamltohtml",
+    "dask_config_sphinx_ext",
 ]
 
 numpydoc_show_class_members = False
