@@ -2,7 +2,7 @@ import requests
 import yaml
 
 from docutils import nodes
-from docutils.parsers.rst import Directive
+from docutils.parsers.rst import Directive, directives
 
 
 def get_remote_yaml(url):
@@ -11,17 +11,30 @@ def get_remote_yaml(url):
 
 
 class DaskConfigDirective(Directive):
-    optional_arguments = 3
+
+    option_spec = {
+        "location": directives.unchanged,
+        "schema": directives.uri,
+        "config": directives.uri,
+    }
 
     def run(self):
-        location, config, schema = self.arguments
+        location = self.options["location"]
+        config = self.options["config"]
+        schema = self.options["schema"]
 
         config = get_remote_yaml(config)
         schema = get_remote_yaml(schema)
 
         for k in location.split("."):
-            config = config[k]
-            schema = schema["properties"].get(k, {})
+            # dask config does not have a top level key
+            # we need to pass full schema and config
+            if k == "dask":
+                schema = schema
+                config = config
+            else:
+                config = config[k]
+                schema = schema["properties"].get(k, {})
         html = generate_html(config, schema, location)
         return [nodes.raw("", html, format="html")]
 
@@ -36,11 +49,11 @@ def setup(app):
     }
 
 
-def process_thing(key, value, schema, prefix=""):
+def dask_config_to_html(key, value, schema, prefix=""):
     if isinstance(value, dict):
         return sum(
             [
-                process_thing(
+                dask_config_to_html(
                     k,
                     v,
                     schema.get("properties", {}).get(k, {"properties": {}}),
@@ -75,5 +88,7 @@ def process_thing(key, value, schema, prefix=""):
 
 
 def generate_html(config, schema, location):
-    nested_html = process_thing(key="", value=config, schema=schema, prefix=location)
+    nested_html = dask_config_to_html(
+        key="", value=config, schema=schema, prefix=location
+    )
     return "".join(nested_html)

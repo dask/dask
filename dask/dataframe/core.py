@@ -627,7 +627,7 @@ Dask Name: {name}, {task} tasks"""
         In the case where the metadata doesn't change, you can also pass in
         the object itself directly:
 
-        >>> res = ddf.map_partitions(lambda df: df.head(), meta=df)
+        >>> res = ddf.map_partitions(lambda df: df.head(), meta=ddf)
 
         Also note that the index and divisions are assumed to remain unchanged.
         If the function you're mapping changes the index/divisions, you'll need
@@ -1683,6 +1683,18 @@ Dask Name: {name}, {task} tasks"""
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
+
+    @derived_from(pd.DataFrame)
+    def mode(self, dropna=True, split_every=False):
+        mode_series = self.reduction(
+            chunk=M.value_counts,
+            combine=M.sum,
+            aggregate=_mode_aggregate,
+            split_every=split_every,
+            chunk_kwargs={"dropna": dropna},
+            aggregate_kwargs={"dropna": dropna},
+        )
+        return mode_series
 
     @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
@@ -2812,6 +2824,10 @@ Dask Name: {name}, {task} tasks""".format(
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
 
+    @derived_from(pd.Series)
+    def mode(self, dropna=True, split_every=False):
+        return super(Series, self).mode(dropna=dropna, split_every=split_every)
+
     @derived_from(pd.Series, version="0.25.0")
     def explode(self):
         meta = self._meta.explode()
@@ -3343,7 +3359,7 @@ class DataFrame(_Frame):
 
     def __len__(self):
         try:
-            s = self[self.columns[0]]
+            s = self.iloc[:, 0]
         except IndexError:
             return super().__len__()
         else:
@@ -4161,6 +4177,36 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
+
+    @derived_from(pd.DataFrame)
+    def mode(self, dropna=True, split_every=False):
+        mode_series_list = []
+        for col_index in range(len(self.columns)):
+            col_series = self.iloc[:, col_index]
+            mode_series = Series.mode(
+                col_series, dropna=dropna, split_every=split_every
+            )
+            mode_series.name = col_series.name
+            mode_series_list.append(mode_series)
+
+        name = "concat-" + tokenize(*mode_series_list)
+
+        dsk = {
+            (name, 0): (
+                apply,
+                methods.concat,
+                [[(df._name, 0) for df in mode_series_list]],
+                {"axis": 1},
+            )
+        }
+
+        meta = methods.concat([df._meta for df in mode_series_list], axis=1)
+        graph = HighLevelGraph.from_collections(
+            name, dsk, dependencies=mode_series_list
+        )
+        ddf = new_dd_object(graph, name, meta, divisions=(None, None))
+
+        return ddf
 
     @derived_from(pd.DataFrame)
     def cov(self, min_periods=None, split_every=False):
@@ -5962,6 +6008,18 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
         return res[0]
     res.name = None
     return res
+
+
+def _mode_aggregate(df, dropna):
+    value_count_series = df.sum()
+    max_val = value_count_series.max(skipna=dropna)
+    mode_series = (
+        value_count_series[value_count_series == max_val]
+        .index.to_series()
+        .sort_values()
+        .reset_index(drop=True)
+    )
+    return mode_series
 
 
 def _count_aggregate(x):

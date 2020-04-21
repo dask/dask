@@ -419,8 +419,10 @@ def test_core_file():
     assert "dataframe" in dask.config.config
     assert "shuffle-compression" in dask.config.get("dataframe")
 
+
 def test_schema():
     jsonschema = pytest.importorskip("jsonschema")
+
     config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
     schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
 
@@ -431,3 +433,32 @@ def test_schema():
         schema = yaml.safe_load(f)
 
     jsonschema.validate(config, schema)
+
+
+def test_schema_is_complete():
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    def test_matches(c, s):
+        for k, v in c.items():
+            if isinstance(v, dict):
+                try:
+                    test_matches(c[k], s["properties"][k])
+                except KeyError:
+                    breakpoint()
+
+    test_matches(config, schema)
+
+
+def test_deprecations():
+    with pytest.warns(Warning) as info:
+        with dask.config.set(fuse_ave_width=123):
+            assert dask.config.get("optimization.fuse.ave-width") == 123
+
+    assert "optimization.fuse.ave-width" in str(info[0].message)

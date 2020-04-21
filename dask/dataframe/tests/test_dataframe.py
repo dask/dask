@@ -1062,6 +1062,8 @@ def test_len():
     assert len(d.a) == len(full.a)
     assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
     assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
+    # Regression test for https://github.com/dask/dask/issues/6110
+    assert len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1)) == 0
 
 
 def test_size():
@@ -3674,6 +3676,22 @@ def test_dataframe_reductions_arithmetic(reduction):
     assert_eq(
         ddf - (getattr(ddf, reduction)() + 1), df - (getattr(df, reduction)() + 1)
     )
+
+
+def test_dataframe_mode():
+    data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
+
+    df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.Name.mode(), df.Name.mode())
+
+    # test empty
+    df = pd.DataFrame(columns=["a", "b"])
+    ddf = dd.from_pandas(df, npartitions=1)
+    # check_index=False should be removed once https://github.com/pandas-dev/pandas/issues/33321 is resolved.
+    assert_eq(ddf.mode(), df.mode(), check_index=False)
 
 
 def test_datetime_loc_open_slicing():
