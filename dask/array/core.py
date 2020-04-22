@@ -2751,6 +2751,13 @@ def from_array(
         raise ValueError(
             "Array is already a dask array. Use 'asarray' or " "'rechunk' instead."
         )
+    elif is_dask_collection(x):
+        warnings.warn(
+            "Passing an object to dask.array.from_array which is "
+            "already a Dask collection. This can lead to unexpected "
+            "behavior."
+        )
+
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 

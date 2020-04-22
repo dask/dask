@@ -2377,6 +2377,16 @@ def test_from_array_dask_array():
         da.from_array(dx)
 
 
+def test_from_array_dask_collection_warns():
+    class CustomCollection(np.ndarray):
+        def __dask_graph__(self):
+            return {"bar": 1}
+
+    x = CustomCollection([1, 2, 3])
+    with pytest.warns(UserWarning):
+        da.from_array(x)
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
