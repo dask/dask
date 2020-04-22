@@ -563,7 +563,7 @@ def test_rename_fused_keys_bag():
     assert outp.keys() == {"c"}
     assert outp["c"][1:] == ("a", 1)
 
-    with dask.config.set({"fuse_rename_keys": False}):
+    with dask.config.set({"optimization.fuse.rename-keys": False}):
         assert optimize(inp, ["c"]) == outp
 
     # By default, fused keys are renamed
