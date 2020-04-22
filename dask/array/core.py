@@ -2755,7 +2755,8 @@ def from_array(
         warnings.warn(
             "Passing an object to dask.array.from_array which is "
             "already a Dask collection. This can lead to unexpected "
-            "behavior."
+            "behavior. Consider using dask.array.asarray or "
+            "dask.array.rechunk instead."
         )
 
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
