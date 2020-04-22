@@ -12,7 +12,7 @@ from .utils import (
     is_categorical_dtype,
 )
 from . import methods
-
+from . import core
 def _categorize_block(df, categories, index):
     """ Categorize a dataframe with given categories
 
@@ -21,14 +21,17 @@ def _categorize_block(df, categories, index):
     """
     df = df.copy()
     for col, vals in categories.items():
-        if not is_categorical_dtype(df[col]):
-            df[col] = df[col].astype('category')
-        df[col] = df[col].cat.set_categories(vals)
+        if is_categorical_dtype(df[col]):
+            df[col] = df[col].cat.set_categories(vals)
+        else:
+            cat_dtype = core.categoricalDtype(meta=df[col], categories=vals, ordered=False)
+            df[col] = df[col].astype(cat_dtype)
     if index is not None:
-        ind = df.index
-        if not is_categorical_dtype(ind):
-            ind = ind.astype(dtype='category')
-        ind = ind.set_categories(index)
+        if is_categorical_dtype(df.index):
+            ind = df.index.set_categories(index)
+        else:
+            cat_dtype = core.categoricalDtype(meta=df.index, categories=index, ordered=False)
+            ind = df.index.astype(dtype=cat_dtype)
         ind.name = df.index.name
         df.index = ind
     return df

@@ -6465,3 +6465,13 @@ def series_map(base_series, map_series):
     divisions = list(base_series.divisions)
 
     return new_dd_object(graph, final_prefix, meta, divisions)
+
+categoricalDtype_dispatch = Dispatch("categoricalDtype")
+
+def categoricalDtype(meta, categories=None, ordered=None):
+    func = categoricalDtype_dispatch.dispatch(type(meta))
+    return func(categories=categories, ordered=ordered)
+
+@categoricalDtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def categoricalDtype_pandas(categories=None, ordered=None):
+    return pd.CategoricalDtype(categories=categories, ordered=ordered)
