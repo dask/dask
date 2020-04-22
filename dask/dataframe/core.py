@@ -6477,4 +6477,7 @@ def categoricalDtype(meta, categories=None, ordered=None):
 
 @categoricalDtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def categoricalDtype_pandas(categories=None, ordered=None):
-    return pd.CategoricalDtype(categories=categories, ordered=ordered)
+    if PANDAS_VERSION > '0.23.4':
+        return pd.CategoricalDtype(categories=categories, ordered=ordered)
+    else:
+        return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)
