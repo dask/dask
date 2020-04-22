@@ -1,6 +1,8 @@
 Configuration Reference
 =======================
 
+.. contents:: :local:
+
 Dask
 ----
 
