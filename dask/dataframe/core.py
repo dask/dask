@@ -6470,13 +6470,13 @@ def series_map(base_series, map_series):
 categoricalDtype_dispatch = Dispatch("categoricalDtype")
 
 
-def categoricalDtype(meta, categories=None, ordered=None):
+def categoricalDtype(meta, categories=None, ordered=False):
     func = categoricalDtype_dispatch.dispatch(type(meta))
     return func(categories=categories, ordered=ordered)
 
 
 @categoricalDtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def categoricalDtype_pandas(categories=None, ordered=None):
+def categoricalDtype_pandas(categories=None, ordered=False):
     if PANDAS_VERSION > '0.23.4':
         return pd.CategoricalDtype(categories=categories, ordered=ordered)
     else:
