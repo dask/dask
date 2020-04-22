@@ -43,6 +43,7 @@ properties:
       fuse:
         type: object
         properties:
+        description: Options for Dask's task fusion optimizations
 
           active:
             type: boolean
