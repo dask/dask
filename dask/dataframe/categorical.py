@@ -12,7 +12,7 @@ from .utils import (
     is_categorical_dtype,
 )
 from . import methods
-from . import core
+from ..utils import Dispatch
 
 
 def _categorize_block(df, categories, index):
@@ -26,15 +26,13 @@ def _categorize_block(df, categories, index):
         if is_categorical_dtype(df[col]):
             df[col] = df[col].cat.set_categories(vals)
         else:
-            cat_dtype = core.categoricalDtype(
-                meta=df[col], categories=vals, ordered=False
-            )
+            cat_dtype = categorical_dtype(meta=df[col], categories=vals, ordered=False)
             df[col] = df[col].astype(cat_dtype)
     if index is not None:
         if is_categorical_dtype(df.index):
             ind = df.index.set_categories(index)
         else:
-            cat_dtype = core.categoricalDtype(
+            cat_dtype = categorical_dtype(
                 meta=df.index, categories=index, ordered=False
             )
             ind = df.index.astype(dtype=cat_dtype)
@@ -275,3 +273,16 @@ class CategoricalAccessor(Accessor):
             meta=meta,
             token="cat-set_categories",
         )
+
+
+categorical_dtype_dispatch = Dispatch("CategoricalDtype")
+
+
+def categorical_dtype(meta, categories=None, ordered=False):
+    func = categorical_dtype_dispatch.dispatch(type(meta))
+    return func(categories=categories, ordered=ordered)
+
+
+@categorical_dtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def categorical_dtype_pandas(categories=None, ordered=False):
+    return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)
