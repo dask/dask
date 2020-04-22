@@ -211,6 +211,18 @@ def test_categorize():
     with pytest.raises(ValueError):
         ddf.categorize(split_every="foo")
 
+    cat_dtype = dd.core.categoricalDtype(
+        meta=meta, categories=["a", "b", "c"], ordered=False
+    )
+    assert_eq(cat_dtype.categories, pd.Index(["a", "b", "c"]))
+    assert_eq(cat_dtype.ordered, False)
+
+    cat_dtype = dd.core.categoricalDtype(
+        meta=meta, categories=[1, 100, 200], ordered=True
+    )
+    assert_eq(cat_dtype.categories, pd.Index([1, 100, 200]))
+    assert_eq(cat_dtype.ordered, True)
+
 
 def test_categorize_index():
     # Object dtype

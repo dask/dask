@@ -13,6 +13,8 @@ from .utils import (
 )
 from . import methods
 from . import core
+
+
 def _categorize_block(df, categories, index):
     """ Categorize a dataframe with given categories
 
@@ -24,13 +26,17 @@ def _categorize_block(df, categories, index):
         if is_categorical_dtype(df[col]):
             df[col] = df[col].cat.set_categories(vals)
         else:
-            cat_dtype = core.categoricalDtype(meta=df[col], categories=vals, ordered=False)
+            cat_dtype = core.categoricalDtype(
+                meta=df[col], categories=vals, ordered=False
+            )
             df[col] = df[col].astype(cat_dtype)
     if index is not None:
         if is_categorical_dtype(df.index):
             ind = df.index.set_categories(index)
         else:
-            cat_dtype = core.categoricalDtype(meta=df.index, categories=index, ordered=False)
+            cat_dtype = core.categoricalDtype(
+                meta=df.index, categories=index, ordered=False
+            )
             ind = df.index.astype(dtype=cat_dtype)
         ind.name = df.index.name
         df.index = ind
@@ -59,7 +65,10 @@ def _get_categories_agg(parts):
         for k, v in p[0].items():
             res[k].append(v)
         res_ind.append(p[1])
-    res = {k: methods.concat(v, ignore_index=True).drop_duplicates() for k, v in res.items()}
+    res = {
+        k: methods.concat(v, ignore_index=True).drop_duplicates()
+        for k, v in res.items()
+    }
     if res_ind[0] is None:
         return res, None
     return res, res_ind[0].append(res_ind[1:]).drop_duplicates()
