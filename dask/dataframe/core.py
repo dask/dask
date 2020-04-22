@@ -58,6 +58,7 @@ from .utils import (
     insert_meta_param_description,
     raise_on_meta_error,
     clear_known_categories,
+    group_split_dispatch,
     is_categorical_dtype,
     has_known_categories,
     PANDAS_VERSION,
@@ -498,7 +499,9 @@ Dask Name: {name}, {task} tasks"""
             raise ValueError(msg)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, subset=None, split_every=None, split_out=1, **kwargs):
+    def drop_duplicates(
+        self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
+    ):
         if subset is not None:
             # Let pandas error on bad inputs
             self._meta_nonempty.drop_duplicates(subset=subset, **kwargs)
@@ -523,6 +526,7 @@ Dask Name: {name}, {task} tasks"""
             split_out=split_out,
             split_out_setup=split_out_setup,
             split_out_setup_kwargs=split_out_setup_kwargs,
+            ignore_index=ignore_index,
             **kwargs
         )
 
@@ -4716,7 +4720,9 @@ def _maybe_from_pandas(dfs):
     return dfs
 
 
-def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
+def hash_shard(
+    df, nparts, split_out_setup=None, split_out_setup_kwargs=None, ignore_index=False
+):
     if split_out_setup:
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
@@ -4725,8 +4731,8 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
     h = hash_object_dispatch(h, index=False)
     if is_series_like(h):
         h = h.values
-    h %= nparts
-    return {i: df.iloc[h == i] for i in range(nparts)}
+    np.mod(h, nparts, out=h)
+    return group_split_dispatch(df, h, nparts, ignore_index=ignore_index)
 
 
 def split_evenly(df, k):
@@ -4762,6 +4768,7 @@ def apply_concat_apply(
     split_out_setup=None,
     split_out_setup_kwargs=None,
     sort=None,
+    ignore_index=False,
     **kwargs
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -4803,6 +4810,8 @@ def apply_concat_apply(
         Keywords for the `split_out_setup` function only.
     sort : bool, default None
         If allowed, sort the keys of the output aggregation.
+    ignore_index : bool, default False
+        If True, do not preserve index values throughout ACA operations.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -4892,6 +4901,7 @@ def apply_concat_apply(
                 split_out,
                 split_out_setup,
                 split_out_setup_kwargs,
+                ignore_index,
             )
             for j in range(split_out):
                 dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
@@ -4906,7 +4916,7 @@ def apply_concat_apply(
     while k > split_every:
         for part_i, inds in enumerate(partition_all(split_every, range(k))):
             for j in range(split_out):
-                conc = (_concat, [(a, depth, i, j) for i in inds])
+                conc = (_concat, [(a, depth, i, j) for i in inds], ignore_index)
                 if combine_kwargs:
                     dsk[(b, depth + 1, part_i, j)] = (
                         apply,
@@ -4932,7 +4942,7 @@ def apply_concat_apply(
     # Aggregate
     for j in range(split_out):
         b = "{0}-agg-{1}".format(token or funcname(aggregate), token_key)
-        conc = (_concat, [(a, depth, i, j) for i in range(k)])
+        conc = (_concat, [(a, depth, i, j) for i in range(k)], ignore_index)
         if aggregate_kwargs:
             dsk[(b, j)] = (apply, aggregate, [conc], aggregate_kwargs)
         else:
@@ -4940,7 +4950,9 @@ def apply_concat_apply(
 
     if meta is no_default:
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
-        meta = _emulate(aggregate, _concat([meta_chunk]), udf=True, **aggregate_kwargs)
+        meta = _emulate(
+            aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
+        )
     meta = make_meta(
         meta, index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None)
     )
