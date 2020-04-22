@@ -34,7 +34,7 @@ properties:
             type: integer
             description: |
               The size of pixels used when displaying a dask array as an SVG image.
-              This is used, for example, for nice rendering in an ipython notebook
+              This is used, for example, for nice rendering in a Jupyter notebook
 
   optimization:
     type: object
