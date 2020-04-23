@@ -59,8 +59,7 @@ For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
 .. code-block:: python
 
    >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
-   >>> df = pd.DataFrame(data=d)
-   >>> df = dd.from_pandas(df, npartitions=2)
+   >>> df = dd.from_pandas(pd.DataFrame(data=d), npartitions=2)
    >>> dd.to_parquet(df=df,
    ...               path='abfs://BLOB/FILE.parquet'
    ...               storage_options={'account_name': 'ACCOUNT_NAME',
