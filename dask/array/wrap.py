@@ -149,22 +149,28 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(np.full)  
+_full = w(np.full)
 _full_like = w_like(np.full, func_like=np.full_like)
 
 
-def full(shape, fill_value, dtype=None, order='C', chunks=None):
-    # np.isscalar has somewhat strange behavior: 
-    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html 
+def full(shape, fill_value, dtype=None, order="C", chunks=None):
+    # np.isscalar has somewhat strange behavior:
+    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
     if np.ndim(fill_value) != 0:
         raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
-    return _full(shape=shape, fill_value=fill_value, dtype=dtype, order=order, chunks=chunks)
+    return _full(
+        shape=shape, fill_value=fill_value, dtype=dtype, order=order, chunks=chunks
+    )
 
 
-def full_like(a, fill_value, dtype=None, order='K', subok=True, shape=None, chunks=None):
+def full_like(
+    a, fill_value, dtype=None, order="K", subok=True, shape=None, chunks=None
+):
     if np.ndim(fill_value) != 0:
         raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
-    return _full_like(a=a, fill_value=fill_value, dtype=dtype, order=order, subok=subok, chunks=chunks)
+    return _full_like(
+        a=a, fill_value=fill_value, dtype=dtype, order=order, subok=subok, chunks=chunks
+    )
 
 
 full.__doc__ = _full.__doc__
