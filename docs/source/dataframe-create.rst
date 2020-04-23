@@ -50,8 +50,27 @@ Pandas:
 .. autosummary::
     from_pandas
 
-Locations
----------
+Writing to remote locations
+---------------------------
+
+Dask can write to a variety of data stores including cloud object stores.
+For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
+
+.. code-block:: python
+
+   >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
+   >>> df = pd.DataFrame(data=d)
+   >>> df = dd.from_pandas(df, npartitions=2)
+   >>> dd.to_parquet(df=df,
+   ...               path='abfs://BLOB/FILE.parquet'
+   ...               storage_options={'account_name': 'ACCOUNT_NAME',
+   ...                                'account_key': 'ACCOUNT_KEY'}
+
+See the :doc:`remote data services documentation<remote-data-services>`
+for more information. 
+
+Reading from various locations
+------------------------------
 
 For text, CSV, and Apache Parquet formats, data can come from local disk,
 the Hadoop File System, S3FS, or other sources, by prepending the filenames with
