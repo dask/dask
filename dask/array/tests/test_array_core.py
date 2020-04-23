@@ -2386,6 +2386,10 @@ def test_from_array_dask_collection_warns():
     with pytest.warns(UserWarning):
         da.from_array(x)
 
+    # Ensure da.array warns too
+    with pytest.warns(UserWarning):
+        da.array(x)
+
 
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
