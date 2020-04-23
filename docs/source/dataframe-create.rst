@@ -50,24 +50,6 @@ Pandas:
 .. autosummary::
     from_pandas
 
-Writing to remote locations
----------------------------
-
-Dask can write to a variety of data stores including cloud object stores.
-For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
-
-.. code-block:: python
-
-   >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
-   >>> df = dd.from_pandas(pd.DataFrame(data=d), npartitions=2)
-   >>> dd.to_parquet(df=df,
-   ...               path='abfs://BLOB/FILE.parquet'
-   ...               storage_options={'account_name': 'ACCOUNT_NAME',
-   ...                                'account_key': 'ACCOUNT_KEY'}
-
-See the :doc:`remote data services documentation<remote-data-services>`
-for more information. 
-
 Reading from various locations
 ------------------------------
 
@@ -91,6 +73,23 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    >>> df = dd.read_csv('s3://bucket-name/my-data-*.csv',
    ...                  storage_options={'anon': True})
 
+Writing to remote locations
+---------------------------
+
+Dask can write to a variety of data stores including cloud object stores.
+For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
+
+.. code-block:: python
+
+   >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
+   >>> df = dd.from_pandas(pd.DataFrame(data=d), npartitions=2)
+   >>> dd.to_parquet(df=df,
+   ...               path='abfs://BLOB/FILE.parquet'
+   ...               storage_options={'account_name': 'ACCOUNT_NAME',
+   ...                                'account_key': 'ACCOUNT_KEY'}
+
+See the :doc:`remote data services documentation<remote-data-services>`
+for more information. 
 
 Dask Delayed
 ------------
