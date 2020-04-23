@@ -137,7 +137,6 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype="f8")
 zeros = w(np.zeros, dtype="f8")
 empty = w(np.empty, dtype="f8")
-full = w(np.full)
 
 
 w_like = wrap(wrap_func_like_safe)
@@ -146,4 +145,29 @@ w_like = wrap(wrap_func_like_safe)
 ones_like = w_like(np.ones, func_like=np.ones_like)
 zeros_like = w_like(np.zeros, func_like=np.zeros_like)
 empty_like = w_like(np.empty, func_like=np.empty_like)
-full_like = w_like(np.full, func_like=np.full_like)
+
+
+# full and full_like require special casing due to argument check on fill_value
+# Generate wrapped functions only once
+_full = w(np.full)  
+_full_like = w_like(np.full, func_like=np.full_like)
+
+
+def full(shape, fill_value, dtype=None, order='C', chunks=None):
+    # np.isscalar has somewhat strange behavior: 
+    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html 
+    if np.ndim(fill_value) != 0:
+        raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
+    return _full(shape=shape, fill_value=fill_value, dtype=dtype, order=order, chunks=chunks)
+
+
+def full_like(a, fill_value, dtype=None, order='K', subok=True, shape=None, chunks=None):
+    if np.ndim(fill_value) != 0:
+        raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
+    return _full_like(a=a, fill_value=fill_value, dtype=dtype, order=order, subok=subok, chunks=chunks)
+
+
+full.__doc__ = _full.__doc__
+full.__name__ = _full.__name__
+full_like.__doc__ = _full_like.__doc__
+full_like.__name__ = _full_like.__name__
