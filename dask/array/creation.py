@@ -65,15 +65,8 @@ def empty_like(a, dtype=None, chunks=None, shape=None):
     """
 
     a = asarray(a, name=False)
-    return empty(
-        (shape or a.shape),
-        dtype=(dtype or a.dtype),
-        chunks=(
-            "auto"
-            if shape and (chunks is None)
-            else (chunks if chunks is not None else a.chunks)
-        ),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return empty(shape, dtype=(dtype or a.dtype), chunks=chunks)
 
 
 def ones_like(a, dtype=None, chunks=None, shape=None):
