@@ -205,7 +205,7 @@ def test_custom_context_used_python3_posix():
     import sys
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
-        with config.set({"multiprocessing.context": "fork"}):
+        with dask.config.set({"multiprocessing.context": "fork"}):
             result = get({"x": (check_for_pytest,)}, "x")
         assert result
     finally:
@@ -221,9 +221,9 @@ def test_get_context_using_python3_posix():
     If default context is changed this test will need to change too.
     """
     assert get_context() is multiprocessing.get_context("spawn")
-    with config.set({"multiprocessing.context": "forkserver"}):
+    with dask.config.set({"multiprocessing.context": "forkserver"}):
         assert get_context() is multiprocessing.get_context("forkserver")
-    with config.set({"multiprocessing.context": "fork"}):
+    with dask.config.set({"multiprocessing.context": "fork"}):
         assert get_context() is multiprocessing.get_context("fork")
 
 
