@@ -47,7 +47,7 @@ You will need to add this to your known channels and update your local charts::
 
 Now, you can launch Dask on your Kubernetes cluster using the Dask Helm_ chart::
 
-   helm install dask/dask
+   helm install my-dask dask/dask
 
 This deploys a ``dask-scheduler``, several ``dask-worker`` processes, and
 also an optional Jupyter server.
