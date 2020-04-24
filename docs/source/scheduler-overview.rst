@@ -146,7 +146,8 @@ global pool set with ``dask.config.set``:
     ...     x.compute()
 
 The multiprocessing scheduler also supports `different contexts`_ ("spawn",
-"forkserver", "fork") which you can set with ``dask.config.set``. The default context is "spawn", but you can set a different one:
+"forkserver", "fork") which you can set with ``dask.config.set``. The default
+context is "spawn", but you can set a different one:
 
 .. code-block:: python
 
