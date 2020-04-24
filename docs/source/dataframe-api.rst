@@ -30,6 +30,7 @@ Dataframe
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.explode
     DataFrame.fillna
     DataFrame.floordiv
     DataFrame.get_partition
@@ -48,6 +49,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.memory_usage
+    DataFrame.memory_usage_per_partition
     DataFrame.merge
     DataFrame.min
     DataFrame.mod
@@ -55,7 +58,10 @@ Dataframe
     DataFrame.ndim
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.partitions
+    DataFrame.pop
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
@@ -63,6 +69,7 @@ Dataframe
     DataFrame.rdiv
     DataFrame.rename
     DataFrame.repartition
+    DataFrame.replace
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
@@ -83,6 +90,7 @@ Dataframe
     DataFrame.to_delayed
     DataFrame.to_hdf
     DataFrame.to_json
+    DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -128,6 +136,7 @@ Series
    Series.dt
    Series.dtype
    Series.eq
+   Series.explode
    Series.ffill
    Series.fillna
    Series.first
@@ -155,6 +164,7 @@ Series
    Series.max
    Series.mean
    Series.memory_usage
+   Series.memory_usage_per_partition
    Series.min
    Series.mod
    Series.mul
@@ -176,6 +186,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.replace
    Series.rename
    Series.resample
    Series.reset_index
@@ -196,7 +207,6 @@ Series
    Series.to_delayed
    Series.to_frame
    Series.to_hdf
-   Series.to_parquet
    Series.to_string
    Series.to_timestamp
    Series.truediv
@@ -228,8 +238,12 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.cov
+   DataFrameGroupBy.corr
    DataFrameGroupBy.first
    DataFrameGroupBy.last
+   DataFrameGroupBy.idxmin
+   DataFrameGroupBy.idxmax
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -249,6 +263,11 @@ Groupby Operations
    SeriesGroupBy.var
    SeriesGroupBy.first
    SeriesGroupBy.last
+   SeriesGroupBy.idxmin
+   SeriesGroupBy.idxmax
+
+.. autosummary::
+   Aggregation
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
@@ -285,6 +304,7 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
    read_json
@@ -309,13 +329,24 @@ Store DataFrames
    to_bag
    to_json
 
-Covert DataFrames
-~~~~~~~~~~~~~~~~~
+Convert DataFrames
+~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
 
-   to_dask_array
-   to_delayed
+   DataFrame.to_dask_array
+   DataFrame.to_delayed
+
+Reshape DataFrames
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autosummary::
+
+   get_dummies
+   pivot_table
+   melt
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -349,6 +380,11 @@ SeriesGroupBy
    :members:
    :inherited-members:
 
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
+
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -356,6 +392,7 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
 .. autofunction:: read_orc
 .. autofunction:: read_hdf
@@ -380,6 +417,21 @@ Rolling
 
 .. autofunction:: map_overlap
 
+Resampling
+~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.tseries.resample
+
+.. autoclass:: Resampler
+   :members:
+   :inherited-members:
+
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe.utils
+
+.. autofunction:: make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
@@ -388,8 +440,17 @@ Other functions
 
 .. autofunction:: compute
 .. autofunction:: map_partitions
+.. autofunction:: to_datetime
+.. autofunction:: to_numeric
 
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
 .. autofunction:: merge
+.. autofunction:: merge_asof
+
+.. currentmodule:: dask.dataframe.reshape
+
+.. autofunction:: get_dummies
+.. autofunction:: pivot_table
+.. autofunction:: melt

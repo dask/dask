@@ -1,0 +1,15 @@
+temporary-directory: null     # Directory for local disk like /tmp, /scratch, or /local
+
+dataframe:
+  shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
+
+array:
+  svg:
+    size: 120  # pixels
+
+optimization:
+  fuse:
+    active: true
+    ave-width: 1
+    subraphs: false
+    rename-keys: true

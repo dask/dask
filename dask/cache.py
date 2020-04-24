@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from .callbacks import Callback
 from timeit import default_timer
 from numbers import Number
@@ -33,8 +31,9 @@ class Cache(Callback):
         try:
             import cachey
         except ImportError as ex:
-            raise ImportError('Cache requires cachey, "{ex}" problem '
-                              'importing'.format(ex=str(ex)))
+            raise ImportError(
+                'Cache requires cachey, "{ex}" problem ' "importing".format(ex=str(ex))
+            )
         self._nbytes = cachey.nbytes
         if isinstance(cache, Number):
             cache = cachey.Cache(cache, *args, **kwargs)
@@ -54,7 +53,7 @@ class Cache(Callback):
 
     def _posttask(self, key, value, dsk, state, id):
         duration = default_timer() - self.starttimes[key]
-        deps = state['dependencies'][key]
+        deps = state["dependencies"][key]
         if deps:
             duration += max(self.durations.get(k, 0) for k in deps)
         self.durations[key] = duration

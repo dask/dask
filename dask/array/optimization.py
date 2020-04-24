@@ -1,14 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
+from itertools import zip_longest
 from operator import getitem
 
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
-from ..compatibility import zip_longest
+from ..blockwise import optimize_blockwise, fuse_roots
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
+from ..highlevelgraph import HighLevelGraph
 
 from numbers import Integral
 
@@ -20,28 +20,49 @@ GETTERS = (getter, getter_nofancy, getter_inline, getitem)
 GETNOREMOVE = (getter, getter_nofancy)
 
 
-def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
-             inline_functions_fast_functions=(getter_inline,), rename_fused_keys=True,
-             **kwargs):
+def optimize(
+    dsk,
+    keys,
+    fuse_keys=None,
+    fast_functions=None,
+    inline_functions_fast_functions=(getter_inline,),
+    rename_fused_keys=True,
+    **kwargs
+):
     """ Optimize dask for array computation
 
     1.  Cull tasks not necessary to evaluate keys
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
-    dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
+
+    # High level stage optimization
+    if isinstance(dsk, HighLevelGraph):
+        dsk = optimize_blockwise(dsk, keys=keys)
+        dsk = fuse_roots(dsk, keys=keys)
+
+    # Low level task optimizations
+    dsk = ensure_dict(dsk)
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 
     dsk2, dependencies = cull(dsk, keys)
     hold = hold_keys(dsk2, dependencies)
 
-    dsk3, dependencies = fuse(dsk2, hold + keys + (fuse_keys or []),
-                              dependencies, rename_keys=rename_fused_keys)
+    dsk3, dependencies = fuse(
+        dsk2,
+        hold + keys + (fuse_keys or []),
+        dependencies,
+        rename_keys=rename_fused_keys,
+    )
     if inline_functions_fast_functions:
-        dsk4 = inline_functions(dsk3, keys, dependencies=dependencies,
-                                fast_functions=inline_functions_fast_functions)
+        dsk4 = inline_functions(
+            dsk3,
+            keys,
+            dependencies=dependencies,
+            fast_functions=inline_functions_fast_functions,
+        )
     else:
         dsk4 = dsk3
     dsk5 = optimize_slices(dsk4)
@@ -121,15 +142,15 @@ def optimize_slices(dsk):
                     break
                 if type(a_index) is tuple:
                     indices = b_index + a_index
-                    if (len(a_index) != len(b_index) and
-                            any(i is None for i in indices)):
+                    if len(a_index) != len(b_index) and any(i is None for i in indices):
                         break
-                    if (f2 is getter_nofancy and
-                            any(isinstance(i, fancy_ind_types) for i in indices)):
+                    if f2 is getter_nofancy and any(
+                        isinstance(i, fancy_ind_types) for i in indices
+                    ):
                         break
-                elif (f2 is getter_nofancy and
-                        (type(a_index) in fancy_ind_types or
-                         type(b_index) in fancy_ind_types)):
+                elif f2 is getter_nofancy and (
+                    type(a_index) in fancy_ind_types or type(b_index) in fancy_ind_types
+                ):
                     break
                 try:
                     c_index = fuse_slice(b_index, a_index)
@@ -143,12 +164,24 @@ def optimize_slices(dsk):
                 a_asarray |= b_asarray
 
             # Skip the get call if not from from_array and nothing to do
-            if (get not in GETNOREMOVE and
-                ((type(a_index) is slice and not a_index.start and
-                  a_index.stop is None and a_index.step is None) or
-                 (type(a_index) is tuple and
-                  all(type(s) is slice and not s.start and s.stop is None and
-                      s.step is None for s in a_index)))):
+            if get not in GETNOREMOVE and (
+                (
+                    type(a_index) is slice
+                    and not a_index.start
+                    and a_index.stop is None
+                    and a_index.step is None
+                )
+                or (
+                    type(a_index) is tuple
+                    and all(
+                        type(s) is slice
+                        and not s.start
+                        and s.stop is None
+                        and s.step is None
+                        for s in a_index
+                    )
+                )
+            ):
                 dsk[k] = a
             elif get is getitem or (a_asarray and not a_lock):
                 # default settings are fine, drop the extra parameters Since we
@@ -186,10 +219,12 @@ def check_for_nonfusible_fancy_indexing(fancy, normal):
     # x[0, :, :][:, [1, 2], :] -> x[0, [1, 2], :]
     for f, n in zip_longest(fancy, normal, fillvalue=slice(None)):
         if type(f) is not list and isinstance(n, Integral):
-            raise NotImplementedError("Can't handle normal indexing with "
-                                      "integers and fancy indexing if the "
-                                      "integers and fancy indices don't "
-                                      "align with the same dimensions.")
+            raise NotImplementedError(
+                "Can't handle normal indexing with "
+                "integers and fancy indexing if the "
+                "integers and fancy indices don't "
+                "align with the same dimensions."
+            )
 
 
 def fuse_slice(a, b):

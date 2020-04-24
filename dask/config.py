@@ -1,34 +1,32 @@
-from __future__ import print_function, division, absolute_import
-
 import ast
+import builtins
+from collections.abc import Mapping
 import os
 import sys
 import threading
+import warnings
+
 try:
     import yaml
 except ImportError:
     yaml = None
 
-from collections import Mapping
 
-from .compatibility import makedirs, builtins
-
-
-no_default = '__no_default__'
+no_default = "__no_default__"
 
 
 paths = [
-    os.getenv('DASK_ROOT_CONFIG', '/etc/dask'),
-    os.path.join(sys.prefix, 'etc', 'dask'),
-    os.path.join(os.path.expanduser('~'), '.config', 'dask'),
-    os.path.join(os.path.expanduser('~'), '.dask')
+    os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
+    os.path.join(sys.prefix, "etc", "dask"),
+    os.path.join(os.path.expanduser("~"), ".config", "dask"),
+    os.path.join(os.path.expanduser("~"), ".dask"),
 ]
 
-if 'DASK_CONFIG' in os.environ:
-    PATH = os.environ['DASK_CONFIG']
+if "DASK_CONFIG" in os.environ:
+    PATH = os.environ["DASK_CONFIG"]
     paths.append(PATH)
 else:
-    PATH = os.path.join(os.path.expanduser('~'), '.config', 'dask')
+    PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
 
 global_config = config = {}
@@ -40,7 +38,30 @@ config_lock = threading.Lock()
 defaults = []
 
 
-def update(old, new, priority='new'):
+def canonical_name(k, config):
+    """Return the canonical name for a key.
+
+    Handles user choice of '-' or '_' conventions by standardizing on whichever
+    version was set first. If a key already exists in either hyphen or
+    underscore form, the existing version is the canonical name. If neither
+    version exists the original key is used as is.
+    """
+    try:
+        if k in config:
+            return k
+    except TypeError:
+        # config is not a mapping, return the same name as provided
+        return k
+
+    altk = k.replace("_", "-") if "_" in k else k.replace("-", "_")
+
+    if altk in config:
+        return altk
+
+    return k
+
+
+def update(old, new, priority="new"):
     """ Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -70,13 +91,14 @@ def update(old, new, priority='new'):
     dask.config.merge
     """
     for k, v in new.items():
-        if k not in old and type(v) is dict:
-            old[k] = {}
+        k = canonical_name(k, old)
 
-        if type(v) is dict:
+        if isinstance(v, Mapping):
+            if k not in old or old[k] is None:
+                old[k] = {}
             update(old[k], v, priority=priority)
         else:
-            if priority == 'new' or k not in old:
+            if priority == "new" or k not in old:
                 old[k] = v
 
     return old
@@ -115,11 +137,20 @@ def collect_yaml(paths=paths):
     for path in paths:
         if os.path.exists(path):
             if os.path.isdir(path):
-                file_paths.extend(sorted([
-                    os.path.join(path, p)
-                    for p in os.listdir(path)
-                    if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
-                ]))
+                try:
+                    file_paths.extend(
+                        sorted(
+                            [
+                                os.path.join(path, p)
+                                for p in os.listdir(path)
+                                if os.path.splitext(p)[1].lower()
+                                in (".json", ".yaml", ".yml")
+                            ]
+                        )
+                    )
+                except OSError:
+                    # Ignore permission errors
+                    pass
             else:
                 file_paths.append(path)
 
@@ -127,9 +158,13 @@ def collect_yaml(paths=paths):
 
     # Parse yaml files
     for path in file_paths:
-        with open(path) as f:
-            data = yaml.load(f.read()) or {}
-            configs.append(data)
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f.read()) or {}
+                configs.append(data)
+        except (OSError, IOError):
+            # Ignore permission errors
+            pass
 
     return configs
 
@@ -143,15 +178,14 @@ def collect_env(env=None):
 
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
-    -  Replaces ``_`` (underscore) with a hyphen.
     -  Calls ``ast.literal_eval`` on the value
     """
     if env is None:
         env = os.environ
     d = {}
     for name, value in env.items():
-        if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('__', '.').replace('_', '-')
+        if name.startswith("DASK_"):
+            varname = name[5:].lower().replace("__", ".")
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
@@ -163,10 +197,7 @@ def collect_env(env=None):
     return result
 
 
-def ensure_file(
-        source,
-        destination=None,
-        comment=True):
+def ensure_file(source, destination=None, comment=True):
     """
     Copy file to default location if it does not already exist
 
@@ -201,108 +232,137 @@ def ensure_file(
 
     try:
         if not os.path.exists(destination):
-            makedirs(directory, exist_ok=True)
+            os.makedirs(directory, exist_ok=True)
 
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
-            tmp = '%s.tmp.%d' % (destination, os.getpid())
+            tmp = "%s.tmp.%d" % (destination, os.getpid())
             with open(source) as f:
                 lines = list(f)
 
             if comment:
-                lines = ['# ' + line
-                         if line.strip() and not line.startswith('#')
-                         else line
-                         for line in lines]
+                lines = [
+                    "# " + line if line.strip() and not line.startswith("#") else line
+                    for line in lines
+                ]
 
-            with open(tmp, 'w') as f:
-                f.write(''.join(lines))
+            with open(tmp, "w") as f:
+                f.write("".join(lines))
 
             try:
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except OSError:
+    except (IOError, OSError):
         pass
 
 
 class set(object):
     """ Temporarily set configuration values within a context manager
 
+    Parameters
+    ----------
+    arg : mapping or None, optional
+        A mapping of configuration key-value pairs to set.
+    **kwargs :
+        Additional key-value pairs to set. If ``arg`` is provided, values set
+        in ``arg`` will be applied before those in ``kwargs``.
+        Double-underscores (``__``) in keyword arguments will be replaced with
+        ``.``, allowing nested values to be easily set.
+
     Examples
     --------
     >>> import dask
-    >>> with dask.config.set({'foo': 123}):
+
+    Set ``'foo.bar'`` in a context, by providing a mapping.
+
+    >>> with dask.config.set({'foo.bar': 123}):
     ...     pass
+
+    Set ``'foo.bar'`` in a context, by providing a keyword argument.
+
+    >>> with dask.config.set(foo__bar=123):
+    ...     pass
+
+    Set ``'foo.bar'`` globally.
+
+    >>> dask.config.set(foo__bar=123)  # doctest: +SKIP
 
     See Also
     --------
     dask.config.get
     """
-    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
-        if arg and not kwargs:
-            kwargs = arg
 
+    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
         with lock:
             self.config = config
-            self.old = {}
+            self._record = []
 
-            for key, value in kwargs.items():
-                self._assign(key.split('.'), value, config, old=self.old)
+            if arg is not None:
+                for key, value in arg.items():
+                    key = check_deprecations(key)
+                    self._assign(key.split("."), value, config)
+            if kwargs:
+                for key, value in kwargs.items():
+                    key = key.replace("__", ".")
+                    key = check_deprecations(key)
+                    self._assign(key.split("."), value, config)
 
     def __enter__(self):
         return self.config
 
     def __exit__(self, type, value, traceback):
-        for keys, value in self.old.items():
-            if value == '--delete--':
-                d = self.config
-                try:
-                    while len(keys) > 1:
-                        d = d[keys[0]]
-                        keys = keys[1:]
-                    del d[keys[0]]
-                except KeyError:
-                    pass
-            else:
-                self._assign(keys, value, self.config)
+        for op, path, value in reversed(self._record):
+            d = self.config
+            if op == "replace":
+                for key in path[:-1]:
+                    d = d.setdefault(key, {})
+                d[path[-1]] = value
+            else:  # insert
+                for key in path[:-1]:
+                    try:
+                        d = d[key]
+                    except KeyError:
+                        break
+                else:
+                    d.pop(path[-1], None)
 
-    @classmethod
-    def _assign(cls, keys, value, d, old=None, path=[]):
-        """ Assign value into a nested configuration dictionary
-
-        Optionally record the old values in old
+    def _assign(self, keys, value, d, path=(), record=True):
+        """Assign value into a nested configuration dictionary
 
         Parameters
         ----------
-        keys: Sequence[str]
-            The nested path of keys to assign the value, similar to toolz.put_in
-        value: object
-        d: dict
+        keys : Sequence[str]
+            The nested path of keys to assign the value.
+        value : object
+        d : dict
             The part of the nested dictionary into which we want to assign the
             value
-        old: dict, optional
-            If provided this will hold the old values
-        path: List[str]
-            Used internally to hold the path of old values
+        path : Tuple[str], optional
+            The path history up to this point.
+        record : bool, optional
+            Whether this operation needs to be recorded to allow for rollback.
         """
+        key = canonical_name(keys[0], d)
+
+        path = path + (key,)
+
         if len(keys) == 1:
-            if old is not None:
-                path_key = tuple(path + [keys[0]])
-                if keys[0] in d:
-                    old[path_key] = d[keys[0]]
+            if record:
+                if key in d:
+                    self._record.append(("replace", path, d[key]))
                 else:
-                    old[path_key] = '--delete--'
-            d[keys[0]] = value
+                    self._record.append(("insert", path, None))
+            d[key] = value
         else:
-            key = keys[0]
             if key not in d:
+                if record:
+                    self._record.append(("insert", path, None))
                 d[key] = {}
-                if old is not None:
-                    old[tuple(path + [key])] = '--delete--'
-                old = None
-            cls._assign(keys[1:], value, d[key], path=path + [key], old=old)
+                # No need to record subsequent operations after an insert
+                record = False
+            self._assign(keys[1:], value, d[key], path, record=record)
 
 
 def collect(paths=paths, env=None):
@@ -364,7 +424,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
     config.clear()
 
     for d in defaults:
-        update(config, d, priority='old')
+        update(config, d, priority="old")
 
     update(config, collect(**kwargs))
 
@@ -391,9 +451,10 @@ def get(key, default=no_default, config=config):
     --------
     dask.config.set
     """
-    keys = key.split('.')
+    keys = key.split(".")
     result = config
     for k in keys:
+        k = canonical_name(k, result)
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
@@ -409,8 +470,8 @@ def rename(aliases, config=config):
 
     This helps migrate older configuration versions over time
     """
-    old = list()
-    new = dict()
+    old = []
+    new = {}
     for o, n in aliases.items():
         value = get(o, None, config=config)
         if value is not None:
@@ -418,7 +479,7 @@ def rename(aliases, config=config):
             new[n] = value
 
     for k in old:
-        del config[k]  # TODO: support nested keys
+        del config[canonical_name(k, config)]  # TODO: support nested keys
 
     set(new, config=config)
 
@@ -433,11 +494,11 @@ def update_defaults(new, config=config, defaults=defaults):
         prioritizing older values over newer ones
     """
     defaults.append(new)
-    update(config, new, priority='old')
+    update(config, new, priority="old")
 
 
 def expand_environment_variables(config):
-    ''' Expand environment variables in a nested config dictionary
+    """ Expand environment variables in a nested config dictionary
 
     This function will recursively search through any nested dictionaries
     and/or lists.
@@ -455,7 +516,7 @@ def expand_environment_variables(config):
     --------
     >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
     {'x': [1, 2, 'my-username']}
-    '''
+    """
     if isinstance(config, Mapping):
         return {k: expand_environment_variables(v) for k, v in config.items()}
     elif isinstance(config, str):
@@ -466,4 +527,69 @@ def expand_environment_variables(config):
         return config
 
 
+deprecations = {
+    "fuse_ave_width": "optimization.fuse.ave-width",
+    "fuse_max_height": "optimization.fuse.max-height",
+    "fuse_max_width": "optimization.fuse.max-width",
+    "fuse_subgraphs": "optimization.fuse.subgraphs",
+    "fuse_rename_keys": "optimization.fuse.rename-keys",
+    "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
+}
+
+
+def check_deprecations(key: str, deprecations: dict = deprecations):
+    """ Check if the provided value has been renamed or removed
+
+    Parameters
+    ----------
+    key : str
+        The configuration key to check
+    deprecations : Dict[str, str]
+        The mapping of aliases
+
+    Examples
+    --------
+    >>> deprecations = {"old_key": "new_key", "invalid": None}
+    >>> check_deprecations("old_key", deprecations=deprecations)  # doctest: +SKIP
+    UserWarning: Configuration key "old_key" has been deprecated. Please use "new_key" instead.
+
+    >>> check_deprecations("invalid", deprecations=deprecations)
+    Traceback (most recent call last):
+        ...
+    ValueError: Configuration value "invalid" has been removed
+
+    >>> check_deprecations("another_key", deprecations=deprecations)
+    'another_key'
+
+    Returns
+    -------
+    new: str
+        The proper key, whether the original (if no deprecation) or the aliased
+        value
+    """
+    if key in deprecations:
+        new = deprecations[key]
+        if new:
+            warnings.warn(
+                'Configuration key "{}" has been deprecated. '
+                'Please use "{}" instead'.format(key, new)
+            )
+            return new
+        else:
+            raise ValueError('Configuration value "{}" has been removed'.format(key))
+    else:
+        return key
+
+
 refresh()
+
+
+if yaml:
+    fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
+    ensure_file(source=fn)
+
+    with open(fn) as f:
+        _defaults = yaml.safe_load(f)
+
+    update_defaults(_defaults)
+    del fn, _defaults

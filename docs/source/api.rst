@@ -3,12 +3,24 @@ API
 
 Dask APIs generally follow from upstream APIs:
 
--  The :doc:`Dask Array API <array-api>` follows the Numpy API
--  The :doc:`Dask Dataframe API <dataframe-api>` follows the Pandas API
--  The `Dask-ML API <https://dask-ml.readthedocs.io/en/latest/modules/api.html>`_ follows the Scikit-Learn API and other related machine learning libraries
--  The :doc:`Dask Bag API <bag-api>` follows the map/filter/groupby/reduce API common in PySpark, PyToolz, and the Python standard library
--  The :doc:`Dask Delayed API <delayed-api>` wraps general Python code
--  The :doc:`Real-time Futures API <futures>` follows the `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ API from the standard library.
+-  :doc:`Arrays<array-api>` follows NumPy
+-  :doc:`DataFrames <dataframe-api>` follows Pandas
+-  :doc:`Bag <bag-api>` follows map/filter/groupby/reduce common in Spark and Python iterators
+-  `Dask-ML <https://ml.dask.org/modules/api.html>`_ follows the Scikit-Learn and others
+-  :doc:`Delayed <delayed-api>` wraps general Python code
+-  :doc:`Futures <futures>` follows `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ from the standard library for real-time computation.
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   Array <array-api.rst>
+   DataFrame <dataframe-api.rst>
+   Bag <bag-api.rst>
+   Machine Learning <https://ml.dask.org/modules/api.html>
+   Delayed <delayed-api.rst>
+   Futures <futures>
+
 
 Additionally, Dask has its own functions to start computations, persist data in
 memory, check progress, and so forth that complement the APIs above.
@@ -32,10 +44,35 @@ workflows.  These are not necessary for normal operation, but can be useful for
 real-time or advanced operation.
 
 This more advanced API is available in the `Dask distributed documentation
-<https://distributed.readthedocs.org/en/latest/api.html>`_
+<https://distributed.dask.org/en/latest/api.html>`_
 
 .. autofunction:: compute
 .. autofunction:: is_dask_collection
 .. autofunction:: optimize
 .. autofunction:: persist
 .. autofunction:: visualize
+
+Datasets
+--------
+
+Dask has a few helpers for generating demo datasets
+
+.. currentmodule:: dask.datasets
+
+.. autofunction:: make_people
+.. autofunction:: timeseries
+
+.. _api.utilities:
+
+Utilities
+---------
+
+Dask has some public utility methods. These are primarily used for parsing
+configuration values.
+
+.. currentmodule:: dask.utils
+
+.. autofunction:: format_bytes
+.. autofunction:: format_time
+.. autofunction:: parse_bytes
+.. autofunction:: parse_timedelta

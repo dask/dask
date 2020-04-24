@@ -1,0 +1,57 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.6.*
+  - numpy=1.15.*
+  - pandas=0.23.*
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto
+  - coverage
+  - codecov
+  - jsonschema
+  # Issue with conda package for NumPy 1.15?
+  # See fastparquet-444
+  # - fastparquet
+  - h5py
+  - pytables
+  - fsspec==0.6.0
+  - zarr
+  - tiledb-py
+  - sqlalchemy
+  - pyarrow>=0.14.0
+  # other -- IO
+  - bcolz
+  - blosc
+  - s3fs
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - chest
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed
+  - graphviz
+  - ipython
+  - lz4
+  - numba
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - pandas-datareader
+  - python-xxhash
+  - mmh3
+  - pip

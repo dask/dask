@@ -4,10 +4,16 @@ import pytest
 # - Non-required dependencies not being installed
 # - Imported doctests due to pulling the docstrings from other packages
 #   (e.g. `numpy`). No need to run these doctests.
-collect_ignore = ['dask/bytes/hdfs3.py',
-                  'dask/bytes/pyarrow.py',
-                  'dask/bytes/s3.py',
-                  'dask/array/fft.py']
+collect_ignore = [
+    "dask/bytes/hdfs3.py",
+    "dask/bytes/pyarrow.py",
+    "dask/bytes/s3.py",
+    "dask/array/ghost.py",
+    "dask/array/fft.py",
+    "dask/dataframe/io/io.py",
+    "dask/dataframe/io/parquet/arrow.py",
+    "dask/dot.py",
+]
 
 
 def pytest_addoption(parser):
@@ -15,5 +21,5 @@ def pytest_addoption(parser):
 
 
 def pytest_runtest_setup(item):
-    if 'slow' in item.keywords and not item.config.getoption("--runslow"):
+    if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
