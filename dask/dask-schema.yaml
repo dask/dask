@@ -1,8 +1,8 @@
 properties:
   temporary-directory:
     type:
-      - string
-      - "null"
+    - string
+    - "null"
     description: |
       Temporary directory for local disk storage /tmp, /scratch,
       or /local.  This directory is used during dask spill-to-disk operations.
@@ -16,8 +16,8 @@ properties:
 
       shuffle-compression:
         type:
-          - string
-          - "null"
+        - string
+        - "null"
         description: |
           Compression algorithm used for on disk-shuffling. Partd, the library used
           for compression supports ZLib, BZ2, SNAPPY, and BLOSC
@@ -42,8 +42,8 @@ properties:
 
       fuse:
         type: object
-        properties:
         description: Options for Dask's task fusion optimizations
+        properties:
 
           active:
             type: boolean
