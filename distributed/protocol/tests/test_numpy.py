@@ -1,4 +1,3 @@
-import sys
 from zlib import crc32
 
 import numpy as np
@@ -189,7 +188,6 @@ def test_itemsize(dt, size):
     assert itemsize(np.dtype(dt)) == size
 
 
-@pytest.mark.skipif(sys.version_info[0] < 3, reason="numpy doesnt use memoryviews")
 def test_compress_numpy():
     pytest.importorskip("lz4")
     x = np.ones(10000000, dtype="i4")
@@ -238,7 +236,6 @@ async def test_dumps_large_blosc(c, s, a, b):
     await x
 
 
-@pytest.mark.skipif(sys.version_info[0] < 3, reason="numpy doesnt use memoryviews")
 def test_compression_takes_advantage_of_itemsize():
     pytest.importorskip("lz4")
     blosc = pytest.importorskip("blosc")

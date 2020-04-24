@@ -646,8 +646,7 @@ async def test_tls_reject_certificate():
         )
         await comm.write({"x": "foo"})  # TODO: why is this necessary in Tornado 6 ?
 
-    # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
-    if sys.version_info >= (3,) and os.name != "nt":
+    if os.name != "nt":
         try:
             # See https://serverfault.com/questions/793260/what-does-tlsv1-alert-unknown-ca-mean
             assert "unknown ca" in str(excinfo.value)
@@ -670,9 +669,7 @@ async def test_tls_reject_certificate():
         await connect(
             listener.contact_address, timeout=2, ssl_context=cli_ctx,
         )
-    # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
-    if sys.version_info >= (3,):
-        assert "certificate verify failed" in str(excinfo.value)
+    assert "certificate verify failed" in str(excinfo.value)
 
 
 #

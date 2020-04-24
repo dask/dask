@@ -5,6 +5,7 @@ import threading
 from time import sleep
 
 import pytest
+from tornado import gen
 
 from distributed import Scheduler, Worker, Client, config, default_client
 from distributed.core import rpc
@@ -49,6 +50,28 @@ async def test_gen_cluster(c, s, a, b):
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
+    assert await c.submit(lambda: 123) == 123
+
+
+@gen_cluster(client=True)
+def test_gen_cluster_legacy_implicit(c, s, a, b):
+    assert isinstance(c, Client)
+    assert isinstance(s, Scheduler)
+    for w in [a, b]:
+        assert isinstance(w, Worker)
+    assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
+    assert (yield c.submit(lambda: 123)) == 123
+
+
+@gen_cluster(client=True)
+@gen.coroutine
+def test_gen_cluster_legacy_explicit(c, s, a, b):
+    assert isinstance(c, Client)
+    assert isinstance(s, Scheduler)
+    for w in [a, b]:
+        assert isinstance(w, Worker)
+    assert s.nthreads == {w.address: w.nthreads for w in [a, b]}
+    assert (yield c.submit(lambda: 123)) == 123
 
 
 @pytest.mark.skip(reason="This hangs on travis")
@@ -99,6 +122,17 @@ async def test_gen_cluster_tls(e, s, a, b):
 @gen_test()
 async def test_gen_test():
     await asyncio.sleep(0.01)
+
+
+@gen_test()
+def test_gen_test_legacy_implicit():
+    yield asyncio.sleep(0.01)
+
+
+@gen_test()
+@gen.coroutine
+def test_gen_test_legacy_explicit():
+    yield asyncio.sleep(0.01)
 
 
 @contextmanager

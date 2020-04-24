@@ -18,7 +18,6 @@ import socket
 import subprocess
 import sys
 import tempfile
-import textwrap
 import threading
 from time import sleep
 import uuid
@@ -34,6 +33,7 @@ import pytest
 
 import dask
 from tlz import merge, memoize, assoc
+from tornado import gen
 from tornado.ioloop import IOLoop
 
 from . import system
@@ -397,25 +397,9 @@ async def geninc(x, delay=0.02):
     return x + 1
 
 
-def compile_snippet(code, dedent=True):
-    if dedent:
-        code = textwrap.dedent(code)
-    code = compile(code, "<dynamic>", "exec")
-    ns = globals()
-    exec(code, ns, ns)
-
-
-if sys.version_info >= (3, 5):
-    compile_snippet(
-        """
-        async def asyncinc(x, delay=0.02):
-            await asyncio.sleep(delay)
-            return x + 1
-        """
-    )
-    assert asyncinc  # noqa: F821
-else:
-    asyncinc = None
+async def asyncinc(x, delay=0.02):
+    await asyncio.sleep(delay)
+    return x + 1
 
 
 _readone_queues = {}
@@ -768,9 +752,11 @@ def gen_test(timeout=10):
     def _(func):
         def test_func():
             with clean() as loop:
-                if not iscoroutinefunction(func):
-                    raise ValueError("@gen_test should wrap async def functions")
-                loop.run_sync(func, timeout=timeout)
+                if iscoroutinefunction(func):
+                    cor = func
+                else:
+                    cor = gen.coroutine(func)
+                loop.run_sync(cor, timeout=timeout)
 
         return test_func
 
@@ -877,10 +863,10 @@ def gen_cluster(
     )
 
     def _(func):
-        def test_func():
-            if not iscoroutinefunction(func):
-                raise ValueError("@gen_cluster should wrap async def functions")
+        if not iscoroutinefunction(func):
+            func = gen.coroutine(func)
 
+        def test_func():
             result = None
             workers = []
             with clean(timeout=active_rpc_timeout, **clean_kwargs) as loop:
@@ -1001,12 +987,7 @@ def terminate_process(proc):
         else:
             proc.send_signal(signal.SIGINT)
         try:
-            if sys.version_info[0] == 3:
-                proc.wait(10)
-            else:
-                start = time()
-                while proc.poll() is None and time() < start + 10:
-                    sleep(0.02)
+            proc.wait(10)
         finally:
             # Make sure we don't leave the process lingering around
             with ignoring(OSError):

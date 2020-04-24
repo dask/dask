@@ -67,7 +67,6 @@ def test_local_cluster_supports_blocked_handlers(loop):
     )
 
 
-@pytest.mark.skipif("sys.version_info[0] == 2", reason="fork issues")
 def test_close_twice():
     with LocalCluster() as cluster:
         with Client(cluster.scheduler_address) as client:
@@ -81,7 +80,6 @@ def test_close_twice():
         assert not log
 
 
-@pytest.mark.skipif("sys.version_info[0] == 2", reason="multi-loop")
 def test_procs():
     with LocalCluster(
         2,
@@ -173,13 +171,11 @@ def test_transports_tcp_port():
             assert e.submit(inc, 4).result() == 5
 
 
-@pytest.mark.skipif("sys.version_info[0] == 2", reason="")
 class LocalTest(ClusterTest, unittest.TestCase):
     Cluster = partial(LocalCluster, silence_logs=False, dashboard_address=None)
     kwargs = {"dashboard_address": None, "processes": False}
 
 
-@pytest.mark.skipif("sys.version_info[0] == 2", reason="")
 def test_Client_with_local(loop):
     with LocalCluster(
         1, scheduler_port=0, silence_logs=False, dashboard_address=None, loop=loop
@@ -429,7 +425,6 @@ def test_bokeh(loop, processes):
         requests.get(url, timeout=0.2)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 6), reason="Unknown")
 def test_blocks_until_full(loop):
     with Client(loop=loop) as c:
         assert len(c.nthreads()) > 0
@@ -462,7 +457,8 @@ async def test_scale_up_and_down():
 
 @pytest.mark.xfail(
     sys.version_info >= (3, 8) and LooseVersion(tornado.version) < "6.0.3",
-    reason="Known issue with Python 3.8 and Tornado < 6.0.3. See https://github.com/tornadoweb/tornado/pull/2683.",
+    reason="Known issue with Python 3.8 and Tornado < 6.0.3. "
+    "See https://github.com/tornadoweb/tornado/pull/2683.",
     strict=True,
 )
 def test_silent_startup():
@@ -549,7 +545,6 @@ def test_death_timeout_raises(loop):
     LocalCluster._instances.clear()  # ignore test hygiene checks
 
 
-@pytest.mark.skipif(sys.version_info < (3, 6), reason="Unknown")
 @pytest.mark.asyncio
 async def test_bokeh_kwargs(cleanup):
     pytest.importorskip("bokeh")

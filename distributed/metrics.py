@@ -49,10 +49,7 @@ class _WindowsTime:
         self.delta = None
         self.last_resync = float("-inf")
 
-    if sys.version_info >= (3,):
-        perf_counter = timemod.perf_counter
-    else:
-        perf_counter = timemod.clock
+    perf_counter = timemod.perf_counter
 
     def time(self):
         delta = self.delta

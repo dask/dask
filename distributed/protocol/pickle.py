@@ -1,12 +1,8 @@
 import logging
-import sys
+import pickle
 
 import cloudpickle
 
-if sys.version_info.major == 2:
-    import cPickle as pickle
-else:
-    import pickle
 
 logger = logging.getLogger(__name__)
 
