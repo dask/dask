@@ -20,6 +20,7 @@ dependencies:
   - sqlalchemy
   - pyarrow>=0.14.0
   - coverage
+  - jsonschema
   # other -- IO
   - bcolz
   - blosc
