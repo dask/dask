@@ -157,7 +157,7 @@ def full(shape, fill_value, dtype=None, order="C", chunks=None):
     # np.isscalar has somewhat strange behavior:
     # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
     if np.ndim(fill_value) != 0:
-        raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
+        raise ValueError(f"fill_value must be scalar. Received {type(fill_value)} instead.")
     return _full(
         shape=shape, fill_value=fill_value, dtype=dtype, order=order, chunks=chunks
     )
