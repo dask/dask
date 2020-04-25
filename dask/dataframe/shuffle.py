@@ -508,18 +508,21 @@ def rearrange_by_column_tasks(
 
     token = tokenize(df, column, max_branch)
 
+    shuffle_join_token = "shuffle-join-" + token
+
     start = {
-        ("shuffle-join-" + token, 0, inp): (df._name, i)
-        if i < df.npartitions
-        else df._meta
+        (shuffle_join_token, 0, inp): (df._name, i) if i < df.npartitions else df._meta
         for i, inp in enumerate(inputs)
     }
 
+    shuffle_group_token = "shuffle-group-" + token
+    shuffle_split_token = "shuffle-split-" + token
+
     for stage in range(1, stages + 1):
         group = {  # Convert partition into dict of dataframe pieces
-            ("shuffle-group-" + token, stage, inp): (
+            (shuffle_group_token, stage, inp): (
                 shuffle_group,
-                ("shuffle-join-" + token, stage - 1, inp),
+                (shuffle_join_token, stage - 1, inp),
                 column,
                 stage - 1,
                 k,
@@ -530,9 +533,9 @@ def rearrange_by_column_tasks(
         }
 
         split = {  # Get out each individual dataframe piece from the dicts
-            ("shuffle-split-" + token, stage, i, inp): (
+            (shuffle_split_token, stage, i, inp): (
                 getitem,
-                ("shuffle-group-" + token, stage, inp),
+                (shuffle_group_token, stage, inp),
                 i,
             )
             for i in range(k)
@@ -540,11 +543,11 @@ def rearrange_by_column_tasks(
         }
 
         join = {  # concatenate those pieces together, with their friends
-            ("shuffle-join-" + token, stage, inp): (
+            (shuffle_join_token, stage, inp): (
                 _concat,
                 [
                     (
-                        "shuffle-split-" + token,
+                        shuffle_split_token,
                         stage,
                         inp[stage - 1],
                         insert(inp, stage - 1, j),
@@ -559,41 +562,41 @@ def rearrange_by_column_tasks(
         splits.append(split)
         joins.append(join)
 
+    shuffle_token = "shuffle-" + token
+
     end = {
-        ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
+        (shuffle_token, i): (shuffle_join_token, stages, inp)
         for i, inp in enumerate(inputs)
     }
 
     dsk = toolz.merge(start, end, *(groups + splits + joins))
-    graph = HighLevelGraph.from_collections("shuffle-" + token, dsk, dependencies=[df])
-    df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    graph = HighLevelGraph.from_collections(shuffle_token, dsk, dependencies=[df])
+    df2 = DataFrame(graph, shuffle_token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
 
+        repartition_group_token = "repartition-group-" + token
+
         dsk = {
-            ("repartition-group-" + token, i): (
-                shuffle_group_2,
-                k,
-                column,
-                ignore_index,
-            )
+            (repartition_group_token, i): (shuffle_group_2, k, column, ignore_index,)
             for i, k in enumerate(df2.__dask_keys__())
         }
+
+        repartition_get_token = "repartition-get-" + token
+
         for p in range(npartitions):
-            dsk[("repartition-get-" + token, p)] = (
+            dsk[(repartition_get_token, p)] = (
                 shuffle_group_get,
-                ("repartition-group-" + token, parts[p]),
+                (repartition_group_token, parts[p]),
                 p,
             )
 
         graph2 = HighLevelGraph.from_collections(
-            "repartition-get-" + token, dsk, dependencies=[df2]
+            repartition_get_token, dsk, dependencies=[df2]
         )
-        df3 = DataFrame(
-            graph2, "repartition-get-" + token, df2, [None] * (npartitions + 1)
-        )
+        df3 = DataFrame(graph2, repartition_get_token, df2, [None] * (npartitions + 1))
     else:
         df3 = df2
         df3.divisions = (None,) * (df.npartitions + 1)

@@ -2294,19 +2294,24 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     token = tokenize(b, grouper, hash, max_branch)
 
+    shuffle_join_token = "shuffle-join-" + token
+
     start = dict(
-        (("shuffle-join-" + token, 0, inp), (b2.name, i) if i < b.npartitions else [])
+        ((shuffle_join_token, 0, inp), (b2.name, i) if i < b.npartitions else [])
         for i, inp in enumerate(inputs)
     )
+
+    shuffle_group_token = "shuffle-group-" + token
+    shuffle_split_token = "shuffle-split-" + token
 
     for stage in range(1, stages + 1):
         group = dict(
             (
-                ("shuffle-group-" + token, stage, inp),
+                (shuffle_group_token, stage, inp),
                 (
                     groupby,
                     (make_group, k, stage - 1),
-                    ("shuffle-join-" + token, stage - 1, inp),
+                    (shuffle_join_token, stage - 1, inp),
                 ),
             )
             for inp in inputs
@@ -2314,8 +2319,8 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
         split = dict(
             (
-                ("shuffle-split-" + token, stage, i, inp),
-                (dict.get, ("shuffle-group-" + token, stage, inp), i, {}),
+                (shuffle_split_token, stage, i, inp),
+                (dict.get, (shuffle_group_token, stage, inp), i, {}),
             )
             for i in range(k)
             for inp in inputs
@@ -2323,14 +2328,14 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
         join = dict(
             (
-                ("shuffle-join-" + token, stage, inp),
+                (shuffle_join_token, stage, inp),
                 (
                     list,
                     (
                         toolz.concat,
                         [
                             (
-                                "shuffle-split-" + token,
+                                shuffle_split_token,
                                 stage,
                                 inp[stage - 1],
                                 insert(inp, stage - 1, j),
@@ -2346,15 +2351,13 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
         splits.append(split)
         joins.append(join)
 
+    name = "shuffle-" + token
+
     end = dict(
-        (
-            ("shuffle-" + token, i),
-            (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),
-        )
+        ((name, i), (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),)
         for i, j in enumerate(join)
     )
 
-    name = "shuffle-" + token
     dsk = merge(start, end, *(groups + splits + joins))
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b2])
     return type(b)(graph, name, len(inputs))
