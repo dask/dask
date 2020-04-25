@@ -1,6 +1,46 @@
 Changelog
 =========
 
+2.15.0 - 2020-04-24
+-------------------
+
+- Reinstate support for legacy ``@gen_cluster`` functions (:pr:`3738`) `crusaderky`_
+- Relax NumPy requirement in UCX (:pr:`3731`) `jakirkham`_
+- Add Configuration Schema (:pr:`3696`) `Matthew Rocklin`_
+- Reuse CI scripts for local installation process (:pr:`3698`) `crusaderky`_
+- Use ``PeriodicCallback`` class from tornado (:pr:`3725`) `James Bourbeau`_
+- Add ``remote_python`` option in ssh cmd (:pr:`3709`) `Abdulelah Bin Mahfoodh`_
+- Configurable polling interval for cluster widget (:pr:`3723`) `Julia Signell`_
+- Fix copy-paste in docs (:pr:`3728`) `Julia Signell`_
+- Replace ``gen.coroutine`` with async-await in tests (:pr:`3706`) `crusaderky`_
+- Fix flaky ``test_oversubscribing_leases`` (:pr:`3726`) `Florian Jetter`_
+- Add ``batch_size`` to ``Client.map`` (:pr:`3650`) `Tom Augspurger`_
+- Adjust semaphore test timeouts (:pr:`3720`) `Florian Jetter`_
+- Dask-serialize dicts longer than five elements (:pr:`3689`) `Richard J Zamora`_
+- Force ``threads_per_worker`` (:pr:`3715`) `crusaderky`_
+- Idempotent semaphore acquire with retries (:pr:`3690`) `Florian Jetter`_
+- Always use ``readinto`` in TCP (:pr:`3711`) `jakirkham`_
+- Avoid ``DeprecationWarning`` from pandas (:pr:`3712`) `Tom Augspurger`_
+- Allow modification of ``distributed.comm.retry`` at runtime (:pr:`3705`) `Florian Jetter`_
+- Do not log an error on unset variable delete (:pr:`3652`) `Jonathan J. Helmus`_
+- Add ``remote_python`` keyword to the new ``SSHCluster`` (:pr:`3701`) `Abdulelah Bin Mahfoodh`_
+- Replace Example with Examples in docstrings (:pr:`3697`) `Matthew Rocklin`_
+- Add ``Cluster`` ``__enter__`` and ``__exit__`` methods (:pr:`3699`) `Matthew Rocklin`_
+- Fix propagating inherit config in ``SSHCluster`` for non-bash shells (:pr:`3688`) `Abdulelah Bin Mahfoodh`_
+- Add ``Client.wait_to_workers`` to ``Client`` autosummary table (:pr:`3692`) `James Bourbeau`_
+- Replace Bokeh Server with Tornado HTTPServer (:pr:`3658`) `Matthew Rocklin`_
+- Fix ``dask-ssh`` after removing ``local-directory`` from ``dask_scheduler`` cli (:pr:`3684`) `Abdulelah Bin Mahfoodh`_
+- Support preload modules in ``Nanny`` (:pr:`3678`) `Matthew Rocklin`_
+- Refactor semaphore internals: make ``_get_lease`` synchronous (:pr:`3679`) `Lucas Rademaker`_
+- Don't make task graphs too big (:pr:`3671`) `Martin Durant`_
+- Pass through ``connection``/``listen_args`` as splatted keywords (:pr:`3674`) `Matthew Rocklin`_
+- Run preload at import, start, and teardown (:pr:`3673`) `Matthew Rocklin`_
+- Use relative URL in scheduler dashboard (:pr:`3676`) `Nicholas Smith`_
+- Expose ``Security`` object as public API (:pr:`3675`) `Matthew Rocklin`_
+- Add zoom tools to profile plots (:pr:`3672`) `James Bourbeau`_
+- Update ``Scheduler.rebalance`` return value when data is missing (:pr:`3670`) `James Bourbeau`_
+
+
 2.14.0 - 2020-04-03
 -------------------
 
@@ -1672,3 +1712,5 @@ significantly without many new features.
 .. _`Prasun Anand`: https://github.com/prasunanand
 .. _`Jonathan J. Helmus`: https://github.com/jjhelmus
 .. _`Rami Chowdhury`: https://github.com/necaris
+.. _`crusaderky`: https://github.com/crusaderky
+.. _`Nicholas Smith`: https://github.com/nsmith-
