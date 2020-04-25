@@ -1,6 +1,50 @@
 Changelog
 =========
 
+2.15.0 / 2020-04-24
+-------------------
+
+Array
++++++
+
+- Update ``dask.array.from_array`` to warn when passed a Dask collection (:pr:`6122`) `James Bourbeau`_
+- Un-numpy like behaviour in ``dask.array.pad`` (:pr:`6042`) `Mark Boer`_
+- Add support for ``repeats=0`` in ``da.repeat`` (:pr:`6080`) `James Bourbeau`_
+
+Core
+++++
+
+- Fix yaml layout for schema (:pr:`6132`) `Ben Zaitlen`_
+- Configuration Reference (:pr:`6069`) `Ben Zaitlen`_
+- Add configuration option to turn off task fusion (:pr:`6087`) `Matthew Rocklin`_
+- Skip pyarrow on windows (:pr:`6094`) `Tom Augspurger`_
+- Set limit to maximum length of fused key (:pr:`6057`) `Lucas Rademaker`_
+- Add test against #6062 (:pr:`6072`) `Martin Durant`_
+- Bump checkout action to v2 (:pr:`6065`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+- Generalize categorical calls to support cudf ``Categorical`` (:pr:`6113`) `GALI PREM SAGAR`_
+- Avoid reading ``_metadata`` on every worker (:pr:`6017`) `Richard (Rick) Zamora`_
+- Use ``group_split_dispatch`` and ``ignore_index`` in ``apply_concat_apply`` (:pr:`6119`) `Richard (Rick) Zamora`_
+- Handle new (dtype) pandas metadata with pyarrow (:pr:`6090`) `Richard (Rick) Zamora`_
+- Skip ``test_partition_on_cats_pyarrow`` if pyarrow is not installed (:pr:`6112`) `James Bourbeau`_
+- Update DataFrame len to handle columns with the same name (:pr:`6111`) `James Bourbeau`_
+- ``ArrowEngine`` bug fixes and test coverage (:pr:`6047`) `Richard (Rick) Zamora`_
+- Added mode (:pr:`5958`) `Adam Lewis`_
+
+Documentation
++++++++++++++
+
+- Update "helm install" for helm 3 usage (:pr:`6130`) `JulianWgs`_
+- Extend preload documentation (:pr:`6077`) `Matthew Rocklin`_
+- Fixed small typo in DataFrame ``map_partitions()`` docstring (:pr:`6115`) `Eugene Huang`_
+- Fix typo: "double" should be times, not plus (:pr:`6091`) `David Chudzicki`_
+- Fix first line of ``array.random.*`` docs (:pr:`6063`) `Martin Durant`_
+- Add section about ``Semaphore`` in distributed (:pr:`6053`) `Florian Jetter`_
+
+
 2.14.0 / 2020-04-03
 -------------------
 
@@ -3072,3 +3116,7 @@ Other
 .. _`mlondschien`: https://github.com/mlondschien
 .. _`petiop`: https://github.com/petiop
 .. _`Richard (Rick) Zamora`: https://github.com/rjzamora
+.. _`Mark Boer`: https://github.com/mark-boer
+.. _`Florian Jetter`: https://github.com/fjetter
+.. _`Adam Lewis`: https://github.com/balast
+.. _`David Chudzicki`: https://github.com/dchudz
