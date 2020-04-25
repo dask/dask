@@ -1,0 +1,72 @@
+properties:
+  temporary-directory:
+    type:
+    - string
+    - "null"
+    description: |
+      Temporary directory for local disk storage /tmp, /scratch,
+      or /local.  This directory is used during dask spill-to-disk operations.
+
+      When the value is "null" (default), dask will create a directory from
+      where dask was launched: `cwd/dask-worker-space`
+
+  dataframe:
+    type: object
+    properties:
+
+      shuffle-compression:
+        type:
+        - string
+        - "null"
+        description: |
+          Compression algorithm used for on disk-shuffling. Partd, the library used
+          for compression supports ZLib, BZ2, SNAPPY, and BLOSC
+
+  array:
+    type: object
+    properties:
+
+      svg:
+        type: object
+        properties:
+
+          size:
+            type: integer
+            description: |
+              The size of pixels used when displaying a dask array as an SVG image.
+              This is used, for example, for nice rendering in a Jupyter notebook
+
+  optimization:
+    type: object
+    properties:
+
+      fuse:
+        type: object
+        description: Options for Dask's task fusion optimizations
+        properties:
+
+          active:
+            type: boolean
+            description: |
+              Configuration setting to turn task fusion on/off
+
+          ave-width:
+            type: integer
+            description: |
+              Upper limit for width, where width = num_nodes / height, a good measure
+              of parallelizability
+
+          subraphs:
+            type: boolean
+            description: |
+              Configuration setting to control whether to fuse multiple tasks into
+              SubgraphCallable objects.
+
+          rename-keys:
+            type: boolean
+            description: |
+              Configuration setting to control renaming of the fused keys with
+              `default_fused_keys_renamer` or not. Renaming fused keys can keep the
+              graph more understandable and comprehensive, but it comes at the cost of
+              additional processing. If False, then the top-most key will be used. For
+              advanced usage, a function to create the new name is also accepted.
