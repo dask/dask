@@ -26,7 +26,7 @@ from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
 
-def empty_like(a, dtype=None, chunks=None):
+def empty_like(a, dtype=None, chunks=None, name=None):
     """
     Return a new array with the same shape and type as a given array.
 
@@ -40,6 +40,9 @@ def empty_like(a, dtype=None, chunks=None):
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
 
     Returns
     -------
@@ -67,10 +70,11 @@ def empty_like(a, dtype=None, chunks=None):
         a.shape,
         dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks),
+        name=name,
     )
 
 
-def ones_like(a, dtype=None, chunks=None):
+def ones_like(a, dtype=None, chunks=None, name=None):
     """
     Return an array of ones with the same shape and type as a given array.
 
@@ -84,6 +88,9 @@ def ones_like(a, dtype=None, chunks=None):
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
 
     Returns
     -------
@@ -104,10 +111,11 @@ def ones_like(a, dtype=None, chunks=None):
         a.shape,
         dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks),
+        name=name,
     )
 
 
-def zeros_like(a, dtype=None, chunks=None):
+def zeros_like(a, dtype=None, chunks=None, name=None):
     """
     Return an array of zeros with the same shape and type as a given array.
 
@@ -121,6 +129,9 @@ def zeros_like(a, dtype=None, chunks=None):
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
 
     Returns
     -------
@@ -141,10 +152,11 @@ def zeros_like(a, dtype=None, chunks=None):
         a.shape,
         dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks),
+        name=name,
     )
 
 
-def full_like(a, fill_value, dtype=None, chunks=None):
+def full_like(a, fill_value, dtype=None, chunks=None, name=None):
     """
     Return a full array with the same shape and type as a given array.
 
@@ -160,6 +172,9 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
 
     Returns
     -------
@@ -183,6 +198,7 @@ def full_like(a, fill_value, dtype=None, chunks=None):
         fill_value,
         dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks),
+        name=name,
     )
 
 

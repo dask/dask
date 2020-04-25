@@ -18,6 +18,7 @@ def _parse_wrap_args(func, args, kwargs, shape):
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
+    name = kwargs.pop("name", None)
     chunks = kwargs.pop("chunks", "auto")
 
     dtype = kwargs.pop("dtype", None)
@@ -26,7 +27,6 @@ def _parse_wrap_args(func, args, kwargs, shape):
     dtype = np.dtype(dtype)
 
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    name = kwargs.pop("name", None)
 
     name = name or funcname(func) + "-" + tokenize(
         func, shape, chunks, dtype, args, kwargs
@@ -121,8 +121,8 @@ def wrap(wrap_func, func, **kwargs):
     template = """
     Blocked variant of %(name)s
 
-    Follows the signature of %(name)s exactly except that it also requires a
-    keyword argument chunks=(...)
+    Follows the signature of %(name)s exactly except that it also features
+    optional keyword arguments `chunks: int, tuple, or dict` and `name: str`.
 
     Original signature follows below.
     """
@@ -153,24 +153,20 @@ _full = w(np.full)
 _full_like = w_like(np.full, func_like=np.full_like)
 
 
-def full(shape, fill_value, dtype=None, order="C", chunks=None):
+def full(shape, fill_value, *args, **kwargs):
     # np.isscalar has somewhat strange behavior:
     # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
     if np.ndim(fill_value) != 0:
-        raise ValueError(f"fill_value must be scalar. Received {type(fill_value)} instead.")
-    return _full(
-        shape=shape, fill_value=fill_value, dtype=dtype, order=order, chunks=chunks
-    )
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value)} instead."
+        )
+    return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 
-def full_like(
-    a, fill_value, dtype=None, order="K", subok=True, shape=None, chunks=None
-):
+def full_like(a, fill_value, *args, **kwargs):
     if np.ndim(fill_value) != 0:
         raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
-    return _full_like(
-        a=a, fill_value=fill_value, dtype=dtype, order=order, subok=subok, chunks=chunks
-    )
+    return _full_like(a=a, fill_value=fill_value, *args, **kwargs,)
 
 
 full.__doc__ = _full.__doc__
