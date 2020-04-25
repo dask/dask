@@ -200,9 +200,11 @@ def test_custom_context_used_python3_posix():
     # parent process should have:
     def check_for_pytest():
         import sys
+
         return "FAKE_MODULE_FOR_TEST" in sys.modules
 
     import sys
+
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
         with dask.config.set({"multiprocessing.context": "fork"}):
