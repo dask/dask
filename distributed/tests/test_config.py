@@ -109,6 +109,45 @@ def test_logging_empty_simple():
         test_logging_default()
 
 
+def test_logging_simple_under_distributed():
+    """
+    Test simple ("old-style") logging configuration under the distributed key.
+    """
+    c = {
+        "distributed": {
+            "logging": {"distributed.foo": "info", "distributed.foo.bar": "error"}
+        }
+    }
+    # Must test using a subprocess to avoid wrecking pre-existing configuration
+    with new_config_file(c):
+        code = """if 1:
+            import logging
+            import dask
+
+            from distributed.utils_test import captured_handler
+
+            d = logging.getLogger('distributed')
+            assert len(d.handlers) == 1
+            assert isinstance(d.handlers[0], logging.StreamHandler)
+            df = logging.getLogger('distributed.foo')
+            dfb = logging.getLogger('distributed.foo.bar')
+
+            with captured_handler(d.handlers[0]) as distributed_log:
+                df.info("1: info")
+                dfb.warning("2: warning")
+                dfb.error("3: error")
+
+            distributed_log = distributed_log.getvalue().splitlines()
+
+            assert distributed_log == [
+                "distributed.foo - INFO - 1: info",
+                "distributed.foo.bar - ERROR - 3: error",
+                ], (dask.config.config, distributed_log)
+            """
+
+        subprocess.check_call([sys.executable, "-c", code])
+
+
 def test_logging_simple():
     """
     Test simple ("old-style") logging configuration.

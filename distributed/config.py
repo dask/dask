@@ -80,7 +80,8 @@ def _initialize_logging_old_style(config):
         "tornado": "critical",
         "tornado.application": "error",
     }
-    loggers.update(config.get("logging", {}))
+    base_config = _find_logging_config(config)
+    loggers.update(base_config.get("logging", {}))
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(
@@ -103,7 +104,8 @@ def _initialize_logging_new_style(config):
     Initialize logging using logging's "Configuration dictionary schema".
     (ref.: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema)
     """
-    logging.config.dictConfig(config.get("logging"))
+    base_config = _find_logging_config(config)
+    logging.config.dictConfig(base_config.get("logging"))
 
 
 def _initialize_logging_file_config(config):
@@ -111,20 +113,34 @@ def _initialize_logging_file_config(config):
     Initialize logging using logging's "Configuration file format".
     (ref.: https://docs.python.org/3/howto/logging.html#configuring-logging)
     """
+    base_config = _find_logging_config(config)
     logging.config.fileConfig(
-        config.get("logging-file-config"), disable_existing_loggers=False
+        base_config.get("logging-file-config"), disable_existing_loggers=False
     )
 
 
+def _find_logging_config(config):
+    """
+    Look for the dictionary containing logging-specific configurations,
+    starting in the 'distributed' dictionary and then trying the top-level
+    """
+    logging_keys = {"logging-file-config", "logging"}
+    if logging_keys & config.get("distributed", {}).keys():
+        return config["distributed"]
+    else:
+        return config
+
+
 def initialize_logging(config):
-    if "logging-file-config" in config:
-        if "logging" in config:
+    base_config = _find_logging_config(config)
+    if "logging-file-config" in base_config:
+        if "logging" in base_config:
             raise RuntimeError(
                 "Config options 'logging-file-config' and 'logging' are mutually exclusive."
             )
         _initialize_logging_file_config(config)
     else:
-        log_config = config.get("logging", {})
+        log_config = base_config.get("logging", {})
         if "version" in log_config:
             # logging module mandates version to be an int
             log_config["version"] = int(log_config["version"])
