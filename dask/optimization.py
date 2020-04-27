@@ -447,7 +447,7 @@ def fuse(
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
-    ave_width: float (default 2)
+    ave_width: float (default 1)
         Upper limit for ``width = num_nodes / height``, a good measure of
         parallelizability
     max_width: int
