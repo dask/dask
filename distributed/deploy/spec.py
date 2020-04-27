@@ -383,7 +383,10 @@ class SpecCluster(Cluster):
             await future
         async with self._lock:
             with ignoring(CommClosedError):
-                await self.scheduler_comm.close(close_workers=True)
+                if self.scheduler_comm:
+                    await self.scheduler_comm.close(close_workers=True)
+                else:
+                    logger.warning("Cluster closed without starting up")
 
         await self.scheduler.close()
         for w in self._created:
