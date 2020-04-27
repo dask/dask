@@ -245,7 +245,15 @@ def set_partition(
     return df4.map_partitions(M.sort_index)
 
 
-def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=None):
+def shuffle(
+    df,
+    index,
+    shuffle=None,
+    shuffle_dtype=None,
+    npartitions=None,
+    max_branch=32,
+    compute=None,
+):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -265,7 +273,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
 
-    if shuffle == "tasks":
+    if shuffle_dtype is False and shuffle == "tasks":
         # Avoid creating the "_partitions" column if possible
         if isinstance(index, DataFrame):
             names = list(index.columns)
@@ -278,14 +286,18 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
                 names,
                 npartitions=npartitions,
                 max_branch=max_branch,
-                shuffle="tasks",
+                shuffle=shuffle,
                 compute=compute,
             )
 
+    meta = df._meta._constructor_sliced([0])
+    if shuffle_dtype:
+        meta = meta.astype(shuffle_dtype)
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=df._meta._constructor_sliced([0]),
+        typ=shuffle_dtype,
+        meta=meta,
         transform_divisions=False,
     )
     df2 = df.assign(_partitions=partitions)
@@ -531,19 +543,21 @@ def rearrange_by_column_tasks(
     inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
 
     token = tokenize(df, column, max_branch)
+    shuffle_name = "shuffle-" + token
+    shuffle_join_name = "shuffle-join-" + token
+    shuffle_group_name = "shuffle-group-" + token
+    shuffle_split_name = "shuffle-split-" + token
 
     start = {
-        ("shuffle-join-" + token, 0, inp): (df._name, i)
-        if i < df.npartitions
-        else df._meta
+        (shuffle_join_name, 0, inp): (df._name, i) if i < df.npartitions else df._meta
         for i, inp in enumerate(inputs)
     }
 
     for stage in range(1, stages + 1):
         group = {  # Convert partition into dict of dataframe pieces
-            ("shuffle-group-" + token, stage, inp): (
+            (shuffle_group_name, stage, inp): (
                 shuffle_group,
-                ("shuffle-join-" + token, stage - 1, inp),
+                (shuffle_join_name, stage - 1, inp),
                 column,
                 stage - 1,
                 k,
@@ -555,9 +569,9 @@ def rearrange_by_column_tasks(
         }
 
         split = {  # Get out each individual dataframe piece from the dicts
-            ("shuffle-split-" + token, stage, i, inp): (
+            (shuffle_split_name, stage, i, inp): (
                 getitem,
-                ("shuffle-group-" + token, stage, inp),
+                (shuffle_group_name, stage, inp),
                 i,
             )
             for i in range(k)
@@ -565,11 +579,11 @@ def rearrange_by_column_tasks(
         }
 
         join = {  # concatenate those pieces together, with their friends
-            ("shuffle-join-" + token, stage, inp): (
+            (shuffle_join_name, stage, inp): (
                 _concat,
                 [
                     (
-                        "shuffle-split-" + token,
+                        shuffle_split_name,
                         stage,
                         inp[stage - 1],
                         insert(inp, stage - 1, j),
@@ -585,20 +599,22 @@ def rearrange_by_column_tasks(
         joins.append(join)
 
     end = {
-        ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
+        (shuffle_name, i): (shuffle_join_name, stages, inp)
         for i, inp in enumerate(inputs)
     }
 
     dsk = toolz.merge(start, end, *(groups + splits + joins))
-    graph = HighLevelGraph.from_collections("shuffle-" + token, dsk, dependencies=[df])
-    df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    graph = HighLevelGraph.from_collections(shuffle_name, dsk, dependencies=[df])
+    df2 = DataFrame(graph, shuffle_name, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
+        repartition_group_name = "repartition-group-" + token
+        repartition_get_name = "repartition-get-" + token
 
         dsk = {
-            ("repartition-group-" + token, i): (
+            (repartition_group_name, i): (
                 shuffle_group_2,
                 k,
                 column,
@@ -608,18 +624,16 @@ def rearrange_by_column_tasks(
             for i, k in enumerate(df2.__dask_keys__())
         }
         for p in range(npartitions):
-            dsk[("repartition-get-" + token, p)] = (
+            dsk[(repartition_get_name, p)] = (
                 shuffle_group_get,
-                ("repartition-group-" + token, parts[p]),
+                (repartition_group_name, parts[p]),
                 p,
             )
 
         graph2 = HighLevelGraph.from_collections(
-            "repartition-get-" + token, dsk, dependencies=[df2]
+            repartition_get_name, dsk, dependencies=[df2]
         )
-        df3 = DataFrame(
-            graph2, "repartition-get-" + token, df2, [None] * (npartitions + 1)
-        )
+        df3 = DataFrame(graph2, repartition_get_name, df2, [None] * (npartitions + 1))
     else:
         df3 = df2
         df3.divisions = (None,) * (df.npartitions + 1)
@@ -632,7 +646,7 @@ def rearrange_by_column_tasks(
 ########################################################
 
 
-def partitioning_index(df, npartitions):
+def partitioning_index(df, npartitions, typ=None):
     """
     Computes a deterministic index mapping each record to a partition.
 
@@ -643,20 +657,23 @@ def partitioning_index(df, npartitions):
     df : DataFrame/Series/Index
     npartitions : int
         The number of partitions to group into.
+    typ : dtype, optional
+        The output type to use.
 
     Returns
     -------
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    typ = np.min_scalar_type(npartitions * 2)
-    if typ.kind == "u":  # CuDF doesn't support unsigned types
-        if typ == np.uint8:
-            typ = np.int16
-        elif typ == np.uint16:
-            typ = np.int32
-        else:
-            typ = np.int64
+    if not typ:
+        typ = np.min_scalar_type(npartitions * 2)
+        if typ.kind == "u":  # CuDF doesn't support unsigned types
+            if typ == np.uint8:
+                typ = np.int16
+            elif typ == np.uint16:
+                typ = np.int32
+            else:
+                typ = np.int64
     return (hash_object_dispatch(df, index=False) % int(npartitions)).astype(typ)
 
 

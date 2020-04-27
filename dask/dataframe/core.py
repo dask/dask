@@ -1174,6 +1174,64 @@ Dask Name: {name}, {task} tasks"""
         elif freq is not None:
             return repartition_freq(self, freq=freq)
 
+    def shuffle(
+        self,
+        index,
+        npartitions=None,
+        max_branch=None,
+        shuffle=None,
+        shuffle_dtype=None,
+        compute=None,
+    ):
+        """ Rearrange DataFrame into new partitions by index
+
+        Uses hashing to map rows to output partitions. After this operation,
+        rows with the same index element(s) will be in the same partition.
+
+        Parameters
+        ----------
+        index : str, list of str, or _Frame
+            Column(s) or index to be used to map rows to output partitions
+        npartitions : int, optional
+            Number of partitions of output. Partition count will not be
+            changed by default.
+        max_branch: int, optional
+            The maximum number of splits per input partition. Used within
+            the staged shuffling algorithm.
+        shuffle: {'disk', 'tasks'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` for
+            distributed operation.  Will be inferred by your current scheduler.
+        shuffle_dtype : dtype or False, optional
+            Specifies the dtype of the intermediate ``'_partitions'`` column used
+            to map rows to new partitions. If ``False`` (and ``shuffle='tasks'``),
+            no ``'_partitions'`` column is constructed, and hashing is repeated
+            during each stage of shuffling.
+        compute: bool
+            Whether or not to trigger an immediate computation. Defaults to False.
+            Note, that even if you set ``compute=False``, an immediate computation
+            will still be triggered if ``divisions`` is ``None``.
+
+        Notes
+        -----
+        This does not preserve a meaningful index/partitioning scheme. This
+        is not deterministic if done in parallel.
+
+        Examples
+        --------
+        >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
+        """
+        from .shuffle import shuffle
+
+        return shuffle(
+            self,
+            index,
+            npartitions=npartitions,
+            max_branch=max_branch,
+            shuffle_dtype=shuffle_dtype,
+            shuffle=shuffle,
+            compute=compute,
+        )
+
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
         axis = self._validate_axis(axis)
@@ -3838,6 +3896,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
+        shuffle_dtype=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -3893,6 +3952,10 @@ class DataFrame(_Frame):
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
+        shuffle_dtype : dtype or False, optional
+            Specifies the dtype of the intermediate ``'_partitions'`` column used
+            for hash-based shuffling. If ``False`` (and ``shuffle='tasks'``),
+            no ``'_partitions'`` column is constructed.
 
         Notes
         -----
