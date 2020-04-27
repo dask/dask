@@ -179,7 +179,8 @@ launching Dask on your own, they will probably dump to the screen unless you
 <https://en.wikipedia.org/wiki/Redirection_(computing)#Redirecting_to_and_from_the_standard_file_handles>`_
 .
 
-You can control the logging verbosity in the ``~/.dask/config.yaml`` file.
+You can control the logging verbosity in the :doc:`configuration`, for example,
+the ``~/.dask/config.yaml`` file.
 Defaults currently look like the following:
 
 .. code-block:: yaml
@@ -189,8 +190,47 @@ Defaults currently look like the following:
      distributed.client: warning
      bokeh: error
 
-So, for example, you could add a line like ``distributed.worker: debug`` to get
+The specific components which you can set are ``distributed.client``,  ``distributed.scheduler``,
+``distributed.nanny``, and ``distributed.worker`` so, for example, you could add a line
+like ``distributed.worker: debug`` to get
 *very* verbose output from the workers.
+
+Furthermore, you can explicitly assign handlers to loggers. The following example
+assigns both file ("output.log") and console output to the scheduler and workers; this case is done
+in code. See the `python logging`_ documentation for information on the meaning of
+specific terms here.
+
+.. code-block:: python
+
+    import dask
+
+    logging_config = {
+        "version": 1,
+        "handlers": {
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": "output.log",
+                "level": "INFO",
+            },
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": "INFO",
+            }
+        },
+        "loggers": {
+            "distributed.worker": {
+                "level": "INFO",
+                "handlers": ["file", "console"],
+            },
+            "distributed.scheduler": {
+                "level": "INFO",
+                "handlers": ["file", "console"],
+            }
+        }
+    }
+    dask.config.config['logging'] = logging_config
+
+.. _python logging: https://docs.python.org/3/library/logging.html
 
 
 LocalCluster
