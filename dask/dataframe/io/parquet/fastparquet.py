@@ -119,11 +119,14 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
-            pf = ParquetFile(
-                paths, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-            )
             if "_metadata" not in fns:
+                paths_use = paths
                 fast_metadata = False
+            else:
+                paths_use = base + fs.sep + "_metadata"
+            pf = ParquetFile(
+                paths_use, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
+            )
         else:
             if "_metadata" in fns:
                 # We have a _metadata file, lets use it
@@ -177,11 +180,12 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             parts = paths.copy()
     else:
         # There is only one file to read
+        base = None
         pf = ParquetFile(
             paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
         )
 
-    return parts, pf, gather_statistics, fast_metadata
+    return parts, pf, gather_statistics, fast_metadata, base
 
 
 class FastParquetEngine(Engine):
@@ -199,7 +203,7 @@ class FastParquetEngine(Engine):
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below).
-        parts, pf, gather_statistics, fast_metadata = _determine_pf_parts(
+        parts, pf, gather_statistics, fast_metadata, base_path = _determine_pf_parts(
             fs, paths, gather_statistics, **kwargs
         )
 
@@ -284,7 +288,6 @@ class FastParquetEngine(Engine):
                 meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
             elif meta.index.name == catcol:
                 meta.index = meta.index.set_categories(pf.cats[catcol])
-
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
@@ -341,28 +344,97 @@ class FastParquetEngine(Engine):
         pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
         pf.fmd.row_groups = None
 
+        # Constructing "piece" and "pf" for each dask partition. We will
+        # need to consider the following output scenarios:
+        #
+        #  1) Each "piece" is a file path, and "pf" is `None`
+        #      - `gather_statistics==False` and no "_metadata" available
+        #  2) Each "piece" is a row-group index, and "pf" is ParquetFile object
+        #      - We have parquet partitions and no "_metadata" available
+        #  3) Each "piece" is a row-group index, and "pf" is a `tuple`
+        #      - The value of the 0th tuple element depends on the following:
+        #      A) Dataset is partitioned and "_metadata" exists
+        #          - 0th tuple element will be the path to "_metadata"
+        #      B) Dataset is not partitioned
+        #          - 0th tuple element will be the path to the data
+        #      C) Dataset is partitioned and "_metadata" does not exist
+        #          - 0th tuple element will be the original `paths` argument
+        #            (We will let the workers use `_determine_pf_parts`)
+
         # Create `parts`
         # This is a list of row-group-descriptor dicts, or file-paths
         # if we have a list of files and gather_statistics=False
-        if not parts:
-            partsin = pf.row_groups
-            if fast_metadata:
-                pf = (paths, gather_statistics)
-        else:
+        base_path = (base_path or "") + fs.sep
+        if parts:
+            # Case (1)
+            # `parts` is just a list of path names.
+            pqpartitions = None
+            pf_deps = None
             partsin = parts
-            pf = None
+        else:
+            # Populate `partsin` with dataset row-groups
+            partsin = pf.row_groups
+            pqpartitions = pf.info.get("partitions", None)
+            if pqpartitions and not fast_metadata:
+                # Case (2)
+                # We have parquet partitions, and do not have
+                # a "_metadata" file for the worker to read.
+                # Therefore, we need to pass the pf object in
+                # the task graph
+                pf_deps = pf
+            else:
+                # Case (3)
+                # We don't need to pass a pf object in the task graph.
+                # Instead, we can try to pass the path for each part.
+                pf_deps = "tuple"
+
         parts = []
-        for i, piece in enumerate(partsin):
-            if pf and not fast_metadata:
-                for col in piece.columns:
+        i_path = 0
+        path_last = None
+
+        # Loop over DataFrame partitions.
+        # Each `part` will be a row-group or path ()
+        for i, part in enumerate(partsin):
+            if pqpartitions and fast_metadata:
+                # Case (3A)
+                # We can pass a "_metadata" path
+                file_path = base_path + "_metadata"
+                i_path = i
+            elif (
+                pf_deps
+                and isinstance(part.columns[0].file_path, str)
+                and not pqpartitions
+            ):
+                # Case (3B)
+                # We can pass a specific file/part path
+                path_curr = part.columns[0].file_path
+                if path_last and path_curr == path_last:
+                    i_path += 1
+                else:
+                    i_path = 0
+                    path_last = path_curr
+                file_path = base_path + path_curr
+            else:
+                # Case (3C)
+                # We cannot pass a specific file/part path
+                file_path = paths
+                i_path = i
+
+            # Strip down pf object
+            if pf_deps and pf_deps != "tuple":
+                # Case (2)
+                for col in part.columns:
                     col.meta_data.statistics = None
                     col.meta_data.encoding_stats = None
-            piece_item = i if pf else piece
-            part = {
-                "piece": piece_item,
-                "kwargs": {"pf": pf, "categories": categories_dict or categories},
+
+            # Final definition of "piece" and "pf" for this output partition
+            piece = i_path if pf_deps else part
+            pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
+            part_item = {
+                "piece": piece,
+                "kwargs": {"pf": pf_piece, "categories": categories_dict or categories},
             }
-            parts.append(part)
+            parts.append(part_item)
 
         return (meta, stats, parts)
 
@@ -385,7 +457,12 @@ class FastParquetEngine(Engine):
             return pf.to_pandas(columns, categories, index=index)
         else:
             if isinstance(pf, tuple):
-                pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
+                if isinstance(pf[0], list):
+                    pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
+                else:
+                    pf = ParquetFile(
+                        pf[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
+                    )
                 pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
                 pf.fmd.row_groups = None
             rg_piece = pf.row_groups[piece]

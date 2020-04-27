@@ -795,7 +795,7 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
 
-    return group_split_dispatch(df, c.astype(np.int32), k, ignore_index=ignore_index)
+    return group_split_dispatch(df, c, k, ignore_index=ignore_index)
 
 
 @contextlib.contextmanager
