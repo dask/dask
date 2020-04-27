@@ -1180,21 +1180,22 @@ Dask Name: {name}, {task} tasks"""
 
     def shuffle(
         self,
-        index,
+        on,
         npartitions=None,
         max_branch=None,
         shuffle=None,
         shuffle_dtype=None,
         compute=None,
     ):
-        """ Rearrange DataFrame into new partitions by index
+        """ Rearrange DataFrame into new partitions
 
-        Uses hashing to map rows to output partitions. After this operation,
-        rows with the same index element(s) will be in the same partition.
+        Uses hashing of `on` to map rows to output partitions. After this
+        operation, rows with the same index element(s) will be in the same
+        partition.
 
         Parameters
         ----------
-        index : str, list of str, or _Frame
+        on : str, list of str, or Series, Index, or DataFrame
             Column(s) or index to be used to map rows to output partitions
         npartitions : int, optional
             Number of partitions of output. Partition count will not be
@@ -1224,11 +1225,11 @@ Dask Name: {name}, {task} tasks"""
         --------
         >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
         """
-        from .shuffle import shuffle
+        from .shuffle import shuffle as dd_shuffle
 
-        return shuffle(
+        return dd_shuffle(
             self,
-            index,
+            on,
             npartitions=npartitions,
             max_branch=max_branch,
             shuffle_dtype=shuffle_dtype,
