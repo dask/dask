@@ -196,39 +196,29 @@ like ``distributed.worker: debug`` to get
 *very* verbose output from the workers.
 
 Furthermore, you can explicitly assign handlers to loggers. The following example
-assigns both file ("output.log") and console output to the scheduler and workers; this case is done
-in code. See the `python logging`_ documentation for information on the meaning of
+assigns both file ("output.log") and console output to the scheduler and workers.
+See the `python logging`_ documentation for information on the meaning of
 specific terms here.
 
-.. code-block:: python
+.. code-block:: yaml
 
-    import dask
-
-    logging_config = {
-        "version": 1,
-        "handlers": {
-            "file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "filename": "output.log",
-                "level": "INFO",
-            },
-            "console": {
-                "class": "logging.StreamHandler",
-                "level": "INFO",
-            }
-        },
-        "loggers": {
-            "distributed.worker": {
-                "level": "INFO",
-                "handlers": ["file", "console"],
-            },
-            "distributed.scheduler": {
-                "level": "INFO",
-                "handlers": ["file", "console"],
-            }
-        }
-    }
-    dask.config.config['logging'] = logging_config
+logging:
+  version: 1
+  handlers:
+    file:
+      class: logging.handlers.RotatingFileHandler
+      filename: output.log
+      level: INFO
+    console:
+      class: logging.StreamHandler
+      level: INFO
+  loggers:
+    distributed.worker:
+      level: INFO
+      handlers: ["file", "console"]
+    distributed.scheduler:
+      level: INFO
+      handlers: ["file", "console"]
 
 .. _python logging: https://docs.python.org/3/library/logging.html
 
