@@ -4608,10 +4608,10 @@ def _vindex_array(x, dict_indexes):
             for okey in other_blocks
         )
 
-        vindex_merge_token = "vindex-merge-" + token
+        vindex_merge_name = "vindex-merge-" + token
         dsk.update(
             (
-                keyname(vindex_merge_token, 0, okey),
+                keyname(vindex_merge_name, 0, okey),
                 (
                     _vindex_merge,
                     [list(pluck(0, per_block[key])) for key in per_block],

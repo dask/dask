@@ -2294,10 +2294,10 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     token = tokenize(b, grouper, hash, max_branch)
 
-    shuffle_join_token = "shuffle-join-" + token
+    shuffle_join_name = "shuffle-join-" + token
 
     start = dict(
-        ((shuffle_join_token, 0, inp), (b2.name, i) if i < b.npartitions else [])
+        ((shuffle_join_name, 0, inp), (b2.name, i) if i < b.npartitions else [])
         for i, inp in enumerate(inputs)
     )
 
@@ -2311,7 +2311,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
                 (
                     groupby,
                     (make_group, k, stage - 1),
-                    (shuffle_join_token, stage - 1, inp),
+                    (shuffle_join_name, stage - 1, inp),
                 ),
             )
             for inp in inputs
@@ -2328,7 +2328,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
         join = dict(
             (
-                (shuffle_join_token, stage, inp),
+                (shuffle_join_name, stage, inp),
                 (
                     list,
                     (

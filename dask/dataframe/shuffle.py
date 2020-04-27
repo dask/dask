@@ -508,10 +508,10 @@ def rearrange_by_column_tasks(
 
     token = tokenize(df, column, max_branch)
 
-    shuffle_join_token = "shuffle-join-" + token
+    shuffle_join_name = "shuffle-join-" + token
 
     start = {
-        (shuffle_join_token, 0, inp): (df._name, i) if i < df.npartitions else df._meta
+        (shuffle_join_name, 0, inp): (df._name, i) if i < df.npartitions else df._meta
         for i, inp in enumerate(inputs)
     }
 
@@ -522,7 +522,7 @@ def rearrange_by_column_tasks(
         group = {  # Convert partition into dict of dataframe pieces
             (shuffle_group_token, stage, inp): (
                 shuffle_group,
-                (shuffle_join_token, stage - 1, inp),
+                (shuffle_join_name, stage - 1, inp),
                 column,
                 stage - 1,
                 k,
@@ -543,7 +543,7 @@ def rearrange_by_column_tasks(
         }
 
         join = {  # concatenate those pieces together, with their friends
-            (shuffle_join_token, stage, inp): (
+            (shuffle_join_name, stage, inp): (
                 _concat,
                 [
                     (
@@ -565,7 +565,7 @@ def rearrange_by_column_tasks(
     shuffle_token = "shuffle-" + token
 
     end = {
-        (shuffle_token, i): (shuffle_join_token, stages, inp)
+        (shuffle_token, i): (shuffle_join_name, stages, inp)
         for i, inp in enumerate(inputs)
     }
 
