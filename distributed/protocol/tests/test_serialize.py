@@ -409,6 +409,7 @@ def test_compression_numpy_list():
         ([MyObj([0, 1, 2]), 1], True),
         (tuple([MyObj(None)]), True),
         ({("x", i): MyObj(5) for i in range(100)}, True),
+        (memoryview(b"hello"), True),
     ],
 )
 def test_check_dask_serializable(data, is_serializable):
@@ -427,4 +428,13 @@ def test_serialize_lists(serializers):
     header, frames = serialize(data_in, serializers=serializers)
     data_out = deserialize(header, frames)
 
+    assert data_in == data_out
+
+
+def test_deser_memoryview():
+    data_in = memoryview(b"hello")
+    header, frames = serialize(data_in)
+    assert header["type"] == "builtins.memoryview"
+    assert frames[0] is data_in
+    data_out = deserialize(header, frames)
     assert data_in == data_out
