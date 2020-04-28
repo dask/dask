@@ -122,7 +122,7 @@ def wrap(wrap_func, func, **kwargs):
     Blocked variant of %(name)s
 
     Follows the signature of %(name)s exactly except that it also features
-    optional keyword arguments `chunks: int, tuple, or dict` and `name: str`.
+    optional keyword arguments ``chunks: int, tuple, or dict`` and ``name: str``.
 
     Original signature follows below.
     """
@@ -142,8 +142,6 @@ empty = w(np.empty, dtype="f8")
 w_like = wrap(wrap_func_like_safe)
 
 
-ones_like = w_like(np.ones, func_like=np.ones_like)
-zeros_like = w_like(np.zeros, func_like=np.zeros_like)
 empty_like = w_like(np.empty, func_like=np.empty_like)
 
 
