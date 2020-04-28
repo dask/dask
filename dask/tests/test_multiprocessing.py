@@ -194,15 +194,24 @@ def check_for_pytest():
 def test_custom_context_used_python3_posix():
     """ The 'multiprocessing.context' config is used to create the pool.
 
-    We assume default is 'fork', and therefore test for 'spawn'.  If default
-    context is changed this test will need to be modified to be different than
-    that.
+    We assume default is 'spawn', and therefore test for 'fork'.
     """
+    pytest.importorskip("cloudpickle")
+    # We check for 'fork' by ensuring subprocess doesn't have modules only
+    # parent process should have:
+
+    def check_for_pytest():
+        import sys
+
+        return "FAKE_MODULE_FOR_TEST" in sys.modules
+
+    import sys
+
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
-        with dask.config.set({"multiprocessing.context": "spawn"}):
+        with dask.config.set({"multiprocessing.context": "fork"}):
             result = get({"x": (check_for_pytest,)}, "x")
-        assert not result
+        assert result
     finally:
         del sys.modules["FAKE_MODULE_FOR_TEST"]
 
@@ -215,19 +224,18 @@ def test_get_context_using_python3_posix():
 
     If default context is changed this test will need to change too.
     """
-    default_context = None if sys.platform != "darwin" else "fork"
-    assert get_context() is multiprocessing.get_context(default_context)
+    assert get_context() is multiprocessing.get_context("spawn")
     with dask.config.set({"multiprocessing.context": "forkserver"}):
         assert get_context() is multiprocessing.get_context("forkserver")
-    with dask.config.set({"multiprocessing.context": "spawn"}):
-        assert get_context() is multiprocessing.get_context("spawn")
+    with dask.config.set({"multiprocessing.context": "fork"}):
+        assert get_context() is multiprocessing.get_context("fork")
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_custom_context_ignored_elsewhere():
     """ On Windows, setting 'multiprocessing.context' doesn't explode.
 
-    Presumption is it's not used since unsupported, but mostly we care about
+    Presumption is it's not used since it's unsupported, but mostly we care about
     not breaking anything.
     """
     assert get({"x": (inc, 1)}, "x") == 2
