@@ -1421,6 +1421,36 @@ def test_to_csv_with_get():
         assert_eq(result, df)
 
 
+def test_to_csv_warns_using_scheduler_argument():
+    from dask.multiprocessing import get as mp_get
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def my_get(*args, **kwargs):
+        return mp_get(*args, **kwargs)
+
+    with tmpdir() as dn:
+        with pytest.warns(FutureWarning):
+            ddf.to_csv(dn, index=False, scheduler=my_get)
+
+
+def test_to_csv_errors_using_multiple_scheduler_args():
+    from dask.multiprocessing import get as mp_get
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def my_get(*args, **kwargs):
+        return mp_get(*args, **kwargs)
+
+    with tmpdir() as dn:
+        with pytest.raises(ValueError) and pytest.warns(FutureWarning):
+            ddf.to_csv(
+                dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
+            )
+
+
 def test_to_csv_paths():
     df = pd.DataFrame({"A": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)

@@ -803,7 +803,11 @@ def to_csv(
                 FutureWarning,
             )
 
-        if scheduler is not None and compute_kwargs.get("scheduler") != scheduler:
+        if (
+            scheduler is not None
+            and compute_kwargs.get("scheduler") is not None
+            and compute_kwargs.get("scheduler") != scheduler
+        ):
             raise ValueError(
                 f"Differing values for 'scheduler' have been passed in.\n"
                 f"scheduler argument: {scheduler}\n"
