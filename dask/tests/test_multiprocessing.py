@@ -196,8 +196,10 @@ def test_custom_context_used_python3_posix():
 
     We assume default is 'spawn', and therefore test for 'fork'.
     """
+    pytest.importorskip("cloudpickle")
     # We check for 'fork' by ensuring subprocess doesn't have modules only
     # parent process should have:
+
     def check_for_pytest():
         import sys
 
