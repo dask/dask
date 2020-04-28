@@ -158,14 +158,16 @@ def full(shape, fill_value, *args, **kwargs):
     # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
     if np.ndim(fill_value) != 0:
         raise ValueError(
-            f"fill_value must be scalar. Received {type(fill_value)} instead."
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
     return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 
 def full_like(a, fill_value, *args, **kwargs):
     if np.ndim(fill_value) != 0:
-        raise ValueError(f"fill_value must be scalar. Received {fill_value} instead.")
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
+        )
     return _full_like(a=a, fill_value=fill_value, *args, **kwargs,)
 
 
