@@ -30,8 +30,9 @@ from dask.array.numpy_compat import _numpy_117, _numpy_118
 @pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
 @pytest.mark.parametrize("name", [None, "my-name"])
+@pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name):
+def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
     shape = cast_shape(shape)
@@ -49,11 +50,11 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name)
     if "like" in funcname:
         a = np.random.randint(0, 10, shape).astype(dtype)
 
-        np_r = np_func(a)
-        da_r = da_func(a, chunks=chunks, name=name)
+        np_r = np_func(a, order=order)
+        da_r = da_func(a, order=order, chunks=chunks, name=name)
     else:
-        np_r = np_func(shape, dtype=dtype)
-        da_r = da_func(shape, dtype=dtype, chunks=chunks, name=name)
+        np_r = np_func(shape, order=order, dtype=dtype)
+        da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
 
     assert np_r.shape == da_r.shape
     assert np_r.dtype == da_r.dtype
@@ -65,6 +66,11 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name)
         assert funcname.split("_")[0] in da_r.name
     else:
         assert da_r.name == name
+
+    if "order" == "F":
+        assert np.isfortran(da_r.compute())
+    else:
+        assert not np.isfortran(da_r.compute())
 
 
 @pytest.mark.parametrize("endpoint", [True, False])
