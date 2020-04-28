@@ -84,7 +84,6 @@ def test_write_json_basic(orient):
         assert_eq(out, df)
 
 
-
 def test_to_json_with_get():
     from dask.multiprocessing import get as mp_get
 
@@ -102,7 +101,6 @@ def test_to_json_with_get():
         assert flag[0]
         result = dd.read_json(os.path.join(dn, "*")).compute().reset_index(drop=True)
         assert_eq(result, df)
-
 
 
 def test_read_json_error():

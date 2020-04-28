@@ -1737,6 +1737,27 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn, engine=engine, unknown_key="unknown_value")
 
 
+def test_to_parquet_with_get(tmpdir):
+    from dask.multiprocessing import get as mp_get
+
+    tmpdir = str(tmpdir)
+
+    flag = [False]
+
+    def my_get(*args, **kwargs):
+        flag[0] = True
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf.to_parquet(tmpdir, compute_kwargs={"scheduler": my_get})
+    assert flag[0]
+
+    result = dd.read_parquet(os.path.join(tmpdir, "*")).compute().reset_index(drop=True)
+    assert_eq(result, df)
+
+
 def test_select_partitioned_column(tmpdir, engine):
     pytest.importorskip("snappy")
     if engine == "pyarrow":
