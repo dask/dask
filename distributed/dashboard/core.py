@@ -27,10 +27,7 @@ def BokehApplication(applications, server, prefix="/", template_variables={}):
 
     extra = toolz.merge({"prefix": prefix}, template_variables)
 
-    apps = {
-        prefix + k.lstrip("/"): functools.partial(v, server, extra)
-        for k, v in applications.items()
-    }
+    apps = {k: functools.partial(v, server, extra) for k, v in applications.items()}
     apps = {k: Application(FunctionHandler(v)) for k, v in apps.items()}
     kwargs = dask.config.get("distributed.scheduler.dashboard.bokeh-application").copy()
     extra_websocket_origins = create_hosts_whitelist(
@@ -39,6 +36,7 @@ def BokehApplication(applications, server, prefix="/", template_variables={}):
 
     application = BokehTornado(
         apps,
+        prefix=prefix,
         use_index=False,
         extra_websocket_origins=extra_websocket_origins,
         **kwargs,

@@ -8,6 +8,7 @@ from time import sleep
 import pytest
 
 pytest.importorskip("bokeh")
+from bokeh.server.server import BokehTornado
 from tlz import first
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
@@ -712,3 +713,21 @@ async def test_memory_by_key(c, s, a, b):
     mbk.update()
     assert mbk.source.data["name"] == ["add", "inc"]
     assert mbk.source.data["nbytes"] == [x.nbytes, sys.getsizeof(1)]
+
+
+@gen_cluster(scheduler_kwargs={"http_prefix": "foo-bar", "dashboard": True})
+async def test_prefix_bokeh(s, a, b):
+    prefix = "foo-bar"
+    http_client = AsyncHTTPClient()
+    response = await http_client.fetch(
+        f"http://localhost:{s.http_server.port}/{prefix}/status"
+    )
+    assert response.code == 200
+    assert (
+        f'<script type="text/javascript" src="/{prefix}/static/'
+        in response.body.decode()
+    )
+
+    bokeh_app = s.http_application.applications[0]
+    assert isinstance(bokeh_app, BokehTornado)
+    assert bokeh_app.prefix == f"/{prefix}"
