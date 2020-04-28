@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2.15.1 - 2020-04-28
+-------------------
+
+- Ensure ``BokehTornado`` uses prefix (:pr:`3746`) `James Bourbeau`_
+- Warn if cluster closes before starting (:pr:`3735`) `Matthew Rocklin`_
+- Memoryview serialisation (:pr:`3743`) `Martin Durant`_
+- Allows logging config under distributed key (:pr:`2952`) `Dillon Niederhut`_
+
+
 2.15.0 - 2020-04-24
 -------------------
 
@@ -1714,3 +1723,4 @@ significantly without many new features.
 .. _`Rami Chowdhury`: https://github.com/necaris
 .. _`crusaderky`: https://github.com/crusaderky
 .. _`Nicholas Smith`: https://github.com/nsmith-
+.. _`Dillon Niederhut`: https://github.com/deniederhut
