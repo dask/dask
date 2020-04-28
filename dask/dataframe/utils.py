@@ -484,7 +484,7 @@ def group_split_pandas(df, c, k, ignore_index=False):
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
-    return dict(zip(range(k), parts))
+    return tuple(parts)
 
 
 _simple_fake_mapping = {

@@ -673,7 +673,7 @@ def set_partitions_pre(s, divisions):
 
 def shuffle_group_2(df, col, ignore_index):
     if not len(df):
-        return {}, df
+        return tuple(), df
     ind = df[col].astype(np.int32)
     n = ind.max() + 1
     result2 = group_split_dispatch(df, ind.values.view(), n, ignore_index=ignore_index)
@@ -682,7 +682,7 @@ def shuffle_group_2(df, col, ignore_index):
 
 def shuffle_group_get(g_head, i):
     g, head = g_head
-    if i in g:
+    if i < len(g):
         return g[i]
     else:
         return head
