@@ -202,27 +202,27 @@ specific terms here.
 
 .. code-block:: yaml
 
-logging:
-  version: 1
-  handlers:
-    file:
-      class: logging.handlers.RotatingFileHandler
-      filename: output.log
-      level: INFO
-    console:
-      class: logging.StreamHandler
-      level: INFO
-  loggers:
-    distributed.worker:
-      level: INFO
+    logging:
+      version: 1
       handlers:
-        - file
-        - console
-    distributed.scheduler:
-      level: INFO
-      handlers:
-        - file
-        - console
+        file:
+          class: logging.handlers.RotatingFileHandler
+          filename: output.log
+          level: INFO
+        console:
+          class: logging.StreamHandler
+          level: INFO
+      loggers:
+        distributed.worker:
+          level: INFO
+          handlers:
+            - file
+            - console
+        distributed.scheduler:
+          level: INFO
+          handlers:
+            - file
+            - console
 
 .. _python logging: https://docs.python.org/3/library/logging.html
 
