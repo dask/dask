@@ -510,8 +510,8 @@ def rearrange_by_column_tasks(
 
     shuffle_join_name = "shuffle-join-" + token
 
-    shuffle_group_token = "shuffle-group-" + token
-    shuffle_split_token = "shuffle-split-" + token
+    shuffle_group_name = "shuffle-group-" + token
+    shuffle_split_name = "shuffle-split-" + token
     shuffle_token = "shuffle-" + token
 
     start = {}
@@ -527,7 +527,7 @@ def rearrange_by_column_tasks(
 
         for stage in range(1, stages + 1):
             # Convert partition into dict of dataframe pieces
-            group[(shuffle_group_token, stage, inp)] = (
+            group[(shuffle_group_name, stage, inp)] = (
                 shuffle_group,
                 (shuffle_join_name, stage - 1, inp),
                 column,
@@ -540,15 +540,15 @@ def rearrange_by_column_tasks(
             _concat_list = []
             for i in range(k):
                 # Get out each individual dataframe piece from the dicts
-                split[(shuffle_split_token, stage, i, inp)] = (
+                split[(shuffle_split_name, stage, i, inp)] = (
                     getitem,
-                    (shuffle_group_token, stage, inp),
+                    (shuffle_group_name, stage, inp),
                     i,
                 )
 
                 _concat_list.append(
                     (
-                        shuffle_split_token,
+                        shuffle_split_name,
                         stage,
                         inp[stage - 1],
                         insert(inp, stage - 1, i),
@@ -582,19 +582,19 @@ def rearrange_by_column_tasks(
             for i, k in enumerate(df2.__dask_keys__())
         }
 
-        repartition_get_token = "repartition-get-" + token
+        repartition_get_name = "repartition-get-" + token
 
         for p in range(npartitions):
-            dsk[(repartition_get_token, p)] = (
+            dsk[(repartition_get_name, p)] = (
                 shuffle_group_get,
                 (repartition_group_token, p % df.npartitions),
                 p,
             )
 
         graph2 = HighLevelGraph.from_collections(
-            repartition_get_token, dsk, dependencies=[df2]
+            repartition_get_name, dsk, dependencies=[df2]
         )
-        df3 = DataFrame(graph2, repartition_get_token, df2, [None] * (npartitions + 1))
+        df3 = DataFrame(graph2, repartition_get_name, df2, [None] * (npartitions + 1))
     else:
         df3 = df2
         df3.divisions = (None,) * (df.npartitions + 1)

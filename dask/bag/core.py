@@ -2296,36 +2296,38 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     shuffle_join_name = "shuffle-join-" + token
 
-    start = dict(
-        ((shuffle_join_name, 0, inp), (b2.name, i) if i < b.npartitions else [])
-        for i, inp in enumerate(inputs)
-    )
+    shuffle_group_name = "shuffle-group-" + token
+    shuffle_split_name = "shuffle-split-" + token
 
-    shuffle_group_token = "shuffle-group-" + token
-    shuffle_split_token = "shuffle-split-" + token
+    start = {}
+    group = {}
+    split = {}
+
+    for idx, inp in enumerate(inputs):
+        if idx < b.npartitions:
+            start[(shuffle_join_name, 0, inp)] = (b2.name, idx)
+        else:
+            start[(shuffle_join_name, 0, inp)] = []
+
+        for stage in range(1, stages + 1):
+            group[(shuffle_group_name, stage, inp)] = (
+                groupby,
+                (make_group, k, stage - 1),
+                (shuffle_join_name, stage - 1, inp),
+            )
+
+            for i in range(k):
+                split[(shuffle_split_name, stage, i, inp)] = (
+                    dict.get,
+                    (shuffle_group_name, stage, inp),
+                    i,
+                    {},
+                )
+
+        groups.append(group)
+        splits.append(split)
 
     for stage in range(1, stages + 1):
-        group = dict(
-            (
-                (shuffle_group_token, stage, inp),
-                (
-                    groupby,
-                    (make_group, k, stage - 1),
-                    (shuffle_join_name, stage - 1, inp),
-                ),
-            )
-            for inp in inputs
-        )
-
-        split = dict(
-            (
-                (shuffle_split_token, stage, i, inp),
-                (dict.get, (shuffle_group_token, stage, inp), i, {}),
-            )
-            for i in range(k)
-            for inp in inputs
-        )
-
         join = dict(
             (
                 (shuffle_join_name, stage, inp),
@@ -2335,7 +2337,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
                         toolz.concat,
                         [
                             (
-                                shuffle_split_token,
+                                shuffle_split_name,
                                 stage,
                                 inp[stage - 1],
                                 insert(inp, stage - 1, j),
@@ -2347,8 +2349,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
             )
             for inp in inputs
         )
-        groups.append(group)
-        splits.append(split)
+
         joins.append(join)
 
     name = "shuffle-" + token
