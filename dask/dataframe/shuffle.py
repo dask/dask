@@ -11,7 +11,7 @@ import tlz as toolz
 import numpy as np
 import pandas as pd
 
-from .core import DataFrame, Series, _Frame, _concat, map_partitions
+from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
@@ -570,7 +570,8 @@ def rearrange_by_column_tasks(
 
     dsk = toolz.merge(start, end, *(groups + splits + joins))
     graph = HighLevelGraph.from_collections(shuffle_token, dsk, dependencies=[df])
-    df2 = DataFrame(graph, shuffle_token, df, df.divisions)
+
+    df2 = new_dd_object(graph, shuffle_token, df._meta, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
         token = tokenize(df2, npartitions)
@@ -594,7 +595,9 @@ def rearrange_by_column_tasks(
         graph2 = HighLevelGraph.from_collections(
             repartition_get_name, dsk, dependencies=[df2]
         )
-        df3 = DataFrame(graph2, repartition_get_name, df2, [None] * (npartitions + 1))
+        df3 = new_dd_object(
+            graph2, repartition_get_name, df2._meta, [None] * (npartitions + 1)
+        )
     else:
         df3 = df2
         df3.divisions = (None,) * (df.npartitions + 1)
