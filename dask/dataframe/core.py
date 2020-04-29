@@ -5163,13 +5163,10 @@ def map_partitions(
             _meta=meta,
             **kwargs3
         )
-    elif not simple:
-        dsk = partitionwise_graph(
-            apply, name, func, *args2, **kwargs3, dependencies=dependencies
-        )
     else:
+        kwargs4 = kwargs if simple else kwargs3
         dsk = partitionwise_graph(
-            func, name, *args2, **kwargs, dependencies=dependencies
+            func, name, *args2, **kwargs4, dependencies=dependencies
         )
 
     divisions = dfs[0].divisions
