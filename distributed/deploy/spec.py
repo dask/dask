@@ -606,6 +606,6 @@ async def run_spec(spec: dict, *args):
 @atexit.register
 def close_clusters():
     for cluster in list(SpecCluster._instances):
-        with ignoring((gen.TimeoutError, TimeoutError)):
+        with ignoring(gen.TimeoutError, TimeoutError):
             if cluster.status != "closed":
                 cluster.close(timeout=10)
