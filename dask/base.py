@@ -19,7 +19,7 @@ from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
-
+from cudf._lib.nvtx import annotate
 
 __all__ = (
     "DaskMethodsMixin",
@@ -201,6 +201,7 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
+@annotate("collections_to_dsk", domain="dask")
 def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
