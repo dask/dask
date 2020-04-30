@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 
 import dask
 from distributed.diagnostics import SchedulerPlugin
-from distributed import Nanny, rpc, Scheduler, Worker, Client, wait
+from distributed import Nanny, rpc, Scheduler, Worker, Client, wait, worker
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -502,3 +502,29 @@ async def test_config(cleanup):
             async with Client(s.address, asynchronous=True) as client:
                 config = await client.run(dask.config.get, "foo")
                 assert config[n.worker_address] == "bar"
+
+
+class KeyboardInterruptWorker(worker.Worker):
+    """A Worker that raises KeyboardInterrupt almost immediately"""
+
+    async def heartbeat(self):
+        def raise_err():
+            raise KeyboardInterrupt()
+
+        self.loop.add_callback(raise_err)
+
+
+@pytest.mark.parametrize("protocol", ["tcp", "ucx"])
+@pytest.mark.asyncio
+async def test_nanny_closed_by_keyboard_interrupt(cleanup, protocol):
+    if protocol == "ucx":  # Skip if UCX isn't available
+        pytest.importorskip("ucp")
+
+    async with Scheduler(protocol=protocol) as s:
+        async with Nanny(
+            s.address, nthreads=1, worker_class=KeyboardInterruptWorker
+        ) as n:
+            n.auto_restart = False
+            await n.process.stopped.wait()
+            # Check that the scheduler has been notified about the closed worker
+            assert len(s.workers) == 0

@@ -762,4 +762,6 @@ class WorkerProcess:
             # Loop was stopped before wait_until_closed() returned, ignore
             pass
         except KeyboardInterrupt:
-            pass
+            # At this point the loop is not running thus we have to run
+            # do_stop() explicitly.
+            loop.run_sync(do_stop)
