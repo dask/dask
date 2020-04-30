@@ -1,5 +1,5 @@
 import asyncio
-from collections import defaultdict, deque, OrderedDict
+from collections import defaultdict, deque
 from collections.abc import Mapping, Set
 from datetime import timedelta
 from functools import partial
@@ -1973,7 +1973,7 @@ class Scheduler(ServerNode):
                 ts.retries = v
 
         # Compute recommendations
-        recommendations = OrderedDict()
+        recommendations = {}
 
         for ts in sorted(runnables, key=operator.attrgetter("priority"), reverse=True):
             if ts.state == "released" and ts.run_spec:
@@ -2107,7 +2107,7 @@ class Scheduler(ServerNode):
                 return {}
             cts = self.tasks.get(cause)
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             if cts is not None and cts.state == "memory":  # couldn't find this
                 for ws in cts.who_has:  # TODO: this behavior is extreme
@@ -2206,7 +2206,7 @@ class Scheduler(ServerNode):
             ws.status = "closed"
             self.total_occupancy -= ws.occupancy
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             for ts in list(ws.processing):
                 k = ts.key
@@ -3876,7 +3876,7 @@ class Scheduler(ServerNode):
 
             ts.state = "waiting"
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             for dts in ts.dependencies:
                 if dts.exception_blame:
@@ -3926,7 +3926,7 @@ class Scheduler(ServerNode):
             if ts.has_lost_dependencies:
                 return {key: "forgotten"}
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             for dts in ts.dependencies:
                 dep = dts.key
@@ -4058,7 +4058,7 @@ class Scheduler(ServerNode):
 
             self.check_idle_saturated(ws)
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             self._add_to_memory(ts, ws, recommendations, **kwargs)
 
@@ -4157,7 +4157,7 @@ class Scheduler(ServerNode):
             if nbytes is not None:
                 ts.set_nbytes(nbytes)
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             self._remove_from_processing(ts)
 
@@ -4194,7 +4194,7 @@ class Scheduler(ServerNode):
                     ts.exception = "Worker holding Actor was lost"
                     return {ts.key: "erred"}  # don't try to recreate
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             for dts in ts.waiters:
                 if dts.state in ("no-worker", "processing"):
@@ -4288,7 +4288,7 @@ class Scheduler(ServerNode):
                     assert not ts.waiting_on
                     assert not ts.waiters
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             ts.exception = None
             ts.exception_blame = None
@@ -4362,7 +4362,7 @@ class Scheduler(ServerNode):
 
             ts.state = "released"
 
-            recommendations = OrderedDict()
+            recommendations = {}
 
             if ts.has_lost_dependencies:
                 recommendations[key] = "forgotten"
