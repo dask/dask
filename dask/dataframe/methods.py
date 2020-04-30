@@ -7,6 +7,7 @@ from tlz import partition
 
 from .utils import (
     is_series_like,
+    is_index_like,
     is_dataframe_like,
     PANDAS_GT_0250,
     hash_object_dispatch,
@@ -271,7 +272,7 @@ def unique(x, series_name=None):
     out = x.unique()
     # out can be either an np.ndarray or may already be a series
     # like object.  When out is an np.ndarray, it must be wrapped.
-    if not is_series_like(out):
+    if not (is_series_like(out) or is_index_like(out)):
         out = pd.Series(out, name=series_name)
     return out
 

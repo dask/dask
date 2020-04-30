@@ -1037,6 +1037,8 @@ def test_unique():
 
     assert_eq(ddf.x.unique(split_every=2), pd.Series(pdf.x.unique(), name="x"))
     assert_eq(ddf.y.unique(split_every=2), pd.Series(pdf.y.unique(), name="y"))
+    assert_eq(ddf.index.unique(), pdf.index.unique())
+
     assert ddf.x.unique(split_every=2)._name != ddf.x.unique()._name
 
 
