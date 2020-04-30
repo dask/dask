@@ -13,8 +13,8 @@ from operator import add, sub, getitem
 from threading import Lock
 import warnings
 
-from toolz import merge, countby, concat
-from toolz.curried import identity
+from tlz import merge, countby, concat
+from tlz.curried import identity
 
 import dask
 import dask.array as da
@@ -45,7 +45,11 @@ from dask.array.core import (
     common_blockdim,
     concatenate_axes,
 )
-from dask.blockwise import make_blockwise_graph as top, broadcast_dimensions
+from dask.blockwise import (
+    make_blockwise_graph as top,
+    broadcast_dimensions,
+    optimize_blockwise,
+)
 from dask.array.utils import assert_eq, same_keys
 
 from numpy import nancumsum, nancumprod
@@ -971,6 +975,20 @@ def test_broadcast_arrays():
         assert_eq(e_a_r, e_d_r)
 
 
+def test_broadcast_arrays_uneven_chunks():
+    x = da.ones(30, chunks=(3,))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+    x = da.ones((1, 30), chunks=(1, 3))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+
 @pytest.mark.parametrize(
     "u_shape, v_shape",
     [
@@ -1356,6 +1374,14 @@ def test_map_blocks_with_kwargs():
     assert_eq(result, np.array([4, 9]))
 
 
+def test_map_blocks_infer_chunks_broadcast():
+    dx = da.from_array([[1, 2, 3, 4]], chunks=((1,), (2, 2)))
+    dy = da.from_array([[10, 20], [30, 40]], chunks=((1, 1), (2,)))
+    result = da.map_blocks(lambda x, y: x + y, dx, dy)
+    assert result.chunks == ((1, 1), (2, 2),)
+    assert_eq(result, np.array([[11, 22, 13, 24], [31, 42, 33, 44]]))
+
+
 def test_map_blocks_with_chunks():
     dx = da.ones((5, 3), chunks=(2, 2))
     dy = da.ones((5, 3), chunks=(2, 2))
@@ -1403,6 +1429,19 @@ def test_map_blocks_no_array_args():
     x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
     assert x.chunks == ((5, 3),)
     assert_eq(x, np.arange(8, dtype=np.float32))
+
+
+@pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
+def test_map_blocks_optimize_blockwise(func):
+    # Check that map_blocks layers can merge with elementwise layers
+    base = [da.full((1,), i, chunks=1) for i in range(4)]
+    a = base[0] + base[1]
+    b = da.map_blocks(func, a, base[2], dtype=np.int8)
+    c = b + base[3]
+    dsk = c.__dask_graph__()
+    optimized = optimize_blockwise(dsk)
+    # The two additions and the map_blocks should be fused together
+    assert len(optimized.layers) == len(dsk.layers) - 2
 
 
 def test_repr():
@@ -2336,6 +2375,20 @@ def test_from_array_dask_array():
         da.from_array(dx)
 
 
+def test_from_array_dask_collection_warns():
+    class CustomCollection(np.ndarray):
+        def __dask_graph__(self):
+            return {"bar": 1}
+
+    x = CustomCollection([1, 2, 3])
+    with pytest.warns(UserWarning):
+        da.from_array(x)
+
+    # Ensure da.array warns too
+    with pytest.warns(UserWarning):
+        da.array(x)
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
@@ -2801,6 +2854,7 @@ def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(2, 3))
 
+    assert_eq(x.view(), d.view())
     assert_eq(x.view("i4"), d.view("i4"))
     assert_eq(x.view("i2"), d.view("i2"))
     assert all(isinstance(s, int) for s in d.shape)
@@ -2855,6 +2909,9 @@ def test_map_blocks_with_changed_dimension():
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
+
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=1), chunks=((3, 4),), drop_axis=1)
 
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
@@ -3723,6 +3780,18 @@ def test_zarr_return_stored(compute):
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
+
+
+def test_to_zarr_delayed_creates_no_metadata():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.from_array([42])
+        result = a.to_zarr(d, compute=False)
+        assert not os.listdir(d)  # No .zarray file
+        # Verify array still created upon compute.
+        result.compute()
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
 
 
 def test_zarr_existing_array():

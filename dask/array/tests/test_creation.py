@@ -4,13 +4,13 @@ pytest.importorskip("numpy")
 
 import numpy as np
 import pytest
-from toolz import concat
+from tlz import concat
 
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_118
 
 
 @pytest.mark.parametrize(
@@ -540,7 +540,7 @@ def test_repeat():
     x = np.random.random((10, 11, 13))
     d = da.from_array(x, chunks=(4, 5, 3))
 
-    repeats = [1, 2, 5]
+    repeats = [0, 1, 2, 5]
     axes = [-3, -2, -1, 0, 1, 2]
 
     for r in repeats:
@@ -640,6 +640,16 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
+        pytest.param(
+            (10, 11),
+            (4, 5),
+            0,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -683,6 +693,16 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
+        pytest.param(
+            (10,),
+            (3,),
+            1,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -691,6 +711,70 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
 
     np_r = np.pad(np_a, pad_width, mode, **kwargs)
     da_r = da.pad(da_a, pad_width, mode, **kwargs)
+
+    if mode == "empty":
+        # empty pads lead to undefined values which may be different
+        assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
+    else:
+        assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
+@pytest.mark.parametrize(
+    "pad_widths", [2, (2,), (2, 3), ((2, 3),), ((3, 1), (0, 0), (2, 0))]
+)
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "constant",
+        "edge",
+        pytest.param(
+            "linear_ramp",
+            marks=pytest.mark.skipif(
+                not _numpy_118, reason="numpy changed pad behaviour"
+            ),
+        ),
+        "maximum",
+        pytest.param(
+            "mean",
+            marks=pytest.mark.skip(
+                reason="Bug dask changes the dtype to float: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        "minimum",
+        pytest.param(
+            "reflect",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "symmetric",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "wrap",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
+        pytest.param(
+            "empty",
+            marks=pytest.mark.skip(
+                reason="Empty leads to undefined values, which may be different"
+            ),
+        ),
+    ],
+)
+def test_pad_3d_data(dtype, pad_widths, mode):
+    np_a = np.arange(2 * 3 * 4).reshape(2, 3, 4).astype(dtype)
+    da_a = da.from_array(np_a, chunks="auto")
+
+    np_r = np.pad(np_a, pad_widths, mode=mode)
+    da_r = da.pad(da_a, pad_widths, mode=mode)
 
     assert_eq(np_r, da_r)
 

@@ -7,8 +7,9 @@ from numbers import Real, Integral
 from distutils.version import LooseVersion
 
 import numpy as np
-from toolz import concat, sliding_window, interleave
+from tlz import concat, sliding_window, interleave
 
+from ..compatibility import apply
 from ..core import flatten
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -238,7 +239,7 @@ def tensordot(lhs, rhs, axes=2):
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
-        left_axes = tuple(range(lhs.ndim - 1, lhs.ndim - axes - 1, -1))
+        left_axes = tuple(range(lhs.ndim - axes, lhs.ndim))
         right_axes = tuple(range(0, axes))
 
     if isinstance(left_axes, Integral):
@@ -349,8 +350,7 @@ def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs)
     :func:`dask.array.map_blocks`
 
     Parameters
-    __________
-
+    ----------
     func1d : callable
         Function to apply to 1-D slices of the array along the given axis
     axis : int
@@ -808,6 +808,12 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
+@implements(np.iscomplexobj)
+@derived_from(np)
+def iscomplexobj(x):
+    return issubclass(x.dtype.type, np.complexfloating)
+
+
 def _unique_internal(ar, indices, counts, return_inverse=False):
     """
     Helper/wrapper function for :func:`numpy.unique`.
@@ -1260,20 +1266,19 @@ def _unravel_index_kernel(indices, func_kwargs):
 
 
 @derived_from(np)
-def unravel_index(indices, dims, order="C"):
-    # TODO: deprecate dims as well?
-    if dims and indices.size:
+def unravel_index(indices, shape, order="C"):
+    if shape and indices.size:
         unraveled_indices = tuple(
             indices.map_blocks(
                 _unravel_index_kernel,
                 dtype=np.intp,
-                chunks=(((len(dims),),) + indices.chunks),
+                chunks=(((len(shape),),) + indices.chunks),
                 new_axis=0,
-                func_kwargs={_unravel_index_keyword: dims, "order": order},
+                func_kwargs={_unravel_index_keyword: shape, "order": order},
             )
         )
     else:
-        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in dims)
+        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in shape)
 
     return unraveled_indices
 
@@ -1293,7 +1298,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
 
 
 @wraps(chunk.coarsen)
-def coarsen(reduction, x, axes, trim_excess=False):
+def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     if not trim_excess and not all(
         bd % div == 0 for i, div in axes.items() for bd in x.chunks[i]
     ):
@@ -1305,16 +1310,17 @@ def coarsen(reduction, x, axes, trim_excess=False):
 
     name = "coarsen-" + tokenize(reduction, x, axes, trim_excess)
     dsk = {
-        (name,) + key[1:]: (chunk.coarsen, reduction, key, axes, trim_excess)
+        (name,)
+        + key[1:]: (apply, chunk.coarsen, [reduction, key, axes, trim_excess], kwargs)
         for key in flatten(x.__dask_keys__())
     }
     chunks = tuple(
         tuple(int(bd // axes.get(i, 1)) for bd in bds) for i, bds in enumerate(x.chunks)
     )
 
-    dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
+    meta = reduction(np.empty((1,) * x.ndim, dtype=x.dtype), **kwargs)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    return Array(graph, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, meta=meta)
 
 
 def split_at_breaks(array, breaks, axis=0):

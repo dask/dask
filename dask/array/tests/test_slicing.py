@@ -2,7 +2,7 @@ import itertools
 from operator import getitem
 
 import pytest
-from toolz import merge
+from tlz import merge
 
 np = pytest.importorskip("numpy")
 
@@ -874,27 +874,23 @@ def test_cached_cumsum():
     a = (1, 2, 3, 4)
     x = cached_cumsum(a)
     y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_array_equal(x, [1, 3, 6, 10])
-    assert x.dtype == np.int64
-    np.testing.assert_array_equal(y, [0, 1, 3, 6, 10])
-    assert y.dtype == np.int64
+    assert x == (1, 3, 6, 10)
+    assert y == (0, 1, 3, 6, 10)
 
 
 def test_cached_cumsum_nan():
     a = (1, np.nan, 3)
     x = cached_cumsum(a)
     y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_array_equal(x, [1, np.nan, np.nan])
-    assert x.dtype == np.float64
-    np.testing.assert_array_equal(y, [0, 1, np.nan, np.nan])
-    assert y.dtype == np.float64
+    np.testing.assert_equal(x, (1, np.nan, np.nan))
+    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
 
 
 def test_cached_cumsum_non_tuple():
     a = [1, 2, 3]
-    np.testing.assert_array_equal(cached_cumsum(a), [1, 3, 6])
+    assert cached_cumsum(a) == (1, 3, 6)
     a[1] = 4
-    np.testing.assert_array_equal(cached_cumsum(a), [1, 5, 8])
+    assert cached_cumsum(a) == (1, 5, 8)
 
 
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])

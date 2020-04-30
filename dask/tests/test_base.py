@@ -6,7 +6,7 @@ import sys
 import time
 from collections import OrderedDict
 
-from toolz import merge
+from tlz import merge
 
 import dask
 from dask import delayed
@@ -25,6 +25,7 @@ from dask.base import (
     named_schedulers,
     get_scheduler,
 )
+from dask.core import literal
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -37,7 +38,7 @@ def import_or_none(path):
     return None
 
 
-tz = pytest.importorskip("toolz")
+tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
 db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
@@ -285,6 +286,46 @@ def test_tokenize_pandas_no_pickle():
     tokenize(df)
 
 
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_extension_array():
+    from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_0240
+
+    if not PANDAS_GT_0240:
+        pytest.skip("requires pandas>=1.0.0")
+
+    arrays = [
+        pd.array([1, 0, None], dtype="Int64"),
+        pd.array(["2000"], dtype="Period[D]"),
+        pd.array([1, 0, 0], dtype="Sparse[int]"),
+        pd.array([pd.Timestamp("2000")], dtype="datetime64[ns]"),
+        pd.array([pd.Timestamp("2000", tz="CET")], dtype="datetime64[ns, CET]"),
+        pd.array(
+            ["a", "b"],
+            dtype=pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False),
+        ),
+    ]
+
+    if PANDAS_GT_100:
+        arrays.extend(
+            [
+                pd.array(["a", "b", None], dtype="string"),
+                pd.array([True, False, None], dtype="boolean"),
+            ]
+        )
+
+    for arr in arrays:
+        assert tokenize(arr) == tokenize(arr)
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_index():
+    idx = pd.Index(["a", "b"])
+    assert tokenize(idx) == tokenize(idx)
+
+    idx = pd.MultiIndex.from_product([["a", "b"], [0, 1]])
+    assert tokenize(idx) == tokenize(idx)
+
+
 def test_tokenize_kwargs():
     assert tokenize(5, x=1) == tokenize(5, x=1)
     assert tokenize(5) != tokenize(5, x=1)
@@ -353,6 +394,13 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+def test_tokenize_range():
+    assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
+    assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 15, 2))  # Different stop
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 10, 1))  # Different step
+
+
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
     a = np.array([u"foo", u"Jos\xe9", np.nan], dtype="O")
@@ -364,6 +412,10 @@ def test_tokenize_object_array_with_nans():
 )
 def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
+
+
+def test_tokenize_literal():
+    assert tokenize(literal(["x", 1])) == tokenize(literal(["x", 1]))
 
 
 @pytest.mark.skipif("not np")
@@ -456,6 +508,7 @@ def test_unpack_collections():
 
         if dataclasses is not None:
             t[2]["f"] = ADataClass(a=a)
+            t[2]["g"] = (ADataClass, a)
 
         return t
 
@@ -617,8 +670,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    pd.util.testing.assert_series_equal(out1, df.a + 1)
-    pd.util.testing.assert_series_equal(out2, df.a + df.b)
+    pd.testing.assert_series_equal(out1, df.a + 1)
+    pd.testing.assert_series_equal(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -629,7 +682,7 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    pd.util.testing.assert_series_equal(df_out, df.a + 2)
+    dd._compat.tm.assert_series_equal(df_out, df.a + 2)
 
 
 @pytest.mark.skipif("not dd")

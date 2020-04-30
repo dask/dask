@@ -8,13 +8,14 @@ import pickle
 import os
 import threading
 import uuid
+from distutils.version import LooseVersion
 
-from toolz import merge, groupby, curry, identity
-from toolz.functoolz import Compose
+from tlz import merge, groupby, curry, identity
+from tlz.functoolz import Compose
 
 from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
-from .core import flatten, quote, get as simple_get
+from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
@@ -292,7 +293,7 @@ def unpack_collections(*args, **kwargs):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr):
+            elif is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -457,9 +458,15 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color: {None, 'order'}, optional
+    color : {None, 'order'}, optional
         Options to color nodes.  Provide ``cmap=`` keyword for additional
         colormap
+    collapse_outputs : bool, optional
+        Whether to collapse output boxes, which often have empty labels.
+        Default is False.
+    verbose : bool, optional
+        Whether to label output and input boxes even if the data aren't chunked.
+        Beware: these labels can get very long. Default is False.
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
 
@@ -677,6 +684,16 @@ def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
 
 
+@normalize_token.register(literal)
+def normalize_literal(lit):
+    return "literal", normalize_token(lit())
+
+
+@normalize_token.register(range)
+def normalize_range(r):
+    return list(map(normalize_token, [r.start, r.stop, r.step]))
+
+
 @normalize_token.register(object)
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
@@ -706,13 +723,11 @@ def normalize_function(func):
 
 
 def _normalize_function(func):
-    if isinstance(func, curry):
-        func = func._partial
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
         return tuple(normalize_function(f) for f in funcs)
-    elif isinstance(func, partial):
+    elif isinstance(func, (partial, curry)):
         args = tuple(normalize_token(i) for i in func.args)
         if func.keywords:
             kws = tuple(
@@ -740,17 +755,46 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
+    # Intentionally not importing PANDAS_GT_0240 from dask.dataframe._compat
+    # to avoid ImportErrors from extra dependencies
+    PANDAS_GT_0240 = LooseVersion(pd.__version__) >= LooseVersion("0.24.0")
+
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
-        return [ind.name, normalize_token(ind.values)]
+        if PANDAS_GT_0240:
+            values = ind.array
+        else:
+            values = ind.values
+        return [ind.name, normalize_token(values)]
+
+    @normalize_token.register(pd.MultiIndex)
+    def normalize_index(ind):
+        codes = ind.codes if PANDAS_GT_0240 else ind.levels
+        return (
+            [ind.name]
+            + [normalize_token(x) for x in ind.levels]
+            + [normalize_token(x) for x in codes]
+        )
 
     @normalize_token.register(pd.Categorical)
     def normalize_categorical(cat):
-        return [
-            normalize_token(cat.codes),
-            normalize_token(cat.categories),
-            cat.ordered,
-        ]
+        return [normalize_token(cat.codes), normalize_token(cat.dtype)]
+
+    if PANDAS_GT_0240:
+
+        @normalize_token.register(pd.arrays.PeriodArray)
+        @normalize_token.register(pd.arrays.DatetimeArray)
+        @normalize_token.register(pd.arrays.TimedeltaArray)
+        def normalize_period_array(arr):
+            return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
+
+        @normalize_token.register(pd.arrays.IntervalArray)
+        def normalize_interval_array(arr):
+            return [
+                normalize_token(arr.left),
+                normalize_token(arr.right),
+                normalize_token(arr.closed),
+            ]
 
     @normalize_token.register(pd.Series)
     def normalize_series(s):
@@ -766,6 +810,21 @@ def register_pandas():
         data = [block.values for block in df._data.blocks]
         data += [df.columns, df.index]
         return list(map(normalize_token, data))
+
+    @normalize_token.register(pd.api.extensions.ExtensionArray)
+    def normalize_extension_array(arr):
+        import numpy as np
+
+        return normalize_token(np.asarray(arr))
+
+    # Dtypes
+    @normalize_token.register(pd.api.types.CategoricalDtype)
+    def normalize_categorical_dtype(dtype):
+        return [normalize_token(dtype.categories), normalize_token(dtype.ordered)]
+
+    @normalize_token.register(pd.api.extensions.ExtensionDtype)
+    def normalize_period_dtype(dtype):
+        return normalize_token(dtype.name)
 
 
 @normalize_token.register_lazy("numpy")

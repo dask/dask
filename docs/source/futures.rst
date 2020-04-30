@@ -24,6 +24,12 @@ despite its name, runs very well on a single machine).
 
 .. currentmodule:: distributed
 
+Examples
+--------
+
+Visit https://examples.dask.org/futures.html to see and run examples
+using futures with Dask.
+
 Start Dask Client
 -----------------
 
@@ -101,6 +107,9 @@ function and many inputs:
 However, note that each task comes with about 1ms of overhead.  If you want to
 map a function over a large number of inputs, then you might consider
 :doc:`dask.bag <bag>` or :doc:`dask.dataframe <dataframe>` instead.
+
+.. note: See `this page <https://docs.dask.org/en/latest/graphs.html>`_ for
+   restrictions on what functions you use with Dask.
 
 Move Data
 ---------
@@ -431,6 +440,7 @@ Coordination Primitives
    Queue
    Variable
    Lock
+   Semaphore
    Pub
    Sub
 
@@ -612,6 +622,32 @@ locks for a particular situation:
 
 This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
+
+
+Semaphore
+~~~~~~~~~
+
+.. autosummary::
+   Semaphore
+
+Similar to the single-valued ``Lock`` it is also possible to use a cluster-wide
+semaphore to coordinate and limit access to a sensitive resource like a
+database.
+
+.. code-block:: python
+
+   from dask.distributed import Semaphore
+
+   sem = Semaphore(max_leases=2, name="database")
+
+   def access_limited(val, sem):
+      with sem:
+         # Interact with the DB
+         return
+
+   futures = client.map(access_limited, range(10), sem=sem)
+   client.gather(futures)
+   sem.close()
 
 
 Publish-Subscribe

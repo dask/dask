@@ -3,6 +3,7 @@ from functools import partial
 import re
 from operator import add, neg
 import sys
+import copy
 import pytest
 
 
@@ -121,6 +122,46 @@ def test_aliases():
     assert len(g.body) - len(labels) == 1  # Single edge
 
 
+def test_to_graphviz_verbose():
+    g = to_graphviz(dsk, verbose=True)
+    labels = list(filter(None, map(get_label, g.body)))
+    assert len(labels) == 10  # 10 nodes total
+    assert set(labels) == {"a", "b", "c", "d", "e", "f"}
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(("box", "circle"))
+
+
+def test_to_graphviz_collapse_outputs():
+    g = to_graphviz(dsk, collapse_outputs=True)
+    labels = list(filter(None, map(get_label, g.body)))
+    assert len(labels) == 6  # 6 nodes total
+    assert set(labels) == {"c", "d", "e", "f", '""'}
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(("box", "circle"))
+
+
+def test_to_graphviz_collapse_outputs_and_verbose():
+    g = to_graphviz(dsk, collapse_outputs=True, verbose=True)
+    labels = list(filter(None, map(get_label, g.body)))
+    assert len(labels) == 6  # 6 nodes total
+    assert set(labels) == {"a", "b", "c", "d", "e", "f"}
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(("box", "circle"))
+
+
+def test_to_graphviz_with_unconnected_node():
+    dsk["g"] = 3
+    g = to_graphviz(dsk, verbose=True)
+    labels = list(filter(None, map(get_label, g.body)))
+    assert len(labels) == 11  # 11 nodes total
+    assert set(labels) == {"a", "b", "c", "d", "e", "f", "g"}
+
+    g = to_graphviz(dsk, verbose=True, collapse_outputs=True)
+    labels = list(filter(None, map(get_label, g.body)))
+    assert len(labels) == 6  # 6 nodes total
+    assert set(labels) == {"a", "b", "c", "d", "e", "f"}
+
+
 @pytest.mark.parametrize(
     "format,typ",
     [
@@ -217,11 +258,10 @@ def test_dot_graph_defaults():
         ),
     ],
 )
-def test_filenames_and_formats(filename, format, target, expected_result_type):
-    result = dot_graph(dsk, filename=filename, format=format)
-    assert os.path.isfile(target)
+def test_filenames_and_formats(tmpdir, filename, format, target, expected_result_type):
+    result = dot_graph(dsk, filename=str(tmpdir.join(filename)), format=format)
+    assert tmpdir.join(target).exists()
     assert isinstance(result, expected_result_type)
-    ensure_not_exists(target)
 
 
 def test_delayed_kwargs_apply():
@@ -232,3 +272,21 @@ def test_delayed_kwargs_apply():
     label = task_label(x.dask[x.key])
     assert "f" in label
     assert "apply" not in label
+
+
+def test_immutable_attributes():
+    def inc(x):
+        return x + 1
+
+    dsk = {"a": (inc, 1), "b": (inc, 2), "c": (add, "a", "b")}
+    attrs_func = {"a": {}}
+    attrs_data = {"b": {}}
+    attrs_func_test = copy.deepcopy(attrs_func)
+    attrs_data_test = copy.deepcopy(attrs_data)
+
+    to_graphviz(
+        dsk, function_attributes=attrs_func, data_attributes=attrs_data,
+    )
+
+    assert attrs_func_test == attrs_func
+    assert attrs_data_test == attrs_data

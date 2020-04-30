@@ -129,7 +129,7 @@ def get_colors(palette, funcs):
         Iterable of function names
     """
     palettes = import_required("bokeh.palettes", _BOKEH_MISSING_MSG)
-    tz = import_required("toolz", _TOOLZ_MISSING_MSG)
+    tz = import_required("tlz", _TOOLZ_MISSING_MSG)
 
     unique_funcs = list(sorted(tz.unique(funcs)))
     n_funcs = len(unique_funcs)
@@ -245,7 +245,7 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
 
-    tz = import_required("toolz", _TOOLZ_MISSING_MSG)
+    tz = import_required("tlz", _TOOLZ_MISSING_MSG)
 
     defaults = dict(
         title="Profile Results",
@@ -436,7 +436,7 @@ def plot_cache(
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
 
-    tz = import_required("toolz", _TOOLZ_MISSING_MSG)
+    tz = import_required("tlz", _TOOLZ_MISSING_MSG)
 
     defaults = dict(
         title="Profile Results",

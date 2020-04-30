@@ -3,7 +3,7 @@ import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar, has_known_categories, PANDAS_VERSION
+from .utils import is_categorical_dtype, is_scalar, has_known_categories
 from ..utils import M
 import sys
 
@@ -103,17 +103,6 @@ def get_dummies(
     --------
     pandas.get_dummies
     """
-    if PANDAS_VERSION >= "0.23.0":
-        # dtype added to pandas
-        kwargs["dtype"] = dtype
-    elif dtype != np.uint8:
-        # User specified something other than the default.
-        raise ValueError(
-            "Your version of pandas is '{}'. "
-            "The 'dtype' keyword was added in pandas "
-            "0.23.0.".format(PANDAS_VERSION)
-        )
-
     if isinstance(data, (pd.Series, pd.DataFrame)):
         return pd.get_dummies(
             data,
@@ -123,6 +112,7 @@ def get_dummies(
             columns=columns,
             sparse=sparse,
             drop_first=drop_first,
+            dtype=dtype,
             **kwargs
         )
 
@@ -168,6 +158,7 @@ def get_dummies(
         columns=columns,
         sparse=sparse,
         drop_first=drop_first,
+        dtype=dtype,
         **kwargs
     )
 
@@ -181,6 +172,7 @@ def get_dummies(
         sparse=sparse,
         drop_first=drop_first,
         meta=meta,
+        dtype=dtype,
         **kwargs
     )
 

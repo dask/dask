@@ -14,6 +14,7 @@ from numbers import Integral, Number
 from threading import Lock
 import uuid
 from weakref import WeakValueDictionary
+from functools import lru_cache
 
 from .core import get_deps
 from .optimization import key_split  # noqa: F401
@@ -564,18 +565,18 @@ def extra_titles(doc):
     return "\n".join(lines)
 
 
-def ignore_warning(doc, cls, name, extra=""):
+def ignore_warning(doc, cls, name, extra="", skipblocks=0):
     """Expand docstring by adding disclaimer and extra text"""
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s. \n\n" % (
+        l1 = "This docstring was copied from %s.%s.%s.\n\n" % (
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s. \n\n" % (cls.__name__, name)
+        l1 = "This docstring was copied from %s.%s.\n\n" % (cls.__name__, name)
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -583,6 +584,11 @@ def ignore_warning(doc, cls, name, extra=""):
         # Insert our warning
         head = doc[: i + 2]
         tail = doc[i + 2 :]
+        while skipblocks > 0:
+            i = tail.find("\n\n")
+            head = tail[: i + 2]
+            tail = tail[i + 2 :]
+            skipblocks -= 1
         # Indentation of next line
         indent = re.match(r"\s*", tail).group(0)
         # Insert the warning, indented, with a blank line before and after
@@ -611,7 +617,7 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=[], extra=""):
+def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
     """ Helper function for derived_from to ease testing """
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
@@ -627,7 +633,9 @@ def _derived_from(cls, method, ua_args=[], extra=""):
 
     # Insert disclaimer that this is a copied docstring
     if doc:
-        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+        doc = ignore_warning(
+            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks
+        )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
 
@@ -649,7 +657,7 @@ def _derived_from(cls, method, ua_args=[], extra=""):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[]):
+def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -666,13 +674,20 @@ def derived_from(original_klass, version=None, ua_args=[]):
     ua_args : list
         List of keywords which Dask doesn't support. Keywords existing in
         original but not in Dask will automatically be added.
+    skipblocks : int
+        How many text blocks (paragraphs) to skip from the start of the
+        docstring. Useful for cases where the target has extra front-matter.
     """
 
     def wrapper(method):
         try:
             extra = getattr(method, "__doc__", None) or ""
             method.__doc__ = _derived_from(
-                original_klass, method, ua_args=ua_args, extra=extra
+                original_klass,
+                method,
+                ua_args=ua_args,
+                extra=extra,
+                skipblocks=skipblocks,
             )
             return method
 
@@ -806,11 +821,9 @@ def insert(tup, loc, val):
 
 
 def dependency_depth(dsk):
-    import toolz
-
     deps, _ = get_deps(dsk)
 
-    @toolz.memoize
+    @lru_cache(maxsize=None)
     def max_depth_by_deps(key):
         if not deps[key]:
             return 1

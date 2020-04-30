@@ -19,7 +19,7 @@ jobs:
   include:
     - env: &py36_env
       - PYTHON_VERSION=3.6
-      - ENV_FILE=continuous_integration/travis/travis-36.yaml
+      - ENV_FILE=continuous_integration/environment-3.6.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -27,16 +27,25 @@ jobs:
 
     - env: &py37_env
       - PYTHON_VERSION=3.7
-      - ENV_FILE=continuous_integration/travis/travis-37.yaml
+      - ENV_FILE=continuous_integration/environment-3.7.yaml
+      - *test_and_lint
+      - *no_coverage
+      - *no_optimize
+      - *imports
+      - *array_function
+
+    - env: &py38_env
+      - PYTHON_VERSION=3.8
+      - ENV_FILE=continuous_integration/environment-3.8.yaml
       - *test_and_lint
       - *coverage
       - *no_optimize
       - *imports
       - *array_function
 
-    - env: &py37_dev
+    - env: &py38_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - ENV_FILE=continuous_integration/travis/travis-37-dev.yaml
+      - ENV_FILE=continuous_integration/environment-3.8-dev.yaml
       - *test_and_lint
       - *no_coverage
       - *no_optimize
@@ -49,7 +58,7 @@ jobs:
       os: osx
 
     - env:
-      - ENV_FILE=continuous_integration/travis/travis-mindeps-array-dataframe.yaml
+      - ENV_FILE=continuous_integration/environment-mindeps-array-dataframe.yaml
       - *test
       - *no_coverage
       - *no_optimize
@@ -57,7 +66,7 @@ jobs:
       if: type != pull_request OR commit_message =~ test-mindeps  # Skip on PRS unless the commit message contains "test-mindeps"
 
     - env:
-      - ENV_FILE=continuous_integration/travis/travis-mindeps-bag-delayed.yaml
+      - ENV_FILE=continuous_integration/environment-mindeps-bag-delayed.yaml
       - *test
       - *no_coverage
       - *no_optimize
@@ -74,7 +83,7 @@ jobs:
         - source continuous_integration/hdfs/startup_hdfs.sh
 
   allow_failures:
-    - env: *py37_dev
+    - env: *py38_dev
     - os: osx
 
 
@@ -85,8 +94,8 @@ install:
 script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
-  - if [[ $LINT == 'true' ]]; then pip install flake8 ; flake8 dask; fi
-  - if [[ $LINT == 'true' ]]; then pip install git+https://github.com/psf/black@73bd7038fbefdb1c6a61fa1edf16ff61613050a5; black dask --check; fi
+  - if [[ $LINT == 'true' ]]; then python -m pip install flake8 ; flake8 dask; fi
+  - if [[ $LINT == 'true' ]]; then python -m pip install black ; black dask --check; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then bash continuous_integration/travis/test_imports.sh; fi
 
 after_success:

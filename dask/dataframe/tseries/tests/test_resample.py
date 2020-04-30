@@ -3,7 +3,8 @@ from itertools import product
 import pandas as pd
 import pytest
 
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe._compat import PANDAS_GT_0240
 import dask.dataframe as dd
 
 
@@ -36,6 +37,7 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
 
     result = resample(ds, freq, how=method, closed=closed, label=label)
     expected = resample(ps, freq, how=method, closed=closed, label=label)
+
     assert_eq(result, expected, check_dtype=False)
 
     divisions = result.divisions
@@ -100,3 +102,34 @@ def test_resample_index_name():
     ddf = dd.from_pandas(df, npartitions=4)
 
     assert ddf.resample("D").mean().head().index.name == "date"
+
+
+@pytest.mark.skipif(not PANDAS_GT_0240, reason="nonexistent not in 0.23 or older")
+def test_series_resample_non_existent_datetime():
+    index = [
+        pd.Timestamp("2016-10-15 00:00:00"),
+        pd.Timestamp("2016-10-16 10:00:00"),
+        pd.Timestamp("2016-10-17 00:00:00"),
+    ]
+    df = pd.DataFrame([[1], [2], [3]], index=index)
+    df.index = df.index.tz_localize("America/Sao_Paulo")
+    ddf = dd.from_pandas(df, npartitions=1)
+    result = ddf.resample("1D").mean()
+    expected = df.resample("1D").mean()
+
+    assert_eq(result, expected)
+
+
+@pytest.mark.skipif(PANDAS_VERSION <= "0.23.4", reason="quantile not in 0.23")
+@pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])
+def test_common_aggs(agg):
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
+
+    f = lambda df: getattr(df, agg)()
+
+    res = f(ps.resample("1d"))
+    expected = f(ds.resample("1d"))
+
+    assert_eq(res, expected, check_dtype=False)

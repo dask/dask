@@ -27,16 +27,15 @@ source activate test-environment
 # We don't have a conda-forge package for cityhash
 # We don't include it in the conda environment.yaml, since that may
 # make things harder for contributors that don't have a C++ compiler
-pip install --no-deps cityhash
+python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
     conda uninstall --force numpy pandas
-    pip install -f https://7933911d6844c6c53a7d-47bd50c35cd79bd838daf386af554a83.ssl.cf2.rackcdn.com \
-        --no-deps \
-        --pre \
+    python -m pip install --no-deps --pre \
+        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
         pandas
-    pip install \
+    python -m pip install \
         --no-deps \
         --upgrade \
         locket \
@@ -49,7 +48,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 fi
 
 # Install dask
-pip install --quiet --no-deps -e .[complete]
+python -m pip install --quiet --no-deps -e .[complete]
 echo conda list
 conda list
 

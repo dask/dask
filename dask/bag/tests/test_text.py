@@ -1,5 +1,6 @@
 import pytest
-from toolz import partial
+from functools import partial
+from tlz import concat
 
 import dask
 from dask import compute
@@ -32,11 +33,16 @@ expected = "".join([files[v] for v in sorted(files)])
 fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
 
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
-fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs for encoding in encodings]
+fmt_bs_enc_path = [
+    (fmt, bs, encoding, include_path)
+    for fmt, bs in fmt_bs
+    for encoding in encodings
+    for include_path in (True, False)
+]
 
 
-@pytest.mark.parametrize("fmt,bs,encoding", fmt_bs_enc)
-def test_read_text(fmt, bs, encoding):
+@pytest.mark.parametrize("fmt,bs,encoding,include_path", fmt_bs_enc_path)
+def test_read_text(fmt, bs, encoding, include_path):
     if fmt not in utils.compress:
         pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
@@ -48,9 +54,24 @@ def test_read_text(fmt, bs, encoding):
         (L,) = compute(b)
         assert "".join(L) == expected
 
-        b = read_text(sorted(files), compression=fmt, blocksize=bs, encoding=encoding)
+        o = read_text(
+            sorted(files),
+            compression=fmt,
+            blocksize=bs,
+            encoding=encoding,
+            include_path=include_path,
+        )
+        b = o.pluck(0) if include_path else o
         (L,) = compute(b)
         assert "".join(L) == expected
+        if include_path:
+            (paths,) = compute(o.pluck(1))
+            expected_paths = list(
+                concat([[k] * v.count("\n") for k, v in files.items()])
+            )
+            assert len(paths) == len(expected_paths)
+            for path, expected_path in zip(paths, expected_paths):
+                assert path.endswith(expected_path)
 
         blocks = read_text(
             ".test.accounts.*.json",
@@ -76,6 +97,18 @@ def test_files_per_partition():
             assert l == 10, "10 files should be grouped into one partition"
 
             assert b.count().compute() == 20, "All 20 lines should be read"
+
+            with pytest.warns(UserWarning):
+                b = read_text("*.txt", files_per_partition=10, include_path=True)
+                p = b.take(100, npartitions=1)
+
+            p_paths = tuple(zip(*p))[1]
+            p_unique_paths = set(p_paths)
+            assert len(p_unique_paths) == 10
+
+            b_paths = tuple(zip(*b.compute()))[1]
+            b_unique_paths = set(b_paths)
+            assert len(b_unique_paths) == 20
 
 
 def test_errors():

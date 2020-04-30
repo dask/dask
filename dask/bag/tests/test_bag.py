@@ -11,7 +11,7 @@ from itertools import repeat
 
 import partd
 import pytest
-from toolz import merge, join, filter, identity, valmap, groupby, pluck, unique
+from tlz import merge, join, identity, valmap, groupby, pluck, unique
 
 import dask
 import dask.bag as db
@@ -19,7 +19,6 @@ from dask.bag.core import (
     Bag,
     lazify,
     lazify_task,
-    map,
     collect,
     reduceby,
     reify,
@@ -557,6 +556,20 @@ def test_inline_singleton_lists():
     assert inline_singleton_lists(inp, ["c"]) == inp
 
 
+def test_rename_fused_keys_bag():
+    inp = {"b": (list, "a"), "c": (f, "b", 1)}
+
+    outp = optimize(inp, ["c"], rename_fused_keys=False)
+    assert outp.keys() == {"c"}
+    assert outp["c"][1:] == ("a", 1)
+
+    with dask.config.set({"optimization.fuse.rename-keys": False}):
+        assert optimize(inp, ["c"]) == outp
+
+    # By default, fused keys are renamed
+    assert optimize(inp, ["c"]) != outp
+
+
 def test_take():
     assert list(b.take(2)) == [0, 1]
     assert b.take(2) == (0, 1)
@@ -591,8 +604,6 @@ def test_take_npartitions_warn():
 
 
 def test_map_is_lazy():
-    from dask.bag.core import map
-
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
 
 
@@ -1176,7 +1187,6 @@ def test_repartition_names():
     assert b is c
 
 
-@pytest.mark.skipif("not db.core._implement_accumulate")
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
     dsk = dict((("test", i), p) for (i, p) in enumerate(parts))
@@ -1473,3 +1483,12 @@ def test_map_releases_element_references_as_soon_as_possible():
         b.compute(scheduler="sync")
     finally:
         gc.enable()
+
+
+def test_bagged_array_delayed():
+    da = pytest.importorskip("dask.array")
+
+    obj = da.ones(10, chunks=5).to_delayed()[0]
+    bag = db.from_delayed(obj)
+    b = bag.compute()
+    assert_eq(b, [1.0, 1.0, 1.0, 1.0, 1.0])

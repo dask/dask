@@ -17,7 +17,7 @@ Optionally, you can obtain a minimal Dask installation using the following comma
 
    conda install dask-core
 
-This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``pip install dask`` below.
+This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask`` below.
 
 Pip
 ---
@@ -27,22 +27,22 @@ dataframes, ...)  This installs both Dask and dependencies like NumPy, Pandas,
 and so on that are necessary for different workloads.  This is often the right
 choice for Dask users::
 
-   pip install "dask[complete]"    # Install everything
+   python -m pip install "dask[complete]"    # Install everything
 
 You can also install only the Dask library.  Modules like ``dask.array``,
 ``dask.dataframe``, ``dask.delayed``, or ``dask.distributed`` won't work until you also install NumPy,
 Pandas, Toolz, or Tornado, respectively.  This is common for downstream library
 maintainers::
 
-   pip install dask                # Install only core parts of dask
+   python -m pip install dask                # Install only core parts of dask
 
 We also maintain other dependency sets for different subsets of functionality::
 
-   pip install "dask[array]"       # Install requirements for dask array
-   pip install "dask[bag]"         # Install requirements for dask bag
-   pip install "dask[dataframe]"   # Install requirements for dask dataframe
-   pip install "dask[delayed]"     # Install requirements for dask delayed
-   pip install "dask[distributed]" # Install requirements for distributed dask
+   python -m pip install "dask[array]"       # Install requirements for dask array
+   python -m pip install "dask[bag]"         # Install requirements for dask bag
+   python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
+   python -m pip install "dask[delayed]"     # Install requirements for dask delayed
+   python -m pip install "dask[distributed]" # Install requirements for distributed dask
 
 We have these options so that users of the lightweight core Dask scheduler
 aren't required to download the more exotic dependencies of the collections
@@ -57,11 +57,11 @@ To install Dask from source, clone the repository from `github
 
     git clone https://github.com/dask/dask.git
     cd dask
-    pip install .
+    python -m pip install .
 
 You can also install all dependencies as well::
 
-    pip install ".[complete]"
+    python -m pip install ".[complete]"
 
 You can view the list of all dependencies within the ``extras_require`` field
 of ``setup.py``.
@@ -69,7 +69,7 @@ of ``setup.py``.
 
 Or do a developer install by using the ``-e`` flag::
 
-    pip install -e .
+    python -m pip install -e .
 
 Anaconda
 --------
@@ -83,43 +83,43 @@ Specific functionality in Dask may require additional optional dependencies.
 For example, reading from Amazon S3 requires ``s3fs``.
 These optional dependencies and their minimum supported versions are listed below.
 
-+-------------+----------+--------------------------------------------------------------+
-| Dependency  | Version  |                          Description                         |
-+=============+==========+==============================================================+
-|    bokeh    | >=1.0.0  |                Visualizing dask diagnostics                  |
-+-------------+----------+--------------------------------------------------------------+
-| cloudpickle | >=0.2.1  |              Pickling support for Python objects             |
-+-------------+----------+--------------------------------------------------------------+
-|  cityhash   |          |                  Faster hashing of arrays                    |
-+-------------+----------+--------------------------------------------------------------+
-| distributed | >=2.0    |               Distributed computing in Python                |
-+-------------+----------+--------------------------------------------------------------+
-| fastparquet |          |         Storing and reading data from parquet files          |
-+-------------+----------+--------------------------------------------------------------+
-|    fsspec   | >=0.6.0  |          Used for local, cluster and remote data IO          |
-+-------------+----------+--------------------------------------------------------------+
-|    gcsfs    | >=0.4.0  |        File-system interface to Google Cloud Storage         |
-+-------------+----------+--------------------------------------------------------------+
-|  murmurhash |          |                   Faster hashing of arrays                   |
-+-------------+----------+--------------------------------------------------------------+
-|    numpy    | >=1.13.0 |                   Required for dask.array                    |
-+-------------+----------+--------------------------------------------------------------+
-|    pandas   | >=0.21.0 |                  Required for dask.dataframe                 |
-+-------------+----------+--------------------------------------------------------------+
-|    partd    | >=0.3.10 |            Concurrent appendable key-value storage           |
-+-------------+----------+--------------------------------------------------------------+
-|    psutil   |          |             Enables a more accurate CPU count                |
-+-------------+----------+--------------------------------------------------------------+
-|    pyarrow  | >=0.14.0 |               Python library for Apache Arrow                |
-+-------------+----------+--------------------------------------------------------------+
-|    s3fs     | >=0.4.0  |                    Reading from Amazon S3                    |
-+-------------+----------+--------------------------------------------------------------+
-|  sqlalchemy |          |            Writing and reading from SQL databases            |
-+-------------+----------+--------------------------------------------------------------+
-|    toolz    | >=0.7.3  | Utility functions for iterators, functions, and dictionaries |
-+-------------+----------+--------------------------------------------------------------+
-|   xxhash    |          |                  Faster hashing of arrays                    |
-+-------------+----------+--------------------------------------------------------------+
++---------------+----------+--------------------------------------------------------------+
+| Dependency    | Version  |                          Description                         |
++===============+==========+==============================================================+
+|     bokeh     | >=1.0.0  |                Visualizing dask diagnostics                  |
++---------------+----------+--------------------------------------------------------------+
+|  cloudpickle  | >=0.2.2  |              Pickling support for Python objects             |
++---------------+----------+--------------------------------------------------------------+
+|   cityhash    |          |                  Faster hashing of arrays                    |
++---------------+----------+--------------------------------------------------------------+
+|  distributed  | >=2.0    |               Distributed computing in Python                |
++---------------+----------+--------------------------------------------------------------+
+|  fastparquet  |          |         Storing and reading data from parquet files          |
++---------------+----------+--------------------------------------------------------------+
+|     fsspec    | >=0.6.0  |          Used for local, cluster and remote data IO          |
++---------------+----------+--------------------------------------------------------------+
+|     gcsfs     | >=0.4.0  |        File-system interface to Google Cloud Storage         |
++---------------+----------+--------------------------------------------------------------+
+|   murmurhash  |          |                   Faster hashing of arrays                   |
++---------------+----------+--------------------------------------------------------------+
+|     numpy     | >=1.13.0 |                   Required for dask.array                    |
++---------------+----------+--------------------------------------------------------------+
+|     pandas    | >=0.23.0 |                  Required for dask.dataframe                 |
++---------------+----------+--------------------------------------------------------------+
+|     partd     | >=0.3.10 |            Concurrent appendable key-value storage           |
++---------------+----------+--------------------------------------------------------------+
+|     psutil    |          |             Enables a more accurate CPU count                |
++---------------+----------+--------------------------------------------------------------+
+|     pyarrow   | >=0.14.0 |               Python library for Apache Arrow                |
++---------------+----------+--------------------------------------------------------------+
+|     s3fs      | >=0.4.0  |                    Reading from Amazon S3                    |
++---------------+----------+--------------------------------------------------------------+
+|   sqlalchemy  |          |            Writing and reading from SQL databases            |
++---------------+----------+--------------------------------------------------------------+
+| cytoolz/toolz | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
++---------------+----------+--------------------------------------------------------------+
+|    xxhash     |          |                  Faster hashing of arrays                    |
++---------------+----------+--------------------------------------------------------------+
 
 Test
 ----

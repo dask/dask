@@ -26,6 +26,8 @@ initialization.
 
 .. _Click: http://click.pocoo.org/
 
+Example
+~~~~~~~
 
 As an example, consider the following file that creates a
 `scheduler plugin <https://distributed.dask.org/en/latest/plugins.html>`_
@@ -59,12 +61,56 @@ if it is on the path) when we start the scheduler::
 
    dask-scheduler --preload scheduler-setup.py --print-count
 
+Types
+~~~~~
+
+Preloads can be specified as any of the following forms:
+
+-   A path to a script, like ``/path/to/myfile.py``
+-   A module name that is on the path, like ``my_module.initialize``
+-   The text of a Python script, like ``import os; os.environ["A"] = "value"``
+
+Configuration
+~~~~~~~~~~~~~
+
+Preloads can also be registered with configuration at the following values:
+
+.. code-block:: yaml
+
+   distributed:
+     scheduler:
+       preload:
+       - "import os; os.environ['A'] = 'b'"  # use Python text
+       - /path/to/myfile.py                  # or a filename
+       - my_module                           # or a module name
+       preload_argv:
+       - []                                  # Pass optional keywords
+       - ["--option", "value"]
+       - []
+     worker:
+       preload: []
+       preload_argv: []
+     nanny:
+       preload: []
+       preload_argv: []
+
+.. note::
+
+   Because the ``dask-worker`` command needs to accept keywords for both the
+   Worker and the Nanny (if a nanny is used) it has both a ``--preload`` and
+   ``--preload-nanny`` keyword.  All extra keywords (like ``--print-count``
+   above) will be sent to the workers rather than the nanny.  There is no way
+   to specify extra keywords to the nanny preload scripts on the command line.
+   We recommend the use of the more flexible configuration if this is
+   necessary.
+
 
 Worker Lifecycle Plugins
 ------------------------
 
-You can also create a class with setup and teardown methods, and register that
-class with the scheduler to give to every worker.
+You can also create a class with ``setup``, ``teardown``, and ``transition`` methods,
+and register that class with the scheduler to give to every worker using the
+``Client.register_worker_plugin`` method.
 
 .. currentmodule:: distributed
 
@@ -72,3 +118,4 @@ class with the scheduler to give to every worker.
    Client.register_worker_plugin
 
 .. automethod:: Client.register_worker_plugin
+   :noindex:

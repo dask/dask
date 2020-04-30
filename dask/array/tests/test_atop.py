@@ -141,6 +141,27 @@ i, j, k = "ijk"
                 [(456, None), (a, "j"), (123, None)],
             ),
         ],
+        # Literals that compare equal (e.g. 0 and False) aren't deduplicated
+        [
+            [
+                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (0, None)]),
+                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (False, None)]),
+            ],
+            (
+                c,
+                "j",
+                {b: (add, _1, _2), c: (add, b, _0)},
+                [(False, None), (a, "j"), (0, None)],
+            ),
+        ],
+        # Literals are deduplicated
+        [
+            [
+                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
+                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (123, None)]),
+            ],
+            (c, "j", {b: (add, _1, _0), c: (add, b, _0)}, [(123, None), (a, "j")]),
+        ],
     ],
 )
 def test_rewrite(inputs, expected):
@@ -566,3 +587,12 @@ def test_atop_legacy():
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)
     assert y.name == z.name
+
+
+def test_non_hlg():
+    # Regression test for https://github.com/dask/dask/issues/5850
+    a = da.from_array(np.ones(1, np.float64), chunks=(1,))
+    a.dask = dict(a.dask)  # Convert from HighLevelGraph to plain dict
+    b = da.from_array(np.zeros(1, np.float64), chunks=(1,))
+    x = a + b
+    assert_eq(x, a)

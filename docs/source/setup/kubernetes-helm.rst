@@ -47,7 +47,7 @@ You will need to add this to your known channels and update your local charts::
 
 Now, you can launch Dask on your Kubernetes cluster using the Dask Helm_ chart::
 
-   helm install dask/dask
+   helm install my-dask dask/dask
 
 This deploys a ``dask-scheduler``, several ``dask-worker`` processes, and
 also an optional Jupyter server.
@@ -131,8 +131,8 @@ variable automatically.
 Configure Environment
 ---------------------
 
-By default, the Helm deployment launches three workers using two cores each and
-a standard conda environment.  We can customize this environment by creating a
+By default, the Helm deployment launches three workers using one core each and
+a standard conda environment. We can customize this environment by creating a
 small yaml file that implements a subset of the values in the
 `dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_.
 

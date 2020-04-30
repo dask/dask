@@ -356,3 +356,26 @@ def test_randint_dtype():
     assert_eq(x, x)
     assert x.dtype == "uint8"
     assert x.compute().dtype == "uint8"
+
+
+def test_doc_wraps_deprecated():
+    with pytest.warns(FutureWarning):
+
+        @da.random.doc_wraps(np.random.normal)
+        def f():
+            pass
+
+
+def test_raises_bad_kwarg():
+    with pytest.raises(Exception) as info:
+        da.random.standard_normal(size=(10,), dtype="float64")
+
+    assert "dtype" in str(info.value)
+
+
+def test_randomstate_kwargs():
+    cupy = pytest.importorskip("cupy")
+
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.standard_normal((10, 5), dtype=np.float32)
+    assert x.dtype == np.float32

@@ -6,20 +6,16 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from distutils.version import LooseVersion
-from functools import wraps, partial
+from functools import wraps, partial, reduce
 from random import Random
 from urllib.request import urlopen
 
-import toolz
-from toolz import (
+import tlz as toolz
+from tlz import (
     merge,
     take,
-    reduce,
     valmap,
-    map,
     partition_all,
-    filter,
     remove,
     compose,
     curry,
@@ -27,39 +23,17 @@ from toolz import (
     second,
     accumulate,
     peek,
+    frequencies,
+    merge_with,
+    join,
+    reduceby,
+    count,
+    pluck,
+    groupby,
+    topk,
+    unique,
+    accumulate,
 )
-
-_implement_accumulate = LooseVersion(toolz.__version__) > "0.7.4"
-try:
-    import cytoolz
-    from cytoolz import (
-        frequencies,
-        merge_with,
-        join,
-        reduceby,
-        count,
-        pluck,
-        groupby,
-        topk,
-        unique,
-    )
-
-    if LooseVersion(cytoolz.__version__) > "0.7.3":
-        from cytoolz import accumulate  # noqa: F811
-
-        _implement_accumulate = True
-except ImportError:
-    from toolz import (
-        frequencies,
-        merge_with,
-        join,
-        reduceby,
-        count,
-        pluck,
-        groupby,
-        topk,
-        unique,
-    )
 
 from .. import config
 from .avro import to_avro
@@ -155,7 +129,7 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
     return dsk
 
 
-def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
+def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
     """ Optimize a dask from a dask Bag. """
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
@@ -665,10 +639,10 @@ class Bag(DaskMethodsMixin):
         --------
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.random_sample(0.5, 42))
-        [1, 3]
-        >>> list(b.random_sample(0.5, 42))
-        [1, 3]
+        >>> list(b.random_sample(0.5, 43))
+        [0, 3, 4]
+        >>> list(b.random_sample(0.5, 43))
+        [0, 3, 4]
         """
         if not 0 <= prob <= 1:
             raise ValueError("prob must be a number in the interval [0, 1]")
@@ -896,7 +870,7 @@ class Bag(DaskMethodsMixin):
                 out_type=out_type,
             )
         else:
-            from toolz.curried import reduce
+            from tlz.curried import reduce
 
             return self.reduction(
                 reduce(binop),
@@ -1601,7 +1575,10 @@ class Bag(DaskMethodsMixin):
         return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):
-        """ Coalesce bag into fewer partitions.
+        """ Changes the number of partitions of the bag.
+
+        This can be used to reduce or increase the number of partitions
+        of the bag.
 
         Examples
         --------
@@ -1673,10 +1650,6 @@ class Bag(DaskMethodsMixin):
         >>> b.accumulate(add, initial=-1)  # doctest: +SKIP
         [-1, 0, 2, 5, 9, 14]
         """
-        if not _implement_accumulate:
-            raise NotImplementedError(
-                "accumulate requires `toolz` > 0.7.4 or `cytoolz` > 0.7.3."
-            )
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)
         a = "%s-part-%s" % (binop_name, token)
@@ -1830,7 +1803,7 @@ def concat(bags):
 def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
-    if seq and isinstance(seq[0], Iterator):
+    if len(seq) and isinstance(seq[0], Iterator):
         seq = list(map(list, seq))
     return seq
 
@@ -2465,20 +2438,21 @@ def random_sample(x, state_data, prob):
     ----------
     x : iterable
     state_data : tuple
-        A tuple that can be passed to ``random.Random``.
+        A tuple that can be passed to ``random.Random.setstate``.
     prob : float
         A float between 0 and 1, representing the probability that each
         element will be yielded.
     """
-    random_state = Random(state_data)
+    random_state = Random()
+    random_state.setstate(state_data)
     for i in x:
         if random_state.random() < prob:
             yield i
 
 
 def random_state_data_python(n, random_state=None):
-    """Return a list of tuples that can initialize.
-    ``random.Random``.
+    """Return a list of tuples that can be passed to
+    ``random.Random.setstate``.
 
     Parameters
     ----------
@@ -2492,7 +2466,12 @@ def random_state_data_python(n, random_state=None):
 
     maxuint32 = 1 << 32
     return [
-        tuple(random_state.randint(0, maxuint32) for i in range(624)) for i in range(n)
+        (
+            3,
+            tuple(random_state.randint(0, maxuint32) for i in range(624)) + (624,),
+            None,
+        )
+        for i in range(n)
     ]
 
 

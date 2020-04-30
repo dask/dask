@@ -138,13 +138,16 @@ and on Windows, because they each only support a single context.
 
 def get_context():
     """ Return the current multiprocessing context."""
+    # fork context does fork()-without-exec(), which can lead to deadlocks,
+    # so default to "spawn".
+    context_name = config.get("multiprocessing.context", "spawn")
     if sys.platform == "win32":
-        # Just do the default, since we can't change it:
-        if config.get("multiprocessing.context", None) is not None:
+        if context_name != "spawn":
+            # Only spawn is supported on Win32, can't change it:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
-    context_name = config.get("multiprocessing.context", None)
-    return multiprocessing.get_context(context_name)
+    else:
+        return multiprocessing.get_context(context_name)
 
 
 def get(

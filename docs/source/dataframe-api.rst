@@ -49,6 +49,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.memory_usage
+    DataFrame.memory_usage_per_partition
     DataFrame.merge
     DataFrame.min
     DataFrame.mod
@@ -162,6 +164,7 @@ Series
    Series.max
    Series.mean
    Series.memory_usage
+   Series.memory_usage_per_partition
    Series.min
    Series.mod
    Series.mul
@@ -331,8 +334,8 @@ Convert DataFrames
 
 .. autosummary::
 
-   to_dask_array
-   to_delayed
+   DataFrame.to_dask_array
+   DataFrame.to_delayed
 
 Reshape DataFrames
 ~~~~~~~~~~~~~~~~~~
@@ -426,9 +429,9 @@ Resampling
 Dask Metadata
 ~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.utils
 
-.. autofunction:: utils.make_meta
+.. autofunction:: make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
@@ -438,6 +441,7 @@ Other functions
 .. autofunction:: compute
 .. autofunction:: map_partitions
 .. autofunction:: to_datetime
+.. autofunction:: to_numeric
 
 .. currentmodule:: dask.dataframe.multi
 

@@ -1,8 +1,8 @@
 from operator import getitem
 from itertools import product
 from numbers import Integral
-from toolz import merge, pipe, concat, partial
-from toolz.curried import map
+from tlz import merge, pipe, concat, partial
+from tlz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist

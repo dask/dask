@@ -5,7 +5,7 @@ from operator import add, getitem
 from numbers import Integral, Number
 
 import numpy as np
-from toolz import accumulate, sliding_window
+from tlz import accumulate, sliding_window
 
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
@@ -396,11 +396,12 @@ def indices(dimensions, dtype=int, chunks="auto"):
     chunks : sequence of ints, str
         The size of each block.  Must be one of the following forms:
 
-        -   A blocksize like (500, 1000)
-        -   A size in bytes, like "100 MiB" which will choose a uniform
-            block-like shape
-        -   The word "auto" which acts like the above, but uses a configuration
-            value ``array.chunk-size`` for the chunk size
+        - A blocksize like (500, 1000)
+        - A size in bytes, like "100 MiB" which will choose a uniform
+          block-like shape
+        - The word "auto" which acts like the above, but uses a configuration
+          value ``array.chunk-size`` for the chunk size
+
         Note that the last block will have fewer samples if ``len(array) % chunks != 0``.
 
     Returns
@@ -578,8 +579,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     diag_chunks = []
     chunk_offsets = []
-    cum1 = list(cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1])
-    cum2 = list(cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1])
+    cum1 = cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1]
+    cum2 = cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1]
     for co1, c1 in zip(cum1, a.chunks[axis1]):
         chunk_offsets.append([])
         for co2, c2 in zip(cum2, a.chunks[axis2]):
@@ -614,14 +615,14 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 def triu(m, k=0):
     """
-    Upper triangle of an array with elements above the `k`-th diagonal zeroed.
+    Upper triangle of an array with elements below the `k`-th diagonal zeroed.
 
     Parameters
     ----------
     m : array_like, shape (M, N)
         Input array.
     k : int, optional
-        Diagonal above which to zero elements.  `k = 0` (the default) is the
+        Diagonal below which to zero elements.  `k = 0` (the default) is the
         main diagonal, `k < 0` is below it and `k > 0` is above.
 
     Returns
@@ -762,7 +763,9 @@ def repeat(a, repeats, axis=None):
     elif not 0 <= axis <= a.ndim - 1:
         raise ValueError("axis(=%d) out of bounds" % axis)
 
-    if repeats == 1:
+    if repeats == 0:
+        return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]
+    elif repeats == 1:
         return a
 
     cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
@@ -834,7 +837,7 @@ def expand_pad_value(array, pad_value):
         and len(pad_value) == 2
         and all(isinstance(pw, Number) for pw in pad_value)
     ):
-        pad_value = tuple((pad_value[0], pad_value[1]) for _ in range(array.ndim))
+        pad_value = array.ndim * (tuple(pad_value),)
     elif (
         isinstance(pad_value, Sequence)
         and len(pad_value) == array.ndim
@@ -842,7 +845,15 @@ def expand_pad_value(array, pad_value):
         and all((len(pw) == 2) for pw in pad_value)
         and all(all(isinstance(w, Number) for w in pw) for pw in pad_value)
     ):
-        pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
+        pad_value = tuple(tuple(pw) for pw in pad_value)
+    elif (
+        isinstance(pad_value, Sequence)
+        and len(pad_value) == 1
+        and isinstance(pad_value[0], Sequence)
+        and len(pad_value[0]) == 2
+        and all(isinstance(pw, Number) for pw in pad_value[0])
+    ):
+        pad_value = array.ndim * (tuple(pad_value[0]),)
     else:
         raise TypeError("`pad_value` must be composed of integral typed values.")
 
@@ -944,6 +955,11 @@ def pad_edge(array, pad_width, mode, *args):
                         zip(pad_arrays, end_values, pad_width[d], pad_chunks)
                     )
                 ]
+        elif mode == "empty":
+            pad_arrays = [
+                empty(s, dtype=array.dtype, chunks=c)
+                for s, c in zip(pad_shapes, pad_chunks)
+            ]
 
         result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
@@ -1111,14 +1127,14 @@ def pad(array, pad_width, mode, **kwargs):
     pad_width = expand_pad_value(array, pad_width)
 
     if mode in ["maximum", "mean", "median", "minimum"]:
-        kwargs.setdefault("stat_length", array.shape)
+        kwargs.setdefault("stat_length", tuple((n, n) for n in array.shape))
     elif mode == "constant":
         kwargs.setdefault("constant_values", 0)
     elif mode == "linear_ramp":
         kwargs.setdefault("end_values", 0)
     elif mode in ["reflect", "symmetric"]:
         kwargs.setdefault("reflect_type", "even")
-    elif mode in ["edge", "wrap"]:
+    elif mode in ["edge", "wrap", "empty"]:
         if kwargs:
             raise TypeError("Got unsupported keyword arguments.")
     elif callable(mode):
@@ -1131,7 +1147,7 @@ def pad(array, pad_width, mode, **kwargs):
 
     if mode in ["maximum", "mean", "median", "minimum"]:
         return pad_stats(array, pad_width, mode, *kwargs.values())
-    elif mode in ["constant", "edge", "linear_ramp"]:
+    elif mode in ["constant", "edge", "linear_ramp", "empty"]:
         return pad_edge(array, pad_width, mode, *kwargs.values())
     elif mode in ["reflect", "symmetric", "wrap"]:
         return pad_reuse(array, pad_width, mode, *kwargs.values())
