@@ -515,12 +515,12 @@ def rearrange_by_column_tasks(
     shuffle_token = "shuffle-" + token
 
     start = {}
-    group = {}
-    split = {}
-    join = {}
     end = {}
 
     for idx, inp in enumerate(inputs):
+        group = {}
+        split = {}
+        join = {}
         start[(shuffle_join_name, 0, inp)] = (
             (df._name, idx) if idx < df.npartitions else df._meta
         )

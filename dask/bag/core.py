@@ -2299,10 +2299,10 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     shuffle_split_name = "shuffle-split-" + token
 
     start = {}
-    group = {}
-    split = {}
 
     for idx, inp in enumerate(inputs):
+        group = {}
+        split = {}
         if idx < b.npartitions:
             start[(shuffle_join_name, 0, inp)] = (b2.name, idx)
         else:
