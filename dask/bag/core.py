@@ -2295,7 +2295,6 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     token = tokenize(b, grouper, hash, max_branch)
 
     shuffle_join_name = "shuffle-join-" + token
-
     shuffle_group_name = "shuffle-group-" + token
     shuffle_split_name = "shuffle-split-" + token
 
