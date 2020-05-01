@@ -1319,7 +1319,7 @@ def test_count_nonzero_str():
     # We may have behavior differences with NumPy for strings
     # with just spaces, depending on the version of NumPy.
     # https://github.com/numpy/numpy/issues/9875
-    x = np.array(list("Hello world"))
+    x = np.array(list("Helloworld"))
     d = da.from_array(x, chunks=(4,))
 
     x_c = np.count_nonzero(x)
