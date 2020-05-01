@@ -23,6 +23,7 @@ async def test_ucx_config(cleanup):
     ucx = {
         "nvlink": True,
         "infiniband": True,
+        "rdmacm": False,
         "net-devices": "",
         "tcp": True,
         "cuda_copy": True,
@@ -31,11 +32,13 @@ async def test_ucx_config(cleanup):
     with dask.config.set(ucx=ucx):
         ucx_config = _scrub_ucx_config()
         assert ucx_config.get("TLS") == "rc,tcp,sockcm,cuda_copy,cuda_ipc"
+        assert ucx_config.get("SOCKADDR_TLS_PRIORITY") == "sockcm"
         assert ucx_config.get("NET_DEVICES") is None
 
     ucx = {
         "nvlink": False,
         "infiniband": True,
+        "rdmacm": False,
         "net-devices": "mlx5_0:1",
         "tcp": True,
         "cuda_copy": False,
@@ -44,11 +47,13 @@ async def test_ucx_config(cleanup):
     with dask.config.set(ucx=ucx):
         ucx_config = _scrub_ucx_config()
         assert ucx_config.get("TLS") == "rc,tcp,sockcm"
+        assert ucx_config.get("SOCKADDR_TLS_PRIORITY") == "sockcm"
         assert ucx_config.get("NET_DEVICES") == "mlx5_0:1"
 
     ucx = {
         "nvlink": False,
         "infiniband": True,
+        "rdmacm": True,
         "net-devices": "all",
         "MEMTYPE_CACHE": "y",
         "tcp": True,
@@ -57,7 +62,8 @@ async def test_ucx_config(cleanup):
 
     with dask.config.set(ucx=ucx):
         ucx_config = _scrub_ucx_config()
-        assert ucx_config.get("TLS") == "rc,tcp,sockcm,cuda_copy"
+        assert ucx_config.get("TLS") == "rc,tcp,rdmacm,cuda_copy"
+        assert ucx_config.get("SOCKADDR_TLS_PRIORITY") == "rdmacm"
         assert ucx_config.get("MEMTYPE_CACHE") == "y"
 
 

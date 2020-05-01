@@ -785,6 +785,10 @@ properties:
         type:
         - boolean
         - "null"
+      rdmacm:
+        type:
+        - boolean
+        - "null"
       cuda_copy:
         type:
         - boolean

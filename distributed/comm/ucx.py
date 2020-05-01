@@ -424,8 +424,12 @@ def _scrub_ucx_config():
             dask.config.get("ucx.infiniband"),
         ]
     ):
-        tls = "tcp,sockcm"
-        tls_priority = "sockcm"
+        if dask.config.get("ucx.rdmacm"):
+            tls = "tcp,rdmacm"
+            tls_priority = "rdmacm"
+        else:
+            tls = "tcp,sockcm"
+            tls_priority = "sockcm"
 
         # CUDA COPY can optionally be used with ucx -- we rely on the user
         # to define when messages will include CUDA objects.  Note:
