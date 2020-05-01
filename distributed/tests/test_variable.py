@@ -1,6 +1,6 @@
 import asyncio
 import random
-from time import sleep
+from time import sleep, monotonic
 import logging
 
 import pytest
@@ -96,10 +96,10 @@ async def test_hold_futures(s, a, b):
 async def test_timeout(c, s, a, b):
     v = Variable("v")
 
-    start = IOLoop.current().time()
+    start = monotonic()
     with pytest.raises(TimeoutError):
         await v.get(timeout=0.2)
-    stop = IOLoop.current().time()
+    stop = monotonic()
 
     if WINDOWS:  # timing is weird with asyncio and Windows
         assert 0.1 < stop - start < 2.0
