@@ -498,12 +498,18 @@ def ndependencies(dependencies, dependents):
     num_dependencies: Dict[key, int]
     total_dependencies: Dict[key, int]
     """
-    num_needed = {k: len(v) for k, v in dependencies.items()}
+    num_needed = {}
+    result = {}
+    for k, v in dependencies.items():
+        num_needed[k] = len(v)
+        if not v:
+            result[k] = 1
+
     num_dependencies = num_needed.copy()
     current = []
     current_pop = current.pop
     current_append = current.append
-    result = {k: 1 for k, v in dependencies.items() if not v}
+
     for key in result:
         for parent in dependents[key]:
             num_needed[parent] -= 1
