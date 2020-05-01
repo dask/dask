@@ -2047,7 +2047,7 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
 def test_read_inconsistent_schema_pyarrow(tmpdir):
     check_pyarrow()
 
-    # Note: This is a proxy test for a current cudf issue
+    # Note: This is a proxy test for a cudf-related issue fix
     # (see cudf#5062 github issue).  The cause of that issue is
     # schema inconsistencies that do not actually correspond to
     # different types, but whether or not the file/column contains
