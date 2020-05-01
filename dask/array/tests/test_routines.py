@@ -1160,7 +1160,10 @@ def test_argwhere_obj():
 
 
 def test_argwhere_str():
-    x = np.array(list("Hello world"))
+    # We may have behavior differences with NumPy for strings
+    # with just spaces, depending on the version of NumPy.
+    # https://github.com/numpy/numpy/issues/9875
+    x = np.array(list("Helloworld"))
     d = da.from_array(x, chunks=(4,))
 
     x_nz = np.argwhere(x)
@@ -1313,6 +1316,9 @@ def test_count_nonzero_obj_axis(axis):
 
 
 def test_count_nonzero_str():
+    # We may have behavior differences with NumPy for strings
+    # with just spaces, depending on the version of NumPy.
+    # https://github.com/numpy/numpy/issues/9875
     x = np.array(list("Hello world"))
     d = da.from_array(x, chunks=(4,))
 
