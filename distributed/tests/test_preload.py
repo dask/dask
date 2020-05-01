@@ -5,6 +5,8 @@ import sys
 import tempfile
 import pytest
 
+from tornado import web
+
 import dask
 from distributed import Client, Scheduler, Worker, Nanny
 from distributed.utils_test import cluster
@@ -121,3 +123,23 @@ backends["foo"] = TCPBackend()
         from distributed.comm.registry import backends
 
         del backends["foo"]
+
+
+@pytest.mark.asyncio
+async def test_web_preload(cleanup):
+    class MyHandler(web.RequestHandler):
+        def get(self):
+            self.write(
+                """
+def dask_setup(dask_server):
+    dask_server.foo = 1
+""".strip()
+            )
+
+    app = web.Application([(r"/preload", MyHandler)])
+    server = app.listen(12345)
+    try:
+        async with Scheduler(preload=["http://localhost:12345/preload"]) as s:
+            assert s.foo == 1
+    finally:
+        server.stop()

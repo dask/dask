@@ -131,12 +131,10 @@ class Nanny(ServerNode):
         if self.preload_argv is None:
             self.preload_argv = dask.config.get("distributed.worker.preload-argv")
 
-        self.preload_nanny = preload_nanny
-        if self.preload_nanny is None:
-            self.preload_nanny = dask.config.get("distributed.nanny.preload")
-        self.preload_nanny_argv = preload_nanny_argv
-        if self.preload_nanny_argv is None:
-            self.preload_nanny_argv = dask.config.get("distributed.nanny.preload-argv")
+        if preload_nanny is None:
+            preload_nanny = dask.config.get("distributed.nanny.preload")
+        if preload_nanny_argv is None:
+            preload_nanny_argv = dask.config.get("distributed.nanny.preload-argv")
 
         self.Worker = Worker if worker_class is None else worker_class
         self.env = env or {}
@@ -168,8 +166,8 @@ class Nanny(ServerNode):
 
         self.local_directory = local_directory
 
-        self._preload_modules = preloading.on_creation(
-            self.preload_nanny, file_dir=self.local_directory
+        self.preloads = preloading.process_preloads(
+            self, preload_nanny, preload_nanny_argv, file_dir=self.local_directory
         )
 
         self.services = services
@@ -263,9 +261,8 @@ class Nanny(ServerNode):
         )
         self.ip = get_address_host(self.address)
 
-        await preloading.on_start(
-            self._preload_modules, self, argv=self.preload_nanny_argv,
-        )
+        for preload in self.preloads:
+            await preload.start()
 
         logger.info("        Start Nanny at: %r", self.address)
         response = await self.instantiate()
@@ -465,7 +462,8 @@ class Nanny(ServerNode):
         self.status = "closing"
         logger.info("Closing Nanny at %r", self.address)
 
-        await preloading.on_teardown(self._preload_modules, self)
+        for preload in self.preloads:
+            await preload.teardown()
 
         self.stop()
         try:

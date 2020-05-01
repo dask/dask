@@ -498,14 +498,12 @@ class Worker(ServerNode):
             self._workdir = self._workspace.new_work_dir(prefix="worker-")
             self.local_directory = self._workdir.dir_path
 
-        self.preload = preload
-        if self.preload is None:
-            self.preload = dask.config.get("distributed.worker.preload")
-        self.preload_argv = preload_argv
-        if self.preload_argv is None:
-            self.preload_argv = dask.config.get("distributed.worker.preload-argv")
-        self._preload_modules = preloading.on_creation(
-            self.preload, file_dir=self.local_directory
+        if preload is None:
+            preload = dask.config.get("distributed.worker.preload")
+        if preload_argv is None:
+            preload_argv = dask.config.get("distributed.worker.preload-argv")
+        self.preloads = preloading.process_preloads(
+            self, preload, preload_argv, file_dir=self.local_directory
         )
 
         self.security = security or Security()
@@ -1025,9 +1023,8 @@ class Worker(ServerNode):
         if self.name is None:
             self.name = self.address
 
-        await preloading.on_start(
-            self._preload_modules, self, argv=self.preload_argv,
-        )
+        for preload in self.preloads:
+            await preload.start()
 
         # Services listen on all addresses
         # Note Nanny is not a "real" service, just some metadata
@@ -1085,7 +1082,8 @@ class Worker(ServerNode):
                 logger.info("Closed worker has not yet started: %s", self.status)
             self.status = "closing"
 
-            await preloading.on_teardown(self._preload_modules, self)
+            for preload in self.preloads:
+                await preload.teardown()
 
             if nanny and self.nanny:
                 with self.rpc(self.nanny) as r:
