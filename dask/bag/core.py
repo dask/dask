@@ -2309,7 +2309,8 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
             start[(shuffle_join_name, 0, inp)] = []
 
         for stage in range(1, stages + 1):
-            group[(shuffle_group_name, stage, inp)] = (
+            _key_tuple = (shuffle_group_name, stage, inp)
+            group[_key_tuple] = (
                 groupby,
                 (make_group, k, stage - 1),
                 (shuffle_join_name, stage - 1, inp),
@@ -2318,7 +2319,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
             for i in range(k):
                 split[(shuffle_split_name, stage, i, inp)] = (
                     dict.get,
-                    (shuffle_group_name, stage, inp),
+                    _key_tuple,
                     i,
                     {},
                 )
