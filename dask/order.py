@@ -434,24 +434,6 @@ def order(dsk, dependencies=None):
             break  # all done!
 
         if next_nodes:
-            # We partition things into `next_nodes` to avoid large sorts, but what if
-            # `next_nodes` is large?  Answer: shrink it before sorting!
-            if len(next_nodes) > 150:
-                # Convert to log scale.  The partition key is a product of two numbers.
-                # Sometimes the keys can be separated by a large multiple.
-                # Sometimes large keys can be close in magnitude, and it's okay to group those.
-                new_next_nodes = defaultdict(list)
-                for key, vals in next_nodes.items():
-                    new_next_nodes[int(10 * log(key))].extend(vals)
-                next_nodes = new_next_nodes
-
-                while len(next_nodes) > 150:
-                    # If it's still large, then continue shrinking
-                    denom = len(next_nodes) // 75
-                    new_next_nodes = defaultdict(list)
-                    for key, vals in next_nodes.items():
-                        new_next_nodes[key // denom].extend(vals)
-                    next_nodes = new_next_nodes
             for key in sorted(next_nodes, reverse=True):
                 # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
                 # Since we pop things off of it (onto `inner_nodes`), this means we handle
