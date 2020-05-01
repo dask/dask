@@ -144,6 +144,15 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
             dataset = pq.ParquetDataset(
                 paths, filesystem=fs, filters=filters, **dataset_kwargs
             )
+            if dataset.schema is None:
+                # The dataset may have inconsistent schemas between files.
+                # If so, we should try to use a "_common_metadata" file
+                proxy_path = (
+                    base + fs.sep + "_common_metadata"
+                    if "_common_metadata" in fns
+                    else paths[0]
+                )
+                dataset.schema = pq.ParquetFile(proxy_path).schema
         else:
             # Rely on schema for 0th file.
             # Will need to pass a list of paths to read_partition
@@ -163,6 +172,15 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
             dataset = pq.ParquetDataset(
                 paths, filesystem=fs, filters=filters, **dataset_kwargs
             )
+            if dataset.schema is None:
+                # The dataset may have inconsistent schemas between files.
+                # If so, we should try to use a "_common_metadata" file
+                proxy_path = (
+                    base + fs.sep + "_common_metadata"
+                    if "_common_metadata" in fns
+                    else allpaths[0]
+                )
+                dataset.schema = pq.ParquetFile(proxy_path).schema
         else:
             # Use _common_metadata file if it is available.
             # Otherwise, just use 0th file
