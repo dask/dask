@@ -1133,14 +1133,14 @@ class Scheduler(ServerNode):
         )
         self.start_http_server(routes, dashboard_address, default_port=8787)
 
-        if dashboard:
+        if dashboard or (dashboard is None and dashboard_address):
             try:
                 import distributed.dashboard.scheduler
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
                 distributed.dashboard.scheduler.connect(
-                    self.http_application, self.http_server, self, prefix=http_prefix,
+                    self.http_application, self.http_server, self, prefix=http_prefix
                 )
 
         # Communication state
