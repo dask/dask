@@ -568,7 +568,10 @@ def rearrange_by_column_tasks(
 
         end[(shuffle_token, idx)] = (shuffle_join_name, stages, inp)
 
-    dsk = toolz.merge(start, end, *(groups + splits + joins))
+    groups.extend(splits)
+    groups.extend(joins)
+
+    dsk = toolz.merge(start, end, *(groups))
     graph = HighLevelGraph.from_collections(shuffle_token, dsk, dependencies=[df])
 
     df2 = new_dd_object(graph, shuffle_token, df._meta, df.divisions)

@@ -367,9 +367,9 @@ def functions_of(task):
             if type(task) in sequence_types:
                 if istask(task):
                     funcs.add(unwrap_partial(task[0]))
-                    new_work += task[1:]
+                    new_work.extend(task[1:])
                 else:
-                    new_work += task
+                    new_work.extend(task)
         work = new_work
 
     return funcs

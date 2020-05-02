@@ -2359,7 +2359,10 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
         for i, j in enumerate(join)
     )
 
-    dsk = merge(start, end, *(groups + splits + joins))
+    groups.extend(splits)
+    groups.extend(joins)
+
+    dsk = merge(start, end, *(groups))
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b2])
     return type(b)(graph, name, len(inputs))
 
