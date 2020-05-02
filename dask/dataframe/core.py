@@ -1,6 +1,6 @@
 import operator
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Sequence, Iterable
 from functools import wraps, partial
 from numbers import Number, Integral
 from operator import getitem
@@ -1908,6 +1908,41 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
 
+
+    @derived_from(pd.DataFrame)
+    def agg(self, arg):
+        if isinstance(arg, str):
+            return getattr(self, arg)()
+
+        series_aggs = []
+        for col_index in range(self.shape[1]):
+            col_series = self.iloc[:, col_index]
+            agg_series = col_series.agg(arg)
+            agg_series.name = col_series.name
+            series_aggs.append(agg_series)
+
+        # concatenate single partition dataframes of possibly different lengths
+        # e.g. ddf.agg(['min', 'std']) when ddf.dtypes = ('float64', 'object')
+        name = "concat-" + tokenize(*series_aggs)
+
+        dsk = {
+            (name, 0): (
+                apply,
+                methods.concat,
+                [[(df._name, 0) for df in series_aggs]],
+                {"axis": 1},
+            )
+        }
+
+        meta = methods.concat([df._meta for df in series_aggs], axis=1)
+        graph = HighLevelGraph.from_collections(
+            name, dsk, dependencies=series_aggs
+        )
+        ddf = new_dd_object(graph, name, meta, divisions=(None, None))
+
+        return ddf
+
+
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
@@ -3133,6 +3168,41 @@ Dask Name: {name}, {task} tasks""".format(
             M.memory_usage, index=index, deep=deep, enforce_metadata=False
         )
         return delayed(sum)(result.to_delayed())
+
+
+    @derived_from(pd.Series)
+    def agg(self, arg):
+        numeric_only_aggs = ['prod', 'var', 'std', 'mean']
+        other_aggs = ['any', 'sum', 'min', 'max', 'count']  # size
+        supported_funcs = numeric_only_aggs + other_aggs
+
+        if isinstance(arg, str):
+            if arg in supported_funcs:
+                return getattr(self, arg)()
+            else:
+                raise ValueError("unknown/unsupported aggregate function: {}".format(arg))
+        elif isinstance(arg, Iterable):
+            supported_aggs = [argfunc in supported_funcs for argfunc in arg]
+            if all(supported_aggs):
+                from .multi import concat
+                series = []
+                for aggfunc in arg:
+                    if aggfunc == 'size':
+                        series.append(getattr(self.to_frame()
+                                              .rename(None, {self.name: aggfunc}),
+                                              aggfunc))
+                    else:
+                        # dask.DataFrame.prod returns a value, even for object dtype
+                        if not (aggfunc in numeric_only_aggs and self.dtype == 'object'):
+                            series.append(getattr(self.to_frame()
+                                                      .rename(None, {self.name: aggfunc}),
+                                                aggfunc)())
+                return concat(series).repartition(npartitions=1)
+            else:
+                raise ValueError("unknown/unsupported aggregate function(s): {}".format(','.join([agg for agg, supported in zip(arg, supported_aggs) if supported is False])))
+        else:
+            raise ValueError('dask.dataframe.Series.agg only supports str and Iterable inputs for arg')
+
 
     def __divmod__(self, other):
         res1 = self // other
