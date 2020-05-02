@@ -38,18 +38,18 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    out_keys = []
+
     seen = set()
     dependencies = dict()
-
+    out = {}
     work = list(set(flatten(keys)))
     while work:
         new_work = []
-        out_keys += work
-        deps = [
-            (k, get_dependencies(dsk, k, as_list=True))  # fuse needs lists
-            for k in work
-        ]
+        deps = []
+        for k in work:
+            deps.append((k, get_dependencies(dsk, k, as_list=True)))  # fuse needs lists
+            out[k] = dsk[k]
+
         dependencies.update(deps)
         for _, deplist in deps:
             for d in deplist:
@@ -57,8 +57,6 @@ def cull(dsk, keys):
                     seen.add(d)
                     new_work.append(d)
         work = new_work
-
-    out = {k: dsk[k] for k in out_keys}
 
     return out, dependencies
 
