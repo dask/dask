@@ -2130,7 +2130,7 @@ Dask Name: {name}, {task} tasks"""
         if is_datetime64_any_dtype(data._meta):
             min_ts = data.dropna().astype("i8").min(split_every=split_every)
             max_ts = data.dropna().astype("i8").max(split_every=split_every)
-            stats += [min_ts, max_ts]
+            stats.extend([min_ts, max_ts])
 
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name

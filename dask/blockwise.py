@@ -73,16 +73,26 @@ def blockwise(
     } | set(output_indices)
     sub = {k: blockwise_token(i, ".") for i, k in enumerate(sorted(unique_indices))}
     output_indices = index_subs(tuple(output_indices), sub)
-    arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
-    arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
+    a_pairs_list = []
+    for a in arrind_pairs[1::2]:
+        if a is not None:
+            val = tuple(a)
+        else:
+            val = a
+        a_pairs_list.append(index_subs(val, sub))
+
+    arrind_pairs[1::2] = a_pairs_list
     new_axes = {index_subs((k,), sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     # separate argpairs into two separate tuples
-    inputs = tuple([name for name, _ in argpairs])
-    inputs_indices = tuple([index for _, index in argpairs])
+    inputs = []
+    inputs_indices = []
+    for name, index in argpairs:
+        inputs.append(name)
+        inputs_indices.append(index)
 
     # Unpack delayed objects in kwargs
     new_keys = {n for c in dependencies for n in c.__dask_layers__()}
@@ -92,8 +102,8 @@ def blockwise(
             blockwise_token(i) for i in range(len(inputs), len(inputs) + len(new_keys))
         )
         sub = dict(zip(new_keys, new_tokens))
-        inputs = inputs + tuple(new_keys)
-        inputs_indices = inputs_indices + (None,) * len(new_keys)
+        inputs = tuple(inputs) + tuple(new_keys)
+        inputs_indices = tuple(inputs_indices) + (None,) * len(new_keys)
         kwargs = subs(kwargs, sub)
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
@@ -348,10 +358,16 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
-    assert set(numblocks) == {name for name, ind in argpairs if ind is not None}
+    block_names = set()
+    all_indices = set()
+    for name, ind in argpairs:
+        if ind is not None:
+            block_names.add(name)
+            for x in ind:
+                all_indices.add(x)
+    assert set(numblocks) == block_names
 
-    all_indices = {x for _, ind in argpairs if ind for x in ind}
-    dummy_indices = list(all_indices - set(out_indices))
+    dummy_indices = all_indices - set(out_indices)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = broadcast_dimensions(argpairs, numblocks)
@@ -364,39 +380,40 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     # - the dummy indices
     # - the dummy indices, with indices replaced by zeros (for broadcasting)
     # - a 0 to assist with broadcasting.
-    index_pos = {ind: i for i, ind in enumerate(out_indices)}
-    zero_pos = {ind: -1 for i, ind in enumerate(out_indices)}
-    index_pos.update(
-        {ind: 2 * i + len(out_indices) for i, ind in enumerate(dummy_indices)}
-    )
-    zero_pos.update(
-        {ind: 2 * i + 1 + len(out_indices) for i, ind in enumerate(dummy_indices)}
-    )
+
+    index_pos, zero_pos = {}, {}
+    for i, ind in enumerate(out_indices):
+        index_pos[ind] = i
+        zero_pos[ind] = -1
+
+    _dummies_list = []
+    for i, ind in enumerate(dummy_indices):
+        index_pos[ind] = 2 * i + len(out_indices)
+        zero_pos[ind] = 2 * i + 1 + len(out_indices)
+        _dummies_list.append([list(range(dims[ind])), [0] * dims[ind]])
 
     # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
     dummies = tuple(
         itertools.chain.from_iterable(
-            [list(range(dims[i])), [0] * dims[i]] for i in dummy_indices
+            _dummies_list
         )
     )
     dummies += (0,)
 
     # For each coordinate position in each input, gives the position in
     # the coordinate set.
-    coord_maps = [
-        [zero_pos[i] if nb == 1 else index_pos[i] for i, nb in zip(ind, numblocks[arg])]
-        if ind is not None
-        else None
-        for arg, ind in argpairs
-    ]
+    coord_maps = []
 
     # Axes along which to concatenate, for each input
-    concat_axes = [
-        [n for n, i in enumerate(ind) if i in dummy_indices]
-        if ind is not None
-        else None
-        for arg, ind in argpairs
-    ]
+    concat_axes = []
+    
+    for arg, ind in argpairs:
+        if ind is not None:
+            coord_maps.append([zero_pos[i] if nb == 1 else index_pos[i] for i, nb in zip(ind, numblocks[arg])])
+            concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
+        else:
+            coord_maps.append(None)
+            concat_axes.append(None)
 
     # Unpack delayed objects in kwargs
     dsk2 = {}
