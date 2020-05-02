@@ -223,12 +223,15 @@ class Blockwise(Mapping):
 
     def _out_numblocks(self):
         d = {}
+        out_d = {}
         indices = {k: v for k, v in self.indices if v is not None}
         for k, v in self.numblocks.items():
             for a, b in zip(indices[k], v):
                 d[a] = max(d.get(a, 0), b)
+                if a in self.output_indices:
+                    out_d[a] = d[a]
 
-        return {k: v for k, v in d.items() if k in self.output_indices}
+        return out_d
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
