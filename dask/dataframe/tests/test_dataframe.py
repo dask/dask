@@ -3695,26 +3695,49 @@ def test_dataframe_mode():
 
 
 def test_agg():
-    data = {'col0': [1.1, 2, 3], 'col1': ['a', 'b', 'c']}
-    s = pd.Series(data['col1'])
+    data = {"col0": [1.1, 2, 3], "col1": ["a", "b", "c"]}
+    s = pd.Series(data["col1"])
     ds = dd.from_pandas(s, npartitions=2)
-    ds.name = 'my_series'
+    ds.name = "my_series"
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=1)
 
     with pytest.raises(ValueError):
-        ds.agg(['mode'])
+        ds.agg(["mode"])
 
     # series tests
-    assert_eq(s.agg('min'), ds.agg('min'))
-    assert_eq(s.agg(['min']), ds.agg(['min']))
-    supported_funcs = ['sum', 'min', 'max', 'count', 'prod', 'var', 'std', 'mean'] # 'any' also works in dask, but yields a different result in pandas
-    assert_eq(s.agg(supported_funcs), ds.agg(supported_funcs), check_dtypes=False, check_dtype=False)
+    assert_eq(s.agg("min"), ds.agg("min"))
+    assert_eq(s.agg(["min"]), ds.agg(["min"]))
+    supported_funcs = [
+        "sum",
+        "min",
+        "max",
+        "count",
+        "prod",
+        "var",
+        "std",
+        "mean",
+    ]  # 'any' also works in dask, but yields a different result in pandas
+    assert_eq(
+        s.agg(supported_funcs),
+        ds.agg(supported_funcs),
+        check_dtypes=False,
+        check_dtype=False,
+    )
 
     # dataframe tests
-    assert_eq(df.agg('min'), ddf.agg('min'))
-    assert_eq(df.agg(['min']), ddf.agg(['min']))
-    supported_funcs = ['sum', 'prod', 'min', 'max', 'count', 'var', 'std', 'mean']  # 'any' also works in dask, but yields a different result in pandas
+    assert_eq(df.agg("min"), ddf.agg("min"))
+    assert_eq(df.agg(["min"]), ddf.agg(["min"]))
+    supported_funcs = [
+        "sum",
+        "prod",
+        "min",
+        "max",
+        "count",
+        "var",
+        "std",
+        "mean",
+    ]  # 'any' also works in dask, but yields a different result in pandas
     assert_eq(df.agg(supported_funcs), ddf.agg(supported_funcs))
 
 

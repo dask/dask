@@ -1908,7 +1908,6 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
 
-
     @derived_from(pd.DataFrame)
     def agg(self, arg):
         if isinstance(arg, str):
@@ -1935,13 +1934,10 @@ Dask Name: {name}, {task} tasks"""
         }
 
         meta = methods.concat([df._meta for df in series_aggs], axis=1)
-        graph = HighLevelGraph.from_collections(
-            name, dsk, dependencies=series_aggs
-        )
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=series_aggs)
         ddf = new_dd_object(graph, name, meta, divisions=(None, None))
 
         return ddf
-
 
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
@@ -3169,40 +3165,61 @@ Dask Name: {name}, {task} tasks""".format(
         )
         return delayed(sum)(result.to_delayed())
 
-
     @derived_from(pd.Series)
     def agg(self, arg):
-        numeric_only_aggs = ['prod', 'var', 'std', 'mean']
-        other_aggs = ['any', 'sum', 'min', 'max', 'count']  # size
+        numeric_only_aggs = ["prod", "var", "std", "mean"]
+        other_aggs = ["any", "sum", "min", "max", "count"]  # size
         supported_funcs = numeric_only_aggs + other_aggs
 
         if isinstance(arg, str):
             if arg in supported_funcs:
                 return getattr(self, arg)()
             else:
-                raise ValueError("unknown/unsupported aggregate function: {}".format(arg))
+                raise ValueError(
+                    "unknown/unsupported aggregate function: {}".format(arg)
+                )
         elif isinstance(arg, Iterable):
             supported_aggs = [argfunc in supported_funcs for argfunc in arg]
             if all(supported_aggs):
                 from .multi import concat
+
                 series = []
                 for aggfunc in arg:
-                    if aggfunc == 'size':
-                        series.append(getattr(self.to_frame()
-                                              .rename(None, {self.name: aggfunc}),
-                                              aggfunc))
+                    if aggfunc == "size":
+                        series.append(
+                            getattr(
+                                self.to_frame().rename(None, {self.name: aggfunc}),
+                                aggfunc,
+                            )
+                        )
                     else:
                         # dask.DataFrame.prod returns a value, even for object dtype
-                        if not (aggfunc in numeric_only_aggs and self.dtype == 'object'):
-                            series.append(getattr(self.to_frame()
-                                                      .rename(None, {self.name: aggfunc}),
-                                                aggfunc)())
+                        if not (
+                            aggfunc in numeric_only_aggs and self.dtype == "object"
+                        ):
+                            series.append(
+                                getattr(
+                                    self.to_frame().rename(None, {self.name: aggfunc}),
+                                    aggfunc,
+                                )()
+                            )
                 return concat(series).repartition(npartitions=1)
             else:
-                raise ValueError("unknown/unsupported aggregate function(s): {}".format(','.join([agg for agg, supported in zip(arg, supported_aggs) if supported is False])))
+                raise ValueError(
+                    "unknown/unsupported aggregate function(s): {}".format(
+                        ",".join(
+                            [
+                                agg
+                                for agg, supported in zip(arg, supported_aggs)
+                                if supported is False
+                            ]
+                        )
+                    )
+                )
         else:
-            raise ValueError('dask.dataframe.Series.agg only supports str and Iterable inputs for arg')
-
+            raise ValueError(
+                "dask.dataframe.Series.agg only supports str and Iterable inputs for arg"
+            )
 
     def __divmod__(self, other):
         res1 = self // other
