@@ -102,8 +102,8 @@ def blockwise(
             blockwise_token(i) for i in range(len(inputs), len(inputs) + len(new_keys))
         )
         sub = dict(zip(new_keys, new_tokens))
-        inputs = tuple(inputs) + tuple(new_keys)
-        inputs_indices = tuple(inputs_indices) + (None,) * len(new_keys)
+        inputs.extend(new_keys)
+        inputs_indices.extend((None,) * len(new_keys))
         kwargs = subs(kwargs, sub)
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]

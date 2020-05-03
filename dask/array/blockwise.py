@@ -161,29 +161,28 @@ def blockwise(
             v = (v,)
         chunkss[k] = v
     arginds = list(zip(arrays, args[1::2]))
-
-    for arg, ind in arginds:
-        if hasattr(arg, "ndim") and hasattr(ind, "__len__") and arg.ndim != len(ind):
-            raise ValueError(
-                "Index string %s does not match array dimension %d" % (ind, arg.ndim)
-            )
-
-    numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
+    numblocks = {}
 
     dependencies = []
     arrays = []
 
     # Normalize arguments
     argindsstr = []
-    for a, ind in arginds:
+
+    for arg, ind in arginds:
+        if hasattr(arg, "ndim") and hasattr(ind, "__len__") and arg.ndim != len(ind):
+            raise ValueError(
+                "Index string %s does not match array dimension %d" % (ind, arg.ndim)
+            )
         if ind is None:
-            a = normalize_arg(a)
-            a, collections = unpack_collections(a)
+            arg = normalize_arg(arg)
+            arg, collections = unpack_collections(arg)
             dependencies.extend(collections)
         else:
-            arrays.append(a)
-            a = a.name
-        argindsstr.extend((a, ind))
+            numblocks[arg.name] = arg.numblocks
+            arrays.append(arg)
+            arg = arg.name
+        argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments
     kwargs2 = {}
