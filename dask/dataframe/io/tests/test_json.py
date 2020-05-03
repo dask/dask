@@ -99,8 +99,8 @@ def test_to_json_with_get():
     with tmpdir() as dn:
         ddf.to_json(dn, compute_kwargs={"scheduler": my_get})
         assert flag[0]
-        result = dd.read_json(os.path.join(dn, "*")).compute().reset_index(drop=True)
-        assert_eq(result, df)
+        result = dd.read_json(os.path.join(dn, "*"))
+        assert_eq(result, df, check_index=False)
 
 
 def test_read_json_error():

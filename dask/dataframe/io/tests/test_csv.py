@@ -1417,8 +1417,8 @@ def test_to_csv_with_get():
     with tmpdir() as dn:
         ddf.to_csv(dn, index=False, compute_kwargs={"scheduler": my_get})
         assert flag[0]
-        result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
-        assert_eq(result, df)
+        result = dd.read_csv(os.path.join(dn, "*"))
+        assert_eq(result, df, check_index=False)
 
 
 def test_to_csv_warns_using_scheduler_argument():
@@ -1449,7 +1449,6 @@ def test_to_csv_errors_using_multiple_scheduler_args():
             ddf.to_csv(
                 dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
             )
-
 
 def test_to_csv_paths():
     df = pd.DataFrame({"A": range(10)})

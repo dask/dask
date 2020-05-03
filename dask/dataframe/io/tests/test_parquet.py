@@ -1754,8 +1754,8 @@ def test_to_parquet_with_get(tmpdir):
     ddf.to_parquet(tmpdir, compute_kwargs={"scheduler": my_get})
     assert flag[0]
 
-    result = dd.read_parquet(os.path.join(tmpdir, "*")).compute().reset_index(drop=True)
-    assert_eq(result, df)
+    result = dd.read_parquet(os.path.join(tmpdir, "*"))
+    assert_eq(result, df, check_index=False)
 
 
 def test_select_partitioned_column(tmpdir, engine):
