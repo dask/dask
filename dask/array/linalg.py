@@ -327,6 +327,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             # cumulative sums (start, end)
             name_q2cs = "cumsum" + token + "-q2"
             dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
+            # PREM
             dsk_q2_cumsum.update(
                 {
                     (name_q2cs, i): (_cumsum_part, (name_q2cs, i - 1), (name_q2bs, i))

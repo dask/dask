@@ -85,7 +85,7 @@ def blockwise(
     new_axes = {index_subs((k,), sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
-    argpairs = list(toolz.partition(2, arrind_pairs))
+    argpairs = toolz.partition(2, arrind_pairs)
 
     # separate argpairs into two separate tuples
     inputs = []
@@ -107,11 +107,11 @@ def blockwise(
         kwargs = subs(kwargs, sub)
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-    keys = tuple(map(blockwise_token, range(len(inputs))))
+    keys = map(blockwise_token, range(len(inputs)))
 
     # Construct local graph
     if not kwargs:
-        subgraph = {output: (func,) + keys}
+        subgraph = {output: (func,) + tuple(keys)}
     else:
         _keys = list(keys)
         if new_keys:

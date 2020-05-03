@@ -160,7 +160,8 @@ def blockwise(
         if not isinstance(v, tuple):
             v = (v,)
         chunkss[k] = v
-    arginds = list(zip(arrays, args[1::2]))
+
+    arginds = zip(arrays, args[1::2])
     numblocks = {}
 
     dependencies = []

@@ -248,6 +248,7 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         other_key = other
 
+    # PREM
     if inv:
         dsk.update({(name, 0): (op, other_key, (self._name, 0))})
     else:
@@ -2343,7 +2344,7 @@ Dask Name: {name}, {task} tasks"""
         )
 
         token = tokenize(self, other, join, axis, fill_value)
-
+        # PREM
         name1 = "align1-" + token
         dsk1 = {
             (name1, i): (getitem, key, 0)

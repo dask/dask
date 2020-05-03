@@ -210,8 +210,7 @@ def getem(
     """
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-
-    keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
+    keys = product([out_name], *[range(len(bds)) for bds in chunks])
     slices = slices_from_chunks(chunks)
 
     if (
@@ -1620,7 +1619,8 @@ class Array(DaskMethodsMixin):
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
         )
 
-        keys = list(product(*[range(len(c)) for c in chunks]))
+        # PREM
+        keys = product(*[range(len(c)) for c in chunks])
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
@@ -3195,11 +3195,18 @@ def unify_chunks(*args, **kwargs):
     ):
         return dict(zip(inds[0], arrays[0].chunks)), arrays
 
-    nameinds = [(a.name if i is not None else a, i) for a, i in arginds]
-    blockdim_dict = {a.name: a.chunks for a, ind in arginds if ind is not None}
+    nameinds = []
+    blockdim_dict = dict()
+    max_parts = 0
+    for a, ind in arginds:
+        if ind is not None:
+            nameinds.append((a.name, ind))
+            blockdim_dict[a.name] = a.chunks
+            max_parts = max(max_parts, a.npartitions)
+        else:
+            nameinds.append((a, ind))
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
-    max_parts = max(arg.npartitions for arg, ind in arginds if ind is not None)
     nparts = np.prod(list(map(len, chunkss.values())))
 
     if warn and nparts and nparts >= max_parts * 10:
@@ -4609,6 +4616,7 @@ def _vindex_array(x, dict_indexes):
         )
 
         vindex_merge_name = "vindex-merge-" + token
+        # PREM
         dsk.update(
             (
                 keyname(vindex_merge_name, 0, okey),

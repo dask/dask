@@ -999,6 +999,7 @@ class Bag(DaskMethodsMixin):
                 )
                 for i, inds in enumerate(partition_all(split_every, range(k)))
             )
+            # PREM
             dsk.update(dsk2)
             k = len(dsk2)
             b = c
@@ -1130,6 +1131,7 @@ class Bag(DaskMethodsMixin):
         if on_other is None:
             on_other = on_self
 
+        # PREM
         dsk.update(
             {
                 (name, i): (list, (join, on_other, other, on_self, (self.name, i)))
@@ -1316,6 +1318,7 @@ class Bag(DaskMethodsMixin):
                     )
                     for i, inds in enumerate(partition_all(split_every, range(k)))
                 }
+            # PREM
             dsk.update(dsk2)
             k = len(dsk2)
             b = c
@@ -1544,6 +1547,7 @@ class Bag(DaskMethodsMixin):
         dtypes = meta.dtypes.to_dict()
         name = "to_dataframe-" + tokenize(self, cols, dtypes)
         dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
+        # PREM
         dsk.update(
             {
                 (name, i): (to_dataframe, (self.name, i), cols, dtypes)

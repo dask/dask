@@ -117,6 +117,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     )
 
     if before and isinstance(before, Integral):
+        # PREM
         dsk.update(
             {
                 (name_a, i): (M.tail, (df_name, i), before)
@@ -148,6 +149,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                     first = first - deltas[j]
                     j = j - 1
 
+                # PREM
                 dsk.update(
                     {
                         (name_a, i): (
@@ -162,6 +164,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
             prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
 
         else:
+            # PREM
             dsk.update(
                 {
                     (name_a, i): (
@@ -178,6 +181,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         prevs = [None] * df.npartitions
 
     if after and isinstance(after, Integral):
+        # PREM
         dsk.update(
             {
                 (name_b, i): (M.head, (df_name, i), after)
@@ -191,6 +195,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         if (after > deltas).any():
             raise ValueError(timedelta_partition_message)
 
+        # PREM
         dsk.update(
             {
                 (name_b, i): (_head_timedelta, (df_name, i - 0), (df_name, i), after)
