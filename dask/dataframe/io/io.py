@@ -565,16 +565,11 @@ def from_delayed(
     name = prefix + "-" + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)
     if verify_meta:
-        # PREM
-        dsk.update(
-            {
-                (name, i): (check_meta, df.key, meta, "from_delayed")
-                for (i, df) in enumerate(dfs)
-            }
-        )
+        for (i, df) in enumerate(dfs):
+            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
     else:
-        # PREM
-        dsk.update({(name, i): df.key for (i, df) in enumerate(dfs)})
+        for (i, df) in enumerate(dfs):
+            dsk[(name, i)] = df.key
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)

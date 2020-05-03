@@ -992,16 +992,15 @@ class Bag(DaskMethodsMixin):
 
         while k > split_every:
             c = fmt + str(depth)
-            dsk2 = dict(
-                (
-                    (c, i),
-                    (empty_safe_aggregate, aggregate, [(b, j) for j in inds], False),
+            for i, inds in enumerate(partition_all(split_every, range(k))):
+                dsk[(c, i)] = (
+                    empty_safe_aggregate,
+                    aggregate,
+                    [(b, j) for j in inds],
+                    False,
                 )
-                for i, inds in enumerate(partition_all(split_every, range(k)))
-            )
-            # PREM
-            dsk.update(dsk2)
-            k = len(dsk2)
+
+            k = i + 1
             b = c
             depth += 1
 
@@ -1131,13 +1130,9 @@ class Bag(DaskMethodsMixin):
         if on_other is None:
             on_other = on_self
 
-        # PREM
-        dsk.update(
-            {
-                (name, i): (list, (join, on_other, other, on_self, (self.name, i)))
-                for i in range(self.npartitions)
-            }
-        )
+        for i in range(self.npartitions):
+            dsk[(name, i)] = (list, (join, on_other, other, on_self, (self.name, i)))
+
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return type(self)(graph, name, self.npartitions)
 
@@ -1299,28 +1294,23 @@ class Bag(DaskMethodsMixin):
         while k > split_every:
             c = b + str(depth)
             if combine_initial is not no_default:
-                dsk2 = {
-                    (c, i): (
+                for i, inds in enumerate(partition_all(split_every, range(k))):
+                    dsk[(c, i)] = (
                         reduceby,
                         0,
                         combine2,
                         (toolz.concat, (map, dictitems, [(b, j) for j in inds])),
                         combine_initial,
                     )
-                    for i, inds in enumerate(partition_all(split_every, range(k)))
-                }
             else:
-                dsk2 = {
-                    (c, i): (
+                for i, inds in enumerate(partition_all(split_every, range(k))):
+                    dsk[(c, i)] = (
                         merge_with,
                         (partial, reduce, combine),
                         [(b, j) for j in inds],
                     )
-                    for i, inds in enumerate(partition_all(split_every, range(k)))
-                }
-            # PREM
-            dsk.update(dsk2)
-            k = len(dsk2)
+
+            k = i + 1
             b = c
             depth += 1
 
@@ -1547,13 +1537,10 @@ class Bag(DaskMethodsMixin):
         dtypes = meta.dtypes.to_dict()
         name = "to_dataframe-" + tokenize(self, cols, dtypes)
         dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
-        # PREM
-        dsk.update(
-            {
-                (name, i): (to_dataframe, (self.name, i), cols, dtypes)
-                for i in range(self.npartitions)
-            }
-        )
+
+        for i in range(self.npartitions):
+            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(dsk, name, meta, divisions)
 

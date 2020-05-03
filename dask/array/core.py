@@ -1619,7 +1619,6 @@ class Array(DaskMethodsMixin):
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
         )
 
-        # PREM
         keys = product(*[range(len(c)) for c in chunks])
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
@@ -4596,10 +4595,11 @@ def _vindex_array(x, dict_indexes):
         full_slices = [slice(None, None) if i is None else None for i in flat_indexes]
 
         name = "vindex-slice-" + token
-        dsk = dict(
-            (
-                keyname(name, i, okey),
-                (
+        vindex_merge_name = "vindex-merge-" + token
+        dsk = {}
+        for okey in other_blocks:
+            for i, key in enumerate(per_block):
+                dsk[keyname(name, i, okey)] = (
                     _vindex_transpose,
                     (
                         _vindex_slice,
@@ -4609,25 +4609,12 @@ def _vindex_array(x, dict_indexes):
                         ),
                     ),
                     axis,
-                ),
+                )
+            dsk[keyname(vindex_merge_name, 0, okey)] = (
+                _vindex_merge,
+                [list(pluck(0, per_block[key])) for key in per_block],
+                [keyname(name, i, okey) for i in range(len(per_block))],
             )
-            for i, key in enumerate(per_block)
-            for okey in other_blocks
-        )
-
-        vindex_merge_name = "vindex-merge-" + token
-        # PREM
-        dsk.update(
-            (
-                keyname(vindex_merge_name, 0, okey),
-                (
-                    _vindex_merge,
-                    [list(pluck(0, per_block[key])) for key in per_block],
-                    [keyname(name, i, okey) for i in range(len(per_block))],
-                ),
-            )
-            for okey in other_blocks
-        )
 
         result_1d = Array(
             HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),

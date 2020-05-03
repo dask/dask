@@ -117,14 +117,13 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     )
 
     if before and isinstance(before, Integral):
-        # PREM
-        dsk.update(
-            {
-                (name_a, i): (M.tail, (df_name, i), before)
-                for i in range(df.npartitions - 1)
-            }
-        )
-        prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+
+        prevs = [None]
+        for i in range(df.npartitions - 1):
+            key = (name_a, i)
+            dsk[key] = (M.tail, (df_name, i), before)
+            prevs.append(key)
+
     elif isinstance(before, datetime.timedelta):
         # Assumes monotonic (increasing?) index
         divs = pd.Series(df.divisions)
@@ -136,6 +135,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
 
         if (before > deltas).any():
             pt_z = divs[0]
+            prevs = [None]
             for i in range(df.npartitions - 1):
                 # Select all indexes of relevant partitions between the current partition and
                 # the partition with the highest division outside the rolling window (before)
@@ -149,60 +149,48 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                     first = first - deltas[j]
                     j = j - 1
 
-                # PREM
-                dsk.update(
-                    {
-                        (name_a, i): (
-                            _tail_timedelta,
-                            [(df_name, k) for k in range(j, i + 1)],
-                            (df_name, i + 1),
-                            before,
-                        )
-                    }
+                key = (name_a, i)
+                dsk[key] = (
+                    _tail_timedelta,
+                    [(df_name, k) for k in range(j, i + 1)],
+                    (df_name, i + 1),
+                    before,
                 )
-
-            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+                prevs.append(key)
 
         else:
-            # PREM
-            dsk.update(
-                {
-                    (name_a, i): (
-                        _tail_timedelta,
-                        [(df_name, i)],
-                        (df_name, i + 1),
-                        before,
-                    )
-                    for i in range(df.npartitions - 1)
-                }
-            )
-            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+            prevs = [None]
+            for i in range(df.npartitions - 1):
+                key = (name_a, i)
+                dsk[key] = (
+                    _tail_timedelta,
+                    [(df_name, i)],
+                    (df_name, i + 1),
+                    before,
+                )
+                prevs.append(key)
     else:
         prevs = [None] * df.npartitions
 
     if after and isinstance(after, Integral):
-        # PREM
-        dsk.update(
-            {
-                (name_b, i): (M.head, (df_name, i), after)
-                for i in range(1, df.npartitions)
-            }
-        )
-        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (M.head, (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
     elif isinstance(after, datetime.timedelta):
         # TODO: Do we have a use-case for this? Pandas doesn't allow negative rolling windows
         deltas = pd.Series(df.divisions).diff().iloc[1:-1]
         if (after > deltas).any():
             raise ValueError(timedelta_partition_message)
 
-        # PREM
-        dsk.update(
-            {
-                (name_b, i): (_head_timedelta, (df_name, i - 0), (df_name, i), after)
-                for i in range(1, df.npartitions)
-            }
-        )
-        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (_head_timedelta, (df_name, i - 0), (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
     else:
         nexts = [None] * df.npartitions
 

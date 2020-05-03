@@ -190,7 +190,7 @@ class RandomState(object):
             small_args,
             small_kwargs,
         )
-        # PREM
+
         dsk.update(dict(zip(keys, vals)))
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)

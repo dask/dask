@@ -248,11 +248,9 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         other_key = other
 
-    # PREM
-    if inv:
-        dsk.update({(name, 0): (op, other_key, (self._name, 0))})
-    else:
-        dsk.update({(name, 0): (op, (self._name, 0), other_key)})
+    dsk[(name, 0)] = (
+        (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
+    )
 
     other_meta = make_meta(other)
     other_meta_nonempty = meta_nonempty(other_meta)
@@ -2344,7 +2342,7 @@ Dask Name: {name}, {task} tasks"""
         )
 
         token = tokenize(self, other, join, axis, fill_value)
-        # PREM
+
         name1 = "align1-" + token
         dsk1 = {
             (name1, i): (getitem, key, 0)
