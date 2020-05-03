@@ -797,9 +797,9 @@ def to_csv(
 
         if scheduler is not None:
             warn(
-                "passing 'scheduler' directly into `to_csv()` is deprecated and will be removed in a future version"
-                "pass the scheduler in as part of `compute_kwargs` instead."
-                f"e.g. df.to_csv(compute=True, compute_kwargs={{scheduler={scheduler}}})",
+                "The 'scheduler' keyword argument for `to_csv()` is deprecated and will be removed in a future version. "
+                "Please use the `compute_kwargs` argument instead. "
+                f"For example, df.to_csv(..., compute_kwargs={{scheduler: {scheduler}}})",
                 FutureWarning,
             )
 
@@ -815,7 +815,7 @@ def to_csv(
             )
 
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
-            compute_kwargs = {"scheduler": scheduler}
+            compute_kwargs["scheduler"] = scheduler
 
         delayed(values).compute(**compute_kwargs)
         return [f.path for f in files]
