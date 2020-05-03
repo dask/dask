@@ -393,11 +393,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         _dummies_list.append([list(range(dims[ind])), [0] * dims[ind]])
 
     # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
-    dummies = tuple(
-        itertools.chain.from_iterable(
-            _dummies_list
-        )
-    )
+    dummies = tuple(itertools.chain.from_iterable(_dummies_list))
     dummies += (0,)
 
     # For each coordinate position in each input, gives the position in
@@ -406,10 +402,15 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Axes along which to concatenate, for each input
     concat_axes = []
-    
+
     for arg, ind in argpairs:
         if ind is not None:
-            coord_maps.append([zero_pos[i] if nb == 1 else index_pos[i] for i, nb in zip(ind, numblocks[arg])])
+            coord_maps.append(
+                [
+                    zero_pos[i] if nb == 1 else index_pos[i]
+                    for i, nb in zip(ind, numblocks[arg])
+                ]
+            )
             concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
         else:
             coord_maps.append(None)
