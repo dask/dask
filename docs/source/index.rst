@@ -186,6 +186,7 @@ messy situations in everyday problems.
    spark.rst
    caching.rst
    graphs.rst
+   phases-of-computation.rst
    remote-data-services.rst
    gpu.rst
    cite.rst
