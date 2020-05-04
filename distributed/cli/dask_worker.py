@@ -52,12 +52,21 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 )
 @click.option(
     "--worker-port",
-    type=int,
-    default=0,
-    help="Serving computation port, defaults to random",
+    default=None,
+    help="Serving computation port, defaults to random. "
+    "When creating multiple workers with --nprocs, a sequential range of "
+    "worker ports may be used by specifying the first and last available "
+    "ports like <first-port>:<last-port>. For example, --worker-port=3000:3026 "
+    "will use ports 3000, 3001, ..., 3025, 3026.",
 )
 @click.option(
-    "--nanny-port", type=int, default=0, help="Serving nanny port, defaults to random"
+    "--nanny-port",
+    default=None,
+    help="Serving nanny port, defaults to random. "
+    "When creating multiple nannies with --nprocs, a sequential range of "
+    "nanny ports may be used by specifying the first and last available "
+    "ports like <first-port>:<last-port>. For example, --nanny-port=3000:3026 "
+    "will use ports 3000, 3001, ..., 3025, 3026.",
 )
 @click.option(
     "--bokeh-port", type=int, default=None, help="Deprecated.  See --dashboard-address"
@@ -280,12 +289,6 @@ def main(
             if v is not None
         }
     )
-
-    if nprocs > 1 and worker_port != 0:
-        logger.error(
-            "Failed to launch worker.  You cannot use the --port argument when nprocs > 1."
-        )
-        sys.exit(1)
 
     if nprocs > 1 and not nanny:
         logger.error(

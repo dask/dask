@@ -3,6 +3,7 @@ import bisect
 from collections import defaultdict, deque, namedtuple
 from collections.abc import MutableMapping
 from datetime import timedelta
+import errno
 from functools import partial
 import heapq
 from inspect import isawaitable
@@ -57,6 +58,7 @@ from .utils import (
     offload,
     parse_bytes,
     parse_timedelta,
+    parse_ports,
     iscoroutinefunction,
     warn_on_duration,
     LRU,
@@ -328,7 +330,7 @@ class Worker(ServerNode):
         lifetime=None,
         lifetime_stagger=None,
         lifetime_restart=None,
-        **kwargs
+        **kwargs,
     ):
         self.tasks = dict()
         self.task_state = dict()
@@ -456,13 +458,10 @@ class Worker(ServerNode):
         if not host and not interface and not scheduler_addr.startswith("inproc://"):
             host = get_ip(get_address_host(scheduler_addr.split("://")[-1]))
 
-        self._start_address = address_from_user_args(
-            host=host,
-            port=port,
-            interface=interface,
-            protocol=protocol,
-            security=security,
-        )
+        self._start_port = port
+        self._start_host = host
+        self._interface = interface
+        self._protocol = protocol
 
         if ncores is not None:
             warnings.warn("the ncores= parameter has moved to nthreads=")
@@ -584,22 +583,9 @@ class Worker(ServerNode):
         self.services = {}
         self.service_specs = services or {}
 
-        routes = get_handlers(
-            server=self,
-            modules=dask.config.get("distributed.worker.http.routes"),
-            prefix=http_prefix,
-        )
-        self.start_http_server(routes, dashboard_address)
-
-        if dashboard:
-            try:
-                import distributed.dashboard.worker
-            except ImportError:
-                logger.debug("To start diagnostics web server please install Bokeh")
-            else:
-                distributed.dashboard.worker.connect(
-                    self.http_application, self.http_server, self, prefix=http_prefix,
-                )
+        self._dashboard_address = dashboard_address
+        self._dashboard = dashboard
+        self._http_prefix = http_prefix
 
         self.metrics = dict(metrics) if metrics else {}
         self.startup_information = (
@@ -643,7 +629,7 @@ class Worker(ServerNode):
             stream_handlers=stream_handlers,
             io_loop=self.loop,
             connection_args=self.connection_args,
-            **kwargs
+            **kwargs,
         )
 
         self.scheduler = self.rpc(scheduler_addr)
@@ -1015,9 +1001,52 @@ class Worker(ServerNode):
         enable_gc_diagnosis()
         thread_state.on_event_loop_thread = True
 
-        await self.listen(
-            self._start_address, **self.security.get_listen_args("worker")
+        ports = parse_ports(self._start_port)
+        for port in ports:
+            start_address = address_from_user_args(
+                host=self._start_host,
+                port=port,
+                interface=self._interface,
+                protocol=self._protocol,
+                security=self.security,
+            )
+            try:
+                await self.listen(
+                    start_address, **self.security.get_listen_args("worker")
+                )
+            except OSError as e:
+                if len(ports) > 1 and e.errno == errno.EADDRINUSE:
+                    continue
+                else:
+                    raise e
+            else:
+                self._start_address = start_address
+                break
+        else:
+            raise ValueError(
+                f"Could not start Worker on host {self._start_host}"
+                f"with port {self._start_port}"
+            )
+
+        # Start HTTP server associated with this Worker node
+        routes = get_handlers(
+            server=self,
+            modules=dask.config.get("distributed.worker.http.routes"),
+            prefix=self._http_prefix,
         )
+        self.start_http_server(routes, self._dashboard_address)
+        if self._dashboard:
+            try:
+                import distributed.dashboard.worker
+            except ImportError:
+                logger.debug("To start diagnostics web server please install Bokeh")
+            else:
+                distributed.dashboard.worker.connect(
+                    self.http_application,
+                    self.http_server,
+                    self,
+                    prefix=self._http_prefix,
+                )
         self.ip = get_address_host(self.address)
 
         if self.name is None:
@@ -1355,7 +1384,7 @@ class Worker(ServerNode):
         duration=None,
         resource_restrictions=None,
         actor=False,
-        **kwargs2
+        **kwargs2,
     ):
         try:
             if key in self.tasks:

@@ -1319,6 +1319,64 @@ def format_dashboard_link(host, port):
     )
 
 
+def parse_ports(port):
+    """ Parse input port information into list of ports
+
+    Parameters
+    ----------
+    port : int, str, None
+        Input port or ports. Can be an integer like 8787, a string for a
+        single port like "8787", a string for a sequential range of ports like
+        "8000:8200", or None.
+
+    Returns
+    -------
+    ports : list
+        List of ports
+
+    Examples
+    --------
+    A single port can be specified using an integer:
+
+    >>> parse_ports(8787)
+    >>> [8787]
+
+    or a string:
+
+    >>> parse_ports("8787")
+    >>> [8787]
+
+    A sequential range of ports can be specified by a string which indicates
+    the first and last ports which should be included in the sequence of ports:
+
+    >>> parse_ports("8787:8790")
+    >>> [8787, 8788, 8789, 8790]
+
+    An input of ``None`` is also valid and can be used to indicate that no port
+    has been specified:
+
+    >>> parse_ports(None)
+    >>> [None]
+
+    """
+    if isinstance(port, str) and ":" not in port:
+        port = int(port)
+
+    if isinstance(port, (int, type(None))):
+        ports = [port]
+    else:
+        port_start, port_stop = map(int, port.split(":"))
+        if port_stop <= port_start:
+            raise ValueError(
+                "When specifying a range of ports like port_start:port_stop, "
+                "port_stop must be greater than port_start, but got "
+                f"port_start={port_start} and port_stop={port_stop}"
+            )
+        ports = list(range(port_start, port_stop + 1))
+
+    return ports
+
+
 def is_coroutine_function(f):
     return asyncio.iscoroutinefunction(f) or gen.is_coroutine_function(f)
 

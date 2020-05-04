@@ -40,6 +40,7 @@ from distributed.utils import (
     LoopRunner,
     parse_bytes,
     parse_timedelta,
+    parse_ports,
     warn_on_duration,
     format_dashboard_link,
     LRU,
@@ -595,6 +596,16 @@ def test_format_dashboard_link():
         assert "hello" not in format_dashboard_link("host", 1234)
     finally:
         del os.environ["host"]
+
+
+def test_parse_ports():
+    assert parse_ports(None) == [None]
+    assert parse_ports(23) == [23]
+    assert parse_ports("45") == [45]
+    assert parse_ports("100:103") == [100, 101, 102, 103]
+
+    with pytest.raises(ValueError, match="port_stop must be greater than port_start"):
+        parse_ports("103:100")
 
 
 def test_lru():

@@ -12,7 +12,7 @@ from time import sleep
 import distributed.cli.dask_worker
 from distributed import Client, Scheduler
 from distributed.metrics import time
-from distributed.utils import sync, tmpfile
+from distributed.utils import sync, tmpfile, parse_ports
 from distributed.utils_test import popen, terminate_process, wait_for_port
 from distributed.utils_test import loop, cleanup  # noqa: F401
 
@@ -45,6 +45,66 @@ def test_nanny_worker_ports(loop):
                     d["workers"]["tcp://127.0.0.1:9684"]["nanny"]
                     == "tcp://127.0.0.1:5273"
                 )
+
+
+def test_nanny_worker_port_range(loop):
+    with popen(["dask-scheduler", "--port", "9359", "--no-dashboard"]) as sched:
+        nprocs = 3
+        worker_port = "9684:9686"
+        nanny_port = "9688:9690"
+        with popen(
+            [
+                "dask-worker",
+                "127.0.0.1:9359",
+                "--nprocs",
+                f"{nprocs}",
+                "--host",
+                "127.0.0.1",
+                "--worker-port",
+                worker_port,
+                "--nanny-port",
+                nanny_port,
+                "--no-dashboard",
+            ]
+        ) as worker:
+            with Client("127.0.0.1:9359", loop=loop) as c:
+                start = time()
+                while len(c.scheduler_info()["workers"]) < nprocs:
+                    sleep(0.1)
+                    assert time() - start < 5
+
+                def get_port(dask_worker):
+                    return dask_worker.port
+
+                expected_worker_ports = set(parse_ports(worker_port))
+                worker_ports = c.run(get_port)
+                assert set(worker_ports.values()) == expected_worker_ports
+
+                expected_nanny_ports = set(parse_ports(nanny_port))
+                nanny_ports = c.run(get_port, nanny=True)
+                assert set(nanny_ports.values()) == expected_nanny_ports
+
+
+def test_nanny_worker_port_range_too_many_workers_raises(loop):
+    with popen(["dask-scheduler", "--port", "9359", "--no-dashboard"]) as sched:
+        with popen(
+            [
+                "dask-worker",
+                "127.0.0.1:9359",
+                "--nprocs",
+                "3",
+                "--host",
+                "127.0.0.1",
+                "--worker-port",
+                "9684:9685",
+                "--nanny-port",
+                "9686:9687",
+                "--no-dashboard",
+            ]
+        ) as worker:
+            assert any(
+                b"Could not start" in worker.stderr.readline() for _ in range(100)
+            )
 
 
 def test_memory_limit(loop):
