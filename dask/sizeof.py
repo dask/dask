@@ -13,12 +13,6 @@ except (AttributeError, TypeError):  # Monkey patch
         return 100
 
 
-try:
-    from cytoolz.itertoolz import map
-except ImportError:
-    pass
-
-
 sizeof = Dispatch(name="sizeof")
 
 
