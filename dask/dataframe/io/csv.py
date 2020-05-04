@@ -797,7 +797,8 @@ def to_csv(
 
         if scheduler is not None:
             warn(
-                "The 'scheduler' keyword argument for `to_csv()` is deprecated and will be removed in a future version. "
+                "The 'scheduler' keyword argument for `to_csv()` is deprecated and"
+                "will be removed in a future version. "
                 "Please use the `compute_kwargs` argument instead. "
                 f"For example, df.to_csv(..., compute_kwargs={{scheduler: {scheduler}}})",
                 FutureWarning,
