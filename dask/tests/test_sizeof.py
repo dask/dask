@@ -129,3 +129,5 @@ def test_dict():
     assert sizeof({"x": x}) > x.nbytes
     assert sizeof({"x": [x]}) > x.nbytes
     assert sizeof({"x": [{"y": x}]}) > x.nbytes
+
+    assert sizeof({i: x for i in range(100)}) > x.nbytes * 100
