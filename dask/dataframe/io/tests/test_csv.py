@@ -1450,6 +1450,25 @@ def test_to_csv_errors_using_multiple_scheduler_args():
                 dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
             )
 
+
+def test_to_csv_keeps_all_non_scheduler_compute_kwargs():
+    from dask.multiprocessing import get as mp_get
+
+    def my_get(*args, **kwargs):
+        assert kwargs["test_kwargs_passed"] == "foobar"
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpdir() as dn:
+        ddf.to_csv(
+            dn,
+            index=False,
+            compute_kwargs={"scheduler": my_get, "test_kwargs_passed": "foobar"},
+        )
+
+
 def test_to_csv_paths():
     df = pd.DataFrame({"A": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
