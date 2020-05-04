@@ -1,25 +1,25 @@
 import contextlib
 import logging
 import math
+import os
 import shutil
-from operator import getitem
-import uuid
 import tempfile
+import uuid
 import warnings
+from operator import getitem
 
-import tlz as toolz
 import numpy as np
 import pandas as pd
-
-from .core import DataFrame, Series, _Frame, _concat, map_partitions
+import tlz as toolz
 
 from .. import base, config
-from ..base import tokenize, compute, compute_as_if_collection
+from ..base import compute, compute_as_if_collection, tokenize
 from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
-from ..utils import digit, insert, M
-from .utils import hash_object_dispatch, group_split_dispatch
+from ..utils import M, digit, insert
+from .core import DataFrame, Series, _concat, _Frame, map_partitions
+from .utils import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def set_index(
     upsample=1.0,
     divisions=None,
     partition_size=128e6,
-    **kwargs
+    **kwargs,
 ):
     """ See _Frame.set_index for docstring """
     if isinstance(index, Series) and index._name == df.index._name:
@@ -440,6 +440,143 @@ def _noop(x, cleanup_token):
     return x
 
 
+class All2All:
+    def __init__(self, n, k, stages, inputs, token, column, ignore_index):
+        self._all2all = True
+        self.n = n
+        self.k = k
+        self.stages = stages
+        self.inputs = inputs  # Input IDs
+        self.token = token
+        self.column = column
+        self.ignore_index = ignore_index
+        self.output_keys = []
+
+    def __repr__(self):
+        # return f"All2All(input_keys={self.input_keys}, output_keys={self.output_keys})"
+        return f"All2All"
+
+    def __call__(self):
+        pass
+
+    def get_tasks(self, priority=0):
+        tasks = {}
+        deps = {}
+        priorities = {}
+
+        for stage in range(1, self.stages + 1):
+
+            for inp in self.inputs:
+                in_key = str(("shuffle-join-" + self.token, stage - 1, inp))
+                key = str(("shuffle-group-" + self.token, stage, inp))
+                priorities[key] = priority
+                deps[key] = (in_key,)
+                tasks[key] = (
+                    shuffle_group,
+                    in_key,
+                    self.column,
+                    stage - 1,
+                    self.k,
+                    self.n,
+                    self.ignore_index,
+                )
+
+            for inp in self.inputs:
+                for i in range(self.k):
+                    key1 = str(("shuffle-split-" + self.token, stage, i, inp))
+                    key2 = str(("shuffle-group-" + self.token, stage, inp))
+                    priorities[key1] = 0  # See <https://github.com/dask/dask/pull/6051>
+                    deps[key1] = (key2,)
+                    tasks[key1] = (getitem, key2, i)
+
+            for inp in self.inputs:
+                out_key = str(("shuffle-join-" + self.token, stage, inp))
+                keys = tuple(
+                    str(
+                        (
+                            "shuffle-split-" + self.token,
+                            stage,
+                            inp[stage - 1],
+                            insert(inp, stage - 1, j),
+                        )
+                    )
+                    for j in range(self.k)
+                )
+                priorities[out_key] = priority
+                deps[out_key] = keys
+                tasks[out_key] = (_concat, keys)
+
+            for i, inp in enumerate(self.inputs):
+                out_key = str(("shuffle-" + self.token, i))
+                in_key = str(("shuffle-join-" + self.token, self.stages, inp))
+                deps[out_key] = (in_key,)
+                tasks[out_key] = in_key
+                self.output_keys.append(out_key)
+        print("stages: ", self.stages)
+        return tasks, deps, priorities
+
+
+def rearrange_by_column_task_generator(
+    df, column, max_branch=32, npartitions=None, ignore_index=False
+):
+    max_branch = max_branch or 32
+    n = df.npartitions
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+
+    token = tokenize(df, column, max_branch)
+
+    start = {
+        ("shuffle-join-" + token, 0, inp): (df._name, i)
+        if i < df.npartitions
+        else df._meta
+        for i, inp in enumerate(inputs)
+    }
+
+    end = {
+        ("shuffle-" + token, i): ("all2all-" + token) for i, inp in enumerate(inputs)
+    }
+
+    all2all = {
+        "all2all-"
+        + token: (
+            All2All(
+                n=n,
+                k=k,
+                stages=stages,
+                inputs=inputs,
+                token=token,
+                column=column,
+                ignore_index=ignore_index,
+            ),
+            [("shuffle-join-" + token, 0, inp) for i, inp in enumerate(inputs)],
+        )
+    }
+
+    dsk = toolz.merge(start, all2all, end)
+
+    # print("shuffle dsk: ")
+    # for k,v in dsk.items():
+    #     print(f"{k}: {v}")
+
+    # print("all2all.get_tasks(): ")
+    # for k,v in all2all["all2all-"+ token][0].get_tasks()[0].items():
+    #     print(f"{repr(k)}: {repr(v)}")
+
+    graph = HighLevelGraph.from_collections("shuffle-" + token, dsk, dependencies=[df])
+
+    return DataFrame(graph, "shuffle-" + token, df, df.divisions)
+
+
+USE_TASK_GENERATOR = os.environ.get("USE_TASK_GENERATOR", False)
+
+
 def rearrange_by_column_tasks(
     df, column, max_branch=32, npartitions=None, ignore_index=False
 ):
@@ -491,82 +628,92 @@ def rearrange_by_column_tasks(
     rearrange_by_column: parent function that calls this or rearrange_by_column_disk
     shuffle_group: does the actual splitting per-partition
     """
-    max_branch = max_branch or 32
-    n = df.npartitions
 
-    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
-    if stages > 1:
-        k = int(math.ceil(n ** (1 / stages)))
+    if USE_TASK_GENERATOR:
+        df2 = rearrange_by_column_task_generator(
+            df, column, max_branch, npartitions, ignore_index
+        )
     else:
-        k = n
+        max_branch = max_branch or 32
+        n = df.npartitions
 
-    groups = []
-    splits = []
-    joins = []
+        stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+        if stages > 1:
+            k = int(math.ceil(n ** (1 / stages)))
+        else:
+            k = n
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+        groups = []
+        splits = []
+        joins = []
 
-    token = tokenize(df, column, max_branch)
+        inputs = [
+            tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)
+        ]
 
-    start = {
-        ("shuffle-join-" + token, 0, inp): (df._name, i)
-        if i < df.npartitions
-        else df._meta
-        for i, inp in enumerate(inputs)
-    }
+        token = tokenize(df, column, max_branch)
 
-    for stage in range(1, stages + 1):
-        group = {  # Convert partition into dict of dataframe pieces
-            ("shuffle-group-" + token, stage, inp): (
-                shuffle_group,
-                ("shuffle-join-" + token, stage - 1, inp),
-                column,
-                stage - 1,
-                k,
-                n,
-                ignore_index,
-            )
-            for inp in inputs
+        start = {
+            ("shuffle-join-" + token, 0, inp): (df._name, i)
+            if i < df.npartitions
+            else df._meta
+            for i, inp in enumerate(inputs)
         }
 
-        split = {  # Get out each individual dataframe piece from the dicts
-            ("shuffle-split-" + token, stage, i, inp): (
-                getitem,
-                ("shuffle-group-" + token, stage, inp),
-                i,
-            )
-            for i in range(k)
-            for inp in inputs
+        for stage in range(1, stages + 1):
+            group = {  # Convert partition into dict of dataframe pieces
+                ("shuffle-group-" + token, stage, inp): (
+                    shuffle_group,
+                    ("shuffle-join-" + token, stage - 1, inp),
+                    column,
+                    stage - 1,
+                    k,
+                    n,
+                    ignore_index,
+                )
+                for inp in inputs
+            }
+
+            split = {  # Get out each individual dataframe piece from the dicts
+                ("shuffle-split-" + token, stage, i, inp): (
+                    getitem,
+                    ("shuffle-group-" + token, stage, inp),
+                    i,
+                )
+                for i in range(k)
+                for inp in inputs
+            }
+
+            join = {  # concatenate those pieces together, with their friends
+                ("shuffle-join-" + token, stage, inp): (
+                    _concat,
+                    [
+                        (
+                            "shuffle-split-" + token,
+                            stage,
+                            inp[stage - 1],
+                            insert(inp, stage - 1, j),
+                        )
+                        for j in range(k)
+                    ],
+                    ignore_index,
+                )
+                for inp in inputs
+            }
+            groups.append(group)
+            splits.append(split)
+            joins.append(join)
+
+        end = {
+            ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
+            for i, inp in enumerate(inputs)
         }
 
-        join = {  # concatenate those pieces together, with their friends
-            ("shuffle-join-" + token, stage, inp): (
-                _concat,
-                [
-                    (
-                        "shuffle-split-" + token,
-                        stage,
-                        inp[stage - 1],
-                        insert(inp, stage - 1, j),
-                    )
-                    for j in range(k)
-                ],
-                ignore_index,
-            )
-            for inp in inputs
-        }
-        groups.append(group)
-        splits.append(split)
-        joins.append(join)
-
-    end = {
-        ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
-        for i, inp in enumerate(inputs)
-    }
-
-    dsk = toolz.merge(start, end, *(groups + splits + joins))
-    graph = HighLevelGraph.from_collections("shuffle-" + token, dsk, dependencies=[df])
-    df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+        dsk = toolz.merge(start, end, *(groups + splits + joins))
+        graph = HighLevelGraph.from_collections(
+            "shuffle-" + token, dsk, dependencies=[df]
+        )
+        df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
