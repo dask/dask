@@ -65,23 +65,36 @@ class ArrowDatasetSubgraph(Mapping):
 
 
 def read_arrow_dataset_part(fragment, fs, schema, format, columns, filter, kwargs):
+    import pyarrow
     from pyarrow.fs import LocalFileSystem
 
     if fs is None:
         fs = LocalFileSystem()
 
-    # TODO need to make new fragment to pass new columns selection for now
-    new_fragment = format.make_fragment(
-        fragment.path,
-        fs,
-        schema=schema,
-        columns=columns,
-        filter=filter,
-        partition_expression=fragment.partition_expression,
-        **kwargs,
-    )
-    return new_fragment.to_table(use_threads=False).to_pandas()
-
+    if pyarrow.__version__ == "0.17.0":
+        # work-around need to pass columns selection to the fragment
+        # for released pyarrow 0.17
+        new_fragment = format.make_fragment(
+            fragment.path,
+            fs,
+            schema=schema,
+            columns=columns,
+            filter=filter,
+            partition_expression=fragment.partition_expression,
+            **kwargs,
+        )
+        return new_fragment.to_table(use_threads=False).to_pandas()
+    else:
+        # works with pyarrow master
+        new_fragment = format.make_fragment(
+            fragment.path,
+            fs,
+            partition_expression=fragment.partition_expression,
+            **kwargs,
+        )
+        return new_fragment.to_table(
+            use_threads=False, schema=schema, columns=columns, filter=filter
+        ).to_pandas()
 
 def read_arrow_dataset(
     path,
@@ -90,7 +103,7 @@ def read_arrow_dataset(
     filter=None,
     filesystem=None,
     format="parquet",
-    split_row_groups=True,
+    split_row_groups=False,
 ):
     """
     Read a dataset using Arrow Datasets.
