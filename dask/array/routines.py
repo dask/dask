@@ -808,6 +808,12 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
+@implements(np.iscomplexobj)
+@derived_from(np)
+def iscomplexobj(x):
+    return issubclass(x.dtype.type, np.complexfloating)
+
+
 def _unique_internal(ar, indices, counts, return_inverse=False):
     """
     Helper/wrapper function for :func:`numpy.unique`.
@@ -1260,20 +1266,19 @@ def _unravel_index_kernel(indices, func_kwargs):
 
 
 @derived_from(np)
-def unravel_index(indices, dims, order="C"):
-    # TODO: deprecate dims as well?
-    if dims and indices.size:
+def unravel_index(indices, shape, order="C"):
+    if shape and indices.size:
         unraveled_indices = tuple(
             indices.map_blocks(
                 _unravel_index_kernel,
                 dtype=np.intp,
-                chunks=(((len(dims),),) + indices.chunks),
+                chunks=(((len(shape),),) + indices.chunks),
                 new_axis=0,
-                func_kwargs={_unravel_index_keyword: dims, "order": order},
+                func_kwargs={_unravel_index_keyword: shape, "order": order},
             )
         )
     else:
-        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in dims)
+        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in shape)
 
     return unraveled_indices
 

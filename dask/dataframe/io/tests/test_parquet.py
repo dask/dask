@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 from distutils.version import LooseVersion
 
@@ -43,8 +44,12 @@ if pq and pa.__version__ < LooseVersion("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
-    SKIP_PYARROW = not pq
-    SKIP_PYARROW_REASON = "pyarrow not found"
+    if sys.platform == "win32" and pa.__version__ == LooseVersion("0.16.0"):
+        SKIP_PYARROW = True
+        SKIP_PYARROW_REASON = "https://github.com/dask/dask/issues/6093"
+    else:
+        SKIP_PYARROW = not pq
+        SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
 
@@ -639,7 +644,9 @@ def test_append_with_partition(tmpdir, engine):
         engine=engine,
     )
 
-    out = dd.read_parquet(tmp, engine=engine, gather_statistics=True).compute()
+    out = dd.read_parquet(
+        tmp, engine=engine, index="index", gather_statistics=True
+    ).compute()
     out["lon"] = out.lon.astype("int")  # just to pass assert
     # sort required since partitioning breaks index order
     assert_eq(
@@ -659,6 +666,25 @@ def test_partition_on_cats(tmpdir, engine):
     d = dd.from_pandas(d, 2)
     d.to_parquet(tmp, partition_on=["b"], engine=engine)
     df = dd.read_parquet(tmp, engine=engine)
+    assert set(df.b.cat.categories) == {"x", "y", "z"}
+
+
+@pytest.mark.parametrize("meta", [False, True])
+@pytest.mark.parametrize("stats", [False, True])
+def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
+    check_pyarrow()
+
+    tmp = str(tmpdir)
+    d = pd.DataFrame(
+        {
+            "a": np.random.rand(50),
+            "b": np.random.choice(["x", "y", "z"], size=50),
+            "c": np.random.choice(["x", "y", "z"], size=50),
+        }
+    )
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=["b"], engine="pyarrow", write_metadata_file=meta)
+    df = dd.read_parquet(tmp, engine="pyarrow", gather_statistics=stats)
     assert set(df.b.cat.categories) == {"x", "y", "z"}
 
 
@@ -1000,9 +1026,14 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
             ("partition_column", pa.int64()),
         ]
     )
-    ddf.to_parquet(
-        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
+    fut = ddf.to_parquet(
+        str(tmpdir),
+        compute=False,
+        engine="pyarrow",
+        partition_on="partition_column",
+        schema=schema,
     )
+    fut.compute(scheduler="single-threaded")
     ddf_after_write = (
         dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
         .compute()
@@ -1091,7 +1122,7 @@ def test_partition_on_string(tmpdir, partition_on):
         assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_filters_categorical(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     cats = ["2018-01-01", "2018-01-02", "2018-01-03", "2018-01-04"]
@@ -1104,7 +1135,10 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
     ddftest = dd.from_pandas(dftest, npartitions=4).set_index("dummy")
     ddftest.to_parquet(tmpdir, partition_on="DatePart", engine=write_engine)
     ddftest_read = dd.read_parquet(
-        tmpdir, engine=read_engine, filters=[(("DatePart", "<=", "2018-01-02"))]
+        tmpdir,
+        index="dummy",
+        engine=read_engine,
+        filters=[(("DatePart", "<=", "2018-01-02"))],
     )
     assert len(ddftest_read) == 2
 
@@ -1762,9 +1796,9 @@ def test_arrow_partitioning(tmpdir):
     }
     pdf = pd.DataFrame(data)
     ddf = dd.from_pandas(pdf, npartitions=2)
-    ddf.to_parquet(path, engine="pyarrow", partition_on="p")
+    ddf.to_parquet(path, engine="pyarrow", write_index=False, partition_on="p")
 
-    ddf = dd.read_parquet(path, engine="pyarrow")
+    ddf = dd.read_parquet(path, index=False, engine="pyarrow")
 
     ddf.astype({"b": np.float32}).compute()
 
@@ -1900,13 +1934,25 @@ def test_categories_large(tmpdir, engine):
 
 
 @write_read_engines()
-def test_read_glob_nostats(tmpdir, write_engine, read_engine):
+def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
 
     ddf2 = dd.read_parquet(
         os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
     )
+    assert_eq(ddf, ddf2, check_divisions=False)
+
+
+@write_read_engines()
+def test_read_glob_yes_stats(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    import glob
+
+    paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
+    paths.append(os.path.join(tmp_path, "_metadata"))
+    ddf2 = dd.read_parquet(paths, engine=read_engine, gather_statistics=False)
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
@@ -2122,6 +2168,36 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
 
+def test_split_row_groups_filter_pyarrow(tmpdir):
+    check_pyarrow()
+    tmp = str(tmpdir)
+    df = pd.DataFrame(
+        {"i32": np.arange(800, dtype=np.int32), "f": np.arange(800, dtype=np.float64)}
+    )
+    df.index.name = "index"
+    search_val = 600
+    filters = [("f", "==", search_val)]
+
+    dd.from_pandas(df, npartitions=4).to_parquet(
+        tmp, append=True, engine="pyarrow", row_group_size=50
+    )
+
+    ddf2 = dd.read_parquet(tmp, engine="pyarrow")
+    ddf3 = dd.read_parquet(
+        tmp,
+        engine="pyarrow",
+        gather_statistics=True,
+        split_row_groups=False,
+        filters=filters,
+    )
+
+    assert search_val in ddf3["i32"]
+    assert_eq(
+        ddf2[ddf2["i32"] == search_val].compute(),
+        ddf3[ddf3["i32"] == search_val].compute(),
+    )
+
+
 def test_optimize_getitem_and_nonblockwise(tmpdir):
     check_engine()
     path = os.path.join(tmpdir, "path.parquet")
@@ -2260,3 +2336,56 @@ def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
 
     ddf = dd.read_parquet(path, engine=engine)
     a, b = dask.optimize(ddf["A"], ddf)
+
+
+@pytest.mark.parametrize("gather_statistics", [None, True])
+@write_read_engines()
+def test_filter_nonpartition_columns(
+    tmpdir, write_engine, read_engine, gather_statistics
+):
+    tmpdir = str(tmpdir)
+    df_write = pd.DataFrame(
+        {
+            "id": [1, 2, 3, 4] * 4,
+            "time": np.arange(16),
+            "random": np.random.choice(["cat", "dog"], size=16),
+        }
+    )
+    ddf_write = dd.from_pandas(df_write, npartitions=4)
+    ddf_write.to_parquet(
+        tmpdir, write_index=False, partition_on=["id"], engine=write_engine
+    )
+    ddf_read = dd.read_parquet(
+        tmpdir,
+        index=False,
+        engine=read_engine,
+        gather_statistics=gather_statistics,
+        filters=[(("time", "<", 5))],
+    )
+    df_read = ddf_read.compute()
+    assert len(df_read) == len(df_read[df_read["time"] < 5])
+    assert df_read["time"].max() < 5
+
+
+def test_pandas_metadata_nullable_pyarrow(tmpdir):
+
+    check_pyarrow()
+    if pa.__version__ < LooseVersion("0.16.0") or pd.__version__ < LooseVersion(
+        "1.0.0"
+    ):
+        pytest.skip("PyArrow>=0.16 and Pandas>=1.0.0 Required.")
+    tmpdir = str(tmpdir)
+
+    ddf1 = dd.from_pandas(
+        pd.DataFrame(
+            {
+                "A": pd.array([1, None, 2], dtype="Int64"),
+                "B": pd.array(["dog", "cat", None], dtype="str"),
+            }
+        ),
+        npartitions=1,
+    )
+    ddf1.to_parquet(tmpdir, engine="pyarrow")
+    ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
+
+    assert_eq(ddf1, ddf2, check_index=False)
