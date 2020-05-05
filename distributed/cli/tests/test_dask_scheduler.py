@@ -241,6 +241,7 @@ _scheduler_info = {}
 
 def dask_setup(scheduler):
     _scheduler_info['address'] = scheduler.address
+    scheduler.foo = "bar"
 
 def get_scheduler_address():
     return _scheduler_info['address']
@@ -297,6 +298,27 @@ def test_preload_module(loop):
                     assert c.run_on_scheduler(check_scheduler) == c.scheduler.address
     finally:
         shutil.rmtree(tmpdir)
+
+
+def test_preload_remote_module(loop, tmpdir):
+    with open(tmpdir / "scheduler_info.py", "w") as f:
+        f.write(PRELOAD_TEXT)
+
+    with popen(["python", "-m", "http.server", "9382"], cwd=tmpdir):
+        with popen(
+            [
+                "dask-scheduler",
+                "--scheduler-file",
+                tmpdir / "scheduler-file.json",
+                "--preload",
+                "http://localhost:9382/scheduler_info.py",
+            ],
+        ) as proc:
+            with Client(scheduler_file=tmpdir / "scheduler-file.json", loop=loop) as c:
+                assert (
+                    c.run_on_scheduler(lambda dask_scheduler: dask_scheduler.foo)
+                    == "bar"
+                )
 
 
 PRELOAD_COMMAND_TEXT = """

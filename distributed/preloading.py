@@ -34,7 +34,11 @@ def validate_preload_argv(ctx, param, value):
             % ("s" if len(value) > 1 else "", " ".join(value))
         )
 
-    preload_modules = {name: _import_module(name) for name in ctx.params.get("preload")}
+    preload_modules = {
+        name: _import_module(name)
+        for name in ctx.params.get("preload")
+        if not is_webaddress(name)
+    }
 
     preload_commands = [
         getattr(m, "dask_setup", None)
