@@ -1466,7 +1466,7 @@ Dask Name: {name}, {task} tasks"""
             min_periods=min_periods,
             adjust=adjust,
             ignore_na=ignore_na,
-            axis=0,
+            axis=axis,
         )
 
     @derived_from(pd.DataFrame)
