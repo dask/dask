@@ -210,7 +210,7 @@ def getem(
     """
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    keys = product([out_name], *[range(len(bds)) for bds in chunks])
+    keys = product([out_name], *(range(len(bds)) for bds in chunks))
     slices = slices_from_chunks(chunks)
 
     if (
