@@ -1619,7 +1619,7 @@ class Array(DaskMethodsMixin):
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
         )
 
-        keys = product(*[range(len(c)) for c in chunks])
+        keys = product(*(range(len(c)) for c in chunks))
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
