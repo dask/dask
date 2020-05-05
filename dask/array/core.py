@@ -210,7 +210,7 @@ def getem(
     """
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    keys = product([out_name], *[range(len(bds)) for bds in chunks])
+    keys = product([out_name], *(range(len(bds)) for bds in chunks))
     slices = slices_from_chunks(chunks)
 
     if (
@@ -1619,7 +1619,7 @@ class Array(DaskMethodsMixin):
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
         )
 
-        keys = product(*[range(len(c)) for c in chunks])
+        keys = product(*(range(len(c)) for c in chunks))
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
