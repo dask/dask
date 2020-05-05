@@ -22,6 +22,7 @@ from .core import (
     broadcast_arrays,
     cached_cumsum,
 )
+from .ufunc import rint
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
@@ -1017,6 +1018,14 @@ def pad_reuse(array, pad_width, mode, *args):
     return result
 
 
+def _round_if_needed(arr, dtype):
+    if np.issubdtype(dtype, np.integer):
+        rint(arr, out=arr)
+        return arr.astype(dtype)
+
+    return arr
+
+
 def pad_stats(array, pad_width, mode, *args):
     """
     Helper function for padding boundaries with statistics from the array.
@@ -1070,6 +1079,9 @@ def pad_stats(array, pad_width, mode, *args):
                 result_idx = result_idx.min(axis=axes, keepdims=True)
 
             result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
+
+            if mode == "mean":
+                result_idx = _round_if_needed(result_idx, array.dtype)
 
         result[idx] = result_idx
 

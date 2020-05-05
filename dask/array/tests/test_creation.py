@@ -735,12 +735,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
             ),
         ),
         "maximum",
-        pytest.param(
-            "mean",
-            marks=pytest.mark.skip(
-                reason="Bug dask changes the dtype to float: https://github.com/dask/dask/issues/5303"
-            ),
-        ),
+        "mean",
         "minimum",
         pytest.param(
             "reflect",
