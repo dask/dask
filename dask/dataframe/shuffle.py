@@ -506,12 +506,12 @@ class All2All:
                 deps[out_key] = keys
                 tasks[out_key] = (_concat, keys)
 
-            for i, inp in enumerate(self.inputs):
-                out_key = str(("shuffle-" + self.token, i))
-                in_key = str(("shuffle-join-" + self.token, self.stages, inp))
-                deps[out_key] = (in_key,)
-                tasks[out_key] = in_key
-                self.output_keys.append(out_key)
+        for i, inp in enumerate(self.inputs):
+            out_key = str(("shuffle-" + self.token, i))
+            in_key = str(("shuffle-join-" + self.token, self.stages, inp))
+            deps[out_key] = (in_key,)
+            tasks[out_key] = in_key
+            self.output_keys.append(out_key)
         print("stages: ", self.stages)
         return tasks, deps, priorities
 
