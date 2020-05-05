@@ -29,9 +29,10 @@ def sizeof_python_collection(seq):
     num_items = len(seq)
     samples = 10
     if num_items > samples:
-        return getsizeof(seq) + num_items / samples * sum(
+        s = getsizeof(seq) + num_items / samples * sum(
             map(sizeof, random.sample(seq, samples))
         )
+        return int(s)
     else:
         return getsizeof(seq) + sum(map(sizeof, seq))
 

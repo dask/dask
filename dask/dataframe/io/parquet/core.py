@@ -289,6 +289,7 @@ def to_parquet(
     storage_options=None,
     write_metadata_file=True,
     compute=True,
+    compute_kwargs=None,
     **kwargs
 ):
     """Store Dask.dataframe to Parquet files
@@ -331,6 +332,8 @@ def to_parquet(
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -453,7 +456,9 @@ def to_parquet(
         )
 
     if compute:
-        out = out.compute()
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+        out = out.compute(**compute_kwargs)
     return out
 
 
