@@ -2062,7 +2062,7 @@ def test_read_inconsistent_schema_pyarrow(tmpdir):
     df2.val = df2.val.astype(other_type)
 
     df_expect = pd.concat([df1, df2], ignore_index=True)
-    df_expect.val = df_expect.val.astype(desired_type)
+    df_expect['val'] = df_expect.val.astype(desired_type)
 
     df1.to_parquet(os.path.join(tmpdir, "0.parquet"))
     df2.to_parquet(os.path.join(tmpdir, "1.parquet"))
