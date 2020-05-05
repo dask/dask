@@ -45,7 +45,7 @@ from .comm import (
     unparse_host_port,
 )
 from .comm.addressing import addresses_from_user_args
-from .core import rpc, connect, send_recv, clean_exception, CommClosedError
+from .core import rpc, send_recv, clean_exception, CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
 
 from .http import get_handlers
@@ -2973,11 +2973,12 @@ class Scheduler(ServerNode):
             addresses = workers
 
         async def send_message(addr):
-            comm = await connect(
-                addr, deserialize=self.deserialize, connection_args=self.connection_args
-            )
+            comm = await self.rpc.connect(addr)
             comm.name = "Scheduler Broadcast"
-            resp = await send_recv(comm, close=True, serializers=serializers, **msg)
+            try:
+                resp = await send_recv(comm, close=True, serializers=serializers, **msg)
+            finally:
+                self.rpc.reuse(addr, comm)
             return resp
 
         results = await All(

@@ -37,6 +37,7 @@ from distributed.utils_test import (  # noqa: F401
     cluster,
     div,
     varying,
+    tls_only_security,
 )
 from distributed.utils_test import loop, nodebug  # noqa: F401
 from dask.compatibility import apply
@@ -513,6 +514,18 @@ async def test_restart(c, s, a, b):
 
 @gen_cluster()
 async def test_broadcast(s, a, b):
+    result = await s.broadcast(msg={"op": "ping"})
+    assert result == {a.address: b"pong", b.address: b"pong"}
+
+    result = await s.broadcast(msg={"op": "ping"}, workers=[a.address])
+    assert result == {a.address: b"pong"}
+
+    result = await s.broadcast(msg={"op": "ping"}, hosts=[a.ip])
+    assert result == {a.address: b"pong", b.address: b"pong"}
+
+
+@gen_cluster(security=tls_only_security(),)
+async def test_broadcast_tls(s, a, b):
     result = await s.broadcast(msg={"op": "ping"})
     assert result == {a.address: b"pong", b.address: b"pong"}
 
