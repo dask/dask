@@ -1023,6 +1023,9 @@ def _round_if_needed(arr, dtype):
         rint(arr, out=arr)
         return arr.astype(dtype)
 
+    if dtype == np.bool:
+        return arr.astype(dtype)
+
     return arr
 
 
