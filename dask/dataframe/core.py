@@ -1455,7 +1455,7 @@ Dask Name: {name}, {task} tasks"""
         """Provides ewm transformations.
             TODO: rest of the docs
         """
-        from dask.dataframe.EWM import EWM
+        from dask.dataframe.ewm import EWM
 
         return EWM(
             self,
