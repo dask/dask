@@ -70,7 +70,7 @@ def pandas_ewm_method(df, ewm_kwargs, name, *args, **kwargs):
     return getattr(ewm, name)(*args, **kwargs)
 
 
-class EWM(object):
+class EWM:
     """Provides exponentially weighted calculations."""
 
     def __init__(
