@@ -130,4 +130,6 @@ def test_dict():
     assert sizeof({"x": [x]}) > x.nbytes
     assert sizeof({"x": [{"y": x}]}) > x.nbytes
 
-    assert sizeof({i: x for i in range(100)}) > x.nbytes * 100
+    d = {i: x for i in range(100)}
+    assert sizeof(d) > x.nbytes * 100
+    assert isinstance(sizeof(d), int)
