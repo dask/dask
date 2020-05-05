@@ -1189,7 +1189,7 @@ _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 def isnonzero(a):
     if a.dtype.kind in {"U", "S"}:
-        # NumPy treats all-whitespace strings as falsy in some places (where).
+        # NumPy treats all-whitespace strings as falsy (like in `np.nonzero`).
         # but not in `.astype(bool)`. To match the behavior of numpy at least until
         # 1.19, we use `_isnonzero_vec`. When NumPy changes behavior, we should just
         # use the try block below.
