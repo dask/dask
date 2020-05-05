@@ -732,7 +732,12 @@ def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = "fromfunction-" + tokenize(func, chunks, shape, dtype, kwargs)
     keys = product([name], *(range(len(bd)) for bd in chunks))
-    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
+
+    def accumulate_gen(chunks):
+        for bd in chunks:
+            yield accumulate(add, (0,) + bd[:-1])
+
+    aggdims = accumulate_gen(chunks)
     offsets = product(*aggdims)
     shapes = product(*chunks)
     dtype = dtype or float
