@@ -526,10 +526,18 @@ def fuse(
     reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
     if keys:
         reducible -= keys
+        keys = set(keys)
+    else:
+        keys = set()
 
     for k, v in dsk.items():
         if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
             reducible.discard(k)
+
+        # Disable fusion of shuffle
+        if (type(k) is tuple and "shuffle" in k[0]) or "all2all" in k:
+            reducible.discard(k)
+            keys.add(k)
 
     if not reducible and (
         not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
