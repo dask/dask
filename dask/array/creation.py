@@ -731,7 +731,7 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
 def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = "fromfunction-" + tokenize(func, chunks, shape, dtype, kwargs)
-    keys = product([name], *[range(len(bd)) for bd in chunks])
+    keys = product([name], *(range(len(bd)) for bd in chunks))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
     offsets = product(*aggdims)
     shapes = product(*chunks)
