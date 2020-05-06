@@ -354,7 +354,15 @@ def pivot_count(df, index, columns, values):
 concat_dispatch = Dispatch("concat")
 
 
-def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore_index=False, **kwargs):
+def concat(
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    ignore_index=False,
+    **kwargs
+):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
@@ -390,7 +398,13 @@ def concat(dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(
-    dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore_index=False, **kwargs
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    ignore_index=False,
+    **kwargs
 ):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **kwargs)
