@@ -1,3 +1,4 @@
+from itertools import zip_longest
 import os
 import warnings
 
@@ -511,6 +512,16 @@ def test_reduction_names():
     assert x.all().name.startswith("all")
     assert any(k[0].startswith("nansum") for k in da.nansum(x).dask)
     assert x.mean().name.startswith("mean")
+
+
+def test_general_reduction_names():
+    dtype = np.int
+    a = da.reduction(
+        da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
+    )
+    names, tokens = list(zip_longest(*[key[0].rsplit("-", 1) for key in a.dask]))
+    assert set(names) == {"ones", "foo", "foo-partial", "foo-aggregate"}
+    assert all(tokens)
 
 
 @pytest.mark.filterwarnings("ignore:`argmax` is not implemented by dask")
