@@ -15,7 +15,6 @@ from .core import _concatenate2, Array, handle_out, implements
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange, diagonal
-from .ufunc import sqrt
 from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
@@ -727,7 +726,7 @@ def moment_agg(
     if isinstance(denominator, Number):
         if denominator < 0:
             denominator = np.nan
-    else:
+    elif denominator is not np.ma.masked:
         denominator[denominator < 0] = np.nan
 
     return divide(M, denominator, dtype=dtype)
@@ -812,9 +811,30 @@ with ignoring(AttributeError):
     nanvar = derived_from(np)(nanvar)
 
 
+def _sqrt(a):
+    o = np.sqrt(a)
+    if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
+        return np.ma.masked
+    return o
+
+
+def safe_sqrt(a):
+    """A version of sqrt that properly handles scalar masked arrays.
+
+    To mimic ``np.ma`` reductions, we need to convert scalar masked arrays that
+    have an active mask to the ``np.ma.masked`` singleton. This is properly
+    handled automatically for reduction code, but not for ufuncs. We implement
+    a simple version here, since calling `np.ma.sqrt` everywhere is
+    significantly more expensive.
+    """
+    if hasattr(a, "_elemwise"):
+        return a._elemwise(_sqrt, a)
+    return _sqrt(a)
+
+
 @derived_from(np)
 def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None):
-    result = sqrt(
+    result = safe_sqrt(
         var(
             a,
             axis=axis,
@@ -834,7 +854,7 @@ def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
 def nanstd(
     a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
 ):
-    result = sqrt(
+    result = safe_sqrt(
         nanvar(
             a,
             axis=axis,
