@@ -2,11 +2,12 @@ import operator
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
+from dask.dataframe import _compat
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     make_meta,
@@ -211,9 +212,27 @@ def test_categorize():
         ddf.categorize(split_every="foo")
 
 
+def test_categorical_dtype():
+    cat_dtype = dd.categorical.categorical_dtype(
+        meta=a, categories=["a", "b", "c"], ordered=False
+    )
+    assert_eq(cat_dtype.categories, pd.Index(["a", "b", "c"]))
+    assert_eq(cat_dtype.ordered, False)
+
+    cat_dtype = dd.categorical.categorical_dtype(meta=a, categories=["a", "b", "c"])
+    assert_eq(cat_dtype.categories, pd.Index(["a", "b", "c"]))
+    assert_eq(cat_dtype.ordered, False)
+
+    cat_dtype = dd.categorical.categorical_dtype(
+        meta=a, categories=[1, 100, 200], ordered=True
+    )
+    assert_eq(cat_dtype.categories, pd.Index([1, 100, 200]))
+    assert_eq(cat_dtype.ordered, True)
+
+
 def test_categorize_index():
     # Object dtype
-    ddf = dd.from_pandas(tm.makeDataFrame(), npartitions=5)
+    ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
     df = ddf.compute()
 
     ddf2 = ddf.categorize()
@@ -264,6 +283,23 @@ def test_categorical_set_index(shuffle):
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
         assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+
+
+@pytest.mark.parametrize("ncategories", [1, 3, 6])
+@pytest.mark.parametrize("npartitions", [1, 3, 6])
+def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategories):
+    """https://github.com/dask/dask/issues/5343"""
+    rows_per_category = 10
+    n_rows = ncategories * rows_per_category
+
+    categories = ["CAT" + str(i) for i in range(ncategories)]
+    pdf = pd.DataFrame(
+        {"id": categories * rows_per_category, "value": np.random.random(n_rows)}
+    )
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+    ddf["id"] = ddf["id"].astype("category").cat.as_ordered()
+    ddf = ddf.set_index("id")
+    # Test passes if this worked and didn't raise any warnings
 
 
 @pytest.mark.parametrize("npartitions", [1, 4])

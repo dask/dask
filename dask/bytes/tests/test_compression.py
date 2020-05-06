@@ -1,15 +1,13 @@
 from io import BytesIO
-import sys
 
 import pytest
 from fsspec.compression import compr
-from ..utils import compress
+
+from dask.bytes.utils import compress
 
 
 @pytest.mark.parametrize("fmt,File", compr.items())
 def test_files(fmt, File):
-    if fmt == "zip" and sys.version_info.minor == 5:
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compression function not provided")
     if fmt is None:

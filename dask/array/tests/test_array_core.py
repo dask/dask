@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import copy
 
 import pytest
@@ -6,19 +5,20 @@ import pytest
 np = pytest.importorskip("numpy")
 
 import os
-import sys
 import time
+from io import StringIO
 from distutils.version import LooseVersion
 import operator
 from operator import add, sub, getitem
 from threading import Lock
 import warnings
 
-from toolz import merge, countby, concat
-from toolz.curried import identity
+from tlz import merge, countby, concat
+from tlz.curried import identity
 
 import dask
 import dask.array as da
+import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
@@ -45,8 +45,11 @@ from dask.array.core import (
     common_blockdim,
     concatenate_axes,
 )
-from dask.blockwise import make_blockwise_graph as top, broadcast_dimensions
-from dask.array.numpy_compat import _numpy_117
+from dask.blockwise import (
+    make_blockwise_graph as top,
+    broadcast_dimensions,
+    optimize_blockwise,
+)
 from dask.array.utils import assert_eq, same_keys
 
 from numpy import nancumsum, nancumprod
@@ -241,7 +244,6 @@ def test_Array_computation():
     LooseVersion(np.__version__) < "1.14.0",
     reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
 )
-@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.inv` breaking")
 def test_Array_numpy_gufunc_call__array_ufunc__01():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -255,7 +257,6 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
     LooseVersion(np.__version__) < "1.14.0",
     reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
 )
-@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.eig` breaking")
 def test_Array_numpy_gufunc_call__array_ufunc__02():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -859,9 +860,6 @@ def test_field_access_with_shape():
     assert_eq(x[["col1", "col2"]], data[["col1", "col2"]])
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 5), reason="Matrix multiplication operator only after Py3.5"
-)
 def test_matmul():
     x = np.random.random((5, 5))
     y = np.random.random((5, 2))
@@ -975,6 +973,20 @@ def test_broadcast_arrays():
 
     for e_a_r, e_d_r in zip(a_r, d_r):
         assert_eq(e_a_r, e_d_r)
+
+
+def test_broadcast_arrays_uneven_chunks():
+    x = da.ones(30, chunks=(3,))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
+
+    x = da.ones((1, 30), chunks=(1, 3))
+    y = da.ones(30, chunks=(5,))
+    z = np.broadcast_arrays(x, y)
+
+    assert_eq(z, z)
 
 
 @pytest.mark.parametrize(
@@ -1362,6 +1374,14 @@ def test_map_blocks_with_kwargs():
     assert_eq(result, np.array([4, 9]))
 
 
+def test_map_blocks_infer_chunks_broadcast():
+    dx = da.from_array([[1, 2, 3, 4]], chunks=((1,), (2, 2)))
+    dy = da.from_array([[10, 20], [30, 40]], chunks=((1, 1), (2,)))
+    result = da.map_blocks(lambda x, y: x + y, dx, dy)
+    assert result.chunks == ((1, 1), (2, 2),)
+    assert_eq(result, np.array([[11, 22, 13, 24], [31, 42, 33, 44]]))
+
+
 def test_map_blocks_with_chunks():
     dx = da.ones((5, 3), chunks=(2, 2))
     dy = da.ones((5, 3), chunks=(2, 2))
@@ -1413,6 +1433,19 @@ def test_map_blocks_no_array_args():
     assert_eq(x, np.arange(8, dtype=np.float32))
 
 
+@pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
+def test_map_blocks_optimize_blockwise(func):
+    # Check that map_blocks layers can merge with elementwise layers
+    base = [da.full((1,), i, chunks=1) for i in range(4)]
+    a = base[0] + base[1]
+    b = da.map_blocks(func, a, base[2], dtype=np.int8)
+    c = b + base[3]
+    dsk = c.__dask_graph__()
+    optimized = optimize_blockwise(dsk)
+    # The two additions and the map_blocks should be fused together
+    assert len(optimized.layers) == len(dsk.layers) - 2
+
+
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
     assert key_split(d.name) in repr(d)
@@ -1420,6 +1453,16 @@ def test_repr():
     assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
+
+
+def test_repr_meta():
+    d = da.ones((4, 4), chunks=(2, 2))
+    assert "chunktype=numpy.ndarray" in repr(d)
+
+    # Test non-numpy meta
+    sparse = pytest.importorskip("sparse")
+    s = d.map_blocks(sparse.COO)
+    assert "chunktype=sparse.COO" in repr(s)
 
 
 def test_slicing_with_ellipsis():
@@ -1845,7 +1888,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x")
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1853,7 +1896,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x", chunks=None)
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1861,7 +1904,7 @@ def test_to_hdf5():
 
     with tmpfile(".hdf5") as fn:
         x.to_hdf5(fn, "/x", chunks=(1, 1))
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
 
             assert_eq(d[:], x)
@@ -1870,7 +1913,7 @@ def test_to_hdf5():
     with tmpfile(".hdf5") as fn:
         da.to_hdf5(fn, {"/x": x, "/y": y})
 
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="r+") as f:
             assert_eq(f["/x"][:], x)
             assert f["/x"].chunks == (2, 2)
             assert_eq(f["/y"][:], y)
@@ -2327,6 +2370,27 @@ def test_from_array_copy():
     assert y.compute() is not y_c.compute()
 
 
+def test_from_array_dask_array():
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=(1, 2))
+    with pytest.raises(ValueError):
+        da.from_array(dx)
+
+
+def test_from_array_dask_collection_warns():
+    class CustomCollection(np.ndarray):
+        def __dask_graph__(self):
+            return {"bar": 1}
+
+    x = CustomCollection([1, 2, 3])
+    with pytest.warns(UserWarning):
+        da.from_array(x)
+
+    # Ensure da.array warns too
+    with pytest.warns(UserWarning):
+        da.array(x)
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
@@ -2354,11 +2418,18 @@ def test_asarray_h5py():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
             x = da.asarray(d)
             assert d in x.dask.values()
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+
+
+def test_asarray_chunks():
+    with dask.config.set({"array.chunk-size": "100 B"}):
+        x = np.ones(1000)
+        d = da.asarray(x)
+        assert d.npartitions > 1
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass")
@@ -2388,6 +2459,13 @@ def test_asanyarray_dataframe():
     dx = da.asanyarray(ddf.x)
     assert isinstance(dx, da.Array)
 
+    assert_eq(x, dx)
+
+
+def test_asanyarray_datetime64():
+    x = np.array(["2000-01-01"], dtype="datetime64")
+    dx = da.asanyarray(x)
+    assert isinstance(dx, da.Array)
     assert_eq(x, dx)
 
 
@@ -2570,7 +2648,7 @@ def test_h5py_newaxis():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile("h5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
             d = da.from_array(x, chunks=(5, 5))
             assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
@@ -2778,6 +2856,7 @@ def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(2, 3))
 
+    assert_eq(x.view(), d.view())
     assert_eq(x.view("i4"), d.view("i4"))
     assert_eq(x.view("i2"), d.view("i2"))
     assert all(isinstance(s, int) for s in d.shape)
@@ -2806,8 +2885,8 @@ def test_h5py_tokenize():
     h5py = pytest.importorskip("h5py")
     with tmpfile("hdf5") as fn1:
         with tmpfile("hdf5") as fn2:
-            f = h5py.File(fn1)
-            g = h5py.File(fn2)
+            f = h5py.File(fn1, mode="a")
+            g = h5py.File(fn2, mode="a")
 
             f["x"] = np.arange(10).astype(float)
             g["x"] = np.ones(10).astype(float)
@@ -2832,6 +2911,9 @@ def test_map_blocks_with_changed_dimension():
 
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
+
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b.sum(axis=1), chunks=((3, 4),), drop_axis=1)
 
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
@@ -3002,7 +3084,7 @@ def test_cumulative():
     assert_eq(da.nancumsum(x, axis=0), nancumsum(np.arange(20)))
     assert_eq(da.nancumprod(x, axis=0), nancumprod(np.arange(20)))
 
-    a = np.random.random((20))
+    a = np.random.random(20)
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
@@ -3357,10 +3439,20 @@ def test_index_array_with_array_1d():
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(x[x > 6], dx[dx > 6])
+    assert_eq(x[x % 2 == 0], dx[dx % 2 == 0])
+
+    # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    assert sorted(x[x % 2 == 0].tolist()) == sorted(dx[dx % 2 == 0].compute().tolist())
-    assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+    with pytest.warns(UserWarning, match="different ordering") as record:
+        assert sorted(x[x % 2 == 0].tolist()) == sorted(
+            dx[dx % 2 == 0].compute().tolist()
+        )
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
+
+    assert len(record) == 2
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")
@@ -3490,7 +3582,7 @@ def test_concatenate_errs():
 
 def test_stack_errs():
     with pytest.raises(ValueError) as e:
-        da.stack([da.zeros((2,), chunks=(2))] * 10 + [da.zeros((3,), chunks=(3))] * 10)
+        da.stack([da.zeros((2,), chunks=2)] * 10 + [da.zeros((3,), chunks=3)] * 10)
 
     assert "shape" in str(e.value).lower()
     assert "(2,)" in str(e.value)
@@ -3692,6 +3784,18 @@ def test_zarr_return_stored(compute):
         assert a2.chunks == a.chunks
 
 
+def test_to_zarr_delayed_creates_no_metadata():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.from_array([42])
+        result = a.to_zarr(d, compute=False)
+        assert not os.listdir(d)  # No .zarray file
+        # Verify array still created upon compute.
+        result.compute()
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+
+
 def test_zarr_existing_array():
     zarr = pytest.importorskip("zarr")
     c = (1, 1)
@@ -3784,11 +3888,6 @@ def test_zarr_nocompute():
         assert a2.chunks == a.chunks
 
 
-@pytest.mark.skipif(
-    sys.version_info[0:2] == (3, 5),
-    reason="Skipping TileDB with python 3.5 because the tiledb-py "
-    "conda-forge package is too old, and is not updatable.",
-)
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
@@ -3822,11 +3921,6 @@ def test_tiledb_roundtrip():
         assert a.chunks == tdb.chunks
 
 
-@pytest.mark.skipif(
-    sys.version_info[0:2] == (3, 5),
-    reason="Skipping TileDB with python 3.5 because the tiledb-py "
-    "conda-forge package is too old, and is not updatable.",
-)
 def test_tiledb_multiattr():
     tiledb = pytest.importorskip("tiledb")
     dom = tiledb.Domain(
@@ -4034,13 +4128,13 @@ def test_auto_chunks_h5py():
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f.create_dataset(
                 "/x", shape=(1000, 1000), chunks=(32, 64), dtype="float64"
             )
             d[:] = 1
 
-        with h5py.File(fn) as f:
+        with h5py.File(fn, mode="a") as f:
             d = f["x"]
             with dask.config.set({"array.chunk-size": "1 MiB"}):
                 x = da.from_array(d)
@@ -4049,18 +4143,160 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
-    x = da.ones((15, 15), chunks=(5, 5))
+    with pytest.warns(None) as record:
+        x = da.ones((3, 10, 10), chunks=(3, 2, 2))
+        da.map_blocks(lambda y: np.mean(y, axis=0), x, dtype=x.dtype, drop_axis=0)
+    assert not record
 
     with pytest.warns(None) as record:
+        x = da.ones((15, 15), chunks=(5, 5))
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
+    assert not record
 
+    with pytest.warns(None) as record:
+        x = da.ones((1,), chunks=(1,))
+        1 / x[0]
     assert not record
 
 
-@pytest.mark.xfail(_numpy_117, reason="sparse-257", strict=True)
 def test_from_array_meta():
     sparse = pytest.importorskip("sparse")
     x = np.ones(10)
     meta = sparse.COO.from_numpy(x)
     y = da.from_array(x, meta=meta)
     assert isinstance(y._meta, sparse.COO)
+
+
+def test_compute_chunk_sizes():
+    x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
+    y = x[x < 0]
+    assert np.isnan(y.shape[0])
+    assert y.chunks == ((np.nan,) * 5,)
+
+    z = y.compute_chunk_sizes()
+    assert y is z
+    assert z.chunks == ((10, 10, 5, 0, 0),)
+    assert len(z) == 25
+
+
+def test_compute_chunk_sizes_2d_array():
+    X = np.linspace(-1, 1, num=9 * 4).reshape(9, 4)
+    X = da.from_array(X, chunks=(3, 4))
+    idx = X.sum(axis=1) > 0
+    Y = X[idx]
+
+    # This is very similar to the DataFrame->Array conversion
+    assert np.isnan(Y.shape[0]) and Y.shape[1] == 4
+    assert Y.chunks == ((np.nan, np.nan, np.nan), (4,))
+
+    Z = Y.compute_chunk_sizes()
+    assert Y is Z
+    assert Z.chunks == ((0, 1, 3), (4,))
+    assert Z.shape == (4, 4)
+
+
+def test_compute_chunk_sizes_3d_array(N=8):
+    X = np.linspace(-1, 2, num=8 * 8 * 8).reshape(8, 8, 8)
+    X = da.from_array(X, chunks=(4, 4, 4))
+    idx = X.sum(axis=0).sum(axis=0) > 0
+    Y = X[idx]
+    idx = X.sum(axis=1).sum(axis=1) < 0
+    Y = Y[:, idx]
+    idx = X.sum(axis=2).sum(axis=1) > 0.1
+    Y = Y[:, :, idx]
+
+    # Checking to make sure shapes are different on outputs
+    assert Y.compute().shape == (8, 3, 5)
+    assert X.compute().shape == (8, 8, 8)
+
+    assert Y.chunks == ((np.nan, np.nan),) * 3
+    assert all(np.isnan(s) for s in Y.shape)
+    Z = Y.compute_chunk_sizes()
+    assert Z is Y
+    assert Z.shape == (8, 3, 5)
+    assert Z.chunks == ((4, 4), (3, 0), (1, 4))
+
+
+def _known(num=50):
+    return da.from_array(np.linspace(-1, 1, num=num), chunks=10)
+
+
+@pytest.fixture()
+def unknown():
+    x = _known()
+    y = x[x < 0]
+    assert y.chunks == ((np.nan,) * 5,)
+    return y
+
+
+def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        y.rechunk("auto")
+    y.compute_chunk_sizes()
+    y.rechunk("auto")
+
+
+def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
+    pytest.importorskip("zarr")
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        with StringIO() as f:
+            y.to_zarr(f)
+    y.compute_chunk_sizes()
+
+    with pytest.raises(ValueError, match="irregular chunking"):
+        with StringIO() as f:
+            y.to_zarr(f)
+
+
+def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
+    y = unknown
+    with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
+        y.to_svg()
+    y.compute_chunk_sizes()
+    y.to_svg()
+
+
+def test_compute_chunk_sizes_warning_fixes_concatenate():
+    x = _known(num=100).reshape(10, 10)
+    idx = x.sum(axis=0) > 0
+    y1 = x[idx]
+    y2 = x[idx]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.concatenate((y1, y2), axis=1)
+    y1.compute_chunk_sizes()
+    y2.compute_chunk_sizes()
+    da.concatenate((y1, y2), axis=1)
+
+
+def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.argmin(y)
+    y.compute_chunk_sizes()
+    da.argmin(y)
+
+
+def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
+    y = unknown
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        da.reshape(y, (5, 5))
+    y.compute_chunk_sizes()
+    da.reshape(y, (5, 5))
+
+
+def test_compute_chunk_sizes_warning_fixes_slicing():
+    x = _known(num=100).reshape(10, 10)
+    y = x[x.sum(axis=0) < 0]
+    with pytest.raises(ValueError, match="compute_chunk_sizes"):
+        y[:3, :]
+    y.compute_chunk_sizes()
+    y[:3, :]
+
+
+def test_rechunk_auto():
+    x = da.ones(10, chunks=(1,))
+    y = x.rechunk()
+
+    assert y.npartitions == 1

@@ -12,7 +12,23 @@ These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/07EiCpdhtDE"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 .. currentmodule:: distributed
+
+Examples
+--------
+
+Visit https://examples.dask.org/futures.html to see and run examples
+using futures with Dask.
 
 Start Dask Client
 -----------------
@@ -91,6 +107,9 @@ function and many inputs:
 However, note that each task comes with about 1ms of overhead.  If you want to
 map a function over a large number of inputs, then you might consider
 :doc:`dask.bag <bag>` or :doc:`dask.dataframe <dataframe>` instead.
+
+.. note: See `this page <https://docs.dask.org/en/latest/graphs.html>`_ for
+   restrictions on what functions you use with Dask.
 
 Move Data
 ---------
@@ -257,7 +276,7 @@ Or collect all futures in batches that had arrived since the last iteration:
       for future, result in batch:
           ...
 
-Additionally, for iterative algorithms, you can add more futures into the 
+Additionally, for iterative algorithms, you can add more futures into the
 ``as_completed`` iterator *during* iteration:
 
 .. code-block:: python
@@ -380,7 +399,7 @@ thread that does not take up a slot within the Dask worker:
 If you intend to do more work in the same thread after waiting on client work,
 you may want to explicitly block until the thread is able to *rejoin* the
 thread pool.  This allows some control over the number of threads that are
-created and stops too many threads from being active at once, over-saturating 
+created and stops too many threads from being active at once, over-saturating
 your hardware:
 
 .. code-block:: python
@@ -421,6 +440,7 @@ Coordination Primitives
    Queue
    Variable
    Lock
+   Semaphore
    Pub
    Sub
 
@@ -435,6 +455,16 @@ queues, global variables, and pub-sub systems that, where appropriate, match
 their in-memory counterparts.  These can be used to control access to external
 resources, track progress of ongoing computations, or share data in
 side-channels between many workers, clients, and tasks sensibly.
+
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/Q-Y3BR1u7c0"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
 
 These features are rarely necessary for common use of Dask.  We recommend that
 beginning users stick with using the simpler futures found above (like
@@ -575,7 +605,7 @@ Using a consistent name is convenient when you want to lock some known named res
 
    futures = client.map(load, filenames)
 
-Passing around a lock works as well and is easier when you want to create short-term 
+Passing around a lock works as well and is easier when you want to create short-term
 locks for a particular situation:
 
 .. code-block:: python
@@ -592,6 +622,32 @@ locks for a particular situation:
 
 This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
+
+
+Semaphore
+~~~~~~~~~
+
+.. autosummary::
+   Semaphore
+
+Similar to the single-valued ``Lock`` it is also possible to use a cluster-wide
+semaphore to coordinate and limit access to a sensitive resource like a
+database.
+
+.. code-block:: python
+
+   from dask.distributed import Semaphore
+
+   sem = Semaphore(max_leases=2, name="database")
+
+   def access_limited(val, sem):
+      with sem:
+         # Interact with the DB
+         return
+
+   futures = client.map(access_limited, range(10), sem=sem)
+   client.gather(futures)
+   sem.close()
 
 
 Publish-Subscribe
@@ -741,6 +797,7 @@ API
    Client.map
    Client.ncores
    Client.persist
+   Client.profile
    Client.publish_dataset
    Client.rebalance
    Client.replicate
@@ -792,7 +849,6 @@ API
 
 .. autoclass:: Future
    :members:
-
 
 .. autoclass:: Queue
    :members:

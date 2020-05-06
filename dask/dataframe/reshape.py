@@ -1,11 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar, has_known_categories, PANDAS_VERSION
+from .utils import is_categorical_dtype, is_scalar, has_known_categories
 from ..utils import M
 import sys
 
@@ -94,7 +92,7 @@ def get_dummies(
     2                ...    ...    ...
     3                ...    ...    ...
     Dask Name: get_dummies, 4 tasks
-    >>> dd.get_dummies(s).compute()
+    >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
        a  b  c
     0  1  0  0
     1  0  1  0
@@ -105,17 +103,6 @@ def get_dummies(
     --------
     pandas.get_dummies
     """
-    if PANDAS_VERSION >= "0.23.0":
-        # dtype added to pandas
-        kwargs["dtype"] = dtype
-    elif dtype != np.uint8:
-        # User specified something other than the default.
-        raise ValueError(
-            "Your version of pandas is '{}'. "
-            "The 'dtype' keyword was added in pandas "
-            "0.23.0.".format(PANDAS_VERSION)
-        )
-
     if isinstance(data, (pd.Series, pd.DataFrame)):
         return pd.get_dummies(
             data,
@@ -125,6 +112,7 @@ def get_dummies(
             columns=columns,
             sparse=sparse,
             drop_first=drop_first,
+            dtype=dtype,
             **kwargs
         )
 
@@ -170,6 +158,7 @@ def get_dummies(
         columns=columns,
         sparse=sparse,
         drop_first=drop_first,
+        dtype=dtype,
         **kwargs
     )
 
@@ -183,6 +172,7 @@ def get_dummies(
         sparse=sparse,
         drop_first=drop_first,
         meta=meta,
+        dtype=dtype,
         **kwargs
     )
 
@@ -238,27 +228,31 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
     new_columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
-    meta = pd.DataFrame(columns=new_columns, dtype=np.float64)
-    meta.index.name = index
+    meta = pd.DataFrame(
+        columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
+    )
 
     kwargs = {"index": index, "columns": columns, "values": values}
 
-    pv_sum = apply_concat_apply(
-        [df],
-        chunk=methods.pivot_sum,
-        aggregate=methods.pivot_agg,
-        meta=meta,
-        token="pivot_table_sum",
-        chunk_kwargs=kwargs,
-    )
-    pv_count = apply_concat_apply(
-        [df],
-        chunk=methods.pivot_count,
-        aggregate=methods.pivot_agg,
-        meta=meta,
-        token="pivot_table_count",
-        chunk_kwargs=kwargs,
-    )
+    if aggfunc in ["sum", "mean"]:
+        pv_sum = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_sum,
+            aggregate=methods.pivot_agg,
+            meta=meta,
+            token="pivot_table_sum",
+            chunk_kwargs=kwargs,
+        )
+
+    if aggfunc in ["count", "mean"]:
+        pv_count = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_count,
+            aggregate=methods.pivot_agg,
+            meta=meta,
+            token="pivot_table_count",
+            chunk_kwargs=kwargs,
+        )
 
     if aggfunc == "sum":
         return pv_sum

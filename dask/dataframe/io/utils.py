@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import pandas as pd
 import json
 
@@ -37,7 +36,10 @@ def _get_pyarrow_dtypes(schema, categories):
             else:
                 numpy_dtype = pandas_metadata_dtypes[field.name]
         else:
-            numpy_dtype = field.type.to_pandas_dtype()
+            try:
+                numpy_dtype = field.type.to_pandas_dtype()
+            except NotImplementedError:
+                continue  # Skip this field (in case we aren't reading it anyway)
 
         dtypes[field.name] = numpy_dtype
 

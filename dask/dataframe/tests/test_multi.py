@@ -1,14 +1,13 @@
 import warnings
 
-import dask
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 from dask.base import compute_as_if_collection
+from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
-from dask.dataframe.methods import concat, concat_kwargs
+from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
     align_partitions,
     merge_indexed_dataframes,
@@ -22,7 +21,6 @@ from dask.dataframe.utils import (
     make_meta,
     has_known_categories,
     clear_known_categories,
-    PANDAS_GT_0230,
 )
 
 import pytest
@@ -221,7 +219,8 @@ def list_eq(aa, bb):
     else:
         av = a.sort_values().values
         bv = b.sort_values().values
-    tm.assert_numpy_array_equal(av, bv)
+
+    dd._compat.assert_numpy_array_equal(av, bv)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
@@ -527,7 +526,8 @@ def test_indexed_concat(join):
 
     B = pd.DataFrame({"x": [10, 20, 40, 50, 60, 80]}, index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
-    expected = pd.concat([A, B], axis=0, join=join, **concat_kwargs)
+
+    expected = pd.concat([A, B], axis=0, join=join, sort=False)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
@@ -558,10 +558,8 @@ def test_concat(join):
     )
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    if PANDAS_GT_0230:
-        kwargs = {"sort": False}
-    else:
-        kwargs = {}
+    kwargs = {"sort": False}
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
         for (dd1, dd2, pd1, pd2) in [
@@ -587,26 +585,34 @@ def test_concat(join):
             assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("join", ["inner", "outer"])
-def test_concat_different_dtypes(join):
+@pytest.mark.parametrize(
+    "value_1, value_2",
+    [
+        (1.0, 1),
+        (1.0, "one"),
+        (1.0, pd.to_datetime("1970-01-01")),
+        (1, "one"),
+        (1, pd.to_datetime("1970-01-01")),
+        ("one", pd.to_datetime("1970-01-01")),
+    ],
+)
+def test_concat_different_dtypes(value_1, value_2):
     # check that the resulting dataframe has coherent dtypes
-    # refer to https://github.com/dask/dask/issues/4685
-    pdf1 = pd.DataFrame(
-        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
-    )
-    ddf1 = dd.from_pandas(pdf1, 2)
-    pdf2 = pd.DataFrame(
-        {"x": [1.0, 2.0, 3.0, 4.0, 6.0, 7.0], "y": list("abcdef")},
-        index=[8, 9, 10, 11, 12, 13],
-    )
-    ddf2 = dd.from_pandas(pdf2, 2)
+    # refer to https://github.com/dask/dask/issues/4685 and
+    # https://github.com/dask/dask/issues/5968
+    df_1 = pd.DataFrame({"x": [value_1]})
+    df_2 = pd.DataFrame({"x": [value_2]})
+    df = pd.concat([df_1, df_2], axis=0)
 
-    expected = pd.concat([pdf1, pdf2], join=join)
-    result = dd.concat([ddf1, ddf2], join=join)
-    assert_eq(expected, result)
+    pandas_dtype = df["x"].dtype
 
-    dtypes_list = dask.compute([part.dtypes for part in result.to_delayed()])
-    assert len(set(map(str, dtypes_list))) == 1  # all the same
+    ddf_1 = dd.from_pandas(df_1, npartitions=1)
+    ddf_2 = dd.from_pandas(df_2, npartitions=1)
+    ddf = dd.concat([ddf_1, ddf_2], axis=0)
+
+    dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
+
+    assert dask_dtypes == [pandas_dtype, pandas_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -724,6 +730,58 @@ def test_merge(how, shuffle):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+@pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
+@pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "cudf",
+        pytest.param(
+            "pandas",
+            marks=pytest.mark.xfail(
+                reason="Pandas does not support leftsemi or leftanti"
+            ),
+        ),
+    ],
+)
+def test_merge_tasks_semi_anti_cudf(engine, how, parts):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+    emp = pd.DataFrame(
+        {
+            "emp_id": np.arange(101, stop=106),
+            "name": ["John", "Tom", "Harry", "Rahul", "Sakil"],
+            "city": ["Cal", "Mum", "Del", "Ban", "Del"],
+            "salary": [50000, 40000, 80000, 60000, 90000],
+        }
+    )
+    skills = pd.DataFrame(
+        {
+            "skill_id": [404, 405, 406, 407, 408],
+            "emp_id": [103, 101, 105, 102, 101],
+            "skill_name": ["Dask", "Spark", "C", "Python", "R"],
+        }
+    )
+
+    if engine == "cudf":
+        emp = cudf.from_pandas(emp)
+        skills = cudf.from_pandas(skills)
+        dd_emp = dask_cudf.from_cudf(emp, npartitions=parts[0])
+        dd_skills = dask_cudf.from_cudf(skills, npartitions=parts[1])
+    else:
+        dd_emp = dd.from_pandas(emp, npartitions=parts[0])
+        dd_skills = dd.from_pandas(skills, npartitions=parts[1])
+
+    expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
+    result = dd_emp.merge(dd_skills, on="emp_id", how=how).sort_values(["emp_id"])
+    assert_eq(result, expect, check_index=False)
 
 
 def test_merge_tasks_passes_through():
@@ -1255,11 +1313,17 @@ def test_cheap_single_partition_merge_on_index():
     actual = aa.merge(bb, left_index=True, right_on="x", how="inner")
     expected = a.merge(b, left_index=True, right_on="x", how="inner")
 
+    # Workaround https://github.com/pandas-dev/pandas/issues/26925
+    # actual has the correct dtype for the index (Int64). Pandas as object-dtype
+    # for empty joins.
+    expected.index = expected.index.astype("int64")
+
     assert actual.known_divisions
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
+    expected.index = expected.index.astype("int64")
 
     assert actual.known_divisions
     assert_eq(actual, expected)
@@ -1398,7 +1462,7 @@ def test_concat2():
         pdcase = [_c.compute() for _c in case]
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, **concat_kwargs)
+            expected = pd.concat(pdcase, sort=False)
 
         ctx = FutureWarning if w else None
 
@@ -1414,7 +1478,7 @@ def test_concat2():
             assert set(result.dask) == set(dd.concat(case).dask)
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join="inner", **concat_kwargs)
+            expected = pd.concat(pdcase, join="inner", sort=False)
 
         ctx = FutureWarning if w else None
 
@@ -1444,7 +1508,7 @@ def test_concat3():
     ddf3 = dd.from_pandas(pdf3, 2)
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2], **concat_kwargs)
+        expected = pd.concat([pdf1, pdf2], sort=False)
 
     ctx = FutureWarning if w else None
 
@@ -1462,7 +1526,7 @@ def test_concat3():
         )
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3], **concat_kwargs)
+        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
 
     ctx = FutureWarning if w else None
 
@@ -1519,12 +1583,11 @@ def test_concat4_interleave_partitions():
         pdcase = [c.compute() for c in case]
 
         assert_eq(
-            dd.concat(case, interleave_partitions=True),
-            pd.concat(pdcase, **concat_kwargs),
+            dd.concat(case, interleave_partitions=True), pd.concat(pdcase, sort=False)
         )
         assert_eq(
             dd.concat(case, join="inner", interleave_partitions=True),
-            pd.concat(pdcase, join="inner", **concat_kwargs),
+            pd.concat(pdcase, join="inner", sort=False),
         )
 
     msg = "'join' must be 'inner' or 'outer'"
@@ -1584,7 +1647,7 @@ def test_concat5():
             # some cases will raise warning directly from pandas
             assert_eq(
                 dd.concat(case, interleave_partitions=True),
-                pd.concat(pdcase, **concat_kwargs),
+                pd.concat(pdcase, sort=False),
             )
 
         assert_eq(
@@ -1817,60 +1880,28 @@ def test_append2():
     meta = make_meta({"b": "i8", "c": "i8"})
     ddf3 = dd.DataFrame(dsk, "y", meta, [None, None])
 
-    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
-    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
-        assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), sort=False))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), sort=False))
 
     # different columns
-    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
-    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
-        assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), sort=False))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), sort=False))
 
     # Dask + pandas
     assert_eq(
-        ddf1.append(ddf2.compute()),
-        ddf1.compute().append(ddf2.compute(), **concat_kwargs),
+        ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute(), sort=False)
     )
     assert_eq(
-        ddf2.append(ddf1.compute()),
-        ddf2.compute().append(ddf1.compute(), **concat_kwargs),
+        ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute(), sort=False)
     )
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(
-            ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute())
-        )
-        assert_eq(
-            ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute())
-        )
 
     # different columns
     assert_eq(
-        ddf1.append(ddf3.compute()),
-        ddf1.compute().append(ddf3.compute(), **concat_kwargs),
+        ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute(), sort=False)
     )
     assert_eq(
-        ddf3.append(ddf1.compute()),
-        ddf3.compute().append(ddf1.compute(), **concat_kwargs),
+        ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute(), sort=False)
     )
-    # Series + DataFrame
-    with pytest.warns(None):
-        # RuntimeWarning from pandas on comparing int and str
-        assert_eq(
-            ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute())
-        )
-        assert_eq(
-            ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute())
-        )
 
 
 def test_append_categorical():
@@ -1966,3 +1997,79 @@ def test_multi_duplicate_divisions():
     r2 = sf1.merge(sf2, how="left", left_index=True, right_index=True)
 
     assert_eq(r1, r2)
+
+
+def test_merge_outer_empty():
+    # Issue #5470 bug reproducer
+    k_clusters = 3
+    df = pd.DataFrame(
+        {"user": ["A", "B", "C", "D", "E", "F"], "cluster": [1, 1, 2, 2, 3, 3]}
+    )
+    df = dd.from_pandas(df, npartitions=10)
+    empty_df = dd.from_pandas(pd.DataFrame(), npartitions=10)
+
+    for x in range(0, k_clusters + 1):
+        assert_eq(
+            dd.merge(empty_df, df[df.cluster == x], how="outer").compute(),
+            df[df.cluster == x].compute(),
+            check_index=False,
+        )
+
+
+def test_dtype_equality_warning():
+    # https://github.com/dask/dask/issues/5437
+    df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
+    df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
+
+    with pytest.warns(None) as r:
+        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+
+    assert len(r) == 0
+
+
+@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+def test_groupby_concat_cudf(engine):
+
+    # NOTE: Issue #5643 Reproducer
+
+    size = 6
+    npartitions = 3
+    d1 = pd.DataFrame(
+        {
+            "a": np.random.permutation(np.arange(size)),
+            "b": np.random.randint(100, size=size),
+        }
+    )
+    d2 = pd.DataFrame(
+        {
+            "c": np.random.permutation(np.arange(size)),
+            "d": np.random.randint(100, size=size),
+        }
+    )
+
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+        d1 = cudf.from_pandas(d1)
+        d2 = cudf.from_pandas(d2)
+        dd1 = dask_cudf.from_cudf(d1, npartitions)
+        dd2 = dask_cudf.from_cudf(d2, npartitions)
+    else:
+        dd1 = dd.from_pandas(d1, npartitions)
+        dd2 = dd.from_pandas(d2, npartitions)
+
+    grouped_d1 = d1.groupby(["a"]).sum()
+    grouped_d2 = d2.groupby(["c"]).sum()
+    res = concat([grouped_d1, grouped_d2], axis=1)
+
+    grouped_dd1 = dd1.groupby(["a"]).sum()
+    grouped_dd2 = dd2.groupby(["c"]).sum()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
+
+    assert_eq(res_dd.compute().sort_index(), res.sort_index())

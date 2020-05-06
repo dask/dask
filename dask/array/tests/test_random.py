@@ -237,14 +237,16 @@ def test_choice():
     assert res.dtype == np_dtype
     assert res.shape == size
 
-    np_a = np.array([1, 3, 5, 7, 9], dtype="f8")
+    py_a = [1, 3, 5, 7, 9]
+    np_a = np.array(py_a, dtype="f8")
     da_a = da.from_array(np_a, chunks=2)
 
-    for a in [np_a, da_a]:
+    for a in [py_a, np_a, da_a]:
         x = da.random.choice(a, size=size, chunks=chunks)
         res = x.compute()
-        assert x.dtype == np_a.dtype
-        assert res.dtype == np_a.dtype
+        expected_dtype = np.asarray(a).dtype
+        assert x.dtype == expected_dtype
+        assert res.dtype == expected_dtype
         assert set(np.unique(res)).issubset(np_a)
 
     np_p = np.array([0, 0.2, 0.2, 0.3, 0.3])
@@ -301,25 +303,44 @@ def test_names():
     assert len(key_split(name)) < 10
 
 
+def test_permutation():
+    x = da.arange(12, chunks=3)
+    y = da.random.permutation(x)
+
+    assert y.shape == x.shape
+    assert y.dtype == x.dtype
+
+    y.compute()  # smoke test
+
+    a = da.random.RandomState(0)
+    b = da.random.RandomState(0)
+    r1 = a.permutation(x)
+    r2 = b.permutation(x)
+    assert_eq(r1, r2)
+
+    x = da.random.permutation(100)
+    assert x.shape == (100,)
+
+
 def test_external_randomstate_class():
     randomgen = pytest.importorskip("randomgen")
 
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed))
     )
-    x = rs.normal(0, 1, size=(10), chunks=(5,))
+    x = rs.normal(0, 1, size=10, chunks=(5,))
     assert_eq(x, x)
 
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
         seed=123,
     )
-    a = rs.normal(0, 1, size=(10), chunks=(5,))
+    a = rs.normal(0, 1, size=10, chunks=(5,))
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
         seed=123,
     )
-    b = rs.normal(0, 1, size=(10), chunks=(5,))
+    b = rs.normal(0, 1, size=10, chunks=(5,))
     assert a.name == b.name
     assert_eq(a, b)
 
@@ -335,3 +356,26 @@ def test_randint_dtype():
     assert_eq(x, x)
     assert x.dtype == "uint8"
     assert x.compute().dtype == "uint8"
+
+
+def test_doc_wraps_deprecated():
+    with pytest.warns(FutureWarning):
+
+        @da.random.doc_wraps(np.random.normal)
+        def f():
+            pass
+
+
+def test_raises_bad_kwarg():
+    with pytest.raises(Exception) as info:
+        da.random.standard_normal(size=(10,), dtype="float64")
+
+    assert "dtype" in str(info.value)
+
+
+def test_randomstate_kwargs():
+    cupy = pytest.importorskip("cupy")
+
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.standard_normal((10, 5), dtype=np.float32)
+    assert x.dtype == np.float32

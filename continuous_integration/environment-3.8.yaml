@@ -1,11 +1,12 @@
+# This job includes coverage
 name: test-environment
 channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
-  - numpy=1.16.*
-  - pandas=0.24.*
+  - python=3.8.*
+  - numpy=1.17.*
+  - pandas=1.0.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -15,9 +16,11 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
-  - fsspec
+  - fsspec>=0.6.0
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
+  - coverage
+  - jsonschema
   # other -- IO
   - bcolz
   - blosc
@@ -30,7 +33,7 @@ dependencies:
   - cloudpickle
   - crick
   - cytoolz
-  - distributed==2.0.1
+  - distributed
   - graphviz
   - ipython
   - lz4
@@ -47,8 +50,6 @@ dependencies:
   - cachey
   - python-graphviz
   - pandas-datareader
+  - python-xxhash
+  - mmh3
   - pip
-  - pip:
-      - cityhash
-      - mmh3
-      - xxhash

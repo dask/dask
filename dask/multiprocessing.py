@@ -1,16 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
+import copyreg
 import multiprocessing
-import traceback
 import pickle
 import sys
+import traceback
+from functools import partial
 from warnings import warn
 
-import cloudpickle
-
 from . import config
-from .compatibility import copyreg
-from .local import get_async  # TODO: get better get
+from .system import CPU_COUNT
+from .local import reraise, get_async  # TODO: get better get
 from .optimization import fuse, cull
 
 
@@ -22,11 +20,22 @@ def _reduce_method_descriptor(m):
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
 
-def _dumps(x):
-    return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+try:
+    import cloudpickle
 
+    _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+    _loads = cloudpickle.loads
+except ImportError:
 
-_loads = cloudpickle.loads
+    def _dumps(obj):
+        try:
+            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+        except (pickle.PicklingError, AttributeError) as exc:
+            raise ModuleNotFoundError(
+                "Please install cloudpickle to use the multiprocessing scheduler"
+            ) from exc
+
+    _loads = pickle.loads
 
 
 def _process_get_id():
@@ -57,7 +66,7 @@ class RemoteException(Exception):
         self.traceback = traceback
 
     def __str__(self):
-        return str(self.exception) + "\n\n" "Traceback\n" "---------\n" + self.traceback
+        return str(self.exception) + "\n\nTraceback\n---------\n" + self.traceback
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) + dir(self.exception)))
@@ -94,7 +103,6 @@ try:
     import tblib.pickling_support
 
     tblib.pickling_support.install()
-    from dask.compatibility import reraise
 
     def _pack_traceback(tb):
         return tb
@@ -130,13 +138,16 @@ and on Windows, because they each only support a single context.
 
 def get_context():
     """ Return the current multiprocessing context."""
-    if sys.platform == "win32" or sys.version_info.major == 2:
-        # Just do the default, since we can't change it:
-        if config.get("multiprocessing.context", None) is not None:
+    # fork context does fork()-without-exec(), which can lead to deadlocks,
+    # so default to "spawn".
+    context_name = config.get("multiprocessing.context", "spawn")
+    if sys.platform == "win32":
+        if context_name != "spawn":
+            # Only spawn is supported on Win32, can't change it:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
-    context_name = config.get("multiprocessing.context", None)
-    return multiprocessing.get_context(context_name)
+    else:
+        return multiprocessing.get_context(context_name)
 
 
 def get(
@@ -161,15 +172,15 @@ def get(
         Number of worker processes (defaults to number of cores)
     func_dumps : function
         Function to use for function serialization
-        (defaults to cloudpickle.dumps)
+        (defaults to cloudpickle.dumps if available, otherwise pickle.dumps)
     func_loads : function
         Function to use for function deserialization
-        (defaults to cloudpickle.loads)
+        (defaults to cloudpickle.loads if available, otherwise pickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """
     pool = pool or config.get("pool", None)
-    num_workers = num_workers or config.get("num_workers", None)
+    num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         context = get_context()
         pool = context.Pool(num_workers, initializer=initialize_worker_process)

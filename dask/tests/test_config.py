@@ -1,4 +1,3 @@
-import yaml
 import os
 import stat
 import sys
@@ -26,6 +25,8 @@ from dask.config import (
 )
 
 from dask.utils import tmpfile
+
+yaml = pytest.importorskip("yaml")
 
 
 def test_canonical_name():
@@ -259,6 +260,22 @@ def test_set():
     assert d["abc"]["x"] == 123
 
 
+def test_set_kwargs():
+    with set(foo__bar=1, foo__baz=2):
+        assert config["foo"] == {"bar": 1, "baz": 2}
+    assert "foo" not in config
+
+    # Mix kwargs and dict, kwargs override
+    with set({"foo.bar": 1, "foo.baz": 2}, foo__buzz=3, foo__bar=4):
+        assert config["foo"] == {"bar": 4, "baz": 2, "buzz": 3}
+    assert "foo" not in config
+
+    # Mix kwargs and nested dict, kwargs override
+    with set({"foo": {"bar": 1, "baz": 2}}, foo__buzz=3, foo__bar=4):
+        assert config["foo"] == {"bar": 4, "baz": 2, "buzz": 3}
+    assert "foo" not in config
+
+
 def test_set_nested():
     with set({"abc": {"x": 123}}):
         assert config["abc"] == {"x": 123}
@@ -399,3 +416,59 @@ def test_merge_None_to_dict():
 
 def test_core_file():
     assert "temporary-directory" in dask.config.config
+    assert "dataframe" in dask.config.config
+    assert "shuffle-compression" in dask.config.get("dataframe")
+
+
+def test_schema():
+    jsonschema = pytest.importorskip("jsonschema")
+
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    jsonschema.validate(config, schema)
+
+
+def test_schema_is_complete():
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    def test_matches(c, s):
+        for k, v in c.items():
+            if list(c) != list(s["properties"]):
+                raise ValueError(
+                    "\nThe dask.yaml and dask-schema.yaml files are not in sync.\n"
+                    "This usually happens when we add a new configuration value,\n"
+                    "but don't add the schema of that value to the dask-schema.yaml file\n"
+                    "Please modify these files to include the missing values: \n\n"
+                    "    dask.yaml:        {}\n"
+                    "    dask-schema.yaml: {}\n\n"
+                    "Examples in these files should be a good start, \n"
+                    "even if you are not familiar with the jsonschema spec".format(
+                        sorted(c), sorted(s["properties"])
+                    )
+                )
+            if isinstance(v, dict):
+                test_matches(c[k], s["properties"][k])
+
+    test_matches(config, schema)
+
+
+def test_deprecations():
+    with pytest.warns(Warning) as info:
+        with dask.config.set(fuse_ave_width=123):
+            assert dask.config.get("optimization.fuse.ave-width") == 123
+
+    assert "optimization.fuse.ave-width" in str(info[0].message)

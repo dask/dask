@@ -4,13 +4,13 @@ pytest.importorskip("numpy")
 
 import numpy as np
 import pytest
-from toolz import concat
+from tlz import concat
 
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_118
 
 
 @pytest.mark.parametrize(
@@ -540,7 +540,7 @@ def test_repeat():
     x = np.random.random((10, 11, 13))
     d = da.from_array(x, chunks=(4, 5, 3))
 
-    repeats = [1, 2, 5]
+    repeats = [0, 1, 2, 5]
     axes = [-3, -2, -1, 0, 1, 2]
 
     for r in repeats:
@@ -571,9 +571,18 @@ def test_repeat():
         assert all(concat(d.repeat(r).chunks))
 
 
+@pytest.mark.parametrize("reps", [2, (2, 2), (1, 2), (2, 1), (2, 3, 4, 0)])
+def test_tile_basic(reps):
+    a = da.asarray([0, 1, 2])
+    b = [[1, 2], [3, 4]]
+
+    assert_eq(np.tile(a.compute(), reps), da.tile(a, reps))
+    assert_eq(np.tile(b, reps), da.tile(b, reps))
+
+
 @pytest.mark.parametrize("shape, chunks", [((10,), (1,)), ((10, 11, 13), (4, 5, 3))])
-@pytest.mark.parametrize("reps", [0, 1, 2, 3, 5])
-def test_tile(shape, chunks, reps):
+@pytest.mark.parametrize("reps", [0, 1, 2, 3, 5, (1,), (1, 2)])
+def test_tile_chunks(shape, chunks, reps):
     x = np.random.random(shape)
     d = da.from_array(x, chunks=chunks)
 
@@ -591,16 +600,35 @@ def test_tile_neg_reps(shape, chunks, reps):
 
 
 @pytest.mark.parametrize("shape, chunks", [((10,), (1,)), ((10, 11, 13), (4, 5, 3))])
-@pytest.mark.parametrize("reps", [[1], [1, 2]])
-def test_tile_array_reps(shape, chunks, reps):
+@pytest.mark.parametrize("reps", [0, (0,), (2, 0), (0, 3, 0, 4)])
+def test_tile_zero_reps(shape, chunks, reps):
     x = np.random.random(shape)
     d = da.from_array(x, chunks=chunks)
 
-    with pytest.raises(NotImplementedError):
-        da.tile(d, reps)
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
-skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061", strict=True)
+@pytest.mark.parametrize("shape, chunks", [((1, 1, 0), (1, 1, 0)), ((2, 0), (1, 0))])
+@pytest.mark.parametrize("reps", [2, (3, 2, 5)])
+def test_tile_empty_array(shape, chunks, reps):
+    x = np.empty(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
+
+
+@pytest.mark.parametrize(
+    "shape", [(3,), (2, 3), (3, 4, 3), (3, 2, 3), (4, 3, 2, 4), (2, 2)]
+)
+@pytest.mark.parametrize("reps", [(2,), (1, 2), (2, 1), (2, 2), (2, 3, 2), (3, 2)])
+def test_tile_np_kroncompare_examples(shape, reps):
+    x = np.random.random(shape)
+    d = da.asarray(x)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
+
+
+skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
 
 
 @pytest.mark.parametrize(
@@ -613,13 +641,14 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061", strict=Tr
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
         pytest.param(
-            (10, 11), (4, 5), 0, "maximum", {"stat_length": 0}, marks=skip_stat_length
-        ),
-        pytest.param(
-            (10, 11), (4, 5), 0, "mean", {"stat_length": 0}, marks=skip_stat_length
-        ),
-        pytest.param(
-            (10, 11), (4, 5), 0, "minimum", {"stat_length": 0}, marks=skip_stat_length
+            (10, 11),
+            (4, 5),
+            0,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
         ),
     ],
 )
@@ -664,6 +693,16 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
+        pytest.param(
+            (10,),
+            (3,),
+            1,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -672,6 +711,70 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
 
     np_r = np.pad(np_a, pad_width, mode, **kwargs)
     da_r = da.pad(da_a, pad_width, mode, **kwargs)
+
+    if mode == "empty":
+        # empty pads lead to undefined values which may be different
+        assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
+    else:
+        assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
+@pytest.mark.parametrize(
+    "pad_widths", [2, (2,), (2, 3), ((2, 3),), ((3, 1), (0, 0), (2, 0))]
+)
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "constant",
+        "edge",
+        pytest.param(
+            "linear_ramp",
+            marks=pytest.mark.skipif(
+                not _numpy_118, reason="numpy changed pad behaviour"
+            ),
+        ),
+        "maximum",
+        pytest.param(
+            "mean",
+            marks=pytest.mark.skip(
+                reason="Bug dask changes the dtype to float: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        "minimum",
+        pytest.param(
+            "reflect",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "symmetric",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "wrap",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
+        pytest.param(
+            "empty",
+            marks=pytest.mark.skip(
+                reason="Empty leads to undefined values, which may be different"
+            ),
+        ),
+    ],
+)
+def test_pad_3d_data(dtype, pad_widths, mode):
+    np_a = np.arange(2 * 3 * 4).reshape(2, 3, 4).astype(dtype)
+    da_a = da.from_array(np_a, chunks="auto")
+
+    np_r = np.pad(np_a, pad_widths, mode=mode)
+    da_r = da.pad(da_a, pad_widths, mode=mode)
 
     assert_eq(np_r, da_r)
 

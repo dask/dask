@@ -1,11 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 import math
+import numbers
 import re
-from operator import getitem
 
 from . import config, core
-from .compatibility import unicode
 from .core import (
     istask,
     get_dependencies,
@@ -69,11 +66,11 @@ def cull(dsk, keys):
 def default_fused_linear_keys_renamer(keys):
     """Create new keys for fused tasks"""
     typ = type(keys[0])
-    if typ is str or typ is unicode:
+    if typ is str:
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0])
         return "-".join(names)
-    elif typ is tuple and len(keys[0]) > 0 and isinstance(keys[0][0], (str, unicode)):
+    elif typ is tuple and len(keys[0]) > 0 and isinstance(keys[0][0], str):
         names = [key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
         return ("-".join(names),) + keys[0][1:]
@@ -380,104 +377,41 @@ def functions_of(task):
     return funcs
 
 
-def fuse_selections(dsk, head1, head2, merge):
-    """Fuse selections with lower operation.
+def default_fused_keys_renamer(keys, max_fused_key_length=120):
+    """Create new keys for ``fuse`` tasks.
 
-    Handles graphs of the form:
-    ``{key1: (head1, key2, ...), key2: (head2, ...)}``
-
-    Parameters
-    ----------
-    dsk : dict
-        dask graph
-    head1 : function
-        The first element of task1
-    head2 : function
-        The first element of task2
-    merge : function
-        Takes ``task1`` and ``task2`` and returns a merged task to
-        replace ``task1``.
-
-    Examples
-    --------
-    >>> def load(store, partition, columns):
-    ...     pass
-    >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
-    ...        'y': (getitem, 'x', 'a')}
-    >>> merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
-    >>> dsk2 = fuse_selections(dsk, getitem, load, merge)
-    >>> cull(dsk2, 'y')[0]
-    {'y': (<function load at ...>, 'store', 'part', 'a')}
+    The optional parameter `max_fused_key_length` is used to limit the maximum string length for each renamed key.
+    If this parameter is set to `None`, there is no limit.
     """
-    dsk2 = dict()
-    for k, v in dsk.items():
-        try:
-            if (
-                istask(v)
-                and v[0] == head1
-                and v[1] in dsk
-                and istask(dsk[v[1]])
-                and dsk[v[1]][0] == head2
-            ):
-                dsk2[k] = merge(v, dsk[v[1]])
-            else:
-                dsk2[k] = v
-        except TypeError:
-            dsk2[k] = v
-    return dsk2
-
-
-def fuse_getitem(dsk, func, place):
-    """ Fuse getitem with lower operation
-
-    Parameters
-    ----------
-    dsk: dict
-        dask graph
-    func: function
-        A function in a task to merge
-    place: int
-        Location in task to insert the getitem key
-
-    Examples
-    --------
-    >>> def load(store, partition, columns):
-    ...     pass
-    >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
-    ...        'y': (getitem, 'x', 'a')}
-    >>> dsk2 = fuse_getitem(dsk, load, 3)  # columns in arg place 3
-    >>> cull(dsk2, 'y')[0]
-    {'y': (<function load at ...>, 'store', 'part', 'a')}
-    """
-    return fuse_selections(
-        dsk,
-        getitem,
-        func,
-        lambda a, b: tuple(b[:place]) + (a[2],) + tuple(b[place + 1 :]),
-    )
-
-
-def default_fused_keys_renamer(keys):
-    """Create new keys for ``fuse`` tasks"""
     it = reversed(keys)
     first_key = next(it)
     typ = type(first_key)
-    if typ is str or typ is unicode:
+
+    if max_fused_key_length:  # Take into account size of hash suffix
+        max_fused_key_length -= 5
+
+    def _enforce_max_key_limit(key_name):
+        if max_fused_key_length and len(key_name) > max_fused_key_length:
+            name_hash = f"{hash(key_name):x}"[:4]
+            key_name = f"{key_name[:max_fused_key_length]}-{name_hash}"
+        return key_name
+
+    if typ is str:
         first_name = key_split(first_key)
         names = {key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key)
-        return "-".join(names)
-    elif (
-        typ is tuple and len(first_key) > 0 and isinstance(first_key[0], (str, unicode))
-    ):
+        concatenated_name = "-".join(names)
+        return _enforce_max_key_limit(concatenated_name)
+    elif typ is tuple and len(first_key) > 0 and isinstance(first_key[0], str):
         first_name = key_split(first_key)
         names = {key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key[0])
-        return ("-".join(names),) + first_key[1:]
+        concatenated_name = "-".join(names)
+        return (_enforce_max_key_limit(concatenated_name),) + first_key[1:]
 
 
 def fuse(
@@ -513,7 +447,7 @@ def fuse(
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
-    ave_width: float (default 2)
+    ave_width: float (default 1)
         Upper limit for ``width = num_nodes / height``, a good measure of
         parallelizability
     max_width: int
@@ -537,6 +471,9 @@ def fuse(
     dependencies: dict mapping dependencies after fusion.  Useful side effect
         to accelerate other downstream optimizations.
     """
+    if not config.get("optimization.fuse.active", True):
+        return dsk, dependencies
+
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
             keys = [keys]
@@ -544,36 +481,26 @@ def fuse(
 
     # Assign reasonable, not too restrictive defaults
     if ave_width is None:
-        if config.get("fuse_ave_width", None) is None:
-            ave_width = 1
-        else:
-            ave_width = config.get("fuse_ave_width", None)
-
+        ave_width = config.get("optimization.fuse.ave-width", 1)
     if max_height is None:
-        if config.get("fuse_max_height", None) is None:
-            max_height = len(dsk)
-        else:
-            max_height = config.get("fuse_max_height", None)
-
+        max_height = config.get("optimization.fuse.max-height", None) or len(dsk)
     max_depth_new_edges = (
         max_depth_new_edges
-        or config.get("fuse_max_depth_new_edges", None)
-        or ave_width + 1.5
+        or config.get("optimization.fuse.max-depth-new-edges", None)
+        or ave_width * 1.5
     )
     max_width = (
         max_width
-        or config.get("fuse_max_width", None)
+        or config.get("optimization.fuse.max-width", None)
         or 1.5 + ave_width * math.log(ave_width + 1)
     )
-
-    if fuse_subgraphs is None:
-        fuse_subgraphs = config.get("fuse_subgraphs", False)
+    fuse_subgraphs = fuse_subgraphs or config.get("optimization.fuse.subgraphs", False)
 
     if not ave_width or not max_height:
         return dsk, dependencies
 
     if rename_keys is None:
-        rename_keys = config.get("fuse_rename_keys", True)
+        rename_keys = config.get("optimization.fuse.rename-keys", True)
     if rename_keys is True:
         key_renamer = default_fused_keys_renamer
     elif rename_keys is False:
@@ -599,6 +526,11 @@ def fuse(
     reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
     if keys:
         reducible -= keys
+
+    for k, v in dsk.items():
+        if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
+            reducible.discard(k)
+
     if not reducible and (
         not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
     ):

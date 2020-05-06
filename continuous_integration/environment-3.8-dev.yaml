@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
+  - python=3.8.*
   # For the dependencies. These will be re-installed later.
   - numpy
   - pandas
@@ -18,12 +18,13 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
+  - jsonschema
   # other -- IO
   - bcolz
   - blosc
   - s3fs
-  - fsspec
+  - fsspec>=0.6.0
   - boto3
   - botocore
   - bokeh
@@ -32,11 +33,11 @@ dependencies:
   - cloudpickle
   - crick
   - cytoolz
-  - distributed==2.0.1
+  - distributed
   - graphviz
   - ipython
   - lz4
-  - numba
+  - numba>=0.49
   - partd
   - psutil
   - requests
@@ -47,8 +48,6 @@ dependencies:
   - python-snappy
   - cachey
   - python-graphviz
+  - python-xxhash
+  - mmh3
   - pip
-  - pip:
-      - cityhash
-      - mmh3
-      - xxhash

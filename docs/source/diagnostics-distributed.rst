@@ -1,12 +1,95 @@
 Diagnostics (distributed)
 =========================
 
-The :doc:`Dask distributed scheduler <scheduling>` provides feedback in two
+The :doc:`Dask distributed scheduler <scheduling>` provides live feedback in two
 forms:
 
-1.  A progress bar suitable for interactive use in consoles or notebooks
-2.  An interactive dashboard containing several plots and tables with live
+1.  An interactive dashboard containing many plots and tables with live
     information
+2.  A progress bar suitable for interactive use in consoles or notebooks
+
+Dashboard
+---------
+
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/N_GqzcuGLCY"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+    </iframe>
+
+If `Bokeh <https://bokeh.pydata.org/en/latest/>`_ is installed
+then the dashboard will start up automatically whenever the scheduler is created.
+For local use this happens when you create a client with no arguments:
+
+.. code-block:: python
+
+   from dask.distributed import Client
+   client = Client()  # start distributed scheduler locally.  Launch dashboard
+
+It is typically served at http://localhost:8787/status ,
+but may be served elsewhere if this port is taken.
+The address of the dashboard will be displayed if you are in a Jupyter Notebook,
+or can be queried from ``client.scheduler_info()['services']``.
+
+There are numerous pages with information about task runtimes, communication,
+statistical profiling, load balancing, memory use, and much more.
+For more information we recommend the video guide above.
+
+.. currentmodule:: dask.distributed
+
+.. autosummary::
+   Client
+
+
+Capture diagnostics
+-------------------
+
+.. autosummary::
+   get_task_stream
+   Client.profile
+   performance_report
+
+You can capture some of the same information that the dashboard presents for
+offline processing using the ``get_task_stream`` and ``Client.profile``
+functions.  These capture the start and stop time of every task and transfer,
+as well as the results of a statistical profiler.
+
+.. code-block:: python
+
+   with get_task_stream(plot='save', filename="task-stream.html") as ts:
+       x.compute()
+
+   client.profile(filename="dask-profile.html")
+
+   history = ts.data
+
+Additionally, Dask can save many diagnostics dashboards at once including the
+task stream, worker profiles, bandwidths, etc. with the ``performance_report``
+context manager:
+
+.. code-block:: python
+
+    from dask.distributed import performance_report
+
+    with performance_report(filename="dask-report.html"):
+        ## some dask computation
+
+The following video demonstrates the ``performance_report`` context manager in greater
+detail:
+
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/nTMGbkS761Q"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+    </iframe>
 
 
 Progress bar
@@ -41,48 +124,48 @@ The ``progress`` function takes a Dask object that is executing in the backgroun
    x.compute()      # convert to final result when done if desired
 
 
-Dashboard
----------
+Connecting to the Dashboard
+---------------------------
 
-.. currentmodule:: dask.distributed
+Some computer networks may restrict access to certain ports or only allow
+access from certain machines.  If you are unable to access the dashboard then
+you may want to contact your IT administrator.
 
-.. autosummary::
-   Client
+Some common problems and solutions follow:
 
-If `Bokeh <https://bokeh.pydata.org/en/latest/>`_ is installed
-then the dashboard will start up automatically whenever the scheduler is created.
-For local use this happens automatically when you create a client with no arguments:
+Specify an accessible port
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+Some clusters restrict the ports that are visible to the outside world.  These
+ports may include the default port for the web interface, ``8787``.  There are
+a few ways to handle this:
 
-   from dask.distributed import Client
-   client = Client()  # start distributed scheduler locally.  Launch dashboard
+1.  Open port ``8787`` to the outside world.  Often this involves asking your
+    cluster administrator.
+2.  Use a different port that is publicly accessible using the
+    ``--dashboard-address :8787`` option on the ``dask-scheduler`` command.
+3.  Use fancier techniques, like `Port Forwarding`_
 
-It is typically served at http://localhost:8787/status ,
-but may be served elsewhere if this port is taken.
-The address of the dashboard will be displayed if you are in a Jupyter Notebook.
+Port Forwarding
+~~~~~~~~~~~~~~~
 
-There are numerous pages with information about task runtimes, communication,
-statistical profiling, load balancing, memory use, and much more.
-For more information we recommend the following video guide:
+If you have SSH access then one way to gain access to a blocked port is through
+SSH port forwarding. A typical use case looks like the following:
 
-.. raw:: html
+.. code:: bash
 
-    <iframe width="560"
-            height="315"
-            src="https://www.youtube.com/embed/N_GqzcuGLCY"
-            frameborder="0"
-            allow="autoplay; encrypted-media"
-            allowfullscreen>
-    </iframe>
+   local$ ssh -L 8000:localhost:8787 user@remote
+   remote$ dask-scheduler  # now, the web UI is visible at localhost:8000
+   remote$ # continue to set up dask if needed -- add workers, etc
 
-External Documentation
-----------------------
-
-More in-depth technical documentation about Dask's distributed scheduler is
-available at https://distributed.dask.org/en/latest
+It is then possible to go to ``localhost:8000`` and see Dask Web UI. This same approach is
+not specific to dask.distributed, but can be used by any service that operates over a
+network, such as Jupyter notebooks. For example, if we chose to do this we could
+forward port 8888 (the default Jupyter port) to port 8001 with
+``ssh -L 8001:localhost:8888 user@remote``.
 
 API
 ---
 
 .. autofunction:: progress
+.. autofunction:: get_task_stream

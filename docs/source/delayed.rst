@@ -26,8 +26,21 @@ directly with a light annotation of normal python code:
 .. image:: images/inc-add.svg
    :alt: simple task graph created with dask.delayed
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/SHqFmynRxVU"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 Example
 -------
+
+Visit https://examples.dask.org/delayed.html to see and run examples using Dask
+Delayed.
 
 Sometimes we face problems that are parallelizable, but don't fit into high-level
 abstractions like Dask Array or Dask DataFrame.  Consider the following example:
@@ -38,7 +51,7 @@ abstractions like Dask Array or Dask DataFrame.  Consider the following example:
         return x + 1
 
     def double(x):
-        return x + 2
+        return x * 2
 
     def add(x, y):
         return x + y
@@ -125,7 +138,7 @@ reproduction of our original problem as a parallel code:
 
     @dask.delayed
     def double(x):
-        return x + 2
+        return x * 2
 
     @dask.delayed
     def add(x, y):

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
@@ -235,7 +233,7 @@ class _Tracker(Process):
     def run(self):
 
         psutil = import_required(
-            "psutil", "Tracking resource usage requires " "`psutil` to be installed"
+            "psutil", "Tracking resource usage requires `psutil` to be installed"
         )
         self.parent = psutil.Process(self.parent_pid)
 

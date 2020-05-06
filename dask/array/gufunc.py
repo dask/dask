@@ -1,12 +1,7 @@
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 import re
 
-try:
-    from cytoolz import concat, merge, unique
-except ImportError:
-    from toolz import concat, merge, unique
+from tlz import concat, merge, unique
 
 from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
 from .utils import meta_from_array
@@ -42,7 +37,7 @@ def _parse_gufunc_signature(signature):
     Returns
     -------
     Tuple of input and output core dimensions parsed from the signature, each
-    of the form List[Tuple[str, ...]], except for one output. For one  output
+    of the form List[Tuple[str, ...]], except for one output. For one output
     core dimension is not a list, but of the form Tuple[str, ...]
     """
     signature = signature.replace(" ", "")
@@ -186,7 +181,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     are considered loop dimensions and are required to broadcast
     naturally against each other.
 
-    In other terms, this function is like np.vectorize, but for
+    In other terms, this function is like ``np.vectorize``, but for
     the blocks of dask arrays. If the function itself shall also
     be vectorized use ``vectorize=True`` for convenience.
 
@@ -232,7 +227,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -353,7 +348,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
         shape = arg.shape
         iax = tuple(a if a < 0 else a - len(shape) for a in iax)
         tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax
-
         transposed_arg = arg.transpose(tidc)
         transposed_args.append(transposed_arg)
     args = transposed_args
@@ -463,9 +457,7 @@ significantly.".format(
 
     ## Split output
     leaf_arrs = []
-    for i, (ocd, odt, oax, meta) in enumerate(
-        zip(output_coredimss, output_dtypes, output_axes, metas)
-    ):
+    for i, (ocd, oax, meta) in enumerate(zip(output_coredimss, output_axes, metas)):
         core_output_shape = tuple(core_shapes[d] for d in ocd)
         core_chunkinds = len(ocd) * (0,)
         output_shape = loop_output_shape + core_output_shape
@@ -478,7 +470,7 @@ significantly.".format(
             for key in keys
         }
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
-        meta = meta_from_array(meta, len(output_shape), dtype=odt)
+        meta = meta_from_array(meta, len(output_shape))
         leaf_arr = Array(
             graph, leaf_name, chunks=output_chunks, shape=output_shape, meta=meta
         )
@@ -546,7 +538,7 @@ class gufunc(object):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -676,7 +668,7 @@ def as_gufunc(signature=None, **kwargs):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if

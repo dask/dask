@@ -5,8 +5,7 @@ from distutils.version import LooseVersion
 
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
-from dask.utils import ignoring, tmpfile
-from dask.compatibility import apply
+from dask.utils import ignoring, tmpfile, apply
 import pytest
 
 try:
@@ -363,13 +362,16 @@ def test_saves_file():
 @ignore_abc_warning
 def test_get_colors():
     from dask.diagnostics.profile_visualize import get_colors
-    from bokeh.palettes import Blues9, Blues5, Viridis
-    from itertools import cycle
+    from bokeh.palettes import Blues5, Viridis
 
-    funcs = list(range(11))
-    cmap = get_colors("Blues", funcs)
-    lk = dict(zip(funcs, cycle(Blues9)))
-    assert cmap == [lk[i] for i in funcs]
+    # 256-color palettes were added in bokeh 1.4.0
+    if LooseVersion(bokeh.__version__) >= "1.4.0":
+        from bokeh.palettes import Blues256
+
+        funcs = list(range(11))
+        cmap = get_colors("Blues", funcs)
+        assert set(cmap) < set(Blues256)
+        assert len(set(cmap)) == 11
 
     funcs = list(range(5))
     cmap = get_colors("Blues", funcs)

@@ -4,15 +4,12 @@ Custom Collections
 For many problems, the built-in Dask collections (``dask.array``,
 ``dask.dataframe``, ``dask.bag``, and ``dask.delayed``) are sufficient. For
 cases where they aren't, it's possible to create your own Dask collections. Here
-we describe the required methods to fullfill the Dask collection interface.
-
-.. warning:: The custom collection API is experimental and subject to change
-             without going through a deprecation cycle.
+we describe the required methods to fulfill the Dask collection interface.
 
 .. note:: This is considered an advanced feature. For most cases the built-in
           collections are probably sufficient.
 
-Before reading this you should read and underestand:
+Before reading this you should read and understand:
 
 - :doc:`overview <graphs>`
 - :doc:`graph specification <spec>`
@@ -34,7 +31,7 @@ Before reading this you should read and underestand:
 The Dask Collection Interface
 -----------------------------
 
-To create your own Dask collection, you need to fullfill the following
+To create your own Dask collection, you need to fulfill the following
 interface. Note that there is no required base class.
 
 It is recommended to also read :ref:`core-method-internals` to see how this
@@ -563,9 +560,12 @@ implementation. There are two ways to do this:
 
 2. Register a function with ``dask.base.normalize_token``
 
-   If defining a method on the class isn't possible, you can register a tokenize
-   function with the ``normalize_token`` dispatch.  The function should have the
-   same signature as described above.
+   If defining a method on the class isn't possible or you need to
+   customize the tokenize function for a class whose super-class is
+   already registered (for example if you need to sub-class built-ins),
+   you can register a tokenize function with the ``normalize_token``
+   dispatch.  The function should have the same signature as described
+   above.
 
 In both cases the implementation should be the same, where only the location of the
 definition is different.

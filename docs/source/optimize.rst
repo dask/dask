@@ -34,15 +34,13 @@ Suppose you had a custom Dask graph for doing a word counting task:
 
 .. code-block:: python
 
-    >>> from __future__ import print_function
-
     >>> def print_and_return(string):
     ...     print(string)
     ...     return string
 
     >>> def format_str(count, val, nwords):
-    ...     return ('word list has {0} occurrences of {1}, '
-    ...             'out of {2} words').format(count, val, nwords)
+    ...     return (f'word list has {count} occurrences of '
+    ...             f'{val}, out of {nwords} words')
 
     >>> dsk = {'words': 'apple orange apple pear orange pear pear',
     ...        'nwords': (len, (str.split, 'words')),
@@ -52,12 +50,12 @@ Suppose you had a custom Dask graph for doing a word counting task:
     ...        'count1': (str.count, 'words', 'val1'),
     ...        'count2': (str.count, 'words', 'val2'),
     ...        'count3': (str.count, 'words', 'val3'),
-    ...        'out1': (format_str, 'count1', 'val1', 'nwords'),
-    ...        'out2': (format_str, 'count2', 'val2', 'nwords'),
-    ...        'out3': (format_str, 'count3', 'val3', 'nwords'),
-    ...        'print1': (print_and_return, 'out1'),
-    ...        'print2': (print_and_return, 'out2'),
-    ...        'print3': (print_and_return, 'out3')}
+    ...        'format1': (format_str, 'count1', 'val1', 'nwords'),
+    ...        'format2': (format_str, 'count2', 'val2', 'nwords'),
+    ...        'format3': (format_str, 'count3', 'val3', 'nwords'),
+    ...        'print1': (print_and_return, 'format1'),
+    ...        'print2': (print_and_return, 'format2'),
+    ...        'print3': (print_and_return, 'format3')}
 
 .. image:: images/optimize_dask1.png
    :width: 65 %
@@ -77,15 +75,11 @@ output keys to a scheduler ``get`` function:
     >>> from dask.optimization import cull
 
     >>> outputs = ['print1', 'print2']
-    >>> dsk2, _ = cull(dsk, outputs)  # remove unnecessary tasks from the graph
+    >>> dsk1, dependencies = cull(dsk, outputs)  # remove unnecessary tasks from the graph
 
     >>> results = get(dsk2, outputs)
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
-
-    >>> results
-    ('word list has 2 occurrences of orange, out of 7 words',
-     'word list has 2 occurrences of apple, out of 7 words')
 
 As can be seen above, the scheduler computed only the requested outputs
 (``'print3'`` was never computed). This is because we called the
@@ -99,10 +93,11 @@ later steps:
 .. code-block:: python
 
     >>> from dask.optimization import cull
+    >>> outputs = ['print1', 'print2']
     >>> dsk1, dependencies = cull(dsk, outputs)
 
 .. image:: images/optimize_dask2.png
-   :width: 60 %
+   :width: 50 %
    :alt: After culling
 
 Looking at the task graph above, there are multiple accesses to constants such
@@ -138,7 +133,7 @@ can be used:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask4.png
-   :width: 40 %
+   :width: 30 %
    :alt: After inlining functions
 
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
@@ -155,7 +150,7 @@ One option is just to merge these linear chains into one big task using the
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask5.png
-   :width: 40 %
+   :width: 30 %
    :alt: After fusing
 
 

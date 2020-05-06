@@ -1,24 +1,21 @@
-from __future__ import absolute_import, division, print_function
-
 import io
 import itertools
 import math
+import operator
 import uuid
 import warnings
 from collections import defaultdict
-from distutils.version import LooseVersion
-from functools import wraps, partial
-from operator import getitem
+from collections.abc import Iterable, Iterator
+from functools import wraps, partial, reduce
 from random import Random
+from urllib.request import urlopen
 
-from toolz import (
+import tlz as toolz
+from tlz import (
     merge,
     take,
-    reduce,
     valmap,
-    map,
     partition_all,
-    filter,
     remove,
     compose,
     curry,
@@ -26,47 +23,22 @@ from toolz import (
     second,
     accumulate,
     peek,
+    frequencies,
+    merge_with,
+    join,
+    reduceby,
+    count,
+    pluck,
+    groupby,
+    topk,
+    unique,
+    accumulate,
 )
-from toolz.compatibility import iteritems, zip
-import toolz
-
-_implement_accumulate = LooseVersion(toolz.__version__) > "0.7.4"
-try:
-    import cytoolz
-    from cytoolz import (
-        frequencies,
-        merge_with,
-        join,
-        reduceby,
-        count,
-        pluck,
-        groupby,
-        topk,
-        unique,
-    )
-
-    if LooseVersion(cytoolz.__version__) > "0.7.3":
-        from cytoolz import accumulate  # noqa: F811
-
-        _implement_accumulate = True
-except ImportError:
-    from toolz import (
-        frequencies,
-        merge_with,
-        join,
-        reduceby,
-        count,
-        pluck,
-        groupby,
-        topk,
-        unique,
-    )
 
 from .. import config
 from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict, flatten
 from ..delayed import Delayed, unpack_collections
@@ -74,6 +46,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
 from ..optimization import fuse, cull, inline
 from ..utils import (
+    apply,
     system_encoding,
     takes_multiple_arguments,
     funcname,
@@ -82,7 +55,9 @@ from ..utils import (
     ensure_dict,
     ensure_bytes,
     ensure_unicode,
+    key_split,
 )
+from . import chunk
 
 
 no_default = "__no__default__"
@@ -154,7 +129,7 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
     return dsk
 
 
-def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
+def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
     """ Optimize a dask from a dask Bag. """
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
@@ -319,7 +294,7 @@ class StringAccessor(object):
         return sorted(set(dir(type(self)) + dir(str)))
 
     def _strmap(self, key, *args, **kwargs):
-        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
+        return self._bag.map(operator.methodcaller(key, *args, **kwargs))
 
     def __getattr__(self, key):
         try:
@@ -492,8 +467,7 @@ class Bag(DaskMethodsMixin):
         return type(self), (self.name, self.npartitions)
 
     def __str__(self):
-        name = self.name if len(self.name) < 10 else self.name[:7] + "..."
-        return "dask.bag<%s, npartitions=%d>" % (name, self.npartitions)
+        return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
 
     __repr__ = __str__
 
@@ -665,10 +639,10 @@ class Bag(DaskMethodsMixin):
         --------
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.random_sample(0.5, 42))
-        [1, 3]
-        >>> list(b.random_sample(0.5, 42))
-        [1, 3]
+        >>> list(b.random_sample(0.5, 43))
+        [0, 3, 4]
+        >>> list(b.random_sample(0.5, 43))
+        [0, 3, 4]
         """
         if not 0 <= prob <= 1:
             raise ValueError("prob must be a number in the interval [0, 1]")
@@ -896,7 +870,7 @@ class Bag(DaskMethodsMixin):
                 out_type=out_type,
             )
         else:
-            from toolz.curried import reduce
+            from tlz.curried import reduce
 
             return self.reduction(
                 reduce(binop),
@@ -1086,22 +1060,9 @@ class Bag(DaskMethodsMixin):
 
     def var(self, ddof=0):
         """ Variance """
-
-        def var_chunk(seq):
-            squares, total, n = 0.0, 0.0, 0
-            for x in seq:
-                squares += x ** 2
-                total += x
-                n += 1
-            return squares, total, n
-
-        def var_aggregate(x):
-            squares, totals, counts = list(zip(*x))
-            x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
-            result = (x2 / n) - (x / n) ** 2
-            return result * n / (n - ddof)
-
-        return self.reduction(var_chunk, var_aggregate, split_every=False)
+        return self.reduction(
+            chunk.var_chunk, partial(chunk.var_aggregate, ddof=ddof), split_every=False
+        )
 
     def std(self, ddof=0):
         """ Standard deviation """
@@ -1329,9 +1290,7 @@ class Bag(DaskMethodsMixin):
                 for i in range(self.npartitions)
             }
 
-        def combine2(acc, x):
-            return combine(acc, x[1])
-
+        combine2 = partial(chunk.foldby_combine2, combine)
         depth = 0
         k = self.npartitions
         b = a
@@ -1558,10 +1517,10 @@ class Bag(DaskMethodsMixin):
         >>> df = b.to_dataframe()
 
         >>> df.compute()
-           balance     name
-        0      100    Alice
-        1      200      Bob
-        0      300  Charlie
+              name  balance
+        0    Alice      100
+        1      Bob      200
+        0  Charlie      300
         """
         import pandas as pd
         import dask.dataframe as dd
@@ -1616,7 +1575,10 @@ class Bag(DaskMethodsMixin):
         return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):
-        """ Coalesce bag into fewer partitions.
+        """ Changes the number of partitions of the bag.
+
+        This can be used to reduce or increase the number of partitions
+        of the bag.
 
         Examples
         --------
@@ -1662,7 +1624,7 @@ class Bag(DaskMethodsMixin):
                     k = int(new - last)
                 dsk[(split_name, i)] = (split, (self.name, i), k)
                 for jj in range(k):
-                    dsk[(new_name, j)] = (getitem, (split_name, i), jj)
+                    dsk[(new_name, j)] = (operator.getitem, (split_name, i), jj)
                     j += 1
                 last = new
 
@@ -1688,10 +1650,6 @@ class Bag(DaskMethodsMixin):
         >>> b.accumulate(add, initial=-1)  # doctest: +SKIP
         [-1, 0, 2, 5, 9, 14]
         """
-        if not _implement_accumulate:
-            raise NotImplementedError(
-                "accumulate requires `toolz` > 0.7.4" " or `cytoolz` > 0.7.3."
-            )
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)
         a = "%s-part-%s" % (binop_name, token)
@@ -1845,7 +1803,7 @@ def concat(bags):
 def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
-    if seq and isinstance(seq[0], Iterator):
+    if len(seq) and isinstance(seq[0], Iterator):
         seq = list(map(list, seq))
     return seq
 
@@ -1894,10 +1852,9 @@ def from_delayed(values):
 
 
 def chunk_distinct(seq, key=None):
-    key2 = key
     if key is not None and not callable(key):
-        key2 = lambda x: x[key]
-    return list(unique(seq, key=key2))
+        key = partial(chunk.getitem, key=key)
+    return list(unique(seq, key=key))
 
 
 def merge_distinct(seqs, key=None):
@@ -1915,7 +1872,7 @@ def merge_frequencies(seqs):
     out = defaultdict(int)
     out.update(first)
     for d in rest:
-        for k, v in iteritems(d):
+        for k, v in d.items():
             out[k] += v
     return out
 
@@ -1993,43 +1950,63 @@ def bag_zip(*bags):
     return Bag(graph, name, npartitions)
 
 
-def map_chunk(f, args, bag_kwargs, kwargs):
+def map_chunk(f, iters, iter_kwarg_keys=None, kwargs=None):
+    """Map ``f`` across one or more iterables, maybe with keyword arguments.
+
+    Low-level function used in ``bag_map``, not user facing.
+
+    Arguments
+    ---------
+    f : callable
+    iters : List[Iterable]
+    iter_kwarg_keys : List[str] or None
+        Keyword names to use for pair with the tail end of ``iters``, allowing
+        keyword arguments to be passed in from iterators.
+    kwargs : dict or None
+        Additional constant keyword arguments to use on every call to ``f``.
+    """
     if kwargs:
         f = partial(f, **kwargs)
+    iters = [iter(a) for a in iters]
+    return _MapChunk(f, iters, kwarg_keys=iter_kwarg_keys)
 
-    args = [iter(a) for a in args]
-    iters = list(args)
-    if bag_kwargs:
-        keys = list(bag_kwargs)
-        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
-        iters.extend(kw_val_iters)
-        kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
-        if args:
-            for a, k in zip(zip(*args), kw_iter):
-                yield f(*a, **k)
-        else:
-            for k in kw_iter:
-                yield f(**k)
-    else:
-        for a in zip(*args):
-            yield f(*a)
 
-    # Check that all iterators are fully exhausted
-    if len(iters) > 1:
-        for i in iters:
-            if isinstance(i, itertools.repeat):
-                continue
-            try:
-                next(i)
-            except StopIteration:
-                pass
-            else:
-                msg = (
-                    "map called with multiple bags that aren't identically "
-                    "partitioned. Please ensure that all bag arguments "
-                    "have the same partition lengths"
-                )
-                raise ValueError(msg)
+class _MapChunk(Iterator):
+    def __init__(self, f, iters, kwarg_keys=None):
+        self.f = f
+        self.iters = iters
+        self.kwarg_keys = kwarg_keys or ()
+        self.nkws = len(self.kwarg_keys)
+
+    def __next__(self):
+        try:
+            vals = [next(i) for i in self.iters]
+        except StopIteration:
+            self.check_all_iterators_consumed()
+            raise
+
+        if self.nkws:
+            args = vals[: -self.nkws]
+            kwargs = dict(zip(self.kwarg_keys, vals[-self.nkws :]))
+            return self.f(*args, **kwargs)
+        return self.f(*vals)
+
+    def check_all_iterators_consumed(self):
+        if len(self.iters) > 1:
+            for i in self.iters:
+                if isinstance(i, itertools.repeat):
+                    continue
+                try:
+                    next(i)
+                except StopIteration:
+                    pass
+                else:
+                    msg = (
+                        "map called with multiple bags that aren't identically "
+                        "partitioned. Please ensure that all bag arguments "
+                        "have the same partition lengths"
+                    )
+                    raise ValueError(msg)
 
 
 def starmap_chunk(f, x, kwargs):
@@ -2151,21 +2128,21 @@ def bag_map(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_args(n):
-        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+    def build_iters(n):
+        args = [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+        if bag_kwargs:
+            args.extend((b.name, n) for b in bag_kwargs.values())
+        return args
 
-    def build_bag_kwargs(n):
-        if not bag_kwargs:
-            return None
-        return (
-            dict,
-            (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
-        )
+    if bag_kwargs:
+        iter_kwarg_keys = list(bag_kwargs)
+    else:
+        iter_kwarg_keys = None
 
     dsk = {
         (name, n): (
             reify,
-            (map_chunk, func, build_args(n), build_bag_kwargs(n), other_kwargs),
+            (map_chunk, func, build_iters(n), iter_kwarg_keys, other_kwargs),
         )
         for n in range(npartitions)
     }
@@ -2313,7 +2290,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
 
-    b2 = b.map(lambda x: (hash(grouper(x)), x))
+    b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
     token = tokenize(b, grouper, hash, max_branch)
 
@@ -2411,10 +2388,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
     # Barrier
     barrier_token = "groupby-barrier-" + token
 
-    def barrier(args):
-        return 0
-
-    dsk3 = {barrier_token: (barrier, list(dsk2))}
+    dsk3 = {barrier_token: (chunk.barrier,) + tuple(dsk2)}
 
     # Collect groups
     name = "groupby-collect-" + token
@@ -2464,20 +2438,21 @@ def random_sample(x, state_data, prob):
     ----------
     x : iterable
     state_data : tuple
-        A tuple that can be passed to ``random.Random``.
+        A tuple that can be passed to ``random.Random.setstate``.
     prob : float
         A float between 0 and 1, representing the probability that each
         element will be yielded.
     """
-    random_state = Random(state_data)
+    random_state = Random()
+    random_state.setstate(state_data)
     for i in x:
         if random_state.random() < prob:
             yield i
 
 
 def random_state_data_python(n, random_state=None):
-    """Return a list of tuples that can initialize.
-    ``random.Random``.
+    """Return a list of tuples that can be passed to
+    ``random.Random.setstate``.
 
     Parameters
     ----------
@@ -2491,7 +2466,12 @@ def random_state_data_python(n, random_state=None):
 
     maxuint32 = 1 << 32
     return [
-        tuple(random_state.randint(0, maxuint32) for i in range(624)) for i in range(n)
+        (
+            3,
+            tuple(random_state.randint(0, maxuint32) for i in range(624)) + (624,),
+            None,
+        )
+        for i in range(n)
     ]
 
 

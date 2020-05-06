@@ -2,7 +2,6 @@ from operator import getitem
 from functools import partial
 
 import numpy as np
-from toolz import curry
 
 from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
 from .utils import empty_like_safe, IS_NEP18_ACTIVE
@@ -10,7 +9,6 @@ from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import (
-    skip_doctest,
     funcname,
     derived_from,
     is_dataframe_like,
@@ -23,13 +21,7 @@ def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
     return x.__array_wrap__(numpy_ufunc(x, *args, **kwargs))
 
 
-@curry
-def copy_docstring(target, source=None):
-    target.__doc__ = skip_doctest(source.__doc__)
-    return target
-
-
-def wrap_elemwise(numpy_ufunc, array_wrap=False):
+def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
     """ Wrap up numpy function into dask.array """
 
     def wrapped(*args, **kwargs):
@@ -49,8 +41,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
 
     # functools.wraps cannot wrap ufunc in Python 2.x
     wrapped.__name__ = numpy_ufunc.__name__
-    wrapped.__doc__ = skip_doctest(numpy_ufunc.__doc__)
-    return wrapped
+    return derived_from(source)(wrapped)
 
 
 class da_frompyfunc(object):
@@ -79,9 +70,7 @@ class da_frompyfunc(object):
     def __getattr__(self, a):
         if not a.startswith("_"):
             return getattr(self._ufunc, a)
-        raise AttributeError(
-            "%r object has no attribute " "%r" % (type(self).__name__, a)
-        )
+        raise AttributeError("%r object has no attribute %r" % (type(self).__name__, a))
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -116,13 +105,14 @@ class ufunc(object):
             )
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
-        copy_docstring(self, ufunc)
+        if isinstance(ufunc, np.ufunc):
+            derived_from(np)(self)
 
     def __getattr__(self, key):
         if key in self._forward_attrs:
             return getattr(self._ufunc, key)
         raise AttributeError(
-            "%r object has no attribute " "%r" % (type(self).__name__, key)
+            "%r object has no attribute %r" % (type(self).__name__, key)
         )
 
     def __dir__(self):
@@ -139,12 +129,12 @@ class ufunc(object):
                 if type(result) != type(NotImplemented):
                     return result
             raise TypeError(
-                "Parameters of such types " "are not supported by " + self.__name__
+                "Parameters of such types are not supported by " + self.__name__
             )
         else:
             return self._ufunc(*args, **kwargs)
 
-    @copy_docstring(source=np.ufunc.outer)
+    @derived_from(np.ufunc)
     def outer(self, A, B, **kwargs):
         if self.nin != 2:
             raise ValueError("outer product only supported for binary functions")
@@ -306,7 +296,7 @@ sinc = wrap_elemwise(np.sinc, array_wrap=True)
 nan_to_num = wrap_elemwise(np.nan_to_num, array_wrap=True)
 
 
-@copy_docstring(source=np.angle)
+@derived_from(np)
 def angle(x, deg=0):
     deg = bool(deg)
     if hasattr(x, "_elemwise"):
@@ -314,7 +304,7 @@ def angle(x, deg=0):
     return np.angle(x, deg=deg)
 
 
-@copy_docstring(source=np.frexp)
+@derived_from(np)
 def frexp(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.frexp, x, dtype=object)
@@ -339,7 +329,7 @@ def frexp(x):
     return L, R
 
 
-@copy_docstring(source=np.modf)
+@derived_from(np)
 def modf(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.modf, x, dtype=object)
@@ -364,7 +354,7 @@ def modf(x):
     return L, R
 
 
-@copy_docstring(source=np.divmod)
+@derived_from(np)
 def divmod(x, y):
     res1 = x // y
     res2 = x % y

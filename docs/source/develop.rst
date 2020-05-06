@@ -5,6 +5,13 @@ Dask is a community maintained project.  We welcome contributions in the form
 of bug reports, documentation, code, design proposals, and more.
 This page provides resources on how best to contribute.
 
+.. note:: Dask strives to be a welcoming community of individuals with diverse
+   backgrounds. For more information on our values, please see our
+   `code of conduct
+   <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
+   and
+   `diversity statement <https://github.com/dask/governance/blob/master/diversity.md>`_
+
 Where to ask for help
 ---------------------
 
@@ -91,11 +98,11 @@ environment on your computer to compile them when installing with ``pip``::
 Install Dask and dependencies::
 
    cd dask
-   pip install -e ".[complete]"
+   python -m pip install -e ".[complete]"
 
 For development, Dask uses the following additional dependencies::
 
-   pip install pytest moto
+   python -m pip install pytest moto
 
 
 Run Tests
@@ -152,7 +159,7 @@ You can also test certain modules or individual tests for faster response::
 
    py.test dask/dataframe --verbose
 
-   py.test dask/dataframe/tests/test_dataframe_core.py::test_set_index
+   py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
 
 Tests run automatically on the Travis.ci and Appveyor continuous testing
 frameworks on every push to every pull request on GitHub.
@@ -161,6 +168,7 @@ Tests are organized within the various modules' subdirectories::
 
     dask/array/tests/test_*.py
     dask/bag/tests/test_*.py
+    dask/bytes/tests/test_*.py
     dask/dataframe/tests/test_*.py
     dask/diagnostics/tests/test_*.py
 
@@ -176,7 +184,7 @@ typically tested directly against the NumPy or Pandas libraries using the
 
    def test_aggregations():
        nx = np.random.random(100)
-       dx = da.from_array(x, chunks=(10,))
+       dx = da.from_array(nx, chunks=(10,))
 
        assert_eq(nx.sum(), dx.sum())
        assert_eq(nx.min(), dx.min())
@@ -228,7 +236,7 @@ after the line.
        ValueError(...)
        """
 
-.. _numpydoc: https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
+.. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
 Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
 docstrings with pytest as follows::
@@ -248,7 +256,7 @@ Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
 format throughout the project. ``black`` and ``flake8`` can be installed with
 ``pip``::
 
-   pip install black flake8
+   python -m pip install black flake8
 
 and then run from the root of the Dask repository::
 
@@ -262,7 +270,7 @@ Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
 to automatically run ``black`` and ``flake8`` when you make a git commit. This
 can be done by installing ``pre-commit``::
 
-   pip install pre-commit
+   python -m pip install pre-commit
 
 and then running::
 
@@ -281,10 +289,20 @@ Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
 
-To build the documentation locally, first install the necessary requirements::
+To build the documentation locally, clone this repository and install 
+the necessary requirements using ``pip`` or ``conda``::
 
-   cd docs/
-   pip install -r requirements-docs.txt
+  git clone https://github.com/dask/dask.git
+  cd dask/docs
+
+``pip``::
+
+  python -m pip install -r requirements-docs.txt
+
+``conda``::
+
+  conda create -n daskdocs -c conda-forge --file requirements-docs.txt
+  conda activate daskdocs
 
 Then build the documentation with ``make``::
 

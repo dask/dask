@@ -1,14 +1,17 @@
-# coding=utf-8
-from __future__ import absolute_import, division, print_function
-
-from itertools import repeat
+import gc
 import math
+import multiprocessing
 import os
 import random
+import weakref
+from bz2 import BZ2File
+from collections.abc import Iterator
+from gzip import GzipFile
+from itertools import repeat
 
 import partd
 import pytest
-from toolz import merge, join, filter, identity, valmap, groupby, pluck, unique
+from tlz import merge, join, identity, valmap, groupby, pluck, unique
 
 import dask
 import dask.bag as db
@@ -16,7 +19,6 @@ from dask.bag.core import (
     Bag,
     lazify,
     lazify_task,
-    map,
     collect,
     reduceby,
     reify,
@@ -26,11 +28,13 @@ from dask.bag.core import (
     from_delayed,
 )
 from dask.bag.utils import assert_eq
-from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
+
+# Needed to pickle the lambda functions used in this test suite
+pytest.importorskip("cloudpickle")
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -175,13 +179,15 @@ def test_repr(func):
     assert str(b.npartitions) in func(b)
     assert b.name[:5] in func(b)
 
+    assert "from_sequence" in func(db.from_sequence(range(5)))
+
 
 def test_pluck():
     d = {("x", 0): [(1, 10), (2, 20)], ("x", 1): [(3, 30), (4, 40)]}
     b = Bag(d, "x", 2)
-    assert set(b.pluck(0)) == set([1, 2, 3, 4])
-    assert set(b.pluck(1)) == set([10, 20, 30, 40])
-    assert set(b.pluck([1, 0])) == set([(10, 1), (20, 2), (30, 3), (40, 4)])
+    assert set(b.pluck(0)) == {1, 2, 3, 4}
+    assert set(b.pluck(1)) == {10, 20, 30, 40}
+    assert set(b.pluck([1, 0])) == {(10, 1), (20, 2), (30, 3), (40, 4)}
     assert b.pluck([1, 0]).name == b.pluck([1, 0]).name
 
 
@@ -229,7 +235,7 @@ def test_fold():
     )
 
     e = db.from_sequence([[1], [2], [3]], npartitions=2)
-    assert set(e.fold(add, initial=[]).compute(scheduler="sync")) == set([1, 2, 3])
+    assert set(e.fold(add, initial=[]).compute(scheduler="sync")) == {1, 2, 3}
 
 
 def test_fold_bag():
@@ -550,6 +556,20 @@ def test_inline_singleton_lists():
     assert inline_singleton_lists(inp, ["c"]) == inp
 
 
+def test_rename_fused_keys_bag():
+    inp = {"b": (list, "a"), "c": (f, "b", 1)}
+
+    outp = optimize(inp, ["c"], rename_fused_keys=False)
+    assert outp.keys() == {"c"}
+    assert outp["c"][1:] == ("a", 1)
+
+    with dask.config.set({"optimization.fuse.rename-keys": False}):
+        assert optimize(inp, ["c"]) == outp
+
+    # By default, fused keys are renamed
+    assert optimize(inp, ["c"]) != outp
+
+
 def test_take():
     assert list(b.take(2)) == [0, 1]
     assert b.take(2) == (0, 1)
@@ -584,8 +604,6 @@ def test_take_npartitions_warn():
 
 
 def test_map_is_lazy():
-    from dask.bag.core import map
-
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
 
 
@@ -633,9 +651,9 @@ def test_read_text_encoding():
         b = db.read_text(fn, blocksize=100, encoding="gb18030")
         c = db.read_text(fn, encoding="gb18030")
         assert len(b.dask) > 5
-        assert list(b.str.strip().map(lambda x: x.encode("utf-8"))) == list(
-            c.str.strip().map(lambda x: x.encode("utf-8"))
-        )
+        b_enc = b.str.strip().map(lambda x: x.encode("utf-8"))
+        c_enc = c.str.strip().map(lambda x: x.encode("utf-8"))
+        assert list(b_enc) == list(c_enc)
 
         d = db.read_text([fn], blocksize=100, encoding="gb18030")
         assert list(b) == list(d)
@@ -687,7 +705,7 @@ def test_from_s3():
 def test_from_sequence():
     b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
-    assert set(b) == set([1, 2, 3, 4, 5])
+    assert set(b) == {1, 2, 3, 4, 5}
 
 
 def test_from_long_sequence():
@@ -706,12 +724,12 @@ def test_from_empty_sequence():
 def test_product():
     b2 = b.product(b)
     assert b2.npartitions == b.npartitions ** 2
-    assert set(b2) == set([(i, j) for i in L for j in L])
+    assert set(b2) == {(i, j) for i in L for j in L}
 
     x = db.from_sequence([1, 2, 3, 4])
     y = db.from_sequence([10, 20, 30])
     z = x.product(y)
-    assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
+    assert set(z) == {(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]}
 
     assert z.name != b2.name
     assert z.name == x.product(y).name
@@ -720,9 +738,9 @@ def test_product():
 def test_partition_collect():
     with partd.Pickle() as p:
         partition(identity, range(6), 3, p)
-        assert set(p.get(0)) == set([0, 3])
-        assert set(p.get(1)) == set([1, 4])
-        assert set(p.get(2)) == set([2, 5])
+        assert set(p.get(0)) == {0, 3}
+        assert set(p.get(1)) == {1, 4}
+        assert set(p.get(2)) == {2, 5}
 
         assert sorted(collect(identity, 0, p, "")) == [(0, [0]), (3, [3])]
 
@@ -852,9 +870,7 @@ def test_to_dataframe():
         check_parts(df, sol)
 
 
-ext_open = [("gz", GzipFile), ("", open)]
-if not PY2:
-    ext_open.append(("bz2", BZ2File))
+ext_open = [("gz", GzipFile), ("bz2", BZ2File), ("", open)]
 
 
 @pytest.mark.parametrize("ext,myopen", ext_open)
@@ -932,9 +948,7 @@ def test_to_textfiles_name_function_warn():
 
 def test_to_textfiles_encoding():
     b = db.from_sequence([u"汽车", u"苹果", u"天气"], npartitions=2)
-    for ext, myopen in [("gz", GzipFile), ("bz2", BZ2File), ("", open)]:
-        if ext == "bz2" and PY2:
-            continue
+    for ext, myopen in ext_open:
         with tmpdir() as dir:
             c = b.to_textfiles(
                 os.path.join(dir, "*." + ext), encoding="gb18030", compute=False
@@ -1110,7 +1124,7 @@ def test_from_delayed():
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-    asum_value = delayed(lambda X: sum(X))(a)
+    asum_value = delayed(sum)(a)
     asum_item = db.Item.from_delayed(asum_value)
     assert asum_value.compute() == asum_item.compute() == 6
 
@@ -1173,7 +1187,6 @@ def test_repartition_names():
     assert b is c
 
 
-@pytest.mark.skipif("not db.core._implement_accumulate")
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
     dsk = dict((("test", i), p) for (i, p) in enumerate(parts))
@@ -1335,7 +1348,7 @@ def test_optimize_fuse_keys():
     z = y.map(inc)
 
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert not set(y.dask) & set(dsk)
+    assert not y.dask.keys() & dsk.keys()
 
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(), fuse_keys=y.__dask_keys__())
     assert all(k in dsk for k in y.__dask_keys__())
@@ -1369,10 +1382,15 @@ def test_repeated_groupby():
 def test_temporary_directory(tmpdir):
     b = db.range(10, npartitions=4)
 
-    with dask.config.set(temporary_directory=str(tmpdir)):
-        b2 = b.groupby(lambda x: x % 2)
-        b2.compute()
-        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
+    # We use a pool to avoid a race condition between the pool close
+    # cleaning up files, and the assert below.
+    pool = multiprocessing.Pool(4)
+
+    with pool:
+        with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
+            b2 = b.groupby(lambda x: x % 2)
+            b2.compute()
+            assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_bag():
@@ -1413,3 +1431,64 @@ def test_map_keynames():
     assert set(b.map(inc).__dask_graph__()) != set(
         b.map_partitions(inc).__dask_graph__()
     )
+
+
+def test_map_releases_element_references_as_soon_as_possible():
+    # Ensure that Bag.map doesn't keep *element* references longer than
+    # necessary. Previous map implementations used ``yield``, which would keep
+    # a reference to the yielded element until the yielded method resumed (this
+    # is just how generator functions work in CPython).
+    #
+    # See https://github.com/dask/dask/issues/5189
+    #
+    # We test 2 variant of potential extra references here:
+    # 1. Within an element of a partition:
+    #    At the time of the second `f_create` for each element, the `C` from
+    #    the first `f_create` should be dropped.
+    # 2. Within a partition:
+    #    When the second item within a partition is processed, `C` from the
+    #    first item should already be dropped.
+    class C:
+        def __init__(self, i):
+            self.i = i
+
+    # keep a weakref to all existing instances of `C`
+    in_memory = weakref.WeakSet()
+
+    def f_create(i):
+        # check that there are no instances of `C` left
+        assert len(in_memory) == 0
+
+        # create new instance
+        o = C(i)
+        in_memory.add(o)
+
+        return o
+
+    def f_drop(o):
+        # o reference dropped on return, should collect
+        return o.i + 100
+
+    b = (
+        db.from_sequence(range(2), npartitions=1)
+        .map(f_create)
+        .map(f_drop)
+        .map(f_create)
+        .map(f_drop)
+        .sum()
+    )
+    try:
+        # Disable gc to ensure refcycles don't matter here
+        gc.disable()
+        b.compute(scheduler="sync")
+    finally:
+        gc.enable()
+
+
+def test_bagged_array_delayed():
+    da = pytest.importorskip("dask.array")
+
+    obj = da.ones(10, chunks=5).to_delayed()[0]
+    bag = db.from_delayed(obj)
+    b = bag.compute()
+    assert_eq(b, [1.0, 1.0, 1.0, 1.0, 1.0])

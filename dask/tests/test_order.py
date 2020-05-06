@@ -36,7 +36,6 @@ def test_ordering_keeps_groups_together(abcde):
     assert abs(o[(a, 1)] - o[(a, 3)]) == 1
 
 
-@pytest.mark.xfail(reason="Can't please 'em all")
 def test_avoid_broker_nodes(abcde):
     r"""
 
@@ -54,9 +53,7 @@ def test_avoid_broker_nodes(abcde):
         (b, 1): (f, (a, 1)),
         (b, 2): (f, (a, 1)),
     }
-
     o = order(dsk)
-
     assert o[(a, 0)] < o[(a, 1)]
 
     # Switch name of 0, 1 to ensure that this isn't due to string comparison
@@ -67,10 +64,19 @@ def test_avoid_broker_nodes(abcde):
         (b, 1): (f, (a, 0)),
         (b, 2): (f, (a, 0)),
     }
-
     o = order(dsk)
-
     assert o[(a, 0)] > o[(a, 1)]
+
+    # Switch name of 0, 1 for "b"s too
+    dsk = {
+        (a, 0): (f,),
+        (a, 1): (f,),
+        (b, 1): (f, (a, 0)),
+        (b, 0): (f, (a, 1)),
+        (b, 2): (f, (a, 1)),
+    }
+    o = order(dsk)
+    assert o[(a, 0)] < o[(a, 1)]
 
 
 def test_base_of_reduce_preferred(abcde):
@@ -169,11 +175,10 @@ def test_avoid_upwards_branching_complex(abcde):
     }
 
     o = order(dsk)
-
     assert o[(c, 1)] < o[(b, 1)]
+    assert abs(o[(d, 2)] - o[(d, 3)]) == 1
 
 
-@pytest.mark.xfail(reason="this case is ambiguous")
 def test_deep_bases_win_over_dependents(abcde):
     r"""
     It's not clear who should run first, e or d
@@ -181,6 +186,8 @@ def test_deep_bases_win_over_dependents(abcde):
     1.  d is nicer because it exposes parallelism
     2.  e is nicer (hypothetically) because it will be sooner released
         (though in this case we need d to run first regardless)
+
+    Regardless of e or d first, we should run b before c.
 
             a
           / | \   .
@@ -192,8 +199,8 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
-    assert o[e] < o[d]
-    assert o[d] < o[b] or o[d] < o[c]
+    assert o[e] < o[d]  # ambiguous, but this is what we currently expect
+    assert o[b] < o[c]
 
 
 def test_prefer_deep(abcde):
@@ -220,7 +227,6 @@ def test_stacklimit(abcde):
     ndependencies(dependencies, dependents)
 
 
-@pytest.mark.xfail(reason="Can't please 'em all")
 def test_break_ties_by_str(abcde):
     a, b, c, d, e = abcde
     dsk = {("x", i): (inc, i) for i in range(10)}
@@ -228,8 +234,8 @@ def test_break_ties_by_str(abcde):
     dsk["y"] = list(x_keys)
 
     o = order(dsk)
-    expected = {"y": 0}
-    expected.update({k: i + 1 for i, k in enumerate(x_keys)})
+    expected = {"y": 10}
+    expected.update({k: i for i, k in enumerate(x_keys)})
 
     assert o == expected
 
@@ -338,7 +344,7 @@ def test_local_parents_of_reduction(abcde):
     |
     a3
 
-    Prefer to finish a1 stack before proceding to b2
+    Prefer to finish a1 stack before proceeding to b2
     """
     a, b, c, d, e = abcde
     a1, a2, a3 = [a + i for i in "123"]
@@ -495,6 +501,7 @@ def test_prefer_short_ancestor(abcde):
     }
     o = order(dsk)
 
+    assert o[(a, 0)] < o[(a, 1)]
     assert o[(b, 0)] < o[(b, 1)]
     assert o[(b, 0)] < o[(c, 2)]
     assert o[(c, 1)] < o[(c, 2)]
@@ -536,3 +543,116 @@ def test_map_overlap(abcde):
     o = order(dsk)
 
     assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]
+
+
+def test_use_structure_not_keys(abcde):
+    """ See https://github.com/dask/dask/issues/5584#issuecomment-554963958
+
+    We were using key names to infer structure, which could result in funny behavior.
+    """
+    a, b, _, _, _ = abcde
+    dsk = {
+        (a, 0): (f,),
+        (a, 1): (f,),
+        (a, 2): (f,),
+        (a, 3): (f,),
+        (a, 4): (f,),
+        (a, 5): (f,),
+        (a, 6): (f,),
+        (a, 7): (f,),
+        (a, 8): (f,),
+        (a, 9): (f,),
+        (b, 5): (f, (a, 2)),
+        (b, 7): (f, (a, 0), (a, 2)),
+        (b, 9): (f, (a, 7), (a, 0), (a, 2)),
+        (b, 1): (f, (a, 4), (a, 7), (a, 0)),
+        (b, 2): (f, (a, 9), (a, 4), (a, 7)),
+        (b, 4): (f, (a, 6), (a, 9), (a, 4)),
+        (b, 3): (f, (a, 5), (a, 6), (a, 9)),
+        (b, 8): (f, (a, 1), (a, 5), (a, 6)),
+        (b, 6): (f, (a, 8), (a, 1), (a, 5)),
+        (b, 0): (f, (a, 3), (a, 8), (a, 1)),
+    }
+    o = order(dsk)
+    As = sorted(val for (letter, _), val in o.items() if letter == a)
+    Bs = sorted(val for (letter, _), val in o.items() if letter == b)
+    assert Bs[0] in {1, 3}
+    if Bs[0] == 3:
+        assert As == [0, 1, 2, 4, 6, 8, 10, 12, 14, 16]
+        assert Bs == [3, 5, 7, 9, 11, 13, 15, 17, 18, 19]
+    else:
+        assert As == [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+        assert Bs == [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+
+
+def test_dont_run_all_dependents_too_early(abcde):
+    """ From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372 """
+    a, b, c, d, e = abcde
+    depth = 10
+    dsk = {(a, 0): 0, (b, 0): 1, (c, 0): 2, (d, 0): (f, (a, 0), (b, 0), (c, 0))}
+    for i in range(1, depth):
+        dsk[(b, i)] = (f, (b, 0))
+        dsk[(c, i)] = (f, (c, 0))
+        dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
+    o = order(dsk)
+    expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+    actual = sorted(v for (letter, num), v in o.items() if letter == d)
+    assert expected == actual
+
+
+def test_many_branches_use_ndependencies(abcde):
+    """ From https://github.com/dask/dask/pull/5646#issuecomment-562700533
+
+    Sometimes we need larger or wider DAGs to test behavior.  This test
+    ensures we choose the branch with more work twice in successtion.
+    This is important, because ``order`` may search along dependencies
+    and then along dependents.
+
+    """
+    a, b, c, d, e = abcde
+    dd = d + d
+    ee = e + e
+    dsk = {
+        (a, 0): 0,
+        (a, 1): (f, (a, 0)),
+        (a, 2): (f, (a, 1)),
+        (b, 1): (f, (a, 0)),
+        (b, 2): (f, (b, 1)),
+        (c, 1): (f, (a, 0)),  # most short and thin; should go last
+        (d, 1): (f, (a, 0)),
+        (d, 2): (f, (d, 1)),
+        (dd, 1): (f, (a, 0)),
+        (dd, 2): (f, (dd, 1)),
+        (dd, 3): (f, (d, 2), (dd, 2)),
+        (e, 1): (f, (a, 0)),
+        (e, 2): (f, (e, 1)),
+        (ee, 1): (f, (a, 0)),
+        (ee, 2): (f, (ee, 1)),
+        (ee, 3): (f, (e, 2), (ee, 2)),
+        (a, 3): (f, (a, 2), (b, 2), (c, 1), (dd, 3), (ee, 3)),
+    }
+    o = order(dsk)
+    # run all d's and e's first
+    expected = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    actual = sorted(v for (letter, _), v in o.items() if letter in {d, dd, e, ee})
+    assert actual == expected
+    assert o[(c, 1)] == o[(a, 3)] - 1
+
+
+def test_order_cycle():
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        dask.get({"a": (f, "a")}, "a")  # we encounter this in `get`
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "a")})  # trivial self-loop
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({("a", 0): (f, ("a", 0))})  # non-string
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})  # non-trivial loop
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
+    with pytest.raises(RuntimeError, match="Cycle detected"):
+        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
+
+
+def test_order_empty():
+    assert order({}) == {}

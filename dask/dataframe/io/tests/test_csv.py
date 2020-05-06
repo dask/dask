@@ -1,22 +1,19 @@
-from __future__ import print_function, division, absolute_import
-
 from io import BytesIO
 import os
 import gzip
-import sys
 from time import sleep
+from unittest import mock
 
 import pytest
 
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
-from toolz import partition_all, valmap
-
-import pandas.util.testing as tm
+from tlz import partition_all, valmap
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
@@ -93,7 +90,7 @@ csv_files = {
     "2014-01-01.csv": (
         b"name,amount,id\n" b"Alice,100,1\n" b"Bob,200,2\n" b"Charlie,300,3\n"
     ),
-    "2014-01-02.csv": (b"name,amount,id\n"),
+    "2014-01-02.csv": b"name,amount,id\n",
     "2014-01-03.csv": (
         b"name,amount,id\n" b"Dennis,400,4\n" b"Edith,500,5\n" b"Frank,600,6\n"
     ),
@@ -108,7 +105,7 @@ fwf_files = {
         b"     Bob     200   2\n"
         b" Charlie     300   3\n"
     ),
-    "2014-01-02.csv": (b"    name  amount  id\n"),
+    "2014-01-02.csv": b"    name  amount  id\n",
     "2014-01-03.csv": (
         b"    name  amount  id\n"
         b"  Dennis     400   4\n"
@@ -620,7 +617,7 @@ def test_categorical_known():
     c,c
     """
     )
-    dtype = pd.api.types.CategoricalDtype(["a", "b", "c"])
+    dtype = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         result = dd.read_csv("foo.*.csv", dtype={"A": "category", "B": "category"})
         assert result.A.cat.known is False
@@ -657,7 +654,9 @@ def test_categorical_known():
         assert_eq(result, expected)
 
         # Specify "unknown" categories
-        result = dd.read_csv("foo.*.csv", dtype=pd.api.types.CategoricalDtype())
+        result = dd.read_csv(
+            "foo.*.csv", dtype=pd.api.types.CategoricalDtype(ordered=False)
+        )
         assert result.A.cat.known is False
 
         result = dd.read_csv("foo.*.csv", dtype="category")
@@ -675,7 +674,7 @@ def test_compression_multiple_files():
         f.write(csv_text.encode())
         f.close()
 
-        with tm.assert_produces_warning(UserWarning):
+        with pytest.warns(UserWarning):
             df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2
@@ -703,8 +702,6 @@ def test_read_csv_sensitive_to_enforce():
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt == "zip" and sys.version_info.minor == 5:
-        pytest.skip("zipfile is read-only on py35")
     if fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
     files2 = valmap(compress[fmt], csv_files)
@@ -773,10 +770,6 @@ def test_auto_blocksize_max64mb():
 
 def test_auto_blocksize_csv(monkeypatch):
     psutil = pytest.importorskip("psutil")
-    try:
-        from unittest import mock
-    except ImportError:
-        mock = pytest.importorskip("mock")
     total_memory = psutil.virtual_memory().total
     cpu_count = psutil.cpu_count()
     mock_read_bytes = mock.Mock(wraps=read_bytes)
@@ -792,11 +785,9 @@ def test_auto_blocksize_csv(monkeypatch):
 def test_head_partial_line_fix():
     files = {
         ".overflow1.csv": (
-            "a,b\n" '0,"abcdefghijklmnopqrstuvwxyz"\n' '1,"abcdefghijklmnopqrstuvwxyz"'
+            "a,b\n0,'abcdefghijklmnopqrstuvwxyz'\n1,'abcdefghijklmnopqrstuvwxyz'"
         ),
-        ".overflow2.csv": (
-            "a,b\n" "111111,-11111\n" "222222,-22222\n" "333333,-33333\n"
-        ),
+        ".overflow2.csv": "a,b\n111111,-11111\n222222,-22222\n333333,-33333\n",
     }
     with filetexts(files):
         # 64 byte file, 52 characters is mid-quote; this should not cause exception in head-handling code.
@@ -1050,7 +1041,19 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-@pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be"])
+xfail_pandas_100 = pytest.mark.xfail(
+    dd._compat.PANDAS_GT_100, reason="https://github.com/dask/dask/issues/5787"
+)
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        pytest.param("utf-16", marks=xfail_pandas_100),
+        pytest.param("utf-16-le", marks=xfail_pandas_100),
+        "utf-16-be",
+    ],
+)
 def test_encoding_gh601(encoding):
     ar = pd.Series(range(0, 100))
     br = ar % 7
@@ -1160,9 +1163,7 @@ def test_robust_column_mismatch():
 
 
 def test_error_if_sample_is_too_small():
-    text = (
-        "AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n" "1,2,3,4,5\n" "6,7,8,9,10\n" "11,12,13,14,15"
-    )
+    text = "AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n1,2,3,4,5\n6,7,8,9,10\n11,12,13,14,15"
     with filetext(text) as fn:
         # Sample size stops mid header row
         sample = 20
@@ -1174,7 +1175,7 @@ def test_error_if_sample_is_too_small():
             dd.read_csv(fn, sample=sample, header=None), pd.read_csv(fn, header=None)
         )
 
-    skiptext = "# skip\n" "# these\n" "# lines\n"
+    skiptext = "# skip\n# these\n# lines\n"
 
     text = skiptext + text
     with filetext(text) as fn:
@@ -1291,6 +1292,63 @@ def test_to_csv_multiple_files_cornercases():
         assert_eq(result, df16)
 
 
+def test_to_single_csv():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv")
+            a.to_csv(fn, index=False, single_file=True)
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            assert_eq(result, df)
+
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv")
+            r = a.to_csv(fn, index=False, compute=False, single_file=True)
+            dask.compute(r, scheduler="sync")
+            result = dd.read_csv(fn).compute().reset_index(drop=True)
+            assert_eq(result, df)
+
+
+def test_to_single_csv_with_name_function():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, "test.csv")
+        with pytest.raises(
+            ValueError,
+            match="name_function is not supported under the single file mode",
+        ):
+            a.to_csv(fn, name_function=lambda x: x, index=False, single_file=True)
+
+
+def test_to_single_csv_with_header_first_partition_only():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 1)
+    with tmpdir() as dn:
+        fn = os.path.join(dn, "test.csv")
+        with pytest.raises(
+            ValueError,
+            match="header_first_partition_only cannot be False in the single file mode.",
+        ):
+            a.to_csv(
+                fn, index=False, header_first_partition_only=False, single_file=True
+            )
+
+
+def test_to_single_csv_gzip():
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpdir() as dn:
+            fn = os.path.join(dn, "test.csv.gz")
+            a.to_csv(fn, index=False, compression="gzip", single_file=True)
+            result = pd.read_csv(fn, compression="gzip").reset_index(drop=True)
+            assert_eq(result, df)
+
+
 @pytest.mark.xfail(reason="to_csv does not support compression")
 def test_to_csv_gzip():
     df = pd.DataFrame(
@@ -1303,6 +1361,21 @@ def test_to_csv_gzip():
             a.to_csv(fn, compression="gzip")
             result = pd.read_csv(fn, index_col=0, compression="gzip")
             tm.assert_frame_equal(result, df)
+
+
+def test_to_csv_nodir():
+    # See #6062 https://github.com/intake/filesystem_spec/pull/271 and
+    df0 = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
+    )
+    df = dd.from_pandas(df0, npartitions=2)
+    with tmpdir() as dir:
+        dir0 = os.path.join(str(dir), "createme")
+        df.to_csv(dir0)
+        assert "createme" in os.listdir(dir)
+        assert os.listdir(dir0)
+        result = dd.read_csv(os.path.join(dir0, "*")).compute()
+    assert (result.x.values == df0.x.values).all()
 
 
 def test_to_csv_simple():
@@ -1342,10 +1415,58 @@ def test_to_csv_with_get():
     ddf = dd.from_pandas(df, npartitions=2)
 
     with tmpdir() as dn:
-        ddf.to_csv(dn, index=False, scheduler=my_get)
+        ddf.to_csv(dn, index=False, compute_kwargs={"scheduler": my_get})
         assert flag[0]
-        result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
-        assert_eq(result, df)
+        result = dd.read_csv(os.path.join(dn, "*"))
+        assert_eq(result, df, check_index=False)
+
+
+def test_to_csv_warns_using_scheduler_argument():
+    from dask.multiprocessing import get as mp_get
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def my_get(*args, **kwargs):
+        return mp_get(*args, **kwargs)
+
+    with tmpdir() as dn:
+        with pytest.warns(FutureWarning):
+            ddf.to_csv(dn, index=False, scheduler=my_get)
+
+
+def test_to_csv_errors_using_multiple_scheduler_args():
+    from dask.multiprocessing import get as mp_get
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def my_get(*args, **kwargs):
+        return mp_get(*args, **kwargs)
+
+    with tmpdir() as dn:
+        with pytest.raises(ValueError) and pytest.warns(FutureWarning):
+            ddf.to_csv(
+                dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
+            )
+
+
+def test_to_csv_keeps_all_non_scheduler_compute_kwargs():
+    from dask.multiprocessing import get as mp_get
+
+    def my_get(*args, **kwargs):
+        assert kwargs["test_kwargs_passed"] == "foobar"
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpdir() as dn:
+        ddf.to_csv(
+            dn,
+            index=False,
+            compute_kwargs={"scheduler": my_get, "test_kwargs_passed": "foobar"},
+        )
 
 
 def test_to_csv_paths():

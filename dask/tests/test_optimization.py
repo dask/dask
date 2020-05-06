@@ -1,12 +1,11 @@
 import itertools
 import pickle
-from operator import getitem
 from functools import partial
 
 import pytest
 
+import dask
 from dask.utils_test import add, inc
-from dask.compatibility import apply
 from dask.core import get_dependencies
 from dask.local import get_sync
 from dask.optimization import (
@@ -15,12 +14,10 @@ from dask.optimization import (
     inline,
     inline_functions,
     functions_of,
-    fuse_getitem,
-    fuse_selections,
     fuse_linear,
     SubgraphCallable,
 )
-from dask.utils import partial_by_order
+from dask.utils import partial_by_order, apply
 
 
 def double(x):
@@ -306,27 +303,6 @@ def test_functions_of():
     assert functions_of(1) == set()
     assert functions_of(a) == set()
     assert functions_of((a,)) == set([a])
-
-
-def test_fuse_getitem():
-    def load(*args):
-        pass
-
-    dsk = {"x": (load, "store", "part", ["a", "b"]), "y": (getitem, "x", "a")}
-    dsk2 = fuse_getitem(dsk, load, 3)
-    dsk2, dependencies = cull(dsk2, "y")
-    assert dsk2 == {"y": (load, "store", "part", "a")}
-
-
-def test_fuse_selections():
-    def load(*args):
-        pass
-
-    dsk = {"x": (load, "store", "part", ["a", "b"]), "y": (getitem, "x", "a")}
-    merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
-    dsk2 = fuse_selections(dsk, getitem, load, merge)
-    dsk2, dependencies = cull(dsk2, "y")
-    assert dsk2 == {"y": (load, "store", "part", "a")}
 
 
 def test_inline_cull_dependencies():
@@ -1223,7 +1199,7 @@ def test_fuse_subgraphs():
     assert res == sol
 
     res = fuse(dsk, "inc-2", fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
@@ -1252,7 +1228,7 @@ def test_fuse_subgraphs():
     assert res in sols
 
     res = fuse(dsk, ["inc-2", "add-2"], fuse_subgraphs=True)
-    # ordering of arguements is unstable, check all permutations
+    # ordering of arguments is unstable, check all permutations
     sols = []
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
@@ -1310,3 +1286,61 @@ def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
         }
     )
     assert res == sol
+
+
+def test_dont_fuse_numpy_arrays():
+    """
+    Some types should stay in the graph bare
+
+    This helps with things like serialization
+    """
+    np = pytest.importorskip("numpy")
+    dsk = {"x": np.arange(5), "y": (inc, "x")}
+
+    assert fuse(dsk, "y")[0] == dsk
+
+
+def test_fuse_config():
+    with dask.config.set({"optimization.fuse.active": False}):
+        d = {
+            "a": 1,
+            "b": (inc, "a"),
+        }
+        dependencies = {"b": ("a",)}
+        assert fuse(d, "b", dependencies=dependencies) == (d, dependencies)
+
+
+def test_fused_keys_max_length():  # generic fix for gh-5999
+    d = {
+        "u-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "v-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "v-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "w-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "w-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "x-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "x-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "y-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "y-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "z-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "z-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            add,
+            "a",
+            "b",
+        ),
+        "a": 1,
+        "b": 2,
+    }
+
+    fused, deps = fuse(d, rename_keys=True)
+    for key in fused:
+        assert len(key) < 150

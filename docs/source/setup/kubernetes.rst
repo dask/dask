@@ -9,7 +9,7 @@ Kubernetes
    Native <kubernetes-native.rst>
 
 Kubernetes_ is a popular system for deploying distributed applications on clusters,
-particularly in the cloud.  You can use Kubernetes to launch Dask workers in the 
+particularly in the cloud.  You can use Kubernetes to launch Dask workers in the
 following two ways:
 
 1.  **Helm**:
@@ -18,8 +18,9 @@ following two ways:
 
     .. code-block:: bash
 
-       helm repo update          # get latest helm charts
-       helm install stable/dask  # deploy standard dask chart
+       helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
+       helm repo update                             # get latest Helm charts
+       helm install dask/dask                     # deploy standard Dask chart
 
     This is a good choice if you want to do the following:
 
@@ -29,9 +30,9 @@ following two ways:
     4.  Try out Dask for the first time on a cloud-based system
         like Amazon, Google, or Microsoft Azure
         (see also our :doc:`Cloud documentation <cloud>`)
-    
+
     .. note::
-    
+
       For more information, see :doc:`Dask and Helm documentation <kubernetes-helm>`.
 
 2.  **Native**:
@@ -56,7 +57,7 @@ following two ways:
     3.  Quickly adapt Dask cluster size to the current workload
 
     .. note::
-    
+
       For more information, see Dask-Kubernetes_ documentation.
 
 You may also want to see the documentation on using

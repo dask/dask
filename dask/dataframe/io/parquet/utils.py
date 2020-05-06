@@ -1,5 +1,4 @@
 import re
-from ....compatibility import string_types
 
 
 class Engine:
@@ -61,7 +60,7 @@ class Engine:
             ]
         parts: List[object]
             A list of objects to be passed to ``Engine.read_partition``.
-            Each object should represent a row group of data.
+            Each object should represent a piece of data (usually a row-group).
             The type of each object can be anything, as long as the
             engine's read_partition function knows how to interpret it.
         """
@@ -299,7 +298,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 
     if user_columns is None:
         user_columns = list(data_columns)
-    elif isinstance(user_columns, string_types):
+    elif isinstance(user_columns, str):
         user_columns = [user_columns]
     else:
         user_columns = list(user_columns)
@@ -311,7 +310,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         # columns (unless `columns` provided).
         user_index = []
         data_columns = data_index + data_columns
-    elif isinstance(user_index, string_types):
+    elif isinstance(user_index, str):
         user_index = [user_index]
     else:
         user_index = list(user_index)
@@ -339,3 +338,94 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         index_names = data_index
 
     return column_names, index_names
+
+
+def _analyze_paths(file_list, fs, root=False):
+    """Consolidate list of file-paths into parquet relative paths
+
+    Note: This function was mostly copied from dask/fastparquet to
+    use in both `FastParquetEngine` and `ArrowEngine`."""
+
+    def _join_path(*path):
+        def _scrub(i, p):
+            # Convert path to standard form
+            # this means windows path separators are converted to linux
+            p = p.replace(fs.sep, "/")
+            if p == "":  # empty path is assumed to be a relative path
+                return "."
+            if p[-1] == "/":  # trailing slashes are not allowed
+                p = p[:-1]
+            if i > 0 and p[0] == "/":  # only the first path can start with /
+                p = p[1:]
+            return p
+
+        abs_prefix = ""
+        if path and path[0]:
+            if path[0][0] == "/":
+                abs_prefix = "/"
+                path = list(path)
+                path[0] = path[0][1:]
+            elif fs.sep == "\\" and path[0][1:].startswith(":/"):
+                # If windows, then look for the "c:/" prefix
+                abs_prefix = path[0][0:3]
+                path = list(path)
+                path[0] = path[0][3:]
+
+        _scrubbed = []
+        for i, p in enumerate(path):
+            _scrubbed.extend(_scrub(i, p).split("/"))
+        simpler = []
+        for s in _scrubbed:
+            if s == ".":
+                pass
+            elif s == "..":
+                if simpler:
+                    if simpler[-1] == "..":
+                        simpler.append(s)
+                    else:
+                        simpler.pop()
+                elif abs_prefix:
+                    raise Exception("can not get parent of root")
+                else:
+                    simpler.append(s)
+            else:
+                simpler.append(s)
+
+        if not simpler:
+            if abs_prefix:
+                joined = abs_prefix
+            else:
+                joined = "."
+        else:
+            joined = abs_prefix + ("/".join(simpler))
+        return joined
+
+    path_parts_list = [_join_path(fn).split("/") for fn in file_list]
+    if root is False:
+        basepath = path_parts_list[0][:-1]
+        for i, path_parts in enumerate(path_parts_list):
+            j = len(path_parts) - 1
+            for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
+                if base_part != path_part:
+                    j = k
+                    break
+            basepath = basepath[:j]
+        l = len(basepath)
+
+    else:
+        basepath = _join_path(root).split("/")
+        l = len(basepath)
+        assert all(
+            p[:l] == basepath for p in path_parts_list
+        ), "All paths must begin with the given root"
+    l = len(basepath)
+    out_list = []
+    for path_parts in path_parts_list:
+        out_list.append(
+            "/".join(path_parts[l:])
+        )  # use '/'.join() instead of _join_path to be consistent with split('/')
+
+    return (
+        "/".join(basepath),
+        out_list,
+    )  # use '/'.join() instead of _join_path to be consistent with split('/')

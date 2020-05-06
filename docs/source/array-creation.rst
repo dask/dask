@@ -2,8 +2,7 @@ Create Dask Arrays
 ==================
 
 You can load or store Dask arrays from a variety of common sources like HDF5,
-NetCDF, `Zarr <https://zarr.readthedocs.io/en/stable/>`_, or any format that
-supports NumPy-style slicing.
+NetCDF, `Zarr`_, or any format that supports NumPy-style slicing.
 
 .. currentmodule:: dask.array
 
@@ -141,7 +140,7 @@ There are several ways to create a Dask array from a Dask DataFrame. Dask DataFr
 
    >>> df = dask.dataframes.from_pandas(...)
    >>> df.to_dask_array()
-   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
 This mirrors the `to_numpy
 <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_numpy.html>`_
@@ -150,7 +149,7 @@ function in Pandas. The ``values`` attribute is also supported:
 .. code-block:: python
 
    >>> df.values
-   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
 However, these arrays do not have known chunk sizes because dask.dataframe does
 not track the number of rows in each partition. This means that some operations
@@ -161,7 +160,7 @@ The chunk sizes can be computed:
 .. code-block:: python
 
    >>> df.to_dask_array(lengths=True)
-   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3)>
+   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3), chunktype=numpy.ndarray>
 
 Specifying ``lengths=True`` triggers immediate computation of the chunk sizes.
 This enables downstream computations that rely on having known chunk sizes
@@ -171,7 +170,7 @@ The Dask DataFrame ``to_records`` method also returns a Dask Array, but does not
 information:
 
    >>> df.to_records()
-   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,)>
+   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,), chunktype=numpy.ndarray>
 
 If you have a function that converts a Pandas DataFrame into a NumPy array,
 then calling ``map_partitions`` with that function on a Dask DataFrame will
@@ -180,7 +179,7 @@ produce a Dask array:
 .. code-block:: python
 
    >>> df.map_partitions(np.asarray)
-   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
 
 Interactions with NumPy arrays
@@ -205,7 +204,7 @@ chunk shape:
    >>> y = np.ones(10)
    >>> z = x + y
    >>> z
-   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,)>
+   dask.array<add, shape=(10,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
 These interactions work not just for NumPy arrays but for any object that has
 shape and dtype attributes and implements NumPy slicing syntax.
@@ -294,11 +293,11 @@ You can store several arrays in one computation with the function
 Zarr
 ----
 
-The `Zarr <https://zarr.readthedocs.io>`_ format is a chunk-wise binary array
+The `Zarr`_ format is a chunk-wise binary array
 storage file format with a good selection of encoding and compression options.
 Due to each chunk being stored in a separate file, it is ideal for parallel
 access in both reading and writing (for the latter, if the Dask array
-chunks are alligned with the target). Furthermore, storage in
+chunks are aligned with the target). Furthermore, storage in
 :doc:`remote data services <remote-data-services>` such as S3 and GCS is
 supported.
 
@@ -467,3 +466,6 @@ other, chaining results through them:
 
    with dask.config.set(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
        ...
+
+
+.. _Zarr: https://zarr.readthedocs.io/en/stable/
