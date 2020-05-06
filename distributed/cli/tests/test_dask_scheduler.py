@@ -300,25 +300,33 @@ def test_preload_module(loop):
         shutil.rmtree(tmpdir)
 
 
-def test_preload_remote_module(loop, tmpdir):
-    with open(tmpdir / "scheduler_info.py", "w") as f:
+def test_preload_remote_module(loop, tmp_path):
+    with open(tmp_path / "scheduler_info.py", "w") as f:
         f.write(PRELOAD_TEXT)
 
-    with popen(["python", "-m", "http.server", "9382"], cwd=tmpdir):
+    with popen([sys.executable, "-m", "http.server", "9382"], cwd=tmp_path):
         with popen(
             [
                 "dask-scheduler",
                 "--scheduler-file",
-                tmpdir / "scheduler-file.json",
+                str(tmp_path / "scheduler-file.json"),
                 "--preload",
                 "http://localhost:9382/scheduler_info.py",
             ],
         ) as proc:
-            with Client(scheduler_file=tmpdir / "scheduler-file.json", loop=loop) as c:
-                assert (
-                    c.run_on_scheduler(lambda dask_scheduler: dask_scheduler.foo)
-                    == "bar"
-                )
+            with Client(
+                scheduler_file=tmp_path / "scheduler-file.json", loop=loop
+            ) as c:
+                for i in range(10):
+                    val = c.run_on_scheduler(
+                        lambda dask_scheduler: getattr(dask_scheduler, "foo", None)
+                    )
+                    if val == "bar":
+                        break
+                    else:
+                        sleep(0.1)
+                else:
+                    raise ValueError(val)
 
 
 PRELOAD_COMMAND_TEXT = """
