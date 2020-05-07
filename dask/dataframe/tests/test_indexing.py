@@ -113,6 +113,10 @@ def test_loc_with_array():
     assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
 
 
+def test_loc_with_function():
+    assert_eq(d.loc[lambda df: df["a"] > 3, :], full.loc[lambda df: df["a"] > 3, :])
+
+
 def test_loc_with_array_different_partition():
     df = pd.DataFrame(
         np.random.randn(20, 5),

@@ -93,10 +93,15 @@ class _LocIndexer(_IndexerBase):
 
     def _loc(self, iindexer, cindexer):
         """ Helper function for the .loc accessor """
+        meta = self._make_meta(iindexer, cindexer)
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
             return self._loc_array(iindexer, cindexer)
+        elif callable(iindexer):
+            return self.obj.map_partitions(
+                methods.try_loc, iindexer, cindexer, meta=meta
+            )
 
         if self.obj.known_divisions:
             iindexer = self._maybe_partial_time_string(iindexer)
@@ -117,7 +122,6 @@ class _LocIndexer(_IndexerBase):
             elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)
 
-            meta = self._make_meta(iindexer, cindexer)
             return self.obj.map_partitions(
                 methods.try_loc, iindexer, cindexer, meta=meta
             )
