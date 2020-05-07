@@ -222,7 +222,8 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts = engine.read_metadata(
+    if engine.__name__ == "ArrowDatasetEngine":
+        meta, fragments, schema, filter, kwargs = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -232,13 +233,28 @@ def read_parquet(
         split_row_groups=split_row_groups,
         **kwargs
     )
+    else:
+        meta, statistics, parts = engine.read_metadata(
+            fs,
+            paths,
+            categories=categories,
+            index=index,
+            gather_statistics=gather_statistics,
+            filters=filters,
+            split_row_groups=split_row_groups,
+            **kwargs
+        )
     if meta.index.name is not None:
         index = meta.index.name
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index, chunksize
-    )
+    if engine.__name__ == "ArrowDatasetEngine":
+        index_in_columns = False
+        divisions = [None] * (len(fragments) + 1)
+    else:
+        parts, divisions, index, index_in_columns = process_statistics(
+            parts, statistics, filters, index, chunksize
+        )
 
     # Account for index and columns arguments.
     # Modify `meta` dataframe accordingly
@@ -246,7 +262,13 @@ def read_parquet(
         meta, index, columns, index_in_columns, auto_index_allowed
     )
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    if engine.__name__ == "ArrowDatasetEngine":
+        from .arrow_dataset import ArrowDatasetSubgraph
+        subgraph = ArrowDatasetSubgraph(
+            name, engine, meta, fragments, schema, columns, filter, index, kwargs
+        )
+    else:
+        subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
@@ -492,14 +514,24 @@ def get_engine(engine):
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
 
-    elif engine == "pyarrow" or engine == "arrow":
+    elif engine == "pyarrow-orig" or engine == "arrow-orig":
         pa = import_required("pyarrow", "`pyarrow` not installed")
         from .arrow import ArrowEngine
 
         if LooseVersion(pa.__version__) < "0.13.1":
             raise RuntimeError("PyArrow version >= 0.13.1 required")
 
-        _ENGINES["pyarrow"] = eng = ArrowEngine
+        _ENGINES["pyarrow-orig"] = eng = ArrowEngine
+        return eng
+
+    elif engine == "pyarrow" or engine == "arrow":
+        pa = import_required("pyarrow", "`pyarrow` not installed")
+        from .arrow_dataset import ArrowDatasetEngine
+
+        if LooseVersion(pa.__version__) < "0.17":
+            raise RuntimeError("PyArrow version >= 0.17.0 required")
+
+        _ENGINES["pyarrow"] = eng = ArrowDatasetEngine
         return eng
 
     else:

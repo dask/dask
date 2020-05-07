@@ -181,6 +181,72 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     return parts, dataset
 
 
+def _get_meta_from_schema(schema, index, categories, partitions, check_partitions=True):
+    columns = None
+
+    has_pandas_metadata = (
+        schema.metadata is not None and b"pandas" in schema.metadata
+    )
+
+    if has_pandas_metadata:
+        pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
+        (
+            index_names,
+            column_names,
+            storage_name_mapping,
+            column_index_names,
+        ) = _parse_pandas_metadata(pandas_metadata)
+        if categories is None:
+            categories = []
+            for col in pandas_metadata["columns"]:
+                if (col["pandas_type"] == "categorical") and (
+                    col["name"] not in categories
+                ):
+                    categories.append(col["name"])
+    else:
+        index_names = []
+        column_names = schema.names
+        storage_name_mapping = {k: k for k in column_names}
+        column_index_names = [None]
+
+    # TODO hack to include partition names in column names
+    if not check_partitions:
+        column_names = schema.names
+
+    if index is None and index_names:
+        index = index_names
+
+    if check_partitions:
+        if set(column_names).intersection(partitions):
+            raise ValueError(
+                "partition(s) should not exist in columns.\n"
+                "categories: {} | partitions: {}".format(column_names, partitions)
+            )
+
+    column_names, index_names = _normalize_index_columns(
+        columns, column_names + partitions, index, index_names
+    )
+
+    all_columns = index_names + column_names
+
+    # Check that categories are included in columns
+    if categories and not set(categories).intersection(all_columns):
+        raise ValueError(
+            "categories not in available columns.\n"
+            "categories: {} | columns: {}".format(categories, list(all_columns))
+        )
+
+    dtypes = _get_pyarrow_dtypes(schema, categories)
+    dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+
+    index_cols = index or ()
+    meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+
+    meta = clear_known_categories(meta, cols=categories)
+
+    return meta, categories
+
+
 def _write_partitioned(
     table, root_path, partition_cols, fs, preserve_index=True, **kwargs
 ):
@@ -302,64 +368,11 @@ class ArrowEngine(Engine):
             schema = dataset.metadata.schema.to_arrow_schema()
         else:
             schema = dataset.schema.to_arrow_schema()
-        columns = None
 
-        has_pandas_metadata = (
-            schema.metadata is not None and b"pandas" in schema.metadata
-        )
-
-        if has_pandas_metadata:
-            pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
-            (
-                index_names,
-                column_names,
-                storage_name_mapping,
-                column_index_names,
-            ) = _parse_pandas_metadata(pandas_metadata)
-            if categories is None:
-                categories = []
-                for col in pandas_metadata["columns"]:
-                    if (col["pandas_type"] == "categorical") and (
-                        col["name"] not in categories
-                    ):
-                        categories.append(col["name"])
-        else:
-            index_names = []
-            column_names = schema.names
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
-
-        if index is None and index_names:
-            index = index_names
-
-        if set(column_names).intersection(partitions):
-            raise ValueError(
-                "partition(s) should not exist in columns.\n"
-                "categories: {} | partitions: {}".format(column_names, partitions)
-            )
-
-        column_names, index_names = _normalize_index_columns(
-            columns, column_names + partitions, index, index_names
-        )
-
-        all_columns = index_names + column_names
+        meta, categories = _get_meta_from_schema(schema, index, categories, partitions)
 
         pieces = sorted(dataset.pieces, key=lambda piece: natural_sort_key(piece.path))
 
-        # Check that categories are included in columns
-        if categories and not set(categories).intersection(all_columns):
-            raise ValueError(
-                "categories not in available columns.\n"
-                "categories: {} | columns: {}".format(categories, list(all_columns))
-            )
-
-        dtypes = _get_pyarrow_dtypes(schema, categories)
-        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
-
-        index_cols = index or ()
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-
-        meta = clear_known_categories(meta, cols=categories)
         if (
             gather_statistics is None
             and dataset.metadata

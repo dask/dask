@@ -127,7 +127,7 @@ def optimize_read_parquet_getitem(dsk, keys):
 # this is just a copy paste of optimize_read_parquet_getitem for now
 def optimize_read_arrow_dataset(dsk, keys):
     # find the keys to optimize
-    from .io.arrow import ArrowDatasetSubgraph
+    from .io.parquet.arrow_dataset import ArrowDatasetSubgraph
 
     read_arrows = [
         k for k, v in dsk.layers.items() if isinstance(v, ArrowDatasetSubgraph)
@@ -206,14 +206,14 @@ def optimize_read_arrow_dataset(dsk, keys):
 
         new = ArrowDatasetSubgraph(
             name,
+            old.engine,
+            meta,
             old.parts,
-            old.fs,
             old.schema,
-            old.format,
             columns,
             old.filter,
+            old.index,
             old.kwargs,
-            meta,
         )
         layers[name] = new
         if name != old.name:
