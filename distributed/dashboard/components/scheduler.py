@@ -1667,9 +1667,8 @@ def systemmonitor_doc(scheduler, extra, doc):
         doc.title = "Dask: Scheduler System Monitor"
         add_periodic_callback(doc, sysmon, 500)
 
-        for subdoc in sysmon.root.children:
-            doc.add_root(subdoc)
-        doc.template = env.get_template("system.html")
+        doc.add_root(sysmon.root)
+        doc.template = env.get_template("simple.html")
         doc.template_variables.update(extra)
         doc.theme = BOKEH_THEME
 
