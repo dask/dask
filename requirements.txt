@@ -1,5 +1,6 @@
 click >= 6.6
 cloudpickle >= 0.2.2
+contextvars;python_version<'3.7'
 dask >= 2.9.0
 msgpack >= 0.6.0
 psutil >= 5.0

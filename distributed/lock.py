@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 import logging
 import uuid
 
-from .client import _get_global_client
+from .client import Client
 from .utils import log_errors, TimeoutError
 from .worker import get_worker
 
@@ -93,7 +93,11 @@ class Lock:
     """
 
     def __init__(self, name=None, client=None):
-        self.client = client or _get_global_client() or get_worker().client
+        try:
+            self.client = client or Client.current()
+        except ValueError:
+            # Initialise new client
+            self.client = get_worker().client
         self.name = name or "lock-" + uuid.uuid4().hex
         self.id = uuid.uuid4().hex
         self._locked = False

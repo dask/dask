@@ -23,6 +23,13 @@ jobs:
           activate-environment: dask-distributed
           auto-activate-base: false
 
+      - name: Install contextvars
+        shell: bash -l {0}
+        run: |
+          if [[ "${{ matrix.python-version }}" = "3.6" ]]; then
+            conda install -c conda-forge contextvars
+          fi
+
       - name: Install tornado
         shell: bash -l {0}
         run: |

@@ -213,6 +213,23 @@ def test_datasets_iter(client):
     client.publish_dataset(**{str(key): key for key in keys})
     for n, key in enumerate(client.datasets):
         assert key == str(n)
+    with pytest.raises(TypeError):
+        client.datasets.__aiter__()
+
+
+@gen_cluster(client=True)
+async def test_datasets_async(c, s, a, b):
+    await c.publish_dataset(foo=1, bar=2)
+    assert await c.datasets["foo"] == 1
+    assert {k async for k in c.datasets} == {"foo", "bar"}
+    with pytest.raises(TypeError):
+        c.datasets["baz"] = 3
+    with pytest.raises(TypeError):
+        del c.datasets["foo"]
+    with pytest.raises(TypeError):
+        next(iter(c.datasets))
+    with pytest.raises(TypeError):
+        len(c.datasets)
 
 
 @gen_cluster(client=True)
@@ -229,3 +246,35 @@ async def test_pickle_safe(c, s, a, b):
 
         with pytest.raises(TypeError):
             await c2.get_dataset("z")
+
+
+@gen_cluster(client=True)
+async def test_deserialize_client(c, s, a, b):
+    """Test that the client attached to Futures returned by Client.get_dataset is always
+    the instance of the client that invoked the method.
+    Specifically:
+
+    - when the client is defined by hostname, test that it is not accidentally
+      reinitialised by IP;
+    - when multiple clients are connected to the same scheduler, test that they don't
+      interfere with each other.
+
+    See: test_client.test_serialize_future
+    See: https://github.com/dask/distributed/issues/3227
+    """
+    future = await c.scatter("123")
+    await c.publish_dataset(foo=future)
+    future = await c.get_dataset("foo")
+    assert future.client is c
+
+    for addr in (s.address, "localhost:" + s.address.split(":")[-1]):
+        async with Client(addr, asynchronous=True) as c2:
+            future = await c.get_dataset("foo")
+            assert future.client is c
+            future = await c2.get_dataset("foo")
+            assert future.client is c2
+
+    # Ensure cleanup
+    from distributed.client import _current_client
+
+    assert _current_client.get() is None

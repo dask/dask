@@ -67,6 +67,10 @@ conda create -n dask-distributed -c conda-forge -c defaults \
 
 source activate dask-distributed
 
+if [[ $PYTHON == 3.6 ]]; then
+  conda install -c conda-forge -c defaults contextvars
+fi
+
 # stacktrace is not currently avaiable for Python 3.8.
 # Remove the version check block below when it is avaiable.
 if [[ $PYTHON != 3.8 ]]; then

@@ -3118,14 +3118,15 @@ def get_client(address=None, timeout=3, resolve_address=True):
         if not address or worker.scheduler.address == address:
             return worker._get_client(timeout=timeout)
 
-    from .client import _get_global_client
+    from .client import Client
 
-    client = _get_global_client()  # TODO: assumes the same scheduler
+    try:
+        client = Client.current()  # TODO: assumes the same scheduler
+    except ValueError:
+        client = None
     if client and (not address or client.scheduler.address == address):
         return client
     elif address:
-        from .client import Client
-
         return Client(address, timeout=timeout)
     else:
         raise ValueError("No global client found and no address provided")

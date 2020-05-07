@@ -6,10 +6,10 @@ from .utils import log_errors, tokey
 class PublishExtension:
     """ An extension for the scheduler to manage collections
 
-    *  publish-list
-    *  publish-put
-    *  publish-get
-    *  publish-delete
+    *  publish_list
+    *  publish_put
+    *  publish_get
+    *  publish_delete
     """
 
     def __init__(self, scheduler):
@@ -59,21 +59,60 @@ class Datasets(MutableMapping):
 
     """
 
+    __slots__ = ("_client",)
+
     def __init__(self, client):
-        self.__client = client
+        self._client = client
 
     def __getitem__(self, key):
-        return self.__client.get_dataset(key)
+        # When client is asynchronous, it returns a coroutine
+        return self._client.get_dataset(key)
 
     def __setitem__(self, key, value):
-        self.__client.publish_dataset(value, name=key)
+        if self._client.asynchronous:
+            # 'await obj[key] = value' is not supported by Python as of 3.8
+            raise TypeError(
+                "Can't use 'client.datasets[name] = value' when client is "
+                "asynchronous; please use 'client.publish_dataset(name=value)' instead"
+            )
+        self._client.publish_dataset(value, name=key)
 
     def __delitem__(self, key):
-        self.__client.unpublish_dataset(key)
+        if self._client.asynchronous:
+            # 'await del obj[key]' is not supported by Python as of 3.8
+            raise TypeError(
+                "Can't use 'del client.datasets[name]' when client is asynchronous; "
+                "please use 'client.unpublish_dataset(name)' instead"
+            )
+        return self._client.unpublish_dataset(key)
 
     def __iter__(self):
-        for key in self.__client.list_datasets():
+        if self._client.asynchronous:
+            raise TypeError(
+                "Can't invoke iter() or 'for' on client.datasets when client is "
+                "asynchronous; use 'async for' instead"
+            )
+        for key in self._client.list_datasets():
             yield key
 
+    def __aiter__(self):
+        if not self._client.asynchronous:
+            raise TypeError(
+                "Can't invoke 'async for' on client.datasets when client is "
+                "synchronous; use iter() or 'for' instead"
+            )
+
+        async def _():
+            for key in await self._client.list_datasets():
+                yield key
+
+        return _()
+
     def __len__(self):
-        return len(self.__client.list_datasets())
+        if self._client.asynchronous:
+            # 'await len(obj)' is not supported by Python as of 3.8
+            raise TypeError(
+                "Can't use 'len(client.datasets)' when client is asynchronous; "
+                "please use 'len(await client.list_datasets())' instead"
+            )
+        return len(self._client.list_datasets())
