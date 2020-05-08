@@ -153,7 +153,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
-    if is_series_like(count) and hasattr(count, "to_frame"):
+    if is_series_like(count):
         typ = type(count.to_frame())
     else:
         typ = type(q)
