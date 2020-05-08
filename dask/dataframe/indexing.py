@@ -120,9 +120,7 @@ class _LocIndexer(_IndexerBase):
                 iindexer = slice(iindexer, iindexer)
 
         meta = self._make_meta(iindexer, cindexer)
-        return self.obj.map_partitions(
-            methods.try_loc, iindexer, cindexer, meta=meta
-        )
+        return self.obj.map_partitions(methods.try_loc, iindexer, cindexer, meta=meta)
 
     def _maybe_partial_time_string(self, iindexer):
         """
