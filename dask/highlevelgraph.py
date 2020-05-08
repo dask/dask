@@ -143,6 +143,8 @@ class HighLevelGraph(Mapping):
 
         return cls(layers, deps)
 
+    # To conform with collections.abc.Mapping, we implement
+    # __getitem__, __len__, and __iter__.
     def __getitem__(self, key):
         for d in self.layers.values():
             if key in d:
@@ -152,24 +154,8 @@ class HighLevelGraph(Mapping):
     def __len__(self):
         return sum(1 for _ in self)
 
-    def items(self):
-        items = []
-        seen = set()
-        for d in self.layers.values():
-            for key in d:
-                if key not in seen:
-                    seen.add(key)
-                    items.append((key, d[key]))
-        return items
-
     def __iter__(self):
         return toolz.unique(toolz.concat(self.layers.values()))
-
-    def keys(self):
-        return [key for key, _ in self.items()]
-
-    def values(self):
-        return [value for _, value in self.items()]
 
     @classmethod
     def merge(cls, *graphs):

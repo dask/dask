@@ -35,8 +35,7 @@ def test_keys_values_items_methods():
     d = b + c
     hg = d.dask
 
-    keys, values, items = hg.keys(), hg.values(), hg.items()
-    assert all(isinstance(i, list) for i in [keys, values, items])
+    keys, values, items = list(hg.keys()), list(hg.values()), list(hg.items())
     assert keys == [i for i in hg]
     assert values == [hg[i] for i in hg]
     assert items == [(k, v) for k, v in zip(keys, values)]
