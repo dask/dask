@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2.16.0 - 2020-05-08
+-------------------
+
+- ``Client.get_dataset`` to always create ``Futures`` attached to itself (:pr:`3729`) `crusaderky`_
+- Remove dev-requirements since it is unused (:pr:`3782`) `Julia Signell`_
+- Use bokeh column for ``/system`` instead of custom css (:pr:`3781`) `Julia Signell`_
+- Attempt to fix ``test_preload_remote_module`` on windows (:pr:`3775`) `James Bourbeau`_
+- Fix broadcast for TLS comms (:pr:`3766`) `Florian Jetter`_
+- Don't validate http preloads locally (:pr:`3768`) `Rami Chowdhury`_
+- Allow range of ports to be specified for ``Workers`` (:pr:`3704`) `James Bourbeau`_
+- Add UCX support for RDMACM (:pr:`3759`) `Peter Andreas Entschev`_
+- Support web addresses in preload (:pr:`3755`) `Matthew Rocklin`_
+
+
 2.15.2 - 2020-05-01
 -------------------
 
