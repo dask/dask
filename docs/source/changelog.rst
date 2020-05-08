@@ -1,6 +1,45 @@
 Changelog
 =========
 
+2.16.0 / 2020-05-08
+-------------------
+
+Array
++++++
+
+- Fix array general-reduction name (:pr:`6176`) `Nick Evans`_
+- Replace ``dim`` with ``shape`` in ``unravel_index`` (:pr:`6155`) `Julia Signell`_
+- Moment: handle all elements being masked (:pr:`5339`) `Gabe Joseph`_
+
+Core
+++++
+
+- Remove Redundant string concatenations in dask code-base (:pr:`6137`) `GALI PREM SAGAR`_
+- Upstream compat (:pr:`6159`) `Tom Augspurger`_
+- Ensure ``sizeof`` of dict and sequences returns an integer (:pr:`6179`) `James Bourbeau`_
+- Estimate python collection sizes with random sampling (:pr:`6154`) `Florian Jetter`_
+- Update test upstream (:pr:`6146`) `Tom Augspurger`_
+- Skip test for mindeps build (:pr:`6144`) `Tom Augspurger`_
+- Switch default multiprocessing context to "spawn" (:pr:`4003`) `Itamar Turner-Trauring`_
+- Update manifest to include dask-schema (:pr:`6140`) `Ben Zaitlen`_
+
+DataFrame
++++++++++
+
+- Harden inconsistent-schema handling in pyarrow-based ``read_parquet`` (:pr:`6160`) `Richard (Rick) Zamora`_
+- Add compute ``kwargs`` to methods that write data to disk (:pr:`6056`) `Krishan Bhasin`_
+- Fix issue where ``unique`` returns an index like result from backends (:pr:`6153`) `GALI PREM SAGAR`_
+- Fix internal error in ``map_partitions`` with collections (:pr:`6103`) `Tom Augspurger`_
+
+Documentation
++++++++++++++
+
+- Add phase of computation to index TOC (:pr:`6157`) `Ben Zaitlen`_
+- Remove unused imports in scheduling script (:pr:`6138`) `James Lamb`_
+- Fix indent (:pr:`6147`) `Martin Durant`_
+- Add Tom's log config example (:pr:`6143`) `Martin Durant`_
+
+
 2.15.0 / 2020-04-24
 -------------------
 
@@ -3120,3 +3159,4 @@ Other
 .. _`Florian Jetter`: https://github.com/fjetter
 .. _`Adam Lewis`: https://github.com/balast
 .. _`David Chudzicki`: https://github.com/dchudz
+.. _`Nick Evans`: https://github.com/nre
