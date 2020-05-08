@@ -900,6 +900,7 @@ def _compute_sum_of_squares(grouped, column):
     if hasattr(grouped, "grouper"):
         keys = grouped.grouper
     else:
+        # Handle CuDF groupby object (different from pandas)
         keys = grouped.grouping._key_columns
     df = grouped.obj[column].pow(2) if column else grouped.obj.pow(2)
     return df.groupby(keys).sum()
