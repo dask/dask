@@ -97,6 +97,8 @@ class _LocIndexer(_IndexerBase):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
             return self._loc_array(iindexer, cindexer)
+        elif callable(iindexer):
+            return self._loc(iindexer(self.obj), cindexer)
 
         if self.obj.known_divisions:
             iindexer = self._maybe_partial_time_string(iindexer)
@@ -105,8 +107,6 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_slice(iindexer, cindexer)
             elif isinstance(iindexer, (list, np.ndarray)):
                 return self._loc_list(iindexer, cindexer)
-            elif callable(iindexer):
-                pass
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
@@ -116,11 +116,13 @@ class _LocIndexer(_IndexerBase):
                 # results in duplicated NaN rows
                 msg = "Cannot index with list against unknown division"
                 raise KeyError(msg)
-            elif not (isinstance(iindexer, slice) or callable(iindexer)):
+            elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)
 
-        meta = self._make_meta(iindexer, cindexer)
-        return self.obj.map_partitions(methods.try_loc, iindexer, cindexer, meta=meta)
+            meta = self._make_meta(iindexer, cindexer)
+            return self.obj.map_partitions(
+                methods.try_loc, iindexer, cindexer, meta=meta
+            )
 
     def _maybe_partial_time_string(self, iindexer):
         """
