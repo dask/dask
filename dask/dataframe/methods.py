@@ -218,10 +218,10 @@ def describe_nonnumeric_aggregate(stats, name):
 
         first = pd.Timestamp(min_ts, tz=tz)
         last = pd.Timestamp(max_ts, tz=tz)
-        index += ["first", "last"]
-        values += [top, freq, first, last]
+        index.extend(["first", "last"])
+        values.extend([top, freq, first, last])
     else:
-        values += [top, freq]
+        values.extend([top, freq])
 
     return pd.Series(values, index=index, name=name)
 

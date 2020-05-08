@@ -614,7 +614,7 @@ def coerce_depth(ndim, depth):
     if isinstance(depth, dict):
         for i in range(ndim):
             if i not in depth:
-                depth.update({i: 0})
+                depth[i] = 0
     return depth
 
 
@@ -629,5 +629,5 @@ def coerce_boundary(ndim, boundary):
     if isinstance(boundary, dict):
         for i in range(ndim):
             if i not in boundary:
-                boundary.update({i: default})
+                boundary[i] = default
     return boundary

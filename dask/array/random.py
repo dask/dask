@@ -92,7 +92,7 @@ class RandomState(object):
 
         shapes = list(args_shapes)
         if size is not None:
-            shapes += [size]
+            shapes.extend([size])
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(
