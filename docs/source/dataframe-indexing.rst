@@ -101,6 +101,18 @@ Dask DataFrame supports Pandas' `partial-string indexing <https://pandas.pydata.
    Dask Name: loc, 12 tasks
 
 
+.. code-block:: python
+
+   >>> ddf.loc[lambda df: df["A"] > 1, ["B"]]
+   Dask DataFrame Structure:
+                      B
+   npartitions=1
+   a              int64
+   c                ...
+   Dask Name: try_loc, 2 tasks
+
+
+
 Positional Indexing
 -------------------
 
