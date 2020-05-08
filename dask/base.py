@@ -209,17 +209,22 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
-        groups = {opt: _extract_graph_and_keys(val) for opt, val in groups.items()}
+
+        _opt_list = []
+        for opt, val in groups.items():
+            _graph_and_keys = _extract_graph_and_keys(val)
+            groups[opt] = _graph_and_keys
+            _opt_list.append(opt(_graph_and_keys[0], _graph_and_keys[1], **kwargs))
 
         for opt in optimizations:
-            groups = {k: (opt(dsk, keys), keys) for k, (dsk, keys) in groups.items()}
+            _opt_list = []
+            group = {}
+            for k, (dsk, keys) in groups.items():
+                group[k] = (opt(dsk, keys), keys)
+                _opt_list.append(opt(dsk, keys, **kwargs))
+            groups = group
 
-        dsk = merge(
-            *map(
-                ensure_dict,
-                [opt(dsk, keys, **kwargs) for opt, (dsk, keys) in groups.items()],
-            )
-        )
+        dsk = merge(*map(ensure_dict, _opt_list,))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -231,8 +236,10 @@ def _extract_graph_and_keys(vals):
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
     from .highlevelgraph import HighLevelGraph
 
-    graphs = [v.__dask_graph__() for v in vals]
-    keys = [v.__dask_keys__() for v in vals]
+    graphs, keys = [], []
+    for v in vals:
+        graphs.append(v.__dask_graph__())
+        keys.append(v.__dask_keys__())
 
     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
         graph = HighLevelGraph.merge(*graphs)
@@ -367,16 +374,13 @@ def optimize(*args, **kwargs):
         return args
 
     dsk = collections_to_dsk(collections, **kwargs)
-    postpersists = [
-        a.__dask_postpersist__() if is_dask_collection(a) else (None, a) for a in args
-    ]
 
-    keys, postpersists = [], []
+    postpersists = []
     for a in collections:
-        keys.extend(flatten(a.__dask_keys__()))
-        postpersists.append(a.__dask_postpersist__())
+        r, s = a.__dask_postpersist__()
+        postpersists.append(r(dsk, *s))
 
-    return repack([r(dsk, *s) for r, s in postpersists])
+    return repack(postpersists)
 
 
 def compute(*args, **kwargs):
@@ -432,8 +436,11 @@ def compute(*args, **kwargs):
     )
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-    keys = [x.__dask_keys__() for x in collections]
-    postcomputes = [x.__dask_postcompute__() for x in collections]
+    keys, postcomputes = [], []
+    for x in collections:
+        keys.append(x.__dask_keys__())
+        postcomputes.append(x.__dask_postcompute__())
+
     results = schedule(dsk, keys, **kwargs)
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
@@ -495,15 +502,20 @@ def visualize(*args, **kwargs):
     filename = kwargs.pop("filename", "mydask")
     optimize_graph = kwargs.pop("optimize_graph", False)
 
-    args2 = []
+    dsks = []
+    args3 = []
     for arg in args:
         if isinstance(arg, (list, tuple, set)):
-            args2.extend(arg)
+            for a in arg:
+                if isinstance(a, Mapping):
+                    dsks.append(a)
+                if is_dask_collection(a):
+                    args3.append(a)
         else:
-            args2.append(arg)
-
-    dsks = [arg for arg in args2 if isinstance(arg, Mapping)]
-    args3 = [arg for arg in args2 if is_dask_collection(arg)]
+            if isinstance(arg, Mapping):
+                dsks.append(arg)
+            if is_dask_collection(arg):
+                args3.append(arg)
 
     dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
     for d in dsks:
@@ -808,7 +820,7 @@ def register_pandas():
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
         data = [block.values for block in df._data.blocks]
-        data += [df.columns, df.index]
+        data.extend([df.columns, df.index])
         return list(map(normalize_token, data))
 
     @normalize_token.register(pd.api.extensions.ExtensionArray)
