@@ -36,7 +36,7 @@ class Cluster:
     2.  Implement ``scale``, which takes an integer and scales the cluster to
         that many workers, or else set ``_supports_scaling`` to False
 
-    For that, should should get the following:
+    For that, you should get the following:
 
     1.  A standard ``__repr__``
     2.  A live IPython widget
