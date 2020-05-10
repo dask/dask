@@ -701,7 +701,11 @@ def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
         frames.append(next)
 
     frame = pd.concat(frames)
-    return pd.merge_asof(left, frame, **kwargs)
+    result = pd.merge_asof(left, frame, **kwargs)
+    # pd.merge_asof() resets index name (and dtype) if left is empty df
+    if result.index.name != left.index.name:
+        result.index.name = left.index.name
+    return result
 
 
 def get_unsorted_columns(frames):
@@ -847,7 +851,12 @@ def merge_asof(
 
     if not is_dask_collection(left):
         left = from_pandas(left, npartitions=1)
+    ixname = ixcol = None
     if left_on is not None:
+        if right_index:
+            ixname = left.index.name
+            left = left.reset_index()
+            ixcol = left.columns[0]
         left = left.set_index(left_on, sorted=True)
 
     if not is_dask_collection(right):
@@ -867,6 +876,10 @@ def merge_asof(
     result = merge_asof_indexed(left, right, **kwargs)
     if left_on or right_on:
         result = result.reset_index()
+        if ixcol is not None:
+            result = result.set_index(ixcol)
+            result._meta = result._meta.rename_axis(ixname)
+            result = result.map_partitions(lambda ddf: ddf.rename_axis(ixname))
 
     return result
 

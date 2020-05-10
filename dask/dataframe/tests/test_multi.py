@@ -324,6 +324,23 @@ def test_merge_asof_on(allow_exact_matches, direction):
     assert_eq(c, C)
 
 
+@pytest.mark.parametrize("allow_exact_matches", [True, False])
+@pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
+def test_merge_asof_left_on_right_index(allow_exact_matches, direction):
+    A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]}, index=[10, 20, 30])
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({"right_val": [2, 3, 6, 7]}, index=[2, 3, 6, 7])
+    b = dd.from_pandas(B, npartitions=2)
+
+    C = pd.merge_asof(
+        A, B, left_on="a", right_index=True, allow_exact_matches=allow_exact_matches, direction=direction,
+    )
+    c = dd.merge_asof(
+        a, b, left_on="a", right_index=True, allow_exact_matches=allow_exact_matches, direction=direction,
+    )
+    assert_eq(c, C)
+
+
 def test_merge_asof_indexed():
     A = pd.DataFrame({"left_val": ["a", "b", "c"]}, index=[1, 5, 10])
     a = dd.from_pandas(A, npartitions=2)
