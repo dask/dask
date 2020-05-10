@@ -1738,6 +1738,8 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
 
 def test_to_parquet_with_get(tmpdir):
+    check_engine()
+
     from dask.multiprocessing import get as mp_get
 
     tmpdir = str(tmpdir)
