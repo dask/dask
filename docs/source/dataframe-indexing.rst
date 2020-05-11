@@ -75,6 +75,22 @@ Slicing rows and (optionally) columns with ``.loc``:
    b              int64
    c                ...
    Dask Name: loc, 2 tasks
+   
+   >>> ddf.loc[df["A"] > 1, ["B"]]
+   Dask DataFrame Structure:
+                      B
+   npartitions=1
+   a              int64
+   c                ...
+   Dask Name: try_loc, 2 tasks
+
+   >>> ddf.loc[lambda df: df["A"] > 1, ["B"]]
+   Dask DataFrame Structure:
+                      B
+   npartitions=1
+   a              int64
+   c                ...
+   Dask Name: try_loc, 2 tasks
 
 Dask DataFrame supports Pandas' `partial-string indexing <https://pandas.pydata.org/pandas-docs/stable/timeseries.html#partial-string-indexing>`_:
 
