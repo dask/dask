@@ -185,3 +185,7 @@ class EWM:
         df_mean = self.obj.ewm(**self._ewm_kwargs()).mean()
         df_mean_sq = df_mean.mul(df_mean)
         return df_sq_mean - df_mean_sq
+
+    @derived_from(pd_EWM)
+    def std(self, bias=True):
+        return self.var(bias).pow(0.5)
