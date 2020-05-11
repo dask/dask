@@ -200,11 +200,11 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
         for w in work:
             typ = type(w)
             if typ is tuple and w and callable(w[0]):  # istask(w)
-                new_work += w[1:]
+                new_work.extend(w[1:])
             elif typ is list:
-                new_work += w
+                new_work.extend(w)
             elif typ is dict:
-                new_work += w.values()
+                new_work.extend(w.values())
             else:
                 try:
                     if w in dsk:

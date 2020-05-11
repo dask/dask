@@ -19,6 +19,7 @@ dependencies:
   - tiledb-py
   - sqlalchemy
   - pyarrow>=0.14.0
+  - jsonschema
   # other -- IO
   - bcolz
   - blosc
@@ -36,7 +37,7 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  - numba
+  - numba>=0.49
   - partd
   - psutil
   - requests

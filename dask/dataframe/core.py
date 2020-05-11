@@ -248,10 +248,9 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         other_key = other
 
-    if inv:
-        dsk.update({(name, 0): (op, other_key, (self._name, 0))})
-    else:
-        dsk.update({(name, 0): (op, (self._name, 0), other_key)})
+    dsk[(name, 0)] = (
+        (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
+    )
 
     other_meta = make_meta(other)
     other_meta_nonempty = meta_nonempty(other_meta)
@@ -2130,7 +2129,7 @@ Dask Name: {name}, {task} tasks"""
         if is_datetime64_any_dtype(data._meta):
             min_ts = data.dropna().astype("i8").min(split_every=split_every)
             max_ts = data.dropna().astype("i8").max(split_every=split_every)
-            stats += [min_ts, max_ts]
+            stats.extend([min_ts, max_ts])
 
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name
@@ -5099,13 +5098,10 @@ def map_partitions(
             _meta=meta,
             **kwargs3
         )
-    elif not simple:
-        dsk = partitionwise_graph(
-            apply, name, func, *args2, **kwargs3, dependencies=dependencies
-        )
     else:
+        kwargs4 = kwargs if simple else kwargs3
         dsk = partitionwise_graph(
-            func, name, *args2, **kwargs, dependencies=dependencies
+            func, name, *args2, **kwargs4, dependencies=dependencies
         )
 
     divisions = dfs[0].divisions

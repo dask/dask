@@ -24,10 +24,8 @@ except ImportError:
 
 try:
     import pyarrow as pa
-
-    check_pa_divs = pa.__version__ >= LooseVersion("0.9.0")
 except ImportError:
-    check_pa_divs = False
+    check_pa_divs = pa = False
 
 
 try:
@@ -44,7 +42,7 @@ if pq and pa.__version__ < LooseVersion("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
-    if sys.platform == "win32" and pa.__version__ == LooseVersion("0.16.0"):
+    if sys.platform == "win32" and pa and pa.__version__ == LooseVersion("0.16.0"):
         SKIP_PYARROW = True
         SKIP_PYARROW_REASON = "https://github.com/dask/dask/issues/6093"
     else:
@@ -1737,6 +1735,29 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn, engine=engine, unknown_key="unknown_value")
 
 
+def test_to_parquet_with_get(tmpdir):
+    check_engine()
+
+    from dask.multiprocessing import get as mp_get
+
+    tmpdir = str(tmpdir)
+
+    flag = [False]
+
+    def my_get(*args, **kwargs):
+        flag[0] = True
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf.to_parquet(tmpdir, compute_kwargs={"scheduler": my_get})
+    assert flag[0]
+
+    result = dd.read_parquet(os.path.join(tmpdir, "*"))
+    assert_eq(result, df, check_index=False)
+
+
 def test_select_partitioned_column(tmpdir, engine):
     pytest.importorskip("snappy")
     if engine == "pyarrow":
@@ -2042,6 +2063,40 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
         check_divisions=False,
         check_index=False,
     )
+
+
+def test_read_inconsistent_schema_pyarrow(tmpdir):
+    check_pyarrow()
+
+    # Note: This is a proxy test for a cudf-related issue fix
+    # (see cudf#5062 github issue).  The cause of that issue is
+    # schema inconsistencies that do not actually correspond to
+    # different types, but whether or not the file/column contains
+    # null values.
+
+    df1 = pd.DataFrame({"id": [0, 1], "val": [10, 20]})
+    df2 = pd.DataFrame({"id": [2, 3], "val": [30, 40]})
+
+    desired_type = "int64"
+    other_type = "int32"
+    df1.val = df1.val.astype(desired_type)
+    df2.val = df2.val.astype(other_type)
+
+    df_expect = pd.concat([df1, df2], ignore_index=True)
+    df_expect["val"] = df_expect.val.astype(desired_type)
+
+    df1.to_parquet(os.path.join(tmpdir, "0.parquet"))
+    df2.to_parquet(os.path.join(tmpdir, "1.parquet"))
+
+    # Read Directory
+    check = dd.read_parquet(str(tmpdir), dataset={"validate_schema": False})
+    assert_eq(check.compute(), df_expect, check_index=False)
+
+    # Read List
+    check = dd.read_parquet(
+        os.path.join(tmpdir, "*.parquet"), dataset={"validate_schema": False}
+    )
+    assert_eq(check.compute(), df_expect, check_index=False)
 
 
 def test_graph_size_pyarrow(tmpdir, engine):

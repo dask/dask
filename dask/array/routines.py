@@ -1188,6 +1188,13 @@ _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
 def isnonzero(a):
+    if a.dtype.kind in {"U", "S"}:
+        # NumPy treats all-whitespace strings as falsy (like in `np.nonzero`).
+        # but not in `.astype(bool)`. To match the behavior of numpy at least until
+        # 1.19, we use `_isnonzero_vec`. When NumPy changes behavior, we should just
+        # use the try block below.
+        # https://github.com/numpy/numpy/issues/9875
+        return a.map_blocks(_isnonzero_vec, dtype=bool)
     try:
         np.zeros(tuple(), dtype=a.dtype).astype(bool)
     except ValueError:
@@ -1266,20 +1273,19 @@ def _unravel_index_kernel(indices, func_kwargs):
 
 
 @derived_from(np)
-def unravel_index(indices, dims, order="C"):
-    # TODO: deprecate dims as well?
-    if dims and indices.size:
+def unravel_index(indices, shape, order="C"):
+    if shape and indices.size:
         unraveled_indices = tuple(
             indices.map_blocks(
                 _unravel_index_kernel,
                 dtype=np.intp,
-                chunks=(((len(dims),),) + indices.chunks),
+                chunks=(((len(shape),),) + indices.chunks),
                 new_axis=0,
-                func_kwargs={_unravel_index_keyword: dims, "order": order},
+                func_kwargs={_unravel_index_keyword: shape, "order": order},
             )
         )
     else:
-        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in dims)
+        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in shape)
 
     return unraveled_indices
 

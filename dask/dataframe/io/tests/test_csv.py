@@ -1415,10 +1415,58 @@ def test_to_csv_with_get():
     ddf = dd.from_pandas(df, npartitions=2)
 
     with tmpdir() as dn:
-        ddf.to_csv(dn, index=False, scheduler=my_get)
+        ddf.to_csv(dn, index=False, compute_kwargs={"scheduler": my_get})
         assert flag[0]
-        result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
-        assert_eq(result, df)
+        result = dd.read_csv(os.path.join(dn, "*"))
+        assert_eq(result, df, check_index=False)
+
+
+def test_to_csv_warns_using_scheduler_argument():
+    from dask.multiprocessing import get as mp_get
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def my_get(*args, **kwargs):
+        return mp_get(*args, **kwargs)
+
+    with tmpdir() as dn:
+        with pytest.warns(FutureWarning):
+            ddf.to_csv(dn, index=False, scheduler=my_get)
+
+
+def test_to_csv_errors_using_multiple_scheduler_args():
+    from dask.multiprocessing import get as mp_get
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def my_get(*args, **kwargs):
+        return mp_get(*args, **kwargs)
+
+    with tmpdir() as dn:
+        with pytest.raises(ValueError) and pytest.warns(FutureWarning):
+            ddf.to_csv(
+                dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
+            )
+
+
+def test_to_csv_keeps_all_non_scheduler_compute_kwargs():
+    from dask.multiprocessing import get as mp_get
+
+    def my_get(*args, **kwargs):
+        assert kwargs["test_kwargs_passed"] == "foobar"
+        return mp_get(*args, **kwargs)
+
+    df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpdir() as dn:
+        ddf.to_csv(
+            dn,
+            index=False,
+            compute_kwargs={"scheduler": my_get, "test_kwargs_passed": "foobar"},
+        )
 
 
 def test_to_csv_paths():
