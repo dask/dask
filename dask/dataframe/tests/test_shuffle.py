@@ -973,3 +973,27 @@ def test_disk_shuffle_check_actual_compression():
     compressed_data = generate_raw_partd_file(compression="BZ2")
 
     assert len(uncompressed_data) > len(compressed_data)
+
+
+@pytest.mark.parametrize("ignore_index", [None, True, False])
+@pytest.mark.parametrize("on", ["id", "name", ["id", "name"]])
+def test_dataframe_shuffle_on_tasks_api(on, ignore_index):
+    # Make sure DataFrame.shuffle API returns the same result
+    # whether the ``on`` argument is a list of column names,
+    # or a separate DataFrame with equivalent values...
+    df_in = dask.datasets.timeseries(
+        "2000",
+        "2001",
+        types={"value": float, "name": str, "id": int},
+        freq="2H",
+        partition_freq="1M",
+        seed=1,
+    )
+    if isinstance(on, str):
+        ext_on = df_in[[on]].copy()
+    else:
+        ext_on = df_in[on].copy()
+    df_out_1 = df_in.shuffle(on, shuffle="tasks", ignore_index=ignore_index)
+    df_out_2 = df_in.shuffle(ext_on, shuffle="tasks", ignore_index=ignore_index)
+
+    assert_eq(df_out_1, df_out_2)

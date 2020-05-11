@@ -1178,7 +1178,13 @@ Dask Name: {name}, {task} tasks"""
             return repartition_freq(self, freq=freq)
 
     def shuffle(
-        self, on, npartitions=None, max_branch=None, shuffle=None, compute=None
+        self,
+        on,
+        npartitions=None,
+        max_branch=None,
+        shuffle=None,
+        ignore_index=False,
+        compute=None,
     ):
         """ Rearrange DataFrame into new partitions
 
@@ -1199,6 +1205,9 @@ Dask Name: {name}, {task} tasks"""
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
+        ignore_index: bool, default False
+            Ignore index during shuffle.  If ``True``, performance may improve,
+            but index values will not be preserved.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
             Note, that even if you set ``compute=False``, an immediate computation

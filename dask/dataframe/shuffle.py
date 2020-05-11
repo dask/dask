@@ -245,7 +245,15 @@ def set_partition(
     return df4.map_partitions(M.sort_index)
 
 
-def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=None):
+def shuffle(
+    df,
+    index,
+    shuffle=None,
+    npartitions=None,
+    max_branch=32,
+    ignore_index=False,
+    compute=None,
+):
     """ Group DataFrame by index
 
     Hash grouping of elements. After this operation all elements that have
@@ -276,17 +284,17 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
                 npartitions=npartitions,
                 max_branch=max_branch,
                 shuffle=shuffle,
+                ignore_index=ignore_index,
                 compute=compute,
             )
 
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
 
-    meta = df._meta._constructor_sliced([0])
     partitions = index.map_partitions(
         partitioning_index,
         npartitions=npartitions or df.npartitions,
-        meta=meta,
+        meta=df._meta._constructor_sliced([0]),
         transform_divisions=False,
     )
     df2 = df.assign(_partitions=partitions)
@@ -298,6 +306,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32, compute=No
         max_branch=max_branch,
         shuffle=shuffle,
         compute=compute,
+        ignore_index=ignore_index,
     )
     del df3["_partitions"]
     return df3
@@ -643,7 +652,7 @@ def rearrange_by_column_tasks(
 ########################################################
 
 
-def partitioning_index(df, npartitions, typ=None):
+def partitioning_index(df, npartitions):
     """
     Computes a deterministic index mapping each record to a partition.
 
@@ -654,24 +663,13 @@ def partitioning_index(df, npartitions, typ=None):
     df : DataFrame/Series/Index
     npartitions : int
         The number of partitions to group into.
-    typ : dtype, optional
-        The output type to use.
 
     Returns
     -------
     partitions : ndarray
         An array of int64 values mapping each record to a partition.
     """
-    if not typ:
-        typ = np.min_scalar_type(npartitions * 2)
-        if typ.kind == "u":  # CuDF doesn't support unsigned types
-            if typ == np.uint8:
-                typ = np.int16
-            elif typ == np.uint16:
-                typ = np.int32
-            else:
-                typ = np.int64
-    return (hash_object_dispatch(df, index=False) % int(npartitions)).astype(typ)
+    return hash_object_dispatch(df, index=False) % int(npartitions)
 
 
 def barrier(args):
