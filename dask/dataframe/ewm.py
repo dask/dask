@@ -1,10 +1,11 @@
+import numpy as np
+from pandas.core.ewm import EWM as pd_EWM
+
 from ..base import tokenize
-from ..utils import funcname
+from ..utils import funcname, derived_from
 from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta
-
-import numpy as np
 
 
 def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
@@ -154,3 +155,7 @@ class EWM:
         return map_ewm_adjust(
             pandas_ewm_method, adj, self.obj, ewm_kwargs, *args, **kwargs,
         )
+
+    @derived_from(pd_EWM)
+    def mean(self):
+        return self._call_method("mean", lambda x: 0)
