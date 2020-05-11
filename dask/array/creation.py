@@ -1021,12 +1021,8 @@ def pad_reuse(array, pad_width, mode, *args):
 def _round_if_needed(arr, dtype):
     if np.issubdtype(dtype, np.integer):
         rint(arr, out=arr)
-        return arr.astype(dtype)
 
-    if dtype == np.bool:
-        return arr.astype(dtype)
-
-    return arr
+    return arr.astype(dtype)
 
 
 def pad_stats(array, pad_width, mode, *args):
