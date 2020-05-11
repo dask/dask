@@ -46,11 +46,10 @@ def map_ewm_adjust(func, adj, df, *args, **kwargs):
 
     dsk = {}
 
-    for i, input_key in enumerate(df.__dask_keys__()):
-        dsk.update({(name_partial, i): (func, input_key, args, kwargs)})
-        kwargs["min_periods"] = max(
-            0, kwargs["min_periods"] - df.partitions[i].shape[axis]
-        )
+    dsk.update(
+        {(name_partial, i): (func, input_key, args, kwargs)}
+        for i, input_key in enumerate(df.__dask_keys__())
+    )
 
     def get_adjustment(adj, partition, prev_partition):
         last_elements = prev_partition[-1, :] if axis == 0 else prev_partition[:, -1]
