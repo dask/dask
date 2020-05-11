@@ -50,11 +50,11 @@ Pandas:
 .. autosummary::
     from_pandas
 
-Creation
+Creating
 --------
 
 Reading from various locations
-------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For text, CSV, and Apache Parquet formats, data can come from local disk,
 the Hadoop File System, S3FS, or other sources, by prepending the filenames with
@@ -77,7 +77,7 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    ...                  storage_options={'anon': True})
 
 Dask Delayed
-------------
+~~~~~~~~~~~~
 
 For more complex situations not covered by the functions above, you may want to
 use :doc:`dask.delayed<delayed>`, which lets you construct Dask DataFrames out
@@ -95,7 +95,7 @@ Dask delayed is particularly useful when simple ``map`` operations aren't
 sufficient to capture the complexity of your data layout.
 
 From Raw Dask Graphs
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 This section is mainly for developers wishing to extend ``dask.dataframe``.  It
 discusses internal API not normally needed by users.  Everything below can be
@@ -139,7 +139,7 @@ Storing
 -------
 
 Writing to remote locations
----------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Dask can write to a variety of data stores including cloud object stores.
 For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
@@ -154,4 +154,4 @@ For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
    ...                                'account_key': 'ACCOUNT_KEY'}
 
 See the :doc:`remote data services documentation<remote-data-services>`
-for more information. 
+for more information.
