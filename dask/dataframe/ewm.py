@@ -4,31 +4,34 @@ from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta
 
+import numpy as np
 
-def map_ewm_merge(func, merge_func, df, *args, **kwargs):
-    """Apply an ewm-type function to the dataframe, merging the results of applying
-       the function to an increasing prefix of partitions.
+
+def map_ewm_adjust(func, adj, df, *args, **kwargs):
+    """Apply an ewm-type function to the dataframe, by applying it to every partition
+        and adjusting the partial results.
 
     Parameters
     ----------
     func : function
-        Function applied to the dataframe.
+        Function to be applied to the dataframe.
     df : dd.DataFrame, dd.Series
-    merge_func: function
-        Function that merges the partial result of applying func to the current partition
-        with results from previous partitions.
+    adj: function
+        Function that returns a single number based on parition's values, used in adjustment.
     args, kwargs :
         Arguments and keywords to pass to the function. The partition will
         be the first argument, and these will be passed *after*.
     """
+    alpha = get_alpha(kwargs)
+    axis = kwargs["axis"]
 
-    merge_func_name = funcname(merge_func)
+    adj_name = funcname(adj)
     if "token" in kwargs:
         func_name = kwargs.pop("token")
         token = tokenize(df, *args, **kwargs)
     else:
         func_name = "ewm-" + funcname(func)
-        token = tokenize(func, merge_func, df, *args, **kwargs)
+        token = tokenize(func, adj, df, *args, **kwargs)
 
     if "meta" in kwargs:
         meta = kwargs.pop("meta")
@@ -38,27 +41,57 @@ def map_ewm_merge(func, merge_func, df, *args, **kwargs):
 
     name = "{0}-{1}".format(func_name, token)
     name_partial = "partial-" + func_name
-    name_merge = "merge-" + merge_func_name
+    name_adj_rem = "adj-rem-" + adj_name
+    name_adj_last = "adj-last-" + adj_name
 
     dsk = {}
 
     for i, input_key in enumerate(df.__dask_keys__()):
         dsk.update({(name_partial, i): (func, input_key, args, kwargs)})
         kwargs["min_periods"] = max(
-            0, kwargs["min_periods"] - df.partitions[i].shape[kwargs["axis"]]
+            0, kwargs["min_periods"] - df.partitions[i].shape[axis]
         )
 
+    def get_adjustment(adj, partition, prev_partition):
+        last_elements = prev_partition[-1, :] if axis == 0 else prev_partition[:, -1]
+        return (1 - alpha) ** partition.shape[axis] * (last_elements - adj(partition))
+
+    def adjust_last_element(adj, partition, prev_partition):
+        last_elements = partition[-1, :] if axis == 0 else partition[:, -1]
+        last_elements += get_adjustment(adj, partition, prev_partition)
+
     partial_keys = list(dsk)
+
     dsk.update(
         {
-            (name_merge, i): (
-                merge_func,
-                input_key,
-                partial_keys[:i],
-                df.__dask_keys__()[:i],
+            (name_adj_last, i): (
+                adjust_last_element,
+                adj,
+                partial_keys[i],
+                partial_keys[i - 1],
             )
-            for i, input_key in enumerate(partial_keys[1:], 1)
         }
+        for i, _ in enumerate(partial_keys[1:], 1)
+    )
+
+    partial_last_adjusted_keys = [
+        (name_adj_last, i) for i, _ in enumerate(partial_keys[1:], 1)
+    ]
+
+    def adjust_remaining_elements(adj, partition, prev_partition):
+        remaining_elements = partition[:-1, :] if axis == 0 else partition[:, :-1]
+        remaining_elements += get_adjustment(adj, partition, prev_partition)
+
+    dsk.update(
+        {
+            (name_adj_rem, i): (
+                adjust_remaining_elements,
+                adj,
+                partial_last_adjusted_keys[i],
+                partial_last_adjusted_keys[i - 1],
+            )
+        }
+        for i, _ in enumerate(partial_last_adjusted_keys, 1)
     )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
@@ -68,6 +101,19 @@ def map_ewm_merge(func, merge_func, df, *args, **kwargs):
 def pandas_ewm_method(df, ewm_kwargs, name, *args, **kwargs):
     ewm = df.ewm(**ewm_kwargs)
     return getattr(ewm, name)(*args, **kwargs)
+
+
+def get_alpha(ewm_kwargs):
+    arg_options = ["com", "span", "halflife"]
+    alpha_comp = {
+        "com": lambda x: 1 / (1 + x),
+        "span": lambda x: 2 / (x + 1),
+        "halflife": lambda x: 1 - np.exp(np.log(0.5) / x),
+    }
+
+    for option in arg_options:
+        if option in ewm_kwargs and ewm_kwargs[option] is not None:
+            return alpha_comp[option](ewm_kwargs[option])
 
 
 class EWM:
