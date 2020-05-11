@@ -977,7 +977,8 @@ def test_disk_shuffle_check_actual_compression():
 
 @pytest.mark.parametrize("ignore_index", [None, True, False])
 @pytest.mark.parametrize("on", ["id", "name", ["id", "name"]])
-def test_dataframe_shuffle_on_tasks_api(on, ignore_index):
+@pytest.mark.parametrize("max_branch", [None, 4])
+def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
     # Make sure DataFrame.shuffle API returns the same result
     # whether the ``on`` argument is a list of column names,
     # or a separate DataFrame with equivalent values...
@@ -993,7 +994,9 @@ def test_dataframe_shuffle_on_tasks_api(on, ignore_index):
         ext_on = df_in[[on]].copy()
     else:
         ext_on = df_in[on].copy()
-    df_out_1 = df_in.shuffle(on, shuffle="tasks", ignore_index=ignore_index)
+    df_out_1 = df_in.shuffle(
+        on, shuffle="tasks", ignore_index=ignore_index, max_branch=max_branch
+    )
     df_out_2 = df_in.shuffle(ext_on, shuffle="tasks", ignore_index=ignore_index)
 
     assert_eq(df_out_1, df_out_2)

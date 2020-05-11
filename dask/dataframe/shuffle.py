@@ -467,6 +467,66 @@ def _noop(x, cleanup_token):
     return x
 
 
+def _simple_rearrange_by_column_tasks(df, column, npartitions, ignore_index=False):
+    """ A simplified (single-stage) version of ``rearrange_by_column_tasks``.
+    """
+
+    token = tokenize(df, column)
+    simple_shuffle_group_token = "simple-shuffle-group-" + token
+    simple_shuffle_split_token = "simple-shuffle-split-" + token
+    simple_shuffle_combine_token = "simple-shuffle-combine-" + token
+
+    # Pre-Materialize tuples with max number of values
+    # to be iterated upon in this function and
+    # loop using slicing later.
+    iter_tuples = tuple(range(max(df.npartitions, npartitions)))
+
+    group = {}
+    split = {}
+    combine = {}
+
+    for i in iter_tuples[: df.npartitions]:
+        # Convert partition into dict of dataframe pieces
+        group[(simple_shuffle_group_token, i)] = (
+            shuffle_group,
+            (df._name, i),
+            column,
+            0,
+            npartitions,
+            npartitions,
+            ignore_index,
+            npartitions,
+        )
+
+    for j in iter_tuples[:npartitions]:
+        _concat_list = []
+        for i in iter_tuples[: df.npartitions]:
+            # Get out each individual dataframe piece from the dicts
+            split[(simple_shuffle_split_token, i, j)] = (
+                getitem,
+                (simple_shuffle_group_token, i),
+                j,
+            )
+
+            _concat_list.append((simple_shuffle_split_token, i, j))
+
+        # concatenate those pieces together, with their friends
+        combine[(simple_shuffle_combine_token, j)] = (
+            _concat,
+            _concat_list,
+            ignore_index,
+        )
+
+    dsk = toolz.merge(group, split, combine)
+    graph = HighLevelGraph.from_collections(
+        simple_shuffle_combine_token, dsk, dependencies=[df]
+    )
+
+    return new_dd_object(
+        graph, simple_shuffle_combine_token, df, (None,) * (npartitions + 1)
+    )
+
+
 def rearrange_by_column_tasks(
     df, column, max_branch=32, npartitions=None, ignore_index=False
 ):
@@ -533,6 +593,14 @@ def rearrange_by_column_tasks(
         k = int(math.ceil(n ** (1 / stages)))
     else:
         k = n
+
+    if (npartitions or n) <= max_branch:
+        # We are creating a small number of output partitions.
+        # No need for staged shuffling. Staged shuffling will
+        # sometimes require extra work/communication in this case.
+        return _simple_rearrange_by_column_tasks(
+            df, column, (npartitions or n), ignore_index=ignore_index
+        )
 
     groups = []
     splits = []
