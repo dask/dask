@@ -1132,7 +1132,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
 
 @derived_from(np)
-def pad(array, pad_width, mode, **kwargs):
+def pad(array, pad_width, mode="constant", **kwargs):
     array = asarray(array)
 
     pad_width = expand_pad_value(array, pad_width)
