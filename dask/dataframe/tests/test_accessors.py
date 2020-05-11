@@ -244,6 +244,15 @@ def test_str_accessor_expand():
 
     assert "n=" in str(info.value)
 
+    s = pd.Series(["a,bcd,zz,f", "aabb,ccdd,z,kk", "aaabbb,cccdddd,l,pp"])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(
+            s.str.split(pat=",", n=n, expand=True),
+            ds.str.split(pat=",", n=n, expand=True),
+        )
+
 
 @pytest.mark.xfail(reason="Need to pad columns")
 def test_str_accessor_expand_more_columns():

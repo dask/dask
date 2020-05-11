@@ -123,10 +123,11 @@ class StringAccessor(Accessor):
             if n == -1:
                 raise NotImplementedError(
                     "To use the expand parameter you must specify the number of "
-                    "expected output columns with the n= parameter"
+                    "expected splits with the n= parameter. Usually n splits result in n+1 output columns."
                 )
             else:
-                meta = type(self._series._meta)([" ".join(["a"] * 2 * n)])
+                delimiter = " " if pat is None else pat
+                meta = type(self._series._meta)([delimiter.join(["a"] * (n + 1))])
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
         else:
             meta = (self._series.name, object)
