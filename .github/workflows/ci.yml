@@ -12,28 +12,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Dump GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
+    - name: get commit message
+      run: |
+          echo ::set-env name=commitmsg::$(git log --format=%B -n 1 ${{ github.event.after }})
 
-    #- name: Checkout
-      #uses: actions/checkout@v2
+    - name: Checkout
+      if: "!contains(env.commitmsg , '[ci skip]')"
+      uses: actions/checkout@v2
 
-    #- name: Set up Python 3.7
-      #uses: actions/setup-python@v1
-      #with:
-        #python-version: 3.7
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
 
-    #- name: Install Dask
-      #run: |
-        #python -m pip install --upgrade pip
-        #python -m pip install -e .
+    - name: Install Dask
+      if: "!contains(env.commitmsg , '[ci skip]')"
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e .
 
-    #- name: Install doc dependencies
-      #run: python -m pip install -r docs/requirements-docs.txt
+    - name: Install doc dependencies
+      if: "!contains(env.commitmsg , '[ci skip]')"
+      run: python -m pip install -r docs/requirements-docs.txt
 
-    #- name: Build docs
-      #run: |
-        #cd docs
-        #make html
+    - name: Build docs
+      if: "!contains(env.commitmsg , '[ci skip]')"
+      run: |
+        cd docs
+        make html
