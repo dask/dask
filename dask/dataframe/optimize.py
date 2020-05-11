@@ -25,11 +25,11 @@ def optimize(dsk, keys, **kwargs):
     else:
         dsk, dependencies = cull(dsk, [keys])
 
+    fuse_subgraphs = config.get("optimization.fuse.subgraphs")
+    if fuse_subgraphs is None:
+        fuse_subgraphs = True
     dsk, dependencies = fuse(
-        dsk,
-        keys,
-        dependencies=dependencies,
-        fuse_subgraphs=config.get("optimization.fuse.subgraphs", True),
+        dsk, keys, dependencies=dependencies, fuse_subgraphs=fuse_subgraphs,
     )
     dsk, _ = cull(dsk, keys)
     return dsk
