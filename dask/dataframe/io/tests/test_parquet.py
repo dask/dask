@@ -25,7 +25,7 @@ except ImportError:
 try:
     import pyarrow as pa
 except ImportError:
-    pa = False
+    check_pa_divs = pa = False
 
 
 try:
