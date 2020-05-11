@@ -12,13 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
+    - name: Checkout
+      uses: actions/checkout@v2
+
     - name: get commit message
       run: |
           echo ::set-env name=commitmsg::$(git log --format=%B -n 1 ${{ github.event.after }})
-
-    - name: Checkout
-      if: "!contains(env.commitmsg , '[ci skip]')"
-      uses: actions/checkout@v2
 
     - name: Set up Python 3.7
       uses: actions/setup-python@v1
