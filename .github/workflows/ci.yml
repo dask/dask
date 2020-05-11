@@ -8,10 +8,13 @@ on:
 
 jobs:
   checks:
-    if: "!contains('test ci skip', 'ci skip')"
     name: Documentation build
     runs-on: ubuntu-latest
     steps:
+
+    - name: debug
+      run: |
+        echo "$GITHUB_CONTEXT"
 
     - name: Checkout
       uses: actions/checkout@v2
