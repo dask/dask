@@ -87,6 +87,7 @@ from .utils import (
     is_dataframe_like,
     make_meta,
 )
+from ..utils import M
 
 
 def align_partitions(*dfs):
@@ -618,7 +619,7 @@ def fix_overlap(ddf):
 
 
 def most_recent_tail(left, right):
-    if right.empty:
+    if len(right.index) == 0:
         return left
     return right.tail(1)
 
@@ -641,7 +642,7 @@ def compute_tails(ddf, by=None):
 
 
 def most_recent_head(left, right):
-    if left.empty:
+    if len(left.index) == 0:
         return right
     return left.head(1)
 
@@ -671,13 +672,18 @@ def pair_partitions(L, R):
 
     n, m = len(L) - 1, len(R) - 1
     i, j = 0, -1
-    while R[j + 1] <= L[i]:
+    while j + 1 < m and R[j + 1] <= L[i]:
         j += 1
     J = []
     while i < n:
-        partition = 0 if j < 0 else m - 1 if j >= m else j
+        partition = max(0, min(m - 1, j))
         lower = R[j] if j >= 0 and R[j] > L[i] else None
-        upper = R[j + 1] if j + 1 < m and (i == n - 1 or R[j + 1] < L[i + 1]) else None
+        upper = (
+            R[j + 1]
+            if j + 1 < m
+            and (R[j + 1] < L[i + 1] or R[j + 1] == L[i + 1] and i == n - 1)
+            else None
+        )
 
         J.append((partition, lower, upper))
 
@@ -686,6 +692,9 @@ def pair_partitions(L, R):
         if i1 > i:
             result.append(J)
             J = []
+        elif i == n - 1 and R[j1] > L[n]:
+            result.append(J)
+            break
         i, j = i1, j1
 
     return result
@@ -851,9 +860,10 @@ def merge_asof(
 
     if not is_dask_collection(left):
         left = from_pandas(left, npartitions=1)
-    ixname = ixcol = None
+    ixname = ixcol = divs = None
     if left_on is not None:
         if right_index:
+            divs = left.divisions if left.known_divisions else None
             ixname = left.index.name
             left = left.reset_index()
             ixcol = left.columns[0]
@@ -877,9 +887,13 @@ def merge_asof(
     if left_on or right_on:
         result = result.reset_index()
         if ixcol is not None:
-            result = result.set_index(ixcol)
-            result._meta = result._meta.rename_axis(ixname)
-            result = result.map_partitions(lambda ddf: ddf.rename_axis(ixname))
+            if divs is not None:
+                result = result.set_index(ixcol, sorted=True, divisions=divs)
+            else:
+                result = result.map_partitions(
+                    M.set_index, ixcol, meta=result._meta.set_index(ixcol)
+                )
+            result = result.map_partitions(M.rename_axis, ixname)
 
     return result
 
