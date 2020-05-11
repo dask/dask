@@ -175,3 +175,13 @@ class EWM:
     @derived_from(pd_EWM)
     def mean(self):
         return self._call_method("mean", lambda x: 0)
+
+    @derived_from(pd_EWM)
+    def var(self, bias=True):
+        if not bias:
+            raise ValueError("bias=false is not yet implemented.")
+
+        df_sq_mean = self.obj.mul(self.obj).ewm(**self._ewm_kwargs()).mean()
+        df_mean = self.obj.ewm(**self._ewm_kwargs()).mean()
+        df_mean_sq = df_mean.mul(df_mean)
+        return df_sq_mean - df_mean_sq
