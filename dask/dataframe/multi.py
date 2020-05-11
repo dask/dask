@@ -273,7 +273,6 @@ def hash_join(
     npartitions=None,
     suffixes=("_x", "_y"),
     shuffle=None,
-    shuffle_dtype=None,
     indicator=False,
 ):
     """ Join two DataFrames on particular columns with hash join
@@ -286,20 +285,8 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(
-        lhs,
-        left_on,
-        npartitions=npartitions,
-        shuffle=shuffle,
-        shuffle_dtype=shuffle_dtype,
-    )
-    rhs2 = shuffle_func(
-        rhs,
-        right_on,
-        npartitions=npartitions,
-        shuffle=shuffle,
-        shuffle_dtype=shuffle_dtype,
-    )
+    lhs2 = shuffle_func(lhs, left_on, npartitions=npartitions, shuffle=shuffle)
+    rhs2 = shuffle_func(rhs, right_on, npartitions=npartitions, shuffle=shuffle)
 
     if isinstance(left_on, Index):
         left_on = None
@@ -432,7 +419,6 @@ def merge(
     indicator=False,
     npartitions=None,
     shuffle=None,
-    shuffle_dtype=None,
     max_branch=None,
 ):
     for o in [on, left_on, right_on]:
@@ -584,7 +570,6 @@ def merge(
             npartitions,
             suffixes,
             shuffle=shuffle,
-            shuffle_dtype=shuffle_dtype,
             indicator=indicator,
         )
 

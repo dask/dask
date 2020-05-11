@@ -248,10 +248,9 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         other_key = other
 
-    if inv:
-        dsk.update({(name, 0): (op, other_key, (self._name, 0))})
-    else:
-        dsk.update({(name, 0): (op, (self._name, 0), other_key)})
+    dsk[(name, 0)] = (
+        (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
+    )
 
     other_meta = make_meta(other)
     other_meta_nonempty = meta_nonempty(other_meta)
@@ -1179,13 +1178,7 @@ Dask Name: {name}, {task} tasks"""
             return repartition_freq(self, freq=freq)
 
     def shuffle(
-        self,
-        on,
-        npartitions=None,
-        max_branch=None,
-        shuffle=None,
-        shuffle_dtype=None,
-        compute=None,
+        self, on, npartitions=None, max_branch=None, shuffle=None, compute=None
     ):
         """ Rearrange DataFrame into new partitions
 
@@ -1206,11 +1199,6 @@ Dask Name: {name}, {task} tasks"""
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
-        shuffle_dtype : dtype or False, optional
-            Specifies the dtype of the intermediate ``'_partitions'`` column used
-            to map rows to new partitions. If ``False`` (and ``shuffle='tasks'``),
-            no ``'_partitions'`` column is constructed, and hashing is repeated
-            during each stage of shuffling.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
             Note, that even if you set ``compute=False``, an immediate computation
@@ -1232,7 +1220,6 @@ Dask Name: {name}, {task} tasks"""
             on,
             npartitions=npartitions,
             max_branch=max_branch,
-            shuffle_dtype=shuffle_dtype,
             shuffle=shuffle,
             compute=compute,
         )
@@ -2189,7 +2176,7 @@ Dask Name: {name}, {task} tasks"""
         if is_datetime64_any_dtype(data._meta):
             min_ts = data.dropna().astype("i8").min(split_every=split_every)
             max_ts = data.dropna().astype("i8").max(split_every=split_every)
-            stats += [min_ts, max_ts]
+            stats.extend([min_ts, max_ts])
 
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name

@@ -328,7 +328,7 @@ def read_pandas(
     assume_missing=False,
     storage_options=None,
     include_path_column=False,
-    **kwargs
+    **kwargs,
 ):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
@@ -402,7 +402,7 @@ def read_pandas(
         sample=sample,
         compression=compression,
         include_path=include_path_column,
-        **(storage_options or {})
+        **(storage_options or {}),
     )
 
     if include_path_column:
@@ -561,7 +561,7 @@ def make_reader(reader, reader_name, file_type):
         assume_missing=False,
         storage_options=None,
         include_path_column=False,
-        **kwargs
+        **kwargs,
     ):
         return read_pandas(
             reader,
@@ -575,7 +575,7 @@ def make_reader(reader, reader_name, file_type):
             assume_missing=assume_missing,
             storage_options=storage_options,
             include_path_column=include_path_column,
-            **kwargs
+            **kwargs,
         )
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
@@ -606,7 +606,8 @@ def to_csv(
     scheduler=None,
     storage_options=None,
     header_first_partition_only=None,
-    **kwargs
+    compute_kwargs=None,
+    **kwargs,
 ):
     """
     Store Dask DataFrame to CSV files
@@ -672,6 +673,9 @@ def to_csv(
         String like 'gzip' or 'xz'.  Must support efficient random access.
         Filenames with extensions corresponding to known compression
         algorithms (gz, bz2) will be compressed accordingly automatically
+    compute: bool
+        If true, immediately executes. If False, returns a set of delayed
+        objects, which can be computed at a later time.
     sep : character, default ','
         Field delimiter for the output file
     na_rep : string, default ''
@@ -731,6 +735,8 @@ def to_csv(
         European data
     storage_options: dict
         Parameters passed on to the backend filesystem class.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
 
     Returns
     -------
@@ -755,7 +761,7 @@ def to_csv(
         compression=compression,
         encoding=encoding,
         newline="",
-        **(storage_options or {})
+        **(storage_options or {}),
     )
     to_csv_chunk = delayed(_write_csv, pure=False)
     dfs = df.to_delayed()
@@ -777,7 +783,7 @@ def to_csv(
             mode=mode,
             name_function=name_function,
             num=df.npartitions,
-            **file_options
+            **file_options,
         )
         values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
         if header_first_partition_only:
@@ -786,7 +792,33 @@ def to_csv(
             [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
         )
     if compute:
-        delayed(values).compute(scheduler=scheduler)
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+
+        if scheduler is not None:
+            warn(
+                "The 'scheduler' keyword argument for `to_csv()` is deprecated and"
+                "will be removed in a future version. "
+                "Please use the `compute_kwargs` argument instead. "
+                f"For example, df.to_csv(..., compute_kwargs={{scheduler: {scheduler}}})",
+                FutureWarning,
+            )
+
+        if (
+            scheduler is not None
+            and compute_kwargs.get("scheduler") is not None
+            and compute_kwargs.get("scheduler") != scheduler
+        ):
+            raise ValueError(
+                f"Differing values for 'scheduler' have been passed in.\n"
+                f"scheduler argument: {scheduler}\n"
+                f"via compute_kwargs: {compute_kwargs.get('scheduler')}"
+            )
+
+        if scheduler is not None and compute_kwargs.get("scheduler") is None:
+            compute_kwargs["scheduler"] = scheduler
+
+        delayed(values).compute(**compute_kwargs)
         return [f.path for f in files]
     else:
         return values
