@@ -3904,7 +3904,6 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
-        shuffle_dtype=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -3960,10 +3959,6 @@ class DataFrame(_Frame):
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
-        shuffle_dtype : dtype or False, optional
-            Specifies the dtype of the intermediate ``'_partitions'`` column used
-            for hash-based shuffling. If ``False`` (and ``shuffle='tasks'``),
-            no ``'_partitions'`` column is constructed.
 
         Notes
         -----
