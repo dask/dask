@@ -7,7 +7,7 @@ from .utils import make_meta
 import numpy as np
 
 
-def map_ewm_adjust(func, adj, df, *args, **kwargs):
+def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
     """Apply an ewm-type function to the dataframe, by applying it to every partition
         and adjusting the partial results.
 
@@ -22,21 +22,14 @@ def map_ewm_adjust(func, adj, df, *args, **kwargs):
         Arguments and keywords to pass to the function. The partition will
         be the first argument, and these will be passed *after*.
     """
-    alpha = get_alpha(kwargs)
-    axis = kwargs["axis"]
+    alpha = get_alpha(ewm_kwargs)
+    axis = ewm_kwargs["axis"]
 
     adj_name = funcname(adj)
-    if "token" in kwargs:
-        func_name = kwargs.pop("token")
-        token = tokenize(df, *args, **kwargs)
-    else:
-        func_name = "ewm-" + funcname(func)
-        token = tokenize(func, adj, df, *args, **kwargs)
+    func_name = "ewm-" + funcname(func)
+    token = tokenize(func, adj, df, ewm_kwargs, *args, **kwargs)
 
-    if "meta" in kwargs:
-        meta = kwargs.pop("meta")
-    else:
-        meta = _emulate(func, df, *args, **kwargs)
+    meta = _emulate(func, df, *args, **kwargs)
     meta = make_meta(meta, index=df._meta.index)
 
     name = "{0}-{1}".format(func_name, token)
@@ -155,3 +148,9 @@ class EWM:
             "ignore_na": self.ignore_na,
             "axis": self.axis,
         }
+
+    def _call_method(self, method_name, adj, *args, **kwargs):
+        ewm_kwargs = self._ewm_kwargs()
+        return map_ewm_adjust(
+            pandas_ewm_method, adj, self.obj, ewm_kwargs, *args, **kwargs,
+        )
