@@ -39,8 +39,10 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
     dsk = {}
 
     dsk.update(
-        {(name_partial, i): (func, df, args, kwargs)}
-        for i, input_key in enumerate(df.__dask_keys__())
+        {
+            (name_partial, i): (func, df.partitions[i], args, kwargs)
+            for i in range(df.npartitions)
+        }
     )
 
     def get_adjustment(adj, partition, prev_partition):
@@ -61,8 +63,8 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
                 partial_keys[i],
                 partial_keys[i - 1],
             )
+            for i in range(1, len(partial_keys))
         }
-        for i, _ in enumerate(partial_keys[1:], 1)
     )
 
     partial_last_adjusted_keys = [
@@ -81,8 +83,8 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
                 partial_last_adjusted_keys[i],
                 partial_last_adjusted_keys[i - 1],
             )
+            for i in range(1, len(partial_last_adjusted_keys))
         }
-        for i, _ in enumerate(partial_last_adjusted_keys, 1)
     )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
