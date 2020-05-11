@@ -1,5 +1,5 @@
 import numpy as np
-from pandas.core.ewm import EWM as pd_EWM
+from pandas.core.window.ewm import EWM as pd_EWM
 
 from ..base import tokenize
 from ..utils import funcname, derived_from
@@ -29,10 +29,8 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
     adj_name = funcname(adj)
     func_name = "ewm-" + funcname(func)
     token = tokenize(func, adj, df, ewm_kwargs, *args, **kwargs)
-
-    meta = _emulate(func, df, *args, **kwargs)
+    meta = _emulate(func, df, args, kwargs)
     meta = make_meta(meta, index=df._meta.index)
-
     name = "{0}-{1}".format(func_name, token)
     name_partial = "partial-" + func_name
     name_adj_rem = "adj-rem-" + adj_name
@@ -41,7 +39,7 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
     dsk = {}
 
     dsk.update(
-        {(name_partial, i): (func, input_key, args, kwargs)}
+        {(name_partial, i): (func, df, args, kwargs)}
         for i, input_key in enumerate(df.__dask_keys__())
     )
 
@@ -91,7 +89,10 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
     return df._constructor(graph, name, meta, df.divisions)
 
 
-def pandas_ewm_method(df, ewm_kwargs, name, *args, **kwargs):
+def pandas_ewm_method(df, args, kwargs):
+    ewm_kwargs = args[0]
+    name = args[1]
+    args = args[2:]
     ewm = df.ewm(**ewm_kwargs)
     return getattr(ewm, name)(*args, **kwargs)
 
@@ -152,6 +153,7 @@ class EWM:
 
     def _call_method(self, method_name, adj, *args, **kwargs):
         ewm_kwargs = self._ewm_kwargs()
+        args = (ewm_kwargs, method_name) + args
         return map_ewm_adjust(
             pandas_ewm_method, adj, self.obj, ewm_kwargs, *args, **kwargs,
         )
