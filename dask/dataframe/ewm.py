@@ -45,12 +45,20 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
         }
     )
 
+    def get_last_elements(partition):
+        index = partition.shape[axis] - 1
+        if axis == 0:
+            last_elements = partition.loc[index, :]
+        else:
+            last_elements = partition.loc[:, index]
+        return last_elements
+
     def get_adjustment(adj, partition, prev_partition):
-        last_elements = prev_partition[-1, :] if axis == 0 else prev_partition[:, -1]
+        last_elements = get_last_elements(prev_partition)
         return (1 - alpha) ** partition.shape[axis] * (last_elements - adj(partition))
 
     def adjust_last_element(adj, partition, prev_partition):
-        last_elements = partition[-1, :] if axis == 0 else partition[:, -1]
+        last_elements = get_last_elements(partition)
         last_elements += get_adjustment(adj, partition, prev_partition)
 
     partial_keys = list(dsk)
@@ -67,17 +75,21 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
         }
     )
 
-    partial_last_adjusted_keys = [
-        (name_adj_last, i) for i, _ in enumerate(partial_keys[1:], 1)
+    partial_last_adjusted_keys = [(partial_keys[0], 0)] + [
+        (name_adj_last, i) for i in range(1, len(partial_keys))
     ]
 
     def adjust_remaining_elements(adj, partition, prev_partition):
-        remaining_elements = partition[:-1, :] if axis == 0 else partition[:, :-1]
+        index = partition.shape[axis] - 1
+        remaining_elements = (
+            partition.loc[:index, :] if axis == 0 else partition.iloc[:, :index]
+        )
         remaining_elements += get_adjustment(adj, partition, prev_partition)
 
+    dsk.update({(name, 0): ()})
     dsk.update(
         {
-            (name_adj_rem, i): (
+            (name, i): (
                 adjust_remaining_elements,
                 adj,
                 partial_last_adjusted_keys[i],
@@ -86,7 +98,7 @@ def map_ewm_adjust(func, adj, df, ewm_kwargs, *args, **kwargs):
             for i in range(1, len(partial_last_adjusted_keys))
         }
     )
-
+    # print(dsk)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     return df._constructor(graph, name, meta, df.divisions)
 
