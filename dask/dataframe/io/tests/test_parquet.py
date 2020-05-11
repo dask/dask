@@ -24,10 +24,8 @@ except ImportError:
 
 try:
     import pyarrow as pa
-
-    check_pa_divs = pa.__version__ >= LooseVersion("0.9.0")
 except ImportError:
-    check_pa_divs = False
+    check_pa_divs = pa = False
 
 
 try:
@@ -44,7 +42,7 @@ if pq and pa.__version__ < LooseVersion("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
-    if sys.platform == "win32" and pa.__version__ == LooseVersion("0.16.0"):
+    if sys.platform == "win32" and pa and pa.__version__ == LooseVersion("0.16.0"):
         SKIP_PYARROW = True
         SKIP_PYARROW_REASON = "https://github.com/dask/dask/issues/6093"
     else:
@@ -1738,6 +1736,8 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
 
 def test_to_parquet_with_get(tmpdir):
+    check_engine()
+
     from dask.multiprocessing import get as mp_get
 
     tmpdir = str(tmpdir)
