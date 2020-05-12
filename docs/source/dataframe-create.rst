@@ -50,8 +50,11 @@ Pandas:
 .. autosummary::
     from_pandas
 
-Locations
----------
+Creating
+--------
+
+Reading from various locations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For text, CSV, and Apache Parquet formats, data can come from local disk,
 the Hadoop File System, S3FS, or other sources, by prepending the filenames with
@@ -73,9 +76,8 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    >>> df = dd.read_csv('s3://bucket-name/my-data-*.csv',
    ...                  storage_options={'anon': True})
 
-
 Dask Delayed
-------------
+~~~~~~~~~~~~
 
 For more complex situations not covered by the functions above, you may want to
 use :doc:`dask.delayed<delayed>`, which lets you construct Dask DataFrames out
@@ -92,9 +94,8 @@ files (as a stand in for any custom file format).
 Dask delayed is particularly useful when simple ``map`` operations aren't
 sufficient to capture the complexity of your data layout.
 
-
 From Raw Dask Graphs
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 This section is mainly for developers wishing to extend ``dask.dataframe``.  It
 discusses internal API not normally needed by users.  Everything below can be
@@ -133,3 +134,24 @@ The ``dd.read_csv`` function does this for you:
                 Timestamp('2000-01-03 23:59:59')]
 
    df = dd.DataFrame(dsk, name, columns, divisions)
+
+Storing
+-------
+
+Writing to remote locations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Dask can write to a variety of data stores including cloud object stores.
+For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
+
+.. code-block:: python
+
+   >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
+   >>> df = dd.from_pandas(pd.DataFrame(data=d), npartitions=2)
+   >>> dd.to_parquet(df=df,
+   ...               path='abfs://CONTAINER/FILE.parquet'
+   ...               storage_options={'account_name': 'ACCOUNT_NAME',
+   ...                                'account_key': 'ACCOUNT_KEY'}
+
+See the :doc:`remote data services documentation<remote-data-services>`
+for more information.
