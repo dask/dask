@@ -399,6 +399,7 @@ class MultiWorker(Worker, ProcessInterface):
             )
             for i in range(n)
         ]
+        self._startup_lock = asyncio.Lock()
 
     @property
     def status(self):

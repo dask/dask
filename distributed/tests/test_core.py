@@ -88,6 +88,7 @@ def test_server(loop):
         await server.listen(8881)
         assert server.port == 8881
         assert server.address == ("tcp://%s:8881" % get_ip())
+        await server
 
         for addr in ("127.0.0.1:8881", "tcp://127.0.0.1:8881", server.address):
             comm = await connect(addr)

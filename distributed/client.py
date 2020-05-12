@@ -51,9 +51,15 @@ from .utils_comm import (
     retry_operation,
 )
 from .cfexecutor import ClientExecutor
-from .core import connect, rpc, clean_exception, CommClosedError, PooledRPCCall
+from .core import (
+    connect,
+    rpc,
+    clean_exception,
+    CommClosedError,
+    PooledRPCCall,
+    ConnectionPool,
+)
 from .metrics import time
-from .node import Node
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
 from .publish import Datasets
@@ -492,7 +498,7 @@ class AllExit(Exception):
     """
 
 
-class Client(Node):
+class Client:
     """ Connect to and submit computation to a Dask cluster
 
     The Client connects users to a Dask cluster.  It provides an asynchronous
@@ -590,6 +596,7 @@ class Client(Node):
         deserializers=None,
         extensions=DEFAULT_EXTENSIONS,
         direct_to_workers=None,
+        connection_limit=512,
         **kwargs,
     ):
         if timeout == no_default:
@@ -671,7 +678,7 @@ class Client(Node):
         self._asynchronous = asynchronous
         self._should_close_loop = not loop
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
-        self.loop = self._loop_runner.loop
+        self.io_loop = self.loop = self._loop_runner.loop
 
         self._gather_keys = None
         self._gather_future = None
@@ -714,12 +721,14 @@ class Client(Node):
             "erred": self._handle_task_erred,
         }
 
-        super(Client, self).__init__(
-            connection_args=self.connection_args,
-            io_loop=self.loop,
+        self.rpc = ConnectionPool(
+            limit=connection_limit,
             serializers=serializers,
             deserializers=deserializers,
+            deserialize=True,
+            connection_args=self.connection_args,
             timeout=timeout,
+            server=self,
         )
 
         for ext in extensions:
@@ -961,8 +970,7 @@ class Client(Node):
             )
 
     async def _start(self, timeout=no_default, **kwargs):
-
-        await super().start()
+        await self.rpc.start()
 
         if timeout == no_default:
             timeout = self._timeout

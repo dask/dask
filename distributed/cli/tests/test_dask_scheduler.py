@@ -66,6 +66,11 @@ def test_dashboard(loop):
     pytest.importorskip("bokeh")
 
     with popen(["dask-scheduler"]) as proc:
+        for line in proc.stderr:
+            if b"dashboard at" in line:
+                dashboard_port = int(line.decode().split(":")[-1].strip())
+                break
+
         with Client("127.0.0.1:%d" % Scheduler.default_port, loop=loop) as c:
             pass
 
@@ -78,7 +83,7 @@ def test_dashboard(loop):
             try:
                 # All addresses should respond
                 for name in names:
-                    uri = "http://%s:8787/status/" % name
+                    uri = "http://%s:%d/status/" % (name, dashboard_port)
                     response = requests.get(uri)
                     assert response.ok
                 break
@@ -88,7 +93,7 @@ def test_dashboard(loop):
                 assert time() < start + 10
 
     with pytest.raises(Exception):
-        requests.get("http://127.0.0.1:8787/status/")
+        requests.get("http://127.0.0.1:%d/status/" % dashboard_port)
 
 
 def test_dashboard_non_standard_ports(loop):
@@ -317,16 +322,12 @@ def test_preload_remote_module(loop, tmp_path):
             with Client(
                 scheduler_file=tmp_path / "scheduler-file.json", loop=loop
             ) as c:
-                for i in range(10):
-                    val = c.run_on_scheduler(
+                assert (
+                    c.run_on_scheduler(
                         lambda dask_scheduler: getattr(dask_scheduler, "foo", None)
                     )
-                    if val == "bar":
-                        break
-                    else:
-                        sleep(0.1)
-                else:
-                    raise ValueError(val)
+                    == "bar"
+                )
 
 
 PRELOAD_COMMAND_TEXT = """

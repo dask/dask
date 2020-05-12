@@ -34,6 +34,7 @@ from .utils import (
     parse_timedelta,
     has_keyword,
     CancelledError,
+    TimeoutError,
 )
 from . import protocol
 
@@ -106,6 +107,10 @@ class Server:
         stream_handlers=None,
         connection_limit=512,
         deserialize=True,
+        serializers=None,
+        deserializers=None,
+        connection_args=None,
+        timeout=None,
         io_loop=None,
     ):
         self.handlers = {
@@ -191,12 +196,58 @@ class Server:
             self.thread_id = threading.get_ident()
 
         self.io_loop.add_callback(set_thread_ident)
+        self._startup_lock = asyncio.Lock()
+        self.status = None
+
+        self.rpc = ConnectionPool(
+            limit=connection_limit,
+            deserialize=deserialize,
+            serializers=serializers,
+            deserializers=deserializers,
+            connection_args=connection_args,
+            timeout=timeout,
+            server=self,
+        )
 
         self.__stopped = False
 
     async def finished(self):
         """ Wait until the server has finished """
         await self._event_finished.wait()
+
+    def __await__(self):
+        async def _():
+            timeout = getattr(self, "death_timeout", 0)
+            async with self._startup_lock:
+                if self.status == "running":
+                    return self
+                if timeout:
+                    try:
+                        await asyncio.wait_for(self.start(), timeout=timeout)
+                        self.status = "running"
+                    except Exception:
+                        await self.close(timeout=1)
+                        raise TimeoutError(
+                            "{} failed to start in {} seconds".format(
+                                type(self).__name__, timeout
+                            )
+                        )
+                else:
+                    await self.start()
+                    self.status = "running"
+            return self
+
+        return _().__await__()
+
+    async def start(self):
+        await self.rpc.start()
+
+    async def __aenter__(self):
+        await self
+        return self
+
+    async def __aexit__(self, typ, value, traceback):
+        await self.close()
 
     def start_periodic_callbacks(self):
         """ Start Periodic Callbacks consistently
@@ -331,6 +382,7 @@ class Server:
 
         logger.debug("Connection from %r to %s", address, type(self).__name__)
         self._comms[comm] = op
+        await self
         try:
             while True:
                 try:

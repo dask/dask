@@ -1079,7 +1079,6 @@ class Scheduler(ServerNode):
         if validate is None:
             validate = dask.config.get("distributed.scheduler.validate")
         self.validate = validate
-        self.status = None
         self.proc = psutil.Process()
         self.delete_interval = parse_timedelta(delete_interval, default="ms")
         self.synchronize_worker_interval = parse_timedelta(
@@ -1426,8 +1425,8 @@ class Scheduler(ServerNode):
 
     async def start(self):
         """ Clear out old state and restart all running coroutines """
-
         await super().start()
+        assert self.status != "running"
 
         enable_gc_diagnosis()
 
@@ -1437,28 +1436,26 @@ class Scheduler(ServerNode):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        if self.status != "running":
-            for addr in self._start_address:
-                await self.listen(addr, **self.security.get_listen_args("scheduler"))
-                self.ip = get_address_host(self.listen_address)
-                listen_ip = self.ip
+        for addr in self._start_address:
+            await self.listen(addr, **self.security.get_listen_args("scheduler"))
+            self.ip = get_address_host(self.listen_address)
+            listen_ip = self.ip
 
-                if listen_ip == "0.0.0.0":
-                    listen_ip = ""
+            if listen_ip == "0.0.0.0":
+                listen_ip = ""
 
-            if self.address.startswith("inproc://"):
-                listen_ip = "localhost"
+        if self.address.startswith("inproc://"):
+            listen_ip = "localhost"
 
-            # Services listen on all addresses
-            self.start_services(listen_ip)
+        # Services listen on all addresses
+        self.start_services(listen_ip)
 
-            self.status = "running"
-            for listener in self.listeners:
-                logger.info("  Scheduler at: %25s", listener.contact_address)
-            for k, v in self.services.items():
-                logger.info("%11s at: %25s", k, "%s:%d" % (listen_ip, v.port))
+        for listener in self.listeners:
+            logger.info("  Scheduler at: %25s", listener.contact_address)
+        for k, v in self.services.items():
+            logger.info("%11s at: %25s", k, "%s:%d" % (listen_ip, v.port))
 
-            self.loop.add_callback(self.reevaluate_occupancy)
+        self.loop.add_callback(self.reevaluate_occupancy)
 
         if self.scheduler_file:
             with open(self.scheduler_file, "w") as f:
@@ -2937,7 +2934,13 @@ class Scheduler(ServerNode):
             finally:
                 await asyncio.gather(*[nanny.close_rpc() for nanny in nannies])
 
-            await self.start()
+            # self.status = None
+            # await self
+            self.clear_task_state()
+
+            with ignoring(AttributeError):
+                for c in self._worker_coroutines:
+                    c.cancel()
 
             self.log_event([client, "all"], {"action": "restart", "client": client})
             start = time()

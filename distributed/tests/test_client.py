@@ -3620,8 +3620,8 @@ def test_open_close_many_workers(loop, worker, count, repeat):
                     return
                 w = worker(s["address"], loop=loop)
                 running[w] = None
-                workers.add(w)
                 await w
+                workers.add(w)
                 addr = w.worker_address
                 running[w] = addr
                 await asyncio.sleep(duration)
@@ -3648,6 +3648,9 @@ def test_open_close_many_workers(loop, worker, count, repeat):
             while c.nthreads():
                 sleep(0.2)
                 assert time() < start + 10
+
+            while len(workers) < count * repeat:
+                sleep(0.2)
 
             status = False
 

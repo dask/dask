@@ -562,7 +562,6 @@ class Worker(ServerNode):
 
         self.actors = {}
         self.loop = loop or IOLoop.current()
-        self.status = None
         self.reconnect = reconnect
         self.executor = executor or ThreadPoolExecutor(
             self.nthreads, thread_name_prefix="Dask-Worker-Threads'"

@@ -806,7 +806,6 @@ def test_local_tls_restart(loop):
         loop=loop,
     ) as c:
         with Client(c.scheduler.address, loop=loop, security=security) as client:
-            print(c.workers, c.workers[0].address)
             workers_before = set(client.scheduler_info()["workers"])
             assert client.submit(inc, 1).result() == 2
             client.restart()
