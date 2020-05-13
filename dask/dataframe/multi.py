@@ -59,7 +59,7 @@ import warnings
 from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype
+from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
 
 from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
@@ -231,7 +231,24 @@ allowed_right = ("inner", "right")
 
 def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
+    categorical_columns = kwargs.pop("categorical_columns", None)
+
     out = lhs.merge(*args, **kwargs)
+    if categorical_columns is not None:
+        for c in categorical_columns:
+            columns = [df[c] for df in [lhs, *args] if c in df.columns]
+            if c == kwargs.get("left_on") is not None and kwargs.get(
+                "right_index", False
+            ):
+                columns.append(args[0].index)
+            elif c == kwargs.get("right_on") is not None and kwargs.get(
+                "left_index", False
+            ):
+                columns.append(lhs.index)
+            out[c] = out[c].astype(
+                union_categoricals([c.astype("category") for c in columns])
+            )
+
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
@@ -253,6 +270,9 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = [
+        c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
+    ]
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
@@ -323,6 +343,10 @@ def hash_join(
     name = "hash-join-" + token
 
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = [
+        c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
+    ]
+
     dsk = {
         (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
         for i in range(npartitions)
@@ -334,11 +358,15 @@ def hash_join(
 
 
 def single_partition_join(left, right, **kwargs):
-    # if the merge is perfomed on_index, divisions can be kept, otherwise the
-    # new index will not necessarily correspond the current divisions
+    # if the merge is performed on_index, divisions can be kept, otherwise the
+    # new index will not necessarily correspond with the current divisions
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = [
+        c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
+    ]
+
     name = "merge-" + tokenize(left, right, **kwargs)
     if left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
@@ -531,6 +559,10 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
         )
+        categorical_columns = [
+            c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
+        ]
+
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(
                 right, right_on, left.divisions, max_branch, shuffle=shuffle
@@ -555,6 +587,7 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
             empty_index_dtype=meta.index.dtype,
+            categorical_columns=categorical_columns,
         )
     # Catch all hash join
     else:
