@@ -297,6 +297,11 @@ def _read_single_hdf(
         """
         with pd.HDFStore(path, mode=mode) as hdf:
             keys = [k for k in hdf.keys() if fnmatch(k, key)]
+            if not keys:
+                keys = [
+                    n._v_pathname
+                    for n in hdf._handle.walk_nodes("/", classname="Table")
+                ]
             stops = []
             divisions = []
             for k in keys:
