@@ -984,7 +984,13 @@ def stack_partitions(dfs, divisions, join="outer"):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def concat(dfs, axis=0, join="outer", interleave_partitions=False, ignore_unknown_divisions=False):
+def concat(
+    dfs,
+    axis=0,
+    join="outer",
+    interleave_partitions=False,
+    ignore_unknown_divisions=False,
+):
     """ Concatenate DataFrames along rows.
 
     - When axis=0 (default), concatenate DataFrames row-wise:
