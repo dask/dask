@@ -17,7 +17,7 @@ test_import () {
 # only a dependency for real-life usage and unit tests
 test_import ""                                "import dask, dask.multiprocessing, dask.threaded, dask.optimization"
 test_import "toolz"                           "import dask.delayed"
-test_import "fsspec numpy toolz partd"              "import dask.bag"
+test_import "fsspec numpy toolz partd"        "import dask.bag"
 test_import "toolz numpy toolz"               "import dask.array"
 test_import "fsspec numpy pandas toolz partd" "import dask.dataframe"
 test_import "bokeh"                           "import dask.diagnostics"
