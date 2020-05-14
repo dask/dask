@@ -1542,12 +1542,5 @@ def clean(threads=not WINDOWS, instances=True, timeout=1, processes=True):
 
 @pytest.fixture
 def cleanup():
-    with check_thread_leak():
-        with check_process_leak():
-            with check_instances():
-                reset_config()
-                dask.config.set({"distributed.comm.timeouts.connect": "5s"})
-                for name, level in logging_levels.items():
-                    logging.getLogger(name).setLevel(level)
-
-                yield
+    with clean():
+        yield

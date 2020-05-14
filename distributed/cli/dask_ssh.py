@@ -175,7 +175,7 @@ def main(
             version=distributed.__version__
         )
     )
-    print("Worker nodes:".format(n=len(hostnames)))
+    print("Worker nodes: {n}".format(n=len(hostnames)))
     for i, host in enumerate(hostnames):
         print("  {num}: {host}".format(num=i, host=host))
     print("\nscheduler node: {addr}:{port}".format(addr=scheduler, port=scheduler_port))

@@ -2889,7 +2889,7 @@ async def test_rebalance_unprepared(c, s, a, b):
 
 @gen_cluster(client=True)
 async def test_rebalance_raises_missing_data(c, s, a, b):
-    with pytest.raises(ValueError, match=f"keys were found to be missing"):
+    with pytest.raises(ValueError, match="keys were found to be missing"):
         futures = await c.scatter(range(100))
         keys = [f.key for f in futures]
         del futures
