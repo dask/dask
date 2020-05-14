@@ -2542,7 +2542,9 @@ def choice_map_partitions(x, size=1, replace=True):
     lx = len(x)
     real_size = size if size <= lx else lx
     # because of: https://github.com/numpy/numpy/issues/8311 (fixed but still in python3.6)
-    sampled = [] if real_size == 0 else np.random.choice(x, size=real_size, replace=replace)
+    sampled = (
+        [] if real_size == 0 else np.random.choice(x, size=real_size, replace=replace)
+    )
     return sampled, lx, size, replace
 
 
