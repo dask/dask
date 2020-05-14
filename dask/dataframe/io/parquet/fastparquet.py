@@ -189,8 +189,9 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
 
 
 class FastParquetEngine(Engine):
-    @staticmethod
+    @classmethod
     def read_metadata(
+        cls,
         fs,
         paths,
         categories=None,
@@ -438,8 +439,8 @@ class FastParquetEngine(Engine):
 
         return (meta, stats, parts)
 
-    @staticmethod
-    def read_partition(fs, piece, columns, index, categories=(), pf=None, **kwargs):
+    @classmethod
+    def read_partition(cls, fs, piece, columns, index, categories=(), pf=None, **kwargs):
         if isinstance(index, list):
             columns += index
 
@@ -471,8 +472,9 @@ class FastParquetEngine(Engine):
                 rg_piece, columns, categories, index=index, **kwargs.get("read", {})
             )
 
-    @staticmethod
+    @classmethod
     def initialize_write(
+        cls,
         df,
         fs,
         path,
@@ -551,8 +553,9 @@ class FastParquetEngine(Engine):
 
         return (fmd, i_offset)
 
-    @staticmethod
+    @classmethod
     def write_partition(
+        cls,
         df,
         path,
         fs,
@@ -599,8 +602,8 @@ class FastParquetEngine(Engine):
         else:
             return []
 
-    @staticmethod
-    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+    @classmethod
+    def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
         _meta = copy.copy(fmd)
         if parts:
             for rg in parts:

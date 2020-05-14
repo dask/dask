@@ -249,8 +249,9 @@ def _write_partitioned(
 
 
 class ArrowEngine(Engine):
-    @staticmethod
+    @classmethod
     def read_metadata(
+        cls,
         fs,
         paths,
         categories=None,
@@ -522,9 +523,9 @@ class ArrowEngine(Engine):
 
         return (meta, stats, parts)
 
-    @staticmethod
+    @classmethod
     def read_partition(
-        fs, piece, columns, index, categories=(), partitions=(), **kwargs
+        cls, fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
         if isinstance(index, list):
             for level in index:
@@ -558,13 +559,8 @@ class ArrowEngine(Engine):
                     columns_and_parts.append(part_name)
             columns = columns or None
 
-        df = piece.read(
-            columns=columns,
-            partitions=partitions,
-            use_pandas_metadata=True,
-            use_threads=False,
-            **kwargs.get("read", {}),
-        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=False)
+        arrow_table = cls._parquet_piece_as_arrow(piece, columns, partitions, **kwargs)
+        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
         # Note that `to_pandas(ignore_metadata=False)` means
         # pyarrow will use the pandas metadata to set the index.
@@ -596,6 +592,26 @@ class ArrowEngine(Engine):
         if index:
             df = df.set_index(index)
         return df
+
+    @classmethod
+    def _arrow_table_to_pandas(cls, arrow_table: pa.Table, categories, **kwargs) -> pd.DataFrame:
+        _kwargs = kwargs.get("arrow_to_pandas", {})
+        _kwargs.update({
+            'use_threads': False, 'ignore_metadata': False
+        })
+
+        return arrow_table.to_pandas(categories=categories, **_kwargs)
+
+    @classmethod
+    def _parquet_piece_as_arrow(cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs) -> pa.Table:
+        arrow_table = piece.read(
+            columns=columns,
+            partitions=partitions,
+            use_pandas_metadata=True,
+            use_threads=False,
+            **kwargs.get("read", {}),
+        )
+        return arrow_table
 
     @staticmethod
     def initialize_write(
