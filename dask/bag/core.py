@@ -672,9 +672,9 @@ class Bag(DaskMethodsMixin):
         Examples
         --------
         >>> import dask.bag as db
-        >>> b = db.from_sequence(range(5), npartition=2)
-        >>> list(b.choice(3))
-        [0, 3, 4]
+        >>> b = db.from_sequence(range(5), npartitions=2)
+        >>> len(list(b.choice(3).compute()))
+        3
         """
         return self.map_partitions(choice_map_partitions, size, replace).reduction(
             lambda x: x, choice_reduce
