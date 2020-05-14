@@ -10,6 +10,7 @@ import versioneer
 extras_require = {
     "array": ["numpy >= 1.13.0", "toolz >= 0.8.2"],
     "bag": [
+        "numpy >= 1.13.0",
         "cloudpickle >= 0.2.2",
         "fsspec >= 0.6.0",
         "toolz >= 0.8.2",
