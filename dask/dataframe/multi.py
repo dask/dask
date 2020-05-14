@@ -234,20 +234,27 @@ def merge_chunk(lhs, *args, **kwargs):
     categorical_columns = kwargs.pop("categorical_columns", None)
 
     out = lhs.merge(*args, **kwargs)
+    left_index = kwargs.get("left_index", False)
+    right_index = kwargs.get("right_index", False)
+
     if categorical_columns is not None:
         for c in categorical_columns:
             columns = [df[c] for df in [lhs, *args] if c in df.columns]
-            if c == kwargs.get("left_on") is not None and kwargs.get(
-                "right_index", False
-            ):
+
+            if c == kwargs.get("left_on", None) and right_index:
                 columns.append(args[0].index)
-            elif c == kwargs.get("right_on") is not None and kwargs.get(
-                "left_index", False
-            ):
+            elif c == kwargs.get("right_on", None) and left_index:
                 columns.append(lhs.index)
-            out[c] = out[c].astype(
-                union_categoricals([c.astype("category") for c in columns])
-            )
+
+            if len(columns) > 0:
+                dtype = union_categoricals([c.astype("category") for c in columns])
+            else:
+                dtype = "category"
+
+            if c in out.columns:
+                out[c] = out[c].astype(dtype)
+            elif c == kwargs.get("right_on", None) and left_index:
+                out.index = out.index.astype(dtype)
 
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
