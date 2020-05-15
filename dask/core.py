@@ -1,6 +1,8 @@
 from collections import defaultdict
 
 from .utils_test import add, inc  # noqa: F401
+from .task import Task
+
 
 no_default = "__no_default__"
 
@@ -37,7 +39,9 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return type(x) is tuple and x and callable(x[0])
+    return ((type(x) is tuple and x and callable(x[0])) or
+            # TODO: swap comparison order when Task is more widely used
+            type(x) is Task)
 
 
 def has_tasks(dsk, x):
@@ -113,6 +117,10 @@ def _execute_task(arg, cache, dsk=None):
     """
     if isinstance(arg, list):
         return [_execute_task(a, cache) for a in arg]
+    elif isinstance(arg, Task):
+        return arg.function(*(_execute_task(a, cache) for a in arg.args),
+                            **{k: _execute_task(v, cache) for k, v
+                               in arg.kwargs.items()})
     elif istask(arg):
         func, args = arg[0], arg[1:]
         # Note: Don't assign the subtask results to a variable. numpy detects
