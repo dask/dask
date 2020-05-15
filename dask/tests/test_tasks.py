@@ -1,3 +1,4 @@
+from collections import namedtuple
 import pickle
 
 import pytest
@@ -106,3 +107,41 @@ def test_from_tuple():
     assert task.args == (1,)
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {}
+
+    # Dask graphs
+    dsk = Task.from_tuple({"x": (apply, inc, (1,), {'extra': .1})})
+    assert dsk["x"].function is inc
+    assert dsk["x"].args == (1,)
+    assert dsk["x"].kwargs == {'extra': .1}
+    assert dsk["x"].annotations == {}
+
+    # Nesting
+    N = namedtuple("N", ("a b"))
+
+    dsk = Task.from_tuple({
+        "v": N(1, (inc, 1)),
+        "w": N(inc, 1),
+        "x": (apply, inc, (1,), {'kwtask': (apply, inc, (1,), {'extra': .1})}),
+        "y": [(inc, 5), (inc, (inc, 2))],
+        "z": (inc, (inc, (inc, Task(inc, (1,)))))
+    })
+
+    # namedtuple reproduce in this case
+    assert dsk["v"]._fields == ("a", "b")
+    assert dsk["v"] == N(1, Task.from_call(inc, 1))
+    # namedtuple not reproduced here
+    assert not hasattr(dsk["w"], "_fields")
+    assert dsk["w"] == Task.from_call(inc, 1)
+    # nested applies
+    kwtask = Task.from_call(inc, 1, extra=.1)
+    assert dsk["x"] == Task.from_call(inc, 1, kwtask=kwtask)
+    # lists
+    task = Task.from_call(inc, 2)
+    task = Task.from_call(inc, task)
+    assert dsk["y"] == [Task.from_call(inc, 5), task]
+    # nested inc tuples
+    task = Task.from_call(inc, 1)
+    task = Task.from_call(inc, task)
+    task = Task.from_call(inc, task)
+    task = Task.from_call(inc, task)
+    assert dsk["z"] == task
