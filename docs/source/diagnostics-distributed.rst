@@ -164,6 +164,13 @@ network, such as Jupyter notebooks. For example, if we chose to do this we could
 forward port 8888 (the default Jupyter port) to port 8001 with
 ``ssh -L 8001:localhost:8888 user@remote``.
 
+Required Packages
+~~~~~~~~~~~~~~~~~
+
+If you are unable to see the dashboard (404 error), you might also be missing some of the
+packages required to build it. Check that you have both ``bokeh`` and ``jupyter-server-proxy``
+installed. 
+
 API
 ---
 
