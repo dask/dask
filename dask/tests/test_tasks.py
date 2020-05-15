@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from dask.core import Task, get
@@ -19,11 +21,22 @@ def test_empty_dict():
         d["a"] = 5
 
 
+def test_task_pickle():
+    task = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
+    assert pickle.loads(pickle.dumps(task)) == task
+
+
+def test_task_repr_and_str():
+    task_1 = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
+    task_2 = Task.from_call(inc, task_1)
+    assert str(task_2) == "inc(inc(1, extra=0.1, annotions={'resource': 'GPU'}))"
+    assert repr(task_2) == "Task(inc, Task(inc, 1, extra=0.1, annotions={'resource': 'GPU'}))"
+
+
 def test_execute_task():
     task_1 = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
     task_2 = Task.from_call(inc, task_1)
     dsk = {'x': task_2}
-
     assert get(dsk, 'x') == 3.1
 
 

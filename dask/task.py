@@ -15,7 +15,7 @@ class Task:
 
     def __init__(self, function, args=None, kwargs=None, annotations=None):
         if not callable(function):
-            raise TypeError("%s is not callable" % function)
+            raise TypeError("function (%s) must be callable" % function)
 
         self.function = function
         self.args = args or ()
@@ -23,16 +23,42 @@ class Task:
 
         if annotations is not None:
             if not isinstance(annotations, dict):
-                raise TypeError("annotations must be a dict")
+                raise TypeError("annotations (%s) must be a dict"
+                                % function)
             self.annotations = annotations
         else:
             self.annotations = EMPTY_DICT
 
-    def __equal__(self, other):
+    def __eq__(self, other):
+        """ Equality """
         return (self.function == other.function and
                 self.args == other.args and
                 self.kwargs == other.kwargs and
                 self.annotations == other.annotations)
+
+    def __reduce__(self):
+        """ Pickling """
+        return (Task, (self.function, self.args,
+                       self.kwargs, self.annotations))
+
+
+    def _format_task_bits(self, fn):
+        """ Format task components into a (arg0, kw0=kwv0, annotations=...) string """
+        arg_str = ", ".join("%s" % fn(a) for a in self.args)
+        kwargs_str = ", ".join("%s=%s"% (k, fn(v))
+                                         for k, v
+                                         in self.kwargs.items())
+        annot_str = ("annotions=%s" % fn(self.annotations)
+                     if self.annotations else "")
+
+        bits = (bit for bit in (arg_str, kwargs_str, annot_str) if bit)
+        return ", ".join(bits)
+
+    def __str__(self):
+        return "%s(%s)" % (self.function.__name__, self._format_task_bits(str))
+
+    def __repr__(self):
+        return "Task(%s, %s)" % (self.function.__name__, self._format_task_bits(repr))
 
     @classmethod
     def from_call(cls, function, *args, annotations=None, **kwargs):
