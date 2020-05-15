@@ -319,7 +319,7 @@ else:
 def read_pandas(
     reader,
     urlpath,
-    blocksize=AUTO_BLOCKSIZE,
+    blocksize="default",
     collection=True,
     lineterminator=None,
     compression=None,
@@ -374,6 +374,8 @@ def read_pandas(
     else:
         path_converter = None
 
+    if blocksize == "default":
+        blocksize = AUTO_BLOCKSIZE
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:
@@ -504,10 +506,10 @@ urlpath : string or list
     can pass a globstring or a list of paths, with the caveat that they
     must all have the same protocol.
 blocksize : str, int or None, optional
-    Number of bytes by which to cut up larger files. Default value is
-    computed based on available physical memory and the number of cores.
-    If ``None``, use a single block for each file.
-    Can be a number like 64000000 or a string like "64MB"
+    Number of bytes by which to cut up larger files. Default value is computed
+    based on available physical memory and the number of cores, up to a maximum
+    of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
+    ``None``, a single block is used for each file.
 collection : boolean, optional
     Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int, optional
@@ -552,7 +554,7 @@ at the cost of reduced parallelism.
 def make_reader(reader, reader_name, file_type):
     def read(
         urlpath,
-        blocksize=AUTO_BLOCKSIZE,
+        blocksize="default",
         collection=True,
         lineterminator=None,
         compression=None,
