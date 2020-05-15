@@ -319,7 +319,7 @@ else:
 def read_pandas(
     reader,
     urlpath,
-    blocksize=AUTO_BLOCKSIZE,
+    blocksize="default",
     collection=True,
     lineterminator=None,
     compression=None,
@@ -374,6 +374,8 @@ def read_pandas(
     else:
         path_converter = None
 
+    if blocksize == "default":
+        blocksize = AUTO_BLOCKSIZE
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:
@@ -552,7 +554,7 @@ at the cost of reduced parallelism.
 def make_reader(reader, reader_name, file_type):
     def read(
         urlpath,
-        blocksize=AUTO_BLOCKSIZE,
+        blocksize="default",
         collection=True,
         lineterminator=None,
         compression=None,
