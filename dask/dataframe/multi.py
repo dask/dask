@@ -1019,9 +1019,9 @@ def concat(
     interleave_partitions : bool, default False
         Whether to concatenate DataFrames ignoring its order. If True, every
         divisions are concatenated each by each.
-    ignore_unknown_divisions: boolean, default False
-        Whether to warn when concatenating dask series/dataframes
-        with unknown divisions. If True the warning won't be emitted.
+    ignore_unknown_divisions : bool, default False
+        By default a warning is raised if any input has unknown divisions.
+        Set to True to disable this warning.
 
     Notes
     -----
@@ -1066,12 +1066,9 @@ def concat(
     >>> dd.concat([a, b])                               # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
 
-    If we set ignore_unknown_divisions=True, the warning won't be emitted
+    By default concatenating with unknown divisions will raise a warning.
+    Set ``ignore_unknown_divisions=True`` to disable this:
 
-    >>> a                                               # doctest: +SKIP
-    dd.DataFrame<x, divisions=(None, None)>
-    >>> b                                               # doctest: +SKIP
-    dd.DataFrame<y, divisions=(1, 4, 10)>
     >>> dd.concat([a, b], ignore_unknown_divisions=True)# doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
 
