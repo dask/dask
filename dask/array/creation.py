@@ -1024,13 +1024,6 @@ def pad_reuse(array, pad_width, mode, **kwargs):
     return result
 
 
-def _round_if_needed(arr, dtype):
-    if np.issubdtype(dtype, np.integer):
-        rint(arr, out=arr)
-
-    return arr.astype(dtype)
-
-
 def pad_stats(array, pad_width, mode, stat_length):
     """
     Helper function for padding boundaries with statistics from the array.
@@ -1086,7 +1079,9 @@ def pad_stats(array, pad_width, mode, stat_length):
             result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
 
             if mode == "mean":
-                result_idx = _round_if_needed(result_idx, array.dtype)
+                if np.issubdtype(array.dtype, np.integer):
+                    result_idx = rint(result_idx)
+                result_idx = result_idx.astype(array.dtype)
 
         result[idx] = result_idx
 
