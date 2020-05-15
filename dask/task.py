@@ -135,3 +135,9 @@ class Task:
             return {k: ft(v) for k, v in obj.items()}
         else:
             return obj
+
+    def can_fuse(self, other):
+        return (type(other) == Task and
+                (self.annotations == EMPTY_DICT or
+                other.annotations == EMPTY_DICT or
+                self.annotations == other.annotations))

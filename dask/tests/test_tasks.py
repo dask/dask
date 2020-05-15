@@ -34,14 +34,14 @@ def test_task_repr_and_str():
     assert repr(task_2) == "Task(inc, Task(inc, 1, extra=0.1, annotions={'resource': 'GPU'}))"
 
 
-def test_execute_task():
+def test_task_get():
     task_1 = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
     task_2 = Task.from_call(inc, task_1)
     dsk = {'x': task_2}
     assert get(dsk, 'x') == 3.1
 
 
-def test_from_call():
+def test_task_from_call():
     # Simple task tuple
     task = Task.from_call(inc, 1)
     assert task.function is inc
@@ -86,7 +86,7 @@ def test_from_call():
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {'a': 1}
 
-def test_from_tuple():
+def test_task_from_tuple():
     # Simple task tuple
     task = Task.from_tuple((inc, 1))
     assert task.function is inc
@@ -145,3 +145,20 @@ def test_from_tuple():
     task = Task.from_call(inc, task)
     task = Task.from_call(inc, task)
     assert dsk["z"] == task
+
+
+def test_task_can_fuse():
+    task_1 = Task.from_call(inc, 1)
+    task_a = Task.from_call(inc, 1, annotations={"a": 1})
+    task_b = Task.from_call(inc, 1, annotations={"b": 1})
+
+    # no annotations with no annotations
+    assert task_1.can_fuse(task_1)
+    # no annotations with annotations
+    assert task_1.can_fuse(task_a)
+    # annotations with annotations
+    assert task_a.can_fuse(task_1)
+    # same annotation with same annotation
+    assert task_a.can_fuse(task_a)
+    # different annotations
+    assert not task_a.can_fuse(task_b)
