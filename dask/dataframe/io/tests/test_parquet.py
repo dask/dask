@@ -2444,3 +2444,72 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
     assert_eq(ddf1, ddf2, check_index=False)
+
+
+def test_pandas_timestamp_overflow_pyarrow(tmpdir):
+
+    check_pyarrow()
+    info = np.iinfo(np.dtype('int64'))
+    arr_numeric = np.linspace(start=info.min + 2, stop=info.max, num=1024, dtype='int64')
+    arr_dates = arr_numeric.astype("datetime64[ms]")
+
+    table = pa.Table.from_arrays(
+        [pa.array(arr_dates)],
+        names=['ts']
+    )
+    pa.parquet.write_table(table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False)
+
+    # This will raise by default due to overflow
+    with pytest.raises(pa.lib.ArrowInvalid) as e:
+        dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
+    assert "out of bounds" in str(e.value)
+
+    from dask.dataframe.io.parquet.arrow import ArrowEngine
+    class ArrowEngineWithTimestampClamp(ArrowEngine):
+
+        @classmethod
+        def clamp_arrow_datetimes(cls, arrow_table: pa.Table) -> pa.Table:
+            """Constrain datetimes to be valid for pandas
+
+            Since pandas works in ns precision and arrow / parquet defaults to ms
+            precision we need to clamp our datetimes to something reasonable"""
+
+            new_columns = []
+            for i, col in enumerate(arrow_table.columns):
+                field = arrow_table.field(i)
+                if pa.types.is_timestamp(col.type) and (col.type.unit in ('s', 'ms', 'us')):
+                    multiplier = {
+                        's': 1_0000_000_000,
+                        'ms': 1_000_000,
+                        'us': 1_000,
+                    }[col.type.unit]
+
+                    original_type = col.type
+
+                    series: pd.Series = col.cast(pa.int64()).to_pandas(
+                        types_mapper={
+                            pa.int64(): pd.Int64Dtype
+                        }
+                    )
+                    info = np.iinfo(np.dtype('int64'))
+                    # constrain data to be within valid ranges
+                    series.clip(
+                        lower=info.min // multiplier + 1,
+                        upper=info.max // multiplier,
+                        inplace=True,
+                    )
+                    new_array = pa.array(series, pa.int64())
+                    new_array = new_array.cast(original_type)
+                    new_columns.append(new_array)
+                else:
+                    new_columns.append(col)
+
+            return pa.Table.from_arrays(new_columns, names=arrow_table.column_names)
+
+        @classmethod
+        def _arrow_table_to_pandas(cls, arrow_table: pa.Table, categories, **kwargs) -> pd.DataFrame:
+            fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
+            return super()._arrow_table_to_pandas(fixed_arrow_table, categories, **kwargs)
+
+    # this should not fail, but instead produce timestamps that are in the valid range
+    df = dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
