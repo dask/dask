@@ -890,9 +890,7 @@ def merge_asof(
             if divs is not None:
                 result = result.set_index(ixcol, sorted=True, divisions=divs)
             else:
-                result = result.map_partitions(
-                    M.set_index, ixcol, meta=result._meta.set_index(ixcol)
-                )
+                result = result.map_partitions(M.set_index, ixcol)
             result = result.map_partitions(M.rename_axis, ixname)
 
     return result
