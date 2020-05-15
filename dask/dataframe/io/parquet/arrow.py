@@ -594,16 +594,18 @@ class ArrowEngine(Engine):
         return df
 
     @classmethod
-    def _arrow_table_to_pandas(cls, arrow_table: pa.Table, categories, **kwargs) -> pd.DataFrame:
+    def _arrow_table_to_pandas(
+        cls, arrow_table: pa.Table, categories, **kwargs
+    ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
-        _kwargs.update({
-            'use_threads': False, 'ignore_metadata': False
-        })
+        _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
 
     @classmethod
-    def _parquet_piece_as_arrow(cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs) -> pa.Table:
+    def _parquet_piece_as_arrow(
+        cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs
+    ) -> pa.Table:
         arrow_table = piece.read(
             columns=columns,
             partitions=partitions,

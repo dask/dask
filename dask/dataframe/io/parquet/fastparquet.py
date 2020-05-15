@@ -440,7 +440,9 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts)
 
     @classmethod
-    def read_partition(cls, fs, piece, columns, index, categories=(), pf=None, **kwargs):
+    def read_partition(
+        cls, fs, piece, columns, index, categories=(), pf=None, **kwargs
+    ):
         if isinstance(index, list):
             columns += index
 
