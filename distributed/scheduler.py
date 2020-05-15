@@ -756,7 +756,6 @@ class TaskGroup:
         self.types = set()
 
     def add(self, ts):
-        # self.tasks.add(ts)
         self.states[ts.state] += 1
         ts.group = self
 
@@ -2934,8 +2933,6 @@ class Scheduler(ServerNode):
             finally:
                 await asyncio.gather(*[nanny.close_rpc() for nanny in nannies])
 
-            # self.status = None
-            # await self
             self.clear_task_state()
 
             with ignoring(AttributeError):
