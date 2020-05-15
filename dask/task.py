@@ -37,7 +37,7 @@ class Task:
 
     def __eq__(self, other):
         """ Equality """
-        return (type(other) == Task and
+        return (type(other) is Task and
                 self.function == other.function and
                 self.args == other.args and
                 self.kwargs == other.kwargs and
@@ -71,7 +71,7 @@ class Task:
 
     @classmethod
     def from_call(cls, function, *args, annotations=None, **kwargs):
-        """ Create Task from function call """
+        """ Create Task from (function, args, kwargs, annotations) """
         # TODO(sjperkins)
         # Figure out how to make this import work globally
         from .utils import apply
@@ -137,7 +137,18 @@ class Task:
             return obj
 
     def can_fuse(self, other):
-        return (type(other) == Task and
-                (self.annotations == EMPTY_DICT or
-                other.annotations == EMPTY_DICT or
+        """
+        Returns
+        -------
+            True if
+
+                1. self.annotations == {} or
+                2. other.annotations == {} or
+                3. self.annotations == other.annotations
+
+            False otherwise.
+        """
+        return (type(other) is Task and
+                (self.annotations is EMPTY_DICT or
+                other.annotations is EMPTY_DICT or
                 self.annotations == other.annotations))
