@@ -735,12 +735,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
             ),
         ),
         "maximum",
-        pytest.param(
-            "mean",
-            marks=pytest.mark.skip(
-                reason="Bug dask changes the dtype to float: https://github.com/dask/dask/issues/5303"
-            ),
-        ),
+        "mean",
         "minimum",
         pytest.param(
             "reflect",
@@ -781,8 +776,9 @@ def test_pad_3d_data(dtype, pad_widths, mode):
 
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
 def test_pad_udf(kwargs):
-    def udf_pad(vector, pad_width, iaxis, kwargs):
-        scaler = kwargs.get("scaler", 1)
+    def udf_pad(vector, pad_width, iaxis, inner_kwargs):
+        assert kwargs == inner_kwargs
+        scaler = inner_kwargs.get("scaler", 1)
         vector[: pad_width[0]] = -scaler * pad_width[0]
         vector[-pad_width[1] :] = scaler * pad_width[1]
         return vector
@@ -794,8 +790,8 @@ def test_pad_udf(kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
 
-    np_r = np.pad(np_a, pad_width, udf_pad, kwargs=kwargs)
-    da_r = da.pad(da_a, pad_width, udf_pad, kwargs=kwargs)
+    np_r = np.pad(np_a, pad_width, udf_pad, **kwargs)
+    da_r = da.pad(da_a, pad_width, udf_pad, **kwargs)
 
     assert_eq(np_r, da_r)
 
