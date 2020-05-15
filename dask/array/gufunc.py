@@ -491,7 +491,7 @@ significantly.".format(
         leaf_arr = leaf_arr.transpose(tidcs)
         leaf_arrs.append(leaf_arr)
 
-    return leaf_arrs if nout else leaf_arrs[0]  # Undo *) from above
+    return (*leaf_arrs,) if nout else leaf_arrs[0]  # Undo *) from above
 
 
 class gufunc(object):
