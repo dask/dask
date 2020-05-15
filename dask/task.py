@@ -17,17 +17,19 @@ class Task:
         if not callable(function):
             raise TypeError("function (%s) must be callable" % function)
 
+        kwargs = kwargs or EMPTY_DICT
+        annotations = annotations or EMPTY_DICT
+
+        if not isinstance(kwargs, dict):
+            raise TypeError("kwargs (%s) must be a dict" % kwargs)
+
+        if not isinstance(annotations, dict):
+            raise TypeError("annotations (%s) must be a dict" % annotations)
+
         self.function = function
         self.args = args or ()
-        self.kwargs = kwargs or EMPTY_DICT
-
-        if annotations is not None:
-            if not isinstance(annotations, dict):
-                raise TypeError("annotations (%s) must be a dict"
-                                % function)
-            self.annotations = annotations
-        else:
-            self.annotations = EMPTY_DICT
+        self.kwargs = kwargs
+        self.annotations = annotations
 
     def __eq__(self, other):
         """ Equality """
@@ -42,9 +44,9 @@ class Task:
                        self.kwargs, self.annotations))
 
 
-    def _format_task_bits(self, fn):
+    def _format_components(self, fn):
         """ Format task components into a (arg0, kw0=kwv0, annotations=...) string """
-        arg_str = ", ".join("%s" % fn(a) for a in self.args)
+        arg_str = ", ".join(fn(a) for a in self.args)
         kwargs_str = ", ".join("%s=%s"% (k, fn(v))
                                          for k, v
                                          in self.kwargs.items())
@@ -55,13 +57,16 @@ class Task:
         return ", ".join(bits)
 
     def __str__(self):
-        return "%s(%s)" % (self.function.__name__, self._format_task_bits(str))
+        return "%s(%s)" % (self.function.__name__,
+                           self._format_components(str))
 
     def __repr__(self):
-        return "Task(%s, %s)" % (self.function.__name__, self._format_task_bits(repr))
+        return "Task(%s, %s)" % (self.function.__name__,
+                                 self._format_components(repr))
 
     @classmethod
     def from_call(cls, function, *args, annotations=None, **kwargs):
+        """ Create Task from function call """
         # TODO(sjperkins)
         # Figure out how to make this import work globally
         from .utils import apply
@@ -80,13 +85,14 @@ class Task:
             elif len(args) == 3:
                 # (apply, function, args, kwargs)
                 return Task(args[0], args[1], args[2], annotations=annotations)
-            else:
-                raise ValueError("Invalid apply call")
-        else:
-            return Task(function, args, kwargs, annotations)
+
+            raise ValueError("Invalid apply call")
+
+        return Task(function, args, kwargs, annotations)
 
     @classmethod
     def from_tuple(cls, task):
+        """ Create task object from legacy task tuple """
         if type(task) is not tuple:
             raise TypeError("task must be a tuple")
 
@@ -94,14 +100,19 @@ class Task:
         # Figure out how to make this import work globally
         from .utils import apply
 
-        # (apply, function, args, kwargs)
+        # (apply, function [, args [, kwargs]])
         if task[0] is apply:
-            if len(task) == 3:
+            if len(task) == 2:
+                # (apply, function)
+                return Task(Task[1])
+            elif len(task) == 3:
+                # (apply, function, args)
                 return Task(task[1], task[2])
             elif len(task) == 4:
+                # (apply, function, args, kwargs)
                 return Task(task[1], task[2], task[3])
-            else:
-                raise ValueError("Invalid apply task")
+
+            raise ValueError("Invalid apply task %s" % task)
 
         # (function, arg1, arg2, ..., argn) form
         return Task(task[0], task[1:])
