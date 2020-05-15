@@ -984,7 +984,13 @@ def stack_partitions(dfs, divisions, join="outer"):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def concat(dfs, axis=0, join="outer", interleave_partitions=False):
+def concat(
+    dfs,
+    axis=0,
+    join="outer",
+    interleave_partitions=False,
+    ignore_unknown_divisions=False,
+):
     """ Concatenate DataFrames along rows.
 
     - When axis=0 (default), concatenate DataFrames row-wise:
@@ -1013,6 +1019,9 @@ def concat(dfs, axis=0, join="outer", interleave_partitions=False):
     interleave_partitions : bool, default False
         Whether to concatenate DataFrames ignoring its order. If True, every
         divisions are concatenated each by each.
+    ignore_unknown_divisions : bool, default False
+        By default a warning is raised if any input has unknown divisions.
+        Set to True to disable this warning.
 
     Notes
     -----
@@ -1057,6 +1066,12 @@ def concat(dfs, axis=0, join="outer", interleave_partitions=False):
     >>> dd.concat([a, b])                               # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
 
+    By default concatenating with unknown divisions will raise a warning.
+    Set ``ignore_unknown_divisions=True`` to disable this:
+
+    >>> dd.concat([a, b], ignore_unknown_divisions=True)# doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(None, None, None, None)>
+
     Different categoricals are unioned
 
     >> dd.concat([                                     # doctest: +SKIP
@@ -1090,12 +1105,13 @@ def concat(dfs, axis=0, join="outer", interleave_partitions=False):
             and all(not df.known_divisions for df in dfs)
             and len({df.npartitions for df in dasks}) == 1
         ):
-            warnings.warn(
-                "Concatenating dataframes with unknown divisions.\n"
-                "We're assuming that the indexes of each dataframes"
-                " are \n aligned. This assumption is not generally "
-                "safe."
-            )
+            if not ignore_unknown_divisions:
+                warnings.warn(
+                    "Concatenating dataframes with unknown divisions.\n"
+                    "We're assuming that the indexes of each dataframes"
+                    " are \n aligned. This assumption is not generally "
+                    "safe."
+                )
             return concat_unindexed_dataframes(dfs)
         else:
             raise ValueError(

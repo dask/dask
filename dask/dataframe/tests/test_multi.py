@@ -1406,6 +1406,10 @@ def test_concat_unknown_divisions():
     with pytest.raises(ValueError):
         dd.concat([aa, cc], axis=1)
 
+    with pytest.warns(None) as record:
+        dd.concat([aa, bb], axis=1, ignore_unknown_divisions=True)
+        assert len(record) == 0
+
 
 def test_concat_unknown_divisions_errors():
     a = pd.Series([1, 2, 3, 4, 5, 6])
