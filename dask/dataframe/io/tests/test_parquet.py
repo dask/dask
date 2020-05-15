@@ -2449,6 +2449,9 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
 def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
     check_pyarrow()
+    if pa.__version__ < LooseVersion("0.17.0"):
+        pytest.skip("PyArrow>=0.17 Required.")
+
     info = np.iinfo(np.dtype('int64'))
     arr_numeric = np.linspace(start=info.min + 2, stop=info.max, num=1024, dtype='int64')
     arr_dates = arr_numeric.astype("datetime64[ms]")
