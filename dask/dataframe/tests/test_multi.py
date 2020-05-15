@@ -2141,3 +2141,41 @@ def test_groupby_concat_cudf(engine):
         res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
 
     assert_eq(res_dd.compute().sort_index(), res.sort_index())
+
+
+def test_categorical_join():
+    # https://github.com/dask/dask/issues/6134
+    df = pd.DataFrame({"join_col": ["a", "a", "b", "b"], "a": [0, 0, 10, 10],})
+    df2 = pd.DataFrame({"b": [1, 2, 1, 2]}, index=["a", "a", "b", "b"])
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=1)
+    ddf["join_col"] = ddf["join_col"].astype("category")
+    ddf2.index = ddf2.index.astype("category")
+
+    expected = ddf.compute().join(ddf2.compute(), on="join_col", how="left")
+
+    actual_dask = ddf.join(ddf2, on="join_col", how="left")
+    assert actual_dask.join_col.dtype == "category"
+
+    actual = actual_dask.compute()
+    assert actual.join_col.dtype == "category"
+    assert assert_eq(expected, actual)
+
+
+def test_categorical_merge():
+    # https://github.com/dask/dask/issues/6142
+    a = pd.DataFrame({"A": [0, 1, 2, 3], "B": [4, 5, 6, 7]})
+    b = pd.DataFrame({"A": [0, 1, 2, 4], "C": [4, 5, 7, 7]})
+
+    df1 = dd.from_pandas(a, 2)
+    df1["A"] = df1.A.astype("category")
+
+    df2 = dd.from_pandas(b, 2)
+    df2["A"] = df2.A.astype("category")
+
+    actual_dask = df1.merge(df2, on="A")
+    assert actual_dask.A.dtype == "category"
+
+    actual = actual_dask.compute()
+    assert actual.A.dtype == "category"
