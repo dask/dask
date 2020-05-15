@@ -39,9 +39,9 @@ class SemaphoreExtension:
 
     * semaphore_acquire
     * semaphore_release
-    * semaphore_create
     * semaphore_close
     * semaphore_refresh_leases
+    * semaphore_register
     """
 
     def __init__(self, scheduler):
@@ -56,7 +56,7 @@ class SemaphoreExtension:
 
         self.scheduler.handlers.update(
             {
-                "semaphore_create": self.create,
+                "semaphore_register": self.create,
                 "semaphore_acquire": self.acquire,
                 "semaphore_release": self.release,
                 "semaphore_close": self.close,
@@ -285,6 +285,12 @@ class Semaphore:
     client: Client (optional)
         Client to use for communication with the scheduler.  If not given, the
         default global client will be used.
+    register: bool
+        If True, register the semaphore with the scheduler. This needs to be
+        done before any leases can be acquired. If not done during
+        initialization, this can also be done by calling the register method of
+        this class.
+        When registering, this needs to be awaited.
 
     Examples
     --------
@@ -320,18 +326,13 @@ class Semaphore:
 
     """
 
-    def __init__(self, max_leases=1, name=None, client=None):
+    def __init__(self, max_leases=1, name=None, client=None, register=True):
         self.client = client or get_client()
         self.name = name or "semaphore-" + uuid.uuid4().hex
         self.max_leases = max_leases
         self.id = uuid.uuid4().hex
         self._leases = deque()
 
-        self._started = self.client.sync(
-            self.client.scheduler.semaphore_create,
-            name=self.name,
-            max_leases=max_leases,
-        )
         # this should give ample time to refresh without introducing another
         # config parameter since this *must* be smaller than the timeout anyhow
         refresh_leases_interval = (
@@ -352,9 +353,28 @@ class Semaphore:
         pc.start()
         self.refresh_leases = True
 
+        self._registered = None
+        if register:
+            self._registered = self.register()
+
+    def register(self):
+        """
+        Register the semaphore on scheduler side
+
+        This will register the semaphore on scheduler side and ensure that all necessary data structures exist.
+        """
+        if self._registered is None:
+            self._registered = self.client.sync(
+                self.client.scheduler.semaphore_register,
+                name=self.name,
+                max_leases=self.max_leases,
+            )
+        return self._registered
+
     def __await__(self):
         async def create_semaphore():
-            await self._started
+            if self._registered:
+                await self._registered
             return self
 
         return create_semaphore().__await__()
@@ -444,7 +464,7 @@ class Semaphore:
     def __setstate__(self, state):
         name, max_leases = state
         client = get_client()
-        self.__init__(name=name, client=client, max_leases=max_leases)
+        self.__init__(name=name, client=client, max_leases=max_leases, register=False)
 
     def close(self):
         return self.client.sync(self.client.scheduler.semaphore_close, name=self.name)
