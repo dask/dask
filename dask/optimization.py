@@ -1,6 +1,8 @@
 import math
 import numbers
 import re
+from enum import Enum
+from typing import Callable, Collection, Hashable, Optional, Union
 
 from . import config, core
 from .core import (
@@ -374,7 +376,9 @@ def functions_of(task):
     return funcs
 
 
-def default_fused_keys_renamer(keys, max_fused_key_length=120):
+def default_fused_keys_renamer(
+    keys: Collection[Hashable], max_fused_key_length: Optional[int] = 120
+) -> Hashable:
     """Create new keys for ``fuse`` tasks.
 
     The optional parameter `max_fused_key_length` is used to limit the maximum string length for each renamed key.
@@ -411,19 +415,27 @@ def default_fused_keys_renamer(keys, max_fused_key_length=120):
         return (_enforce_max_key_limit(concatenated_name),) + first_key[1:]
 
 
-_use_config = object()
+# PEP-484 compliant singleton constant
+# https://www.python.org/dev/peps/pep-0484/#support-for-singleton-types-in-unions
+class UseConfig(Enum):
+    token = 0
+
+
+_use_config = UseConfig.token
 
 
 def fuse(
     dsk,
     keys=None,
     dependencies=None,
-    ave_width=_use_config,
-    max_width=_use_config,
-    max_height=_use_config,
-    max_depth_new_edges=_use_config,
-    rename_keys=_use_config,
-    fuse_subgraphs=_use_config,
+    ave_width: Union[float, UseConfig] = _use_config,
+    max_width: Union[float, UseConfig] = _use_config,
+    max_height: Union[float, None, UseConfig] = _use_config,
+    max_depth_new_edges: Union[float, None, UseConfig] = _use_config,
+    rename_keys: Union[
+        bool, Callable[[Collection[Hashable]], Hashable], UseConfig
+    ] = _use_config,
+    fuse_subgraphs: Union[bool, None, UseConfig] = _use_config,
 ):
     """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
@@ -494,30 +506,39 @@ def fuse(
     # Read defaults from dask.yaml and/or user-defined config file
     if ave_width is _use_config:
         ave_width = config.get("optimization.fuse.ave-width")
+        assert ave_width is not _use_config
     if max_height is _use_config:
         max_height = config.get("optimization.fuse.max-height")
+        assert max_height is not _use_config
     if max_depth_new_edges is _use_config:
         max_depth_new_edges = config.get("optimization.fuse.max-depth-new-edges")
+        assert max_depth_new_edges is not _use_config
     if max_depth_new_edges is None:
         max_depth_new_edges = ave_width * 1.5
     if max_width is _use_config:
         max_width = config.get("optimization.fuse.max-width")
+        assert max_width is not _use_config
     if max_width is None:
         max_width = 1.5 + ave_width * math.log(ave_width + 1)
     if fuse_subgraphs is _use_config:
         fuse_subgraphs = config.get("optimization.fuse.subgraphs")
+        assert fuse_subgraphs is not _use_config
     if fuse_subgraphs is None:
         fuse_subgraphs = False
 
     if not ave_width or not max_height:
         return dsk, dependencies
 
+    key_renamer: Optional[Callable[[Collection[Hashable]], Hashable]]
     if rename_keys is _use_config:
         rename_keys = config.get("optimization.fuse.rename-keys")
+        assert rename_keys is not _use_config
     if rename_keys is True:
         key_renamer = default_fused_keys_renamer
     elif rename_keys is False:
         key_renamer = None
+    elif not callable(rename_keys):
+        raise TypeError("rename_keys must be a boolean or callable")
     else:
         key_renamer = rename_keys
     rename_keys = key_renamer is not None
@@ -818,7 +839,7 @@ def fuse(
     if fuse_subgraphs:
         _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
 
-    if rename_keys:
+    if key_renamer:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
             if alias is not None and alias not in rv:
