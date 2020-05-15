@@ -298,6 +298,8 @@ def _read_single_hdf(
         with pd.HDFStore(path, mode=mode) as hdf:
             keys = [k for k in hdf.keys() if fnmatch(k, key)]
             if not keys:
+                # https://github.com/dask/dask/issues/5934
+                # TODO: remove this if/when pandas copes with all keys
                 keys = [
                     n._v_pathname
                     for n in hdf._handle.walk_nodes("/", classname="Table")

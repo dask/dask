@@ -844,3 +844,39 @@ def test_hdf_path_exceptions():
     # list of files is empty
     with pytest.raises(ValueError):
         dd.read_hdf([], "/tmp")
+
+
+def test_hdf_nonpandas_keys():
+    # https://github.com/dask/dask/issues/5934
+    # TODO: maybe remove this if/when pandas copes with all keys
+
+    tables = pytest.importorskip("tables")
+    import tables
+
+    class Table1(tables.IsDescription):
+        value1 = tables.Float32Col()
+
+    class Table2(tables.IsDescription):
+        value2 = tables.Float32Col()
+
+    class Table3(tables.IsDescription):
+        value3 = tables.Float32Col()
+
+    with tmpfile("h5") as path:
+        with tables.open_file(path, mode="w") as h5file:
+            group = h5file.create_group("/", "group")
+            t = h5file.create_table(group, "table1", Table1, "Table 1")
+            row = t.row
+            row["value1"] = 1
+            row.append()
+            t = h5file.create_table(group, "table2", Table2, "Table 2")
+            row = t.row
+            row["value2"] = 1
+            row.append()
+            t = h5file.create_table(group, "table3", Table3, "Table 3")
+            row = t.row
+            row["value3"] = 1
+            row.append()
+        dd.read_hdf(path, "/group/table1")
+        dd.read_hdf(path, "/group/table2")
+        dd.read_hdf(path, "/group/table3")
