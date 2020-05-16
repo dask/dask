@@ -47,26 +47,46 @@ properties:
 
           active:
             type: boolean
-            description: |
-              Configuration setting to turn task fusion on/off
+            description: Turn task fusion on/off
 
           ave-width:
-            type: integer
-            description: |
+            type: number
+            minimum: 0
+            description:
               Upper limit for width, where width = num_nodes / height, a good measure
               of parallelizability
 
-          subraphs:
-            type: boolean
+          max-width:
+            type: [number, 'null']
+            minimum: 0
+            description:
+              Don't fuse if total width is greater than this. Set to null to dynamically
+              adjust to 1.5 + ave_width * log(ave_width + 1)
+
+          max-height:
+            type: number
+            minimum: 0
+            description: Don't fuse more than this many levels
+
+          max-depth-new-edges:
+            type: [number, 'null']
+            minimum: 0
+            description:
+              Don't fuse if new dependencies are added after this many levels.
+              Set to null to dynamically adjust to ave_width * 1.5.
+
+          subgraphs:
+            type: [boolean, 'null']
             description: |
-              Configuration setting to control whether to fuse multiple tasks into
-              SubgraphCallable objects.
+              Set to True to fuse multiple tasks into SubgraphCallable objects. Set to
+              None to let the default optimizer of individual dask collections decide.
+              If no collection-specific default exists, None defaults to False.
 
           rename-keys:
             type: boolean
-            description: |
-              Configuration setting to control renaming of the fused keys with
-              `default_fused_keys_renamer` or not. Renaming fused keys can keep the
-              graph more understandable and comprehensive, but it comes at the cost of
-              additional processing. If False, then the top-most key will be used. For
-              advanced usage, a function to create the new name is also accepted.
+            description:
+              Set to true to rename the fused keys with `default_fused_keys_renamer`.
+              Renaming fused keys can keep the graph more understandable and
+              comprehensible, but it comes at the cost of additional processing. If
+              False, then the top-most key will be used. For advanced usage, a function
+              to create the new name is also accepted.
