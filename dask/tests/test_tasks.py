@@ -182,23 +182,6 @@ def test_task_can_fuse():
     assert not task_a.can_fuse(task_b)
 
 
-@pytest.mark.skip
-def test_task_tuple():
-    task = Task.from_call(apply, tuple, [slice(None)])
-    assert task.function is tuple
-    assert task.args == ([slice(None)],)
-    assert task.execute() == (slice(None),)
-
-    task = Task.from_spec((apply, tuple, [slice(None)]))
-    assert task.function is tuple
-    assert task.args == ([slice(None)],)
-    assert task.execute() == (slice(None),)
-
-    task = Task.from_spec((slice, [None, None, None]))
-    assert task.function is slice
-    assert task.execute() == slice(None)
-
-
 def test_task_complex():
     from dask.core import get_dependencies, get
 
