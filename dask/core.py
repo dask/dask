@@ -39,9 +39,12 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return ((type(x) is tuple and x and callable(x[0])) or
-            # TODO: swap comparison order when Task is more widely used
-            type(x) is Task)
+    return (
+        (type(x) is tuple and x and callable(x[0]))
+        or
+        # TODO: swap comparison order when Task is more widely used
+        type(x) is Task
+    )
 
 
 def has_tasks(dsk, x):
@@ -119,12 +122,17 @@ def _execute_task(arg, cache, dsk=None):
         return [_execute_task(a, cache) for a in arg]
     elif isinstance(arg, Task):
         return arg.function(
-            *((_execute_task(a, cache) for a in arg.args)
-               if isinstance(arg.args, list)
-               else _execute_task(arg.args, cache)),
-            **({k: _execute_task(v, cache) for k, v in arg.kwargs.items()}
+            *(
+                (_execute_task(a, cache) for a in arg.args)
+                if isinstance(arg.args, list)
+                else _execute_task(arg.args, cache)
+            ),
+            **(
+                {k: _execute_task(v, cache) for k, v in arg.kwargs.items()}
                 if isinstance(arg.kwargs, dict)
-                else _execute_task(arg.kwargs, cache)))
+                else _execute_task(arg.kwargs, cache)
+            )
+        )
 
     elif istask(arg):
         func, args = arg[0], arg[1:]
@@ -158,6 +166,7 @@ def get(dsk, out, cache=None):
     # This merely exists for testing purposes,
     # remove when PR is ready
     from dask.task import Task
+
     dsk = Task.from_spec(dsk)
 
     for k in flatten(out) if isinstance(out, list) else [out]:

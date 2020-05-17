@@ -8,6 +8,7 @@ from dask.core import Task, get
 from dask.task import EmptyDict
 from dask.utils import apply
 
+
 def inc(x, extra=None):
     if extra:
         return x + 1 + extra
@@ -23,22 +24,25 @@ def test_empty_dict():
 
 
 def test_task_pickle():
-    task = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
+    task = Task.from_call(inc, 1, extra=0.1, annotations={"resource": "GPU"})
     assert pickle.loads(pickle.dumps(task)) == task
 
 
 def test_task_repr_and_str():
-    task_1 = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
+    task_1 = Task.from_call(inc, 1, extra=0.1, annotations={"resource": "GPU"})
     task_2 = Task.from_call(inc, task_1)
     assert str(task_2) == "inc(inc(1, extra=0.1, annotions={'resource': 'GPU'}))"
-    assert repr(task_2) == "Task(inc, Task(inc, 1, extra=0.1, annotions={'resource': 'GPU'}))"
+    assert (
+        repr(task_2)
+        == "Task(inc, Task(inc, 1, extra=0.1, annotions={'resource': 'GPU'}))"
+    )
 
 
 def test_task_get():
-    task_1 = Task.from_call(inc, 1, extra=.1, annotations={'resource': 'GPU'})
+    task_1 = Task.from_call(inc, 1, extra=0.1, annotations={"resource": "GPU"})
     task_2 = Task.from_call(inc, task_1)
-    dsk = {'x': task_2}
-    assert get(dsk, 'x') == 3.1
+    dsk = {"x": task_2}
+    assert get(dsk, "x") == 3.1
 
 
 def test_task_from_call():
@@ -49,17 +53,17 @@ def test_task_from_call():
     assert task.kwargs == {}
     assert task.annotations == {}
 
-    task = Task.from_call(inc, 1, extra=.1)
+    task = Task.from_call(inc, 1, extra=0.1)
     assert task.function is inc
     assert task.args == [1]
-    assert task.kwargs == {'extra': .1}
+    assert task.kwargs == {"extra": 0.1}
     assert task.annotations == {}
 
-    task = Task.from_call(inc, 1, extra=.1, annotations={'a': 1})
+    task = Task.from_call(inc, 1, extra=0.1, annotations={"a": 1})
     assert task.function is inc
     assert task.args == [1]
-    assert task.kwargs == {'extra': .1}
-    assert task.annotations == {'a': 1}
+    assert task.kwargs == {"extra": 0.1}
+    assert task.annotations == {"a": 1}
 
     # Apply task, (apply, function)
     task = Task.from_call(apply, inc)
@@ -72,19 +76,19 @@ def test_task_from_call():
     assert task.annotations == {}
 
     # Apply task tuple, (apply, function, args, kwargs)
-    task = Task.from_call(apply, inc, (1,), {'extra': .1})
+    task = Task.from_call(apply, inc, (1,), {"extra": 0.1})
     assert task.function is inc
     assert task.args == (1,)
-    assert task.kwargs == {'extra': .1}
+    assert task.kwargs == {"extra": 0.1}
     assert task.annotations == {}
 
     # Apply task tuple, (apply, function, args, kwargs)
-    task = Task.from_call(apply, inc, (1,), {'extra': .1},
-                          annotations={'a': 1})
+    task = Task.from_call(apply, inc, (1,), {"extra": 0.1}, annotations={"a": 1})
     assert task.function is inc
     assert task.args == (1,)
-    assert task.kwargs == {'extra': .1}
-    assert task.annotations == {'a': 1}
+    assert task.kwargs == {"extra": 0.1}
+    assert task.annotations == {"a": 1}
+
 
 def test_task_from_spec():
     # Simple task tuple
@@ -102,29 +106,31 @@ def test_task_from_spec():
     assert task.annotations == {}
 
     # Apply args and kwargs case
-    task = Task.from_spec((apply, inc, [1], {'extra': .1}))
+    task = Task.from_spec((apply, inc, [1], {"extra": 0.1}))
     assert task.function is inc
     assert task.args == [1]
-    assert task.kwargs == {'extra': .1}
+    assert task.kwargs == {"extra": 0.1}
     assert task.annotations == {}
 
     # Dask graphs
-    dsk = Task.from_spec({"x": (apply, inc, [1], {'extra': .1})})
+    dsk = Task.from_spec({"x": (apply, inc, [1], {"extra": 0.1})})
     assert dsk["x"].function is inc
     assert dsk["x"].args == [1]
-    assert dsk["x"].kwargs == {'extra': .1}
+    assert dsk["x"].kwargs == {"extra": 0.1}
     assert dsk["x"].annotations == {}
 
     # Nesting
     N = namedtuple("N", ("a b"))
 
-    dsk = Task.from_spec({
-        "v": N(1, (inc, 1)),
-        "w": N(inc, 1),
-        "x": (apply, inc, [1], {'kwtask': (apply, inc, [1], {'extra': .1})}),
-        "y": [(inc, 5), (inc, (inc, 2))],
-        "z": (inc, (inc, (inc, Task(inc, [1]))))
-    })
+    dsk = Task.from_spec(
+        {
+            "v": N(1, (inc, 1)),
+            "w": N(inc, 1),
+            "x": (apply, inc, [1], {"kwtask": (apply, inc, [1], {"extra": 0.1})}),
+            "y": [(inc, 5), (inc, (inc, 2))],
+            "z": (inc, (inc, (inc, Task(inc, [1])))),
+        }
+    )
 
     # namedtuple reproduce in this case
     assert dsk["v"]._fields == ("a", "b")
@@ -133,7 +139,7 @@ def test_task_from_spec():
     assert not hasattr(dsk["w"], "_fields")
     assert dsk["w"] == Task.from_call(inc, 1)
     # nested applies
-    kwtask = Task.from_call(inc, 1, extra=.1)
+    kwtask = Task.from_call(inc, 1, extra=0.1)
     assert dsk["x"] == Task.from_call(inc, 1, kwtask=kwtask)
     # lists
     task = Task.from_call(inc, 2)
@@ -186,29 +192,28 @@ def test_task_complex():
     from dask.core import get_dependencies, get
 
     dsk = {
-        ('a', i): (
-            tuple,
-            [(apply, slice, ('b', i)), (slice, 0, 'c')],
-        )
+        ("a", i): (tuple, [(apply, slice, ("b", i)), (slice, 0, "c")],)
         for i in range(4)
     }
 
-    dsk.update({
-        "c": 10,
-        ("b", 0): (1, 2),
-        ("b", 1): (2, 3),
-        ("b", 2): (3, 4),
-        ("b", 3): (4, 5)
-    })
+    dsk.update(
+        {
+            "c": 10,
+            ("b", 0): (1, 2),
+            ("b", 1): (2, 3),
+            ("b", 2): (3, 4),
+            ("b", 3): (4, 5),
+        }
+    )
 
     # Convert to tuples
     dsk2 = Task.from_spec(dsk)
 
-    keys = [('a', i) for i in range(4)]
+    keys = [("a", i) for i in range(4)]
 
     assert get(dsk, keys) == get(dsk2, keys)
 
     for i in range(4):
-        deps = get_dependencies(dsk, ('a', i))
-        assert deps == {('b', i), 'c'}
-        assert get_dependencies(dsk2, ('a', i)) == deps
+        deps = get_dependencies(dsk, ("a", i))
+        assert deps == {("b", i), "c"}
+        assert get_dependencies(dsk2, ("a", i)) == deps

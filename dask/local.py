@@ -416,6 +416,7 @@ def get_async(
     # This merely exists for testing purposes,
     # remove when PR is ready
     from dask.task import Task
+
     dsk = Task.from_spec(dsk)
 
     with local_callbacks(callbacks) as callbacks:

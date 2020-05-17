@@ -100,6 +100,7 @@ def test_nested_schedulers():
     # Change this back
     # Probably don't want to force new tasks here
     from dask.task import Task
+
     assert outer_callback.dsk == Task.from_spec(outer_dsk)
     assert inner_callback.dsk == Task.from_spec(inner_dsk)
     assert not Callback.active

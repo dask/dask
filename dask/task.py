@@ -8,6 +8,7 @@ class EmptyDict(dict):
     def __reduce__(self):
         return (EmptyDict, ())
 
+
 EMPTY_DICT = EmptyDict()
 
 
@@ -31,12 +32,16 @@ class Task:
         self.annotations = annotations
 
     def __str__(self):
-        return "%s(%s)" % (getattr(self.function, "__name__", str(self.function)),
-                           self._format_components(str))
+        return "%s(%s)" % (
+            getattr(self.function, "__name__", str(self.function)),
+            self._format_components(str),
+        )
 
     def __repr__(self):
-        return "Task(%s, %s)" % (getattr(self.function, "__name__", str(self.function)),
-                                 self._format_components(repr))
+        return "Task(%s, %s)" % (
+            getattr(self.function, "__name__", str(self.function)),
+            self._format_components(repr),
+        )
 
     @classmethod
     def from_call(cls, function, *args, annotations=None, **kwargs):
@@ -55,12 +60,10 @@ class Task:
                 return Task(args[0])
             elif len(args) == 2:
                 # (apply, function, args)
-                return Task(args[0], args[1],
-                            annotations=annotations)
+                return Task(args[0], args[1], annotations=annotations)
             elif len(args) == 3:
                 # (apply, function, args, kwargs)
-                return Task(args[0], args[1], args[2],
-                            annotations=annotations)
+                return Task(args[0], args[1], args[2], annotations=annotations)
             raise ValueError("Invalid apply call")
         elif callable(function):
             return Task(function, list(args), kwargs, annotations)
@@ -121,11 +124,12 @@ class Task:
             # Key or literal
             return obj
 
-
     def dependencies(self):
-        return ((self.args if isinstance(self.args, list) else [self.args]) +
-                (list(self.kwargs.values()) if isinstance(self.kwargs, dict)
-                 else [self.kwargs]))
+        return (self.args if isinstance(self.args, list) else [self.args]) + (
+            list(self.kwargs.values())
+            if isinstance(self.kwargs, dict)
+            else [self.kwargs]
+        )
 
     def can_fuse(self, other):
         """
@@ -139,25 +143,25 @@ class Task:
 
             False otherwise.
         """
-        return (type(other) is Task and
-                (self.annotations is EMPTY_DICT or
-                other.annotations is EMPTY_DICT or
-                self.annotations == other.annotations))
-
+        return type(other) is Task and (
+            self.annotations is EMPTY_DICT
+            or other.annotations is EMPTY_DICT
+            or self.annotations == other.annotations
+        )
 
     def __eq__(self, other):
         """ Equality """
-        return (type(other) is Task and
-                self.function == other.function and
-                self.args == other.args and
-                self.kwargs == other.kwargs and
-                self.annotations == other.annotations)
+        return (
+            type(other) is Task
+            and self.function == other.function
+            and self.args == other.args
+            and self.kwargs == other.kwargs
+            and self.annotations == other.annotations
+        )
 
     def __reduce__(self):
         """ Pickling """
-        return (Task, (self.function, self.args,
-                       self.kwargs, self.annotations))
-
+        return (Task, (self.function, self.args, self.kwargs, self.annotations))
 
     def _format_components(self, fn):
         """ Format task components into a (arg0, kw0=kwv0, annotations=...) string """
@@ -167,14 +171,11 @@ class Task:
             arg_str = "*%s" % fn(self.args)
 
         if isinstance(self.kwargs, dict):
-            kwargs_str = ", ".join("%s=%s"% (k, fn(v))
-                                            for k, v
-                                            in self.kwargs.items())
+            kwargs_str = ", ".join("%s=%s" % (k, fn(v)) for k, v in self.kwargs.items())
         else:
             kwargs_str = "**%s" % fn(self.kwargs)
 
-        annot_str = ("annotions=%s" % fn(self.annotations)
-                     if self.annotations else "")
+        annot_str = "annotions=%s" % fn(self.annotations) if self.annotations else ""
 
         bits = (bit for bit in (arg_str, kwargs_str, annot_str) if bit)
         return ", ".join(bits)
