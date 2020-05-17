@@ -126,7 +126,12 @@ def test_task_from_spec():
         {
             "v": N(1, (inc, 1)),
             "w": N(inc, 1),
-            "x": (apply, inc, [1], {"kwtask": (apply, inc, [1], {"extra": 0.1})}),
+            "x": (
+                apply,
+                inc,
+                [1],
+                (dict, [["extra", (apply, inc, [1], (dict, [["extra", 0.1]]))]]),
+            ),
             "y": [(inc, 5), (inc, (inc, 2))],
             "z": (inc, (inc, (inc, Task(inc, [1])))),
         }
@@ -135,22 +140,29 @@ def test_task_from_spec():
     # namedtuple reproduce in this case
     assert dsk["v"]._fields == ("a", "b")
     assert dsk["v"] == N(1, Task.from_call(inc, 1))
+    assert get(dsk, "v") == N(1, Task.from_call(inc, 1))
     # namedtuple not reproduced here
     assert not hasattr(dsk["w"], "_fields")
     assert dsk["w"] == Task.from_call(inc, 1)
+    assert get(dsk, "w") == 2
     # nested applies
-    kwtask = Task.from_call(inc, 1, extra=0.1)
-    assert dsk["x"] == Task.from_call(inc, 1, kwtask=kwtask)
+    extra_dict = Task(dict, [[["extra", 0.1]]])
+    kw_inc = Task(inc, [1], extra_dict)
+    extra_dict = Task(dict, [[["extra", kw_inc]]])
+    assert dsk["x"] == Task(inc, [1], extra_dict)
+    assert get(dsk, "x") == inc(1, extra=inc(1, extra=0.1))
     # lists
     task = Task.from_call(inc, 2)
     task = Task.from_call(inc, task)
     assert dsk["y"] == [Task.from_call(inc, 5), task]
+    assert get(dsk, "y") == [inc(5), inc(inc(2))]
     # nested inc tuples
     task = Task.from_call(inc, 1)
     task = Task.from_call(inc, task)
     task = Task.from_call(inc, task)
     task = Task.from_call(inc, task)
     assert dsk["z"] == task
+    assert get(dsk, "z") == inc(inc(inc(inc(1))))
 
 
 def test_task_can_fuse():
