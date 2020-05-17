@@ -6,9 +6,10 @@ class EmptyDict(dict):
         raise NotImplementedError("Modifying an EmptyDict")
 
     def __reduce__(self):
-        return (EmptyDict,)
+        return (EmptyDict, ())
 
 EMPTY_DICT = EmptyDict()
+
 
 class Task:
     __slots__ = ("function", "args", "kwargs", "annotations")
