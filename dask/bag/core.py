@@ -950,7 +950,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(func, agg, out_type=Bag, name="distinct")
 
     def reduction(
-        self, perpartition, aggregate, split_every=None, out_type=Item, name=None,
+        self, perpartition, aggregate, split_every=None, out_type=Item, name=None
     ):
         """ Reduce collection with reduction operators.
 
