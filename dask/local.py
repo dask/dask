@@ -412,7 +412,9 @@ def get_async(
         result_flat = set([result])
     results = set(result_flat)
 
-    dsk = dict(dsk)
+    from dask.task import Task
+    dsk = Task.from_spec(dsk)
+
     with local_callbacks(callbacks) as callbacks:
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []
