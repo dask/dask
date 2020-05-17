@@ -22,12 +22,6 @@ class Task:
         annotations = annotations or EMPTY_DICT
         args = args or ()
 
-        if not isinstance(args, tuple):
-            raise TypeError("args (%s) must be a tuple" % args)
-
-        if not isinstance(kwargs, dict):
-            raise TypeError("kwargs (%s) must be a dict" % kwargs)
-
         if not isinstance(annotations, dict):
             raise TypeError("annotations (%s) must be a dict" % annotations)
 
