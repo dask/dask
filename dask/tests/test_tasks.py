@@ -45,19 +45,19 @@ def test_task_from_call():
     # Simple task tuple
     task = Task.from_call(inc, 1)
     assert task.function is inc
-    assert task.args == (1,)
+    assert task.args == [1]
     assert task.kwargs == {}
     assert task.annotations == {}
 
     task = Task.from_call(inc, 1, extra=.1)
     assert task.function is inc
-    assert task.args == (1,)
+    assert task.args == [1]
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {}
 
     task = Task.from_call(inc, 1, extra=.1, annotations={'a': 1})
     assert task.function is inc
-    assert task.args == (1,)
+    assert task.args == [1]
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {'a': 1}
 
@@ -90,28 +90,28 @@ def test_task_from_tuple():
     # Simple task tuple
     task = Task.from_tuple((inc, 1))
     assert task.function is inc
-    assert task.args == (1,)
+    assert task.args == [1]
     assert task.kwargs == {}
     assert task.annotations == {}
 
     # Apply args only case
-    task = Task.from_tuple((apply, inc, 1))
+    task = Task.from_tuple((apply, inc, [1]))
     assert task.function is inc
-    assert task.args == (1,)
+    assert task.args == [1]
     assert task.kwargs == {}
     assert task.annotations == {}
 
     # Apply args and kwargs case
-    task = Task.from_tuple((apply, inc, 1, {'extra': .1}))
+    task = Task.from_tuple((apply, inc, [1], {'extra': .1}))
     assert task.function is inc
-    assert task.args == (1,)
+    assert task.args == [1]
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {}
 
     # Dask graphs
-    dsk = Task.from_tuple({"x": (apply, inc, 1, {'extra': .1})})
+    dsk = Task.from_tuple({"x": (apply, inc, [1], {'extra': .1})})
     assert dsk["x"].function is inc
-    assert dsk["x"].args == (1,)
+    assert dsk["x"].args == [1]
     assert dsk["x"].kwargs == {'extra': .1}
     assert dsk["x"].annotations == {}
 
@@ -121,9 +121,9 @@ def test_task_from_tuple():
     dsk = Task.from_tuple({
         "v": N(1, (inc, 1)),
         "w": N(inc, 1),
-        "x": (apply, inc, 1, {'kwtask': (apply, inc, 1, {'extra': .1})}),
+        "x": (apply, inc, [1], {'kwtask': (apply, inc, [1], {'extra': .1})}),
         "y": [(inc, 5), (inc, (inc, 2))],
-        "z": (inc, (inc, (inc, Task(inc, (1,)))))
+        "z": (inc, (inc, (inc, Task(inc, [1]))))
     })
 
     # namedtuple reproduce in this case

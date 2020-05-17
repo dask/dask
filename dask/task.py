@@ -89,28 +89,38 @@ class Task:
                 return Task(args[0])
             elif len(args) == 2:
                 # (apply, function, args)
-                return Task(args[0], args[1], annotations=annotations)
+                return Task(args[0], args[1],
+                            annotations=annotations)
             elif len(args) == 3:
                 # (apply, function, args, kwargs)
-                return Task(args[0], args[1], args[2], annotations=annotations)
-
+                return Task(args[0], args[1], args[2],
+                            annotations=annotations)
             raise ValueError("Invalid apply call")
-
-        return Task(function, args, kwargs, annotations)
+        elif callable(function):
+            return Task(function, list(args), kwargs, annotations)
+        else:
+            raise TypeError("function is not callable")
 
     @classmethod
     def from_tuple(cls, obj):
-        """ Recreate objects containing legacy task tuples """
+        """
+        Recreate objects containing legacy task tuples.
+
+        For more information please reread the `dask graph specification
+        <https://docs.dask.org/en/latest/spec.html>_`_
+        """
         ft = Task.from_tuple
 
         # TODO(sjperkins)
-        # Figure out how to make this import work globally
+        # Figure out how to make these imports work globally
         from .utils import apply
+        from .highlevelgraph import HighLevelGraph
 
         if isinstance(obj, tuple):
-            if obj is ():
+            # Tuples are either tasks, or keys
+            if obj == ():
                 return obj
-            # (apply, function [, args [, kwargs]])
+            # task of the form (apply, function [, args [, kwargs]])
             elif obj[0] is apply:
                 if len(obj) == 2:
                     # (apply, function)
@@ -123,21 +133,28 @@ class Task:
                     return Task(obj[1], ft(obj[2]), ft(obj[3]))
 
                 raise ValueError("Invalid apply obj %s" % obj)
-            # (function, arg1, arg2, ..., argn) form
+
+            # task of the form (function, arg1, arg2, ..., argn)
             elif callable(obj[0]):
-                return Task(obj[0], ft(obj[1:]))
+                return Task(obj[0], list(ft(a) for a in obj[1:]))
             # namedtuple
             elif getattr(obj, "_fields", None) is not None:
                 return obj._make((ft(a) for a in obj))
-            # ordinary tuple
+            # key is implied by a standard tuple
             else:
-                return tuple(ft(a) for a in obj)
-        if isinstance(obj, list):
+                return obj
+        elif isinstance(obj, list):
             return [ft(t) for t in obj]
         elif isinstance(obj, dict):
             return {k: ft(v) for k, v in obj.items()}
+        elif isinstance(obj, HighLevelGraph):
+            # TODO(sjperkins)
+            # Properly handle HLG complexity
+            return {k: ft(v) for k, v in obj.items()}
         else:
+            # Key or literal
             return obj
+
 
     def can_fuse(self, other):
         """
