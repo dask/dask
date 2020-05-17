@@ -120,9 +120,11 @@ def _execute_task(arg, cache, dsk=None):
     elif isinstance(arg, Task):
          return arg.function(
             *(_execute_task(a, cache) for a
-              in _execute_task(arg.args, cache)),
+              in (arg.args if isinstance(arg.args, list)
+                  else _execute_task(arg.args, cache))),
             **{k: _execute_task(v, cache) for k, v
-               in _execute_task(arg.kwargs, cache).items()})
+               in (arg.kwargs if isinstance(arg.kwargs, dict)
+                   else _execute_task(arg.kwargs, cache)).items()})
 
 
     elif istask(arg):
