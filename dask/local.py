@@ -412,6 +412,9 @@ def get_async(
         result_flat = set([result])
     results = set(result_flat)
 
+    # TODO(sjperkins)
+    # This merely exists for testing purposes,
+    # remove when PR is ready
     from dask.task import Task
     dsk = Task.from_spec(dsk)
 
