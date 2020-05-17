@@ -37,7 +37,7 @@ def _sample_map_partitions(population, k):
     population : list
         List of elements to sample.
     k : int, optional
-        Number of elements to sample. Default is a single value is returned.
+        Number of elements to sample. Default is 1.
 
     Returns
     -------
