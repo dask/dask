@@ -164,14 +164,14 @@ class Task:
         if isinstance(self.args, (tuple, list)):
             arg_str = ", ".join(fn(a) for a in self.args)
         else:
-            arg_str = fn(self.args)
+            arg_str = "*%s" % fn(self.args)
 
         if isinstance(self.kwargs, dict):
             kwargs_str = ", ".join("%s=%s"% (k, fn(v))
                                             for k, v
                                             in self.kwargs.items())
         else:
-            kwargs_str = fn(self.kwargs)
+            kwargs_str = "**%s" % fn(self.kwargs)
 
         annot_str = ("annotions=%s" % fn(self.annotations)
                      if self.annotations else "")
