@@ -156,6 +156,11 @@ class Task:
             return obj
 
 
+    def dependencies(self):
+        return ((self.args if isinstance(self.args, list) else [self.args]) +
+                (list(self.kwargs.values()) if isinstance(self.kwargs, dict)
+                 else [self.kwargs]))
+
     def can_fuse(self, other):
         """
         Returns

@@ -216,11 +216,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
         for w in work:
             typ = type(w)
             if typ is Task:
-                if w.args:
-                    new_work.append(w.args)  # args itself might be a key
-                    new_work.extend(a for a in w.args)
-                if w.kwargs:
-                    new_work.append(w.kwargs)
+                new_work.extend(w.dependencies())
             elif typ is tuple and w and callable(w[0]):  # istask(w)
                 new_work += w[1:]
             elif typ is list:
