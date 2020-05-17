@@ -65,7 +65,7 @@ def _sample_map_partitions(population, k=1, replace=True):
     population : list
         List of elements to sample.
     k : int, optional
-        Number of elements to sample. Default is a single value is returned.
+        Number of elements to sample. Default is 1.
     replace : boolean, optional
         Whether the sample is with or without replacement
 
