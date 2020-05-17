@@ -1,29 +1,5 @@
 import random
-
-
-def sample(population, k):
-    """
-    Chooses k unique random elements from a population bag.
-
-    Returns a new bag containing elements from the population while
-    leaving the original population unchanged.
-
-    Parameters
-    ----------
-    population : Bag
-        Elements to sample.
-    k : integer, optional
-        Number of elements to sample.
-    Examples
-    --------
-    >>> import dask.bag as db
-    >>> from dask.bag import random
-    >>>
-    >>> b = db.from_sequence(range(5), npartitions=2)
-    >>> len(list(random.sample(b, 3).compute()))
-    3
-    """
-    return _sample(population, k, False)
+from functools import partial
 
 
 def choices(population, k=1):
@@ -41,23 +17,19 @@ def choices(population, k=1):
         Number of elements to sample.
     Examples
     --------
-    >>> import dask.bag as db
-    >>> from dask.bag import random
+    >>> import dask.bag as db # doctest: +SKIP
+    >>> from dask.bag import random # doctest: +SKIP
     >>>
-    >>> b = db.from_sequence(range(5), npartitions=2)
-    >>> len(list(random.choices(b, 3).compute()))
-    3
+    >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
+    >>> list(random.choices(b, 3).compute()) # doctest: +SKIP
+    [1, 3, 5]
     """
-    return _sample(population, k, True)
-
-
-def _sample(population, k=1, replace=False):
-    return population.map_partitions(_sample_map_partitions, k, replace).reduction(
-        lambda x: x, _sample_reduce
+    return population.reduction(
+        partial(_sample_map_partitions, k=k), partial(_sample_reduce, k=k)
     )
 
 
-def _sample_map_partitions(population, k=1, replace=True):
+def _sample_map_partitions(population, k):
     """
     Map function used on the sample and choices functions.
     Parameters
@@ -66,24 +38,26 @@ def _sample_map_partitions(population, k=1, replace=True):
         List of elements to sample.
     k : int, optional
         Number of elements to sample. Default is a single value is returned.
-    replace : boolean, optional
-        Whether the sample is with or without replacement
 
-    Returns a tuple, composed by:
-    - list of k samples;
-    - total number of elements from where the sample was drawn;
-    - total number of elements to be sampled;
-    - boolean which is True whether the sample is with or without replacement.
+    Returns
+    -------
+    sample : list
+        List of sampled elements from the partition.
+    lx : int
+        Number of elements on the partition.
+    k : int
+        Number of elements to sample.
+    replace: boolean
+        Whether the sample is with or without replacement.
     """
     lx = len(population)
     real_k = k if k <= lx else lx
-    sample_fun = random.choices if replace else random.sample
     # because otherwise it raises IndexError:
-    sampled = [] if real_k == 0 else sample_fun(population, k=real_k)
-    return sampled, lx, k, replace
+    sampled = [] if real_k == 0 else random.choices(population, k=real_k)
+    return sampled, lx
 
 
-def _sample_reduce(reduce_iter):
+def _sample_reduce(reduce_iter, k):
     """
     Reduce function used on the sample and choice functions.
 
@@ -97,20 +71,16 @@ def _sample_reduce(reduce_iter):
     ns_ks = []
     s = []
     n = 0
-    k = 0
-    tot_ks = 0
-    replace = True
     # unfolding reduce outputs
     for i in reduce_iter:
-        (s_i, n_i, k, replace) = i
+        (s_i, n_i) = i
         s.extend(s_i)
         n += n_i
         k_i = len(s_i)
-        tot_ks += k_i
         ns_ks.append((n_i, k_i))
 
-    if k < 0 or ((k > n) and not replace):
-        raise ValueError("Sample larger than population or is negative")
+    if k < 0:
+        raise ValueError("Sample is negative")
 
     # creating the probability array
     p = []
@@ -119,5 +89,4 @@ def _sample_reduce(reduce_iter):
             p_i = n_i / (k_i * n)
             p += [p_i] * k_i
 
-    final_k = min(k, tot_ks) if not replace else k
-    return random.choices(population=s, weights=p, k=final_k)
+    return random.choices(population=s, weights=p, k=k)
