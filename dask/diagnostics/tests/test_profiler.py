@@ -6,6 +6,7 @@ from distutils.version import LooseVersion
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile, apply
+from dask.task import Task
 import pytest
 
 try:
@@ -38,7 +39,10 @@ def test_profiler():
     keys = [i.key for i in prof_data]
     assert keys == ["c", "d", "e"]
     tasks = [i.task for i in prof_data]
-    assert tasks == [(add, "a", "b"), (mul, "a", "b"), (mul, "c", "d")]
+    # TODO(sjperkins)
+    # Remove Task.from_spec, temporarily added while
+    # checking that all test cases can run with new Task object
+    assert tasks == Task.from_spec([(add, "a", "b"), (mul, "a", "b"), (mul, "c", "d")])
     prof.clear()
     assert prof.results == []
 

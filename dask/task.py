@@ -32,16 +32,14 @@ class Task:
         self.annotations = annotations
 
     def __str__(self):
-        return "%s(%s)" % (
-            getattr(self.function, "__name__", str(self.function)),
-            self._format_components(str),
-        )
+        from .utils import funcname
+
+        return "%s(%s)" % (funcname(self.function), self._format_components(str))
 
     def __repr__(self):
-        return "Task(%s, %s)" % (
-            getattr(self.function, "__name__", str(self.function)),
-            self._format_components(repr),
-        )
+        from .utils import funcname
+
+        return "Task(%s,%s)" % (funcname(self.function), self._format_components(str))
 
     @classmethod
     def from_call(cls, function, *args, annotations=None, **kwargs):

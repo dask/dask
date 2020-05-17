@@ -5,7 +5,7 @@ from itertools import cycle
 from operator import itemgetter, add
 
 from ..utils import funcname, import_required, apply
-from ..core import istask
+from ..core import istask, Task
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
@@ -60,13 +60,20 @@ def pprint_task(task, keys, label_size=60):
     '[]'
     """
     if istask(task):
-        func = task[0]
-        if func is apply:
+        if type(task) is Task:
+            func = task.function
+            head = funcname(task.function)
+            tail = ")"
+            args = tuple(task.args)
+            kwargs = task.kwargs
+        elif task[0] is apply:
+            func = task[1]
             head = funcname(task[1])
             tail = ")"
             args = unquote(task[2]) if len(task) > 2 else ()
             kwargs = unquote(task[3]) if len(task) > 3 else {}
         else:
+            func = task[0]
             if hasattr(func, "funcs"):
                 head = "(".join(funcname(f) for f in func.funcs)
                 tail = ")" * len(func.funcs)
