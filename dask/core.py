@@ -118,9 +118,13 @@ def _execute_task(arg, cache, dsk=None):
     if isinstance(arg, list):
         return [_execute_task(a, cache) for a in arg]
     elif isinstance(arg, Task):
-        return arg.function(*(_execute_task(a, cache) for a in arg.args),
-                            **{k: _execute_task(v, cache) for k, v
-                               in arg.kwargs.items()})
+         return arg.function(
+            *(_execute_task(a, cache) for a
+              in _execute_task(arg.args, cache)),
+            **{k: _execute_task(v, cache) for k, v
+               in _execute_task(arg.kwargs, cache).items()})
+
+
     elif istask(arg):
         func, args = arg[0], arg[1:]
         # Note: Don't assign the subtask results to a variable. numpy detects
@@ -203,11 +207,18 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     result = []
     work = [arg]
 
+    from dask.task import Task
+
     while work:
         new_work = []
         for w in work:
             typ = type(w)
-            if typ is tuple and w and callable(w[0]):  # istask(w)
+            if typ is Task:
+                if w.args:
+                    new_work.append(w.args)
+                if w.kwargs:
+                    new_work.append(w.kwargs)
+            elif typ is tuple and w and callable(w[0]):  # istask(w)
                 new_work += w[1:]
             elif typ is list:
                 new_work += w

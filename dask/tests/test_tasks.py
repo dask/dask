@@ -95,21 +95,21 @@ def test_task_from_tuple():
     assert task.annotations == {}
 
     # Apply args only case
-    task = Task.from_tuple((apply, inc, (1,)))
+    task = Task.from_tuple((apply, inc, 1))
     assert task.function is inc
     assert task.args == (1,)
     assert task.kwargs == {}
     assert task.annotations == {}
 
     # Apply args and kwargs case
-    task = Task.from_tuple((apply, inc, (1,), {'extra': .1}))
+    task = Task.from_tuple((apply, inc, 1, {'extra': .1}))
     assert task.function is inc
     assert task.args == (1,)
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {}
 
     # Dask graphs
-    dsk = Task.from_tuple({"x": (apply, inc, (1,), {'extra': .1})})
+    dsk = Task.from_tuple({"x": (apply, inc, 1, {'extra': .1})})
     assert dsk["x"].function is inc
     assert dsk["x"].args == (1,)
     assert dsk["x"].kwargs == {'extra': .1}
@@ -121,7 +121,7 @@ def test_task_from_tuple():
     dsk = Task.from_tuple({
         "v": N(1, (inc, 1)),
         "w": N(inc, 1),
-        "x": (apply, inc, (1,), {'kwtask': (apply, inc, (1,), {'extra': .1})}),
+        "x": (apply, inc, 1, {'kwtask': (apply, inc, 1, {'extra': .1})}),
         "y": [(inc, 5), (inc, (inc, 2))],
         "z": (inc, (inc, (inc, Task(inc, (1,)))))
     })
@@ -162,3 +162,53 @@ def test_task_can_fuse():
     assert task_a.can_fuse(task_a)
     # different annotations
     assert not task_a.can_fuse(task_b)
+
+
+@pytest.mark.skip
+def test_task_tuple():
+    task = Task.from_call(apply, tuple, [slice(None)])
+    assert task.function is tuple
+    assert task.args == ([slice(None)],)
+    assert task.execute() == (slice(None),)
+
+    task = Task.from_tuple((apply, tuple, [slice(None)]))
+    assert task.function is tuple
+    assert task.args == ([slice(None)],)
+    assert task.execute() == (slice(None),)
+
+    task = Task.from_tuple((slice, [None, None, None]))
+    assert task.function is slice
+    assert task.execute() == slice(None)
+
+
+def test_task_complex():
+    from pprint import pprint
+    from dask.core import get_dependencies, get
+
+    dsk = {
+        ('a', i): (
+            tuple,
+            [(apply, slice, ('b', i)), (slice, 0, 'c')],
+        )
+        for i in range(4)
+    }
+
+    dsk.update({
+        "c": 10,
+        ("b", 0): (1, 2),
+        ("b", 1): (2, 3),
+        ("b", 2): (3, 4),
+        ("b", 3): (4, 5)
+    })
+
+    # Convert to tuples
+    dsk2 = Task.from_tuple(dsk)
+
+    keys = [('a', i) for i in range(4)]
+
+    assert get(dsk, keys) == get(dsk2, keys)
+
+    for i in range(4):
+        deps = get_dependencies(dsk, ('a', i))
+        assert deps == {('b', i), 'c'}
+        assert get_dependencies(dsk2, ('a', i)) == deps
