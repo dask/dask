@@ -165,8 +165,6 @@ def get(dsk, out, cache=None):
     # TODO(sjperkins)
     # This merely exists for testing purposes,
     # remove when PR is ready
-    from dask.task import Task
-
     dsk = Task.from_spec(dsk)
 
     for k in flatten(out) if isinstance(out, list) else [out]:
@@ -222,8 +220,6 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 
     result = []
     work = [arg]
-
-    from dask.task import Task
 
     while work:
         new_work = []
