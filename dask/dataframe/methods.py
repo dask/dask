@@ -7,6 +7,7 @@ from tlz import partition
 
 from .utils import (
     is_series_like,
+    is_index_like,
     is_dataframe_like,
     PANDAS_GT_0250,
     hash_object_dispatch,
@@ -77,7 +78,7 @@ def boundary_slice(
     Columns: []
     Index: []
     """
-    if df.empty:
+    if len(df.index) == 0:
         return df
 
     if kind == "loc" and not df.index.is_monotonic:
@@ -217,10 +218,10 @@ def describe_nonnumeric_aggregate(stats, name):
 
         first = pd.Timestamp(min_ts, tz=tz)
         last = pd.Timestamp(max_ts, tz=tz)
-        index += ["first", "last"]
-        values += [top, freq, first, last]
+        index.extend(["first", "last"])
+        values.extend([top, freq, first, last])
     else:
-        values += [top, freq]
+        values.extend([top, freq])
 
     return pd.Series(values, index=index, name=name)
 
@@ -271,7 +272,7 @@ def unique(x, series_name=None):
     out = x.unique()
     # out can be either an np.ndarray or may already be a series
     # like object.  When out is an np.ndarray, it must be wrapped.
-    if not is_series_like(out):
+    if not (is_series_like(out) or is_index_like(out)):
         out = pd.Series(out, name=series_name)
     return out
 
