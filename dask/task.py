@@ -30,40 +30,6 @@ class Task:
         self.kwargs = kwargs
         self.annotations = annotations
 
-    def __eq__(self, other):
-        """ Equality """
-        return (type(other) is Task and
-                self.function == other.function and
-                self.args == other.args and
-                self.kwargs == other.kwargs and
-                self.annotations == other.annotations)
-
-    def __reduce__(self):
-        """ Pickling """
-        return (Task, (self.function, self.args,
-                       self.kwargs, self.annotations))
-
-
-    def _format_components(self, fn):
-        """ Format task components into a (arg0, kw0=kwv0, annotations=...) string """
-        if isinstance(self.args, (tuple, list)):
-            arg_str = ", ".join(fn(a) for a in self.args)
-        else:
-            arg_str = fn(self.args)
-
-        if isinstance(self.kwargs, dict):
-            kwargs_str = ", ".join("%s=%s"% (k, fn(v))
-                                            for k, v
-                                            in self.kwargs.items())
-        else:
-            kwargs_str = fn(self.kwargs)
-
-        annot_str = ("annotions=%s" % fn(self.annotations)
-                     if self.annotations else "")
-
-        bits = (bit for bit in (arg_str, kwargs_str, annot_str) if bit)
-        return ", ".join(bits)
-
     def __str__(self):
         return "%s(%s)" % (getattr(self.function, "__name__", str(self.function)),
                            self._format_components(str))
@@ -177,3 +143,38 @@ class Task:
                 (self.annotations is EMPTY_DICT or
                 other.annotations is EMPTY_DICT or
                 self.annotations == other.annotations))
+
+
+    def __eq__(self, other):
+        """ Equality """
+        return (type(other) is Task and
+                self.function == other.function and
+                self.args == other.args and
+                self.kwargs == other.kwargs and
+                self.annotations == other.annotations)
+
+    def __reduce__(self):
+        """ Pickling """
+        return (Task, (self.function, self.args,
+                       self.kwargs, self.annotations))
+
+
+    def _format_components(self, fn):
+        """ Format task components into a (arg0, kw0=kwv0, annotations=...) string """
+        if isinstance(self.args, (tuple, list)):
+            arg_str = ", ".join(fn(a) for a in self.args)
+        else:
+            arg_str = fn(self.args)
+
+        if isinstance(self.kwargs, dict):
+            kwargs_str = ", ".join("%s=%s"% (k, fn(v))
+                                            for k, v
+                                            in self.kwargs.items())
+        else:
+            kwargs_str = fn(self.kwargs)
+
+        annot_str = ("annotions=%s" % fn(self.annotations)
+                     if self.annotations else "")
+
+        bits = (bit for bit in (arg_str, kwargs_str, annot_str) if bit)
+        return ", ".join(bits)
