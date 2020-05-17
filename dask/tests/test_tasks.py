@@ -188,7 +188,6 @@ def test_task_tuple():
 
 
 def test_task_complex():
-    from pprint import pprint
     from dask.core import get_dependencies, get
 
     dsk = {

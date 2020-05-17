@@ -18,7 +18,6 @@ from .context import thread_state
 from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict, apply
-from .task import Task
 from . import config, local, threaded
 
 
