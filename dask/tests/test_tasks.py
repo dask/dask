@@ -86,30 +86,30 @@ def test_task_from_call():
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {'a': 1}
 
-def test_task_from_tuple():
+def test_task_from_spec():
     # Simple task tuple
-    task = Task.from_tuple((inc, 1))
+    task = Task.from_spec((inc, 1))
     assert task.function is inc
     assert task.args == [1]
     assert task.kwargs == {}
     assert task.annotations == {}
 
     # Apply args only case
-    task = Task.from_tuple((apply, inc, [1]))
+    task = Task.from_spec((apply, inc, [1]))
     assert task.function is inc
     assert task.args == [1]
     assert task.kwargs == {}
     assert task.annotations == {}
 
     # Apply args and kwargs case
-    task = Task.from_tuple((apply, inc, [1], {'extra': .1}))
+    task = Task.from_spec((apply, inc, [1], {'extra': .1}))
     assert task.function is inc
     assert task.args == [1]
     assert task.kwargs == {'extra': .1}
     assert task.annotations == {}
 
     # Dask graphs
-    dsk = Task.from_tuple({"x": (apply, inc, [1], {'extra': .1})})
+    dsk = Task.from_spec({"x": (apply, inc, [1], {'extra': .1})})
     assert dsk["x"].function is inc
     assert dsk["x"].args == [1]
     assert dsk["x"].kwargs == {'extra': .1}
@@ -118,7 +118,7 @@ def test_task_from_tuple():
     # Nesting
     N = namedtuple("N", ("a b"))
 
-    dsk = Task.from_tuple({
+    dsk = Task.from_spec({
         "v": N(1, (inc, 1)),
         "w": N(inc, 1),
         "x": (apply, inc, [1], {'kwtask': (apply, inc, [1], {'extra': .1})}),
@@ -171,12 +171,12 @@ def test_task_tuple():
     assert task.args == ([slice(None)],)
     assert task.execute() == (slice(None),)
 
-    task = Task.from_tuple((apply, tuple, [slice(None)]))
+    task = Task.from_spec((apply, tuple, [slice(None)]))
     assert task.function is tuple
     assert task.args == ([slice(None)],)
     assert task.execute() == (slice(None),)
 
-    task = Task.from_tuple((slice, [None, None, None]))
+    task = Task.from_spec((slice, [None, None, None]))
     assert task.function is slice
     assert task.execute() == slice(None)
 
@@ -202,7 +202,7 @@ def test_task_complex():
     })
 
     # Convert to tuples
-    dsk2 = Task.from_tuple(dsk)
+    dsk2 = Task.from_spec(dsk)
 
     keys = [('a', i) for i in range(4)]
 

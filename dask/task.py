@@ -102,14 +102,14 @@ class Task:
             raise TypeError("function is not callable")
 
     @classmethod
-    def from_tuple(cls, obj):
+    def from_spec(cls, obj):
         """
-        Recreate objects containing legacy task tuples.
-
-        For more information please reread the `dask graph specification
+        Transform objects from the the `dask graph specification
         <https://docs.dask.org/en/latest/spec.html>_`_
+        by converting task tuples into Task objects
+
         """
-        ft = Task.from_tuple
+        ft = Task.from_spec
 
         # TODO(sjperkins)
         # Figure out how to make these imports work globally
