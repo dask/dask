@@ -46,10 +46,18 @@ class Task:
 
     def _format_components(self, fn):
         """ Format task components into a (arg0, kw0=kwv0, annotations=...) string """
-        arg_str = ", ".join(fn(a) for a in self.args)
-        kwargs_str = ", ".join("%s=%s"% (k, fn(v))
-                                         for k, v
-                                         in self.kwargs.items())
+        if isinstance(self.args, (tuple, list)):
+            arg_str = ", ".join(fn(a) for a in self.args)
+        else:
+            arg_str = fn(self.args)
+
+        if isinstance(self.kwargs, dict):
+            kwargs_str = ", ".join("%s=%s"% (k, fn(v))
+                                            for k, v
+                                            in self.kwargs.items())
+        else:
+            kwargs_str = fn(self.kwargs)
+
         annot_str = ("annotions=%s" % fn(self.annotations)
                      if self.annotations else "")
 
@@ -57,11 +65,11 @@ class Task:
         return ", ".join(bits)
 
     def __str__(self):
-        return "%s(%s)" % (self.function.__name__,
+        return "%s(%s)" % (getattr(self.function, "__name__", str(self.function)),
                            self._format_components(str))
 
     def __repr__(self):
-        return "Task(%s, %s)" % (self.function.__name__,
+        return "Task(%s, %s)" % (getattr(self.function, "__name__", str(self.function)),
                                  self._format_components(repr))
 
     @classmethod
