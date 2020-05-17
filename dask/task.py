@@ -31,16 +31,6 @@ class Task:
         self.kwargs = kwargs
         self.annotations = annotations
 
-    def __str__(self):
-        from .utils import funcname
-
-        return "%s(%s)" % (funcname(self.function), self._format_components(str))
-
-    def __repr__(self):
-        from .utils import funcname
-
-        return "Task(%s,%s)" % (funcname(self.function), self._format_components(str))
-
     @classmethod
     def from_call(cls, function, *args, annotations=None, **kwargs):
         """ Create Task from (function, args, kwargs, annotations) """
@@ -177,3 +167,13 @@ class Task:
 
         bits = (bit for bit in (arg_str, kwargs_str, annot_str) if bit)
         return ", ".join(bits)
+
+    def __str__(self):
+        from .utils import funcname
+
+        return "%s(%s)" % (funcname(self.function), self._format_components(str))
+
+    def __repr__(self):
+        from .utils import funcname
+
+        return "Task(%s, %s)" % (funcname(self.function), self._format_components(repr))
