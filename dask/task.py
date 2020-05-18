@@ -59,7 +59,7 @@ class Task:
             raise TypeError("function is not callable")
 
     @classmethod
-    def from_spec(cls, obj):
+    def from_spec(cls, dsk):
         """
         Transform objects from the the `dask graph specification
         <https://docs.dask.org/en/latest/spec.html>_`_
@@ -73,44 +73,44 @@ class Task:
         from .utils import apply
         from .highlevelgraph import HighLevelGraph
 
-        if isinstance(obj, tuple):
+        if isinstance(dsk, tuple):
             # Tuples are either tasks, or keys
-            if obj == ():
-                return obj
+            if dsk == ():
+                return dsk
             # task of the form (apply, function [, args [, kwargs]])
-            elif obj[0] is apply:
-                if len(obj) == 2:
+            elif dsk[0] is apply:
+                if len(dsk) == 2:
                     # (apply, function)
-                    return Task(obj[1])
-                elif len(obj) == 3:
+                    return Task(dsk[1])
+                elif len(dsk) == 3:
                     # (apply, function, args)
-                    return Task(obj[1], ft(obj[2]))
-                elif len(obj) == 4:
+                    return Task(dsk[1], ft(dsk[2]))
+                elif len(dsk) == 4:
                     # (apply, function, args, kwargs)
-                    return Task(obj[1], ft(obj[2]), ft(obj[3]))
+                    return Task(dsk[1], ft(dsk[2]), ft(dsk[3]))
 
-                raise ValueError("Invalid apply obj %s" % obj)
+                raise ValueError("Invalid apply dsk %s" % dsk)
 
             # task of the form (function, arg1, arg2, ..., argn)
-            elif callable(obj[0]):
-                return Task(obj[0], list(ft(a) for a in obj[1:]))
+            elif callable(dsk[0]):
+                return Task(dsk[0], list(ft(a) for a in dsk[1:]))
             # namedtuple
-            elif getattr(obj, "_fields", None) is not None:
-                return obj._make((ft(a) for a in obj))
+            elif getattr(dsk, "_fields", None) is not None:
+                return dsk._make((ft(a) for a in dsk))
             # key is implied by a standard tuple
             else:
-                return obj
-        elif isinstance(obj, list):
-            return [ft(t) for t in obj]
-        elif isinstance(obj, dict):
-            return {k: ft(v) for k, v in obj.items()}
-        elif isinstance(obj, HighLevelGraph):
+                return dsk
+        elif isinstance(dsk, list):
+            return [ft(t) for t in dsk]
+        elif isinstance(dsk, dict):
+            return {k: ft(v) for k, v in dsk.items()}
+        elif isinstance(dsk, HighLevelGraph):
             # TODO(sjperkins)
             # Properly handle HLG complexity
-            return {k: ft(v) for k, v in obj.items()}
+            return {k: ft(v) for k, v in dsk.items()}
         else:
             # Key or literal
-            return obj
+            return dsk
 
     def dependencies(self):
         return (self.args if isinstance(self.args, list) else [self.args]) + (
