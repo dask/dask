@@ -154,12 +154,16 @@ class Task:
         ts = Task.to_spec
 
         if typ is Task:
+            # Get an annotated funtion
             fn = annotate(dsk.function, dsk.annotations)
             kw = ts(dsk.kwargs)
 
+            # No keywords, output (function, args1, ..., argns)
             if len(kw) == 0:
                 return (fn,) + tuple(ts(dsk.args))
+            # Keywords, output (apply, function, args, kwargs)
             else:
+                # Convert any dicts to (dict, [[k, v]]) task
                 if type(kw) is dict:
                     kw = (dict, [[k, v] for k, v in kw.items()])
                 return (apply, fn, ts(dsk.args), kw)
