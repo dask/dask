@@ -17,15 +17,92 @@ from pandas.api.types import (
     CategoricalDtype,
 )
 
+from ...base import tokenize
+
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
+from ..core import new_dd_object
 from ...delayed import delayed
-from ...utils import asciitable, parse_bytes
+from ...utils import asciitable, parse_bytes, ensure_dict
 from ..utils import clear_known_categories
 from .io import from_delayed
 
 import fsspec.implementations.local
 from fsspec.compression import compr
+
+
+class CSVSubgraph(Mapping):
+    def __init__(
+        self,
+        name,
+        reader,
+        block_lists,
+        header,
+        kwargs,
+        dtypes,
+        columns,
+        collection,
+        enforce,
+        path,
+    ):
+        self.name = name
+        self.reader = reader
+        self.block_lists = block_lists
+        self.header = header
+        self.kwargs = kwargs
+        self.dtypes = dtypes
+        self.columns = columns
+        self.enforce = enforce
+        self.colname, self.paths = path or (None, None)
+        self.delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
+
+    def __getitem__(self, key):
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
+
+        if name != self.name:
+            raise KeyError(key)
+
+        if i < 0 or i >= len(self.block_lists):
+            raise KeyError(key)
+
+        blocks = self.block_lists[i]
+        if not isinstance(blocks, list):
+            blocks = [blocks]
+
+        if self.paths is not None:
+            path_info = (self.colname, self.paths[i], self.paths)
+        else:
+            path_info = None
+
+        header = True
+        rest_kwargs = self.kwargs.copy()
+        if i != 0:
+            header = False
+            rest_kwargs.pop("skiprows", None)
+
+        # or self.delayed_pandas_read_text
+        return pandas_read_text(
+            self.reader,
+            blocks[i].compute(),  # this is clearly not correct
+            self.header,
+            self.kwargs,
+            self.dtypes,
+            self.columns,
+            write_header=False,
+            enforce=self.enforce,
+            path=path_info,
+        )
+
+    def __len__(self):
+        return len(self.block_lists)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield (self.name, i)
 
 
 def pandas_read_text(
@@ -243,45 +320,50 @@ def text_blocks_to_pandas(
         dtypes[k] = "category"
 
     columns = list(head.columns)
-    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
-    dfs = []
-    colname, paths = path or (None, None)
 
-    for i, blocks in enumerate(block_lists):
-        if not blocks:
-            continue
-        if path:
-            path_info = (colname, paths[i], paths)
-        else:
-            path_info = None
-        df = delayed_pandas_read_text(
-            reader,
-            blocks[0],
-            header,
-            kwargs,
-            dtypes,
-            columns,
-            write_header=False,
-            enforce=enforce,
-            path=path_info,
-        )
+    name = "read-csv-" + tokenize(
+        reader, block_lists, header, kwargs, dtypes, columns, collection, path,
+    )
 
-        dfs.append(df)
-        rest_kwargs = kwargs.copy()
-        rest_kwargs.pop("skiprows", None)
-        for b in blocks[1:]:
-            dfs.append(
-                delayed_pandas_read_text(
-                    reader,
-                    b,
-                    header,
-                    rest_kwargs,
-                    dtypes,
-                    columns,
-                    enforce=enforce,
-                    path=path_info,
-                )
-            )
+    #    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
+    #    dfs = []
+    #    colname, paths = path or (None, None)
+    #
+    #    for i, blocks in enumerate(block_lists):
+    #        if not blocks:
+    #            continue
+    #        if path:
+    #            path_info = (colname, paths[i], paths)
+    #        else:
+    #            path_info = None
+    #        df = delayed_pandas_read_text(
+    #            reader,
+    #            blocks[0],
+    #            header,
+    #            kwargs,
+    #            dtypes,
+    #            columns,
+    #            write_header=False,
+    #            enforce=enforce,
+    #            path=path_info,
+    #        )
+    #
+    #        dfs.append(df)
+    #        rest_kwargs = kwargs.copy()
+    #        rest_kwargs.pop("skiprows", None)
+    #        for b in blocks[1:]:
+    #            dfs.append(
+    #                delayed_pandas_read_text(
+    #                    reader,
+    #                    b,
+    #                    header,
+    #                    rest_kwargs,
+    #                    dtypes,
+    #                    columns,
+    #                    enforce=enforce,
+    #                    path=path_info,
+    #                )
+    #            )
 
     if collection:
         if path:
@@ -294,9 +376,21 @@ def text_blocks_to_pandas(
             )
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
-        return from_delayed(dfs, head)
-    else:
-        return dfs
+
+    subgraph = CSVSubgraph(
+        name,
+        reader,
+        block_lists,
+        head,
+        kwargs,
+        dtypes,
+        columns,
+        collection,
+        enforce,
+        path,
+    )
+
+    return new_dd_object(subgraph, name, head, (None,) * (len(block_lists) + 1))
 
 
 def auto_blocksize(total_memory, cpu_count):
