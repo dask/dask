@@ -133,9 +133,12 @@ class Task:
         elif typ is dict:
             return {k: fs(v) for k, v in dsk.items()}
         elif typ is HighLevelGraph:
-            # TODO(sjperkins)
-            # Properly handle HLG complexity
-            return {k: fs(v) for k, v in dsk.items()}
+            layers = {
+                name: {k: fs(v) for k, v in layer.items()}
+                for name, layer in dsk.layers.items()
+            }
+
+            return HighLevelGraph(layers, dsk.dependencies)
         else:
             # Key or literal
             return dsk
@@ -163,16 +166,17 @@ class Task:
         elif typ is dict:
             return {k: ts(v) for k, v in dsk.items()}
         elif typ is HighLevelGraph:
-            # TODO(sjperkins)
-            # Properly handle HLG complexity
-            return {k: ts(v) for k, v in dsk.items()}
+            layers = {
+                name: {k: ts(v) for k, v in layer.items()}
+                for name, layer in dsk.layers.items()
+            }
+
+            return HighLevelGraph(layers, dsk.dependencies)
         else:
             return dsk
 
-
     def to_tuple(self):
         return Task.to_spec(self)
-
 
     def dependencies(self):
         return (self.args if isinstance(self.args, list) else [self.args]) + (

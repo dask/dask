@@ -160,6 +160,22 @@ def test_task_from_spec():
     assert dsk["z"] == task
     assert get(dsk, "z") == inc(inc(inc(inc(1))))
 
+    from dask.highlevelgraph import HighLevelGraph
+
+    layer_a = {("a", i): (inc, i) for i in range(4)}
+    layer_b = {("b", i): (inc, ("a", i)) for i in range(4)}
+    layers = {"a": layer_a, "b": layer_b}
+    deps = {"a": set(), "b": set(["a"])}
+    dsk = HighLevelGraph(layers, deps)
+
+    hlg = Task.from_spec(dsk)
+    assert type(hlg) is HighLevelGraph
+    assert hlg.dependencies == dsk.dependencies
+    assert hlg.layers["a"] == {("a", i): Task.from_call(inc, i) for i in range(4)}
+    assert hlg.layers["b"] == {
+        ("b", i): Task.from_call(inc, ("a", i)) for i in range(4)
+    }
+
 
 def test_task_to_spec():
     from dask.core import get
@@ -176,6 +192,20 @@ def test_task_to_spec():
     assert dsk3["out"][0]._dask_annotation == {"b": 1}
     assert dsk3["out"][1][1]._dask_annotation == {"c": 1}
     assert get(dsk3, "out") == get(dsk2, "out")
+
+    from dask.highlevelgraph import HighLevelGraph
+
+    layer_a = {("a", i): Task.from_call(inc, i) for i in range(4)}
+    layer_b = {("b", i): Task.from_call(inc, ("a", i)) for i in range(4)}
+    layers = {"a": layer_a, "b": layer_b}
+    deps = {"a": set(), "b": set(["a"])}
+    dsk = HighLevelGraph(layers, deps)
+
+    hlg = Task.to_spec(dsk)
+    assert type(hlg) is HighLevelGraph
+    assert hlg.dependencies == dsk.dependencies
+    assert hlg.layers["a"] == {("a", i): (inc, i) for i in range(4)}
+    assert hlg.layers["b"] == {("b", i): (inc, ("a", i)) for i in range(4)}
 
 
 def test_task_can_fuse():
