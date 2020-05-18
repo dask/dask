@@ -73,7 +73,9 @@ class Task:
         from .utils import apply
         from .highlevelgraph import HighLevelGraph
 
-        if isinstance(dsk, tuple):
+        typ = type(dsk)
+
+        if typ is tuple:
             # Tuples are either tasks, or keys
             if dsk == ():
                 return dsk
@@ -94,17 +96,14 @@ class Task:
             # task of the form (function, arg1, arg2, ..., argn)
             elif callable(dsk[0]):
                 return Task(dsk[0], list(fs(a) for a in dsk[1:]))
-            # namedtuple
-            elif getattr(dsk, "_fields", None) is not None:
-                return dsk._make((fs(a) for a in dsk))
             # key is implied by a standard tuple
             else:
                 return dsk
-        elif isinstance(dsk, list):
+        elif typ is list:
             return [fs(t) for t in dsk]
-        elif isinstance(dsk, dict):
+        elif typ is dict:
             return {k: fs(v) for k, v in dsk.items()}
-        elif isinstance(dsk, HighLevelGraph):
+        elif typ is HighLevelGraph:
             # TODO(sjperkins)
             # Properly handle HLG complexity
             return {k: fs(v) for k, v in dsk.items()}

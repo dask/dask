@@ -124,7 +124,6 @@ def test_task_from_spec():
 
     dsk = Task.from_spec(
         {
-            "v": N(1, (inc, 1)),
             "w": N(inc, 1),
             "x": (
                 apply,
@@ -137,14 +136,8 @@ def test_task_from_spec():
         }
     )
 
-    # namedtuple reproduce in this case
-    assert dsk["v"]._fields == ("a", "b")
-    assert dsk["v"] == N(1, Task.from_call(inc, 1))
-    assert get(dsk, "v") == N(1, Task.from_call(inc, 1))
-    # namedtuple not reproduced here
-    assert not hasattr(dsk["w"], "_fields")
-    assert dsk["w"] == Task.from_call(inc, 1)
-    assert get(dsk, "w") == 2
+    # namedtuples passed through
+    assert dsk["w"] == N(inc, 1)
     # nested applies
     extra_dict = Task(dict, [[["extra", 0.1]]])
     kw_inc = Task(inc, [1], extra_dict)
