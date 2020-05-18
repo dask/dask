@@ -208,6 +208,13 @@ def test_task_to_spec():
     assert hlg.layers["b"] == {("b", i): (inc, ("a", i)) for i in range(4)}
 
 
+def test_task_to_tuple():
+    tuple_task = (apply, inc, [1], (dict, [["extra", 0.1]]))
+    task = Task.from_spec(tuple_task)
+    assert task == Task(inc, [1], Task(dict, [[["extra", 0.1]]]))
+    assert task.to_tuple() == tuple_task
+
+
 def test_task_can_fuse():
     task_1 = Task.from_call(inc, 1)
     task_a = Task.from_call(inc, 1, annotations={"a": 1})

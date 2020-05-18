@@ -155,11 +155,11 @@ class Task:
 
         if typ is Task:
             fn = annotate(dsk.function, dsk.annotations)
+            kw = ts(dsk.kwargs)
 
-            if len(dsk.kwargs) == 0:
+            if len(kw) == 0:
                 return (fn,) + tuple(ts(dsk.args))
             else:
-                kw = (dict, [[k, ts(v)] for k, v in dsk.kwargs.items()])
                 return (apply, fn, ts(dsk.args), kw)
         elif typ is list:
             return [ts(e) for e in dsk]
