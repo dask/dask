@@ -169,6 +169,11 @@ class Task:
         else:
             return dsk
 
+
+    def to_tuple(self):
+        return Task.to_spec(self)
+
+
     def dependencies(self):
         return (self.args if isinstance(self.args, list) else [self.args]) + (
             list(self.kwargs.values())
