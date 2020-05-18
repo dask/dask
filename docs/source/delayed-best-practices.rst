@@ -179,7 +179,7 @@ of the Dask collections to help you.
 +------------------------------------+-------------------------------------------------------------+
 | .. code-block:: python             | .. code-block:: python                                      |
 |                                    |                                                             |
-|    # Too mamy tasks                |    # Use collections                                        |
+|    # Too many tasks                |    # Use collections                                        |
 |                                    |                                                             |
 |    results = []                    |    import dask.bag as db                                    |
 |    for x in range(10000000):       |    b = db.from_sequence(range(10000000), npartitions=1000)  |
@@ -201,7 +201,7 @@ our own batching as follows
 
     batches = []
     for i in range(0, 10000000, 10000):
-        result_batch = dask.delayed(batch, range(i, i + 10000))
+        result_batch = dask.delayed(batch)(range(i, i + 10000))
         batches.append(result_batch)
 
 
@@ -300,13 +300,3 @@ your data separately for each function call.
 
 
 Every call to ``dask.delayed(train)(x, ...)`` has to hash the NumPy array ``x``, which slows things down.
-
-
-**Do**
-
-.. code-block:: python
-
-   x = np.array(...)  # some large array
-   x = dask.delayed(x)  # delay the data, hashing once
-
-   results = [dask.delayed(train)(x, i) for i in range(1000)]

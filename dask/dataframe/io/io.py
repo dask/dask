@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from math import ceil
 from operator import getitem
 import os
@@ -7,10 +5,9 @@ from threading import Lock
 
 import pandas as pd
 import numpy as np
-from toolz import merge
+from tlz import merge
 
 from ...base import tokenize
-from ...compatibility import unicode, PY3
 from ... import array as da
 from ...delayed import delayed
 
@@ -186,8 +183,6 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     if chunksize is None:
         chunksize = int(ceil(nrows / npartitions))
-    else:
-        npartitions = int(ceil(nrows / chunksize))
 
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
@@ -239,7 +234,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
     import dask.array as da
     import bcolz
 
-    if isinstance(x, (str, unicode)):
+    if isinstance(x, str):
         x = bcolz.ctable(rootdir=x)
     bc_chunklen = max(x[name].chunklen for name in x.names)
     if chunksize is None and bc_chunklen > 10000:
@@ -516,7 +511,7 @@ def to_records(df):
     Examples
     --------
     >>> df.to_records()  # doctest: +SKIP
-    dask.array<shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,)>
+    dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,), chunktype=numpy.ndarray>  # noqa: E501
 
     See Also
     --------
@@ -527,7 +522,9 @@ def to_records(df):
 
 
 @insert_meta_param_description
-def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed"):
+def from_delayed(
+    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
+):
     """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -545,6 +542,8 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed"):
         If None, then won't use index information
     prefix : str, optional
         Prefix to prepend to the keys.
+    verify_meta : bool, optional
+        If True check that the partitions have consistent metadata, defaults to True.
     """
     from dask.delayed import Delayed
 
@@ -565,12 +564,12 @@ def from_delayed(dfs, meta=None, divisions=None, prefix="from-delayed"):
 
     name = prefix + "-" + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)
-    dsk.update(
-        {
-            (name, i): (check_meta, df.key, meta, "from_delayed")
-            for (i, df) in enumerate(dfs)
-        }
-    )
+    if verify_meta:
+        for (i, df) in enumerate(dfs):
+            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
+    else:
+        for (i, df) in enumerate(dfs):
+            dsk[(name, i)] = df.key
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
@@ -621,7 +620,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
     positions = [0]
     values = [seq[0]]
-    for pos in list(range(0, len(seq), chunksize)):
+    for pos in range(0, len(seq), chunksize):
         if pos <= positions[-1]:
             continue
         while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:
@@ -638,6 +637,5 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     return values, positions
 
 
-if PY3:
-    DataFrame.to_records.__doc__ = to_records.__doc__
-    DataFrame.to_bag.__doc__ = to_bag.__doc__
+DataFrame.to_records.__doc__ = to_records.__doc__
+DataFrame.to_bag.__doc__ = to_bag.__doc__

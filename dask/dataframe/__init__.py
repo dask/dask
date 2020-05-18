@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 try:
     from .core import (
         DataFrame,
@@ -31,6 +29,7 @@ try:
         to_json,
         read_fwf,
     )
+    from .numeric import to_numeric
     from .optimize import optimize
     from .multi import merge, concat, merge_asof
     from . import rolling, backends
@@ -52,6 +51,6 @@ except ImportError as e:
         "Dask dataframe requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install dask                     # either conda install\n"
-        "  pip install dask[dataframe] --upgrade  # or pip install"
+        "  python -m pip install dask[dataframe] --upgrade  # or python -m pip install"
     )
-    raise ImportError(str(e) + "\n\n" + msg)
+    raise ImportError(msg) from e

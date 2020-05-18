@@ -1,18 +1,16 @@
 import itertools
 import warnings
+from collections.abc import Mapping
 
 import numpy as np
 
-try:
-    import cytoolz as toolz
-except ImportError:
-    import toolz
+import tlz as toolz
 
-from . import core, utils
-from .compatibility import apply, Mapping
+from .core import reverse_dict
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
-from .optimization import SubgraphCallable
+from .optimization import SubgraphCallable, fuse
+from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
 def subs(task, substitution):
@@ -75,16 +73,26 @@ def blockwise(
     } | set(output_indices)
     sub = {k: blockwise_token(i, ".") for i, k in enumerate(sorted(unique_indices))}
     output_indices = index_subs(tuple(output_indices), sub)
-    arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
-    arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
+    a_pairs_list = []
+    for a in arrind_pairs[1::2]:
+        if a is not None:
+            val = tuple(a)
+        else:
+            val = a
+        a_pairs_list.append(index_subs(val, sub))
+
+    arrind_pairs[1::2] = a_pairs_list
     new_axes = {index_subs((k,), sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
-    argpairs = list(toolz.partition(2, arrind_pairs))
+    argpairs = toolz.partition(2, arrind_pairs)
 
     # separate argpairs into two separate tuples
-    inputs = tuple([name for name, _ in argpairs])
-    inputs_indices = tuple([index for _, index in argpairs])
+    inputs = []
+    inputs_indices = []
+    for name, index in argpairs:
+        inputs.append(name)
+        inputs_indices.append(index)
 
     # Unpack delayed objects in kwargs
     new_keys = {n for c in dependencies for n in c.__dask_layers__()}
@@ -94,16 +102,16 @@ def blockwise(
             blockwise_token(i) for i in range(len(inputs), len(inputs) + len(new_keys))
         )
         sub = dict(zip(new_keys, new_tokens))
-        inputs = inputs + tuple(new_keys)
-        inputs_indices = inputs_indices + (None,) * len(new_keys)
+        inputs.extend(new_keys)
+        inputs_indices.extend((None,) * len(new_keys))
         kwargs = subs(kwargs, sub)
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-    keys = tuple(map(blockwise_token, range(len(inputs))))
+    keys = map(blockwise_token, range(len(inputs)))
 
     # Construct local graph
     if not kwargs:
-        subgraph = {output: (func,) + keys}
+        subgraph = {output: (func,) + tuple(keys)}
     else:
         _keys = list(keys)
         if new_keys:
@@ -156,6 +164,7 @@ class Blockwise(Mapping):
     new_axes: Dict
         New index dimensions that may have been created, and their extent
 
+
     See Also
     --------
     dask.blockwise.blockwise
@@ -179,8 +188,20 @@ class Blockwise(Mapping):
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
         )
         self.numblocks = numblocks
-        self.concatenate = concatenate
+        # optimize_blockwise won't merge where `concatenate` doesn't match, so
+        # enforce a canonical value if there are no axes for reduction.
+        if all(
+            all(i in output_indices for i in ind)
+            for name, ind in indices
+            if ind is not None
+        ):
+            self.concatenate = None
+        else:
+            self.concatenate = concatenate
         self.new_axes = new_axes or {}
+
+    def __repr__(self):
+        return "Blockwise<{} -> {}>".format(self.indices, self.output)
 
     @property
     def _dict(self):
@@ -188,7 +209,8 @@ class Blockwise(Mapping):
             return self._cached_dict
         else:
             keys = tuple(map(blockwise_token, range(len(self.indices))))
-            func = SubgraphCallable(self.dsk, self.output, keys)
+            dsk, _ = fuse(self.dsk, [self.output])
+            func = SubgraphCallable(dsk, self.output, keys)
             self._cached_dict = make_blockwise_graph(
                 func,
                 self.output,
@@ -211,12 +233,15 @@ class Blockwise(Mapping):
 
     def _out_numblocks(self):
         d = {}
+        out_d = {}
         indices = {k: v for k, v in self.indices if v is not None}
         for k, v in self.numblocks.items():
             for a, b in zip(indices[k], v):
                 d[a] = max(d.get(a, 0), b)
+                if a in self.output_indices:
+                    out_d[a] = d[a]
 
-        return {k: v for k, v in d.items() if k in self.output_indices}
+        return out_d
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -333,9 +358,15 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
-    assert set(numblocks) == {name for name, ind in argpairs if ind is not None}
+    block_names = set()
+    all_indices = set()
+    for name, ind in argpairs:
+        if ind is not None:
+            block_names.add(name)
+            for x in ind:
+                all_indices.add(x)
+    assert set(numblocks) == block_names
 
-    all_indices = {x for _, ind in argpairs if ind for x in ind}
     dummy_indices = all_indices - set(out_indices)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
@@ -343,56 +374,115 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     for k, v in new_axes.items():
         dims[k] = len(v) if isinstance(v, tuple) else 1
 
-    # (0, 0), (0, 1), (0, 2), (1, 0), ...
-    keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))
-    # {i: 0, j: 0}, {i: 0, j: 1}, ...
-    keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
+    # For each position in the output space, we'll construct a
+    # "coordinate set" that consists of
+    # - the output indices
+    # - the dummy indices
+    # - the dummy indices, with indices replaced by zeros (for broadcasting)
+    # - a 0 to assist with broadcasting.
 
-    # {j: [1, 2, 3], ...}  For j a dummy index of dimension 3
-    dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
+    index_pos, zero_pos = {}, {}
+    for i, ind in enumerate(out_indices):
+        index_pos[ind] = i
+        zero_pos[ind] = -1
 
-    dsk = {}
+    _dummies_list = []
+    for i, ind in enumerate(dummy_indices):
+        index_pos[ind] = 2 * i + len(out_indices)
+        zero_pos[ind] = 2 * i + 1 + len(out_indices)
+        _dummies_list.append([list(range(dims[ind])), [0] * dims[ind]])
 
-    # Create argument lists
-    valtups = []
-    for kd in keydicts:
-        args = []
-        for arg, ind in argpairs:
-            if ind is None:
-                args.append(arg)
-            else:
-                tups = lol_tuples((arg,), ind, kd, dummies)
-                if any(nb == 1 for nb in numblocks[arg]):
-                    tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
-                else:
-                    tups2 = tups
-                if concatenate and isinstance(tups2, list):
-                    axes = [n for n, i in enumerate(ind) if i in dummies]
-                    tups2 = (concatenate, tups2, axes)
-                args.append(tups2)
-        valtups.append(args)
+    # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
+    dummies = tuple(itertools.chain.from_iterable(_dummies_list))
+    dummies += (0,)
 
-    if not kwargs:  # will not be used in an apply, should be a tuple
-        valtups = [tuple(vt) for vt in valtups]
+    # For each coordinate position in each input, gives the position in
+    # the coordinate set.
+    coord_maps = []
 
-    # Add heads to tuples
-    keys = [(output,) + kt for kt in keytups]
+    # Axes along which to concatenate, for each input
+    concat_axes = []
+
+    for arg, ind in argpairs:
+        if ind is not None:
+            coord_maps.append(
+                [
+                    zero_pos[i] if nb == 1 else index_pos[i]
+                    for i, nb in zip(ind, numblocks[arg])
+                ]
+            )
+            concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
+        else:
+            coord_maps.append(None)
+            concat_axes.append(None)
 
     # Unpack delayed objects in kwargs
+    dsk2 = {}
     if kwargs:
         task, dsk2 = to_task_dask(kwargs)
         if dsk2:
-            dsk.update(utils.ensure_dict(dsk2))
             kwargs2 = task
         else:
             kwargs2 = kwargs
-        vals = [(apply, func, vt, kwargs2) for vt in valtups]
-    else:
-        vals = [(func,) + vt for vt in valtups]
 
-    dsk.update(dict(zip(keys, vals)))
+    dsk = {}
+    # Create argument lists
+    for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
+        coords = out_coords + dummies
+        args = []
+        for cmap, axes, arg_ind in zip(coord_maps, concat_axes, argpairs):
+            arg, ind = arg_ind
+            if ind is None:
+                args.append(arg)
+            else:
+                arg_coords = tuple(coords[c] for c in cmap)
+                if axes:
+                    tups = lol_product((arg,), arg_coords)
+                    if concatenate:
+                        tups = (concatenate, tups, axes)
+                else:
+                    tups = (arg,) + arg_coords
+                args.append(tups)
+        if kwargs:
+            val = (apply, func, args, kwargs2)
+        else:
+            args.insert(0, func)
+            val = tuple(args)
+        dsk[(output,) + out_coords] = val
+
+    if dsk2:
+        dsk.update(ensure_dict(dsk2))
 
     return dsk
+
+
+def lol_product(head, values):
+    """ List of list of tuple keys, similar to `itertools.product`.
+
+    Parameters
+    ----------
+
+    head : tuple
+        Prefix prepended to all results.
+    values : sequence
+        Mix of singletons and lists. Each list is substituted with every
+        possible value and introduces another level of list in the output.
+
+    Examples
+    --------
+
+    >>> lol_product(('x',), (1, 2, 3))
+    ('x', 1, 2, 3)
+    >>> lol_product(('x',), (1, [2, 3], 4, [5, 6]))  # doctest: +NORMALIZE_WHITESPACE
+    [[('x', 1, 2, 4, 5), ('x', 1, 2, 4, 6)],
+     [('x', 1, 3, 4, 5), ('x', 1, 3, 4, 6)]]
+    """
+    if not values:
+        return head
+    elif isinstance(values[0], list):
+        return [lol_product(head + (x,), values[1:]) for x in values[0]]
+    else:
+        return lol_product(head + (values[0],), values[1:])
 
 
 def lol_tuples(head, ind, values, dummies):
@@ -415,9 +505,6 @@ def lol_tuples(head, ind, values, dummies):
 
     >>> lol_tuples(('x',), 'ij', {'i': 1, 'j': 0}, {})
     ('x', 1, 0)
-
-    >>> lol_tuples(('x',), 'ij', {'i': 1}, {'j': range(3)})
-    [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
 
     >>> lol_tuples(('x',), 'ij', {'i': 1}, {'j': range(3)})
     [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
@@ -488,7 +575,7 @@ def optimize_blockwise(graph, keys=()):
 def _optimize_blockwise(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
-    dependents = core.reverse_dict(full_graph.dependencies)
+    dependents = reverse_dict(full_graph.dependencies)
     roots = {k for k in full_graph.dicts if not dependents.get(k)}
     stack = list(roots)
 
@@ -576,12 +663,16 @@ def rewrite_blockwise(inputs):
     --------
     optimize_blockwise
     """
+    if len(inputs) == 1:
+        # Fast path: if there's only one input we can just use it as-is.
+        return inputs[0]
+
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {
         inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
         for inp in inputs.values()
     }
-    dependents = core.reverse_dict(dependencies)
+    dependents = reverse_dict(dependencies)
 
     new_index_iter = (
         c + (str(d) if d else "")  # A, B, ... A1, B1, ...
@@ -642,23 +733,20 @@ def rewrite_blockwise(inputs):
 
             # Bump new inputs up in list
             sub = {}
+            # Map from (id(key), inds or None) -> index in indices. Used to deduplicate indices.
+            index_map = {(id(k), inds): n for n, (k, inds) in enumerate(indices)}
             for i, index in enumerate(new_indices):
-                try:
-                    contains = index in indices
-                except (ValueError, TypeError):
-                    contains = False
-
-                if contains:  # use old inputs if available
-                    sub[blockwise_token(i)] = blockwise_token(indices.index(index))
+                id_key = (id(index[0]), index[1])
+                if id_key in index_map:  # use old inputs if available
+                    sub[blockwise_token(i)] = blockwise_token(index_map[id_key])
                 else:
+                    index_map[id_key] = len(indices)
                     sub[blockwise_token(i)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
             # indices.extend(new_indices)
             dsk.update(new_dsk)
-
-    indices = [(a, tuple(b) if isinstance(b, list) else b) for a, b in indices]
 
     # De-duplicate indices like [(a, ij), (b, i), (a, ij)] -> [(a, ij), (b, i)]
     # Make sure that we map everything else appropriately as we remove inputs
@@ -713,7 +801,7 @@ def zero_broadcast_dimensions(lol, nblocks):
     lol_tuples
     """
     f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return utils.homogeneous_deepmap(f, lol)
+    return homogeneous_deepmap(f, lol)
 
 
 def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=None):
@@ -774,3 +862,59 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)
+
+
+def fuse_roots(graph: HighLevelGraph, keys: list):
+    """
+    Fuse nearby layers if they don't have dependencies
+
+    Often Blockwise sections of the graph fill out all of the computation
+    except for the initial data access or data loading layers::
+
+      Large Blockwise Layer
+        |       |       |
+        X       Y       Z
+
+    This can be troublesome because X, Y, and Z tasks may be executed on
+    different machines, and then require communication to move around.
+
+    This optimization identifies this situation, lowers all of the graphs to
+    concrete dicts, and then calls ``fuse`` on them, with a width equal to the
+    number of layers like X, Y, and Z.
+
+    This is currently used within array and dataframe optimizations.
+
+    Parameters
+    ----------
+    graph: HighLevelGraph
+        The full graph of the computation
+    keys: list
+        The output keys of the comptuation, to be passed on to fuse
+
+    See Also
+    --------
+    Blockwise
+    fuse
+    """
+    layers = graph.layers.copy()
+    dependencies = graph.dependencies.copy()
+    dependents = reverse_dict(dependencies)
+
+    for name, layer in graph.layers.items():
+        deps = graph.dependencies[name]
+        if (
+            isinstance(layer, Blockwise)
+            and len(deps) > 1
+            and not any(dependencies[dep] for dep in deps)  # no need to fuse if 0 or 1
+            and all(len(dependents[dep]) == 1 for dep in deps)
+        ):
+            new = toolz.merge(layer, *[layers[dep] for dep in deps])
+            new, _ = fuse(new, keys, ave_width=len(deps))
+
+            for dep in deps:
+                del layers[dep]
+
+            layers[name] = new
+            dependencies[name] = set()
+
+    return HighLevelGraph(layers, dependencies)

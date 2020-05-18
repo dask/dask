@@ -1,10 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 import numbers
 import re
 import textwrap
-from distutils.version import LooseVersion
+from collections.abc import Iterator, Mapping
 
 import sys
 import traceback
@@ -12,7 +10,6 @@ from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 from pandas.api.types import (
     is_categorical_dtype,
     is_scalar,
@@ -22,9 +19,18 @@ from pandas.api.types import (
     is_interval_dtype,
 )
 
+# include these here for compat
+from ._compat import (  # noqa: F401
+    PANDAS_VERSION,
+    PANDAS_GT_0240,
+    PANDAS_GT_0250,
+    PANDAS_GT_100,
+    HAS_INT_NA,
+    tm,
+)
+
 from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
-from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
 from ..local import get_sync
 from ..utils import asciitable, is_arraylike, Dispatch, typename
@@ -32,12 +38,8 @@ from ..utils import is_dataframe_like as dask_is_dataframe_like
 from ..utils import is_series_like as dask_is_series_like
 from ..utils import is_index_like as dask_is_index_like
 
-
-PANDAS_VERSION = LooseVersion(pd.__version__)
-PANDAS_GT_0230 = PANDAS_VERSION >= LooseVersion("0.23.0")
-PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0rc1")
-PANDAS_GT_0250 = PANDAS_VERSION >= LooseVersion("0.25.0")
-HAS_INT_NA = PANDAS_GT_0240
+# register pandas extension types
+from . import _dtypes  # noqa: F401
 
 
 def is_integer_na_dtype(t):
@@ -384,7 +386,14 @@ def meta_nonempty_object(x):
 @meta_nonempty.register(pd.DataFrame)
 def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
-    data = {i: _nonempty_series(x.iloc[:, i], idx=idx) for i, c in enumerate(x.columns)}
+    dt_s_dict = dict()
+    data = dict()
+    for i, c in enumerate(x.columns):
+        series = x.iloc[:, i]
+        dt = series.dtype
+        if dt not in dt_s_dict:
+            dt_s_dict[dt] = _nonempty_series(x.iloc[:, i], idx=idx)
+        data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
     return res
@@ -462,6 +471,20 @@ def hash_object_pandas(
     return pd.util.hash_pandas_object(
         obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
     )
+
+
+group_split_dispatch = Dispatch("group_split_dispatch")
+
+
+@group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def group_split_pandas(df, c, k, ignore_index=False):
+    indexer, locations = pd._libs.algos.groupsort_indexer(
+        c.astype(np.int64, copy=False), k
+    )
+    df2 = df.take(indexer)
+    locations = locations.cumsum()
+    parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
+    return dict(zip(range(k), parts))
 
 
 _simple_fake_mapping = {
@@ -617,10 +640,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             typename(type(x)),
         )
     elif is_dataframe_like(meta):
-        kwargs = dict()
-        if PANDAS_VERSION >= "0.23.0":
-            kwargs["sort"] = True
-        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, **kwargs)
+        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, sort=True)
         bad_dtypes = [
             (col, a, b)
             for col, a, b in dtypes.fillna("-").itertuples()
@@ -631,13 +651,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
                 typename(type(meta)),
                 asciitable(["Column", "Found", "Expected"], bad_dtypes),
             )
-        elif not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(x.columns)):
-            errmsg = (
-                "The columns in the computed data do not match"
-                " the columns in the provided metadata.\n"
-                " %s\n  :%s" % (meta.columns, x.columns)
-            )
         else:
+            check_matching_columns(meta, x)
             return x
     else:
         if equal_dtypes(x.dtype, meta.dtype):
@@ -651,6 +666,22 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         "Metadata mismatch found%s.\n\n"
         "%s" % ((" in `%s`" % funcname if funcname else ""), errmsg)
     )
+
+
+def check_matching_columns(meta, actual):
+    # Need nan_to_num otherwise nan comparison gives False
+    if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
+        extra = actual.columns.difference(meta.columns).tolist()
+        missing = meta.columns.difference(actual.columns).tolist()
+        if extra or missing:
+            extra_info = f"  Extra:   {extra}\n  Missing: {missing}"
+        else:
+            extra_info = "Order of columns does not match"
+        raise ValueError(
+            "The columns in the computed data do not match"
+            " the columns in the provided metadata\n"
+            f"{extra_info}"
+        )
 
 
 def index_summary(idx, name=None):
@@ -755,7 +786,7 @@ def assert_eq(
     check_dtypes=True,
     check_divisions=True,
     check_index=True,
-    **kwargs
+    **kwargs,
 ):
     if check_divisions:
         assert_divisions(a)
@@ -844,8 +875,7 @@ def assert_sane_keynames(ddf):
         assert isinstance(k, (str, bytes))
         assert len(k) < 100
         assert " " not in k
-        if not PY2:
-            assert k.split("-")[0].isidentifier()
+        assert k.split("-")[0].isidentifier()
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):
@@ -927,3 +957,13 @@ def valid_divisions(divisions):
         return False
 
     return True
+
+
+def drop_by_shallow_copy(df, columns, errors="raise"):
+    """ Use shallow copy to drop columns in place
+    """
+    df2 = df.copy(deep=False)
+    if not pd.api.types.is_list_like(columns):
+        columns = [columns]
+    df2.drop(columns=columns, inplace=True, errors=errors)
+    return df2

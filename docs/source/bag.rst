@@ -16,11 +16,26 @@ version of PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 .. _PyToolz: https://toolz.readthedocs.io/en/latest/
 .. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python/pyspark.html
 
+Examples
+--------
+
+Visit https://examples.dask.org/bag.html to see and run examples using Dask Bag.
+
 Design
 ------
 
 Dask bags coordinate many Python lists or Iterators, each of which forms a
 partition of a larger collection.
+
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/-qIiJ1XtSv0"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
 
 Common Uses
 -----------
@@ -50,7 +65,12 @@ great deal of inter-worker communication.  For common operations this is rarely
 an issue as most Dask Bag workflows are embarrassingly parallel or result in
 reductions with little data moving between workers.
 
+Because the multiprocessing scheduler requires moving functions between multiple
+processes, we encourage that Dask Bag users also install the cloudpickle_ library to
+enable the transfer of more complex functions.
+
 .. _GIL: https://docs.python.org/3/glossary.html#term-gil
+.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 
 
 Shuffle

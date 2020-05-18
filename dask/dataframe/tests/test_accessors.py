@@ -47,7 +47,7 @@ def test_register(obj, registrar):
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
         registrar("mine")(MyAccessor)
-        instance = dd.from_pandas(obj._partition_type([]), 2)
+        instance = dd.from_pandas(obj._partition_type([], dtype=float), 2)
         assert instance.mine.prop == "item"
         after = set(dir(obj))
         assert (before ^ after) == {"mine"}
@@ -80,6 +80,10 @@ def df_ddf():
         },
         index=["E", "f", "g", "h"],
     )
+
+    if dd._compat.PANDAS_GT_100:
+        df["string_col"] = df["str_col"].astype("string")
+        df.loc["E", "string_col"] = pd.NA
 
     ddf = dd.from_pandas(df, 2)
 
@@ -121,6 +125,8 @@ def test_str_accessor(df_ddf):
 
     # implemented methods are present in tab completion
     assert "upper" in dir(ddf.str_col.str)
+    if dd._compat.PANDAS_GT_100:
+        assert "upper" in dir(ddf.string_col.str)
     assert "upper" in dir(ddf.index.str)
 
     # not implemented methods don't show up
@@ -131,11 +137,19 @@ def test_str_accessor(df_ddf):
     assert_eq(ddf.str_col.str.upper(), df.str_col.str.upper())
     assert set(ddf.str_col.str.upper().dask) == set(ddf.str_col.str.upper().dask)
 
+    if dd._compat.PANDAS_GT_100:
+        assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper())
+        assert set(ddf.string_col.str.upper().dask) == set(
+            ddf.string_col.str.upper().dask
+        )
+
     assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass thru args & kwargs
     assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
+    if dd._compat.PANDAS_GT_100:
+        assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
@@ -230,6 +244,15 @@ def test_str_accessor_expand():
 
     assert "n=" in str(info.value)
 
+    s = pd.Series(["a,bcd,zz,f", "aabb,ccdd,z,kk", "aaabbb,cccdddd,l,pp"])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    for n in [1, 2, 3]:
+        assert_eq(
+            s.str.split(pat=",", n=n, expand=True),
+            ds.str.split(pat=",", n=n, expand=True),
+        )
+
 
 @pytest.mark.xfail(reason="Need to pad columns")
 def test_str_accessor_expand_more_columns():
@@ -241,4 +264,11 @@ def test_str_accessor_expand_more_columns():
     s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
     ds = dd.from_pandas(s, npartitions=2)
 
-    s.str.split(n=10, expand=True).compute()
+    ds.str.split(n=10, expand=True).compute()
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="No StringDtype")
+def test_string_nullable_types(df_ddf):
+    df, ddf = df_ddf
+    assert_eq(ddf.string_col.str.count("A"), df.string_col.str.count("A"))
+    assert_eq(ddf.string_col.str.isalpha(), df.string_col.str.isalpha())

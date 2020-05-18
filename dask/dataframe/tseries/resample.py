@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pandas as pd
 import numpy as np
 from pandas.core.resample import Resampler as pd_Resampler
@@ -8,6 +6,7 @@ from ..core import DataFrame, Series
 from ...base import tokenize
 from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
+from .._compat import PANDAS_GT_0240
 
 
 def getnanos(rule):
@@ -32,12 +31,20 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-    return out.reindex(
-        pd.date_range(
+    if PANDAS_GT_0240:
+        new_index = pd.date_range(
+            start.tz_localize(None),
+            end.tz_localize(None),
+            freq=rule,
+            closed=reindex_closed,
+            name=out.index.name,
+        ).tz_localize(start.tz, nonexistent="shift_forward")
+
+    else:
+        new_index = pd.date_range(
             start, end, freq=rule, closed=reindex_closed, name=out.index.name
-        ),
-        fill_value=fill_value,
-    )
+        )
+    return out.reindex(new_index, fill_value=fill_value)
 
 
 def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
@@ -81,6 +88,25 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
 
 
 class Resampler(object):
+    """ Class for resampling timeseries data.
+
+    This class is commonly encountered when using ``obj.resample(...)`` which
+    return ``Resampler`` objects.
+
+    Parameters
+    ----------
+    obj : Dask DataFrame or Series
+        Data to be resampled.
+    rule : str, tuple, datetime.timedelta, DateOffset or None
+        The offset string or object representing the target conversion.
+    kwargs : optional
+        Keyword arguments passed to underlying pandas resampling function.
+
+    Returns
+    -------
+    Resampler instance of the appropriate type
+    """
+
     def __init__(self, obj, rule, **kwargs):
         if not obj.known_divisions:
             msg = (
@@ -103,6 +129,24 @@ class Resampler(object):
         self._kwargs = kwargs
 
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
+        """ Aggregate using one or more operations
+
+        Parameters
+        ----------
+        how : str
+            Name of aggregation operation
+        fill_value : scalar, optional
+            Value to use for missing values, applied during upsampling.
+            Default is NaN.
+        how_args : optional
+            Positional arguments for aggregation operation.
+        how_kwargs : optional
+            Keyword arguments for aggregation operation.
+
+        Returns
+        -------
+        Dask DataFrame or Series
+        """
         rule = self._rule
         kwargs = self._kwargs
         name = "resample-" + tokenize(
@@ -178,6 +222,10 @@ class Resampler(object):
         return self._agg("max")
 
     @derived_from(pd_Resampler)
+    def nunique(self):
+        return self._agg("nunique")
+
+    @derived_from(pd_Resampler)
     def ohlc(self):
         return self._agg("ohlc")
 
@@ -194,9 +242,17 @@ class Resampler(object):
         return self._agg("std")
 
     @derived_from(pd_Resampler)
+    def size(self):
+        return self._agg("size")
+
+    @derived_from(pd_Resampler)
     def sum(self):
         return self._agg("sum")
 
     @derived_from(pd_Resampler)
     def var(self):
         return self._agg("var")
+
+    @derived_from(pd_Resampler)
+    def quantile(self):
+        return self._agg("quantile")

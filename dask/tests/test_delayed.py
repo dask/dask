@@ -1,17 +1,18 @@
 from collections import namedtuple
 from operator import add, setitem
+from functools import partial
 import pickle
 from random import random
 import types
 
-from toolz import identity, partial, merge
+from tlz import merge
 import pytest
 
 import dask
 from dask import compute
-from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
+from dask.dataframe.utils import assert_eq
 
 try:
     from operator import matmul
@@ -361,7 +362,7 @@ def test_nout():
     func = delayed(lambda x: (x,), nout=1, pure=True)
     x = func(1)
     assert len(x) == 1
-    a, = x
+    (a,) = x
     assert a.compute() == 1
     assert a._length is None
     pytest.raises(TypeError, lambda: len(a))
@@ -498,22 +499,19 @@ def test_callable_obj():
     assert f().compute() == 2
 
 
+def identity(x):
+    return x
+
+
 def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    if PY2:
-        assert func(data)._key == "identity-6700b857eea9a7d3079762c9a253ffbd"
-    if PY3:
-        assert func(data)._key == "identity-84c5e2194036c17d1d97c4e3a2b90482"
+    assert func(data)._key == "identity-02129ed1acaffa7039deee80c5da547c"
 
     data = {"x": 1, 1: "x"}
     assert func(data)._key == func(data)._key
-
-    if PY2:
-        assert func(1)._key == "identity-91f02358e13dca18cde218a63fee436a"
-    if PY3:
-        assert func(1)._key == "identity-7126728842461bf3d2caecf7b954fa3b"
+    assert func(1)._key == "identity-ca2fae46a3b938016331acac1908ae45"
 
 
 def test_sensitive_to_partials():
@@ -608,3 +606,55 @@ def test_attribute_of_attribute():
     assert isinstance(x.a, Delayed)
     assert isinstance(x.a.b, Delayed)
     assert isinstance(x.a.b.c, Delayed)
+
+
+def test_check_meta_flag():
+    from pandas import Series
+    from dask.delayed import delayed
+    from dask.dataframe import from_delayed
+
+    a = Series(["a", "b", "a"], dtype="category")
+    b = Series(["a", "c", "a"], dtype="category")
+    da = delayed(lambda x: x)(a)
+    db = delayed(lambda x: x)(b)
+
+    c = from_delayed([da, db], verify_meta=False)
+    assert_eq(c, c)
+
+
+def modlevel_eager(x):
+    return x + 1
+
+
+@delayed
+def modlevel_delayed1(x):
+    return x + 1
+
+
+@delayed(pure=False)
+def modlevel_delayed2(x):
+    return x + 1
+
+
+@pytest.mark.parametrize(
+    "f",
+    [
+        delayed(modlevel_eager),
+        pytest.param(modlevel_delayed1, marks=pytest.mark.xfail(reason="#3369")),
+        pytest.param(modlevel_delayed2, marks=pytest.mark.xfail(reason="#3369")),
+    ],
+)
+def test_pickle(f):
+    d = f(2)
+    d = pickle.loads(pickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
+    assert d.compute() == 3
+
+
+@pytest.mark.parametrize(
+    "f", [delayed(modlevel_eager), modlevel_delayed1, modlevel_delayed2]
+)
+def test_cloudpickle(f):
+    cloudpickle = pytest.importorskip("cloudpickle")
+    d = f(2)
+    d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
+    assert d.compute() == 3

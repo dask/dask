@@ -61,7 +61,6 @@ def test_array_function_fft(func):
         lambda x: np.min_scalar_type(x),
         lambda x: np.linalg.det(x),
         lambda x: np.linalg.eigvals(x),
-        lambda x: np.median(x),
     ],
 )
 def test_array_notimpl_function_dask(func):
@@ -89,9 +88,6 @@ def test_array_function_sparse(func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-@pytest.mark.xfail(
-    reason="requires sparse support for __array_function__", strict=False
-)
 def test_array_function_sparse_tensordot():
     sparse = pytest.importorskip("sparse")
     x = np.random.random((2, 3, 4))
@@ -229,15 +225,14 @@ def test_unregistered_func(func):
     assert_eq(xx, yy, check_meta=False)
 
 
-def test_median_func():
+def test_non_existent_func():
     # Regression test for __array_function__ becoming default in numpy 1.17
-    # dask has no median function, so ensure that this still calls np.median
-    image = da.from_array(np.array([[0, 1], [1, 2]]), chunks=(1, 2))
+    # dask has no sort function, so ensure that this still calls np.sort
+    x = da.from_array(np.array([1, 2, 4, 3]), chunks=(2,))
     if IS_NEP18_ACTIVE:
         with pytest.warns(
-            FutureWarning,
-            match="The `numpy.median` function is not implemented by Dask",
+            FutureWarning, match="The `numpy.sort` function is not implemented by Dask"
         ):
-            assert int(np.median(image)) == 1
+            assert list(np.sort(x)) == [1, 2, 3, 4]
     else:
-        assert int(np.median(image)) == 1
+        assert list(np.sort(x)) == [1, 2, 3, 4]

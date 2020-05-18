@@ -1,7 +1,7 @@
 import numbers
 import warnings
 
-import toolz
+import tlz as toolz
 
 from .. import base, utils
 from ..delayed import unpack_collections
@@ -145,41 +145,50 @@ def blockwise(
         chunkss, arrays = unify_chunks(*args)
     else:
         arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
-        if arginds:
-            arg, ind = max(arginds, key=lambda ai: len(ai[1]))
-            chunkss = dict(zip(ind, arg.chunks))
-        else:
-            chunkss = {}
+        chunkss = {}
+        # For each dimension, use the input chunking that has the most blocks;
+        # this will ensure that broadcasting works as expected, and in
+        # particular the number of blocks should be correct if the inputs are
+        # consistent.
+        for arg, ind in arginds:
+            for c, i in zip(arg.chunks, ind):
+                if i not in chunkss or len(c) > len(chunkss[i]):
+                    chunkss[i] = c
         arrays = args[::2]
 
     for k, v in new_axes.items():
         if not isinstance(v, tuple):
             v = (v,)
         chunkss[k] = v
-    arginds = list(zip(arrays, args[1::2]))
 
-    for arg, ind in arginds:
-        if hasattr(arg, "ndim") and hasattr(ind, "__len__") and arg.ndim != len(ind):
-            raise ValueError(
-                "Index string %s does not match array dimension %d" % (ind, arg.ndim)
-            )
-
-    numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
+    arginds = zip(arrays, args[1::2])
+    numblocks = {}
 
     dependencies = []
     arrays = []
 
     # Normalize arguments
     argindsstr = []
-    for a, ind in arginds:
+
+    for arg, ind in arginds:
         if ind is None:
-            a = normalize_arg(a)
-            a, collections = unpack_collections(a)
+            arg = normalize_arg(arg)
+            arg, collections = unpack_collections(arg)
             dependencies.extend(collections)
         else:
-            arrays.append(a)
-            a = a.name
-        argindsstr.extend((a, ind))
+            if (
+                hasattr(arg, "ndim")
+                and hasattr(ind, "__len__")
+                and arg.ndim != len(ind)
+            ):
+                raise ValueError(
+                    "Index string %s does not match array dimension %d"
+                    % (ind, arg.ndim)
+                )
+            numblocks[arg.name] = arg.numblocks
+            arrays.append(arg)
+            arg = arg.name
+        argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments
     kwargs2 = {}
@@ -220,6 +229,14 @@ def blockwise(
                 elif isinstance(adjust_chunks[ind], numbers.Integral):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
+                    if len(adjust_chunks[ind]) != len(chunks[i]):
+                        raise ValueError(
+                            "Dimension {0} has {1} blocks, "
+                            "adjust_chunks specified with "
+                            "{2} blocks".format(
+                                i, len(chunks[i]), len(adjust_chunks[ind])
+                            )
+                        )
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
                     raise NotImplementedError(

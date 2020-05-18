@@ -8,13 +8,7 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
-from dask.blockwise import (
-    Blockwise,
-    rewrite_blockwise,
-    optimize_blockwise,
-    index_subs,
-    blockwise,
-)
+from dask.blockwise import Blockwise, rewrite_blockwise, optimize_blockwise, index_subs
 from dask.array.utils import assert_eq
 from dask.array.numpy_compat import _numpy_116
 from dask.utils_test import inc, dec
@@ -146,6 +140,27 @@ i, j, k = "ijk"
                 {b: (add, _1, _2), c: (add, b, _0)},
                 [(456, None), (a, "j"), (123, None)],
             ),
+        ],
+        # Literals that compare equal (e.g. 0 and False) aren't deduplicated
+        [
+            [
+                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (0, None)]),
+                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (False, None)]),
+            ],
+            (
+                c,
+                "j",
+                {b: (add, _1, _2), c: (add, b, _0)},
+                [(False, None), (a, "j"), (0, None)],
+            ),
+        ],
+        # Literals are deduplicated
+        [
+            [
+                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
+                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (123, None)]),
+            ],
+            (c, "j", {b: (add, _1, _0), c: (add, b, _0)}, [(123, None), (a, "j")]),
         ],
     ],
 )
@@ -496,8 +511,8 @@ def test_bag_array_conversion():
     import dask.bag as db
 
     b = db.range(10, npartitions=1)
-    x, = b.map_partitions(np.asarray).to_delayed()
-    x, = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
+    (x,) = b.map_partitions(np.asarray).to_delayed()
+    (x,) = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
     z = da.concatenate([x])
     assert_eq(z, np.arange(10), check_graph=False)
 
@@ -552,38 +567,6 @@ def test_validate_top_inputs():
     assert "i" in str(info.value)
 
 
-def test_gh_4176():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        from dask.sharedict import ShareDict
-
-    def foo(A):
-        return A[None, ...]
-
-    A = da.ones(shape=(10, 20, 4), chunks=(2, 5, 4))
-
-    name = "D"
-
-    dsk = blockwise(
-        foo,
-        name,
-        ("nsrc", "ntime", "nbl", "npol"),
-        A.name,
-        ("ntime", "nbl", "npol"),
-        new_axes={"nsrc": 1},
-        numblocks={a.name: a.numblocks for a in (A,)},
-    )
-
-    array_dsk = ShareDict()
-    array_dsk.update(dsk)
-    array_dsk.update(A.__dask_graph__())
-
-    chunks = ((1,),) + A.chunks
-
-    D = da.Array(array_dsk, name, chunks, dtype=A.dtype)
-    D.sum(axis=0).compute()
-
-
 def test_dont_merge_before_reductions():
     x = da.ones(10, chunks=(5,))
     y = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
@@ -604,3 +587,12 @@ def test_atop_legacy():
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)
     assert y.name == z.name
+
+
+def test_non_hlg():
+    # Regression test for https://github.com/dask/dask/issues/5850
+    a = da.from_array(np.ones(1, np.float64), chunks=(1,))
+    a.dask = dict(a.dask)  # Convert from HighLevelGraph to plain dict
+    b = da.from_array(np.zeros(1, np.float64), chunks=(1,))
+    x = a + b
+    assert_eq(x, a)

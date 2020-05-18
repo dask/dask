@@ -1,6 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import OrderedDict
+from collections.abc import Mapping, Iterator
 from functools import partial
 from hashlib import md5
 from operator import getitem
@@ -9,24 +8,16 @@ import pickle
 import os
 import threading
 import uuid
+from distutils.version import LooseVersion
 
-from toolz import merge, groupby, curry, identity
-from toolz.functoolz import Compose
+from tlz import merge, groupby, curry, identity
+from tlz.functoolz import Compose
 
-from .compatibility import (
-    apply,
-    long,
-    unicode,
-    Iterator,
-    is_dataclass,
-    dataclass_fields,
-    Mapping,
-    cPickle,
-)
+from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
-from .core import flatten, quote, get as simple_get
+from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict
+from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
 
 
@@ -218,17 +209,22 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
-        groups = {opt: _extract_graph_and_keys(val) for opt, val in groups.items()}
+
+        _opt_list = []
+        for opt, val in groups.items():
+            _graph_and_keys = _extract_graph_and_keys(val)
+            groups[opt] = _graph_and_keys
+            _opt_list.append(opt(_graph_and_keys[0], _graph_and_keys[1], **kwargs))
 
         for opt in optimizations:
-            groups = {k: (opt(dsk, keys), keys) for k, (dsk, keys) in groups.items()}
+            _opt_list = []
+            group = {}
+            for k, (dsk, keys) in groups.items():
+                group[k] = (opt(dsk, keys), keys)
+                _opt_list.append(opt(dsk, keys, **kwargs))
+            groups = group
 
-        dsk = merge(
-            *map(
-                ensure_dict,
-                [opt(dsk, keys, **kwargs) for opt, (dsk, keys) in groups.items()],
-            )
-        )
+        dsk = merge(*map(ensure_dict, _opt_list,))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -240,13 +236,15 @@ def _extract_graph_and_keys(vals):
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
     from .highlevelgraph import HighLevelGraph
 
-    graphs = [v.__dask_graph__() for v in vals]
-    keys = [v.__dask_keys__() for v in vals]
+    graphs, keys = [], []
+    for v in vals:
+        graphs.append(v.__dask_graph__())
+        keys.append(v.__dask_keys__())
 
     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
         graph = HighLevelGraph.merge(*graphs)
     else:
-        graph = merge(*graphs)
+        graph = merge(*map(ensure_dict, graphs))
 
     return graph, keys
 
@@ -302,7 +300,7 @@ def unpack_collections(*args, **kwargs):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr):
+            elif is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -376,16 +374,13 @@ def optimize(*args, **kwargs):
         return args
 
     dsk = collections_to_dsk(collections, **kwargs)
-    postpersists = [
-        a.__dask_postpersist__() if is_dask_collection(a) else (None, a) for a in args
-    ]
 
-    keys, postpersists = [], []
+    postpersists = []
     for a in collections:
-        keys.extend(flatten(a.__dask_keys__()))
-        postpersists.append(a.__dask_postpersist__())
+        r, s = a.__dask_postpersist__()
+        postpersists.append(r(dsk, *s))
 
-    return repack([r(dsk, *s) for r, s in postpersists])
+    return repack(postpersists)
 
 
 def compute(*args, **kwargs):
@@ -441,8 +436,11 @@ def compute(*args, **kwargs):
     )
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-    keys = [x.__dask_keys__() for x in collections]
-    postcomputes = [x.__dask_postcompute__() for x in collections]
+    keys, postcomputes = [], []
+    for x in collections:
+        keys.append(x.__dask_keys__())
+        postcomputes.append(x.__dask_postcompute__())
+
     results = schedule(dsk, keys, **kwargs)
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
@@ -467,9 +465,15 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color: {None, 'order'}, optional
+    color : {None, 'order'}, optional
         Options to color nodes.  Provide ``cmap=`` keyword for additional
         colormap
+    collapse_outputs : bool, optional
+        Whether to collapse output boxes, which often have empty labels.
+        Default is False.
+    verbose : bool, optional
+        Whether to label output and input boxes even if the data aren't chunked.
+        Beware: these labels can get very long. Default is False.
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
 
@@ -498,15 +502,20 @@ def visualize(*args, **kwargs):
     filename = kwargs.pop("filename", "mydask")
     optimize_graph = kwargs.pop("optimize_graph", False)
 
-    args2 = []
+    dsks = []
+    args3 = []
     for arg in args:
         if isinstance(arg, (list, tuple, set)):
-            args2.extend(arg)
+            for a in arg:
+                if isinstance(a, Mapping):
+                    dsks.append(a)
+                if is_dask_collection(a):
+                    args3.append(a)
         else:
-            args2.append(arg)
-
-    dsks = [arg for arg in args2 if isinstance(arg, Mapping)]
-    args3 = [arg for arg in args2 if is_dask_collection(arg)]
+            if isinstance(arg, Mapping):
+                dsks.append(arg)
+            if is_dask_collection(arg):
+                args3.append(arg)
 
     dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
     for d in dsks:
@@ -663,20 +672,7 @@ def tokenize(*args, **kwargs):
 
 normalize_token = Dispatch()
 normalize_token.register(
-    (
-        int,
-        long,
-        float,
-        str,
-        unicode,
-        bytes,
-        type(None),
-        type,
-        slice,
-        complex,
-        type(Ellipsis),
-    ),
-    identity,
+    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
 )
 
 
@@ -698,6 +694,16 @@ def normalize_set(s):
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
     return type(seq).__name__, list(map(normalize_token, seq))
+
+
+@normalize_token.register(literal)
+def normalize_literal(lit):
+    return "literal", normalize_token(lit())
+
+
+@normalize_token.register(range)
+def normalize_range(r):
+    return list(map(normalize_token, [r.start, r.stop, r.step]))
 
 
 @normalize_token.register(object)
@@ -729,13 +735,11 @@ def normalize_function(func):
 
 
 def _normalize_function(func):
-    if isinstance(func, curry):
-        func = func._partial
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
         return tuple(normalize_function(f) for f in funcs)
-    elif isinstance(func, partial):
+    elif isinstance(func, (partial, curry)):
         args = tuple(normalize_token(i) for i in func.args)
         if func.keywords:
             kws = tuple(
@@ -763,17 +767,46 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
+    # Intentionally not importing PANDAS_GT_0240 from dask.dataframe._compat
+    # to avoid ImportErrors from extra dependencies
+    PANDAS_GT_0240 = LooseVersion(pd.__version__) >= LooseVersion("0.24.0")
+
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
-        return [ind.name, normalize_token(ind.values)]
+        if PANDAS_GT_0240:
+            values = ind.array
+        else:
+            values = ind.values
+        return [ind.name, normalize_token(values)]
+
+    @normalize_token.register(pd.MultiIndex)
+    def normalize_index(ind):
+        codes = ind.codes if PANDAS_GT_0240 else ind.levels
+        return (
+            [ind.name]
+            + [normalize_token(x) for x in ind.levels]
+            + [normalize_token(x) for x in codes]
+        )
 
     @normalize_token.register(pd.Categorical)
     def normalize_categorical(cat):
-        return [
-            normalize_token(cat.codes),
-            normalize_token(cat.categories),
-            cat.ordered,
-        ]
+        return [normalize_token(cat.codes), normalize_token(cat.dtype)]
+
+    if PANDAS_GT_0240:
+
+        @normalize_token.register(pd.arrays.PeriodArray)
+        @normalize_token.register(pd.arrays.DatetimeArray)
+        @normalize_token.register(pd.arrays.TimedeltaArray)
+        def normalize_period_array(arr):
+            return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
+
+        @normalize_token.register(pd.arrays.IntervalArray)
+        def normalize_interval_array(arr):
+            return [
+                normalize_token(arr.left),
+                normalize_token(arr.right),
+                normalize_token(arr.closed),
+            ]
 
     @normalize_token.register(pd.Series)
     def normalize_series(s):
@@ -787,8 +820,23 @@ def register_pandas():
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
         data = [block.values for block in df._data.blocks]
-        data += [df.columns, df.index]
+        data.extend([df.columns, df.index])
         return list(map(normalize_token, data))
+
+    @normalize_token.register(pd.api.extensions.ExtensionArray)
+    def normalize_extension_array(arr):
+        import numpy as np
+
+        return normalize_token(np.asarray(arr))
+
+    # Dtypes
+    @normalize_token.register(pd.api.types.CategoricalDtype)
+    def normalize_categorical_dtype(dtype):
+        return [normalize_token(dtype.categories), normalize_token(dtype.ordered)]
+
+    @normalize_token.register(pd.api.extensions.ExtensionDtype)
+    def normalize_period_dtype(dtype):
+        return normalize_token(dtype.name)
 
 
 @normalize_token.register_lazy("numpy")
@@ -798,17 +846,19 @@ def register_numpy():
     @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
-            return (str(x), x.dtype)
+            return (x.item(), x.dtype)
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (
                     x.ctypes.get_as_parameter().value
                     - x.base.ctypes.get_as_parameter().value
                 )
-            elif hasattr(x, "offset"):
-                offset = getattr(x, "offset")
             else:
                 offset = 0  # root memmap's have mmap object as base
+            if hasattr(
+                x, "offset"
+            ):  # offset numpy used while opening, and not the offset to the beginning of the file
+                offset += getattr(x, "offset")
             return (
                 x.filename,
                 os.path.getmtime(x.filename),
@@ -830,9 +880,8 @@ def register_numpy():
                     # bytes fast-path
                     data = hash_buffer_hex(b"-".join(x.flat))
             except (TypeError, UnicodeDecodeError):
-                # object data w/o fast-path, use fast cPickle
                 try:
-                    data = hash_buffer_hex(cPickle.dumps(x, cPickle.HIGHEST_PROTOCOL))
+                    data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
                     data = uuid.uuid4().hex
@@ -971,10 +1020,6 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             from distributed.worker import get_client
 
             return get_client().get
-        elif scheduler.lower() in ["processes", "multiprocessing"]:
-            raise ValueError(
-                "Please install cloudpickle to use the '%s' scheduler." % scheduler
-            )
         else:
             raise ValueError(
                 "Expected one of [distributed, %s]"

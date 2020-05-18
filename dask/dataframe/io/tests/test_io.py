@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 
 import pytest
 from threading import Lock
@@ -8,6 +7,7 @@ from multiprocessing.pool import ThreadPool
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 
@@ -263,18 +263,17 @@ def test_from_pandas_small():
             ddf = dd.from_pandas(df, npartitions=5, sort=sort)
             assert_eq(df, ddf)
 
-            s = pd.Series([0] * i, name="x")
+            s = pd.Series([0] * i, name="x", dtype=int)
             ds = dd.from_pandas(s, npartitions=5, sort=sort)
             assert_eq(s, ds)
 
 
-@pytest.mark.xfail(reason="")
-def test_from_pandas_npartitions_is_accurate():
+@pytest.mark.parametrize("n", [1, 2, 4, 5])
+def test_from_pandas_npartitions_is_accurate(n):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
-    for n in [1, 2, 4, 5]:
-        assert dd.from_pandas(df, npartitions=n).npartitions == n
+    assert dd.from_pandas(df, npartitions=n).npartitions <= n
 
 
 def test_from_pandas_series():

@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import os
@@ -9,6 +8,7 @@ import pathlib
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe._compat import tm
 from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.dataframe.utils import assert_eq
 
@@ -829,3 +829,18 @@ def test_hdf_filenames():
     assert ddf.to_hdf("foo*.hdf5", "key") == ["foo0.hdf5", "foo1.hdf5"]
     os.remove("foo0.hdf5")
     os.remove("foo1.hdf5")
+
+
+def test_hdf_path_exceptions():
+
+    # single file doesn't exist
+    with pytest.raises(IOError):
+        dd.read_hdf("nonexistant_store_X34HJK", "/tmp")
+
+    # a file from a list of files doesn't exist
+    with pytest.raises(IOError):
+        dd.read_hdf(["nonexistant_store_X34HJK", "nonexistant_store_UY56YH"], "/tmp")
+
+    # list of files is empty
+    with pytest.raises(ValueError):
+        dd.read_hdf([], "/tmp")

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from fnmatch import fnmatch
 from glob import glob
 import os
@@ -7,7 +5,7 @@ import uuid
 from warnings import warn
 
 import pandas as pd
-from toolz import merge
+from tlz import merge
 
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes  # noqa
@@ -18,7 +16,6 @@ from ...base import get_scheduler
 from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
-from ...compatibility import PY3
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
 
@@ -476,6 +473,20 @@ def read_hdf(
         paths = sorted(glob(pattern))
     else:
         paths = pattern
+
+    if not isinstance(pattern, str) and len(paths) == 0:
+        raise ValueError("No files provided")
+    if not paths or len(paths) == 0:
+        raise IOError("File(s) not found: {0}".format(pattern))
+    for path in paths:
+        try:
+            exists = os.path.exists(path)
+        except (ValueError, TypeError):
+            exists = False
+        if not exists:
+            raise IOError(
+                "File not found or insufficient permissions: {0}".format(path)
+            )
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     if chunksize <= 0:
@@ -505,7 +516,6 @@ def read_hdf(
     )
 
 
-if PY3:
-    from ..core import _Frame
+from ..core import _Frame
 
-    _Frame.to_hdf.__doc__ = to_hdf.__doc__
+_Frame.to_hdf.__doc__ = to_hdf.__doc__

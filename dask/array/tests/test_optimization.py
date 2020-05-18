@@ -356,14 +356,14 @@ def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove)
         assert optimize_slices({"a": orig}) == {"a": final}
 
 
-@pytest.mark.xfail(reason="blockwise fusion doesnt respect this, which is ok")
+@pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")
 def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)
 
     a = y.__dask_optimize__(y.dask, y.__dask_keys__())
 
-    with dask.config.set(fuse_ave_width=0):
+    with dask.config.set({"optimization.fuse.ave-width": 0}):
         b = y.__dask_optimize__(y.dask, y.__dask_keys__())
 
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
@@ -389,3 +389,13 @@ def test_double_dependencies():
     X = da.dot(X, X.T)
 
     assert_eq(X.compute(optimize_graph=False), X)
+
+
+def test_fuse_roots():
+    x = da.ones(10, chunks=(2,))
+    y = da.zeros(10, chunks=(2,))
+    z = (x + 1) + (2 * y ** 2)
+    (zz,) = dask.optimize(z)
+    # assert len(zz.dask) == 5
+    assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
+    assert_eq(zz, z)

@@ -1,6 +1,6 @@
-from __future__ import print_function, division, absolute_import
-
+import random
 import sys
+from distutils.version import LooseVersion
 
 from .utils import Dispatch
 
@@ -26,7 +26,25 @@ def sizeof_default(o):
 @sizeof.register(set)
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
-    return getsizeof(seq) + sum(map(sizeof, seq))
+    num_items = len(seq)
+    samples = 10
+    if num_items > samples:
+        s = getsizeof(seq) + num_items / samples * sum(
+            map(sizeof, random.sample(seq, samples))
+        )
+        return int(s)
+    else:
+        return getsizeof(seq) + sum(map(sizeof, seq))
+
+
+@sizeof.register(dict)
+def sizeof_python_dict(d):
+    return (
+        getsizeof(d)
+        + sizeof(list(d.keys()))
+        + sizeof(list(d.values()))
+        - 2 * sizeof(list())
+    )
 
 
 @sizeof.register_lazy("cupy")
@@ -36,6 +54,27 @@ def register_cupy():
     @sizeof.register(cupy.ndarray)
     def sizeof_cupy_ndarray(x):
         return int(x.nbytes)
+
+
+@sizeof.register_lazy("numba")
+def register_numba():
+    import numba.cuda
+
+    @sizeof.register(numba.cuda.cudadrv.devicearray.DeviceNDArray)
+    def sizeof_numba_devicendarray(x):
+        return int(x.nbytes)
+
+
+@sizeof.register_lazy("rmm")
+def register_rmm():
+    import rmm
+
+    # Only included in 0.11.0+
+    if hasattr(rmm, "DeviceBuffer"):
+
+        @sizeof.register(rmm.DeviceBuffer)
+        def sizeof_rmm_devicebuffer(x):
+            return int(x.nbytes)
 
 
 @sizeof.register_lazy("numpy")
@@ -103,3 +142,36 @@ def register_spmatrix():
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
         return sum(sizeof(v) for v in s.__dict__.values())
+
+
+@sizeof.register_lazy("pyarrow")
+def register_pyarrow():
+    import pyarrow as pa
+
+    def _get_col_size(data):
+        p = 0
+        if not isinstance(data, pa.ChunkedArray):
+            data = data.data  # pyarrow <0.15.0
+        for chunk in data.iterchunks():
+            for buffer in chunk.buffers():
+                if buffer:
+                    p += buffer.size
+        return p
+
+    @sizeof.register(pa.Table)
+    def sizeof_pyarrow_table(table):
+        p = sizeof(table.schema.metadata)
+        for col in table.itercolumns():
+            p += _get_col_size(col)
+        return int(p) + 1000
+
+    @sizeof.register(pa.ChunkedArray)
+    def sizeof_pyarrow_chunked_array(data):
+        return int(_get_col_size(data)) + 1000
+
+    # Handle pa.Column for pyarrow < 0.15
+    if pa.__version__ < LooseVersion("0.15.0"):
+
+        @sizeof.register(pa.Column)
+        def sizeof_pyarrow_column(col):
+            return int(_get_col_size(col)) + 1000

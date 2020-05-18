@@ -123,17 +123,20 @@ Top level user functions:
    max
    maximum
    mean
+   median
    meshgrid
    min
    minimum
    modf
    moment
+   moveaxis
    nanargmax
    nanargmin
    nancumprod
    nancumsum
    nanmax
    nanmean
+   nanmedian
    nanmin
    nanprod
    nanstd
@@ -163,6 +166,7 @@ Top level user functions:
    result_type
    rint
    roll
+   rollaxis
    round
    sign
    signbit
@@ -185,6 +189,7 @@ Top level user functions:
    tril
    triu
    trunc
+   unify_chunks
    unique
    unravel_index
    var
@@ -496,17 +501,20 @@ Other functions
 .. autofunction:: max
 .. autofunction:: maximum
 .. autofunction:: mean
+.. autofunction:: median
 .. autofunction:: meshgrid
 .. autofunction:: min
 .. autofunction:: minimum
 .. autofunction:: modf
 .. autofunction:: moment
+.. autofunction:: moveaxis
 .. autofunction:: nanargmax
 .. autofunction:: nanargmin
 .. autofunction:: nancumprod
 .. autofunction:: nancumsum
 .. autofunction:: nanmax
 .. autofunction:: nanmean
+.. autofunction:: nanmedian
 .. autofunction:: nanmin
 .. autofunction:: nanprod
 .. autofunction:: nanstd
@@ -535,6 +543,7 @@ Other functions
 .. autofunction:: result_type
 .. autofunction:: rint
 .. autofunction:: roll
+.. autofunction:: rollaxis
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit

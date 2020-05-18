@@ -1,5 +1,4 @@
 import re
-from ....compatibility import string_types
 
 
 class Engine:
@@ -299,7 +298,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 
     if user_columns is None:
         user_columns = list(data_columns)
-    elif isinstance(user_columns, string_types):
+    elif isinstance(user_columns, str):
         user_columns = [user_columns]
     else:
         user_columns = list(user_columns)
@@ -311,7 +310,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         # columns (unless `columns` provided).
         user_index = []
         data_columns = data_index + data_columns
-    elif isinstance(user_index, string_types):
+    elif isinstance(user_index, str):
         user_index = [user_index]
     else:
         user_index = list(user_index)
@@ -342,7 +341,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 
 
 def _analyze_paths(file_list, fs, root=False):
-    """Consolidate list of file-paths into  parquet relative paths
+    """Consolidate list of file-paths into parquet relative paths
 
     Note: This function was mostly copied from dask/fastparquet to
     use in both `FastParquetEngine` and `ArrowEngine`."""

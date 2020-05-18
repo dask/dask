@@ -25,6 +25,11 @@ import os
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+import sys
+
+source_dir = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(source_dir, "ext"))
+
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.mathjax",
@@ -33,6 +38,7 @@ extensions = [
     "sphinx.ext.extlinks",
     "numpydoc",
     "sphinx_click.ext",
+    "dask_config_sphinx_ext",
 ]
 
 numpydoc_show_class_members = False
@@ -48,7 +54,6 @@ source_suffix = ".rst"
 
 # The master toctree document.
 master_doc = "index"
-html_extra_path = ["index.html"]
 
 # General information about the project.
 project = u"Dask"
@@ -359,10 +364,9 @@ redirect_template = """\
 """
 
 html_context = {
-    'css_files': [
-        '_static/theme_overrides.css',  # override wide tables in RTD theme
-        ],
-     }
+    "css_files": ["_static/theme_overrides.css"]  # override wide tables in RTD theme
+}
+
 
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":

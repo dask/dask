@@ -1,11 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 import numpy as np
 import pandas as pd
-from toolz import partial
+from functools import partial
 
 from ..utils import derived_from
-from .utils import PANDAS_VERSION
 
 
 def maybe_wrap_pandas(obj, x):
@@ -126,10 +123,11 @@ class StringAccessor(Accessor):
             if n == -1:
                 raise NotImplementedError(
                     "To use the expand parameter you must specify the number of "
-                    "expected output columns with the n= parameter"
+                    "expected splits with the n= parameter. Usually n splits result in n+1 output columns."
                 )
             else:
-                meta = type(self._series._meta)([" ".join(["a"] * 2 * n)])
+                delimiter = " " if pat is None else pat
+                meta = type(self._series._meta)([delimiter.join(["a"] * (n + 1))])
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
         else:
             meta = (self._series.name, object)
@@ -156,11 +154,6 @@ class StringAccessor(Accessor):
     def extractall(self, pat, flags=0):
         # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
         meta = self._series._meta.str.extractall(pat, flags=flags)
-        if PANDAS_VERSION < "0.23.0":
-            index_name = self._series.index.name
-            meta.index = pd.MultiIndex(
-                levels=[[], []], labels=[[], []], names=[index_name, "match"]
-            )
         return self._series.map_partitions(
             str_extractall, pat, flags, meta=meta, token="str-extractall"
         )

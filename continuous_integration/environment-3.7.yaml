@@ -4,38 +4,36 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.6.*
-  - numpy=1.15.*
-  - pandas=0.23.*
+  - python=3.7.*
+  - numpy=1.17.*
+  - pandas=0.25.*
   # test dependencies
   - pytest
   - pytest-xdist
   - moto
-  - coverage
-  - codecov
-  # Issue with conda package for NumPy 1.15?
-  # See fastparquet-444
-  # - fastparquet
+  - fastparquet
   - h5py
   - pytables
-  - fsspec
   - zarr
   - tiledb-py
+  - fsspec>=0.6.0
   - sqlalchemy
-  - pyarrow
+  - pyarrow>=0.14.0
+  - coverage
+  - jsonschema
   # other -- IO
   - bcolz
   - blosc
-  - s3fs
   - boto3
   - botocore
   - bokeh
   - httpretty
   - chest
+  - s3fs
   - cloudpickle
   - crick
   - cytoolz
-  - distributed==2.0.1
+  - distributed
   - graphviz
   - ipython
   - lz4
@@ -52,6 +50,6 @@ dependencies:
   - cachey
   - python-graphviz
   - pandas-datareader
+  - python-xxhash
   - mmh3
-  - xxhash
   - pip

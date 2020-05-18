@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import os
 import pytest
 from operator import add, mul
@@ -8,7 +6,7 @@ import sys
 import time
 from collections import OrderedDict
 
-from toolz import merge
+from tlz import merge
 
 import dask
 from dask import delayed
@@ -27,10 +25,10 @@ from dask.base import (
     named_schedulers,
     get_scheduler,
 )
+from dask.core import literal
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode, PY2
 from dask.diagnostics import Profiler
 
 
@@ -40,7 +38,7 @@ def import_or_none(path):
     return None
 
 
-tz = pytest.importorskip("toolz")
+tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
 db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
@@ -133,6 +131,17 @@ def test_tokenize_numpy_scalar():
 
 
 @pytest.mark.skipif("not np")
+def test_tokenize_numpy_scalar_string_rep():
+    # Test tokenizing numpy scalars doesn't depend on their string representation
+    try:
+        np.set_string_function(lambda x: "foo")
+        assert tokenize(np.array(1)) != tokenize(np.array(2))
+    finally:
+        # Reset back to default
+        np.set_string_function(None)
+
+
+@pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
         np.array(["a", "aa", "aaa"], dtype=object)
@@ -143,12 +152,6 @@ def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
-    if PY2:
-        assert tokenize(
-            np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)
-        ) == tokenize(
-            np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)
-        )
 
 
 @pytest.mark.skipif("not np")
@@ -164,6 +167,10 @@ def test_tokenize_numpy_memmap_offset(tmpdir):
         mmap2 = np.memmap(f, dtype=np.uint8, mode="r", offset=5, shape=5)
 
         assert tokenize(mmap1) != tokenize(mmap2)
+        # also make sure that they tokenize correctly when taking sub-arrays
+        sub1 = mmap1[1:-1]
+        sub2 = mmap2[1:-1]
+        assert tokenize(sub1) != tokenize(sub2)
 
 
 @pytest.mark.skipif("not np")
@@ -230,7 +237,7 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 
 
 def test_normalize_base():
-    for i in [1, long(1), 1.1, "1", slice(1, 2, 3)]:
+    for i in [1, 1.1, "1", slice(1, 2, 3)]:
         assert normalize_token(i) is i
 
 
@@ -277,6 +284,46 @@ def test_tokenize_pandas_no_pickle():
 
     df = pd.DataFrame({"x": ["foo", None, NoPickle()]})
     tokenize(df)
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_extension_array():
+    from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_0240
+
+    if not PANDAS_GT_0240:
+        pytest.skip("requires pandas>=1.0.0")
+
+    arrays = [
+        pd.array([1, 0, None], dtype="Int64"),
+        pd.array(["2000"], dtype="Period[D]"),
+        pd.array([1, 0, 0], dtype="Sparse[int]"),
+        pd.array([pd.Timestamp("2000")], dtype="datetime64[ns]"),
+        pd.array([pd.Timestamp("2000", tz="CET")], dtype="datetime64[ns, CET]"),
+        pd.array(
+            ["a", "b"],
+            dtype=pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False),
+        ),
+    ]
+
+    if PANDAS_GT_100:
+        arrays.extend(
+            [
+                pd.array(["a", "b", None], dtype="string"),
+                pd.array([True, False, None], dtype="boolean"),
+            ]
+        )
+
+    for arr in arrays:
+        assert tokenize(arr) == tokenize(arr)
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_index():
+    idx = pd.Index(["a", "b"])
+    assert tokenize(idx) == tokenize(idx)
+
+    idx = pd.MultiIndex.from_product([["a", "b"], [0, 1]])
+    assert tokenize(idx) == tokenize(idx)
 
 
 def test_tokenize_kwargs():
@@ -337,15 +384,21 @@ def test_tokenize_set():
 
 
 def test_tokenize_ordered_dict():
-    with ignoring(ImportError):
-        from collections import OrderedDict
+    from collections import OrderedDict
 
-        a = OrderedDict([("a", 1), ("b", 2)])
-        b = OrderedDict([("a", 1), ("b", 2)])
-        c = OrderedDict([("b", 2), ("a", 1)])
+    a = OrderedDict([("a", 1), ("b", 2)])
+    b = OrderedDict([("a", 1), ("b", 2)])
+    c = OrderedDict([("b", 2), ("a", 1)])
 
-        assert tokenize(a) == tokenize(b)
-        assert tokenize(a) != tokenize(c)
+    assert tokenize(a) == tokenize(b)
+    assert tokenize(a) != tokenize(c)
+
+
+def test_tokenize_range():
+    assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
+    assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 15, 2))  # Different stop
+    assert tokenize(range(5, 10, 2)) != tokenize(range(5, 10, 1))  # Different step
 
 
 @pytest.mark.skipif("not np")
@@ -359,6 +412,10 @@ def test_tokenize_object_array_with_nans():
 )
 def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
+
+
+def test_tokenize_literal():
+    assert tokenize(literal(["x", 1])) == tokenize(literal(["x", 1]))
 
 
 @pytest.mark.skipif("not np")
@@ -451,6 +508,7 @@ def test_unpack_collections():
 
         if dataclasses is not None:
             t[2]["f"] = ADataClass(a=a)
+            t[2]["g"] = (ADataClass, a)
 
         return t
 
@@ -525,7 +583,7 @@ def test_custom_collection():
     y = Tuple(dsk2, ["c", "d"])
     z = Tuple(dsk3, ["e", "f"])
 
-    # __slots__ defined on base mixin class propogates
+    # __slots__ defined on base mixin class propagates
     with pytest.raises(AttributeError):
         x.foo = 1
 
@@ -577,9 +635,7 @@ def test_compute_no_opt():
     # Otherwise, the lengths below would be 4 and 0.
     assert len([k for k in keys if "mul" in k[0]]) == 8
     assert len([k for k in keys if "add" in k[0]]) == 4
-    assert (
-        len([k for k in keys if "add-from_sequence-mul" in k[0]]) == 4
-    )  # See? Renamed
+    assert len([k for k in keys if "add-mul" in k[0]]) == 4  # See? Renamed
 
 
 @pytest.mark.skipif("not da")
@@ -614,8 +670,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    pd.util.testing.assert_series_equal(out1, df.a + 1)
-    pd.util.testing.assert_series_equal(out2, df.a + df.b)
+    pd.testing.assert_series_equal(out1, df.a + 1)
+    pd.testing.assert_series_equal(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -626,7 +682,7 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    pd.util.testing.assert_series_equal(df_out, df.a + 2)
+    dd._compat.tm.assert_series_equal(df_out, df.a + 2)
 
 
 @pytest.mark.skipif("not dd")
@@ -735,6 +791,7 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
+    pytest.importorskip("cloudpickle")
     from textwrap import dedent
 
     defn = dedent(
@@ -873,8 +930,7 @@ def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
     x3 = delayed(inc)(x2)
-
-    xx, = persist(x3)
+    (xx,) = persist(x3)
     assert isinstance(xx, Delayed)
     assert xx.key == x3.key
     assert len(xx.dask) == 1
@@ -1003,6 +1059,7 @@ def test_callable_scheduler():
 
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
+    pytest.importorskip("cloudpickle")
     # Regression test for issue #4082
 
     @delayed

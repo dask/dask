@@ -1,15 +1,13 @@
-from __future__ import absolute_import, division, print_function
-
+from collections.abc import Iterator
 from functools import wraps
 from numbers import Number
 
 import numpy as np
-from toolz import merge, merge_sorted
+from tlz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..compatibility import Iterator
 
 
 @wraps(np.percentile)
@@ -66,13 +64,13 @@ def percentile(a, q, interpolation="linear", method="default"):
         The interpolation method to use when the desired percentile lies
         between two data points ``i < j``. Only valid for ``method='dask'``.
 
-        * 'linear': ``i + (j - i) * fraction``, where ``fraction``
-        is the fractional part of the index surrounded by ``i``
-        and ``j``.
-        * 'lower': ``i``.
-        * 'higher': ``j``.
-        * 'nearest': ``i`` or ``j``, whichever is nearest.
-        * 'midpoint': ``(i + j) / 2``.
+        - 'linear': ``i + (j - i) * fraction``, where ``fraction``
+          is the fractional part of the index surrounded by ``i``
+          and ``j``.
+        - 'lower': ``i``.
+        - 'higher': ``j``.
+        - 'nearest': ``i`` or ``j``, whichever is nearest.
+        - 'midpoint': ``(i + j) / 2``.
 
     method : {'default', 'dask', 'tdigest'}, optional
         What method to use. By default will use dask's internal custom
@@ -118,7 +116,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
         name = "percentile_tdigest_chunk-" + token
         dsk = dict(
-            ((name, i), (_tdigest_chunk, (key)))
+            ((name, i), (_tdigest_chunk, key))
             for i, key in enumerate(a.__dask_keys__())
         )
 
@@ -131,7 +129,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
         name = "percentile_chunk-" + token
         dsk = dict(
-            ((name, i), (_percentile, (key), q, interpolation))
+            ((name, i), (_percentile, key, q, interpolation))
             for i, key in enumerate(a.__dask_keys__())
         )
 

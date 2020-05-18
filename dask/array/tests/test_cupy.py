@@ -501,12 +501,7 @@ def test_random_shapes(shape):
         (20, 10, 10, None),  # tall-skinny regular blocks
         (20, 10, (3, 10), None),  # tall-skinny regular fat layers
         (20, 10, ((8, 4, 8), 10), None),  # tall-skinny irregular fat layers
-        (
-            40,
-            10,
-            ((15, 5, 5, 8, 7), (10)),
-            None,
-        ),  # tall-skinny non-uniform chunks (why?)
+        (40, 10, ((15, 5, 5, 8, 7), 10), None),  # tall-skinny non-uniform chunks (why?)
         (128, 2, (16, 2), None),  # tall-skinny regular thin layers; recursion_depth=1
         (
             129,
@@ -537,7 +532,7 @@ def test_random_shapes(shape):
         (
             10,
             40,
-            ((10), (15, 5, 5, 8, 7)),
+            (10, (15, 5, 5, 8, 7)),
             ValueError,
         ),  # short-fat non-uniform chunks (why?)
         (20, 20, 10, ValueError),  # 2x2 regular blocks
@@ -745,7 +740,7 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
         (
             40,
             10,
-            ((15, 5, 5, 8, 7), (10)),
+            ((15, 5, 5, 8, 7), 10),
             ValueError,
         ),  # tall-skinny non-uniform chunks (why?)
         (
@@ -795,7 +790,7 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
         (10, 10, 10, None),  # single block square
         (10, 40, (10, 10), None),  # short-fat regular blocks
         (10, 40, (10, 15), None),  # short-fat irregular blocks
-        (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+        (10, 40, (10, (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
         (20, 20, 10, ValueError),  # 2x2 regular blocks
     ],
 )
@@ -818,6 +813,19 @@ def test_sfqr(m, n, chunks, error_type):
     else:
         with pytest.raises(error_type):
             q, r = da.linalg.sfqr(data)
+
+
+def test_sparse_hstack_vstack_csr():
+    pytest.importorskip("cupyx")
+    x = cupy.arange(24, dtype=cupy.float32).reshape(4, 6)
+
+    sp = da.from_array(x, chunks=(2, 3), asarray=False, fancy=False)
+    sp = sp.map_blocks(cupy.sparse.csr_matrix, dtype=cupy.float32)
+
+    y = sp.compute()
+
+    assert cupy.sparse.isspmatrix(y)
+    assert_eq(x, y.todense())
 
 
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")

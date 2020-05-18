@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+from itertools import zip_longest
 import os
 import warnings
 
@@ -51,6 +50,9 @@ def test_numel(dtype, keepdims):
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert_eq(da_func(darr), np_func(narr))
+    assert_eq(
+        da_func(narr), np_func(narr)
+    )  # Ensure Dask reductions work with NumPy arrays
     assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert_eq(da_func(darr, axis=()), np_func(narr, axis=()))
     assert same_keys(da_func(darr), da_func(darr))
@@ -512,6 +514,16 @@ def test_reduction_names():
     assert x.mean().name.startswith("mean")
 
 
+def test_general_reduction_names():
+    dtype = np.int
+    a = da.reduction(
+        da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
+    )
+    names, tokens = list(zip_longest(*[key[0].rsplit("-", 1) for key in a.dask]))
+    assert set(names) == {"ones", "foo", "foo-partial", "foo-aggregate"}
+    assert all(tokens)
+
+
 @pytest.mark.filterwarnings("ignore:`argmax` is not implemented by dask")
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
 def test_array_reduction_out(func):
@@ -665,3 +677,15 @@ def test_trace():
     _assert(a, b, 0, 1, 2, float)
     _assert(a, b, offset=1, axis1=0, axis2=2, dtype=int)
     _assert(a, b, offset=1, axis1=0, axis2=2, dtype=float)
+
+
+@pytest.mark.parametrize("func", ["median", "nanmedian"])
+@pytest.mark.parametrize("axis", [0, [0, 1], 1, -1])
+@pytest.mark.parametrize("keepdims", [True, False])
+def test_median(axis, keepdims, func):
+    x = np.arange(100).reshape((2, 5, 10))
+    d = da.from_array(x, chunks=2)
+    assert_eq(
+        getattr(da, func)(d, axis=axis, keepdims=keepdims),
+        getattr(np, func)(x, axis=axis, keepdims=keepdims),
+    )

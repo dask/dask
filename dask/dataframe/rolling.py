@@ -1,16 +1,16 @@
-from __future__ import absolute_import, division, print_function
-
 import datetime
+import inspect
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
 from numbers import Integral
 
 from ..base import tokenize
-from ..utils import M, funcname, derived_from
+from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
+from ._compat import PANDAS_VERSION
 from .core import _emulate
-from .utils import make_meta, PANDAS_VERSION
+from .utils import make_meta
 from . import methods
 
 
@@ -117,13 +117,13 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     )
 
     if before and isinstance(before, Integral):
-        dsk.update(
-            {
-                (name_a, i): (M.tail, (df_name, i), before)
-                for i in range(df.npartitions - 1)
-            }
-        )
-        prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+
+        prevs = [None]
+        for i in range(df.npartitions - 1):
+            key = (name_a, i)
+            dsk[key] = (M.tail, (df_name, i), before)
+            prevs.append(key)
+
     elif isinstance(before, datetime.timedelta):
         # Assumes monotonic (increasing?) index
         divs = pd.Series(df.divisions)
@@ -135,6 +135,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
 
         if (before > deltas).any():
             pt_z = divs[0]
+            prevs = [None]
             for i in range(df.npartitions - 1):
                 # Select all indexes of relevant partitions between the current partition and
                 # the partition with the highest division outside the rolling window (before)
@@ -148,56 +149,48 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                     first = first - deltas[j]
                     j = j - 1
 
-                dsk.update(
-                    {
-                        (name_a, i): (
-                            _tail_timedelta,
-                            [(df_name, k) for k in range(j, i + 1)],
-                            (df_name, i + 1),
-                            before,
-                        )
-                    }
+                key = (name_a, i)
+                dsk[key] = (
+                    _tail_timedelta,
+                    [(df_name, k) for k in range(j, i + 1)],
+                    (df_name, i + 1),
+                    before,
                 )
-
-            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+                prevs.append(key)
 
         else:
-            dsk.update(
-                {
-                    (name_a, i): (
-                        _tail_timedelta,
-                        [(df_name, i)],
-                        (df_name, i + 1),
-                        before,
-                    )
-                    for i in range(df.npartitions - 1)
-                }
-            )
-            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+            prevs = [None]
+            for i in range(df.npartitions - 1):
+                key = (name_a, i)
+                dsk[key] = (
+                    _tail_timedelta,
+                    [(df_name, i)],
+                    (df_name, i + 1),
+                    before,
+                )
+                prevs.append(key)
     else:
         prevs = [None] * df.npartitions
 
     if after and isinstance(after, Integral):
-        dsk.update(
-            {
-                (name_b, i): (M.head, (df_name, i), after)
-                for i in range(1, df.npartitions)
-            }
-        )
-        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (M.head, (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
     elif isinstance(after, datetime.timedelta):
         # TODO: Do we have a use-case for this? Pandas doesn't allow negative rolling windows
         deltas = pd.Series(df.divisions).diff().iloc[1:-1]
         if (after > deltas).any():
             raise ValueError(timedelta_partition_message)
 
-        dsk.update(
-            {
-                (name_b, i): (_head_timedelta, (df_name, i - 0), (df_name, i), after)
-                for i in range(1, df.npartitions)
-            }
-        )
-        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (_head_timedelta, (df_name, i - 0), (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
     else:
         nexts = [None] * df.npartitions
 
@@ -264,19 +257,8 @@ class Rolling(object):
     """Provides rolling window calculations."""
 
     def __init__(
-        self,
-        obj,
-        window=None,
-        min_periods=None,
-        freq=None,
-        center=False,
-        win_type=None,
-        axis=0,
+        self, obj, window=None, min_periods=None, center=False, win_type=None, axis=0
     ):
-        if freq is not None:
-            msg = "The deprecated freq argument is not supported."
-            raise NotImplementedError(msg)
-
         self.obj = obj  # dataframe or series
         self.window = window
         self.min_periods = min_periods
@@ -330,7 +312,7 @@ class Rolling(object):
                 *args,
                 token=method_name,
                 meta=meta,
-                **kwargs
+                **kwargs,
             )
         # Convert window to overlap
         if self.center:
@@ -352,7 +334,7 @@ class Rolling(object):
             *args,
             token=method_name,
             meta=meta,
-            **kwargs
+            **kwargs,
         )
 
     @derived_from(pd_Rolling)
@@ -404,20 +386,33 @@ class Rolling(object):
         return self._call_method("quantile", quantile)
 
     @derived_from(pd_Rolling)
-    def apply(self, func, args=(), kwargs={}, **kwds):
-        # TODO: In a future version of pandas this will change to
-        # raw=False. Think about inspecting the function signature and setting
-        # to that?
-        if PANDAS_VERSION >= "0.23.0":
-            kwds.setdefault("raw", None)
-        else:
-            if kwargs:
-                msg = (
-                    "Invalid argument to 'apply'. Keyword arguments "
-                    "should be given as a dict to the 'kwargs' argument. "
-                )
-                raise TypeError(msg)
-        return self._call_method("apply", func, args=args, kwargs=kwargs, **kwds)
+    def apply(
+        self,
+        func,
+        raw=None,
+        engine="cython",
+        engine_kwargs=None,
+        args=None,
+        kwargs=None,
+    ):
+        compat_kwargs = {}
+        kwargs = kwargs or {}
+        args = args or ()
+        meta = self.obj._meta.rolling(0)
+        if has_keyword(meta.apply, "engine"):
+            # PANDAS_GT_100
+            compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
+        elif engine != "cython" or engine_kwargs is not None:
+            raise NotImplementedError(
+                f"Specifying the engine requires pandas>=1.0.0. Version '{PANDAS_VERSION}' installed."
+            )
+        if raw is None:
+            # PANDAS_GT_100: The default changed from None to False
+            raw = inspect.signature(meta.apply).parameters["raw"]
+
+        return self._call_method(
+            "apply", func, raw=raw, args=args, kwargs=kwargs, **compat_kwargs
+        )
 
     @derived_from(pd_Rolling)
     def aggregate(self, func, args=(), kwargs={}, **kwds):

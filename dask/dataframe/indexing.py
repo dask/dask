@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from datetime import datetime
 from collections import defaultdict
 
@@ -9,11 +7,10 @@ import pandas as pd
 
 from .core import new_dd_object, Series
 from ..array.core import Array
-from .utils import is_index_like
+from .utils import is_index_like, meta_nonempty
 from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from .. import compatibility
 
 
 class _IndexerBase(object):
@@ -100,6 +97,8 @@ class _LocIndexer(_IndexerBase):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
             return self._loc_array(iindexer, cindexer)
+        elif callable(iindexer):
+            return self._loc(iindexer(self.obj), cindexer)
 
         if self.obj.known_divisions:
             iindexer = self._maybe_partial_time_string(iindexer)
@@ -130,9 +129,8 @@ class _LocIndexer(_IndexerBase):
         Convert index-indexer for partial time string slicing
         if obj.index is DatetimeIndex / PeriodIndex
         """
-        iindexer = _maybe_partial_time_string(
-            self.obj._meta_nonempty.index, iindexer, kind="loc"
-        )
+        idx = meta_nonempty(self.obj._meta.index)
+        iindexer = _maybe_partial_time_string(idx, iindexer, kind="loc")
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
@@ -345,18 +343,18 @@ def _maybe_partial_time_string(index, indexer, kind):
         return indexer
 
     if isinstance(indexer, slice):
-        if isinstance(indexer.start, compatibility.string_types):
+        if isinstance(indexer.start, str):
             start = index._maybe_cast_slice_bound(indexer.start, "left", kind)
         else:
             start = indexer.start
 
-        if isinstance(indexer.stop, compatibility.string_types):
+        if isinstance(indexer.stop, str):
             stop = index._maybe_cast_slice_bound(indexer.stop, "right", kind)
         else:
             stop = indexer.stop
         return slice(start, stop)
 
-    elif isinstance(indexer, compatibility.string_types):
+    elif isinstance(indexer, str):
         start = index._maybe_cast_slice_bound(indexer, "left", "loc")
         stop = index._maybe_cast_slice_bound(indexer, "right", "loc")
         return slice(min(start, stop), max(start, stop))

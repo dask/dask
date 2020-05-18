@@ -1,16 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
+from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
 from operator import add, getitem
 from numbers import Integral, Number
 
 import numpy as np
-from toolz import accumulate, sliding_window
+from tlz import accumulate, sliding_window
 
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
-from ..compatibility import Sequence
 from ..utils import derived_from
 from . import chunk
 from .core import (
@@ -24,6 +22,7 @@ from .core import (
     broadcast_arrays,
     cached_cumsum,
 )
+from .ufunc import rint
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
@@ -398,11 +397,12 @@ def indices(dimensions, dtype=int, chunks="auto"):
     chunks : sequence of ints, str
         The size of each block.  Must be one of the following forms:
 
-        -   A blocksize like (500, 1000)
-        -   A size in bytes, like "100 MiB" which will choose a uniform
-            block-like shape
-        -   The word "auto" which acts like the above, but uses a configuration
-            value ``array.chunk-size`` for the chunk size
+        - A blocksize like (500, 1000)
+        - A size in bytes, like "100 MiB" which will choose a uniform
+          block-like shape
+        - The word "auto" which acts like the above, but uses a configuration
+          value ``array.chunk-size`` for the chunk size
+
         Note that the last block will have fewer samples if ``len(array) % chunks != 0``.
 
     Returns
@@ -580,8 +580,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     diag_chunks = []
     chunk_offsets = []
-    cum1 = list(cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1])
-    cum2 = list(cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1])
+    cum1 = cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1]
+    cum2 = cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1]
     for co1, c1 in zip(cum1, a.chunks[axis1]):
         chunk_offsets.append([])
         for co2, c2 in zip(cum2, a.chunks[axis2]):
@@ -616,14 +616,14 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 def triu(m, k=0):
     """
-    Upper triangle of an array with elements above the `k`-th diagonal zeroed.
+    Upper triangle of an array with elements below the `k`-th diagonal zeroed.
 
     Parameters
     ----------
     m : array_like, shape (M, N)
         Input array.
     k : int, optional
-        Diagonal above which to zero elements.  `k = 0` (the default) is the
+        Diagonal below which to zero elements.  `k = 0` (the default) is the
         main diagonal, `k < 0` is below it and `k > 0` is above.
 
     Returns
@@ -732,10 +732,15 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
 def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = "fromfunction-" + tokenize(func, chunks, shape, dtype, kwargs)
-    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
-    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
-    offsets = list(product(*aggdims))
-    shapes = list(product(*chunks))
+    keys = product([name], *(range(len(bd)) for bd in chunks))
+
+    def accumulate_gen(chunks):
+        for bd in chunks:
+            yield accumulate(add, (0,) + bd[:-1])
+
+    aggdims = accumulate_gen(chunks)
+    offsets = product(*aggdims)
+    shapes = product(*chunks)
     dtype = dtype or float
 
     values = [
@@ -764,7 +769,9 @@ def repeat(a, repeats, axis=None):
     elif not 0 <= axis <= a.ndim - 1:
         raise ValueError("axis(=%d) out of bounds" % axis)
 
-    if repeats == 1:
+    if repeats == 0:
+        return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]
+    elif repeats == 1:
         return a
 
     cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
@@ -798,17 +805,28 @@ def repeat(a, repeats, axis=None):
 
 @derived_from(np)
 def tile(A, reps):
-    if not isinstance(reps, Integral):
-        raise NotImplementedError("Only integer valued `reps` supported.")
-
-    if reps < 0:
+    try:
+        tup = tuple(reps)
+    except TypeError:
+        tup = (reps,)
+    if any(i < 0 for i in tup):
         raise ValueError("Negative `reps` are not allowed.")
-    elif reps == 0:
-        return A[..., :0]
-    elif reps == 1:
-        return A
+    c = asarray(A)
 
-    return concatenate(reps * [A], axis=-1)
+    if all(tup):
+        for nrep in tup[::-1]:
+            c = nrep * [c]
+        return block(c)
+
+    d = len(tup)
+    if d < c.ndim:
+        tup = (1,) * (c.ndim - d) + tup
+    if c.ndim < d:
+        shape = (1,) * (d - c.ndim) + c.shape
+    else:
+        shape = c.shape
+    shape_out = tuple(s * t for s, t in zip(shape, tup))
+    return empty(shape=shape_out, dtype=c.dtype)
 
 
 def expand_pad_value(array, pad_value):
@@ -825,7 +843,7 @@ def expand_pad_value(array, pad_value):
         and len(pad_value) == 2
         and all(isinstance(pw, Number) for pw in pad_value)
     ):
-        pad_value = tuple((pad_value[0], pad_value[1]) for _ in range(array.ndim))
+        pad_value = array.ndim * (tuple(pad_value),)
     elif (
         isinstance(pad_value, Sequence)
         and len(pad_value) == array.ndim
@@ -833,7 +851,15 @@ def expand_pad_value(array, pad_value):
         and all((len(pw) == 2) for pw in pad_value)
         and all(all(isinstance(w, Number) for w in pw) for pw in pad_value)
     ):
-        pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
+        pad_value = tuple(tuple(pw) for pw in pad_value)
+    elif (
+        isinstance(pad_value, Sequence)
+        and len(pad_value) == 1
+        and isinstance(pad_value[0], Sequence)
+        and len(pad_value[0]) == 2
+        and all(isinstance(pw, Number) for pw in pad_value[0])
+    ):
+        pad_value = array.ndim * (tuple(pad_value[0]),)
     else:
         raise TypeError("`pad_value` must be composed of integral typed values.")
 
@@ -883,14 +909,14 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     return result
 
 
-def pad_edge(array, pad_width, mode, *args):
+def pad_edge(array, pad_width, mode, **kwargs):
     """
     Helper function for padding edges.
 
     Handles the cases where the only the values on the edge are needed.
     """
 
-    args = tuple(expand_pad_value(array, e) for e in args)
+    kwargs = {k: expand_pad_value(array, v) for k, v in kwargs.items()}
 
     result = array
     for d in range(array.ndim):
@@ -898,7 +924,7 @@ def pad_edge(array, pad_width, mode, *args):
         pad_arrays = [result, result]
 
         if mode == "constant":
-            constant_values = args[0][d]
+            constant_values = kwargs["constant_values"][d]
             constant_values = [asarray(c).astype(result.dtype) for c in constant_values]
 
             pad_arrays = [
@@ -919,7 +945,7 @@ def pad_edge(array, pad_width, mode, *args):
                     for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
                 ]
             elif mode == "linear_ramp":
-                end_values = args[0][d]
+                end_values = kwargs["end_values"][d]
 
                 pad_arrays = [
                     a.map_blocks(
@@ -935,13 +961,18 @@ def pad_edge(array, pad_width, mode, *args):
                         zip(pad_arrays, end_values, pad_width[d], pad_chunks)
                     )
                 ]
+        elif mode == "empty":
+            pad_arrays = [
+                empty(s, dtype=array.dtype, chunks=c)
+                for s, c in zip(pad_shapes, pad_chunks)
+            ]
 
         result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
     return result
 
 
-def pad_reuse(array, pad_width, mode, *args):
+def pad_reuse(array, pad_width, mode, **kwargs):
     """
     Helper function for padding boundaries with values in the array.
 
@@ -950,8 +981,14 @@ def pad_reuse(array, pad_width, mode, *args):
     boundary constraints.
     """
 
-    if mode in ["reflect", "symmetric"] and "odd" in args:
-        raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
+    if mode in {"reflect", "symmetric"}:
+        reflect_type = kwargs.get("reflect", "even")
+        if reflect_type == "odd":
+            raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
+        if reflect_type != "even":
+            raise ValueError(
+                "unsupported value for reflect_type, must be one of (`even`, `odd`)"
+            )
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -992,7 +1029,7 @@ def pad_reuse(array, pad_width, mode, *args):
     return result
 
 
-def pad_stats(array, pad_width, mode, *args):
+def pad_stats(array, pad_width, mode, stat_length):
     """
     Helper function for padding boundaries with statistics from the array.
 
@@ -1004,7 +1041,7 @@ def pad_stats(array, pad_width, mode, *args):
     if mode == "median":
         raise NotImplementedError("`pad` does not support `mode` of `median`.")
 
-    stat_length = expand_pad_value(array, args[0])
+    stat_length = expand_pad_value(array, stat_length)
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -1046,6 +1083,11 @@ def pad_stats(array, pad_width, mode, *args):
 
             result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
 
+            if mode == "mean":
+                if np.issubdtype(array.dtype, np.integer):
+                    result_idx = rint(result_idx)
+                result_idx = result_idx.astype(array.dtype)
+
         result[idx] = result_idx
 
     result = block(result.tolist())
@@ -1072,7 +1114,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     boundaries.
     """
 
-    result = pad_edge(array, pad_width, "constant", 0)
+    result = pad_edge(array, pad_width, "constant", constant_values=0)
 
     chunks = result.chunks
     for d in range(result.ndim):
@@ -1096,37 +1138,51 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
 
 @derived_from(np)
-def pad(array, pad_width, mode, **kwargs):
+def pad(array, pad_width, mode="constant", **kwargs):
     array = asarray(array)
 
     pad_width = expand_pad_value(array, pad_width)
 
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        kwargs.setdefault("stat_length", array.shape)
+    if callable(mode):
+        return pad_udf(array, pad_width, mode, **kwargs)
+
+    # Make sure that no unsupported keywords were passed for the current mode
+    allowed_kwargs = {
+        "empty": [],
+        "edge": [],
+        "wrap": [],
+        "constant": ["constant_values"],
+        "linear_ramp": ["end_values"],
+        "maximum": ["stat_length"],
+        "mean": ["stat_length"],
+        "median": ["stat_length"],
+        "minimum": ["stat_length"],
+        "reflect": ["reflect_type"],
+        "symmetric": ["reflect_type"],
+    }
+    try:
+        unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
+    except KeyError:
+        raise ValueError("mode '{}' is not supported".format(mode))
+    if unsupported_kwargs:
+        raise ValueError(
+            "unsupported keyword arguments for mode '{}': {}".format(
+                mode, unsupported_kwargs
+            )
+        )
+
+    if mode in {"maximum", "mean", "median", "minimum"}:
+        stat_length = kwargs.get("stat_length", tuple((n, n) for n in array.shape))
+        return pad_stats(array, pad_width, mode, stat_length)
     elif mode == "constant":
         kwargs.setdefault("constant_values", 0)
+        return pad_edge(array, pad_width, mode, **kwargs)
     elif mode == "linear_ramp":
         kwargs.setdefault("end_values", 0)
-    elif mode in ["reflect", "symmetric"]:
-        kwargs.setdefault("reflect_type", "even")
-    elif mode in ["edge", "wrap"]:
-        if kwargs:
-            raise TypeError("Got unsupported keyword arguments.")
-    elif callable(mode):
-        kwargs.setdefault("kwargs", {})
-    else:
-        raise ValueError("Got an unsupported `mode`.")
-
-    if not callable(mode) and len(kwargs) > 1:
-        raise TypeError("Got too many keyword arguments.")
-
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        return pad_stats(array, pad_width, mode, *kwargs.values())
-    elif mode in ["constant", "edge", "linear_ramp"]:
-        return pad_edge(array, pad_width, mode, *kwargs.values())
+        return pad_edge(array, pad_width, mode, **kwargs)
+    elif mode in {"edge", "empty"}:
+        return pad_edge(array, pad_width, mode)
     elif mode in ["reflect", "symmetric", "wrap"]:
-        return pad_reuse(array, pad_width, mode, *kwargs.values())
-    elif callable(mode):
-        return pad_udf(array, pad_width, mode, **kwargs)
-    else:
-        raise ValueError("Unsupported mode selected.")
+        return pad_reuse(array, pad_width, mode, **kwargs)
+
+    assert False, "unreachable"

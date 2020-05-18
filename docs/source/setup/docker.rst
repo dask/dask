@@ -46,7 +46,7 @@ they will trigger calls to the following respectively::
 
    apt-get install $EXTRA_APT_PACKAGES
    conda install $EXTRA_CONDA_PACKAGES
-   pip install $EXTRA_PIP_PACKAGES
+   python -m pip install $EXTRA_PIP_PACKAGES
 
 For example, the following ``conda`` installs the ``joblib`` package into
 the Dask worker software environment:

@@ -1,14 +1,13 @@
-from __future__ import absolute_import, division, print_function
-
 from itertools import product
 import math
 from numbers import Integral, Number
-from operator import getitem, itemgetter
+from operator import add, getitem, itemgetter
 import warnings
 import functools
+import bisect
 
 import numpy as np
-from toolz import memoize, merge, pluck, concat
+from tlz import memoize, merge, pluck, concat, accumulate
 
 from .. import core
 from ..highlevelgraph import HighLevelGraph
@@ -277,11 +276,15 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
+    from .core import unknown_chunk_message
+
     shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
-            raise ValueError("Arrays chunk sizes are unknown: %s", shape)
+            raise ValueError(
+                "Arrays chunk sizes are unknown: %s%s" % (shape, unknown_chunk_message)
+            )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
     assert len(index) == len(blockdims)
@@ -398,7 +401,7 @@ def _slice_1d(dim_shape, lengths, index):
 
     if isinstance(index, Integral):
         # use right-side search to be consistent with previous result
-        i = chunk_boundaries.searchsorted(index, side="right")
+        i = bisect.bisect_right(chunk_boundaries, index)
         if i > 0:
             # the very first chunk has no relative shift
             ind = index - chunk_boundaries[i - 1]
@@ -428,8 +431,8 @@ def _slice_1d(dim_shape, lengths, index):
 
     d = dict()
     if step > 0:
-        istart = chunk_boundaries.searchsorted(start, side="right")
-        istop = chunk_boundaries.searchsorted(stop, side="left")
+        istart = bisect.bisect_right(chunk_boundaries, start)
+        istop = bisect.bisect_left(chunk_boundaries, stop)
 
         # the bound is not exactly tight; make it tighter?
         istop = min(istop + 1, len(lengths))
@@ -450,8 +453,8 @@ def _slice_1d(dim_shape, lengths, index):
     else:
         rstart = start  # running start
 
-        istart = chunk_boundaries.searchsorted(start, side="left")
-        istop = chunk_boundaries.searchsorted(stop, side="right")
+        istart = bisect.bisect_left(chunk_boundaries, start)
+        istop = bisect.bisect_right(chunk_boundaries, stop)
 
         # the bound is not exactly tight; make it tighter?
         istart = min(istart + 1, len(chunk_boundaries) - 1)
@@ -914,7 +917,7 @@ def slice_with_int_dask_array(x, index):
         for idx in index
     ]
     if sum(fancy_indexes) > 1:
-        raise NotImplementedError("Don't yet support nd fancy indexing)")
+        raise NotImplementedError("Don't yet support nd fancy indexing")
 
     out_index = []
     dropped_axis_cnt = 0
@@ -1199,26 +1202,22 @@ class _HashIdWrapper(object):
 
 
 @functools.lru_cache()
-def _cumsum(seq):
+def _cumsum(seq, initial_zero):
     if isinstance(seq, _HashIdWrapper):
-        return _cumsum(seq.wrapped)
-    seq = np.array(seq)
-    dtype = np.int64 if np.issubdtype(seq.dtype, np.integer) else seq.dtype
-    out = np.empty(len(seq) + 1, dtype)
-    out[0] = 0
-    np.cumsum(seq, out=out[1:], dtype=dtype)
-    return out
+        seq = seq.wrapped
+    if initial_zero:
+        return tuple(accumulate(add, seq, 0))
+    else:
+        return tuple(accumulate(add, seq))
 
 
 def cached_cumsum(seq, initial_zero=False):
-    """Compute :meth:`np.cumsum` with caching.
+    """Compute :meth:`toolz.accumulate` with caching.
 
     Caching is by the identify of `seq` rather than the value. It is thus
     important that `seq` is a tuple of immutable objects, and this function
-    is intended for use where `seq` is a value that will persist.
-
-    The result has type int64 if the sequence contains integers, and
-    otherwise the type of ``np.array(seq)``.
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
 
     Parameters
     ----------
@@ -1226,15 +1225,16 @@ def cached_cumsum(seq, initial_zero=False):
         Values to cumulatively sum.
     initial_zero : bool, optional
         If true, the return value is prefixed with a zero.
+
+    Returns
+    -------
+    tuple
     """
     if isinstance(seq, tuple):
         # Look up by identity first, to avoid a linear-time __hash__
         # if we've seen this tuple object before.
-        result = _cumsum(_HashIdWrapper(seq))
+        result = _cumsum(_HashIdWrapper(seq), initial_zero)
     else:
         # Construct a temporary tuple, and look up by value.
-        result = _cumsum(tuple(seq))
-
-    if not initial_zero:
-        result = result[1:]
+        result = _cumsum(tuple(seq), initial_zero)
     return result

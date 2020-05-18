@@ -37,6 +37,16 @@ single workstations.  It contains many diagnostics and features not found in
 the older single-machine scheduler.  The following pages explain in more detail
 how to set up Dask on a variety of local and distributed hardware.
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/TQM9zIBzNBo"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 - Single Machine:
     - :doc:`Default Scheduler <setup/single-machine>`: The no-setup default.
       Uses local threads or processes for larger-than-memory processing
@@ -85,3 +95,4 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/adaptive.rst
    setup/docker.rst
    setup/custom-startup.rst
+   setup/prometheus.rst

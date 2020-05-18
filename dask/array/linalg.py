@@ -1,16 +1,13 @@
-from __future__ import absolute_import, division, print_function
-
 import operator
 from numbers import Number
 
 import numpy as np
-import toolz
+import tlz as toolz
 
 from ..base import tokenize, wait
 from ..blockwise import blockwise
-from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from
+from ..utils import derived_from, apply
 from .core import dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
@@ -99,9 +96,12 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
     See Also
     --------
-    dask.array.linalg.qr - Powered by this algorithm
-    dask.array.linalg.svd - Powered by this algorithm
-    dask.array.linalg.sfqr - Variant for short-and-fat arrays
+    dask.array.linalg.qr
+        Powered by this algorithm
+    dask.array.linalg.svd
+        Powered by this algorithm
+    dask.array.linalg.sfqr
+        Variant for short-and-fat arrays
     """
     nr, nc = len(data.chunks[0]), len(data.chunks[1])
     cr_max, cc = max(data.chunks[0]), data.chunks[1][0]
@@ -221,7 +221,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             graph,
             name_r_stacked,
             shape=(sum(vchunks_rstacked), n),
-            chunks=(vchunks_rstacked, (n)),
+            chunks=(vchunks_rstacked, n),
             meta=r_stacked_meta,
         )
 
@@ -327,12 +327,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             # cumulative sums (start, end)
             name_q2cs = "cumsum" + token + "-q2"
             dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
-            dsk_q2_cumsum.update(
-                {
-                    (name_q2cs, i): (_cumsum_part, (name_q2cs, i - 1), (name_q2bs, i))
-                    for i in range(1, numblocks[0])
-                }
-            )
+
+            for i in range(1, numblocks[0]):
+                dsk_q2_cumsum[(name_q2cs, i)] = (
+                    _cumsum_part,
+                    (name_q2cs, i - 1),
+                    (name_q2bs, i),
+                )
 
             # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
             name_blockslice = "slice" + token + "-q"
@@ -522,8 +523,10 @@ def sfqr(data, name=None):
 
     See Also
     --------
-    dask.array.linalg.qr - Main user API that uses this function
-    dask.array.linalg.tsqr - Variant for tall-and-skinny case
+    dask.array.linalg.qr
+        Main user API that uses this function
+    dask.array.linalg.tsqr
+        Variant for tall-and-skinny case
     """
     nr, nc = len(data.chunks[0]), len(data.chunks[1])
     cr, cc = data.chunks[0][0], data.chunks[1][0]
@@ -597,7 +600,7 @@ def sfqr(data, name=None):
             graph,
             name_A_rest,
             shape=(min(m, n), n - cc),
-            chunks=((cr), data.chunks[1][1:]),
+            chunks=(cr, data.chunks[1][1:]),
             meta=A_rest_meta,
         )
         Rs.append(Q.T.dot(A_rest))
@@ -745,21 +748,22 @@ def qr(a):
     """
     Compute the qr factorization of a matrix.
 
-    Examples
-    --------
-
-    >>> q, r = da.linalg.qr(x)  # doctest: +SKIP
+    Parameters
+    ----------
+    a : Array
 
     Returns
     -------
-
     q:  Array, orthonormal
     r:  Array, upper-triangular
 
+    Examples
+    --------
+    >>> q, r = da.linalg.qr(x)  # doctest: +SKIP
+
     See Also
     --------
-
-    np.linalg.qr: Equivalent NumPy Operation
+    numpy.linalg.qr: Equivalent NumPy Operation
     dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """

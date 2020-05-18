@@ -1,10 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 from operator import getitem
 from itertools import product
 from numbers import Integral
-from toolz import merge, pipe, concat, partial
-from toolz.curried import map
+from tlz import merge, pipe, concat, partial
+from tlz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
@@ -159,8 +157,8 @@ def overlap_internal(x, axes):
         if len(bds) == 1:
             chunks.append(bds)
         else:
-            left = [bds[0] + left_depth]
-            right = [bds[-1] + right_depth]
+            left = [bds[0] + right_depth]
+            right = [bds[-1] + left_depth]
             mid = []
             for bd in bds[1:-1]:
                 mid.append(bd + left_depth + right_depth)
@@ -616,7 +614,7 @@ def coerce_depth(ndim, depth):
     if isinstance(depth, dict):
         for i in range(ndim):
             if i not in depth:
-                depth.update({i: 0})
+                depth[i] = 0
     return depth
 
 
@@ -631,5 +629,5 @@ def coerce_boundary(ndim, boundary):
     if isinstance(boundary, dict):
         for i in range(ndim):
             if i not in boundary:
-                boundary.update({i: default})
+                boundary[i] = default
     return boundary

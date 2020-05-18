@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pytest
 from numpy.testing import assert_equal
 import dask.array as da
@@ -117,7 +115,9 @@ def test_apply_gufunc_01():
         return np.mean(x, axis=-1), np.std(x, axis=-1)
 
     a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
-    mean, std = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,))
+    result = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,))
+    mean, std = result
+    assert isinstance(result, tuple)
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
 
@@ -166,9 +166,6 @@ def test_apply_gufunc_pass_additional_kwargs():
     assert_eq(ret, np.array(1.0, dtype="f"))
 
 
-@pytest.mark.xfail(
-    reason="Currently np.einsum doesn't seem to broadcast correctly for this case"
-)
 def test_apply_gufunc_02():
     def outer_product(x, y):
         return np.einsum("...i,...j->...ij", x, y)

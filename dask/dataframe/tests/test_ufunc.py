@@ -1,16 +1,12 @@
-from __future__ import absolute_import, division, print_function
-
 import pytest
 
 pd = pytest.importorskip("pandas")
-import pandas.util.testing as tm
 
 import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
-from dask.array.numpy_compat import _numpy_117
 
 
 _BASE_UFUNCS = [
@@ -155,8 +151,7 @@ def test_ufunc(pandas_input, ufunc):
         pytest.param("imag", marks=pytest.mark.filterwarnings("ignore::FutureWarning")),
         "angle",
         "fix",
-        # Possible NumPy / pandas bug: https://github.com/numpy/numpy/issues/13894
-        pytest.param("i0", marks=pytest.mark.xfail(_numpy_117, reason="NumPy-13894")),
+        "i0",
         "sinc",
         "nan_to_num",
     ],
@@ -187,10 +182,10 @@ def test_ufunc_array_wrap(ufunc):
     assert_eq(dafunc(ds), pd.Series(npfunc(s), index=s.index))
 
     assert isinstance(npfunc(ds), np.ndarray)
-    tm.assert_numpy_array_equal(npfunc(ds), npfunc(s))
+    np.testing.assert_equal(npfunc(ds), npfunc(s))
 
     assert isinstance(dafunc(s), np.ndarray)
-    tm.assert_numpy_array_equal(dafunc(s), npfunc(s))
+    np.testing.assert_array_equal(dafunc(s), npfunc(s))
 
     df = pd.DataFrame(
         {
@@ -209,10 +204,10 @@ def test_ufunc_array_wrap(ufunc):
     assert_eq(dafunc(ddf), exp)
 
     assert isinstance(npfunc(ddf), np.ndarray)
-    tm.assert_numpy_array_equal(npfunc(ddf), npfunc(df))
+    np.testing.assert_array_equal(npfunc(ddf), npfunc(df))
 
     assert isinstance(dafunc(df), np.ndarray)
-    tm.assert_numpy_array_equal(dafunc(df), npfunc(df))
+    np.testing.assert_array_equal(dafunc(df), npfunc(df))
 
 
 _UFUNCS_2ARG = [
@@ -457,7 +452,7 @@ def test_2args_with_array(ufunc, pandas, darray):
     assert isinstance(dafunc(dask, darray), dask_type)
     assert isinstance(dafunc(darray, dask), dask_type)
 
-    tm.assert_numpy_array_equal(
+    np.testing.assert_array_equal(
         dafunc(dask, darray).compute().values, npfunc(pandas.values, darray).compute()
     )
 
@@ -465,10 +460,10 @@ def test_2args_with_array(ufunc, pandas, darray):
     assert isinstance(npfunc(dask, darray), dask_type)
     assert isinstance(npfunc(darray, dask), dask_type)
 
-    tm.assert_numpy_array_equal(
+    np.testing.assert_array_equal(
         npfunc(dask, darray).compute().values, npfunc(pandas.values, darray.compute())
     )
-    tm.assert_numpy_array_equal(
+    np.testing.assert_array_equal(
         npfunc(darray, dask).compute().values, npfunc(darray.compute(), pandas.values)
     )
 

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import io
 import pandas as pd
 from dask.bytes import open_files, read_bytes
@@ -17,6 +15,7 @@ def to_json(
     encoding="utf-8",
     errors="strict",
     compression=None,
+    compute_kwargs=None,
     **kwargs
 ):
     """Write dataframe into JSON text files
@@ -48,6 +47,8 @@ def to_json(
     compute: bool
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
     encoding, errors:
         Text conversion, ``see str.encode()``
     compression : string or None
@@ -76,7 +77,9 @@ def to_json(
         for outfile, d in zip(outfiles, df.to_delayed())
     ]
     if compute:
-        dask.compute(parts)
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+        dask.compute(parts, **compute_kwargs)
         return [f.path for f in outfiles]
     else:
         return parts
@@ -134,7 +137,7 @@ def read_json(
         newline character.
     sample: int
         Number of bytes to pre-load, to provide an empty dataframe structure
-        to any blocks wihout data. Only relevant is using blocksize.
+        to any blocks without data. Only relevant is using blocksize.
     encoding, errors:
         Text conversion, ``see bytes.decode()``
     compression : string or None

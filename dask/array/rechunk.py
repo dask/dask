@@ -5,17 +5,16 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
-from __future__ import absolute_import, division, print_function
-
 import math
 import heapq
+from functools import reduce
 
 from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
 
 import numpy as np
-import toolz
-from toolz import accumulate, reduce
+import tlz as toolz
+from tlz import accumulate
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -142,7 +141,10 @@ def _old_to_new(old_chunks, new_chunks):
     if not sums == sums2:
         raise ValueError("Cannot change dimensions from %r to %r" % (sums, sums2))
     if not n_missing == n_missing2:
-        raise ValueError("Chunks must be unchanging along unknown dimensions")
+        raise ValueError(
+            "Chunks must be unchanging along unknown dimensions.\n\n"
+            "A possible solution:\n  x.compute_chunk_sizes()"
+        )
 
     old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
     for idx, missing in enumerate(n_missing):
@@ -180,7 +182,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks, threshold=None, block_size_limit=None):
+def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -188,13 +190,14 @@ def rechunk(x, chunks, threshold=None, block_size_limit=None):
     ----------
     x: dask array
         Array to be rechunked.
-    chunks:  int, tuple or dict
+    chunks:  int, tuple, dict or str, optional
         The new block dimensions to create. -1 indicates the full size of the
-        corresponding dimension.
-    threshold: int
+        corresponding dimension. Default is "auto" which automatically
+        determines chunk sizes.
+    threshold: int, optional
         The graph growth factor under which we don't bother introducing an
         intermediate step.
-    block_size_limit: int
+    block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
 
@@ -262,7 +265,11 @@ def estimate_graph_size(old_chunks, new_chunks):
     # Estimate the number of intermediate blocks that will be produced
     # (we don't use intersect_chunks() which is much more expensive)
     crossed_size = reduce(
-        mul, (len(oc) + len(nc) for oc, nc in zip(old_chunks, new_chunks))
+        mul,
+        (
+            (len(oc) + len(nc) - 1 if oc != nc else len(oc))
+            for oc, nc in zip(old_chunks, new_chunks)
+        ),
     )
     return crossed_size
 
@@ -509,7 +516,8 @@ def plan_rechunk(
         )
         if (chunks == current_chunks and not first_pass) or chunks == new_chunks:
             break
-        steps.append(chunks)
+        if chunks != current_chunks:
+            steps.append(chunks)
         current_chunks = chunks
         if not memory_limit_hit:
             break
