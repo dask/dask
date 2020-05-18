@@ -126,12 +126,13 @@ def test_task_from_spec():
 
     dsk = Task.from_spec(
         {
+            "a": 0.1,
             "w": N(inc, 1),
             "x": (
                 apply,
                 inc,
                 [1],
-                (dict, [["extra", (apply, inc, [1], (dict, [["extra", 0.1]]))]]),
+                (dict, [["extra", (apply, inc, [1], (dict, [["extra", "a"]]))]]),
             ),
             "y": [(inc, 5), (inc, (inc, 2))],
             "z": (inc, (inc, (inc, Task(inc, [1])))),
@@ -141,7 +142,7 @@ def test_task_from_spec():
     # namedtuples passed through
     assert dsk["w"] == N(inc, 1)
     # nested applies
-    extra_dict = Task(dict, [[["extra", 0.1]]])
+    extra_dict = Task(dict, [[["extra", "a"]]])
     kw_inc = Task(inc, [1], extra_dict)
     extra_dict = Task(dict, [[["extra", kw_inc]]])
     assert dsk["x"] == Task(inc, [1], extra_dict)
