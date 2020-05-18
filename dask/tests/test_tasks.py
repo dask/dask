@@ -209,10 +209,10 @@ def test_task_to_spec():
 
 
 def test_task_to_tuple():
-    tuple_task = (apply, inc, [1], (dict, [["extra", 0.1]]))
+    tuple_task = (apply, inc, [1], {'extra': 0.1})
     task = Task.from_spec(tuple_task)
-    assert task == Task(inc, [1], Task(dict, [[["extra", 0.1]]]))
-    assert task.to_tuple() == tuple_task
+    assert task == Task(inc, [1], {'extra': 0.1})
+    assert task.to_tuple() == (apply, inc, [1], (dict, [['extra', 0.1]]))
 
 
 def test_task_can_fuse():

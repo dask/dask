@@ -160,6 +160,8 @@ class Task:
             if len(kw) == 0:
                 return (fn,) + tuple(ts(dsk.args))
             else:
+                if type(kw) is dict:
+                    kw = (dict, [[k, v] for k, v in kw.items()])
                 return (apply, fn, ts(dsk.args), kw)
         elif typ is list:
             return [ts(e) for e in dsk]
