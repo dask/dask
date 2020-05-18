@@ -66,7 +66,7 @@ class Task:
         by converting task tuples into Task objects
 
         """
-        ft = Task.from_spec
+        fs = Task.from_spec
 
         # TODO(sjperkins)
         # Figure out how to make these imports work globally
@@ -84,30 +84,30 @@ class Task:
                     return Task(dsk[1])
                 elif len(dsk) == 3:
                     # (apply, function, args)
-                    return Task(dsk[1], ft(dsk[2]))
+                    return Task(dsk[1], fs(dsk[2]))
                 elif len(dsk) == 4:
                     # (apply, function, args, kwargs)
-                    return Task(dsk[1], ft(dsk[2]), ft(dsk[3]))
+                    return Task(dsk[1], fs(dsk[2]), fs(dsk[3]))
 
                 raise ValueError("Invalid apply dsk %s" % dsk)
 
             # task of the form (function, arg1, arg2, ..., argn)
             elif callable(dsk[0]):
-                return Task(dsk[0], list(ft(a) for a in dsk[1:]))
+                return Task(dsk[0], list(fs(a) for a in dsk[1:]))
             # namedtuple
             elif getattr(dsk, "_fields", None) is not None:
-                return dsk._make((ft(a) for a in dsk))
+                return dsk._make((fs(a) for a in dsk))
             # key is implied by a standard tuple
             else:
                 return dsk
         elif isinstance(dsk, list):
-            return [ft(t) for t in dsk]
+            return [fs(t) for t in dsk]
         elif isinstance(dsk, dict):
-            return {k: ft(v) for k, v in dsk.items()}
+            return {k: fs(v) for k, v in dsk.items()}
         elif isinstance(dsk, HighLevelGraph):
             # TODO(sjperkins)
             # Properly handle HLG complexity
-            return {k: ft(v) for k, v in dsk.items()}
+            return {k: fs(v) for k, v in dsk.items()}
         else:
             # Key or literal
             return dsk
