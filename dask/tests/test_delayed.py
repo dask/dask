@@ -198,7 +198,7 @@ def test_delayed_optimize():
     x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
     (x2,) = dask.optimize(x)
     # Delayed's __dask_optimize__ culls out 'c'
-    assert sorted(x2.dask.keys()) == ["a", "b"]
+    assert sorted(x2.dask.keys()) == ["a-b", "b"]
 
 
 def test_lists():

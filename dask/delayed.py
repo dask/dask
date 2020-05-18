@@ -13,7 +13,7 @@ from .compatibility import is_dataclass, dataclass_fields
 
 from .core import quote
 from .context import globalmethod
-from .optimization import cull
+from .optimization import cull, fuse
 from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
 from .highlevelgraph import HighLevelGraph
 
@@ -456,8 +456,9 @@ def right(method):
 
 def optimize(dsk, keys, **kwargs):
     dsk = ensure_dict(dsk)
-    dsk2, _ = cull(dsk, keys)
-    return dsk2
+    dsk, deps = cull(dsk, keys)
+    dsk, _ = fuse(dsk, keys, dependencies=deps)
+    return dsk
 
 
 def rebuild(dsk, key, length):
