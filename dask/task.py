@@ -77,7 +77,7 @@ class Task:
 
         if typ is tuple:
             # Tuples are either tasks, or keys
-            if dsk == ():
+            if len(dsk) == 0:
                 return dsk
             # task of the form (apply, function [, args [, kwargs]])
             elif dsk[0] is apply:
