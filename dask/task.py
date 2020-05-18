@@ -1,3 +1,6 @@
+import functools
+import types
+
 class EmptyDict(dict):
     def __init__(self):
         pass
@@ -10,6 +13,21 @@ class EmptyDict(dict):
 
 
 EMPTY_DICT = EmptyDict()
+
+
+def annotate(fn, annotation=None):
+    """Based on http://stackoverflow.com/a/6528148/190597 (Glenn Maynard)"""
+
+    if not annotation:
+        return fn
+
+    g = types.FunctionType(fn.__code__, fn.__globals__, name=fn.__name__,
+                           argdefs=fn.__defaults__, closure=fn.__closure__)
+    g = functools.update_wrapper(g, fn)
+    g.__kwdefaults__ = fn.__kwdefaults__
+    g._dask_annotation = annotation
+
+    return g
 
 
 class Task:
@@ -66,13 +84,12 @@ class Task:
         by converting task tuples into Task objects
 
         """
-        fs = Task.from_spec
-
         # TODO(sjperkins)
         # Figure out how to make these imports work globally
         from .utils import apply
         from .highlevelgraph import HighLevelGraph
 
+        fs = Task.from_spec
         typ = type(dsk)
 
         if typ is tuple:
@@ -81,21 +98,27 @@ class Task:
                 return dsk
             # task of the form (apply, function [, args [, kwargs]])
             elif dsk[0] is apply:
+                annot = getattr(dsk[1], "_dask_annotation", None)
+
                 if len(dsk) == 2:
                     # (apply, function)
-                    return Task(dsk[1])
+                    return Task(dsk[1], annotations=annot)
                 elif len(dsk) == 3:
                     # (apply, function, args)
-                    return Task(dsk[1], fs(dsk[2]))
+                    return Task(dsk[1], fs(dsk[2]), annotations=annot)
                 elif len(dsk) == 4:
                     # (apply, function, args, kwargs)
-                    return Task(dsk[1], fs(dsk[2]), fs(dsk[3]))
+                    return Task(dsk[1], fs(dsk[2]), fs(dsk[3]),
+                                annotations=annot)
 
                 raise ValueError("Invalid apply dsk %s" % dsk)
 
             # task of the form (function, arg1, arg2, ..., argn)
             elif callable(dsk[0]):
-                return Task(dsk[0], list(fs(a) for a in dsk[1:]))
+                return Task(dsk[0], list(fs(a) for a in dsk[1:]),
+                            annotations=getattr(dsk[0],
+                                                "_dask_annotation",
+                                                None))
             # key is implied by a standard tuple
             else:
                 return dsk
@@ -110,6 +133,36 @@ class Task:
         else:
             # Key or literal
             return dsk
+
+    @classmethod
+    def to_spec(cls, dsk):
+        # TODO(sjperkins)
+        # Figure out how to make these imports work globally
+        from .utils import apply
+        from .highlevelgraph import HighLevelGraph
+
+        typ = type(dsk)
+        ts = Task.to_spec
+
+        if typ is Task:
+            fn = annotate(dsk.function, dsk.annotations)
+
+            if len(dsk.kwargs) == 0:
+                return (fn,) + tuple(ts(dsk.args))
+            else:
+                kw = (dict, [[k, ts(v)] for k, v in dsk.kwargs.items()])
+                return (apply, fn, ts(dsk.args), kw)
+        elif typ is list:
+            return [ts(e) for e in dsk]
+        elif typ is dict:
+            return {k: ts(v) for k, v in dsk.items()}
+        elif typ is HighLevelGraph:
+            # TODO(sjperkins)
+            # Properly handle HLG complexity
+            return {k: fs(v) for k, v in dsk.items()}
+        else:
+            return dsk
+
 
     def dependencies(self):
         return (self.args if isinstance(self.args, list) else [self.args]) + (

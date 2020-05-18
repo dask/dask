@@ -3,9 +3,9 @@ import pickle
 
 import pytest
 
-from dask.core import Task, get
+from dask.core import get
 
-from dask.task import EmptyDict
+from dask.task import EmptyDict, Task, annotate
 from dask.utils import apply
 
 
@@ -53,12 +53,6 @@ def test_task_from_call():
     assert task.kwargs == {}
     assert task.annotations == {}
 
-    task = Task.from_call(inc, 1, extra=0.1)
-    assert task.function is inc
-    assert task.args == [1]
-    assert task.kwargs == {"extra": 0.1}
-    assert task.annotations == {}
-
     task = Task.from_call(inc, 1, extra=0.1, annotations={"a": 1})
     assert task.function is inc
     assert task.args == [1]
@@ -97,6 +91,14 @@ def test_task_from_spec():
     assert task.args == [1]
     assert task.kwargs == {}
     assert task.annotations == {}
+
+    # Simple task tuple with annotation
+    annot_inc = annotate(inc, {"b": 1})
+    task = Task.from_spec((annot_inc, 1))
+    assert task.function is annot_inc
+    assert task.args == [1]
+    assert task.kwargs == {}
+    assert task.annotations == {"b": 1}
 
     # Apply args only case
     task = Task.from_spec((apply, inc, [1]))
@@ -156,6 +158,23 @@ def test_task_from_spec():
     task = Task.from_call(inc, task)
     assert dsk["z"] == task
     assert get(dsk, "z") == inc(inc(inc(inc(1))))
+
+
+def test_task_to_spec():
+    from dask.core import get
+
+    binc = annotate(inc, {"b": 1})
+    cinc = annotate(inc, {"c": 1})
+    dsk = {"a": 0.1, "out": (binc, (apply, cinc, [1], {"extra": "a"}))}
+    dsk2 = Task.from_spec(dsk)
+    dsk3 = Task.to_spec(dsk2)
+
+    assert dsk2["out"].annotations == {"b": 1}
+    assert dsk2["out"].args[0].annotations == {"c": 1}
+    # (annot_inc, (apply, annot_inc, [1], (dict, [['extra', 'a']])))
+    assert dsk3["out"][0]._dask_annotation == {"b": 1}
+    assert dsk3["out"][1][1]._dask_annotation == {"c": 1}
+    assert get(dsk3, "out") == get(dsk2, "out")
 
 
 def test_task_can_fuse():
