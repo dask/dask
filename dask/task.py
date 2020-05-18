@@ -1,6 +1,7 @@
 import functools
 import types
 
+
 class EmptyDict(dict):
     def __init__(self):
         pass
@@ -21,8 +22,13 @@ def annotate(fn, annotation=None):
     if not annotation:
         return fn
 
-    g = types.FunctionType(fn.__code__, fn.__globals__, name=fn.__name__,
-                           argdefs=fn.__defaults__, closure=fn.__closure__)
+    g = types.FunctionType(
+        fn.__code__,
+        fn.__globals__,
+        name=fn.__name__,
+        argdefs=fn.__defaults__,
+        closure=fn.__closure__,
+    )
     g = functools.update_wrapper(g, fn)
     g.__kwdefaults__ = fn.__kwdefaults__
     g._dask_annotation = annotation
@@ -108,17 +114,17 @@ class Task:
                     return Task(dsk[1], fs(dsk[2]), annotations=annot)
                 elif len(dsk) == 4:
                     # (apply, function, args, kwargs)
-                    return Task(dsk[1], fs(dsk[2]), fs(dsk[3]),
-                                annotations=annot)
+                    return Task(dsk[1], fs(dsk[2]), fs(dsk[3]), annotations=annot)
 
                 raise ValueError("Invalid apply dsk %s" % dsk)
 
             # task of the form (function, arg1, arg2, ..., argn)
             elif callable(dsk[0]):
-                return Task(dsk[0], list(fs(a) for a in dsk[1:]),
-                            annotations=getattr(dsk[0],
-                                                "_dask_annotation",
-                                                None))
+                return Task(
+                    dsk[0],
+                    list(fs(a) for a in dsk[1:]),
+                    annotations=getattr(dsk[0], "_dask_annotation", None),
+                )
             # key is implied by a standard tuple
             else:
                 return dsk
@@ -159,10 +165,9 @@ class Task:
         elif typ is HighLevelGraph:
             # TODO(sjperkins)
             # Properly handle HLG complexity
-            return {k: fs(v) for k, v in dsk.items()}
+            return {k: ts(v) for k, v in dsk.items()}
         else:
             return dsk
-
 
     def dependencies(self):
         return (self.args if isinstance(self.args, list) else [self.args]) + (
