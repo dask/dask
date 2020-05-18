@@ -775,11 +775,11 @@ def set_index_post_series(df, index_name, drop, column_dtype):
 
 
 def drop_overlap(df, index):
-    return df.drop(index) if df.index.contains(index) else df
+    return df.drop(index) if index in df.index else df
 
 
 def get_overlap(df, index):
-    return df.loc[[index]] if df.index.contains(index) else None
+    return df.loc[[index]] if index in df.index else None
 
 
 def fix_overlap(ddf, overlap):
