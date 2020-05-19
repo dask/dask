@@ -525,7 +525,9 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         if attr == 'visualise':
             # added to warn users incase of spelling error 
             # for more details: https://github.com/dask/dask/issues/5721
-            raise AttributeError("Attribute visualise not found. Perhaps you meant visualize?")
+            warnings.warn(
+                "dask.delayed objects have no `visualise` method, perhaps you meant `visualize`?"
+            )
 
         return DelayedAttr(self, attr)
 
