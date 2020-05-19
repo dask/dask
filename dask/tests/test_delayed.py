@@ -171,7 +171,7 @@ def test_np_dtype_of_delayed():
         np.dtype(x)
     assert delayed(np.array([1], dtype="f8")).dtype.compute() == np.dtype("f8")
 
-def test_delayed_visualise_error():
+def test_delayed_visualise_warn():
     # Raise a warning when user calls visualise() 
     # instead of visualize()
     def inc(x):
@@ -180,11 +180,11 @@ def test_delayed_visualise_error():
     z = dask.delayed(inc)(1)
     z.compute()
 
-    with pytest.raises(AttributeError):
+    with pytest.warns(UserWarning, match='dask.delayed objects have no `visualise` method'):
         z.visualise(file_name="desk_graph.svg")
 
     # with no args 
-    with pytest.raises(AttributeError):
+    with pytest.warns(UserWarning, match='dask.delayed objects have no `visualise` method'):
         z.visualise()
         
 def test_delayed_errors():
