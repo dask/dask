@@ -521,6 +521,12 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __getattr__(self, attr):
         if attr.startswith("_"):
             raise AttributeError("Attribute {0} not found".format(attr))
+
+        if attr == 'visualise':
+            # added to warn users incase of spelling error 
+            # for more details: https://github.com/dask/dask/issues/5721
+            raise AttributeError("Attribute visualise not found. Perhaps you meant visualize?")
+
         return DelayedAttr(self, attr)
 
     def __setattr__(self, attr, val):
