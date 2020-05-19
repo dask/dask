@@ -46,6 +46,31 @@ def annotate(fn, annotation=None):
 
 
 class Task:
+    """
+    Task object
+
+    .. code-block:: python
+
+        def fn(a, b, extra=0.1)
+            return a + b + extra
+
+        task = Task(fn, [1, 2], {'extra': 0.1}, {'priority': 100})
+        assert task.function(*task.args, **task.kwargs) == 3.1
+
+    Parameters
+    ----------
+    function : callable
+        Function executed by the task.
+    args : list or object
+        Arguments supplied to the function upon execution of the task.
+    kwargs : dict or object
+        Keyword arguments supplied to the function upon execution of the task.
+    annotations : dict
+        Metadata associated with the task. Used for specifying additional
+        information about the task to the dask schedulers,
+        or scheduler plugins.
+    """
+
     __slots__ = ("function", "args", "kwargs", "annotations")
 
     def __init__(self, function, args=None, kwargs=None, annotations=None):
