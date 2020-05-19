@@ -22,6 +22,7 @@ from ...base import tokenize
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
 from ..core import new_dd_object
+from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes, ensure_dict
 from ..utils import clear_known_categories
@@ -36,7 +37,8 @@ class CSVSubgraph(Mapping):
         self,
         name,
         reader,
-        block_lists,
+        blocks,
+        is_first,
         header,
         kwargs,
         dtypes,
@@ -47,7 +49,8 @@ class CSVSubgraph(Mapping):
     ):
         self.name = name
         self.reader = reader
-        self.block_lists = block_lists
+        self.blocks = blocks
+        self.is_first = is_first
         self.header = header
         self.kwargs = kwargs
         self.dtypes = dtypes
@@ -66,12 +69,10 @@ class CSVSubgraph(Mapping):
         if name != self.name:
             raise KeyError(key)
 
-        if i < 0 or i >= len(self.block_lists):
+        if i < 0 or i >= len(self.blocks):
             raise KeyError(key)
 
-        blocks = self.block_lists[i]
-        if not isinstance(blocks, list):
-            blocks = [blocks]
+        block = self.blocks[i]
 
         if self.paths is not None:
             path_info = (self.colname, self.paths[i], self.paths)
@@ -80,14 +81,14 @@ class CSVSubgraph(Mapping):
 
         header = True
         rest_kwargs = self.kwargs.copy()
-        if i != 0:
+        if not self.is_first[i]:
             header = False
             rest_kwargs.pop("skiprows", None)
 
         # or self.delayed_pandas_read_text
-        return pandas_read_text(
+        return self.delayed_pandas_read_text(
             self.reader,
-            blocks[i].compute(),  # this is clearly not correct
+            block,
             self.header,
             self.kwargs,
             self.dtypes,
@@ -98,7 +99,7 @@ class CSVSubgraph(Mapping):
         )
 
     def __len__(self):
-        return len(self.block_lists)
+        return len(self.blocks)
 
     def __iter__(self):
         for i in range(len(self)):
@@ -321,8 +322,16 @@ def text_blocks_to_pandas(
 
     columns = list(head.columns)
 
+    blocks = tuple(flatten(block_lists))
+    # Create mask of first blocks from nested block_lists
+    for sublist in block_lists:
+        sublist[0] = True
+        if len(sublist) > 1:
+            sublist[1:] = [False,] * len(sublist[1:])
+    is_first = tuple(flatten(block_lists))
+
     name = "read-csv-" + tokenize(
-        reader, block_lists, header, kwargs, dtypes, columns, collection, path,
+        reader, blocks, header, kwargs, dtypes, columns, collection, path,
     )
 
     #    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
@@ -380,7 +389,8 @@ def text_blocks_to_pandas(
     subgraph = CSVSubgraph(
         name,
         reader,
-        block_lists,
+        blocks,
+        is_first,
         head,
         kwargs,
         dtypes,
