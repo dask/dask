@@ -21,7 +21,7 @@ from ...base import tokenize
 
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
-from ..core import new_dd_object
+from ..core import new_dd_object, DataFrame
 from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes, ensure_dict
@@ -79,23 +79,24 @@ class CSVSubgraph(Mapping):
         else:
             path_info = None
 
-        header = True
+        write_header = False
         rest_kwargs = self.kwargs.copy()
         if not self.is_first[i]:
-            header = False
+            write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        # or self.delayed_pandas_read_text
-        return self.delayed_pandas_read_text(
-            self.reader,
-            block,
-            self.header,
-            self.kwargs,
-            self.dtypes,
-            self.columns,
-            write_header=False,
-            enforce=self.enforce,
-            path=path_info,
+        return from_delayed(
+            self.delayed_pandas_read_text(
+                self.reader,
+                block,
+                self.header,
+                rest_kwargs,
+                self.dtypes,
+                self.columns,
+                write_header=write_header,
+                enforce=self.enforce,
+                path=path_info,
+            )
         )
 
     def __len__(self):
@@ -333,46 +334,6 @@ def text_blocks_to_pandas(
     name = "read-csv-" + tokenize(
         reader, blocks, header, kwargs, dtypes, columns, collection, path,
     )
-
-    #    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
-    #    dfs = []
-    #    colname, paths = path or (None, None)
-    #
-    #    for i, blocks in enumerate(block_lists):
-    #        if not blocks:
-    #            continue
-    #        if path:
-    #            path_info = (colname, paths[i], paths)
-    #        else:
-    #            path_info = None
-    #        df = delayed_pandas_read_text(
-    #            reader,
-    #            blocks[0],
-    #            header,
-    #            kwargs,
-    #            dtypes,
-    #            columns,
-    #            write_header=False,
-    #            enforce=enforce,
-    #            path=path_info,
-    #        )
-    #
-    #        dfs.append(df)
-    #        rest_kwargs = kwargs.copy()
-    #        rest_kwargs.pop("skiprows", None)
-    #        for b in blocks[1:]:
-    #            dfs.append(
-    #                delayed_pandas_read_text(
-    #                    reader,
-    #                    b,
-    #                    header,
-    #                    rest_kwargs,
-    #                    dtypes,
-    #                    columns,
-    #                    enforce=enforce,
-    #                    path=path_info,
-    #                )
-    #            )
 
     if collection:
         if path:
