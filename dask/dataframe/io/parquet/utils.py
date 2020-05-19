@@ -4,8 +4,9 @@ import re
 class Engine:
     """ The API necessary to provide a new Parquet reader/writer """
 
-    @staticmethod
+    @classmethod
     def read_metadata(
+        cls,
         fs,
         paths,
         categories=None,
@@ -66,8 +67,8 @@ class Engine:
         """
         raise NotImplementedError()
 
-    @staticmethod
-    def read_partition(fs, piece, columns, index, **kwargs):
+    @classmethod
+    def read_partition(cls, fs, piece, columns, index, **kwargs):
         """ Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -93,8 +94,9 @@ class Engine:
         """
         raise NotImplementedError()
 
-    @staticmethod
+    @classmethod
     def initialize_write(
+        cls,
         df,
         fs,
         path,
@@ -134,9 +136,9 @@ class Engine:
         """
         raise NotImplementedError
 
-    @staticmethod
+    @classmethod
     def write_partition(
-        df, path, fs, filename, partition_on, return_metadata, **kwargs
+        cls, df, path, fs, filename, partition_on, return_metadata, **kwargs
     ):
         """
         Output a partition of a dask.DataFrame. This will correspond to
@@ -167,8 +169,8 @@ class Engine:
         """
         raise NotImplementedError
 
-    @staticmethod
-    def write_metadata(parts, meta, fs, path, append=False, **kwargs):
+    @classmethod
+    def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
         """
         Write the shared metadata file for a parquet dataset.
 
