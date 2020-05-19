@@ -814,7 +814,7 @@ def compute_divisions(df, **kwargs):
     df.divisions = tuple(mins) + (list(maxes)[-1],)
 
     overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
-    return fix_overlap(df, overlap) if overlap else df
+    return fix_overlap(df, overlap).divisions if overlap else df.divisions
 
 
 def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
