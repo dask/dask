@@ -1,9 +1,10 @@
+import asyncio
 import pickle
 import dask
 import pytest
 from dask.distributed import Client
-from time import sleep
-from distributed import Semaphore
+from time import time, sleep
+from distributed import Semaphore, fire_and_forget
 from distributed.comm import Comm
 from distributed.core import ConnectionPool
 from distributed.metrics import time
@@ -205,10 +206,26 @@ async def test_close_async(c, s, a, b):
     ):
         await sem.acquire()
 
+    sem2 = await Semaphore(name="t2", max_leases=1)
+    assert await sem2.acquire()
+
+    def f(sem_):
+        return sem_.acquire()
+
     semaphore_object = s.extensions["semaphores"]
+    fire_and_forget(c.submit(f, sem_=sem2))
+    while not semaphore_object.metrics["pending"]["t2"]:  # Wait for the pending lease
+        await asyncio.sleep(0.01)
+    with pytest.warns(
+        RuntimeWarning, match="Closing semaphore .* but there remain pending leases"
+    ):
+        await sem2.close()
+
     assert not semaphore_object.max_leases
     assert not semaphore_object.leases
     assert not semaphore_object.events
+    for metric_dict in semaphore_object.metrics.values():
+        assert not metric_dict
 
 
 def test_close_sync(client):
@@ -420,7 +437,7 @@ async def test_oversubscribing_leases(c, s, a, b):
     assert await sem.get_value() == 0
 
 
-@gen_cluster(client=True,)
+@gen_cluster(client=True)
 async def test_timeout_zero(c, s, a, b):
     # Depending on the internals a timeout zero cannot work, e.g. when the
     # initial try already includes a wait. Since some test cases use this, it is
@@ -443,3 +460,33 @@ async def test_getvalue(c, s, a, b):
     assert await sem.get_value() == 1
     await sem.release()
     assert await sem.get_value() == 0
+
+
+@gen_cluster(client=True)
+async def test_metrics(c, s, a, b):
+    from collections import defaultdict
+
+    sem = await Semaphore(name="test", max_leases=5)
+
+    before_acquiring = time()
+
+    assert await sem.acquire()
+    assert await sem.acquire()
+
+    expected_average_pending_lease_time = (time() - before_acquiring) / 2
+    epsilon = max(0.1, 0.5 * expected_average_pending_lease_time)
+
+    sem_ext = s.extensions["semaphores"]
+
+    actual = sem_ext.metrics.copy()
+    assert (
+        expected_average_pending_lease_time - epsilon
+        <= actual.pop("average_pending_lease_time")["test"]
+        <= expected_average_pending_lease_time + epsilon
+    )
+    expected = {
+        "acquire_total": defaultdict(int, {"test": 2}),
+        "release_total": defaultdict(int),
+        "pending": defaultdict(int, {"test": 0}),
+    }
+    assert actual == expected

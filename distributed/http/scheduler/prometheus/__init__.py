@@ -1,7 +1,8 @@
 import toolz
 
-from ..utils import RequestHandler
-from ...scheduler import ALL_TASK_STATES
+from distributed.http.utils import RequestHandler
+from distributed.scheduler import ALL_TASK_STATES
+from .semaphore import SemaphoreMetricExtension
 
 
 class _PrometheusCollector:
@@ -68,8 +69,11 @@ class _PrometheusCollector:
         yield tasks
 
 
+COLLECTORS = [_PrometheusCollector, SemaphoreMetricExtension]
+
+
 class PrometheusHandler(RequestHandler):
-    _collector = None
+    _collectors = None
 
     def __init__(self, *args, dask_server=None, **kwargs):
         import prometheus_client
@@ -78,14 +82,19 @@ class PrometheusHandler(RequestHandler):
             *args, dask_server=dask_server, **kwargs
         )
 
-        if PrometheusHandler._collector:
+        if PrometheusHandler._collectors:
             # Especially during testing, multiple schedulers are started
             # sequentially in the same python process
-            PrometheusHandler._collector.server = self.server
+            for _collector in PrometheusHandler._collectors:
+                _collector.server = self.server
             return
 
-        PrometheusHandler._collector = _PrometheusCollector(self.server)
-        prometheus_client.REGISTRY.register(PrometheusHandler._collector)
+        PrometheusHandler._collectors = tuple(
+            collector(self.server) for collector in COLLECTORS
+        )
+        # Register collectors
+        for instantiated_collector in PrometheusHandler._collectors:
+            prometheus_client.REGISTRY.register(instantiated_collector)
 
     def get(self):
         import prometheus_client
@@ -94,6 +103,4 @@ class PrometheusHandler(RequestHandler):
         self.set_header("Content-Type", "text/plain; version=0.0.4")
 
 
-routes = [
-    ("/metrics", PrometheusHandler, {}),
-]
+routes = [("/metrics", PrometheusHandler, {})]
