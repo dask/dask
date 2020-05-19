@@ -583,8 +583,7 @@ def from_delayed(
     if divisions == "sorted":
         from ..shuffle import compute_divisions
 
-        divisions = compute_divisions(df)
-        df.divisions = divisions
+        df = compute_divisions(df)
 
     return df
 
