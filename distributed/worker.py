@@ -1593,7 +1593,7 @@ class Worker(ServerNode):
         self.task_state[key] = state or finish
         if self.validate:
             self.validate_key(key)
-        self._notify_transition(key, start, finish, **kwargs)
+        self._notify_transition(key, start, state or finish, **kwargs)
 
     def transition_waiting_ready(self, key):
         try:

@@ -85,6 +85,22 @@ async def test_failing_task_transitions_called(c, s, w):
         await c.submit(failing, 1, key="task")
 
 
+@gen_cluster(
+    nthreads=[("127.0.0.1", 1)], client=True, worker_kwargs={"resources": {"X": 1}},
+)
+async def test_superseding_task_transitions_called(c, s, w):
+    expected_transitions = [
+        ("task", "waiting", "constrained"),
+        ("task", "constrained", "executing"),
+        ("task", "executing", "memory"),
+    ]
+
+    plugin = MyPlugin(1, expected_transitions=expected_transitions)
+
+    await c.register_worker_plugin(plugin)
+    await c.submit(lambda x: x, 1, key="task", resources={"X": 1})
+
+
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
 async def test_empty_plugin(c, s, w):
     class EmptyPlugin:
