@@ -189,8 +189,8 @@ def test_task_to_spec():
     assert dsk2["out"].annotations == {"b": 1}
     assert dsk2["out"].args[0].annotations == {"c": 1}
     # (annot_inc, (apply, annot_inc, [1], (dict, [['extra', 'a']])))
-    assert dsk3["out"][0]._dask_annotation == {"b": 1}
-    assert dsk3["out"][1][1]._dask_annotation == {"c": 1}
+    assert dsk3["out"][0]._dask_annotations == {"b": 1}
+    assert dsk3["out"][1][1]._dask_annotations == {"c": 1}
     assert get(dsk3, "out") == get(dsk2, "out")
 
     from dask.highlevelgraph import HighLevelGraph
@@ -261,3 +261,24 @@ def test_task_complex():
         deps = get_dependencies(dsk, ("a", i))
         assert deps == {("b", i), "c"}
         assert get_dependencies(dsk2, ("a", i)) == deps
+
+
+def test_annotate_function():
+    from dask.task import annotate
+
+    ainc = annotate(inc, {"a": 1})
+    assert ainc is not inc
+    assert ainc._dask_annotations == {"a": 1}
+    aainc = annotate(ainc, {"b": 1})
+    assert aainc._dask_annotations == {"a": 1, "b": 1}
+    assert aainc is ainc
+
+
+def test_annotate_task():
+    task = Task.from_call(inc, 1)
+    assert len(task.annotations) == 0
+
+    task.annotate({"a": 1})
+    assert task.annotations == {"a": 1}
+    task.annotate({"b": 1})
+    assert task.annotations == {"a": 1, "b": 1}

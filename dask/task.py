@@ -17,11 +17,20 @@ EMPTY_DICT = EmptyDict()
 
 
 def annotate(fn, annotation=None):
-    """Based on http://stackoverflow.com/a/6528148/190597 (Glenn Maynard)"""
-
+    """ Annotate a function object """
     if not annotation:
         return fn
 
+    # Attribute already exists on fn, update it and return fn
+    try:
+        fn._dask_annotations.update(annotation)
+    except AttributeError:
+        pass
+    else:
+        return fn
+
+    # Create a copy of the function, add the annotation
+    # Based on http://stackoverflow.com/a/6528148/190597
     g = types.FunctionType(
         fn.__code__,
         fn.__globals__,
@@ -31,7 +40,7 @@ def annotate(fn, annotation=None):
     )
     g = functools.update_wrapper(g, fn)
     g.__kwdefaults__ = fn.__kwdefaults__
-    g._dask_annotation = annotation
+    g._dask_annotations = annotation
 
     return g
 
@@ -104,7 +113,7 @@ class Task:
                 return dsk
             # task of the form (apply, function [, args [, kwargs]])
             elif dsk[0] is apply:
-                annot = getattr(dsk[1], "_dask_annotation", None)
+                annot = getattr(dsk[1], "_dask_annotations", None)
 
                 if len(dsk) == 2:
                     # (apply, function)
@@ -123,7 +132,7 @@ class Task:
                 return Task(
                     dsk[0],
                     list(fs(a) for a in dsk[1:]),
-                    annotations=getattr(dsk[0], "_dask_annotation", None),
+                    annotations=getattr(dsk[0], "_dask_annotations", None),
                 )
             # key is implied by a standard tuple
             else:
@@ -180,6 +189,20 @@ class Task:
             return HighLevelGraph(layers, dsk.dependencies)
         else:
             return dsk
+
+    def annotate(self, annotations):
+        if type(annotations) is not dict:
+            raise TypeError("annotations is not a dict")
+        elif self.annotations is EMPTY_DICT:
+            self.annotations = annotations
+        else:
+            self.annotations.update(annotations)
+
+    def from_tuple(self, task):
+        if type(task) is tuple and task and callable(task[0]):
+            return Task.from_spec(task)
+
+        raise TypeError("task is not a (fn, *args) task tuple")
 
     def to_tuple(self):
         return Task.to_spec(self)
