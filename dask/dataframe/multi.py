@@ -231,30 +231,50 @@ allowed_right = ("inner", "right")
 
 def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-    categorical_columns = kwargs.pop("categorical_columns", None)
 
-    out = lhs.merge(*args, **kwargs)
+    rhs = args[0] if len(args) > 0 else None
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
 
-    if categorical_columns is not None:
-        for c in categorical_columns:
-            columns = [df[c] for df in [lhs, *args] if c in df.columns]
+    # discover categoricals
+    left_cats = lhs.select_dtypes(include="category")
+    right_cats = rhs.select_dtypes(include="category")
 
-            if c == kwargs.get("left_on", None) and right_index:
-                columns.append(args[0].index)
-            elif c == kwargs.get("right_on", None) and left_index:
-                columns.append(lhs.index)
+    for col in set(left_cats.columns).union(right_cats.columns):
+        left = None
+        right = None
 
-            if len(columns) > 0:
-                dtype = union_categoricals([c.astype("category") for c in columns])
+        if col in left_cats:
+            left = left_cats[col]
+        elif col == kwargs.get("right_on", None) and left_index:
+            left = lhs.index
+
+        if col in right_cats:
+            right = right_cats[col]
+        elif col == kwargs.get("left_on", None) and right_index:
+            right = rhs.index
+
+        dtype = "category"
+        if left is not None and right is not None:
+            dtype = union_categoricals(
+                [left.astype("category"), right.astype("category")]
+            )
+
+        if left is not None:
+            if isinstance(left, pd.Index):
+                lhs.index = left.astype(dtype)
             else:
-                dtype = "category"
+                lhs[col] = left.astype(dtype)
+        if right is not None:
+            if isinstance(right, pd.Index):
+                rhs.index = right.astype(dtype)
+            else:
+                rhs[col] = right.astype(dtype)
 
-            if c in out.columns:
-                out[c] = out[c].astype(dtype)
-            elif c == kwargs.get("right_on", None) and left_index:
-                out.index = out.index.astype(dtype)
+    if rhs is not None:
+        out = lhs.merge(rhs, *args[1:], **kwargs)
+    else:
+        out = lhs.merge(*args, **kwargs)
 
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
@@ -277,9 +297,6 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = [
-        c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
-    ]
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
@@ -350,9 +367,6 @@ def hash_join(
     name = "hash-join-" + token
 
     kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = [
-        c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
-    ]
 
     dsk = {
         (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
@@ -370,9 +384,6 @@ def single_partition_join(left, right, **kwargs):
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = [
-        c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
-    ]
 
     name = "merge-" + tokenize(left, right, **kwargs)
     if left.npartitions == 1 and kwargs["how"] in allowed_right:
@@ -566,9 +577,6 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
         )
-        categorical_columns = [
-            c for c, dtype in meta.dtypes.items() if is_categorical_dtype(dtype)
-        ]
 
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(
@@ -594,7 +602,6 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
             empty_index_dtype=meta.index.dtype,
-            categorical_columns=categorical_columns,
         )
     # Catch all hash join
     else:
