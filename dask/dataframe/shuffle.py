@@ -5,7 +5,6 @@ import shutil
 from operator import getitem
 import uuid
 import tempfile
-import warnings
 
 import tlz as toolz
 import numpy as np
