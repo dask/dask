@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 import errno
 import logging
 from multiprocessing.queues import Empty
@@ -31,7 +32,6 @@ from .utils import (
     json_load_robust,
     parse_timedelta,
     parse_ports,
-    ignoring,
     TimeoutError,
 )
 from .worker import run, parse_memory_limit, Worker
@@ -231,7 +231,7 @@ class Nanny(ServerNode):
             return
 
         allowed_errors = (TimeoutError, CommClosedError, EnvironmentError, RPCClosed)
-        with ignoring(allowed_errors):
+        with suppress(allowed_errors):
             await asyncio.wait_for(
                 self.scheduler.unregister(address=self.worker_address), timeout
             )

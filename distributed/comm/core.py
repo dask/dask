@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod, abstractproperty
 import asyncio
+from contextlib import suppress
 import inspect
 import logging
 import weakref
@@ -7,7 +8,7 @@ import weakref
 import dask
 
 from ..metrics import time
-from ..utils import parse_timedelta, ignoring, TimeoutError
+from ..utils import parse_timedelta, TimeoutError
 from . import registry
 from .addressing import parse_address
 
@@ -223,7 +224,7 @@ async def connect(addr, timeout=None, deserialize=True, **connection_args):
                 future = connector.connect(
                     loc, deserialize=deserialize, **connection_args
                 )
-                with ignoring(TimeoutError):
+                with suppress(TimeoutError):
                     comm = await asyncio.wait_for(
                         future, timeout=min(deadline - time(), 1)
                     )

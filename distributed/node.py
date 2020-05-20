@@ -1,3 +1,4 @@
+from contextlib import suppress
 import logging
 import warnings
 import weakref
@@ -11,7 +12,7 @@ from .comm import get_address_host
 from .core import Server
 from .http.routing import RoutingApplication
 from .versions import get_versions
-from .utils import DequeHandler, clean_dashboard_address, ignoring
+from .utils import DequeHandler, clean_dashboard_address
 
 
 class ServerNode(Server):
@@ -125,7 +126,7 @@ class ServerNode(Server):
             if isinstance(address, (list, tuple)):
                 address = address[0]
             if address:
-                with ignoring(ValueError):
+                with suppress(ValueError):
                     http_address["address"] = get_address_host(address)
 
         change_port = False

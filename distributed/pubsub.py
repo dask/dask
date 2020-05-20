@@ -1,12 +1,13 @@
 import asyncio
 from collections import defaultdict, deque
+from contextlib import suppress
 import logging
 import threading
 import weakref
 
 from .core import CommClosedError
 from .metrics import time
-from .utils import sync, TimeoutError, ignoring
+from .utils import sync, TimeoutError
 from .protocol.serialize import to_serialize
 
 logger = logging.getLogger(__name__)
@@ -420,7 +421,7 @@ class Sub:
             try:
                 await asyncio.wait_for(_(), timeout2)
             finally:
-                with ignoring(RuntimeError):  # Python 3.6 fails here sometimes
+                with suppress(RuntimeError):  # Python 3.6 fails here sometimes
                     self.condition.release()
 
         return self.buffer.popleft()

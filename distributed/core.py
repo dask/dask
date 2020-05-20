@@ -1,5 +1,6 @@
 import asyncio
 from collections import defaultdict, deque
+from contextlib import suppress
 from functools import partial
 import inspect
 import logging
@@ -29,7 +30,6 @@ from .utils import (
     is_coroutine_function,
     get_traceback,
     truncate_exception,
-    ignoring,
     shutting_down,
     parse_timedelta,
     has_keyword,
@@ -167,7 +167,7 @@ class Server:
             )
 
         # Statistics counters for various events
-        with ignoring(ImportError):
+        with suppress(ImportError):
             from .counter import Digest
 
             self.digests = defaultdict(partial(Digest, loop=self.io_loop))

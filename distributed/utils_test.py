@@ -1,7 +1,7 @@
 import asyncio
 import collections
 import gc
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import copy
 import functools
 from glob import glob
@@ -48,7 +48,6 @@ from .process import _cleanup_dangling
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (
-    ignoring,
     log_errors,
     mp_context,
     get_ip,
@@ -704,12 +703,12 @@ def cluster(
             for proc in [w["proc"] for w in workers]:
                 proc.join(timeout=2)
 
-            with ignoring(UnboundLocalError):
+            with suppress(UnboundLocalError):
                 del worker, w, proc
             del workers[:]
 
             for fn in glob("_test_worker-*"):
-                with ignoring(OSError):
+                with suppress(OSError):
                     shutil.rmtree(fn)
 
         try:
@@ -730,7 +729,7 @@ async def disconnect(addr, timeout=3, rpc_kwargs=None):
     rpc_kwargs = rpc_kwargs or {}
 
     async def do_disconnect():
-        with ignoring(EnvironmentError, CommClosedError):
+        with suppress(EnvironmentError, CommClosedError):
             with rpc(addr, **rpc_kwargs) as w:
                 await w.terminate(close=True)
 
@@ -818,7 +817,7 @@ async def end_cluster(s, workers):
     logger.debug("Closing out test cluster")
 
     async def end_worker(w):
-        with ignoring(TimeoutError, CommClosedError, EnvironmentError):
+        with suppress(TimeoutError, CommClosedError, EnvironmentError):
             await w.close(report=False)
 
     await asyncio.gather(*[end_worker(w) for w in workers])
@@ -990,7 +989,7 @@ def terminate_process(proc):
             proc.wait(10)
         finally:
             # Make sure we don't leave the process lingering around
-            with ignoring(OSError):
+            with suppress(OSError):
                 proc.kill()
 
 
@@ -1484,7 +1483,7 @@ def check_instances():
     _global_clients.clear()
 
     for w in Worker._instances:
-        with ignoring(RuntimeError):  # closed IOLoop
+        with suppress(RuntimeError):  # closed IOLoop
             w.loop.add_callback(w.close, report=False, executor_wait=False)
             if w.status == "running":
                 w.loop.add_callback(w.close)
@@ -1536,7 +1535,7 @@ def clean(threads=not WINDOWS, instances=True, timeout=1, processes=True):
 
                         yield loop
 
-                        with ignoring(AttributeError):
+                        with suppress(AttributeError):
                             del thread_state.on_event_loop_thread
 
 

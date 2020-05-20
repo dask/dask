@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 import logging
 import threading
 import warnings
@@ -11,7 +12,6 @@ from .adaptive import Adaptive
 
 from ..utils import (
     log_errors,
-    ignoring,
     sync,
     Log,
     Logs,
@@ -80,12 +80,12 @@ class Cluster:
         self.status = "closed"
 
     def close(self, timeout=None):
-        with ignoring(RuntimeError):  # loop closed during process shutdown
+        with suppress(RuntimeError):  # loop closed during process shutdown
             return self.sync(self._close, callback_timeout=timeout)
 
     def __del__(self):
         if self.status != "closed":
-            with ignoring(AttributeError, RuntimeError):  # during closing
+            with suppress(AttributeError, RuntimeError):  # during closing
                 self.loop.add_callback(self.close)
 
     async def _watch_worker_status(self, comm):
@@ -121,7 +121,7 @@ class Cluster:
         --------
         >>> cluster.adapt(minimum=0, maximum=10, interval='500ms')
         """
-        with ignoring(AttributeError):
+        with suppress(AttributeError):
             self._adaptive.stop()
         if not hasattr(self, "_adaptive_options"):
             self._adaptive_options = {}
@@ -305,7 +305,7 @@ class Cluster:
             def scale_cb(b):
                 with log_errors():
                     n = request.value
-                    with ignoring(AttributeError):
+                    with suppress(AttributeError):
                         self._adaptive.stop()
                     self.scale(n)
                     update()

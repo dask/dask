@@ -1,10 +1,11 @@
-from ..utils import ignoring
+from contextlib import suppress
+
 from .graph_layout import GraphLayout
 from .plugin import SchedulerPlugin
 
-with ignoring(ImportError):
+with suppress(ImportError):
     from .progressbar import progress
-with ignoring(ImportError):
+with suppress(ImportError):
     from .resource_monitor import Occupancy
-with ignoring(ImportError):
+with suppress(ImportError):
     from .scheduler_widgets import scheduler_status

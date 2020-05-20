@@ -4,7 +4,7 @@ import atexit
 import click
 from collections import deque, OrderedDict, UserDict
 from concurrent.futures import ThreadPoolExecutor, CancelledError  # noqa: F401
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import functools
 from hashlib import md5
 import html
@@ -192,14 +192,6 @@ def get_ip_interface(ifname):
     raise ValueError("interface %r doesn't have an IPv4 address" % (ifname,))
 
 
-@contextmanager
-def ignoring(*exceptions):
-    try:
-        yield
-    except exceptions as e:
-        pass
-
-
 # FIXME: this breaks if changed to async def...
 @gen.coroutine
 def ignore_exceptions(coroutines, *exceptions):
@@ -211,7 +203,7 @@ def ignore_exceptions(coroutines, *exceptions):
     wait_iterator = gen.WaitIterator(*coroutines)
     results = []
     while not wait_iterator.done():
-        with ignoring(*exceptions):
+        with suppress(*exceptions):
             result = yield wait_iterator.next()
             results.append(result)
     raise gen.Return(results)
@@ -481,7 +473,7 @@ class LoopRunner:
             try:
                 self._loop.add_callback(self._loop.stop)
                 self._loop_thread.join(timeout=timeout)
-                with ignoring(KeyError):  # IOLoop can be missing
+                with suppress(KeyError):  # IOLoop can be missing
                     self._loop.close()
             finally:
                 self._loop_thread = None
@@ -1033,7 +1025,7 @@ def import_file(path):
         names_to_import.append(name)
     if ext == ".py":  # Ensure that no pyc file will be reused
         cache_file = cache_from_source(path)
-        with ignoring(OSError):
+        with suppress(OSError):
             os.remove(cache_file)
     if ext in (".egg", ".zip", ".pyz"):
         if path not in sys.path:

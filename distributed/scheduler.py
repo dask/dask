@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict, deque
 from collections.abc import Mapping, Set
+from contextlib import suppress
 from datetime import timedelta
 from functools import partial
 import inspect
@@ -56,7 +57,6 @@ from .proctitle import setproctitle
 from .security import Security
 from .utils import (
     All,
-    ignoring,
     get_fileno_limit,
     log_errors,
     key_split,
@@ -1431,7 +1431,7 @@ class Scheduler(ServerNode):
 
         self.clear_task_state()
 
-        with ignoring(AttributeError):
+        with suppress(AttributeError):
             for c in self._worker_coroutines:
                 c.cancel()
 
@@ -1515,7 +1515,7 @@ class Scheduler(ServerNode):
         self.stop_services()
 
         for ext in self.extensions.values():
-            with ignoring(AttributeError):
+            with suppress(AttributeError):
                 ext.teardown()
         logger.info("Scheduler closing all comms")
 
@@ -1524,7 +1524,7 @@ class Scheduler(ServerNode):
             if not comm.closed():
                 comm.send({"op": "close", "report": False})
                 comm.send({"op": "close-stream"})
-            with ignoring(AttributeError):
+            with suppress(AttributeError):
                 futures.append(comm.close())
 
         for future in futures:  # TODO: do all at once
@@ -2181,7 +2181,7 @@ class Scheduler(ServerNode):
             )
             logger.info("Remove worker %s", ws)
             if close:
-                with ignoring(AttributeError, CommClosedError):
+                with suppress(AttributeError, CommClosedError):
                     self.stream_comms[address].send({"op": "close", "report": False})
 
             self.remove_resources(address)
@@ -2935,7 +2935,7 @@ class Scheduler(ServerNode):
 
             self.clear_task_state()
 
-            with ignoring(AttributeError):
+            with suppress(AttributeError):
                 for c in self._worker_coroutines:
                     c.cancel()
 

@@ -1,5 +1,6 @@
 import asyncio
 import atexit
+from contextlib import suppress
 import logging
 import gc
 import os
@@ -9,7 +10,6 @@ import warnings
 
 import click
 import dask
-from dask.utils import ignoring
 from dask.system import CPU_COUNT
 from distributed import Nanny, Security
 from distributed.cli.utils import check_python_3, install_signal_handlers
@@ -381,7 +381,7 @@ def main(
             "dask-worker SCHEDULER_ADDRESS:8786"
         )
 
-    with ignoring(TypeError, ValueError):
+    with suppress(TypeError, ValueError):
         name = int(name)
 
     if "DASK_INTERNAL_INHERIT_CONFIG" in os.environ:

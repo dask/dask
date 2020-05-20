@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 import gc
 import logging
 import os
@@ -18,7 +19,7 @@ from distributed import Nanny, rpc, Scheduler, Worker, Client, wait, worker
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
-from distributed.utils import ignoring, tmpfile, TimeoutError, parse_ports
+from distributed.utils import tmpfile, TimeoutError, parse_ports
 from distributed.utils_test import (  # noqa: F401
     gen_cluster,
     gen_test,
@@ -88,7 +89,7 @@ async def test_nanny_process_failure(c, s):
     await ww.update_data(data=valmap(dumps, {"x": 1, "y": 2}))
     pid = n.pid
     assert pid is not None
-    with ignoring(CommClosedError):
+    with suppress(CommClosedError):
         await c.run(os._exit, 0, workers=[n.worker_address])
 
     start = time()

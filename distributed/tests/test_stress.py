@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 import random
 import sys
 from operator import add
@@ -11,7 +12,7 @@ from tlz import concat, sliding_window
 from distributed import Client, wait, Nanny
 from distributed.config import config
 from distributed.metrics import time
-from distributed.utils import All, ignoring, CancelledError
+from distributed.utils import All, CancelledError
 from distributed.utils_test import (
     gen_cluster,
     cluster,
@@ -160,7 +161,7 @@ async def test_stress_scatter_death(c, s, *workers):
         await w.close()
         alive.remove(w)
 
-    with ignoring(CancelledError):
+    with suppress(CancelledError):
         await c.gather(futures)
 
     futures = None

@@ -1,5 +1,6 @@
 import asyncio
 from collections import deque
+from contextlib import suppress
 from functools import partial
 import gc
 import logging
@@ -57,7 +58,6 @@ from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
 from distributed.utils import (
-    ignoring,
     mp_context,
     sync,
     tmp_text,
@@ -3391,7 +3391,7 @@ def test_close_idempotent(c):
 @nodebug
 def test_get_returns_early(c):
     start = time()
-    with ignoring(RuntimeError):
+    with suppress(RuntimeError):
         result = c.get({"x": (throws, 1), "y": (sleep, 1)}, ["x", "y"])
     assert time() < start + 0.5
     # Futures should be released and forgotten
@@ -3402,7 +3402,7 @@ def test_get_returns_early(c):
     x = c.submit(inc, 1)
     x.result()
 
-    with ignoring(RuntimeError):
+    with suppress(RuntimeError):
         result = c.get({"x": (throws, 1), x.key: (inc, 1)}, ["x", x.key])
     assert x.key in c.futures
 

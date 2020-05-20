@@ -68,13 +68,13 @@ def get_system_info():
 
 def version_of_package(pkg):
     """ Try a variety of common ways to get the version of a package """
-    from .utils import ignoring
+    from contextlib import suppress
 
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return pkg.__version__
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return str(pkg.version)
-    with ignoring(AttributeError):
+    with suppress(AttributeError):
         return ".".join(map(str, pkg.version_info))
     return None
 

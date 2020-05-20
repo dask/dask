@@ -1,5 +1,6 @@
 import asyncio
 import atexit
+from contextlib import suppress
 import copy
 import logging
 import math
@@ -14,7 +15,6 @@ from ..core import rpc, CommClosedError
 from ..utils import (
     LoopRunner,
     silence_logging,
-    ignoring,
     parse_bytes,
     parse_timedelta,
     import_term,
@@ -309,7 +309,7 @@ class SpecCluster(Cluster):
                 tasks = [self.workers[w].close() for w in to_close if w in self.workers]
                 await asyncio.wait(tasks)
                 for task in tasks:  # for tornado gen.coroutine support
-                    with ignoring(RuntimeError):
+                    with suppress(RuntimeError):
                         await task
             for name in to_close:
                 if name in self.workers:
@@ -382,7 +382,7 @@ class SpecCluster(Cluster):
         for future in self._futures:
             await future
         async with self._lock:
-            with ignoring(CommClosedError):
+            with suppress(CommClosedError):
                 if self.scheduler_comm:
                     await self.scheduler_comm.close(close_workers=True)
                 else:
@@ -415,7 +415,7 @@ class SpecCluster(Cluster):
             raise ValueError("To scale by cores= you must specify cores per worker")
 
         for name in ["nthreads", "ncores", "threads", "cores"]:
-            with ignoring(KeyError):
+            with suppress(KeyError):
                 return self.new_spec["options"][name]
 
         if not self.new_spec:
@@ -429,7 +429,7 @@ class SpecCluster(Cluster):
             )
 
         for name in ["memory_limit", "memory"]:
-            with ignoring(KeyError):
+            with suppress(KeyError):
                 return parse_bytes(self.new_spec["options"][name])
 
         raise ValueError(
@@ -606,6 +606,6 @@ async def run_spec(spec: dict, *args):
 @atexit.register
 def close_clusters():
     for cluster in list(SpecCluster._instances):
-        with ignoring(gen.TimeoutError, TimeoutError):
+        with suppress(gen.TimeoutError, TimeoutError):
             if cluster.status != "closed":
                 cluster.close(timeout=10)

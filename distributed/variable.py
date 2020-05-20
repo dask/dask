@@ -1,12 +1,13 @@
 import asyncio
 from collections import defaultdict
+from contextlib import suppress
 import logging
 import uuid
 
 from tlz import merge
 
 from .client import Future, Client
-from .utils import tokey, log_errors, TimeoutError, ignoring
+from .utils import tokey, log_errors, TimeoutError
 from .worker import get_client
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ class VariableExtension:
 
                 await asyncio.wait_for(_(), timeout=left)
             finally:
-                with ignoring(RuntimeError):  # Python 3.6 loses lock on finally clause
+                with suppress(RuntimeError):  # Python 3.6 loses lock on finally clause
                     self.started.release()
 
         record = self.variables[name]
@@ -113,9 +114,9 @@ class VariableExtension:
             else:
                 if old["type"] == "Future":
                     await self.release(old["value"], name)
-            with ignoring(KeyError):
+            with suppress(KeyError):
                 del self.waiting_conditions[name]
-            with ignoring(KeyError):
+            with suppress(KeyError):
                 del self.variables[name]
 
 
