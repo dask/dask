@@ -299,7 +299,7 @@ def _read_single_hdf(
             import glob
             from distutils.version import LooseVersion
 
-            if LooseVersion(pd.__version__) >= LooseVersion('0.24'):
+            if LooseVersion(pd.__version__) >= LooseVersion("0.24"):
                 if not glob.has_magic(key):
                     keys = [key]
                 else:
