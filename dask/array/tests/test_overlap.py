@@ -391,10 +391,10 @@ def test_map_overlap_multiarray_block_broadcast():
     x = da.ones((12,), chunks=12)  # numblocks = (1,) -> (2, 2) after broadcast
     y = da.ones((16, 12), chunks=(8, 6))  # numblocks = (2, 2)
     z = da.map_overlap(func, x, y, chunks=(3, 3), depth=1, trim=True)
-    assert_eq(z.compute().shape, z.shape)
-    assert_eq(z.shape, (2, 2))
+    assert_eq(z, z)
+    assert z.shape ==, (2, 2)
     # func call will receive (8,) and (10, 8) arrays for each of 4 blocks
-    assert_eq(z.sum().compute(), 4 * (10 * 8 + 8))
+    assert_eq(z.sum(), 4 * (10 * 8 + 8))
 
 
 def test_map_overlap_multiarray_variadic():
