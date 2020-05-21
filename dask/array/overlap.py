@@ -545,7 +545,9 @@ def map_overlap(
     Parameters
     ----------
     func: function
-        The function to apply to each extended block
+        The function to apply to each extended block.
+        If multiple arrays are provided, then the function should expect to
+        receive chunks of each array in the same order.
     args : dask arrays
     depth: int, tuple, dict or list
         The number of elements that each block should share with its neighbors
@@ -573,7 +575,7 @@ def map_overlap(
         arrays to be broken into smaller ones that match chunk sizes in other
         arrays such that they are compatible for block function mapping. If
         this is false, then an error will be thrown if arrays do not already
-        have the same number of blocks in each dimensions.
+        have the same number of blocks in each dimension.
     **kwargs:
         Other keyword arguments valid in ``map_blocks``
 
@@ -607,15 +609,52 @@ def map_overlap(
            [16,  17,  18,  19],
            [20,  21,  22,  23],
            [24,  25,  26,  27]])
+
+    The ``da.map_overlap`` function can also accept multiple arrays.
+
+    >>> func = lambda x, y: x + y
+    >>> x = da.arange(8).reshape(2, 4).rechunk((1, 2))
+    >>> y = da.arange(4).rechunk(2)
+    >>> da.map_overlap(func, x, y, depth=1).compute() # doctest: +NORMALIZE_WHITESPACE
+    array([[0,  2,  4,  6],
+           [4,  6,  8, 10]])
+
+    When multiple arrays are given, they do not need to have the
+    same number of dimensions but they must broadcast together.
+    Arrays are aligned block by block (just as in ``da.map_blocks``)
+    so the blocks must have a common chunk size.  This common chunking
+    is determined automatically as long as ``align_arrays`` is True.
+
+    >>> x = da.arange(8, chunks=4)
+    >>> y = da.arange(8, chunks=2)
+    >>> r = da.map_overlap(func, x, y, depth=1, align_arrays=True)
+    >>> len(r.to_delayed())
+    4
+
+    >>> da.map_overlap(func, x, y, depth=1, align_arrays=False)
+    ValueError: Shapes do not align
+
+    Note also that this function is equivalent to ``map_blocks``
+    by default.  A non-zero ``depth`` must be defined for any
+    overlap to appear in the arrays provided to ``func``.
+
+    >>> func = lambda x: x.sum()
+    >>> x = da.ones(10, dtype='int')
+    >>> block_args = dict(chunks=(), drop_axis=0)
+    >>> da.map_blocks(func, x, **block_args).compute()
+    10
+    >>> da.map_overlap(func, x, **block_args).compute()
+    10
+    >>> da.map_overlap(func, x, **block_args, depth=1).compute()
+    12
     """
     # Look for invocation using deprecated single-array signature
     # map_overlap(x, func, depth, boundary=None, trim=True, **kwargs)
     if isinstance(func, Array) and callable(args[0]):
         warnings.warn(
-            "Detected use of signature map_overlap(x, func) rather than "
-            "map_overlap(func, *args) for multi-array support. Arguments "
-            "will be swapped in this case but such an exception will not "
-            "be made in a future release.",
+            "The use of map_overlap(array, func, **kwargs) is deprecated since dask 2.17.0 "
+            "and will be an error in a future release. To silence this warning, use the syntax "
+            "map_overlap(func, array0,[ array1, ...,] **kwargs) instead.",
             FutureWarning,
         )
         sig = ["func", "depth", "boundary", "trim"]

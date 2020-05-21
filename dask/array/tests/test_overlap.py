@@ -392,7 +392,7 @@ def test_map_overlap_multiarray_block_broadcast():
     y = da.ones((16, 12), chunks=(8, 6))  # numblocks = (2, 2)
     z = da.map_overlap(func, x, y, chunks=(3, 3), depth=1, trim=True)
     assert_eq(z, z)
-    assert z.shape ==, (2, 2)
+    assert z.shape == (2, 2)
     # func call will receive (8,) and (10, 8) arrays for each of 4 blocks
     assert_eq(z.sum(), 4 * (10 * 8 + 8))
 
