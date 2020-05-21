@@ -47,8 +47,6 @@ def _sample_map_partitions(population, k):
         Number of elements on the partition.
     k : int
         Number of elements to sample.
-    replace: boolean
-        Whether the sample is with or without replacement.
     """
     lx = len(population)
     real_k = k if k <= lx else lx
