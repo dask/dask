@@ -296,14 +296,21 @@ def _read_single_hdf(
         key.
         """
         with pd.HDFStore(path, mode=mode) as hdf:
-            keys = [k for k in hdf.keys() if fnmatch(k, key)]
-            if not keys:
+            import glob
+
+            if not glob.has_magic(key):
+                keys = [key]
+            else:
+                keys = [k for k in hdf.keys() if fnmatch(k, key)]
                 # https://github.com/dask/dask/issues/5934
-                # TODO: remove this if/when pandas copes with all keys
-                keys = [
+                # TODO: remove this part if/when pandas copes with all keys
+                keys.extend(
                     n._v_pathname
                     for n in hdf._handle.walk_nodes("/", classname="Table")
-                ]
+                    if fnmatch(n._v_pathname, key)
+                    and n._v_name != u"table"
+                    and n._v_pathname not in keys
+                )
             stops = []
             divisions = []
             for k in keys:
