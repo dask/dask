@@ -2163,7 +2163,41 @@ def test_categorical_join():
     assert assert_eq(expected, actual)
 
 
-def test_categorical_merge():
+def test_categorical_merge_with_columns_missing_from_left():
+    df1 = pd.DataFrame({"A": [0, 1], "B": pd.Categorical(["a", "b"])})
+    df2 = pd.DataFrame({"C": pd.Categorical(["a", "b"])})
+
+    expected = pd.merge(df2, df1, left_index=True, right_on="A")
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    actual = dd.merge(ddf2, ddf1, left_index=True, right_on="A").compute()
+    assert actual.C.dtype == "category"
+    assert actual.B.dtype == "category"
+    assert actual.A.dtype == "int"
+    assert actual.index.dtype == "int"
+    assert assert_eq(expected, actual)
+
+
+def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
+    df1 = pd.DataFrame({"A": pd.Categorical([0, 1]), "B": pd.Categorical(["a", "b"])})
+    df2 = pd.DataFrame({"C": pd.Categorical(["a", "b"])})
+
+    expected = pd.merge(df2, df1, left_index=True, right_on="A")
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    actual = dd.merge(ddf2, ddf1, left_index=True, right_on="A").compute()
+    assert actual.C.dtype == "category"
+    assert actual.B.dtype == "category"
+    assert actual.A.dtype == "int"
+    assert actual.index.dtype == "int"
+    assert assert_eq(expected, actual)
+
+
+def test_categorical_merge_julia():
     # https://github.com/dask/dask/issues/6142
     a = pd.DataFrame({"A": [0, 1, 2, 3], "B": [4, 5, 6, 7]})
     b = pd.DataFrame({"A": [0, 1, 2, 4], "C": [4, 5, 7, 7]})
