@@ -1189,7 +1189,7 @@ Dask Name: {name}, {task} tasks"""
         """ Rearrange DataFrame into new partitions
 
         Uses hashing of `on` to map rows to output partitions. After this
-        operation, rows with the same index element(s) will be in the same
+        operation, rows with the same value of `on` will be in the same
         partition.
 
         Parameters
@@ -1210,8 +1210,6 @@ Dask Name: {name}, {task} tasks"""
             but index values will not be preserved.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
-            Note, that even if you set ``compute=False``, an immediate computation
-            will still be triggered if ``divisions`` is ``None``.
 
         Notes
         -----

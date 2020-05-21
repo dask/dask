@@ -679,7 +679,6 @@ def rearrange_by_column_tasks(
 
     if npartitions is not None and npartitions != df.npartitions:
         token = tokenize(df2, npartitions)
-        repartition_get_name = "repartition-get-" + token
         repartition_group_token = "repartition-group-" + token
 
         dsk = {
