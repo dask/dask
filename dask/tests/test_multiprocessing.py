@@ -60,6 +60,22 @@ def test_pickle_locals():
     assert b"unrelated_function_local" not in b
 
 
+@not_cloudpickle
+def test_pickle_kwargs():
+    """Test that out-of-band pickling works
+
+    Note cloudpickle does not support this argument:
+
+    https://github.com/cloudpipe/cloudpickle/issues/213
+    """
+    b = _dumps(my_small_function_global, fix_imports=True)
+    assert b"my_small_function_global" in b
+    assert b"unrelated_function_global" not in b
+    assert b"numpy" not in b
+    my_small_function_global_2 = _loads(b, fix_imports=True)
+    assert my_small_function_global_2(2, 3) == 5
+
+
 @pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
 def test_out_of_band_pickling():
     """Test that out-of-band pickling works
