@@ -1,5 +1,6 @@
 import logging
 import pickle
+from pickle import HIGHEST_PROTOCOL
 
 import cloudpickle
 
@@ -23,36 +24,46 @@ def _always_use_pickle_for(x):
         return False
 
 
-def dumps(x):
+def dumps(x, *, buffer_callback=None):
     """ Manage between cloudpickle and pickle
 
     1.  Try pickle
     2.  If it is short then check if it contains __main__
     3.  If it is long, then first check type, then check __main__
     """
+    buffers = []
+    dump_kwargs = {"protocol": HIGHEST_PROTOCOL}
+    if HIGHEST_PROTOCOL >= 5 and buffer_callback is not None:
+        dump_kwargs["buffer_callback"] = buffers.append
     try:
-        result = pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        buffers.clear()
+        result = pickle.dumps(x, **dump_kwargs)
         if len(result) < 1000:
             if b"__main__" in result:
-                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-            else:
-                return result
-        else:
-            if _always_use_pickle_for(x) or b"__main__" not in result:
-                return result
-            else:
-                return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+                buffers.clear()
+                result = cloudpickle.dumps(x, **dump_kwargs)
+        elif not _always_use_pickle_for(x) and b"__main__" in result:
+            buffers.clear()
+            result = cloudpickle.dumps(x, **dump_kwargs)
     except Exception:
         try:
-            return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+            buffers.clear()
+            result = cloudpickle.dumps(x, **dump_kwargs)
         except Exception as e:
             logger.info("Failed to serialize %s. Exception: %s", x, e)
             raise
+    if buffer_callback is not None:
+        for b in buffers:
+            buffer_callback(b)
+    return result
 
 
-def loads(x):
+def loads(x, *, buffers=()):
     try:
-        return pickle.loads(x)
+        if buffers:
+            return pickle.loads(x, buffers=buffers)
+        else:
+            return pickle.loads(x)
     except Exception:
         logger.info("Failed to deserialize %s", x[:10000], exc_info=True)
         raise

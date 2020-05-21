@@ -52,11 +52,16 @@ def dask_loads(header, frames):
 
 
 def pickle_dumps(x):
-    return {"serializer": "pickle"}, [pickle.dumps(x)]
+    header = {"serializer": "pickle"}
+    frames = [None]
+    buffer_callback = lambda f: frames.append(memoryview(f))
+    frames[0] = pickle.dumps(x, buffer_callback=buffer_callback)
+    return header, frames
 
 
 def pickle_loads(header, frames):
-    return pickle.loads(b"".join(frames))
+    x, buffers = frames[0], frames[1:]
+    return pickle.loads(x, buffers=buffers)
 
 
 def msgpack_dumps(x):
