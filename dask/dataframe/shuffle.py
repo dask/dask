@@ -14,7 +14,7 @@ import pandas as pd
 from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
-from ..base import tokenize, compute, compute_as_if_collection
+from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
@@ -270,12 +270,15 @@ def shuffle(
     set_partition
     shuffle_disk
     """
-    if shuffle == "tasks" and isinstance(index, (str, list)):
+    list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
+    if shuffle == "tasks" and (isinstance(index, str) or list_like):
         # Avoid creating the "_partitions" column if possible.
         # We currently do this if the user is passing in
         # specific column names (and shuffle == "tasks").
         if isinstance(index, str):
             index = [index]
+        else:
+            index = list(index)
         nset = set(index)
         if nset.intersection(set(df.columns)) == nset:
             return rearrange_by_column(

@@ -976,7 +976,9 @@ def test_disk_shuffle_check_actual_compression():
 
 
 @pytest.mark.parametrize("ignore_index", [None, True, False])
-@pytest.mark.parametrize("on", ["id", "name", ["id", "name"]])
+@pytest.mark.parametrize(
+    "on", ["id", "name", ["id", "name"], pd.Series(["id", "name"])]
+)
 @pytest.mark.parametrize("max_branch", [None, 4])
 def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
     # Make sure DataFrame.shuffle API returns the same result
