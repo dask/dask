@@ -232,7 +232,7 @@ allowed_right = ("inner", "right")
 def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
 
-    rhs = args[0] if len(args) > 0 else None
+    rhs, *args = args
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
 
@@ -271,10 +271,7 @@ def merge_chunk(lhs, *args, **kwargs):
             else:
                 rhs[col] = right.astype(dtype)
 
-    if rhs is not None:
-        out = lhs.merge(rhs, *args[1:], **kwargs)
-    else:
-        out = lhs.merge(*args, **kwargs)
+    out = lhs.merge(rhs, *args, **kwargs)
 
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
