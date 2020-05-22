@@ -163,7 +163,7 @@ def reduction(
     inds = tuple(range(x.ndim))
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
     tmp = blockwise(
-        chunk, inds, x, inds, axis=axis, keepdims=True, dtype=dtype or float
+        chunk, inds, x, inds, axis=axis, keepdims=True, token=name, dtype=dtype or float
     )
     tmp._chunks = tuple(
         (output_size,) * len(c) if i in axis else c for i, c in enumerate(tmp.chunks)

@@ -213,8 +213,7 @@ def getem(
     """
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-
-    keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
+    keys = product([out_name], *(range(len(bds)) for bds in chunks))
     slices = slices_from_chunks(chunks)
 
     if (
@@ -1626,7 +1625,7 @@ class Array(DaskMethodsMixin):
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
         )
 
-        keys = list(product(*[range(len(c)) for c in chunks]))
+        keys = product(*(range(len(c)) for c in chunks))
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
@@ -3201,11 +3200,18 @@ def unify_chunks(*args, **kwargs):
     ):
         return dict(zip(inds[0], arrays[0].chunks)), arrays
 
-    nameinds = [(a.name if i is not None else a, i) for a, i in arginds]
-    blockdim_dict = {a.name: a.chunks for a, ind in arginds if ind is not None}
+    nameinds = []
+    blockdim_dict = dict()
+    max_parts = 0
+    for a, ind in arginds:
+        if ind is not None:
+            nameinds.append((a.name, ind))
+            blockdim_dict[a.name] = a.chunks
+            max_parts = max(max_parts, a.npartitions)
+        else:
+            nameinds.append((a, ind))
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
-    max_parts = max(arg.npartitions for arg, ind in arginds if ind is not None)
     nparts = np.prod(list(map(len, chunkss.values())))
 
     if warn and nparts and nparts >= max_parts * 10:
@@ -4216,12 +4222,23 @@ def transposelist(arrays, axes, extradims=0):
     return reshapelist(newshape, result)
 
 
-def stack(seq, axis=0):
+def stack(seq, axis=0, allow_unknown_chunksizes=False):
     """
     Stack arrays along a new axis
 
     Given a sequence of dask arrays, form a new dask array by stacking them
     along a new dimension (axis=0 by default)
+
+     Parameters
+    ----------
+    seq: list of dask.arrays
+    axis: int
+        Dimension along which to align all of the arrays
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
 
     Examples
     --------
@@ -4256,7 +4273,7 @@ def stack(seq, axis=0):
 
     if not seq:
         raise ValueError("Need array(s) to stack")
-    if not all(x.shape == seq[0].shape for x in seq):
+    if not allow_unknown_chunksizes and not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError(
             "Stacked arrays must have the same shape. "
@@ -4595,10 +4612,11 @@ def _vindex_array(x, dict_indexes):
         full_slices = [slice(None, None) if i is None else None for i in flat_indexes]
 
         name = "vindex-slice-" + token
-        dsk = dict(
-            (
-                keyname(name, i, okey),
-                (
+        vindex_merge_name = "vindex-merge-" + token
+        dsk = {}
+        for okey in other_blocks:
+            for i, key in enumerate(per_block):
+                dsk[keyname(name, i, okey)] = (
                     _vindex_transpose,
                     (
                         _vindex_slice,
@@ -4608,23 +4626,12 @@ def _vindex_array(x, dict_indexes):
                         ),
                     ),
                     axis,
-                ),
+                )
+            dsk[keyname(vindex_merge_name, 0, okey)] = (
+                _vindex_merge,
+                [list(pluck(0, per_block[key])) for key in per_block],
+                [keyname(name, i, okey) for i in range(len(per_block))],
             )
-            for i, key in enumerate(per_block)
-            for okey in other_blocks
-        )
-
-        dsk.update(
-            (
-                keyname("vindex-merge-" + token, 0, okey),
-                (
-                    _vindex_merge,
-                    [list(pluck(0, per_block[key])) for key in per_block],
-                    [keyname(name, i, okey) for i in range(len(per_block))],
-                ),
-            )
-            for okey in other_blocks
-        )
 
         result_1d = Array(
             HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),

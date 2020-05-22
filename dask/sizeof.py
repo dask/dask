@@ -1,3 +1,4 @@
+import random
 import sys
 from distutils.version import LooseVersion
 
@@ -25,15 +26,25 @@ def sizeof_default(o):
 @sizeof.register(set)
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
-    return getsizeof(seq) + sum(map(sizeof, seq))
+    num_items = len(seq)
+    samples = 10
+    if num_items > samples:
+        s = getsizeof(seq) + num_items / samples * sum(
+            map(sizeof, random.sample(seq, samples))
+        )
+        return int(s)
+    else:
+        return getsizeof(seq) + sum(map(sizeof, seq))
 
 
 @sizeof.register(dict)
 def sizeof_python_dict(d):
-    if len(d) > 10:
-        return getsizeof(d) + 1000 * len(d)
-    else:
-        return getsizeof(d) + sum(map(sizeof, d.keys())) + sum(map(sizeof, d.values()))
+    return (
+        getsizeof(d)
+        + sizeof(list(d.keys()))
+        + sizeof(list(d.values()))
+        - 2 * sizeof(list())
+    )
 
 
 @sizeof.register_lazy("cupy")
