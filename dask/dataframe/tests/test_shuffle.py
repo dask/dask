@@ -793,7 +793,7 @@ def test_set_index_categorical():
 
 
 def test_compute_divisions():
-    from dask.dataframe.shuffle import compute_divisions
+    from dask.dataframe.shuffle import compute_and_set_divisions
 
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]},
@@ -802,7 +802,7 @@ def test_compute_divisions():
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
 
-    b = compute_divisions(copy(a))
+    b = compute_and_set_divisions(copy(a))
 
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions

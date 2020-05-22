@@ -581,9 +581,9 @@ def from_delayed(
     df = new_dd_object(dsk, name, meta, divs)
 
     if divisions == "sorted":
-        from ..shuffle import compute_divisions
+        from ..shuffle import compute_and_set_divisions
 
-        df = compute_divisions(df)
+        df = compute_and_set_divisions(df)
 
     return df
 
