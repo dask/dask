@@ -372,6 +372,30 @@ def test_map_overlap_multiarray_defaults():
     assert_eq(z.sum(), 20)
 
 
+def test_map_overlap_multiarray_different_depths():
+    x = da.ones(5, dtype="int")
+    y = da.ones(5, dtype="int")
+
+    def run(depth):
+        return da.map_overlap(
+            lambda x, y: x.sum() + y.sum(), x, y, depth=depth, chunks=(0,), trim=False
+        ).compute()
+
+    # Check that the number of elements added
+    # to arrays in overlap works as expected
+    # when depths differ for each array
+    assert_eq(run([0, 0]), 10)
+    assert_eq(run([0, 1]), 12)
+    assert_eq(run([1, 1]), 14)
+    assert_eq(run([1, 2]), 16)
+    assert_eq(run([0, 5]), 20)
+    assert_eq(run([5, 5]), 30)
+
+    # Ensure that depth > chunk size results in error
+    with pytest.raises(ValueError):
+        run([0, 6])
+
+
 def test_map_overlap_multiarray_uneven_numblocks_exception():
     x = da.arange(10, chunks=(10,))
     y = da.arange(10, chunks=(5, 5))
