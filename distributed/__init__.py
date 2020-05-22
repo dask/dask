@@ -24,6 +24,7 @@ from .pubsub import Pub, Sub
 from .queues import Queue
 from .security import Security
 from .semaphore import Semaphore
+from .event import Event
 from .scheduler import Scheduler
 from .threadpoolexecutor import rejoin
 from .utils import sync, TimeoutError, CancelledError

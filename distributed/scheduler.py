@@ -81,6 +81,7 @@ from .queues import QueueExtension
 from .semaphore import SemaphoreExtension
 from .recreate_exceptions import ReplayExceptionScheduler
 from .lock import LockExtension
+from .event import EventExtension
 from .pubsub import PubSubSchedulerExtension
 from .stealing import WorkStealing
 from .variable import VariableExtension
@@ -102,6 +103,7 @@ DEFAULT_EXTENSIONS = [
     VariableExtension,
     PubSubSchedulerExtension,
     SemaphoreExtension,
+    EventExtension,
 ]
 
 ALL_TASK_STATES = {"released", "waiting", "no-worker", "processing", "erred", "memory"}

@@ -83,6 +83,7 @@ API
 .. currentmodule:: distributed
 
 .. autosummary::
+   Event
    Lock
    Queue
    Variable
@@ -193,6 +194,8 @@ Other
 .. autoclass:: distributed.Reschedule
 .. autoclass:: get_task_stream
 
+.. autoclass:: Event
+   :members:
 .. autoclass:: Lock
    :members:
 .. autoclass:: Semaphore
