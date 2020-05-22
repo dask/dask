@@ -79,6 +79,9 @@ def test_intersect_2():
     assert answer == cross
 
 
+
+    
+
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
     a = np.random.uniform(0, 1, 30)
@@ -199,8 +202,16 @@ def test_rechunk_0d():
     assert y.compute() == a
 
 
+def test_rechunk_empty_array():
+    x = da.array([])
+    x.rechunk()
+    assert x.size == 0
+
+
 def test_rechunk_empty():
     x = da.ones((0, 10), chunks=(5, 5))
+    print(x)
+    print(x.size)
     y = x.rechunk((2, 2))
     assert y.chunks == ((0,), (2,) * 5)
     assert_eq(x, y)

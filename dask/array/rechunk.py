@@ -220,6 +220,8 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
+    if x.shape == (0,):
+        return x
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
@@ -230,7 +232,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     chunks = normalize_chunks(
         chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
     )
-
+    
     if chunks == x.chunks:
         return x
     ndim = x.ndim
