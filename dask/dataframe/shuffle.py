@@ -796,7 +796,7 @@ def fix_overlap(ddf, overlap):
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)
 
 
-def compute_divisions(df, **kwargs):
+def compute_and_set_divisions(df, **kwargs):
     mins = df.index.map_partitions(M.min, meta=df.index)
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
@@ -825,7 +825,7 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 
     if not divisions:
-        return compute_divisions(result, **kwargs)
+        return compute_and_set_divisions(result, **kwargs)
     elif len(divisions) != len(df.divisions):
         msg = (
             "When doing `df.set_index(col, sorted=True, divisions=...)`, "
