@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 from time import sleep
 
 import pytest
@@ -120,11 +121,11 @@ async def test_timeouts(c, s, a, b):
     sub = Sub("a", client=c, worker=None)
     start = time()
     with pytest.raises(TimeoutError):
-        await sub.get(timeout=0.1)
+        await sub.get(timeout="100ms")
     stop = time()
     assert stop - start < 1
     with pytest.raises(TimeoutError):
-        await sub.get(timeout=0.01)
+        await sub.get(timeout=timedelta(milliseconds=10))
 
 
 @gen_cluster(client=True)

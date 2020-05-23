@@ -7,6 +7,7 @@ import uuid
 from .client import Client
 from .utils import log_errors, TimeoutError
 from .worker import get_worker
+from .utils import parse_timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -204,19 +205,23 @@ class Event:
 
         Parameters
         ----------
-        timeout : number, optional
+        timeout : number or string or timedelta, optional
             Seconds to wait on the event in the scheduler.  This does not
             include local coroutine time, network transfer time, etc..
+            Instead of number of seconds, it is also possible to specify
+            a timedelta in string format, e.g. "200ms".
 
         Examples
         --------
         >>> event = Event('a')  # doctest: +SKIP
-        >>> event.wait(timeout=1)  # doctest: +SKIP
+        >>> event.wait(timeout="1s")  # doctest: +SKIP
 
         Returns
         -------
         True if the event was set of false, if a timeout happend
         """
+        timeout = parse_timedelta(timeout)
+
         result = self.client.sync(
             self.client.scheduler.event_wait, name=self.name, timeout=timeout,
         )

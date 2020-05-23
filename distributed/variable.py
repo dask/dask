@@ -7,7 +7,7 @@ import uuid
 from tlz import merge
 
 from .client import Future, Client
-from .utils import tokey, log_errors, TimeoutError
+from .utils import tokey, log_errors, TimeoutError, parse_timedelta
 from .worker import get_client
 
 logger = logging.getLogger(__name__)
@@ -204,7 +204,16 @@ class Variable:
         return value
 
     def get(self, timeout=None, **kwargs):
-        """ Get the value of this variable """
+        """ Get the value of this variable
+
+        Parameters
+        ----------
+        timeout: number or string or timedelta, optional
+            Time in seconds to wait before timing out.
+            Instead of number of seconds, it is also possible to specify
+            a timedelta in string format, e.g. "200ms".
+        """
+        timeout = parse_timedelta(timeout)
         return self.client.sync(self._get, timeout=timeout, **kwargs)
 
     def delete(self):

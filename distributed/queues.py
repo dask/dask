@@ -6,6 +6,7 @@ import uuid
 from .client import Future, Client
 from .utils import tokey, sync, thread_state
 from .worker import get_client
+from .utils import parse_timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +209,16 @@ class Queue:
             )
 
     def put(self, value, timeout=None, **kwargs):
-        """ Put data into the queue """
+        """ Put data into the queue
+
+        Parameters
+        ----------
+        timeout: number or string or timedelta, optional
+            Time in seconds to wait before timing out.
+            Instead of number of seconds, it is also possible to specify
+            a timedelta in string format, e.g. "200ms".
+        """
+        timeout = parse_timedelta(timeout)
         return self.client.sync(self._put, value, timeout=timeout, **kwargs)
 
     def get(self, timeout=None, batch=False, **kwargs):
@@ -216,13 +226,16 @@ class Queue:
 
         Parameters
         ----------
-        timeout: Number (optional)
-            Time in seconds to wait before timing out
+        timeout: number or string or timedelta, optional
+            Time in seconds to wait before timing out.
+            Instead of number of seconds, it is also possible to specify
+            a timedelta in string format, e.g. "200ms".
         batch: boolean, int (optional)
             If True then return all elements currently waiting in the queue.
             If an integer than return that many elements from the queue
             If False (default) then return one item at a time
          """
+        timeout = parse_timedelta(timeout)
         return self.client.sync(self._get, timeout=timeout, batch=batch, **kwargs)
 
     def qsize(self, **kwargs):

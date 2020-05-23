@@ -1,5 +1,6 @@
 import pickle
 from time import sleep
+from datetime import timedelta
 
 import pytest
 
@@ -57,9 +58,9 @@ async def test_acquires_with_zero_timeout(c, s, a, b):
     assert lock.locked()
     await lock.release()
 
-    await lock.acquire(timeout=1)
+    await lock.acquire(timeout="1s")
     await lock.release()
-    await lock.acquire(timeout=1)
+    await lock.acquire(timeout=timedelta(seconds=1))
     await lock.release()
 
 

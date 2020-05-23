@@ -7,7 +7,7 @@ import weakref
 
 from .core import CommClosedError
 from .metrics import time
-from .utils import sync, TimeoutError
+from .utils import sync, TimeoutError, parse_timedelta
 from .protocol.serialize import to_serialize
 
 logger = logging.getLogger(__name__)
@@ -429,7 +429,16 @@ class Sub:
     __anext__ = _get
 
     def get(self, timeout=None):
-        """ Get a single message """
+        """ Get a single message
+
+        Parameters
+        ----------
+        timeout: number or string or timedelta, optional
+            Time in seconds to wait before timing out.
+            Instead of number of seconds, it is also possible to specify
+            a timedelta in string format, e.g. "200ms".
+        """
+        timeout = parse_timedelta(timeout)
         if self.client:
             return self.client.sync(self._get, timeout=timeout)
         elif self.worker.thread_id == threading.get_ident():

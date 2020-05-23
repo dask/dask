@@ -445,7 +445,16 @@ class Semaphore:
 
         If the internal counter is greater than zero, decrement it by one and return True immediately.
         If it is zero, wait until a release() is called and return True.
+
+        Parameters
+        ----------
+        timeout : number or string or timedelta, optional
+            Seconds to wait on acquiring the semaphore.  This does not
+            include local coroutine time, network transfer time, etc..
+            Instead of number of seconds, it is also possible to specify
+            a timedelta in string format, e.g. "200ms".
         """
+        timeout = parse_timedelta(timeout)
         return self.client.sync(self._acquire, timeout=timeout)
 
     def release(self):

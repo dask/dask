@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 import pickle
 import dask
 import pytest
@@ -77,10 +78,10 @@ async def test_release_simple(c, s, a, b):
 @gen_cluster(client=True)
 async def test_acquires_with_timeout(c, s, a, b):
     sem = await Semaphore(1, "x")
-    assert await sem.acquire(timeout=0.025)
+    assert await sem.acquire(timeout="25ms")
     assert not await sem.acquire(timeout=0.025)
     await sem.release()
-    assert await sem.acquire(timeout=0.025)
+    assert await sem.acquire(timeout=timedelta(seconds=0.025))
     await sem.release()
 
 

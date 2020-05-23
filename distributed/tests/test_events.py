@@ -1,4 +1,5 @@
 import pickle
+from datetime import timedelta
 
 from distributed import Event
 from distributed.utils_test import gen_cluster
@@ -119,10 +120,10 @@ async def test_timeout(c, s, a, b):
     assert not await Event("x").wait(timeout=0.1)
 
     await event.set()
-    assert await Event("x").wait(timeout=0.1)
+    assert await Event("x").wait(timeout="100ms")
 
     await event.clear()
-    assert not await Event("x").wait(timeout=0.1)
+    assert not await Event("x").wait(timeout=timedelta(seconds=0.1))
 
 
 def test_event_sync(client):

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 from time import sleep
 
 import pytest
@@ -248,7 +249,7 @@ async def test_timeout(c, s, a, b):
 
     start = time()
     with pytest.raises(TimeoutError):
-        await q.get(timeout=0.3)
+        await q.get(timeout="300ms")
     stop = time()
     assert 0.2 < stop - start < 2.0
 
@@ -256,7 +257,7 @@ async def test_timeout(c, s, a, b):
 
     start = time()
     with pytest.raises(TimeoutError):
-        await q.put(2, timeout=0.3)
+        await q.put(2, timeout=timedelta(seconds=0.3))
     stop = time()
     assert 0.1 < stop - start < 2.0
 
