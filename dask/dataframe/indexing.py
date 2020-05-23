@@ -97,6 +97,8 @@ class _LocIndexer(_IndexerBase):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
             return self._loc_array(iindexer, cindexer)
+        elif callable(iindexer):
+            return self._loc(iindexer(self.obj), cindexer)
 
         if self.obj.known_divisions:
             iindexer = self._maybe_partial_time_string(iindexer)

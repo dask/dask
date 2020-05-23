@@ -4216,12 +4216,23 @@ def transposelist(arrays, axes, extradims=0):
     return reshapelist(newshape, result)
 
 
-def stack(seq, axis=0):
+def stack(seq, axis=0, allow_unknown_chunksizes=False):
     """
     Stack arrays along a new axis
 
     Given a sequence of dask arrays, form a new dask array by stacking them
     along a new dimension (axis=0 by default)
+
+     Parameters
+    ----------
+    seq: list of dask.arrays
+    axis: int
+        Dimension along which to align all of the arrays
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
 
     Examples
     --------
@@ -4256,7 +4267,7 @@ def stack(seq, axis=0):
 
     if not seq:
         raise ValueError("Need array(s) to stack")
-    if not all(x.shape == seq[0].shape for x in seq):
+    if not allow_unknown_chunksizes and not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
         raise ValueError(
             "Stacked arrays must have the same shape. "

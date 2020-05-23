@@ -580,44 +580,6 @@ def merge(
 ###############################################################
 
 
-def fix_overlap(ddf):
-    """ Ensures that ddf.divisions are all distinct and that the upper bound on
-    each partition is exclusive
-    """
-    if not ddf.known_divisions:
-        raise ValueError("Can only fix overlap when divisions are known")
-
-    def body(df, index):
-        return df.drop(index, inplace=True) if index in df else df
-
-    def overlap(df, index):
-        return df.loc[[index]] if index in df else None
-
-    dsk = dict()
-    name = "fix-overlap-" + tokenize(ddf)
-
-    n = len(ddf.divisions) - 1
-    divisions = []
-    for i in range(n):
-        if i > 0 and ddf.divisions[i - 1] == ddf.divisions[i]:
-            frames = dsk[(name, len(divisions) - 1)][1]
-        else:
-            frames = []
-            if i > 0:
-                frames.append((overlap, (ddf._name, i - 1), ddf.divisions[i]))
-            divisions.append(ddf.divisions[i])
-            dsk[(name, len(divisions) - 1)] = (pd.concat, frames)
-
-        if i == n - 1 or ddf.divisions[i + 1] == ddf.divisions[i]:
-            frames.append((ddf._name, i))
-        else:
-            frames.append((body, (ddf._name, i), ddf.divisions[i + 1]))
-    divisions.append(ddf.divisions[-1])
-
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    return new_dd_object(graph, name, ddf._meta, divisions)
-
-
 def most_recent_tail(left, right):
     if len(right.index) == 0:
         return left
@@ -767,9 +729,6 @@ def _concat_compat(frames, left, right):
 
 
 def merge_asof_indexed(left, right, **kwargs):
-    left = fix_overlap(left)
-    right = fix_overlap(right)
-
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
@@ -1009,7 +968,13 @@ def stack_partitions(dfs, divisions, join="outer"):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def concat(dfs, axis=0, join="outer", interleave_partitions=False):
+def concat(
+    dfs,
+    axis=0,
+    join="outer",
+    interleave_partitions=False,
+    ignore_unknown_divisions=False,
+):
     """ Concatenate DataFrames along rows.
 
     - When axis=0 (default), concatenate DataFrames row-wise:
@@ -1038,6 +1003,9 @@ def concat(dfs, axis=0, join="outer", interleave_partitions=False):
     interleave_partitions : bool, default False
         Whether to concatenate DataFrames ignoring its order. If True, every
         divisions are concatenated each by each.
+    ignore_unknown_divisions : bool, default False
+        By default a warning is raised if any input has unknown divisions.
+        Set to True to disable this warning.
 
     Notes
     -----
@@ -1082,6 +1050,12 @@ def concat(dfs, axis=0, join="outer", interleave_partitions=False):
     >>> dd.concat([a, b])                               # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
 
+    By default concatenating with unknown divisions will raise a warning.
+    Set ``ignore_unknown_divisions=True`` to disable this:
+
+    >>> dd.concat([a, b], ignore_unknown_divisions=True)# doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(None, None, None, None)>
+
     Different categoricals are unioned
 
     >> dd.concat([                                     # doctest: +SKIP
@@ -1115,12 +1089,13 @@ def concat(dfs, axis=0, join="outer", interleave_partitions=False):
             and all(not df.known_divisions for df in dfs)
             and len({df.npartitions for df in dasks}) == 1
         ):
-            warnings.warn(
-                "Concatenating dataframes with unknown divisions.\n"
-                "We're assuming that the indexes of each dataframes"
-                " are \n aligned. This assumption is not generally "
-                "safe."
-            )
+            if not ignore_unknown_divisions:
+                warnings.warn(
+                    "Concatenating dataframes with unknown divisions.\n"
+                    "We're assuming that the indexes of each dataframes"
+                    " are \n aligned. This assumption is not generally "
+                    "safe."
+                )
             return concat_unindexed_dataframes(dfs)
         else:
             raise ValueError(
