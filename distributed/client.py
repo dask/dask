@@ -2574,6 +2574,7 @@ class Client:
             dependencies = {
                 tokey(k): [tokey(dep) for dep in deps]
                 for k, deps in dependencies.items()
+                if deps
             }
             for k, deps in future_dependencies.items():
                 if deps:
