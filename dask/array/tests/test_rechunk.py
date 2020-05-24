@@ -79,9 +79,6 @@ def test_intersect_2():
     assert answer == cross
 
 
-
-    
-
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
     a = np.random.uniform(0, 1, 30)

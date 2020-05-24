@@ -232,7 +232,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     chunks = normalize_chunks(
         chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
     )
-    
+
     if chunks == x.chunks:
         return x
     ndim = x.ndim
