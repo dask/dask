@@ -5,7 +5,6 @@ import shutil
 from operator import getitem
 import uuid
 import tempfile
-import warnings
 
 import tlz as toolz
 import numpy as np
@@ -116,8 +115,6 @@ def set_index(
         ):
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
-            # There are cases where this still may not be sorted
-            # so sort_index to be sure. https://github.com/dask/dask/issues/2288
             return result.map_partitions(M.sort_index)
 
     return set_partition(
@@ -776,6 +773,49 @@ def set_index_post_series(df, index_name, drop, column_dtype):
     return df2
 
 
+def drop_overlap(df, index):
+    return df.drop(index) if index in df.index else df
+
+
+def get_overlap(df, index):
+    return df.loc[[index]] if index in df.index else None
+
+
+def fix_overlap(ddf, overlap):
+    """ Ensures that the upper bound on each partition of ddf is exclusive """
+    name = "fix-overlap-" + tokenize(ddf, overlap)
+    n = len(ddf.divisions) - 1
+    dsk = {(name, i): (ddf._name, i) for i in range(n)}
+
+    for i in overlap:
+        frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
+        dsk[(name, i)] = (pd.concat, frames)
+        dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    return new_dd_object(graph, name, ddf._meta, ddf.divisions)
+
+
+def compute_and_set_divisions(df, **kwargs):
+    mins = df.index.map_partitions(M.min, meta=df.index)
+    maxes = df.index.map_partitions(M.max, meta=df.index)
+    mins, maxes = compute(mins, maxes, **kwargs)
+
+    if (
+        sorted(mins) != list(mins)
+        or sorted(maxes) != list(maxes)
+        or any(a > b for a, b in zip(mins, maxes))
+    ):
+        raise ValueError(
+            "Partitions must be sorted ascending with the index", mins, maxes
+        )
+
+    df.divisions = tuple(mins) + (list(maxes)[-1],)
+
+    overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
+    return fix_overlap(df, overlap) if overlap else df
+
+
 def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
     if not isinstance(index, Series):
         meta = df._meta.set_index(index, drop=drop)
@@ -785,7 +825,7 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 
     if not divisions:
-        divisions = compute_divisions(result, **kwargs)
+        return compute_and_set_divisions(result, **kwargs)
     elif len(divisions) != len(df.divisions):
         msg = (
             "When doing `df.set_index(col, sorted=True, divisions=...)`, "
@@ -800,24 +840,3 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
 
     result.divisions = tuple(divisions)
     return result
-
-
-def compute_divisions(df, **kwargs):
-    mins = df.index.map_partitions(M.min, meta=df.index)
-    maxes = df.index.map_partitions(M.max, meta=df.index)
-    mins, maxes = compute(mins, maxes, **kwargs)
-
-    if (
-        sorted(mins) != list(mins)
-        or sorted(maxes) != list(maxes)
-        or any(a > b for a, b in zip(mins, maxes))
-    ):
-        raise ValueError(
-            "Partitions must be sorted ascending with the index", mins, maxes
-        )
-
-    if any(a >= b for a, b in zip(maxes[:1], mins[1:])):
-        warnings.warn("Partition indices have overlap.")
-
-    divisions = tuple(mins) + (list(maxes)[-1],)
-    return divisions
