@@ -132,18 +132,16 @@ class Task:
         """
         # TODO(sjperkins)
         # Figure out how to make these imports work globally
+        from .core import spec_type
         from .utils import apply
         from .highlevelgraph import HighLevelGraph
 
         fs = Task.from_spec
-        typ = type(dsk)
+        typ = spec_type(dsk)
 
-        if typ is tuple:
-            # Tuples are either tasks, or keys
-            if len(dsk) == 0:
-                return dsk
+        if typ is TupleTask:
             # task of the form (apply, function [, args [, kwargs]])
-            elif dsk[0] is apply:
+            if dsk[0] is apply:
                 annot = getattr(dsk[1], "_dask_annotations", None)
 
                 if len(dsk) == 2:
@@ -159,15 +157,12 @@ class Task:
                 raise ValueError("Invalid apply dsk %s" % dsk)
 
             # task of the form (function, arg1, arg2, ..., argn)
-            elif callable(dsk[0]):
+            else:
                 return Task(
                     dsk[0],
                     list(fs(a) for a in dsk[1:]),
                     annotations=getattr(dsk[0], "_dask_annotations", None),
                 )
-            # key is implied by a standard tuple
-            else:
-                return dsk
         elif typ is list:
             return [fs(t) for t in dsk]
         elif typ is dict:
@@ -180,7 +175,7 @@ class Task:
 
             return HighLevelGraph(layers, dsk.dependencies)
         else:
-            # Key or literal
+            # Task or Key or literal
             return dsk
 
     @classmethod
