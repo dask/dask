@@ -2762,10 +2762,10 @@ class Client:
             Whether or not to optimize the underlying graphs
         workers: str, list, dict
             Which workers can run which parts of the computation
-            If a string a list then the output collections will run on the listed
+            If a string or list then the output collections will run on the listed
             workers, but other sub-computations can run anywhere
-            If a dict then keys should be (tuples of) collections and values
-            should be addresses or lists.
+            If a dict then keys should be (tuples of) collections or
+            task keys and values should be addresses or lists.
         allow_other_workers: bool, list
             If True then all restrictions in workers= are considered loose
             If a list then only the keys for the listed collections are loose
@@ -2912,10 +2912,10 @@ class Client:
             Whether or not to optimize the underlying graphs
         workers: str, list, dict
             Which workers can run which parts of the computation
-            If a string a list then the output collections will run on the listed
+            If a string or list then the output collections will run on the listed
             workers, but other sub-computations can run anywhere
-            If a dict then keys should be (tuples of) collections and values
-            should be addresses or lists.
+            If a dict then keys should be (tuples of) collections or
+            task keys and values should be addresses or lists.
         allow_other_workers: bool, list
             If True then all restrictions in workers= are considered loose
             If a list then only the keys for the listed collections are loose
@@ -3912,6 +3912,8 @@ class Client:
                     ws = [ws]
                 if dask.is_dask_collection(colls):
                     keys = flatten(colls.__dask_keys__())
+                elif isinstance(colls, str):
+                    keys = [colls]
                 else:
                     keys = list(
                         {k for c in flatten(colls) for k in flatten(c.__dask_keys__())}
