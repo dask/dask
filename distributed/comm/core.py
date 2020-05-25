@@ -40,6 +40,7 @@ class Comm(ABC):
 
     def __init__(self):
         self._instances.add(self)
+        self.allow_offload = True  # for deserialization in utils.from_frames
         self.name = None
 
     # XXX add set_close_callback()?

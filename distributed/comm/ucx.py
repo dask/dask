@@ -176,7 +176,10 @@ class UCX(Comm):
                     serializers = ("cuda", "dask", "pickle", "error")
                 # msg can also be a list of dicts when sending batched messages
                 frames = await to_frames(
-                    msg, serializers=serializers, on_error=on_error
+                    msg,
+                    serializers=serializers,
+                    on_error=on_error,
+                    allow_offload=self.allow_offload,
                 )
                 nframes = len(frames)
                 cuda_frames = tuple(
@@ -261,7 +264,10 @@ class UCX(Comm):
                 for each_frame in recv_frames:
                     await self.ep.recv(each_frame)
                 msg = await from_frames(
-                    frames, deserialize=self.deserialize, deserializers=deserializers
+                    frames,
+                    deserialize=self.deserialize,
+                    deserializers=deserializers,
+                    allow_offload=self.allow_offload,
                 )
                 return msg
 
@@ -310,13 +316,19 @@ class UCXListener(Listener):
     encrypted = UCXConnector.encrypted
 
     def __init__(
-        self, address: str, comm_handler: None, deserialize=False, **connection_args
+        self,
+        address: str,
+        comm_handler: None,
+        deserialize=False,
+        allow_offload=True,
+        **connection_args
     ):
         if not address.startswith("ucx"):
             address = "ucx://" + address
         self.ip, self._input_port = parse_host_port(address, default_port=0)
         self.comm_handler = comm_handler
         self.deserialize = deserialize
+        self.allow_offload = allow_offload
         self._ep = None  # type: ucp.Endpoint
         self.ucp_server = None
         self.connection_args = connection_args
@@ -337,6 +349,7 @@ class UCXListener(Listener):
                 peer_addr=self.address,
                 deserialize=self.deserialize,
             )
+            ucx.allow_offload = self.allow_offload
             if self.comm_handler:
                 await self.comm_handler(ucx)
 

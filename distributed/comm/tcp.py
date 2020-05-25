@@ -200,7 +200,10 @@ class TCP(Comm):
         else:
             try:
                 msg = await from_frames(
-                    frames, deserialize=self.deserialize, deserializers=deserializers
+                    frames,
+                    deserialize=self.deserialize,
+                    deserializers=deserializers,
+                    allow_offload=self.allow_offload,
                 )
             except EOFError:
                 # Frames possibly garbled or truncated by communication error
@@ -216,6 +219,7 @@ class TCP(Comm):
 
         frames = await to_frames(
             msg,
+            allow_offload=self.allow_offload,
             serializers=serializers,
             on_error=on_error,
             context={"sender": self._local_addr, "recipient": self._peer_addr},
@@ -378,12 +382,19 @@ class TLSConnector(BaseTCPConnector):
 
 class BaseTCPListener(Listener, RequireEncryptionMixin):
     def __init__(
-        self, address, comm_handler, deserialize=True, default_port=0, **connection_args
+        self,
+        address,
+        comm_handler,
+        deserialize=True,
+        allow_offload=True,
+        default_port=0,
+        **connection_args
     ):
         self._check_encryption(address, connection_args)
         self.ip, self.port = parse_host_port(address, default_port)
         self.comm_handler = comm_handler
         self.deserialize = deserialize
+        self.allow_offload = allow_offload
         self.server_args = self._get_server_args(**connection_args)
         self.tcp_server = None
         self.bound_address = None
@@ -432,6 +443,7 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
         logger.debug("Incoming connection from %r to %r", address, self.contact_address)
         local_address = self.prefix + get_stream_address(stream)
         comm = self.comm_class(stream, local_address, address, self.deserialize)
+        comm.allow_offload = self.allow_offload
         await self.comm_handler(comm)
 
     def get_host_port(self):

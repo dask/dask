@@ -1372,6 +1372,7 @@ class Scheduler(ServerNode):
 
         setproctitle("dask-scheduler [not started]")
         Scheduler._instances.add(self)
+        self.rpc.allow_offload = False
 
     ##################
     # Administration #
@@ -1438,7 +1439,9 @@ class Scheduler(ServerNode):
                 c.cancel()
 
         for addr in self._start_address:
-            await self.listen(addr, **self.security.get_listen_args("scheduler"))
+            await self.listen(
+                addr, allow_offload=False, **self.security.get_listen_args("scheduler")
+            )
             self.ip = get_address_host(self.listen_address)
             listen_ip = self.ip
 
