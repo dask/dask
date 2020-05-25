@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from .config import config
 from .utils_test import add, inc  # noqa: F401
 from .task import Task, TupleTask
 
@@ -309,7 +310,7 @@ def reverse_dict(d):
     return result
 
 
-def subs(task, key, val, to_task=False):
+def subs(task, key, val):
     """ Perform a substitution on a task
 
     Examples
@@ -333,11 +334,11 @@ def subs(task, key, val, to_task=False):
             type_arg = spec_type(arg)
 
             if type_arg is Task:
-                arg = subs(arg, key, val, to_task)
+                arg = subs(arg, key, val)
             elif type_arg is TupleTask:
-                arg = subs(arg, key, val, to_task)
+                arg = subs(arg, key, val)
             elif type_arg is list:
-                arg = [subs(x, key, val, to_task) for x in arg]
+                arg = [subs(x, key, val) for x in arg]
             elif type_arg is type(key):
                 try:
                     # Can't do a simple equality check, since this may trigger
@@ -357,7 +358,8 @@ def subs(task, key, val, to_task=False):
 
             newargs.append(arg)
 
-        return (Task.from_call(task[0], *newargs) if to_task
+        return (Task.from_call(task[0], *(Task.from_spec(a) for a in newargs))
+                if config.get("convert_tasks", False)
                 else task[:1] + tuple(newargs))
     else:
         try:
@@ -367,44 +369,9 @@ def subs(task, key, val, to_task=False):
             pass
 
         if type_task is list:
-            return [subs(x, key, val, to_task) for x in task]
-
-        return task
-
-    type_task = type(task)
-
-    if not (type_task is tuple and task and callable(task[0])):  # istask(task):
-        try:
-            if type_task is type(key) and task == key:
-                return val
-        except Exception:
-            pass
-        if type_task is list:
             return [subs(x, key, val) for x in task]
-        return task
-    newargs = []
-    for arg in task[1:]:
-        type_arg = type(arg)
-        if type_arg is tuple and arg and callable(arg[0]):  # istask(task):
-            arg = subs(arg, key, val)
-        elif type_arg is list:
-            arg = [subs(x, key, val) for x in arg]
-        elif type_arg is type(key):
-            try:
-                # Can't do a simple equality check, since this may trigger
-                # a FutureWarning from NumPy about array equality
-                # https://github.com/dask/dask/pull/2457
-                if len(arg) == len(key) and all(
-                    type(aa) == type(bb) and aa == bb for aa, bb in zip(arg, key)
-                ):
-                    arg = val
 
-            except (TypeError, AttributeError):
-                # Handle keys which are not sized (len() fails), but are hashable
-                if arg == key:
-                    arg = val
-        newargs.append(arg)
-    return task[:1] + tuple(newargs)
+        return task
 
 
 def _toposort(dsk, keys=None, returncycle=False, dependencies=None):

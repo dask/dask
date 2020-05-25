@@ -40,7 +40,8 @@ from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
 from ..context import globalmethod
-from ..core import quote, get_dependencies, reverse_dict, flatten, Task
+from ..core import (quote, get_dependencies, reverse_dict,
+                    flatten, Task, TupleTask, spec_type)
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
@@ -80,21 +81,25 @@ def lazify_task(task, start=True):
     >>> lazify_task(task)  # doctest: +SKIP
     (sum, (map, inc, [1, 2, 3]))
     """
-    if type(task) is list and len(task) < 50:
+    task_type = spec_type(task)
+
+    if task_type is list and len(task) < 50:
         return [lazify_task(arg, False) for arg in task]
-    elif type(task) is Task:
+    elif task_type is Task:
         if not start and task.function in (list, reify):
             return lazify_task(task.args, start=False)
         else:
             return Task(task.function, [lazify_task(arg, False) for arg in task.args])
 
-    elif type(task) is tuple and task and callable(task):
+    elif task_type is TupleTask:
         head, tail = task[0], task[1:]
 
         if not start and head in (list, reify):
             return lazify_task(*tail, start=False)
-        else:
+        elif config.get("convert_tasks", False):
             return Task.from_call(head, *(lazify_task(arg, False) for arg in tail))
+        else:
+            return (head,) + tuple([lazify_task(arg, False) for arg in tail])
     else:
         return task
 
