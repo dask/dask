@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from .utils_test import add, inc  # noqa: F401
-from .task import Task
+from .task import Task, TupleTask
 
 
 no_default = "__no_default__"
@@ -39,12 +39,15 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return (
-        (type(x) is tuple and x and callable(x[0]))
-        or
-        # TODO: swap comparison order when Task is more widely used
-        type(x) is Task
-    )
+    # return ((type(x) is tuple and x and callable(x[0])) or type(x) is Task)
+    t = type(x)
+    return (TupleTask if (t is tuple and x and callable(x[0])) else
+            Task if t is Task else False)
+
+
+def spec_type(x):
+    t = type(x)
+    return TupleTask if (t is tuple and x and callable(x[0])) else t
 
 
 def has_tasks(dsk, x):
@@ -306,7 +309,7 @@ def reverse_dict(d):
     return result
 
 
-def subs(task, key, val):
+def subs(task, key, val, to_task=False):
     """ Perform a substitution on a task
 
     Examples
@@ -315,7 +318,61 @@ def subs(task, key, val):
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
     (inc, 1)
     """
+    type_task = spec_type(task)
+
+    if type_task is Task:
+        return Task(task.function,
+                    subs(task.args, key, val),
+                    {k: subs(v, key, val) for k, v in task.kwargs.items()}
+                    if task.kwargs else None,
+                    task.annotations)
+    elif type_task is TupleTask:
+        newargs = []
+
+        for arg in task[1:]:
+            type_arg = spec_type(arg)
+
+            if type_arg is Task:
+                arg = subs(arg, key, val, to_task)
+            elif type_arg is TupleTask:
+                arg = subs(arg, key, val, to_task)
+            elif type_arg is list:
+                arg = [subs(x, key, val, to_task) for x in arg]
+            elif type_arg is type(key):
+                try:
+                    # Can't do a simple equality check, since this may trigger
+                    # a FutureWarning from NumPy about array equality
+                    # https://github.com/dask/dask/pull/2457
+                    if len(arg) == len(key) and all(type(aa) == type(bb)
+                                                    and aa == bb
+                                                    for aa, bb
+                                                    in zip(arg, key)):
+                        arg = val
+
+                except (TypeError, AttributeError):
+                    # Handle keys which are not sized (len() fails),
+                    # but are hashable
+                    if arg == key:
+                        arg = val
+
+            newargs.append(arg)
+
+        return (Task.from_call(task[0], *newargs) if to_task
+                else task[:1] + tuple(newargs))
+    else:
+        try:
+            if type_task is type(key) and task == key:
+                return val
+        except Exception:
+            pass
+
+        if type_task is list:
+            return [subs(x, key, val, to_task) for x in task]
+
+        return task
+
     type_task = type(task)
+
     if not (type_task is tuple and task and callable(task[0])):  # istask(task):
         try:
             if type_task is type(key) and task == key:

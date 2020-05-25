@@ -887,7 +887,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
         # Skip chains with < 2 executable tasks
         ntasks = 0
         for key in chain:
-            ntasks += istask(dsk[key])
+            ntasks += istask(dsk[key]) is not False
             if ntasks > 1:
                 chains.append(chain)
                 break

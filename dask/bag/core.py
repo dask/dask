@@ -40,7 +40,7 @@ from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
 from ..context import globalmethod
-from ..core import quote, istask, get_dependencies, reverse_dict, flatten
+from ..core import quote, get_dependencies, reverse_dict, flatten, Task
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
@@ -82,14 +82,21 @@ def lazify_task(task, start=True):
     """
     if type(task) is list and len(task) < 50:
         return [lazify_task(arg, False) for arg in task]
-    if not istask(task):
-        return task
-    head, tail = task[0], task[1:]
-    if not start and head in (list, reify):
-        task = task[1]
-        return lazify_task(*tail, start=False)
+    elif type(task) is Task:
+        if not start and task.function in (list, reify):
+            return lazify_task(task.args, start=False)
+        else:
+            return Task(task.function, [lazify_task(arg, False) for arg in task.args])
+
+    elif type(task) is tuple and task and callable(task):
+        head, tail = task[0], task[1:]
+
+        if not start and head in (list, reify):
+            return lazify_task(*tail, start=False)
+        else:
+            return Task.from_call(head, *(lazify_task(arg, False) for arg in tail))
     else:
-        return (head,) + tuple([lazify_task(arg, False) for arg in tail])
+        return task
 
 
 def lazify(dsk):
@@ -120,7 +127,11 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
     inline_keys = {
         k
         for k, v in dsk.items()
-        if istask(v) and v and v[0] is list and len(dependents[k]) == 1
+        if (
+            (type(v) is Task and v.function is list)
+            or (type(v) is tuple and v and v[0] is list)
+        )
+        and len(dependents[k]) == 1
     }
     inline_keys.difference_update(flatten(keys))
     dsk = inline(dsk, inline_keys, inline_constants=False)
