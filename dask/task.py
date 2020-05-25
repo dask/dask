@@ -45,6 +45,11 @@ def annotate(fn, annotation=None):
     return g
 
 
+class TupleTask:
+    """ Means :code:`type(x) is tuple and x and callable(x[0])` """
+    pass
+
+
 class Task:
     """
     Task object
