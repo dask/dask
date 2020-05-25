@@ -29,7 +29,8 @@ def ishashable(x):
 def istask(x):
     """ Is x a runnable task?
 
-    A task is a tuple with a callable first argument
+    A task is a :class:`dask.task.Task` object or a
+    tuple with a callable first argument
 
     Examples
     --------
@@ -40,13 +41,10 @@ def istask(x):
     >>> istask(1)
     False
     """
-    # return ((type(x) is tuple and x and callable(x[0])) or type(x) is Task)
     t = type(x)
     return (
-        TupleTask
-        if (t is tuple and x and callable(x[0]))
-        else Task
-        if t is Task
+        TupleTask if (t is tuple and x and callable(x[0]))
+        else Task if t is Task
         else False
     )
 
