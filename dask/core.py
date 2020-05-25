@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from .config import config
 from .utils_test import add, inc  # noqa: F401
-from .task import Task, TupleTask
+from .task import spec_type, Task, TupleTask
 
 
 no_default = "__no_default__"
@@ -49,11 +49,6 @@ def istask(x):
         if t is Task
         else False
     )
-
-
-def spec_type(x):
-    t = type(x)
-    return TupleTask if (t is tuple and x and callable(x[0])) else t
 
 
 def has_tasks(dsk, x):

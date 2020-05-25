@@ -45,6 +45,11 @@ def annotate(fn, annotation=None):
     return g
 
 
+def spec_type(x):
+    t = type(x)
+    return TupleTask if (t is tuple and x and callable(x[0])) else t
+
+
 class TupleTask:
     """ Means :code:`type(x) is tuple and x and callable(x[0])` """
 
