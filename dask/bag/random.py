@@ -1,5 +1,32 @@
+import heapq
+import math
 import random
 from functools import partial
+
+
+def sample(population, k):
+    """
+    Chooses k unique random elements from a population bag.
+
+    Returns a new bag containing elements from the population while
+    leaving the original population unchanged.
+
+    Parameters
+    ----------
+    population : Bag
+        Elements to sample.
+    k : integer, optional
+        Number of elements to sample.
+    Examples
+    --------
+    >>> import dask.bag as db # doctest: +SKIP
+    >>> from dask.bag import random # doctest: +SKIP
+    >>>
+    >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
+    >>> list(random.sample(b, 3).compute()) # doctest: +SKIP
+    [1, 3, 5]
+    """
+    return _sample(population=population, k=k, replace=False)
 
 
 def choices(population, k=1):
@@ -22,14 +49,19 @@ def choices(population, k=1):
     >>>
     >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
     >>> list(random.choices(b, 3).compute()) # doctest: +SKIP
-    [1, 3, 5]
+    [1, 1, 5]
     """
+    return _sample(population=population, k=k, replace=True)
+
+
+def _sample(population, k, replace=False):
     return population.reduction(
-        partial(_sample_map_partitions, k=k), partial(_sample_reduce, k=k)
+        partial(_sample_map_partitions, k=k, replace=replace),
+        partial(_sample_reduce, k=k, replace=replace),
     )
 
 
-def _sample_map_partitions(population, k):
+def _sample_map_partitions(population, k, replace):
     """
     Map function used on the sample and choices functions.
     Parameters
@@ -50,12 +82,13 @@ def _sample_map_partitions(population, k):
     """
     lx = len(population)
     real_k = k if k <= lx else lx
+    sample_func = random.choices if replace else random.sample
     # because otherwise it raises IndexError:
-    sampled = [] if real_k == 0 else random.choices(population, k=real_k)
+    sampled = [] if real_k == 0 else sample_func(population=population, k=real_k)
     return sampled, lx
 
 
-def _sample_reduce(reduce_iter, k):
+def _sample_reduce(reduce_iter, k, replace):
     """
     Reduce function used on the sample and choice functions.
 
@@ -77,8 +110,8 @@ def _sample_reduce(reduce_iter, k):
         k_i = len(s_i)
         ns_ks.append((n_i, k_i))
 
-    if k < 0:
-        raise ValueError("Sample is negative")
+    if k < 0 or (k > n and not replace):
+        raise ValueError("Sample larger than population or is negative")
 
     # creating the probability array
     p = []
@@ -87,4 +120,14 @@ def _sample_reduce(reduce_iter, k):
             p_i = n_i / (k_i * n)
             p += [p_i] * k_i
 
-    return random.choices(population=s, weights=p, k=k)
+    sample_func = random.choices if replace else _weighted_sampling_without_replacement
+    return sample_func(population=s, weights=p, k=k)
+
+
+def _weighted_sampling_without_replacement(population, weights, k):
+    """
+    Source:
+        Weighted random sampling with a reservoir, Pavlos S. Efraimidis, Paul G. Spirakis
+    """
+    elt = [(math.log(random.random()) / weights[i], i) for i in range(len(weights))]
+    return [population[x[1]] for x in heapq.nlargest(k, elt)]
