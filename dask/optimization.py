@@ -13,6 +13,7 @@ from .core import (
     reverse_dict,
     ishashable,
 )
+from .task import Task
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -123,6 +124,8 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
             keys = [keys]
         keys = set(flatten(keys))
 
+    convert = config.get("convert_tasks", False)
+
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
 
@@ -191,16 +194,16 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
             child = parent
         fused.add(child)
         if is_renamed:
-            rv[new_key] = val
+            rv[new_key] = Task.from_spec(val) if convert else val
             rv[child] = new_key
             dependencies[new_key] = dependencies[child]
             dependencies[child] = {new_key}
             aliases.add(child)
         else:
-            rv[child] = val
+            rv[child] = Task.from_spec(val) if convert else val
     for key, val in dsk.items():
         if key not in fused:
-            rv[key] = val
+            rv[key] = Task.from_spec(val) if convert else val
     if aliases:
         for key, deps in dependencies.items():
             for old_key in deps & aliases:
@@ -212,6 +215,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
             for key in aliases - keys:
                 del rv[key]
                 del dependencies[key]
+
     return rv, dependencies
 
 
@@ -244,6 +248,9 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
+
+    convert = config.get("convert_tasks", False)
+
     if dependencies and isinstance(next(iter(dependencies.values())), list):
         dependencies = {k: set(v) for k, v in dependencies.items()}
 
@@ -276,7 +283,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
         keysubs[key] = val
 
     # Make new dask with substitutions
-    dsk2 = keysubs.copy()
+    dsk2 = Task.from_spec(keysubs) if convert else keysubs.copy()
     for key, val in dsk.items():
         if key not in dsk2:
             for item in keys & dependencies[key]:
@@ -540,6 +547,8 @@ def fuse(
         key_renamer = rename_keys
     rename_keys = key_renamer is not None
 
+    convert = config.get("convert_tasks", False)
+
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     else:
@@ -569,7 +578,7 @@ def fuse(
         # fusible by the main `fuse`, or by `fuse_subgraphs` if enabled.
         return dsk, deps
 
-    rv = dsk.copy()
+    rv = Task.from_spec(dsk) if convert else dsk.copy()
     fused_trees = {}
     # These are the stacks we use to store data as we traverse the graph
     info_stack = []

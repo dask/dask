@@ -5,6 +5,7 @@ from functools import partial
 import pytest
 
 import dask
+import dask.config as config
 from dask.utils_test import add, inc
 from dask.core import get_dependencies
 from dask.local import get_sync
@@ -17,6 +18,7 @@ from dask.optimization import (
     fuse_linear,
     SubgraphCallable,
 )
+from dask.task import Task
 from dask.utils import partial_by_order, apply
 
 
@@ -51,7 +53,21 @@ def with_deps(dsk):
     return dsk, {k: get_dependencies(dsk, k) for k in dsk}
 
 
-def test_fuse():
+@pytest.fixture
+def convert_tasks(request):
+
+    fn = Task.from_spec if request.param is True else lambda x: x
+
+    try:
+        with config.set({"convert_tasks": request.param}):
+            yield request.param, fn
+    finally:
+        pass
+
+
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_all(convert_tasks):
+    _, fn = convert_tasks
     fuse = fuse2  # tests both `fuse` and `fuse_linear`
     d = {
         "w": (inc, "x"),
@@ -62,15 +78,18 @@ def test_fuse():
         "b": 2,
     }
     assert fuse(d, rename_keys=False) == with_deps(
-        {"w": (inc, (inc, (inc, (add, "a", "b")))), "a": 1, "b": 2}
+        fn({"w": (inc, (inc, (inc, (add, "a", "b")))), "a": 1, "b": 2})
     )
+
     assert fuse(d, rename_keys=True) == with_deps(
-        {
-            "z-y-x-w": (inc, (inc, (inc, (add, "a", "b")))),
-            "a": 1,
-            "b": 2,
-            "w": "z-y-x-w",
-        }
+        fn(
+            {
+                "z-y-x-w": (inc, (inc, (inc, (add, "a", "b")))),
+                "a": 1,
+                "b": 2,
+                "w": "z-y-x-w",
+            }
+        )
     )
 
     d = {
@@ -82,25 +101,41 @@ def test_fuse():
         "a": 1,
         "b": 2,
     }
+
+    # from pprint import pprint
+    # pprint(fuse(d, rename_keys=False))
+    # pprint(with_deps(fn(
+    #     {
+    #         "NEW": (inc, "y"),
+    #         "w": (inc, (inc, "y")),
+    #         "y": (inc, (add, "a", "b")),
+    #         "a": 1,
+    #         "b": 2,
+    #     })))
+
     assert fuse(d, rename_keys=False) == with_deps(
-        {
-            "NEW": (inc, "y"),
-            "w": (inc, (inc, "y")),
-            "y": (inc, (add, "a", "b")),
-            "a": 1,
-            "b": 2,
-        }
+        fn(
+            {
+                "NEW": (inc, "y"),
+                "w": (inc, (inc, "y")),
+                "y": (inc, (add, "a", "b")),
+                "a": 1,
+                "b": 2,
+            }
+        )
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        {
-            "NEW": (inc, "z-y"),
-            "x-w": (inc, (inc, "z-y")),
-            "z-y": (inc, (add, "a", "b")),
-            "a": 1,
-            "b": 2,
-            "w": "x-w",
-            "y": "z-y",
-        }
+        fn(
+            {
+                "NEW": (inc, "z-y"),
+                "x-w": (inc, (inc, "z-y")),
+                "z-y": (inc, (add, "a", "b")),
+                "a": 1,
+                "b": 2,
+                "w": "x-w",
+                "y": "z-y",
+            }
+        )
     )
 
     d = {
@@ -116,26 +151,30 @@ def test_fuse():
         "d": 2,
     }
     assert fuse(d, rename_keys=False) == with_deps(
-        {
-            "u": (inc, (inc, (inc, "y"))),
-            "v": (inc, "y"),
-            "y": (inc, (add, "a", "b")),
-            "a": (inc, 1),
-            "b": (inc, 2),
-        }
+        fn(
+            {
+                "u": (inc, (inc, (inc, "y"))),
+                "v": (inc, "y"),
+                "y": (inc, (add, "a", "b")),
+                "a": (inc, 1),
+                "b": (inc, 2),
+            }
+        )
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        {
-            "x-w-u": (inc, (inc, (inc, "z-y"))),
-            "v": (inc, "z-y"),
-            "z-y": (inc, (add, "c-a", "d-b")),
-            "c-a": (inc, 1),
-            "d-b": (inc, 2),
-            "a": "c-a",
-            "b": "d-b",
-            "u": "x-w-u",
-            "y": "z-y",
-        }
+        fn(
+            {
+                "x-w-u": (inc, (inc, (inc, "z-y"))),
+                "v": (inc, "z-y"),
+                "z-y": (inc, (add, "c-a", "d-b")),
+                "c-a": (inc, 1),
+                "d-b": (inc, 2),
+                "a": "c-a",
+                "b": "d-b",
+                "u": "x-w-u",
+                "y": "z-y",
+            }
+        )
     )
 
     d = {
@@ -147,25 +186,27 @@ def test_fuse():
         "y": 0,
     }
     assert fuse(d, rename_keys=False) == with_deps(
-        {"a": (inc, "x"), "b": (inc, "x"), "d": (inc, (inc, "x")), "x": (inc, 0)}
+        fn({"a": (inc, "x"), "b": (inc, "x"), "d": (inc, (inc, "x")), "x": (inc, 0)})
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        {
-            "a": (inc, "y-x"),
-            "b": (inc, "y-x"),
-            "c-d": (inc, (inc, "y-x")),
-            "y-x": (inc, 0),
-            "d": "c-d",
-            "x": "y-x",
-        }
+        fn(
+            {
+                "a": (inc, "y-x"),
+                "b": (inc, "y-x"),
+                "c-d": (inc, (inc, "y-x")),
+                "y-x": (inc, 0),
+                "d": "c-d",
+                "x": "y-x",
+            }
+        )
     )
 
     d = {"a": 1, "b": (inc, "a"), "c": (add, "b", "b")}
     assert fuse(d, rename_keys=False) == with_deps(
-        {"b": (inc, 1), "c": (add, "b", "b")}
+        fn({"b": (inc, 1), "c": (add, "b", "b")})
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        {"a-b": (inc, 1), "c": (add, "a-b", "a-b"), "b": "a-b"}
+        fn({"a-b": (inc, 1), "c": (add, "a-b", "a-b"), "b": "a-b"})
     )
 
 
