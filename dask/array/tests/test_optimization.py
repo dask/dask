@@ -396,6 +396,6 @@ def test_fuse_roots():
     y = da.zeros(10, chunks=(2,))
     z = (x + 1) + (2 * y ** 2)
     (zz,) = dask.optimize(z)
-    # assert len(zz.dask) == 5
-    assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
+    count_tasks = lambda t: dask.istask(t) is not False
+    assert sum(map(count_tasks, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
