@@ -40,8 +40,15 @@ from .avro import to_avro
 from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
 from ..context import globalmethod
-from ..core import (quote, get_dependencies, reverse_dict,
-                    flatten, Task, TupleTask, spec_type)
+from ..core import (
+    quote,
+    get_dependencies,
+    reverse_dict,
+    flatten,
+    Task,
+    TupleTask,
+    spec_type,
+)
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget

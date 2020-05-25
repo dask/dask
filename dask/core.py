@@ -42,8 +42,13 @@ def istask(x):
     """
     # return ((type(x) is tuple and x and callable(x[0])) or type(x) is Task)
     t = type(x)
-    return (TupleTask if (t is tuple and x and callable(x[0])) else
-            Task if t is Task else False)
+    return (
+        TupleTask
+        if (t is tuple and x and callable(x[0]))
+        else Task
+        if t is Task
+        else False
+    )
 
 
 def spec_type(x):
@@ -322,11 +327,14 @@ def subs(task, key, val):
     type_task = spec_type(task)
 
     if type_task is Task:
-        return Task(task.function,
-                    subs(task.args, key, val),
-                    {k: subs(v, key, val) for k, v in task.kwargs.items()}
-                    if task.kwargs else None,
-                    task.annotations)
+        return Task(
+            task.function,
+            subs(task.args, key, val),
+            {k: subs(v, key, val) for k, v in task.kwargs.items()}
+            if task.kwargs
+            else None,
+            task.annotations,
+        )
     elif type_task is TupleTask:
         newargs = []
 
@@ -344,10 +352,9 @@ def subs(task, key, val):
                     # Can't do a simple equality check, since this may trigger
                     # a FutureWarning from NumPy about array equality
                     # https://github.com/dask/dask/pull/2457
-                    if len(arg) == len(key) and all(type(aa) == type(bb)
-                                                    and aa == bb
-                                                    for aa, bb
-                                                    in zip(arg, key)):
+                    if len(arg) == len(key) and all(
+                        type(aa) == type(bb) and aa == bb for aa, bb in zip(arg, key)
+                    ):
                         arg = val
 
                 except (TypeError, AttributeError):
@@ -358,9 +365,11 @@ def subs(task, key, val):
 
             newargs.append(arg)
 
-        return (Task.from_call(task[0], *(Task.from_spec(a) for a in newargs))
-                if config.get("convert_tasks", False)
-                else task[:1] + tuple(newargs))
+        return (
+            Task.from_call(task[0], *(Task.from_spec(a) for a in newargs))
+            if config.get("convert_tasks", False)
+            else task[:1] + tuple(newargs)
+        )
     else:
         try:
             if type_task is type(key) and task == key:
