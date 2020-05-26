@@ -147,7 +147,7 @@ def test_merge_known_to_unknown(
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
-    assert len(result.__dask_graph__()) >= 400
+    assert len(result.__dask_graph__()) >= 390
 
 
 @pytest.mark.skipif(
@@ -166,7 +166,7 @@ def test_merge_unknown_to_known(
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
-    assert len(result.__dask_graph__()) > 400
+    assert len(result.__dask_graph__()) >= 390
 
 
 @pytest.mark.skipif(
@@ -185,4 +185,4 @@ def test_merge_unknown_to_unknown(
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
-    assert len(result.__dask_graph__()) > 400
+    assert len(result.__dask_graph__()) >= 390
