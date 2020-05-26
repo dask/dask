@@ -664,14 +664,42 @@ class CurrentLoad(DashboardComponent):
                     getattr(self.scheduler.workers[ws.address], "memory_limit", inf)
                     or inf
                 )
+                pause = (
+                    getattr(
+                        self.scheduler.workers[ws.address],
+                        "memory_target_fraction",
+                        inf,
+                    )
+                    or inf
+                )
+                spill = (
+                    getattr(
+                        self.scheduler.workers[ws.address],
+                        "memory_target_fraction",
+                        inf,
+                    )
+                    or inf
+                )
+                target = (
+                    getattr(
+                        self.scheduler.workers[ws.address],
+                        "memory_target_fraction",
+                        inf,
+                    )
+                    or inf
+                )
 
                 if limit > max_limit and limit != inf:
                     max_limit = limit
 
                 if nb > limit:
+                    nbytes_color.append("black")
+                elif nb > pause:
                     nbytes_color.append("red")
-                elif nb > limit / 2:
+                elif nb > target:
                     nbytes_color.append("orange")
+                elif nb > target * 0.85:
+                    nbytes_color.append("yellow")
                 else:
                     nbytes_color.append("blue")
 
