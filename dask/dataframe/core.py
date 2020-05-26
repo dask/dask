@@ -3493,6 +3493,8 @@ class DataFrame(_Frame):
         (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
         """
         col_size = len(self.columns)
+        if col_size == 0:
+            return (self.index.shape[0], 0)
         row_size = delayed(int)(self.size / col_size)
         return (row_size, col_size)
 
