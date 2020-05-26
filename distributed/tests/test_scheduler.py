@@ -1540,8 +1540,11 @@ async def test_collect_versions(c, s, a, b):
 
 @gen_cluster(client=True, config={"distributed.scheduler.idle-timeout": "500ms"})
 async def test_idle_timeout(c, s, a, b):
+    beginning = time()
+    assert s.idle_since <= beginning
     future = c.submit(slowinc, 1)
     await future
+    assert s.idle_since is None or s.idle_since > beginning
 
     assert s.status != "closed"
 
@@ -1559,6 +1562,7 @@ async def test_idle_timeout(c, s, a, b):
     assert "idle" in logs.getvalue()
     assert "500" in logs.getvalue()
     assert "ms" in logs.getvalue()
+    assert s.idle_since > beginning
 
 
 @gen_cluster(client=True, config={"distributed.scheduler.bandwidth": "100 GB"})

@@ -1099,7 +1099,7 @@ class Scheduler(ServerNode):
             self.idle_timeout = parse_timedelta(idle_timeout)
         else:
             self.idle_timeout = None
-        self.time_started = time()
+        self.idle_since = time()
         self._lock = asyncio.Lock()
         self.bandwidth = parse_bytes(dask.config.get("distributed.scheduler.bandwidth"))
         self.bandwidth_workers = defaultdict(float)
@@ -5246,18 +5246,13 @@ class Scheduler(ServerNode):
                 self.remove_worker(address=ws.address)
 
     def check_idle(self):
-        if any(ws.processing for ws in self.workers.values()):
+        if any(ws.processing for ws in self.workers.values()) or self.unrunnable:
+            self.idle_since = None
             return
-        if self.unrunnable:
-            return
+        elif not self.idle_since:
+            self.idle_since = time()
 
-        if not self.transition_log:
-            close = time() > self.time_started + self.idle_timeout
-        else:
-            last_task = self.transition_log[-1][-1]
-            close = time() > last_task + self.idle_timeout
-
-        if close:
+        if time() > self.idle_since + self.idle_timeout:
             logger.info(
                 "Scheduler closing after being idle for %s",
                 format_time(self.idle_timeout),
