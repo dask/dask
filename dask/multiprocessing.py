@@ -27,9 +27,9 @@ try:
     _loads = cloudpickle.loads
 except ImportError:
 
-    def _dumps(obj):
+    def _dumps(obj, **kwargs):
         try:
-            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL, **kwargs)
         except (pickle.PicklingError, AttributeError) as exc:
             raise ModuleNotFoundError(
                 "Please install cloudpickle to use the multiprocessing scheduler"

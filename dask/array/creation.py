@@ -22,6 +22,7 @@ from .core import (
     broadcast_arrays,
     cached_cumsum,
 )
+from .ufunc import rint
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
@@ -908,14 +909,14 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     return result
 
 
-def pad_edge(array, pad_width, mode, *args):
+def pad_edge(array, pad_width, mode, **kwargs):
     """
     Helper function for padding edges.
 
     Handles the cases where the only the values on the edge are needed.
     """
 
-    args = tuple(expand_pad_value(array, e) for e in args)
+    kwargs = {k: expand_pad_value(array, v) for k, v in kwargs.items()}
 
     result = array
     for d in range(array.ndim):
@@ -923,7 +924,7 @@ def pad_edge(array, pad_width, mode, *args):
         pad_arrays = [result, result]
 
         if mode == "constant":
-            constant_values = args[0][d]
+            constant_values = kwargs["constant_values"][d]
             constant_values = [asarray(c).astype(result.dtype) for c in constant_values]
 
             pad_arrays = [
@@ -944,7 +945,7 @@ def pad_edge(array, pad_width, mode, *args):
                     for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
                 ]
             elif mode == "linear_ramp":
-                end_values = args[0][d]
+                end_values = kwargs["end_values"][d]
 
                 pad_arrays = [
                     a.map_blocks(
@@ -971,7 +972,7 @@ def pad_edge(array, pad_width, mode, *args):
     return result
 
 
-def pad_reuse(array, pad_width, mode, *args):
+def pad_reuse(array, pad_width, mode, **kwargs):
     """
     Helper function for padding boundaries with values in the array.
 
@@ -980,8 +981,14 @@ def pad_reuse(array, pad_width, mode, *args):
     boundary constraints.
     """
 
-    if mode in ["reflect", "symmetric"] and "odd" in args:
-        raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
+    if mode in {"reflect", "symmetric"}:
+        reflect_type = kwargs.get("reflect", "even")
+        if reflect_type == "odd":
+            raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
+        if reflect_type != "even":
+            raise ValueError(
+                "unsupported value for reflect_type, must be one of (`even`, `odd`)"
+            )
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -1022,7 +1029,7 @@ def pad_reuse(array, pad_width, mode, *args):
     return result
 
 
-def pad_stats(array, pad_width, mode, *args):
+def pad_stats(array, pad_width, mode, stat_length):
     """
     Helper function for padding boundaries with statistics from the array.
 
@@ -1034,7 +1041,7 @@ def pad_stats(array, pad_width, mode, *args):
     if mode == "median":
         raise NotImplementedError("`pad` does not support `mode` of `median`.")
 
-    stat_length = expand_pad_value(array, args[0])
+    stat_length = expand_pad_value(array, stat_length)
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -1076,6 +1083,11 @@ def pad_stats(array, pad_width, mode, *args):
 
             result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
 
+            if mode == "mean":
+                if np.issubdtype(array.dtype, np.integer):
+                    result_idx = rint(result_idx)
+                result_idx = result_idx.astype(array.dtype)
+
         result[idx] = result_idx
 
     result = block(result.tolist())
@@ -1102,7 +1114,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     boundaries.
     """
 
-    result = pad_edge(array, pad_width, "constant", 0)
+    result = pad_edge(array, pad_width, "constant", constant_values=0)
 
     chunks = result.chunks
     for d in range(result.ndim):
@@ -1126,37 +1138,51 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
 
 @derived_from(np)
-def pad(array, pad_width, mode, **kwargs):
+def pad(array, pad_width, mode="constant", **kwargs):
     array = asarray(array)
 
     pad_width = expand_pad_value(array, pad_width)
 
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        kwargs.setdefault("stat_length", tuple((n, n) for n in array.shape))
+    if callable(mode):
+        return pad_udf(array, pad_width, mode, **kwargs)
+
+    # Make sure that no unsupported keywords were passed for the current mode
+    allowed_kwargs = {
+        "empty": [],
+        "edge": [],
+        "wrap": [],
+        "constant": ["constant_values"],
+        "linear_ramp": ["end_values"],
+        "maximum": ["stat_length"],
+        "mean": ["stat_length"],
+        "median": ["stat_length"],
+        "minimum": ["stat_length"],
+        "reflect": ["reflect_type"],
+        "symmetric": ["reflect_type"],
+    }
+    try:
+        unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
+    except KeyError:
+        raise ValueError("mode '{}' is not supported".format(mode))
+    if unsupported_kwargs:
+        raise ValueError(
+            "unsupported keyword arguments for mode '{}': {}".format(
+                mode, unsupported_kwargs
+            )
+        )
+
+    if mode in {"maximum", "mean", "median", "minimum"}:
+        stat_length = kwargs.get("stat_length", tuple((n, n) for n in array.shape))
+        return pad_stats(array, pad_width, mode, stat_length)
     elif mode == "constant":
         kwargs.setdefault("constant_values", 0)
+        return pad_edge(array, pad_width, mode, **kwargs)
     elif mode == "linear_ramp":
         kwargs.setdefault("end_values", 0)
-    elif mode in ["reflect", "symmetric"]:
-        kwargs.setdefault("reflect_type", "even")
-    elif mode in ["edge", "wrap", "empty"]:
-        if kwargs:
-            raise TypeError("Got unsupported keyword arguments.")
-    elif callable(mode):
-        kwargs.setdefault("kwargs", {})
-    else:
-        raise ValueError("Got an unsupported `mode`.")
-
-    if not callable(mode) and len(kwargs) > 1:
-        raise TypeError("Got too many keyword arguments.")
-
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        return pad_stats(array, pad_width, mode, *kwargs.values())
-    elif mode in ["constant", "edge", "linear_ramp", "empty"]:
-        return pad_edge(array, pad_width, mode, *kwargs.values())
+        return pad_edge(array, pad_width, mode, **kwargs)
+    elif mode in {"edge", "empty"}:
+        return pad_edge(array, pad_width, mode)
     elif mode in ["reflect", "symmetric", "wrap"]:
-        return pad_reuse(array, pad_width, mode, *kwargs.values())
-    elif callable(mode):
-        return pad_udf(array, pad_width, mode, **kwargs)
-    else:
-        raise ValueError("Unsupported mode selected.")
+        return pad_reuse(array, pad_width, mode, **kwargs)
+
+    assert False, "unreachable"

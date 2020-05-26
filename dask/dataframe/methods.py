@@ -78,7 +78,7 @@ def boundary_slice(
     Columns: []
     Index: []
     """
-    if df.empty:
+    if len(df.index) == 0:
         return df
 
     if kind == "loc" and not df.index.is_monotonic:

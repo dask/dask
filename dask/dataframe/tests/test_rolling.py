@@ -1,3 +1,5 @@
+from distutils.version import LooseVersion
+
 import pandas as pd
 import pytest
 import numpy as np
@@ -383,7 +385,11 @@ def test_rolling_agg_aggregate():
 
 @pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
 def test_rolling_numba_engine():
-    pytest.importorskip("numba")
+    numba = pytest.importorskip("numba")
+    if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":
+        # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
+        pytest.xfail("Known incompatibility between pandas and numba")
+
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
 
