@@ -580,44 +580,6 @@ def merge(
 ###############################################################
 
 
-def fix_overlap(ddf):
-    """ Ensures that ddf.divisions are all distinct and that the upper bound on
-    each partition is exclusive
-    """
-    if not ddf.known_divisions:
-        raise ValueError("Can only fix overlap when divisions are known")
-
-    def body(df, index):
-        return df.drop(index, inplace=True) if index in df else df
-
-    def overlap(df, index):
-        return df.loc[[index]] if index in df else None
-
-    dsk = dict()
-    name = "fix-overlap-" + tokenize(ddf)
-
-    n = len(ddf.divisions) - 1
-    divisions = []
-    for i in range(n):
-        if i > 0 and ddf.divisions[i - 1] == ddf.divisions[i]:
-            frames = dsk[(name, len(divisions) - 1)][1]
-        else:
-            frames = []
-            if i > 0:
-                frames.append((overlap, (ddf._name, i - 1), ddf.divisions[i]))
-            divisions.append(ddf.divisions[i])
-            dsk[(name, len(divisions) - 1)] = (pd.concat, frames)
-
-        if i == n - 1 or ddf.divisions[i + 1] == ddf.divisions[i]:
-            frames.append((ddf._name, i))
-        else:
-            frames.append((body, (ddf._name, i), ddf.divisions[i + 1]))
-    divisions.append(ddf.divisions[-1])
-
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    return new_dd_object(graph, name, ddf._meta, divisions)
-
-
 def most_recent_tail(left, right):
     if len(right.index) == 0:
         return left
@@ -767,9 +729,6 @@ def _concat_compat(frames, left, right):
 
 
 def merge_asof_indexed(left, right, **kwargs):
-    left = fix_overlap(left)
-    right = fix_overlap(right)
-
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
