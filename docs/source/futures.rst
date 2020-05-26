@@ -440,6 +440,7 @@ Coordination Primitives
    Queue
    Variable
    Lock
+   Event
    Semaphore
    Pub
    Sub
@@ -450,7 +451,7 @@ Sometimes situations arise where tasks, workers, or clients need to coordinate
 with each other in ways beyond normal task scheduling with futures.  In these
 cases Dask provides additional primitives to help in complex situations.
 
-Dask provides distributed versions of coordination primitives like locks,
+Dask provides distributed versions of coordination primitives like locks, events,
 queues, global variables, and pub-sub systems that, where appropriate, match
 their in-memory counterparts.  These can be used to control access to external
 resources, track progress of ongoing computations, or share data in
@@ -622,6 +623,62 @@ locks for a particular situation:
 
 This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
+
+
+Events
+~~~~~~
+
+.. autosummary::
+   Event
+
+Dask Events mimic ``asyncio.Event`` objects, but on a cluster scope.
+They hold a single flag which can be set or cleared.
+Clients can wait until the event flag is set.
+Different from a ``Lock``, every client can set or clear the flag and there
+is no "ownership" of an event.
+
+You can use events to e.g. synchronize multiple clients:
+
+.. code-block:: python
+
+   # One one client
+   from dask.distributed import Event
+
+   event = Event("my-event-1")
+   event.wait()
+
+The call to wait will block until the event is set, e.g. in another client
+
+.. code-block:: python
+
+   # In another client
+   from dask.distributed import Event
+
+   event = Event("my-event-1")
+
+   # do some work
+
+   event.set()
+
+Events can be set, cleared and waited on multiple times.
+Every waiter referencing the same event name will be notified on event set
+(and not only the first one as in the case of a lock):
+
+.. code-block:: python
+
+   from dask.distributed import Event
+
+   def wait_for_event(x):
+      event = Event("my-event")
+
+      event.wait()
+      # at this point, all function calls
+      # are in sync once the event is set
+
+   futures = client.map(wait_for_event, range(10))
+
+   Event("my-event").set()
+   client.gather(futures)
 
 
 Semaphore
@@ -857,6 +914,9 @@ API
    :members:
 
 .. autoclass:: Lock
+   :members:
+
+.. autoclass:: Event
    :members:
 
 .. autoclass:: Pub
