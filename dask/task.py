@@ -230,10 +230,14 @@ class Task:
             self.annotations.update(annotations)
 
     def from_tuple(self, task):
-        if type(task) is tuple and task and callable(task[0]):
-            return Task.from_spec(task)
+        task_type = spec_type(task)
 
-        raise TypeError("task is not a (fn, *args) task tuple")
+        if task_type is Task:
+            return task
+        elif task_type is TupleTask:
+            return Task.from_spec(task)
+        else:
+            raise TypeError("task is not a (fn, *args) task tuple")
 
     def to_tuple(self):
         return Task.to_spec(self)
