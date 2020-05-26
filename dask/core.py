@@ -120,9 +120,11 @@ def _execute_task(arg, cache, dsk=None):
     >>> _execute_task('foo', cache)  # Passes through on non-keys
     'foo'
     """
-    if isinstance(arg, list):
+    arg_type = spec_type(arg)
+
+    if arg_type is list:
         return [_execute_task(a, cache) for a in arg]
-    elif isinstance(arg, Task):
+    elif arg_type is Task:
         return arg.function(
             *(
                 (_execute_task(a, cache) for a in arg.args)
@@ -136,7 +138,7 @@ def _execute_task(arg, cache, dsk=None):
             )
         )
 
-    elif istask(arg):
+    elif arg_type is TupleTask:
         func, args = arg[0], arg[1:]
         # Note: Don't assign the subtask results to a variable. numpy detects
         # temporaries by their reference count and can execute certain
