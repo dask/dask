@@ -866,7 +866,7 @@ def concat_and_check(dfs):
     return methods.concat(dfs, axis=1)
 
 
-def concat_unindexed_dataframes(dfs):
+def concat_unindexed_dataframes(dfs, **kwargs):
     name = "concat-" + tokenize(*dfs)
 
     dsk = {
@@ -874,17 +874,17 @@ def concat_unindexed_dataframes(dfs):
         for i in range(dfs[0].npartitions)
     }
 
-    meta = methods.concat([df._meta for df in dfs], axis=1)
+    meta = methods.concat([df._meta for df in dfs], axis=1, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
-def concat_indexed_dataframes(dfs, axis=0, join="outer"):
+def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     """ Concatenate indexed dataframes together along the index """
     warn = axis != 0
     meta = methods.concat(
-        [df._meta for df in dfs], axis=axis, join=join, filter_warning=warn
+        [df._meta for df in dfs], axis=axis, join=join, filter_warning=warn, **kwargs
     )
     empties = [strip_unknown_categories(df._meta) for df in dfs]
 
@@ -1084,7 +1084,7 @@ def concat(
 
     if axis == 1:
         if all(df.known_divisions for df in dasks):
-            return concat_indexed_dataframes(dfs, axis=axis, join=join)
+            return concat_indexed_dataframes(dfs, axis=axis, join=join, **kwargs)
         elif (
             len(dasks) == len(dfs)
             and all(not df.known_divisions for df in dfs)
@@ -1097,7 +1097,7 @@ def concat(
                     " are \n aligned. This assumption is not generally "
                     "safe."
                 )
-            return concat_unindexed_dataframes(dfs)
+            return concat_unindexed_dataframes(dfs, **kwargs)
         else:
             raise ValueError(
                 "Unable to concatenate DataFrame with unknown "
@@ -1117,7 +1117,7 @@ def concat(
                 divisions += dfs[-1].divisions
                 return stack_partitions(dfs, divisions, join=join, **kwargs)
             elif interleave_partitions:
-                return concat_indexed_dataframes(dfs, join=join)
+                return concat_indexed_dataframes(dfs, join=join, **kwargs)
             else:
                 divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
                 return stack_partitions(dfs, divisions, join=join, **kwargs)
