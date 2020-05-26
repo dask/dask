@@ -223,7 +223,7 @@ class Resampler(object):
 
     @derived_from(pd_Resampler)
     def nunique(self):
-        return self._agg("nunique")
+        return self._agg("nunique", fill_value=0)
 
     @derived_from(pd_Resampler)
     def ohlc(self):
@@ -243,11 +243,11 @@ class Resampler(object):
 
     @derived_from(pd_Resampler)
     def size(self):
-        return self._agg("size")
+        return self._agg("size", fill_value=0)
 
     @derived_from(pd_Resampler)
     def sum(self):
-        return self._agg("sum")
+        return self._agg("sum", fill_value=0)
 
     @derived_from(pd_Resampler)
     def var(self):
