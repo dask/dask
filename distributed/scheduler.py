@@ -1069,7 +1069,7 @@ class Scheduler(ServerNode):
         preload=None,
         preload_argv=(),
         plugins=(),
-        **kwargs
+        **kwargs,
     ):
         self._setup_logging(logger)
 
@@ -1352,7 +1352,7 @@ class Scheduler(ServerNode):
             connection_limit=connection_limit,
             deserialize=False,
             connection_args=self.connection_args,
-            **kwargs
+            **kwargs,
         )
 
         if self.worker_ttl:
@@ -2089,7 +2089,7 @@ class Scheduler(ServerNode):
                     exception=exception,
                     traceback=traceback,
                     worker=worker,
-                    **kwargs
+                    **kwargs,
                 )
         else:
             recommendations = {}
@@ -3389,7 +3389,7 @@ class Scheduler(ServerNode):
         close_workers=False,
         names=None,
         lock=True,
-        **kwargs
+        **kwargs,
     ):
         """ Gracefully retire workers from cluster
 
@@ -4090,7 +4090,7 @@ class Scheduler(ServerNode):
         typename=None,
         worker=None,
         startstops=None,
-        **kwargs
+        **kwargs,
     ):
         try:
             ts = self.tasks[key]
@@ -5055,6 +5055,15 @@ class Scheduler(ServerNode):
 
         # Task stream
         task_stream = self.get_task_stream(start=start)
+        total_tasks = len(task_stream)
+        timespent = defaultdict(int)
+        for d in task_stream:
+            for x in d["startstops"]:
+                timespent[x["action"]] += x["stop"] - x["start"]
+        tasks_timings = ""
+        for k in sorted(timespent.keys()):
+            tasks_timings += f"\n<li> {k} time: {format_time(timespent[k])} </li>"
+
         from .diagnostics.task_stream import rectangles
         from .dashboard.components.scheduler import task_stream_figure
 
@@ -5081,6 +5090,11 @@ class Scheduler(ServerNode):
         <i> Select different tabs on the top for additional information </i>
 
         <h2> Duration: {time} </h2>
+        <h2> Tasks Information </h2>
+        <ul>
+         <li> number of tasks: {ntasks} </li>
+         {tasks_timings}
+        </ul>
 
         <h2> Scheduler Information </h2>
         <ul>
@@ -5096,6 +5110,8 @@ class Scheduler(ServerNode):
         </pre>
         """.format(
             time=format_time(stop - start),
+            ntasks=total_tasks,
+            tasks_timings=tasks_timings,
             address=self.address,
             nworkers=len(self.workers),
             threads=sum(w.nthreads for w in self.workers.values()),
