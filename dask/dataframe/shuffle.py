@@ -19,6 +19,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
+from . import methods
 
 logger = logging.getLogger(__name__)
 
@@ -778,7 +779,7 @@ def drop_overlap(df, index):
 
 
 def get_overlap(df, index):
-    return df.loc[[index]] if index in df.index else None
+    return df.loc[[index]] if index in df.index else df._constructor()
 
 
 def fix_overlap(ddf, overlap):
@@ -789,7 +790,7 @@ def fix_overlap(ddf, overlap):
 
     for i in overlap:
         frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
-        dsk[(name, i)] = (pd.concat, frames)
+        dsk[(name, i)] = (methods.concat, frames)
         dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
