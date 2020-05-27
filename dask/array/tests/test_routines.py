@@ -659,6 +659,7 @@ def test_histogram_normed_deprecation():
         (10, [0]),
         (10, np.array([[0, 1]])),
         (10, da.array([[0, 1]])),
+        (da.array(10), (1, 10)),
     ],
 )
 def test_histogram_bin_range_raises(bins, hist_range):

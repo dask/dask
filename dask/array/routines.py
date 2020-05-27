@@ -722,10 +722,11 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             else:
                 range_refs.append(elem)
 
+    if isinstance(bins, Array) and bins.ndim == 0:
+        raise ValueError(
+            "The number of bins cannot be a delayed Dask array, it must be an actual value or a Dask array of bin edges"
+        )
     if not np.iterable(bins):
-        assert not isinstance(
-            bins, Array
-        ), "The number of bins cannot be a Dask array, it must be an actual value"
         bin_token = bins
         if len(dependencies) == 1:
             # ^ `len(dependencies) == 1` here iff neither element in `range` was a Dask array.
