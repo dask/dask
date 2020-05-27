@@ -2590,7 +2590,6 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         )
         last_multiplier = 0
         last_autos = set()
-
         while (
             multiplier != last_multiplier or autos != last_autos
         ):  # while things change

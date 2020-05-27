@@ -199,6 +199,14 @@ def test_rechunk_0d():
     assert y.compute() == a
 
 
+@pytest.mark.parametrize(
+    "arr", [da.array([]), da.array([[], []]), da.array([[[]], [[]]])]
+)
+def test_rechunk_empty_array(arr):
+    arr.rechunk()
+    assert arr.size == 0
+
+
 def test_rechunk_empty():
     x = da.ones((0, 10), chunks=(5, 5))
     y = x.rechunk((2, 2))
