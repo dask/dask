@@ -649,15 +649,24 @@ def test_histogram_normed_deprecation():
 
 
 @pytest.mark.parametrize(
-    "bins, hist_range", [(None, None), (10, None), (None, (1, 10))]
+    "bins, hist_range",
+    [
+        (None, None),
+        (10, None),
+        (10, 1),
+        (None, (1, 10)),
+        (10, [0, 1, 2]),
+        (10, [0]),
+        (10, np.array([[0, 1]])),
+        (10, da.array([[0, 1]])),
+    ],
 )
 def test_histogram_bin_range_raises(bins, hist_range):
     data = da.random.random(10, chunks=2)
-    with pytest.raises(ValueError) as info:
+    with pytest.raises((ValueError, TypeError)) as info:
         da.histogram(data, bins=bins, range=hist_range)
     err_msg = str(info.value)
-    assert "bins" in err_msg
-    assert "range" in err_msg
+    assert "bins" in err_msg or "range" in err_msg
 
 
 @pytest.mark.parametrize("density", [True, False])

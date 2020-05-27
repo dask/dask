@@ -701,6 +701,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 raise ValueError(
                     f"range must be a sequence of length 2, but got {len(range)} items"
                 )
+            if isinstance(range, (Array, np.ndarray)) and range.ndim != 1:
+                raise ValueError(
+                    f"range must be a 1-dimensional array of two items, but got an array of shape {range.shape}"
+                )
         except TypeError:
             raise TypeError(f"expected a sequence for range, not {range}") from None
 
