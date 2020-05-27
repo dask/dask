@@ -1,3 +1,4 @@
+from distutils.version import LooseVersion
 import sys
 import multiprocessing
 from operator import add
@@ -9,7 +10,7 @@ import numpy as np
 import pytest
 import dask
 from dask import compute, delayed
-from dask.multiprocessing import get, _dumps, get_context, remote_exception
+from dask.multiprocessing import get, _dumps, _loads, get_context, remote_exception
 from dask.utils_test import inc
 
 
@@ -57,6 +58,42 @@ def test_pickle_locals():
     assert b"my_small_function_global" not in b
     assert b"my_small_function_local" in b
     assert b"unrelated_function_local" not in b
+
+
+@not_cloudpickle
+def test_pickle_kwargs():
+    """Test that out-of-band pickling works
+
+    Note cloudpickle does not support this argument:
+
+    https://github.com/cloudpipe/cloudpickle/issues/213
+    """
+    b = _dumps(my_small_function_global, fix_imports=True)
+    assert b"my_small_function_global" in b
+    assert b"unrelated_function_global" not in b
+    assert b"numpy" not in b
+    my_small_function_global_2 = _loads(b, fix_imports=True)
+    assert my_small_function_global_2(2, 3) == 5
+
+
+@pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
+def test_out_of_band_pickling():
+    """Test that out-of-band pickling works
+    """
+    if has_cloudpickle:
+        if cloudpickle.__version__ < LooseVersion("1.3.0"):
+            pytest.skip("when using cloudpickle, it must be version 1.3.0+")
+
+    a = np.arange(5)
+
+    l = []
+    b = _dumps(a, buffer_callback=l.append)
+    assert len(l) == 1
+    assert isinstance(l[0], pickle.PickleBuffer)
+    assert memoryview(l[0]) == memoryview(a)
+
+    a2 = _loads(b, buffers=l)
+    assert np.all(a == a2)
 
 
 def bad():

@@ -167,8 +167,9 @@ def read_parquet(
         the second level corresponds to the kwargs that will be passed on to
         the underlying `pyarrow` or `fastparquet` function.
         Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
-        'file' (for opening a `fastparquet` `ParquetFile`), and 'read' (for the
-        backend read function)
+        'file' (for opening a `fastparquet` `ParquetFile`), 'read' (for the
+        backend read function), 'arrow_to_pandas' (for controlling the arguments
+        passed to convert from a `pyarrow.Table.to_pandas()`)
 
     Examples
     --------

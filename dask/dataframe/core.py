@@ -1177,6 +1177,60 @@ Dask Name: {name}, {task} tasks"""
         elif freq is not None:
             return repartition_freq(self, freq=freq)
 
+    def shuffle(
+        self,
+        on,
+        npartitions=None,
+        max_branch=None,
+        shuffle=None,
+        ignore_index=False,
+        compute=None,
+    ):
+        """ Rearrange DataFrame into new partitions
+
+        Uses hashing of `on` to map rows to output partitions. After this
+        operation, rows with the same value of `on` will be in the same
+        partition.
+
+        Parameters
+        ----------
+        on : str, list of str, or Series, Index, or DataFrame
+            Column(s) or index to be used to map rows to output partitions
+        npartitions : int, optional
+            Number of partitions of output. Partition count will not be
+            changed by default.
+        max_branch: int, optional
+            The maximum number of splits per input partition. Used within
+            the staged shuffling algorithm.
+        shuffle: {'disk', 'tasks'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` for
+            distributed operation.  Will be inferred by your current scheduler.
+        ignore_index: bool, default False
+            Ignore index during shuffle.  If ``True``, performance may improve,
+            but index values will not be preserved.
+        compute: bool
+            Whether or not to trigger an immediate computation. Defaults to False.
+
+        Notes
+        -----
+        This does not preserve a meaningful index/partitioning scheme. This
+        is not deterministic if done in parallel.
+
+        Examples
+        --------
+        >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
+        """
+        from .shuffle import shuffle as dd_shuffle
+
+        return dd_shuffle(
+            self,
+            on,
+            npartitions=npartitions,
+            max_branch=max_branch,
+            shuffle=shuffle,
+            compute=compute,
+        )
+
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
         axis = self._validate_axis(axis)
@@ -1975,7 +2029,7 @@ Dask Name: {name}, {task} tasks"""
 
             if isinstance(quantiles[0], Scalar):
                 layer = {
-                    (keyname, 0): (pd.Series, qnames, num.columns, None, meta.name)
+                    (keyname, 0): (type(meta), qnames, num.columns, None, meta.name)
                 }
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
@@ -2097,7 +2151,7 @@ Dask Name: {name}, {task} tasks"""
         ]
         stats_names = [(s._name, 0) for s in stats]
 
-        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+        colname = data._meta.name if is_series_like(data._meta) else None
 
         name = "describe-numeric--" + tokenize(num, split_every)
         layer = {
@@ -3493,6 +3547,8 @@ class DataFrame(_Frame):
         (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
         """
         col_size = len(self.columns)
+        if col_size == 0:
+            return (self.index.shape[0], 0)
         row_size = delayed(int)(self.size / col_size)
         return (row_size, col_size)
 
@@ -5245,14 +5301,19 @@ def quantile(df, q, method="default"):
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
-        meta = pd.Series(df._meta_nonempty).quantile(q)
+        series_typ = df._meta.to_series()._constructor
+        meta = df._meta_nonempty.to_series().quantile(q)
     else:
+        if is_series_like(df._meta):
+            series_typ = df._meta._constructor
+        else:
+            series_typ = df._meta._constructor_sliced
         meta = df._meta_nonempty.quantile(q)
 
     if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
-        finalize_tsk = lambda tsk: (pd.Series, tsk, q, None, df_name)
+        finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
         return_type = Series
     else:
         finalize_tsk = lambda tsk: (getitem, tsk, 0)
@@ -5267,8 +5328,9 @@ def quantile(df, q, method="default"):
     if len(qs) == 0:
         name = "quantiles-" + token
         empty_index = pd.Index([], dtype=float)
+
         return Series(
-            {(name, 0): pd.Series([], name=df.name, index=empty_index, dtype="float")},
+            {(name, 0): series_typ([], name=df.name, index=empty_index, dtype="float")},
             name,
             df._meta,
             [None, None],
@@ -6294,8 +6356,6 @@ def prefix_reduction(f, ddf, identity, **kwargs):
     ddf : dd.DataFrame
     identity : pd.DataFrame
         an identity element of f, that is f(identity, df) = f(df, identity) = df
-    kwargs : ??
-        keyword arguments of f ??
     """
     dsk = dict()
     name = "prefix_reduction-" + tokenize(f, ddf, identity, **kwargs)
