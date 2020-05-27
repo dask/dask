@@ -80,7 +80,7 @@ def test_sample_size_over():
     seq = range(3)
     sut = db.from_sequence(seq, npartitions=3)
     # should raise: Sample larger than population or is negative
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Sample larger than population or is negative"):
         random.sample(sut, k=4).compute()
 
 
