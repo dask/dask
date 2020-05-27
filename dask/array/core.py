@@ -1061,7 +1061,7 @@ class Array(DaskMethodsMixin):
         return self
 
     def __reduce__(self):
-        return (Array, (self.dask, self.name, self.chunks, self.dtype))
+        return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
 
     def __dask_graph__(self):
         return self.dask
