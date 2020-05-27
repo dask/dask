@@ -5,7 +5,7 @@ set -o errexit
 test_import () {
     echo "Create environment: python=$PYTHON $1"
     # Create an empty environment
-    conda create -y -n test-imports -c conda-forge python=$PYTHON_VERSION $1 > /dev/null 2>&1
+    conda create -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml $1 > /dev/null 2>&1
     source activate test-imports > /dev/null 2>&1
     echo "python -c '$2'"
     python -c "$2"
