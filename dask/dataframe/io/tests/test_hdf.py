@@ -847,7 +847,9 @@ def test_hdf_path_exceptions():
         dd.read_hdf([], "/tmp")
 
 
-@pytest.mark.skipif(pd.__version__ < LooseVersion("0.24.2"), reason='HDF key behaviour changed')
+@pytest.mark.skipif(
+    pd.__version__ < LooseVersion("0.24.2"), reason="HDF key behaviour changed"
+)
 def test_hdf_nonpandas_keys():
     # https://github.com/dask/dask/issues/5934
     # TODO: maybe remove this if/when pandas copes with all keys
@@ -882,7 +884,7 @@ def test_hdf_nonpandas_keys():
 
         # pandas keys should still work
         bar = pd.DataFrame(np.random.randn(10, 4))
-        bar.to_hdf(path, "/bar", format="table", mode='a')
+        bar.to_hdf(path, "/bar", format="table", mode="a")
 
         dd.read_hdf(path, "/group/table1")
         dd.read_hdf(path, "/group/table2")
