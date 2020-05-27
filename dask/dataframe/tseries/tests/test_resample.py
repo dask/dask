@@ -82,6 +82,15 @@ def test_resample_agg_passes_kwargs():
     assert (ds.resample("2h").agg(foo, bar=2) == 2).compute().all()
 
 
+def test_resample_throws_error_when_parition_index_does_not_match_index():
+    index = pd.date_range("1-1-2000", "2-15-2000", freq="D")
+    index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="D"))
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=5)
+    with pytest.raises(ValueError, match="Index is not contained within new index."):
+        ds.resample("2M").count().compute()
+
+
 def test_series_resample_not_implemented():
     index = pd.date_range(start="2012-01-02", periods=100, freq="T")
     s = pd.Series(range(len(index)), index=index)
