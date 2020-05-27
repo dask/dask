@@ -1,3 +1,4 @@
+from distutils.version import LooseVersion
 import numpy as np
 import pandas as pd
 import pytest
@@ -846,6 +847,7 @@ def test_hdf_path_exceptions():
         dd.read_hdf([], "/tmp")
 
 
+@pytest.mark.skipif(pd.__version__ < LooseVersion("0.24.2"), reason='HDF key behaviour changed')
 def test_hdf_nonpandas_keys():
     # https://github.com/dask/dask/issues/5934
     # TODO: maybe remove this if/when pandas copes with all keys
@@ -863,7 +865,7 @@ def test_hdf_nonpandas_keys():
         value3 = tables.Float32Col()
 
     with tmpfile("h5") as path:
-        with tables.open_file(path, mode="w") as h5file:
+        with tables.open_file(path, mode="a") as h5file:
             group = h5file.create_group("/", "group")
             t = h5file.create_table(group, "table1", Table1, "Table 1")
             row = t.row
@@ -877,6 +879,12 @@ def test_hdf_nonpandas_keys():
             row = t.row
             row["value3"] = 1
             row.append()
+
+        # pandas keys should still work
+        bar = pd.DataFrame(np.random.randn(10, 4))
+        bar.to_hdf(path, "/bar", format="table", mode='a')
+
         dd.read_hdf(path, "/group/table1")
         dd.read_hdf(path, "/group/table2")
         dd.read_hdf(path, "/group/table3")
+        dd.read_hdf(path, "/bar")
