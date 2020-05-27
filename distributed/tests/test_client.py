@@ -5133,7 +5133,7 @@ async def test_call_stack_collections_all(c, s, a, b):
     assert result
 
 
-@gen_cluster(client=True, worker_kwargs={"profile_cycle_interval": 100})
+@gen_cluster(client=True, worker_kwargs={"profile_cycle_interval": "100ms"})
 async def test_profile(c, s, a, b):
     futures = c.map(slowinc, range(10), delay=0.05, workers=a.address)
     await wait(futures)
@@ -5155,7 +5155,7 @@ async def test_profile(c, s, a, b):
     assert not result["count"]
 
 
-@gen_cluster(client=True, worker_kwargs={"profile_cycle_interval": 100})
+@gen_cluster(client=True, worker_kwargs={"profile_cycle_interval": "100ms"})
 async def test_profile_keys(c, s, a, b):
     x = c.map(slowinc, range(10), delay=0.05, workers=a.address)
     y = c.map(slowdec, range(10), delay=0.05, workers=a.address)

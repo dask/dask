@@ -4975,8 +4975,11 @@ class Scheduler(ServerNode):
             *(
                 self.rpc(w).profile(start=start, stop=stop, key=key, server=server)
                 for w in workers
-            )
+            ),
+            return_exceptions=True
         )
+
+        results = [r for r in results if not isinstance(r, Exception)]
 
         if merge_workers:
             response = profile.merge(*results)
@@ -5003,9 +5006,11 @@ class Scheduler(ServerNode):
         else:
             workers = set(self.workers) & set(workers)
         results = await asyncio.gather(
-            *(self.rpc(w).profile_metadata(start=start, stop=stop) for w in workers)
+            *(self.rpc(w).profile_metadata(start=start, stop=stop) for w in workers),
+            return_exceptions=True
         )
 
+        results = [r for r in results if not isinstance(r, Exception)]
         counts = [v["counts"] for v in results]
         counts = itertools.groupby(merge_sorted(*counts), lambda t: t[0] // dt * dt)
         counts = [(time, sum(pluck(1, group))) for time, group in counts]
