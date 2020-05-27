@@ -2029,7 +2029,7 @@ Dask Name: {name}, {task} tasks"""
 
             if isinstance(quantiles[0], Scalar):
                 layer = {
-                    (keyname, 0): (pd.Series, qnames, num.columns, None, meta.name)
+                    (keyname, 0): (type(meta), qnames, num.columns, None, meta.name)
                 }
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
@@ -2151,7 +2151,7 @@ Dask Name: {name}, {task} tasks"""
         ]
         stats_names = [(s._name, 0) for s in stats]
 
-        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+        colname = data._meta.name if is_series_like(data._meta) else None
 
         name = "describe-numeric--" + tokenize(num, split_every)
         layer = {
@@ -5301,14 +5301,19 @@ def quantile(df, q, method="default"):
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
-        meta = pd.Series(df._meta_nonempty).quantile(q)
+        series_typ = df._meta.to_series()._constructor
+        meta = df._meta_nonempty.to_series().quantile(q)
     else:
+        if is_series_like(df._meta):
+            series_typ = df._meta._constructor
+        else:
+            series_typ = df._meta._constructor_sliced
         meta = df._meta_nonempty.quantile(q)
 
     if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
-        finalize_tsk = lambda tsk: (pd.Series, tsk, q, None, df_name)
+        finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
         return_type = Series
     else:
         finalize_tsk = lambda tsk: (getitem, tsk, 0)
@@ -5323,8 +5328,9 @@ def quantile(df, q, method="default"):
     if len(qs) == 0:
         name = "quantiles-" + token
         empty_index = pd.Index([], dtype=float)
+
         return Series(
-            {(name, 0): pd.Series([], name=df.name, index=empty_index, dtype="float")},
+            {(name, 0): series_typ([], name=df.name, index=empty_index, dtype="float")},
             name,
             df._meta,
             [None, None],
