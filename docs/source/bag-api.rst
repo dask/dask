@@ -71,6 +71,14 @@ Turn Bags into other things
    Bag.to_delayed
    Bag.to_avro
 
+Random
+------
+
+.. autosummary::
+   random.sample
+   random.choices
+
+
 Bag methods
 -----------
 
