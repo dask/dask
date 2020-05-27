@@ -1227,6 +1227,7 @@ Dask Name: {name}, {task} tasks"""
             on,
             npartitions=npartitions,
             max_branch=max_branch,
+            ignore_index=ignore_index,
             shuffle=shuffle,
             compute=compute,
         )
