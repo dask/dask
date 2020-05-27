@@ -220,7 +220,8 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
-    if x.shape == (0,):
+    # don't rechunk if array is empty
+    if x.ndim > 0 and x.shape[-1] == 0:
         return x
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}

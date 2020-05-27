@@ -199,10 +199,12 @@ def test_rechunk_0d():
     assert y.compute() == a
 
 
-def test_rechunk_empty_array():
-    x = da.array([])
-    x.rechunk()
-    assert x.size == 0
+@pytest.mark.parametrize(
+    "arr", [da.array([]), da.array([[], []]), da.array([[[]], [[]]])]
+)
+def test_rechunk_empty_array(arr):
+    arr.rechunk()
+    assert arr.size == 0
 
 
 def test_rechunk_empty():
