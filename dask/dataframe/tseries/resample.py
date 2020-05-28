@@ -86,7 +86,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
             setter = lambda a, val: a.append(val)
         else:
             setter = lambda a, val: a.__setitem__(-1, val)
-        setter(newdivs, divisions[-1])
+        setter(newdivs, divisions[-1] + res)
         if outdivs[-1] > divisions[-1]:
             setter(outdivs, outdivs[-1])
         elif outdivs[-1] < divisions[-1]:
