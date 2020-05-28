@@ -616,8 +616,8 @@ def map_overlap(
     >>> x = da.arange(8).reshape(2, 4).rechunk((1, 2))
     >>> y = da.arange(4).rechunk(2)
     >>> da.map_overlap(func, x, y, depth=1).compute() # doctest: +NORMALIZE_WHITESPACE
-    array([[0,  2,  4,  6],
-           [4,  6,  8,  10]])
+    array([[ 0,  2,  4,  6],
+           [ 4,  6,  8,  10]])
 
     When multiple arrays are given, they do not need to have the
     same number of dimensions but they must broadcast together.
