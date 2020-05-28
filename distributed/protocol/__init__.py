@@ -105,6 +105,10 @@ def _register_rmm():
 @cuda_deserialize.register_lazy("cudf")
 @dask_serialize.register_lazy("cudf")
 @dask_deserialize.register_lazy("cudf")
+@cuda_serialize.register_lazy("dask_cudf")
+@cuda_deserialize.register_lazy("dask_cudf")
+@dask_serialize.register_lazy("dask_cudf")
+@dask_deserialize.register_lazy("dask_cudf")
 def _register_cudf():
     from cudf.comm import serialize
 
