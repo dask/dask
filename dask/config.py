@@ -6,10 +6,7 @@ import sys
 import threading
 import warnings
 
-try:
-    import yaml
-except ImportError:
-    yaml = None
+import yaml
 
 
 no_default = "__no_default__"
@@ -387,11 +384,8 @@ def collect(paths=paths, env=None):
     """
     if env is None:
         env = os.environ
-    configs = []
 
-    if yaml:
-        configs.extend(collect_yaml(paths=paths))
-
+    configs = collect_yaml(paths=paths)
     configs.append(collect_env(env=env))
 
     return merge(*configs)
@@ -581,10 +575,7 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
         return key
 
 
-refresh()
-
-
-if yaml:
+def _initialize():
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
     ensure_file(source=fn)
 
@@ -592,4 +583,7 @@ if yaml:
         _defaults = yaml.safe_load(f)
 
     update_defaults(_defaults)
-    del fn, _defaults
+
+
+refresh()
+_initialize()
