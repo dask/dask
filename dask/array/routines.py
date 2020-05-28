@@ -635,10 +635,6 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
-def is_scalary(x):
-    return np.isscalar(x) or (isinstance(x, Array) and x.chunks == ())
-
-
 # TODO: dask linspace doesn't support delayed values
 def _linspace_from_delayed(start, stop, num=50):
     linspace_name = "linspace-" + tokenize(start, stop, num)
@@ -651,7 +647,7 @@ def _linspace_from_delayed(start, stop, num=50):
         linspace_name, linspace_dsk, dependencies=deps
     )
 
-    chunks = ((np.nan,),) if is_dask_collection(num) else ((num,),)
+    chunks = ((float("nan"),),) if is_dask_collection(num) else ((num,),)
     return Array(linspace_graph, linspace_name, chunks, dtype=float)
 
 
@@ -670,6 +666,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
       and a ``range`` argument is required as computing ``min`` and ``max``
       over blocked arrays is an expensive operation that must be performed
       explicitly.
+
+    - If ``bins`` is a single number, it cannot be a delayed value.
 
     - ``weights`` must be a dask.array.Array with the same block structure
       as ``a``.
@@ -696,11 +694,19 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    if bins is None or (is_scalary(bins) and range is None):
+    scalar_bins = np.isscalar(bins) or (isinstance(bins, np.ndarray) and bins.ndim == 0)
+
+    if bins is None or (scalar_bins and range is None):
         raise ValueError(
             "dask.array.histogram requires either specifying "
             "bins as an iterable or specifying both a range and "
             "the number of bins"
+        )
+
+    if isinstance(bins, Array) and bins.ndim == 0:
+        raise ValueError(
+            "The number of bins cannot be a delayed Dask array. It must be a concrete number, "
+            "or a (possibly-delayed) array/sequence of bin edges."
         )
 
     if weights is not None and weights.chunks != a.chunks:
@@ -728,10 +734,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 f"Expected a sequence or array for range, not {range}"
             ) from None
 
-    if is_scalary(bins):
+    token = tokenize(a, bins, range, weights, density)
+    name = "histogram-sum-" + token
+
+    if scalar_bins:
         bins = _linspace_from_delayed(range[0], range[1], bins + 1)
         # ^ NOTE `range[1]` is safe because of the above check, and the initial check
-        # that range must not be None if `is_scalary(bins)`
+        # that `range` must not be None if `scalar_bins` is True
     else:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
@@ -739,9 +748,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             raise ValueError(
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
-
-    token = tokenize(a, bins, range, weights, density)
-    name = "histogram-sum-" + token
 
     (bins_ref, range_ref), deps = unpack_collections([bins, range])
 
@@ -768,12 +774,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     # Turn graph into a 2D Array of shape (nchunks, nbins)
     nchunks = len(list(flatten(a.__dask_keys__())))
-    try:
-        nbins = len(bins) - 1
-    except TypeError:
-        # `bins` has a NaN in its chunks
-        nbins = float("nan")
-    chunks = ((1,) * nchunks, (nbins,))
+    chunks = ((1,) * nchunks, (len(bins) - 1,))
     mapped = Array(graph, name, chunks, dtype=dtype)
 
     # Sum over chunks to get the final histogram
