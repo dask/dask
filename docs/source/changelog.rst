@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2.17.2 / 2020-05-28
+-------------------
+
+Core
+++++
+
+- Re-add the ``complete`` extra (:pr:`6257`) `Jim Crist-Harif`_
+
+DataFrame
++++++++++
+
+- Raise error if ``resample`` isn't going to give right answer (:pr:`6244`) `Julia Signell`_
+
+
 2.17.1 / 2020-05-28
 -------------------
 
