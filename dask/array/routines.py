@@ -635,10 +635,6 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
-def is_scalary(x):
-    return np.isscalar(x) or (isinstance(x, Array) and x.chunks == ())
-
-
 # TODO: dask linspace doesn't support delayed values
 def _linspace_from_delayed(start, stop, num=50):
     linspace_name = "linspace-" + tokenize(start, stop, num)
@@ -674,6 +670,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     - ``weights`` must be a dask.array.Array with the same block structure
       as ``a``.
 
+    - If ``density`` is True, ``bins`` cannot be a single-number delayed
+      value. It must be a concrete number, or a (possibly-delayed)
+      array/sequence of the bin edges.
+
     Examples
     --------
     Using number of bins and range:
@@ -696,7 +696,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    if bins is None or (is_scalary(bins) and range is None):
+    scalar_bins = (bins.ndim if isinstance(bins, Array) else np.ndim(bins)) == 0
+    # ^ `np.ndim` is not implemented by Dask array.
+
+    if bins is None or (scalar_bins and range is None):
         raise ValueError(
             "dask.array.histogram requires either specifying "
             "bins as an iterable or specifying both a range and "
@@ -711,6 +714,12 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             "The normed= keyword argument has been deprecated. "
             "Please use density instead. "
             "See the numpy.histogram docstring for more information."
+        )
+
+    if density and isinstance(bins, Array) and bins.ndim == 0:
+        raise NotImplementedError(
+            "When `density` is True, the number of bins cannot be a delayed Dask array. "
+            "It must be a concrete number or a (possibly-delayed) array/sequence of bin edges."
         )
 
     if range is not None:
@@ -728,10 +737,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 f"Expected a sequence or array for range, not {range}"
             ) from None
 
-    if is_scalary(bins):
+    token = tokenize(a, bins, range, weights, density)
+    name = "histogram-sum-" + token
+
+    if scalar_bins:
         bins = _linspace_from_delayed(range[0], range[1], bins + 1)
         # ^ NOTE `range[1]` is safe because of the above check, and the initial check
-        # that range must not be None if `is_scalary(bins)`
+        # that range must not be None if `scalar_bins`
     else:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
@@ -739,9 +751,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             raise ValueError(
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
-
-    token = tokenize(a, bins, range, weights, density)
-    name = "histogram-sum-" + token
 
     (bins_ref, range_ref), deps = unpack_collections([bins, range])
 

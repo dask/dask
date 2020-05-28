@@ -690,7 +690,7 @@ def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins)
         d_range[non_delayed_i] = d_range[non_delayed_i].compute()
     hist_d, bins_d = da.histogram(
         vd,
-        bins=da.array(n) if delay_n_bins else n,
+        bins=da.array(n) if delay_n_bins and not density else n,
         range=d_range,
         density=density,
         weights=weights_d if weighted else None,
@@ -741,6 +741,14 @@ def test_histogram_delayed_bins(density, weighted):
     assert bins_d is bins_d2
     assert_eq(hist_d, hist)
     assert_eq(bins_d2, bins)
+
+
+def test_histogram_delayed_n_bins_raises_with_density():
+    data = da.random.random(10, chunks=2)
+    with pytest.raises(
+        NotImplementedError, match="number of bins cannot be a delayed Dask array"
+    ):
+        da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
 
 
 def test_cov():
