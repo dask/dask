@@ -636,6 +636,11 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
+# mapped blockwise function for histogram
+def _block_hist(x, bins, range=None, weights=None):
+    return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
+
+
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
     Blocked variant of :func:`numpy.histogram`.
@@ -779,12 +784,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     name = "histogram-sum-" + token
 
     # Map the histogram to all bins
-    def block_hist(x, bins, range=None, weights=None):
-        return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
-
     if weights is None:
         dsk = {
-            (name, i, 0): (block_hist, k, bins_ref, range_refs)
+            (name, i, 0): (_block_hist, k, bins_ref, range_refs)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
@@ -793,7 +795,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (block_hist, k, bins_ref, range_refs, w)
+            (name, i, 0): (_block_hist, k, bins_ref, range_refs, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
