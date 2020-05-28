@@ -237,7 +237,7 @@ def merge_chunk(lhs, *args, **kwargs):
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
 
-    if categorical_columns is not None:
+    if categorical_columns is not None and PANDAS_GT_100:
         for col in categorical_columns:
             left = None
             right = None

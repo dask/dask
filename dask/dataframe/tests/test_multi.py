@@ -2159,8 +2159,12 @@ def test_categorical_join():
     assert actual_dask.join_col.dtype == "category"
 
     actual = actual_dask.compute()
-    assert actual.join_col.dtype == "category"
-    assert assert_eq(expected, actual)
+    if dd._compat.PANDAS_GT_100:
+        assert actual.join_col.dtype == "category"
+        assert assert_eq(expected, actual)
+    else:
+        assert actual.join_col.dtype == "object"
+        assert assert_eq(expected, actual, check_dtypes=False)
 
 
 def test_categorical_merge_with_columns_missing_from_left():
@@ -2197,7 +2201,7 @@ def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
     assert assert_eq(expected, actual)
 
 
-def test_categorical_merge_julia():
+def test_categorical_merge_retains_category_dtype():
     # https://github.com/dask/dask/issues/6142
     a = pd.DataFrame({"A": [0, 1, 2, 3], "B": [4, 5, 6, 7]})
     b = pd.DataFrame({"A": [0, 1, 2, 4], "C": [4, 5, 7, 7]})
@@ -2212,4 +2216,7 @@ def test_categorical_merge_julia():
     assert actual_dask.A.dtype == "category"
 
     actual = actual_dask.compute()
-    assert actual.A.dtype == "category"
+    if dd._compat.PANDAS_GT_100:
+        assert actual.A.dtype == "category"
+    else:
+        assert actual.A.dtype == "int"
