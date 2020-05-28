@@ -3124,7 +3124,13 @@ class Scheduler(ServerNode):
                 if not all(r["status"] == "OK" for r in result):
                     return {
                         "status": "missing-data",
-                        "keys": tuple(concat(r["keys"].keys() for r in result)),
+                        "keys": tuple(
+                            concat(
+                                r["keys"].keys()
+                                for r in result
+                                if r["status"] == "missing-data"
+                            )
+                        ),
                     }
 
                 for sender, recipient, ts in msgs:
@@ -4976,7 +4982,7 @@ class Scheduler(ServerNode):
                 self.rpc(w).profile(start=start, stop=stop, key=key, server=server)
                 for w in workers
             ),
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         results = [r for r in results if not isinstance(r, Exception)]
@@ -5007,7 +5013,7 @@ class Scheduler(ServerNode):
             workers = set(self.workers) & set(workers)
         results = await asyncio.gather(
             *(self.rpc(w).profile_metadata(start=start, stop=stop) for w in workers),
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         results = [r for r in results if not isinstance(r, Exception)]
