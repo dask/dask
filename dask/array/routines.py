@@ -11,7 +11,8 @@ from tlz import concat, sliding_window, interleave
 
 from ..compatibility import apply
 from ..core import flatten
-from ..base import tokenize
+from ..base import tokenize, is_dask_collection
+from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
@@ -24,7 +25,6 @@ from .core import (
     Array,
     map_blocks,
     elemwise,
-    from_array,
     asarray,
     asanyarray,
     concatenate,
@@ -635,6 +635,30 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
+def is_scalary(x):
+    return np.isscalar(x) or (isinstance(x, Array) and x.chunks == ())
+
+
+# TODO: dask linspace doesn't support delayed values
+def _linspace_from_delayed(start, stop, num=50):
+    linspace_name = "linspace-" + tokenize(start, stop, num)
+    (start_ref, stop_ref, num_ref), deps = unpack_collections([start, stop, num])
+    if len(deps) == 0:
+        return np.linspace(start, stop, num=num)
+
+    linspace_dsk = {(linspace_name, 0): (np.linspace, start_ref, stop_ref, num_ref)}
+    linspace_graph = HighLevelGraph.from_collections(
+        linspace_name, linspace_dsk, dependencies=deps
+    )
+
+    chunks = ((np.nan,),) if is_dask_collection(num) else ((num,),)
+    return Array(linspace_graph, linspace_name, chunks, dtype=float)
+
+
+def _block_hist(x, bins, range=None, weights=None):
+    return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
+
+
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
     Blocked variant of :func:`numpy.histogram`.
@@ -672,7 +696,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    if not np.iterable(bins) and (range is None or bins is None):
+    if bins is None or (is_scalary(bins) and range is None):
         raise ValueError(
             "dask.array.histogram requires either specifying "
             "bins as an iterable or specifying both a range and "
@@ -689,30 +713,42 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             "See the numpy.histogram docstring for more information."
         )
 
-    if not np.iterable(bins):
-        bin_token = bins
-        mn, mx = range
-        if mn == mx:
-            mn -= 0.5
-            mx += 0.5
+    if range is not None:
+        try:
+            if len(range) != 2:
+                raise ValueError(
+                    f"range must be a sequence or array of length 2, but got {len(range)} items"
+                )
+            if isinstance(range, (Array, np.ndarray)) and range.shape != (2,):
+                raise ValueError(
+                    f"range must be a 1-dimensional array of two items, but got an array of shape {range.shape}"
+                )
+        except TypeError:
+            raise TypeError(
+                f"Expected a sequence or array for range, not {range}"
+            ) from None
 
-        bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+    if is_scalary(bins):
+        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
+        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
+        # that range must not be None if `is_scalary(bins)`
     else:
-        bin_token = bins
-    token = tokenize(a, bin_token, range, weights, density)
+        if not isinstance(bins, (Array, np.ndarray)):
+            bins = asarray(bins)
+        if bins.ndim != 1:
+            raise ValueError(
+                f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
+            )
 
-    nchunks = len(list(flatten(a.__dask_keys__())))
-    chunks = ((1,) * nchunks, (len(bins) - 1,))
-
+    token = tokenize(a, bins, range, weights, density)
     name = "histogram-sum-" + token
 
-    # Map the histogram to all bins
-    def block_hist(x, range=None, weights=None):
-        return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
+    (bins_ref, range_ref), deps = unpack_collections([bins, range])
 
+    # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
         dsk = {
-            (name, i, 0): (block_hist, k, range)
+            (name, i, 0): (_block_hist, k, bins_ref, range_ref)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
@@ -720,22 +756,33 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (block_hist, k, range, w)
+            (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
 
-    graph = HighLevelGraph.from_collections(
-        name, dsk, dependencies=[a] if weights is None else [a, weights]
-    )
+    deps = (a,) + deps
+    if weights is not None:
+        deps += (weights,)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
 
+    # Turn graph into a 2D Array of shape (nchunks, nbins)
+    nchunks = len(list(flatten(a.__dask_keys__())))
+    try:
+        nbins = len(bins) - 1
+    except TypeError:
+        # `bins` has a NaN in its chunks
+        nbins = float("nan")
+    chunks = ((1,) * nchunks, (nbins,))
     mapped = Array(graph, name, chunks, dtype=dtype)
+
+    # Sum over chunks to get the final histogram
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
     if density is not None:
         if density:
-            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            db = asarray(np.diff(bins).astype(float), chunks=n.chunks)
             return n / db / n.sum(), bins
         else:
             return n, bins
@@ -1300,7 +1347,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
         name="piecewise",
         funclist=funclist,
         func_args=args,
-        func_kw=kw
+        func_kw=kw,
     )
 
 
