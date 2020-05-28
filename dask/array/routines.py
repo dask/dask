@@ -12,6 +12,7 @@ from tlz import concat, sliding_window, interleave
 from ..compatibility import apply
 from ..core import flatten
 from ..base import tokenize
+from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
@@ -764,9 +765,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         dependencies.append(bins)
         bins_ref = "histogram-bins-" + token
 
-        bins_dsk = {bins_ref: (np.concatenate, bins.__dask_keys__())}
+        bins_task, bins_deps = unpack_collections(bins)
         bins_graph = HighLevelGraph.from_collections(
-            bins_ref, bins_dsk, dependencies=[bins]
+            bins_ref, {bins_ref: bins_task}, dependencies=bins_deps
         )
     else:
         bins_ref = bins
