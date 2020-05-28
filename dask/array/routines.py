@@ -801,7 +801,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         dtype = weights.dtype
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    if bins_graph:
+    if bins_graph is not None:
         graph = HighLevelGraph.merge(graph, bins_graph)
 
     mapped = Array(graph, name, chunks, dtype=dtype)
