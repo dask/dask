@@ -44,6 +44,14 @@ def _resample_series(
         new_index = pd.date_range(
             start, end, freq=rule, closed=reindex_closed, name=out.index.name
         )
+
+    if not out.index.isin(new_index).all():
+        raise ValueError(
+            "Index is not contained within new index. This can often be "
+            "resolved by using larger partitions, or unambiguous "
+            "frequencies: 'Q', 'A'..."
+        )
+
     return out.reindex(new_index, fill_value=fill_value)
 
 
