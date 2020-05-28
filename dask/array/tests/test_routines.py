@@ -659,7 +659,6 @@ def test_histogram_normed_deprecation():
         (10, [0]),
         (10, np.array([[0, 1]])),
         (10, da.array([[0, 1]])),
-        (da.array(10), [1, 10]),
         ([[0, 1, 2]], None),
         (np.array([[0, 1, 2]]), None),
         (da.array([[0, 1, 2]]), None),
@@ -676,7 +675,8 @@ def test_histogram_bin_range_raises(bins, hist_range):
 @pytest.mark.parametrize("density", [True, False])
 @pytest.mark.parametrize("weighted", [True, False])
 @pytest.mark.parametrize("non_delayed_i", [None, 0, 1])
-def test_histogram_delayed_range(density, weighted, non_delayed_i):
+@pytest.mark.parametrize("delay_n_bins", [False, True])
+def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins):
     n = 100
     v = np.random.random(n)
     vd = da.from_array(v, chunks=10)
@@ -690,7 +690,7 @@ def test_histogram_delayed_range(density, weighted, non_delayed_i):
         d_range[non_delayed_i] = d_range[non_delayed_i].compute()
     hist_d, bins_d = da.histogram(
         vd,
-        bins=n,
+        bins=da.array(n) if delay_n_bins else n,
         range=d_range,
         density=density,
         weights=weights_d if weighted else None,
