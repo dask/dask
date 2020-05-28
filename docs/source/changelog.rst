@@ -1,6 +1,29 @@
 Changelog
 =========
 
+2.17.1 / 2020-05-28
+-------------------
+
+Array
++++++
+
+- Empty array rechunk (:pr:`6233`) `Andrew Fulton`_
+
+Core
+++++
+
+- Make ``pyyaml`` required (:pr:`6250`) `Jim Crist-Harif`_
+- Fix install commands from ``ImportError`` (:pr:`6238`) `Gaurav Sheni`_
+- Remove issue template (:pr:`6249`) `Jacob Tomlinson`_
+
+DataFrame
++++++++++
+
+- Pass ``ignore_index`` to ``dd_shuffle`` from ``DataFrame.shuffle`` (:pr:`6247`) `Richard (Rick) Zamora`_
+- Cope with missing HDF keys (:pr:`6204`) `Martin Durant`_
+- Generalize ``describe`` & ``quantile`` apis (:pr:`5137`) `GALI PREM SAGAR`_
+
+
 2.17.0 / 2020-05-26
 -------------------
 
@@ -3220,3 +3243,5 @@ Other
 .. _`Brian Larsen`: https://github.com/brl0
 .. _`Nils Braun`: https://github.com/nils-braun
 .. _`Scott Sanderson`: https://github.com/ssanderson
+.. _`Gaurav Sheni`: https://github.com/gsheni
+.. _`Andrew Fulton`: https://github.com/andrewfulton9
