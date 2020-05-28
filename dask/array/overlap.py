@@ -631,8 +631,10 @@ def map_overlap(
     >>> len(r.to_delayed())
     4
 
-    >>> da.map_overlap(func, x, y, depth=1, align_arrays=False)
-    ValueError: Shapes do not align
+    >>> da.map_overlap(func, x, y, depth=1, align_arrays=False).compute()
+    Traceback (most recent call last):
+        ...
+    ValueError: Shapes do not align {'.0': {2, 4}}
 
     Note also that this function is equivalent to ``map_blocks``
     by default.  A non-zero ``depth`` must be defined for any
