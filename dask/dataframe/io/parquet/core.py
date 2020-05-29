@@ -167,8 +167,9 @@ def read_parquet(
         the second level corresponds to the kwargs that will be passed on to
         the underlying `pyarrow` or `fastparquet` function.
         Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
-        'file' (for opening a `fastparquet` `ParquetFile`), and 'read' (for the
-        backend read function)
+        'file' (for opening a `fastparquet` `ParquetFile`), 'read' (for the
+        backend read function), 'arrow_to_pandas' (for controlling the arguments
+        passed to convert from a `pyarrow.Table.to_pandas()`)
 
     Examples
     --------
@@ -289,6 +290,7 @@ def to_parquet(
     storage_options=None,
     write_metadata_file=True,
     compute=True,
+    compute_kwargs=None,
     **kwargs
 ):
     """Store Dask.dataframe to Parquet files
@@ -331,6 +333,8 @@ def to_parquet(
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -453,7 +457,9 @@ def to_parquet(
         )
 
     if compute:
-        out = out.compute()
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+        out = out.compute(**compute_kwargs)
     return out
 
 

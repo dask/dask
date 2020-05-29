@@ -179,12 +179,14 @@ messy situations in everyday problems.
    develop.rst
    changelog.rst
    configuration.rst
+   configuration-reference.rst
    educational-resources.rst
    presentations.rst
    cheatsheet.rst
    spark.rst
    caching.rst
    graphs.rst
+   phases-of-computation.rst
    remote-data-services.rst
    gpu.rst
    cite.rst

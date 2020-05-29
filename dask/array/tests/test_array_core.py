@@ -362,6 +362,43 @@ def test_stack_rechunk():
     assert_eq(z, np.stack([x.compute(), y.compute()], axis=0))
 
 
+def test_stack_unknown_chunksizes():
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    a_df = pd.DataFrame({"x": np.arange(12)})
+    b_df = pd.DataFrame({"y": np.arange(12) * 10})
+
+    a_ddf = dd.from_pandas(a_df, sort=False, npartitions=3)
+    b_ddf = dd.from_pandas(b_df, sort=False, npartitions=3)
+
+    a_x = a_ddf.values
+    b_x = b_ddf.values
+
+    assert np.isnan(a_x.shape[0])
+    assert np.isnan(b_x.shape[0])
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([a_x, b_x], axis=0)
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([a_x, b_x], axis=0, allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=0))
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([a_x, b_x], axis=1)
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([a_x, b_x], axis=1, allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=1))
+
+
 def test_concatenate():
     a, b, c = [
         Array(
@@ -2375,6 +2412,20 @@ def test_from_array_dask_array():
     dx = da.from_array(x, chunks=(1, 2))
     with pytest.raises(ValueError):
         da.from_array(dx)
+
+
+def test_from_array_dask_collection_warns():
+    class CustomCollection(np.ndarray):
+        def __dask_graph__(self):
+            return {"bar": 1}
+
+    x = CustomCollection([1, 2, 3])
+    with pytest.warns(UserWarning):
+        da.from_array(x)
+
+    # Ensure da.array warns too
+    with pytest.warns(UserWarning):
+        da.array(x)
 
 
 def test_asarray():

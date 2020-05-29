@@ -1,6 +1,164 @@
 Changelog
 =========
 
+2.17.0 / 2020-05-26
+-------------------
+
+Array
++++++
+
+- Small improvements to ``da.pad`` (:pr:`6213`) `Mark Boer`_
+- Return ``tuple`` if multiple outputs in ``dask.array.apply_gufunc``, add test to check for tuple (:pr:`6207`) `Kai Mühlbauer`_
+- Support ``stack`` with unknown chunksizes (:pr:`6195`) `swapna`_
+
+Bag
++++
+
+- Random Choice on Bags (:pr:`6208`) `Antonio Ercole De Luca`_
+
+Core
+++++
+
+- Raise warning ``delayed.visualise()`` (:pr:`6216`) `Amol Umbarkar`_
+- Ensure other pickle arguments work (:pr:`6229`) `John A Kirkham`_
+- Overhaul ``fuse()`` config (:pr:`6198`) `Guido Imperiale`_
+- Update ``dask.order.order`` to consider "next" nodes using both FIFO and LIFO (:pr:`5872`) `Erik Welch`_
+
+DataFrame
++++++++++
+
+- Use 0 as ``fill_value`` for more agg methods (:pr:`6245`) `Julia Signell`_
+- Generalize ``rearrange_by_column_tasks`` and add ``DataFrame.shuffle`` (:pr:`6066`) `Richard (Rick) Zamora`_
+- Xfail ``test_rolling_numba_engine`` for newer numba and older pandas (:pr:`6236`) `James Bourbeau`_
+- Generalize ``fix_overlap`` (:pr:`6240`) `GALI PREM SAGAR`_
+- Fix ``DataFrame.shape`` with no columns (:pr:`6237`) `noreentry`_
+- Avoid shuffle when setting a presorted index with overlapping divisions (:pr:`6226`) `Krishan Bhasin`_
+- Adjust the Parquet engine classes to allow more easily subclassing (:pr:`6211`) `Marius van Niekerk`_
+- Fix ``dd.merge_asof`` with ``left_on='col'`` & ``right_index=True`` (:pr:`6192`) `noreentry`_
+- Disable warning for ``concat`` (:pr:`6210`) `Tung Dang`_
+- Move ``AUTO_BLOCKSIZE`` out of ``read_csv`` signature (:pr:`6214`) `Jim Crist-Harif`_
+- ``.loc`` indexing with callable (:pr:`6185`) `Endre Mark Borza`_
+- Avoid apply in ``_compute_sum_of_squares`` for groupby std agg (:pr:`6186`) `Richard (Rick) Zamora`_
+- Minor correction to ``test_parquet`` (:pr:`6190`) `Brian Larsen`_
+- Adhering to the passed pat for delimeter join and fix error message (:pr:`6194`) `GALI PREM SAGAR`_
+- Skip ``test_to_parquet_with_get`` if no parquet libs available (:pr:`6188`) `Scott Sanderson`_
+
+Documentation
++++++++++++++
+
+- Added documentation for ``distributed.Event`` class (:pr:`6231`) `Nils Braun`_
+- Doc write to remote (:pr:`6124`) `Ray Bell`_
+
+
+2.16.0 / 2020-05-08
+-------------------
+
+Array
++++++
+
+- Fix array general-reduction name (:pr:`6176`) `Nick Evans`_
+- Replace ``dim`` with ``shape`` in ``unravel_index`` (:pr:`6155`) `Julia Signell`_
+- Moment: handle all elements being masked (:pr:`5339`) `Gabe Joseph`_
+
+Core
+++++
+
+- Remove Redundant string concatenations in dask code-base (:pr:`6137`) `GALI PREM SAGAR`_
+- Upstream compat (:pr:`6159`) `Tom Augspurger`_
+- Ensure ``sizeof`` of dict and sequences returns an integer (:pr:`6179`) `James Bourbeau`_
+- Estimate python collection sizes with random sampling (:pr:`6154`) `Florian Jetter`_
+- Update test upstream (:pr:`6146`) `Tom Augspurger`_
+- Skip test for mindeps build (:pr:`6144`) `Tom Augspurger`_
+- Switch default multiprocessing context to "spawn" (:pr:`4003`) `Itamar Turner-Trauring`_
+- Update manifest to include dask-schema (:pr:`6140`) `Ben Zaitlen`_
+
+DataFrame
++++++++++
+
+- Harden inconsistent-schema handling in pyarrow-based ``read_parquet`` (:pr:`6160`) `Richard (Rick) Zamora`_
+- Add compute ``kwargs`` to methods that write data to disk (:pr:`6056`) `Krishan Bhasin`_
+- Fix issue where ``unique`` returns an index like result from backends (:pr:`6153`) `GALI PREM SAGAR`_
+- Fix internal error in ``map_partitions`` with collections (:pr:`6103`) `Tom Augspurger`_
+
+Documentation
++++++++++++++
+
+- Add phase of computation to index TOC (:pr:`6157`) `Ben Zaitlen`_
+- Remove unused imports in scheduling script (:pr:`6138`) `James Lamb`_
+- Fix indent (:pr:`6147`) `Martin Durant`_
+- Add Tom's log config example (:pr:`6143`) `Martin Durant`_
+
+
+2.15.0 / 2020-04-24
+-------------------
+
+Array
++++++
+
+- Update ``dask.array.from_array`` to warn when passed a Dask collection (:pr:`6122`) `James Bourbeau`_
+- Un-numpy like behaviour in ``dask.array.pad`` (:pr:`6042`) `Mark Boer`_
+- Add support for ``repeats=0`` in ``da.repeat`` (:pr:`6080`) `James Bourbeau`_
+
+Core
+++++
+
+- Fix yaml layout for schema (:pr:`6132`) `Ben Zaitlen`_
+- Configuration Reference (:pr:`6069`) `Ben Zaitlen`_
+- Add configuration option to turn off task fusion (:pr:`6087`) `Matthew Rocklin`_
+- Skip pyarrow on windows (:pr:`6094`) `Tom Augspurger`_
+- Set limit to maximum length of fused key (:pr:`6057`) `Lucas Rademaker`_
+- Add test against #6062 (:pr:`6072`) `Martin Durant`_
+- Bump checkout action to v2 (:pr:`6065`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+- Generalize categorical calls to support cudf ``Categorical`` (:pr:`6113`) `GALI PREM SAGAR`_
+- Avoid reading ``_metadata`` on every worker (:pr:`6017`) `Richard (Rick) Zamora`_
+- Use ``group_split_dispatch`` and ``ignore_index`` in ``apply_concat_apply`` (:pr:`6119`) `Richard (Rick) Zamora`_
+- Handle new (dtype) pandas metadata with pyarrow (:pr:`6090`) `Richard (Rick) Zamora`_
+- Skip ``test_partition_on_cats_pyarrow`` if pyarrow is not installed (:pr:`6112`) `James Bourbeau`_
+- Update DataFrame len to handle columns with the same name (:pr:`6111`) `James Bourbeau`_
+- ``ArrowEngine`` bug fixes and test coverage (:pr:`6047`) `Richard (Rick) Zamora`_
+- Added mode (:pr:`5958`) `Adam Lewis`_
+
+Documentation
++++++++++++++
+
+- Update "helm install" for helm 3 usage (:pr:`6130`) `JulianWgs`_
+- Extend preload documentation (:pr:`6077`) `Matthew Rocklin`_
+- Fixed small typo in DataFrame ``map_partitions()`` docstring (:pr:`6115`) `Eugene Huang`_
+- Fix typo: "double" should be times, not plus (:pr:`6091`) `David Chudzicki`_
+- Fix first line of ``array.random.*`` docs (:pr:`6063`) `Martin Durant`_
+- Add section about ``Semaphore`` in distributed (:pr:`6053`) `Florian Jetter`_
+
+
+2.14.0 / 2020-04-03
+-------------------
+
+Array
++++++
+
+- Added ``np.iscomplexobj`` implementation (:pr:`6045`) `Tom Augspurger`_
+
+Core
+++++
+
+- Update ``test_rearrange_disk_cleanup_with_exception`` to pass without cloudpickle installed (:pr:`6052`) `James Bourbeau`_
+- Fixed flaky ``test-rearrange`` (:pr:`5977`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Use ``_meta_nonempty`` for dtype casting in ``stack_partitions`` (:pr:`6061`) `mlondschien`_
+- Fix bugs in ``_metadata`` creation and filtering in parquet ``ArrowEngine`` (:pr:`6023`) `Richard (Rick) Zamora`_
+
+Documentation
++++++++++++++
+
+- DOC: Add name caveats (:pr:`6040`) `Tom Augspurger`_
+
+
 2.13.0 / 2020-03-25
 -------------------
 
@@ -3045,3 +3203,20 @@ Other
 .. _`psimaj`: https://github.com/psimaj
 .. _`mlondschien`: https://github.com/mlondschien
 .. _`petiop`: https://github.com/petiop
+.. _`Richard (Rick) Zamora`: https://github.com/rjzamora
+.. _`Mark Boer`: https://github.com/mark-boer
+.. _`Florian Jetter`: https://github.com/fjetter
+.. _`Adam Lewis`: https://github.com/balast
+.. _`David Chudzicki`: https://github.com/dchudz
+.. _`Nick Evans`: https://github.com/nre
+.. _`Kai Mühlbauer`: https://github.com/kmuehlbauer
+.. _`swapna`: https://github.com/swapna-pg
+.. _`Antonio Ercole De Luca`: https://github.com/eracle
+.. _`Amol Umbarkar`: https://github.com/mindhash
+.. _`noreentry`: https://github.com/noreentry
+.. _`Marius van Niekerk`: https://github.com/mariusvniekerk
+.. _`Tung Dang`: https://github.com/3cham
+.. _`Jim Crist-Harif`: https://github.com/jcrist
+.. _`Brian Larsen`: https://github.com/brl0
+.. _`Nils Braun`: https://github.com/nils-braun
+.. _`Scott Sanderson`: https://github.com/ssanderson

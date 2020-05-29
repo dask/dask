@@ -212,6 +212,24 @@ def test_categorize():
         ddf.categorize(split_every="foo")
 
 
+def test_categorical_dtype():
+    cat_dtype = dd.categorical.categorical_dtype(
+        meta=a, categories=["a", "b", "c"], ordered=False
+    )
+    assert_eq(cat_dtype.categories, pd.Index(["a", "b", "c"]))
+    assert_eq(cat_dtype.ordered, False)
+
+    cat_dtype = dd.categorical.categorical_dtype(meta=a, categories=["a", "b", "c"])
+    assert_eq(cat_dtype.categories, pd.Index(["a", "b", "c"]))
+    assert_eq(cat_dtype.ordered, False)
+
+    cat_dtype = dd.categorical.categorical_dtype(
+        meta=a, categories=[1, 100, 200], ordered=True
+    )
+    assert_eq(cat_dtype.categories, pd.Index([1, 100, 200]))
+    assert_eq(cat_dtype.ordered, True)
+
+
 def test_categorize_index():
     # Object dtype
     ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)

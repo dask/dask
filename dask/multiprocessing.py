@@ -27,9 +27,9 @@ try:
     _loads = cloudpickle.loads
 except ImportError:
 
-    def _dumps(obj):
+    def _dumps(obj, **kwargs):
         try:
-            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL, **kwargs)
         except (pickle.PicklingError, AttributeError) as exc:
             raise ModuleNotFoundError(
                 "Please install cloudpickle to use the multiprocessing scheduler"
@@ -138,20 +138,16 @@ and on Windows, because they each only support a single context.
 
 def get_context():
     """ Return the current multiprocessing context."""
+    # fork context does fork()-without-exec(), which can lead to deadlocks,
+    # so default to "spawn".
+    context_name = config.get("multiprocessing.context", "spawn")
     if sys.platform == "win32":
-        # Just do the default, since we can't change it:
-        if config.get("multiprocessing.context", None) is not None:
+        if context_name != "spawn":
+            # Only spawn is supported on Win32, can't change it:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
-    context_name = config.get("multiprocessing.context", None)
-    # The default context on OSX was switched from "fork" to "spawn" in
-    # Python 3.8. We keep "fork" as the default here for backwards
-    # compatibility and to avoid raising a RuntimeError when using the
-    # multiprocessing scheduler in a Python script that is not in a
-    # if __name__ == "__main__" block
-    if context_name is None and sys.platform == "darwin":
-        context_name = "fork"
-    return multiprocessing.get_context(context_name)
+    else:
+        return multiprocessing.get_context(context_name)
 
 
 def get(

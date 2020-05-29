@@ -907,6 +907,14 @@ def test_map_partitions_keeps_kwargs_readable():
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
 
 
+def test_map_partitions_with_delayed_collection():
+    # https://github.com/dask/dask/issues/5854
+    df = pd.DataFrame(columns=list("abcdefghijk"))
+    ddf = dd.from_pandas(df, 2)
+    ddf.dropna(subset=list("abcdefghijk")).compute()
+    # no error!
+
+
 def test_metadata_inference_single_partition_aligned_args():
     # https://github.com/dask/dask/issues/3034
     # Previously broadcastable series functionality broke this
@@ -1029,6 +1037,8 @@ def test_unique():
 
     assert_eq(ddf.x.unique(split_every=2), pd.Series(pdf.x.unique(), name="x"))
     assert_eq(ddf.y.unique(split_every=2), pd.Series(pdf.y.unique(), name="y"))
+    assert_eq(ddf.index.unique(), pdf.index.unique())
+
     assert ddf.x.unique(split_every=2)._name != ddf.x.unique()._name
 
 
@@ -1062,6 +1072,8 @@ def test_len():
     assert len(d.a) == len(full.a)
     assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
     assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
+    # Regression test for https://github.com/dask/dask/issues/6110
+    assert len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1)) == 0
 
 
 def test_size():
@@ -1078,6 +1090,11 @@ def test_shape():
     result = d.a.shape
     assert_eq(result[0].compute(), len(full.a))
     assert_eq(dd.compute(result)[0], (len(full.a),))
+
+    sh = dd.from_pandas(pd.DataFrame(index=[1, 2, 3]), npartitions=2).shape
+    assert (sh[0].compute(), sh[1]) == (3, 0)
+    sh = dd.from_pandas(pd.DataFrame({"a": [], "b": []}, index=[]), npartitions=1).shape
+    assert (sh[0].compute(), sh[1]) == (0, 2)
 
 
 def test_nbytes():
@@ -3674,6 +3691,22 @@ def test_dataframe_reductions_arithmetic(reduction):
     assert_eq(
         ddf - (getattr(ddf, reduction)() + 1), df - (getattr(df, reduction)() + 1)
     )
+
+
+def test_dataframe_mode():
+    data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
+
+    df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.Name.mode(), df.Name.mode())
+
+    # test empty
+    df = pd.DataFrame(columns=["a", "b"])
+    ddf = dd.from_pandas(df, npartitions=1)
+    # check_index=False should be removed once https://github.com/pandas-dev/pandas/issues/33321 is resolved.
+    assert_eq(ddf.mode(), df.mode(), check_index=False)
 
 
 def test_datetime_loc_open_slicing():

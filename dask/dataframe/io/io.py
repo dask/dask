@@ -565,14 +565,11 @@ def from_delayed(
     name = prefix + "-" + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)
     if verify_meta:
-        dsk.update(
-            {
-                (name, i): (check_meta, df.key, meta, "from_delayed")
-                for (i, df) in enumerate(dfs)
-            }
-        )
+        for (i, df) in enumerate(dfs):
+            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
     else:
-        dsk.update({(name, i): df.key for (i, df) in enumerate(dfs)})
+        for (i, df) in enumerate(dfs):
+            dsk[(name, i)] = df.key
 
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
@@ -584,10 +581,9 @@ def from_delayed(
     df = new_dd_object(dsk, name, meta, divs)
 
     if divisions == "sorted":
-        from ..shuffle import compute_divisions
+        from ..shuffle import compute_and_set_divisions
 
-        divisions = compute_divisions(df)
-        df.divisions = divisions
+        df = compute_and_set_divisions(df)
 
     return df
 
@@ -623,7 +619,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
     positions = [0]
     values = [seq[0]]
-    for pos in list(range(0, len(seq), chunksize)):
+    for pos in range(0, len(seq), chunksize):
         if pos <= positions[-1]:
             continue
         while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:

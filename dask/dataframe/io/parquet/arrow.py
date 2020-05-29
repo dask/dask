@@ -89,9 +89,22 @@ def _merge_statistics(stats, s):
         min_i = stats[-1]["columns"][i]["min"]
         max_i = stats[-1]["columns"][i]["max"]
         stats[-1]["columns"][i]["min"] = min(min_i, min_n)
-        stats[-1]["columns"][i]["max"] = min(max_i, max_n)
+        stats[-1]["columns"][i]["max"] = max(max_i, max_n)
         stats[-1]["columns"][i]["null_count"] += null_count_n
     return True
+
+
+class SimplePiece:
+    """ SimplePiece
+        Surrogate class for PyArrow ParquetDatasetPiece.
+        Only used for flat datasets (not partitioned) where
+        a "_metadata" file is available.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.partition_keys = None
+        self.row_group = None
 
 
 def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwargs):
@@ -103,37 +116,71 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     """
     parts = []
     if len(paths) > 1:
-        if gather_statistics is not False:
-            # This scans all the files
-            dataset = pq.ParquetDataset(
-                paths, filesystem=fs, filters=filters, **dataset_kwargs
-            )
-        else:
-            base, fns = _analyze_paths(paths, fs)
-            if "_metadata" in fns:
-                # We have a _metadata file, lets use it
+        base, fns = _analyze_paths(paths, fs)
+        if "_metadata" in fns:
+            # We have a _metadata file
+            # PyArrow cannot handle "_metadata"
+            # when `paths` is a list.
+            paths.remove(base + fs.sep + "_metadata")
+            fns.remove("_metadata")
+            if gather_statistics is not False:
+                # If we are allowed to gather statistics,
+                # lets use "_metadata" instead of opening
+                # every file. Note that we don't need to check if
+                # the dataset is flat here, because PyArrow cannot
+                # properly handle partitioning in this case anyway.
                 dataset = pq.ParquetDataset(
                     base + fs.sep + "_metadata",
                     filesystem=fs,
                     filters=filters,
                     **dataset_kwargs,
                 )
-            else:
-                # Rely on metadata for 0th file.
-                # Will need to pass a list of paths to read_partition
-                dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
-                parts = [base + fs.sep + fn for fn in fns]
+                dataset.metadata = dataset.pieces[0].get_metadata()
+                dataset.pieces = [SimplePiece(path) for path in paths]
+                dataset.partitions = None
+                return parts, dataset
+        if gather_statistics is not False:
+            # This scans all the files
+            dataset = pq.ParquetDataset(
+                paths, filesystem=fs, filters=filters, **dataset_kwargs
+            )
+            if dataset.schema is None:
+                # The dataset may have inconsistent schemas between files.
+                # If so, we should try to use a "_common_metadata" file
+                proxy_path = (
+                    base + fs.sep + "_common_metadata"
+                    if "_common_metadata" in fns
+                    else paths[0]
+                )
+                dataset.schema = pq.ParquetDataset(proxy_path, filesystem=fs).schema
+        else:
+            # Rely on schema for 0th file.
+            # Will need to pass a list of paths to read_partition
+            dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
+            parts = [base + fs.sep + fn for fn in fns]
     elif fs.isdir(paths[0]):
         # This is a directory, check for _metadata, then _common_metadata
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
+        # Check if dataset is "not flat" (partitioned into directories).
+        # If so, we will need to let pyarrow generate the `dataset` object.
+        not_flat = any([fs.isdir(p) for p in fs.glob(fs.sep.join([base, "*"]))])
         if "_metadata" in fns and "validate_schema" not in dataset_kwargs:
             dataset_kwargs["validate_schema"] = False
-        if "_metadata" in fns or gather_statistics is not False:
+        if not_flat or "_metadata" in fns or gather_statistics is not False:
             # Let arrow do its thing (use _metadata or scan files)
             dataset = pq.ParquetDataset(
                 paths, filesystem=fs, filters=filters, **dataset_kwargs
             )
+            if dataset.schema is None:
+                # The dataset may have inconsistent schemas between files.
+                # If so, we should try to use a "_common_metadata" file
+                proxy_path = (
+                    base + fs.sep + "_common_metadata"
+                    if "_common_metadata" in fns
+                    else allpaths[0]
+                )
+                dataset.schema = pq.ParquetDataset(proxy_path, filesystem=fs).schema
         else:
             # Use _common_metadata file if it is available.
             # Otherwise, just use 0th file
@@ -145,7 +192,7 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
                 dataset = pq.ParquetDataset(
                     allpaths[0], filesystem=fs, **dataset_kwargs
                 )
-            parts = [base + fs.sep + fn for fn in fns]
+            parts = [base + fs.sep + fn for fn in fns if fn != "_common_metadata"]
     else:
         # There is only one file to read
         dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
@@ -202,8 +249,9 @@ def _write_partitioned(
 
 
 class ArrowEngine(Engine):
-    @staticmethod
+    @classmethod
     def read_metadata(
+        cls,
         fs,
         paths,
         categories=None,
@@ -475,9 +523,9 @@ class ArrowEngine(Engine):
 
         return (meta, stats, parts)
 
-    @staticmethod
+    @classmethod
     def read_partition(
-        fs, piece, columns, index, categories=(), partitions=(), **kwargs
+        cls, fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
         if isinstance(index, list):
             for level in index:
@@ -511,19 +559,61 @@ class ArrowEngine(Engine):
                     columns_and_parts.append(part_name)
             columns = columns or None
 
-        df = piece.read(
+        arrow_table = cls._parquet_piece_as_arrow(piece, columns, partitions, **kwargs)
+        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+        # Note that `to_pandas(ignore_metadata=False)` means
+        # pyarrow will use the pandas metadata to set the index.
+        index_in_columns_and_parts = set(df.index.names).issubset(
+            set(columns_and_parts)
+        )
+        if not index:
+            if index_in_columns_and_parts:
+                # User does not want to set index and a desired
+                # column/partition has been set to the index
+                df.reset_index(drop=False, inplace=True)
+            else:
+                # User does not want to set index and an
+                # "unwanted" column has been set to the index
+                df.reset_index(drop=True, inplace=True)
+        else:
+            if set(df.index.names) != set(index) and index_in_columns_and_parts:
+                # The wrong index has been set and it contains
+                # one or more desired columns/partitions
+                df.reset_index(drop=False, inplace=True)
+            elif index_in_columns_and_parts:
+                # The correct index has already been set
+                index = False
+                columns_and_parts = list(
+                    set(columns_and_parts).difference(set(df.index.names))
+                )
+        df = df[list(columns_and_parts)]
+
+        if index:
+            df = df.set_index(index)
+        return df
+
+    @classmethod
+    def _arrow_table_to_pandas(
+        cls, arrow_table: pa.Table, categories, **kwargs
+    ) -> pd.DataFrame:
+        _kwargs = kwargs.get("arrow_to_pandas", {})
+        _kwargs.update({"use_threads": False, "ignore_metadata": False})
+
+        return arrow_table.to_pandas(categories=categories, **_kwargs)
+
+    @classmethod
+    def _parquet_piece_as_arrow(
+        cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs
+    ) -> pa.Table:
+        arrow_table = piece.read(
             columns=columns,
             partitions=partitions,
             use_pandas_metadata=True,
             use_threads=False,
             **kwargs.get("read", {}),
-        ).to_pandas(categories=categories, use_threads=False, ignore_metadata=True)[
-            list(columns_and_parts)
-        ]
-
-        if index:
-            df = df.set_index(index)
-        return df
+        )
+        return arrow_table
 
     @staticmethod
     def initialize_write(

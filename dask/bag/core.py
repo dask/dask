@@ -133,9 +133,10 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
     """ Optimize a dask from a dask Bag. """
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
-    dsk3, dependencies = fuse(
-        dsk2, keys + (fuse_keys or []), dependencies, rename_keys=rename_fused_keys
-    )
+    kwargs = {}
+    if rename_fused_keys is not None:
+        kwargs["rename_keys"] = rename_fused_keys
+    dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies, **kwargs)
     dsk4 = inline_singleton_lists(dsk3, keys, dependencies)
     dsk5 = lazify(dsk4)
     return dsk5
@@ -992,15 +993,15 @@ class Bag(DaskMethodsMixin):
 
         while k > split_every:
             c = fmt + str(depth)
-            dsk2 = dict(
-                (
-                    (c, i),
-                    (empty_safe_aggregate, aggregate, [(b, j) for j in inds], False),
+            for i, inds in enumerate(partition_all(split_every, range(k))):
+                dsk[(c, i)] = (
+                    empty_safe_aggregate,
+                    aggregate,
+                    [(b, j) for j in inds],
+                    False,
                 )
-                for i, inds in enumerate(partition_all(split_every, range(k)))
-            )
-            dsk.update(dsk2)
-            k = len(dsk2)
+
+            k = i + 1
             b = c
             depth += 1
 
@@ -1130,12 +1131,9 @@ class Bag(DaskMethodsMixin):
         if on_other is None:
             on_other = on_self
 
-        dsk.update(
-            {
-                (name, i): (list, (join, on_other, other, on_self, (self.name, i)))
-                for i in range(self.npartitions)
-            }
-        )
+        for i in range(self.npartitions):
+            dsk[(name, i)] = (list, (join, on_other, other, on_self, (self.name, i)))
+
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return type(self)(graph, name, self.npartitions)
 
@@ -1297,27 +1295,23 @@ class Bag(DaskMethodsMixin):
         while k > split_every:
             c = b + str(depth)
             if combine_initial is not no_default:
-                dsk2 = {
-                    (c, i): (
+                for i, inds in enumerate(partition_all(split_every, range(k))):
+                    dsk[(c, i)] = (
                         reduceby,
                         0,
                         combine2,
                         (toolz.concat, (map, dictitems, [(b, j) for j in inds])),
                         combine_initial,
                     )
-                    for i, inds in enumerate(partition_all(split_every, range(k)))
-                }
             else:
-                dsk2 = {
-                    (c, i): (
+                for i, inds in enumerate(partition_all(split_every, range(k))):
+                    dsk[(c, i)] = (
                         merge_with,
                         (partial, reduce, combine),
                         [(b, j) for j in inds],
                     )
-                    for i, inds in enumerate(partition_all(split_every, range(k)))
-                }
-            dsk.update(dsk2)
-            k = len(dsk2)
+
+            k = i + 1
             b = c
             depth += 1
 
@@ -1544,12 +1538,10 @@ class Bag(DaskMethodsMixin):
         dtypes = meta.dtypes.to_dict()
         name = "to_dataframe-" + tokenize(self, cols, dtypes)
         dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
-        dsk.update(
-            {
-                (name, i): (to_dataframe, (self.name, i), cols, dtypes)
-                for i in range(self.npartitions)
-            }
-        )
+
+        for i in range(self.npartitions):
+            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(dsk, name, meta, divisions)
 
@@ -2294,43 +2286,50 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
 
     token = tokenize(b, grouper, hash, max_branch)
 
-    start = dict(
-        (("shuffle-join-" + token, 0, inp), (b2.name, i) if i < b.npartitions else [])
-        for i, inp in enumerate(inputs)
-    )
+    shuffle_join_name = "shuffle-join-" + token
+    shuffle_group_name = "shuffle-group-" + token
+    shuffle_split_name = "shuffle-split-" + token
+
+    start = {}
+
+    for idx, inp in enumerate(inputs):
+        group = {}
+        split = {}
+        if idx < b.npartitions:
+            start[(shuffle_join_name, 0, inp)] = (b2.name, idx)
+        else:
+            start[(shuffle_join_name, 0, inp)] = []
+
+        for stage in range(1, stages + 1):
+            _key_tuple = (shuffle_group_name, stage, inp)
+            group[_key_tuple] = (
+                groupby,
+                (make_group, k, stage - 1),
+                (shuffle_join_name, stage - 1, inp),
+            )
+
+            for i in range(k):
+                split[(shuffle_split_name, stage, i, inp)] = (
+                    dict.get,
+                    _key_tuple,
+                    i,
+                    {},
+                )
+
+        groups.append(group)
+        splits.append(split)
 
     for stage in range(1, stages + 1):
-        group = dict(
-            (
-                ("shuffle-group-" + token, stage, inp),
-                (
-                    groupby,
-                    (make_group, k, stage - 1),
-                    ("shuffle-join-" + token, stage - 1, inp),
-                ),
-            )
-            for inp in inputs
-        )
-
-        split = dict(
-            (
-                ("shuffle-split-" + token, stage, i, inp),
-                (dict.get, ("shuffle-group-" + token, stage, inp), i, {}),
-            )
-            for i in range(k)
-            for inp in inputs
-        )
-
         join = dict(
             (
-                ("shuffle-join-" + token, stage, inp),
+                (shuffle_join_name, stage, inp),
                 (
                     list,
                     (
                         toolz.concat,
                         [
                             (
-                                "shuffle-split-" + token,
+                                shuffle_split_name,
                                 stage,
                                 inp[stage - 1],
                                 insert(inp, stage - 1, j),
@@ -2342,20 +2341,20 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
             )
             for inp in inputs
         )
-        groups.append(group)
-        splits.append(split)
+
         joins.append(join)
 
+    name = "shuffle-" + token
+
     end = dict(
-        (
-            ("shuffle-" + token, i),
-            (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),
-        )
+        ((name, i), (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),)
         for i, j in enumerate(join)
     )
 
-    name = "shuffle-" + token
-    dsk = merge(start, end, *(groups + splits + joins))
+    groups.extend(splits)
+    groups.extend(joins)
+
+    dsk = merge(start, end, *(groups))
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b2])
     return type(b)(graph, name, len(inputs))
 

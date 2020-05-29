@@ -4,6 +4,7 @@ from functools import partial
 
 import pytest
 
+import dask
 from dask.utils_test import add, inc
 from dask.core import get_dependencies
 from dask.local import get_sync
@@ -1297,3 +1298,49 @@ def test_dont_fuse_numpy_arrays():
     dsk = {"x": np.arange(5), "y": (inc, "x")}
 
     assert fuse(dsk, "y")[0] == dsk
+
+
+def test_fuse_config():
+    with dask.config.set({"optimization.fuse.active": False}):
+        d = {
+            "a": 1,
+            "b": (inc, "a"),
+        }
+        dependencies = {"b": ("a",)}
+        assert fuse(d, "b", dependencies=dependencies) == (d, dependencies)
+
+
+def test_fused_keys_max_length():  # generic fix for gh-5999
+    d = {
+        "u-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "v-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "v-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "w-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "w-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "x-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "x-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "y-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "y-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            inc,
+            "z-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong",
+        ),
+        "z-looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong": (
+            add,
+            "a",
+            "b",
+        ),
+        "a": 1,
+        "b": 2,
+    }
+
+    fused, deps = fuse(d, rename_keys=True)
+    for key in fused:
+        assert len(key) < 150

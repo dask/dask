@@ -58,6 +58,7 @@ from .utils import (
     insert_meta_param_description,
     raise_on_meta_error,
     clear_known_categories,
+    group_split_dispatch,
     is_categorical_dtype,
     has_known_categories,
     PANDAS_VERSION,
@@ -247,10 +248,9 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         other_key = other
 
-    if inv:
-        dsk.update({(name, 0): (op, other_key, (self._name, 0))})
-    else:
-        dsk.update({(name, 0): (op, (self._name, 0), other_key)})
+    dsk[(name, 0)] = (
+        (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
+    )
 
     other_meta = make_meta(other)
     other_meta_nonempty = meta_nonempty(other_meta)
@@ -498,7 +498,9 @@ Dask Name: {name}, {task} tasks"""
             raise ValueError(msg)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self, subset=None, split_every=None, split_out=1, **kwargs):
+    def drop_duplicates(
+        self, subset=None, split_every=None, split_out=1, ignore_index=False, **kwargs
+    ):
         if subset is not None:
             # Let pandas error on bad inputs
             self._meta_nonempty.drop_duplicates(subset=subset, **kwargs)
@@ -523,6 +525,7 @@ Dask Name: {name}, {task} tasks"""
             split_out=split_out,
             split_out_setup=split_out_setup,
             split_out_setup_kwargs=split_out_setup_kwargs,
+            ignore_index=ignore_index,
             **kwargs
         )
 
@@ -627,7 +630,7 @@ Dask Name: {name}, {task} tasks"""
         In the case where the metadata doesn't change, you can also pass in
         the object itself directly:
 
-        >>> res = ddf.map_partitions(lambda df: df.head(), meta=df)
+        >>> res = ddf.map_partitions(lambda df: df.head(), meta=ddf)
 
         Also note that the index and divisions are assumed to remain unchanged.
         If the function you're mapping changes the index/divisions, you'll need
@@ -1174,6 +1177,60 @@ Dask Name: {name}, {task} tasks"""
         elif freq is not None:
             return repartition_freq(self, freq=freq)
 
+    def shuffle(
+        self,
+        on,
+        npartitions=None,
+        max_branch=None,
+        shuffle=None,
+        ignore_index=False,
+        compute=None,
+    ):
+        """ Rearrange DataFrame into new partitions
+
+        Uses hashing of `on` to map rows to output partitions. After this
+        operation, rows with the same value of `on` will be in the same
+        partition.
+
+        Parameters
+        ----------
+        on : str, list of str, or Series, Index, or DataFrame
+            Column(s) or index to be used to map rows to output partitions
+        npartitions : int, optional
+            Number of partitions of output. Partition count will not be
+            changed by default.
+        max_branch: int, optional
+            The maximum number of splits per input partition. Used within
+            the staged shuffling algorithm.
+        shuffle: {'disk', 'tasks'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` for
+            distributed operation.  Will be inferred by your current scheduler.
+        ignore_index: bool, default False
+            Ignore index during shuffle.  If ``True``, performance may improve,
+            but index values will not be preserved.
+        compute: bool
+            Whether or not to trigger an immediate computation. Defaults to False.
+
+        Notes
+        -----
+        This does not preserve a meaningful index/partitioning scheme. This
+        is not deterministic if done in parallel.
+
+        Examples
+        --------
+        >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
+        """
+        from .shuffle import shuffle as dd_shuffle
+
+        return dd_shuffle(
+            self,
+            on,
+            npartitions=npartitions,
+            max_branch=max_branch,
+            shuffle=shuffle,
+            compute=compute,
+        )
+
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
         axis = self._validate_axis(axis)
@@ -1717,6 +1774,18 @@ Dask Name: {name}, {task} tasks"""
             return result
 
     @derived_from(pd.DataFrame)
+    def mode(self, dropna=True, split_every=False):
+        mode_series = self.reduction(
+            chunk=M.value_counts,
+            combine=M.sum,
+            aggregate=_mode_aggregate,
+            split_every=split_every,
+            chunk_kwargs={"dropna": dropna},
+            aggregate_kwargs={"dropna": dropna},
+        )
+        return mode_series
+
+    @derived_from(pd.DataFrame)
     def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
@@ -1992,7 +2061,7 @@ Dask Name: {name}, {task} tasks"""
 
             if isinstance(quantiles[0], Scalar):
                 layer = {
-                    (keyname, 0): (pd.Series, qnames, num.columns, None, meta.name)
+                    (keyname, 0): (type(meta), qnames, num.columns, None, meta.name)
                 }
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
@@ -2114,7 +2183,7 @@ Dask Name: {name}, {task} tasks"""
         ]
         stats_names = [(s._name, 0) for s in stats]
 
-        colname = data._meta.name if isinstance(data._meta, pd.Series) else None
+        colname = data._meta.name if is_series_like(data._meta) else None
 
         name = "describe-numeric--" + tokenize(num, split_every)
         layer = {
@@ -2146,7 +2215,7 @@ Dask Name: {name}, {task} tasks"""
         if is_datetime64_any_dtype(data._meta):
             min_ts = data.dropna().astype("i8").min(split_every=split_every)
             max_ts = data.dropna().astype("i8").max(split_every=split_every)
-            stats += [min_ts, max_ts]
+            stats.extend([min_ts, max_ts])
 
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name
@@ -2844,6 +2913,10 @@ Dask Name: {name}, {task} tasks""".format(
     def count(self, split_every=False):
         return super(Series, self).count(split_every=split_every)
 
+    @derived_from(pd.Series)
+    def mode(self, dropna=True, split_every=False):
+        return super(Series, self).mode(dropna=dropna, split_every=split_every)
+
     @derived_from(pd.Series, version="0.25.0")
     def explode(self):
         meta = self._meta.explode()
@@ -3375,7 +3448,7 @@ class DataFrame(_Frame):
 
     def __len__(self):
         try:
-            s = self[self.columns[0]]
+            s = self.iloc[:, 0]
         except IndexError:
             return super().__len__()
         else:
@@ -3506,6 +3579,8 @@ class DataFrame(_Frame):
         (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
         """
         col_size = len(self.columns)
+        if col_size == 0:
+            return (self.index.shape[0], 0)
         row_size = delayed(int)(self.size / col_size)
         return (row_size, col_size)
 
@@ -4195,6 +4270,36 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
+    def mode(self, dropna=True, split_every=False):
+        mode_series_list = []
+        for col_index in range(len(self.columns)):
+            col_series = self.iloc[:, col_index]
+            mode_series = Series.mode(
+                col_series, dropna=dropna, split_every=split_every
+            )
+            mode_series.name = col_series.name
+            mode_series_list.append(mode_series)
+
+        name = "concat-" + tokenize(*mode_series_list)
+
+        dsk = {
+            (name, 0): (
+                apply,
+                methods.concat,
+                [[(df._name, 0) for df in mode_series_list]],
+                {"axis": 1},
+            )
+        }
+
+        meta = methods.concat([df._meta for df in mode_series_list], axis=1)
+        graph = HighLevelGraph.from_collections(
+            name, dsk, dependencies=mode_series_list
+        )
+        ddf = new_dd_object(graph, name, meta, divisions=(None, None))
+
+        return ddf
+
+    @derived_from(pd.DataFrame)
     def cov(self, min_periods=None, split_every=False):
         return cov_corr(self, min_periods, split_every=split_every)
 
@@ -4702,7 +4807,9 @@ def _maybe_from_pandas(dfs):
     return dfs
 
 
-def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
+def hash_shard(
+    df, nparts, split_out_setup=None, split_out_setup_kwargs=None, ignore_index=False
+):
     if split_out_setup:
         h = split_out_setup(df, **(split_out_setup_kwargs or {}))
     else:
@@ -4711,8 +4818,8 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
     h = hash_object_dispatch(h, index=False)
     if is_series_like(h):
         h = h.values
-    h %= nparts
-    return {i: df.iloc[h == i] for i in range(nparts)}
+    np.mod(h, nparts, out=h)
+    return group_split_dispatch(df, h, nparts, ignore_index=ignore_index)
 
 
 def split_evenly(df, k):
@@ -4748,6 +4855,7 @@ def apply_concat_apply(
     split_out_setup=None,
     split_out_setup_kwargs=None,
     sort=None,
+    ignore_index=False,
     **kwargs
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -4789,6 +4897,8 @@ def apply_concat_apply(
         Keywords for the `split_out_setup` function only.
     sort : bool, default None
         If allowed, sort the keys of the output aggregation.
+    ignore_index : bool, default False
+        If True, do not preserve index values throughout ACA operations.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -4878,6 +4988,7 @@ def apply_concat_apply(
                 split_out,
                 split_out_setup,
                 split_out_setup_kwargs,
+                ignore_index,
             )
             for j in range(split_out):
                 dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
@@ -4892,7 +5003,7 @@ def apply_concat_apply(
     while k > split_every:
         for part_i, inds in enumerate(partition_all(split_every, range(k))):
             for j in range(split_out):
-                conc = (_concat, [(a, depth, i, j) for i in inds])
+                conc = (_concat, [(a, depth, i, j) for i in inds], ignore_index)
                 if combine_kwargs:
                     dsk[(b, depth + 1, part_i, j)] = (
                         apply,
@@ -4918,7 +5029,7 @@ def apply_concat_apply(
     # Aggregate
     for j in range(split_out):
         b = "{0}-agg-{1}".format(token or funcname(aggregate), token_key)
-        conc = (_concat, [(a, depth, i, j) for i in range(k)])
+        conc = (_concat, [(a, depth, i, j) for i in range(k)], ignore_index)
         if aggregate_kwargs:
             dsk[(b, j)] = (apply, aggregate, [conc], aggregate_kwargs)
         else:
@@ -4926,7 +5037,9 @@ def apply_concat_apply(
 
     if meta is no_default:
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
-        meta = _emulate(aggregate, _concat([meta_chunk]), udf=True, **aggregate_kwargs)
+        meta = _emulate(
+            aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
+        )
     meta = make_meta(
         meta, index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None)
     )
@@ -5073,13 +5186,10 @@ def map_partitions(
             _meta=meta,
             **kwargs3
         )
-    elif not simple:
-        dsk = partitionwise_graph(
-            apply, name, func, *args2, **kwargs3, dependencies=dependencies
-        )
     else:
+        kwargs4 = kwargs if simple else kwargs3
         dsk = partitionwise_graph(
-            func, name, *args2, **kwargs, dependencies=dependencies
+            func, name, *args2, **kwargs4, dependencies=dependencies
         )
 
     divisions = dfs[0].divisions
@@ -5223,14 +5333,19 @@ def quantile(df, q, method="default"):
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
-        meta = pd.Series(df._meta_nonempty).quantile(q)
+        series_typ = df._meta.to_series()._constructor
+        meta = df._meta_nonempty.to_series().quantile(q)
     else:
+        if is_series_like(df._meta):
+            series_typ = df._meta._constructor
+        else:
+            series_typ = df._meta._constructor_sliced
         meta = df._meta_nonempty.quantile(q)
 
     if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
-        finalize_tsk = lambda tsk: (pd.Series, tsk, q, None, df_name)
+        finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
         return_type = Series
     else:
         finalize_tsk = lambda tsk: (getitem, tsk, 0)
@@ -5245,8 +5360,9 @@ def quantile(df, q, method="default"):
     if len(qs) == 0:
         name = "quantiles-" + token
         empty_index = pd.Index([], dtype=float)
+
         return Series(
-            {(name, 0): pd.Series([], name=df.name, index=empty_index, dtype="float")},
+            {(name, 0): series_typ([], name=df.name, index=empty_index, dtype="float")},
             name,
             df._meta,
             [None, None],
@@ -5996,6 +6112,18 @@ def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
     return res
 
 
+def _mode_aggregate(df, dropna):
+    value_count_series = df.sum()
+    max_val = value_count_series.max(skipna=dropna)
+    mode_series = (
+        value_count_series[value_count_series == max_val]
+        .index.to_series()
+        .sort_values()
+        .reset_index(drop=True)
+    )
+    return mode_series
+
+
 def _count_aggregate(x):
     return x.sum().astype("int64")
 
@@ -6260,8 +6388,6 @@ def prefix_reduction(f, ddf, identity, **kwargs):
     ddf : dd.DataFrame
     identity : pd.DataFrame
         an identity element of f, that is f(identity, df) = f(df, identity) = df
-    kwargs : ??
-        keyword arguments of f ??
     """
     dsk = dict()
     name = "prefix_reduction-" + tokenize(f, ddf, identity, **kwargs)
