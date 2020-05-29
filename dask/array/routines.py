@@ -777,11 +777,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     # Turn graph into a 2D Array of shape (nchunks, nbins)
     nchunks = len(list(flatten(a.__dask_keys__())))
-    try:
-        nbins = len(bins) - 1
-    except TypeError:
-        # `bins` has a NaN in its chunks
-        nbins = float("nan")
+    nbins = bins.size  # since `bins` is 1D
     chunks = ((1,) * nchunks, (nbins,))
     mapped = Array(graph, name, chunks, dtype=dtype)
 
