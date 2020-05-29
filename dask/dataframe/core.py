@@ -3781,7 +3781,7 @@ class DataFrame(_Frame):
                             v.npartitions, self.npartitions
                         )
                     )
-                kwargs[k] = from_dask_array(v, index=self.index)
+                kwargs[k] = from_dask_array(v, index=self.index, meta_df=self._meta)
 
         pairs = list(sum(kwargs.items(), ()))
 

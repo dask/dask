@@ -1430,7 +1430,7 @@ class Array(DaskMethodsMixin):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
-    def to_dask_dataframe(self, columns=None, index=None):
+    def to_dask_dataframe(self, columns=None, index=None, meta_df=None):
         """ Convert dask Array to dask Dataframe
 
         Parameters
@@ -1455,7 +1455,7 @@ class Array(DaskMethodsMixin):
         """
         from ..dataframe import from_dask_array
 
-        return from_dask_array(self, columns=columns, index=index)
+        return from_dask_array(self, columns=columns, index=index, meta_df=meta_df)
 
     def __bool__(self):
         if self.size > 1:
