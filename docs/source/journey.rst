@@ -12,8 +12,8 @@ A user computes the addition of two variables already on the cluster, then pulls
 .. code-block:: python
 
    client = Client('host:port')
-   x = e.submit(...)
-   y = e.submit(...)
+   x = client.submit(...)
+   y = client.submit(...)
 
    z = client.submit(add, x, y)  # we follow z
 
