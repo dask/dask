@@ -140,6 +140,7 @@ class Task:
         from .core import spec_type
         from .utils import apply
         from .highlevelgraph import HighLevelGraph
+        from .optimization import SubgraphCallable
 
         fs = Task.from_spec
         typ = spec_type(dsk)
@@ -160,11 +161,17 @@ class Task:
                     return Task(dsk[1], fs(dsk[2]), fs(dsk[3]), annotations=annot)
 
                 raise ValueError("Invalid apply dsk %s" % dsk)
-
             # task of the form (function, arg1, arg2, ..., argn)
             else:
+                if type(dsk[0]) is SubgraphCallable:
+                    fn = SubgraphCallable(
+                        fs(dsk[0].dsk), dsk[0].outkey, dsk[0].inkeys, dsk[0].name
+                    )
+                else:
+                    fn = dsk[0]
+
                 return Task(
-                    dsk[0],
+                    fn,
                     list(fs(a) for a in dsk[1:]),
                     annotations=getattr(dsk[0], "_dask_annotations", None),
                 )
@@ -189,6 +196,7 @@ class Task:
         # Figure out how to make these imports work globally
         from .utils import apply
         from .highlevelgraph import HighLevelGraph
+        from .optimization import SubgraphCallable
 
         typ = type(dsk)
         ts = Task.to_spec
@@ -197,6 +205,10 @@ class Task:
             # Get an annotated funtion
             fn = annotate(dsk.function, dsk.annotations)
             kw = ts(dsk.kwargs)
+
+            # Convert SubgraphCallable graph's
+            if type(fn) is SubgraphCallable:
+                fn.dsk = ts(fn.dsk)
 
             # No keywords, output (function, args1, ..., argns)
             if len(kw) == 0:

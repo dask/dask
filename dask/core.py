@@ -51,8 +51,10 @@ def istask(x):
     """
     t = type(x)
     return (
-        TupleTask if (t is tuple and x and callable(x[0]))
-        else Task if t is Task
+        TupleTask
+        if (t is tuple and x and callable(x[0]))
+        else Task
+        if t is Task
         else False
     )
 
@@ -370,7 +372,8 @@ def subs(task, key, val, convert=False):
 
         return (
             Task.from_call(task[0], *(Task.from_spec(a) for a in newargs))
-            if convert else task[:1] + tuple(newargs)
+            if convert
+            else task[:1] + tuple(newargs)
         )
     else:
         try:

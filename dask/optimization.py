@@ -275,7 +275,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     )
     keysubs = {}
     for key in replaceorder:
-        val = dsk[key]
+        val = Task.from_spec(dsk[key]) if convert else dsk[key]
         for dep in keys & dependencies[key]:
             if dep in keysubs:
                 replace = keysubs[dep]
@@ -287,6 +287,9 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     # Make new dask with substitutions
     dsk2 = Task.from_spec(keysubs) if convert else keysubs.copy()
     for key, val in dsk.items():
+        if convert:
+            val = Task.from_spec(val)
+
         if key not in dsk2:
             for item in keys & dependencies[key]:
                 val = subs(val, item, keysubs[item], convert)
@@ -347,6 +350,9 @@ def inline_functions(
         )
         for k in keys:
             del dsk[k]
+    elif config.get("convert_tasks", False):
+        dsk = Task.from_spec(dsk)
+
     return dsk
 
 
@@ -502,8 +508,10 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
+    convert = config.get("convert_tasks", False)
+
     if not config.get("optimization.fuse.active"):
-        return dsk, dependencies
+        return Task.from_spec(dsk) if convert else dsk, dependencies
 
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
@@ -549,8 +557,6 @@ def fuse(
         key_renamer = rename_keys
     rename_keys = key_renamer is not None
 
-    convert = config.get("convert_tasks", False)
-
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     else:
@@ -578,7 +584,7 @@ def fuse(
     ):
         # Quick return if there's nothing to do. Only progress if there's tasks
         # fusible by the main `fuse`, or by `fuse_subgraphs` if enabled.
-        return dsk, deps
+        return Task.from_spec(dsk) if convert else dsk, deps
 
     rv = Task.from_spec(dsk) if convert else dsk.copy()
     fused_trees = {}
@@ -863,6 +869,9 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
     """Subroutine of fuse.
 
     Mutates dsk, depenencies, and fused_trees inplace"""
+
+    convert = config.get("convert_tasks", False)
+
     # locate all members of linear chains
     child2parent = {}
     unfusible = set()
@@ -916,7 +925,8 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
 
         # Create new task
         inkeys = tuple(inkeys_set)
-        dsk[outkey] = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
+        task = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
+        dsk[outkey] = Task.from_spec(task) if convert else task
 
         # Mutate `fused_trees` if key renaming is needed (renaming done in fuse)
         if rename_keys:

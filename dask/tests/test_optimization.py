@@ -26,6 +26,16 @@ def double(x):
     return x * 2
 
 
+@pytest.fixture
+def convert_tasks(request):
+    """ Configure dask to convert tuple tasks to Task objects """
+    try:
+        with config.set({"convert_tasks": request.param}):
+            yield Task.from_spec if request.param is True else lambda x: x
+    finally:
+        pass
+
+
 def test_cull():
     # 'out' depends on 'x' and 'y', but not 'z'
     d = {"x": 1, "y": (inc, "x"), "z": (inc, "x"), "out": (add, "y", 10)}
@@ -53,21 +63,8 @@ def with_deps(dsk):
     return dsk, {k: get_dependencies(dsk, k) for k in dsk}
 
 
-@pytest.fixture
-def convert_tasks(request):
-
-    fn = Task.from_spec if request.param is True else lambda x: x
-
-    try:
-        with config.set({"convert_tasks": request.param}):
-            yield request.param, fn
-    finally:
-        pass
-
-
 @pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
 def test_fuse_all(convert_tasks):
-    _, fn = convert_tasks
     fuse = fuse2  # tests both `fuse` and `fuse_linear`
     d = {
         "w": (inc, "x"),
@@ -78,11 +75,11 @@ def test_fuse_all(convert_tasks):
         "b": 2,
     }
     assert fuse(d, rename_keys=False) == with_deps(
-        fn({"w": (inc, (inc, (inc, (add, "a", "b")))), "a": 1, "b": 2})
+        convert_tasks({"w": (inc, (inc, (inc, (add, "a", "b")))), "a": 1, "b": 2})
     )
 
     assert fuse(d, rename_keys=True) == with_deps(
-        fn(
+        convert_tasks(
             {
                 "z-y-x-w": (inc, (inc, (inc, (add, "a", "b")))),
                 "a": 1,
@@ -103,7 +100,7 @@ def test_fuse_all(convert_tasks):
     }
 
     assert fuse(d, rename_keys=False) == with_deps(
-        fn(
+        convert_tasks(
             {
                 "NEW": (inc, "y"),
                 "w": (inc, (inc, "y")),
@@ -114,7 +111,7 @@ def test_fuse_all(convert_tasks):
         )
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        fn(
+        convert_tasks(
             {
                 "NEW": (inc, "z-y"),
                 "x-w": (inc, (inc, "z-y")),
@@ -140,7 +137,7 @@ def test_fuse_all(convert_tasks):
         "d": 2,
     }
     assert fuse(d, rename_keys=False) == with_deps(
-        fn(
+        convert_tasks(
             {
                 "u": (inc, (inc, (inc, "y"))),
                 "v": (inc, "y"),
@@ -151,7 +148,7 @@ def test_fuse_all(convert_tasks):
         )
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        fn(
+        convert_tasks(
             {
                 "x-w-u": (inc, (inc, (inc, "z-y"))),
                 "v": (inc, "z-y"),
@@ -175,10 +172,12 @@ def test_fuse_all(convert_tasks):
         "y": 0,
     }
     assert fuse(d, rename_keys=False) == with_deps(
-        fn({"a": (inc, "x"), "b": (inc, "x"), "d": (inc, (inc, "x")), "x": (inc, 0)})
+        convert_tasks(
+            {"a": (inc, "x"), "b": (inc, "x"), "d": (inc, (inc, "x")), "x": (inc, 0)}
+        )
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        fn(
+        convert_tasks(
             {
                 "a": (inc, "y-x"),
                 "b": (inc, "y-x"),
@@ -192,22 +191,23 @@ def test_fuse_all(convert_tasks):
 
     d = {"a": 1, "b": (inc, "a"), "c": (add, "b", "b")}
     assert fuse(d, rename_keys=False) == with_deps(
-        fn({"b": (inc, 1), "c": (add, "b", "b")})
+        convert_tasks({"b": (inc, 1), "c": (add, "b", "b")})
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        fn({"a-b": (inc, 1), "c": (add, "a-b", "a-b"), "b": "a-b"})
+        convert_tasks({"a-b": (inc, 1), "c": (add, "a-b", "a-b"), "b": "a-b"})
     )
 
 
-def test_fuse_keys():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_keys(convert_tasks):
     fuse = fuse2  # tests both `fuse` and `fuse_linear`
     d = {"a": 1, "b": (inc, "a"), "c": (inc, "b")}
     keys = ["b"]
     assert fuse(d, keys, rename_keys=False) == with_deps(
-        {"b": (inc, 1), "c": (inc, "b")}
+        convert_tasks({"b": (inc, 1), "c": (inc, "b")})
     )
     assert fuse(d, keys, rename_keys=True) == with_deps(
-        {"a-b": (inc, 1), "c": (inc, "a-b"), "b": "a-b"}
+        convert_tasks({"a-b": (inc, 1), "c": (inc, "a-b"), "b": "a-b"})
     )
 
     d = {
@@ -220,73 +220,78 @@ def test_fuse_keys():
     }
     keys = ["x", "z"]
     assert fuse(d, keys, rename_keys=False) == with_deps(
-        {"w": (inc, "x"), "x": (inc, (inc, "z")), "z": (add, "a", "b"), "a": 1, "b": 2}
+        convert_tasks(
+            {
+                "w": (inc, "x"),
+                "x": (inc, (inc, "z")),
+                "z": (add, "a", "b"),
+                "a": 1,
+                "b": 2,
+            }
+        )
     )
     assert fuse(d, keys, rename_keys=True) == with_deps(
-        {
-            "w": (inc, "y-x"),
-            "y-x": (inc, (inc, "z")),
-            "z": (add, "a", "b"),
-            "a": 1,
-            "b": 2,
-            "x": "y-x",
-        }
+        convert_tasks(
+            {
+                "w": (inc, "y-x"),
+                "y-x": (inc, (inc, "z")),
+                "z": (add, "a", "b"),
+                "a": 1,
+                "b": 2,
+                "x": "y-x",
+            }
+        )
     )
 
 
-def test_inline():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline(convert_tasks):
     d = {"a": 1, "b": (inc, "a"), "c": (inc, "b"), "d": (add, "a", "c")}
-    assert inline(d) == {"a": 1, "b": (inc, 1), "c": (inc, "b"), "d": (add, 1, "c")}
-    assert inline(d, ["a", "b", "c"]) == {
-        "a": 1,
-        "b": (inc, 1),
-        "c": (inc, (inc, 1)),
-        "d": (add, 1, (inc, (inc, 1))),
-    }
+    assert inline(d) == convert_tasks(
+        {"a": 1, "b": (inc, 1), "c": (inc, "b"), "d": (add, 1, "c")}
+    )
+    assert inline(d, ["a", "b", "c"]) == convert_tasks(
+        {"a": 1, "b": (inc, 1), "c": (inc, (inc, 1)), "d": (add, 1, (inc, (inc, 1))),}
+    )
     d = {"x": 1, "y": (inc, "x"), "z": (add, "x", "y")}
-    assert inline(d) == {"x": 1, "y": (inc, 1), "z": (add, 1, "y")}
-    assert inline(d, keys="y") == {"x": 1, "y": (inc, 1), "z": (add, 1, (inc, 1))}
-    assert inline(d, keys="y", inline_constants=False) == {
-        "x": 1,
-        "y": (inc, "x"),
-        "z": (add, "x", (inc, "x")),
-    }
+    assert inline(d) == convert_tasks({"x": 1, "y": (inc, 1), "z": (add, 1, "y")})
+    assert inline(d, keys="y") == convert_tasks(
+        {"x": 1, "y": (inc, 1), "z": (add, 1, (inc, 1))}
+    )
+    assert inline(d, keys="y", inline_constants=False) == convert_tasks(
+        {"x": 1, "y": (inc, "x"), "z": (add, "x", (inc, "x")),}
+    )
 
     d = {"a": 1, "b": "a", "c": "b", "d": ["a", "b", "c"], "e": (add, (len, "d"), "a")}
-    assert inline(d, "d") == {
-        "a": 1,
-        "b": 1,
-        "c": 1,
-        "d": [1, 1, 1],
-        "e": (add, (len, [1, 1, 1]), 1),
-    }
-    assert inline(d, "a", inline_constants=False) == {
-        "a": 1,
-        "b": 1,
-        "c": "b",
-        "d": [1, "b", "c"],
-        "e": (add, (len, "d"), 1),
-    }
+    assert inline(d, "d") == convert_tasks(
+        {"a": 1, "b": 1, "c": 1, "d": [1, 1, 1], "e": (add, (len, [1, 1, 1]), 1),}
+    )
+    assert inline(d, "a", inline_constants=False) == convert_tasks(
+        {"a": 1, "b": 1, "c": "b", "d": [1, "b", "c"], "e": (add, (len, "d"), 1),}
+    )
 
 
-def test_inline_functions():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_functions(convert_tasks):
     x, y, i, d = "xyid"
     dsk = {"out": (add, i, d), i: (inc, x), d: (double, y), x: 1, y: 1}
 
     result = inline_functions(dsk, [], fast_functions=set([inc]))
     expected = {"out": (add, (inc, x), d), d: (double, y), x: 1, y: 1}
-    assert result == expected
+    assert result == convert_tasks(expected)
 
 
-def test_inline_ignores_curries_and_partials():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_ignores_curries_and_partials(convert_tasks):
     dsk = {"x": 1, "y": 2, "a": (partial(add, 1), "x"), "b": (inc, "a")}
 
     result = inline_functions(dsk, [], fast_functions=set([add]))
-    assert result["b"] == (inc, dsk["a"])
+    assert result["b"] == convert_tasks((inc, dsk["a"]))
     assert "a" not in result
 
 
-def test_inline_functions_non_hashable():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_functions_non_hashable(convert_tasks):
     class NonHashableCallable(object):
         def __call__(self, a):
             return a + 1
@@ -299,28 +304,33 @@ def test_inline_functions_non_hashable():
     dsk = {"a": 1, "b": (inc, "a"), "c": (nohash, "b"), "d": (inc, "c")}
 
     result = inline_functions(dsk, [], fast_functions={inc})
-    assert result["c"] == (nohash, dsk["b"])
+    assert result["c"] == convert_tasks((nohash, dsk["b"]))
     assert "b" not in result
 
 
-def test_inline_doesnt_shrink_fast_functions_at_top():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_doesnt_shrink_fast_functions_at_top(convert_tasks):
     dsk = {"x": (inc, "y"), "y": 1}
     result = inline_functions(dsk, [], fast_functions=set([inc]))
-    assert result == dsk
+    assert result == convert_tasks(dsk)
 
 
-def test_inline_traverses_lists():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_traverses_lists(convert_tasks):
     x, y, i, d = "xyid"
     dsk = {"out": (sum, [i, d]), i: (inc, x), d: (double, y), x: 1, y: 1}
     expected = {"out": (sum, [(inc, x), d]), d: (double, y), x: 1, y: 1}
     result = inline_functions(dsk, [], fast_functions=set([inc]))
-    assert result == expected
+    assert result == convert_tasks(expected)
 
 
-def test_inline_functions_protects_output_keys():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_functions_protects_output_keys(convert_tasks):
     dsk = {"x": (inc, 1), "y": (double, "x")}
-    assert inline_functions(dsk, [], [inc]) == {"y": (double, (inc, 1))}
-    assert inline_functions(dsk, ["x"], [inc]) == {"y": (double, "x"), "x": (inc, 1)}
+    assert inline_functions(dsk, [], [inc]) == convert_tasks({"y": (double, (inc, 1))})
+    assert inline_functions(dsk, ["x"], [inc]) == convert_tasks(
+        {"y": (double, "x"), "x": (inc, 1)}
+    )
 
 
 def test_functions_of():
@@ -342,18 +352,19 @@ def test_inline_cull_dependencies():
     inline(d2, {"b"}, dependencies=dependencies)
 
 
-def test_fuse_reductions_single_input():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_reductions_single_input(convert_tasks):
     def f(*args):
         return args
 
     d = {"a": 1, "b1": (f, "a"), "b2": (f, "a", "a"), "c": (f, "b1", "b2")}
-    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(convert_tasks(d))
     assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
-        {"a": 1, "c": (f, (f, "a"), (f, "a", "a"))}
+        convert_tasks({"a": 1, "c": (f, (f, "a"), (f, "a", "a"))})
     )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {"a": 1, "b1-b2-c": (f, (f, "a"), (f, "a", "a")), "c": "b1-b2-c"}
+        convert_tasks({"a": 1, "b1-b2-c": (f, (f, "a"), (f, "a", "a")), "c": "b1-b2-c"})
     )
 
     d = {
@@ -363,27 +374,29 @@ def test_fuse_reductions_single_input():
         "b3": (f, "a", "a", "a"),
         "c": (f, "b1", "b2", "b3"),
     }
-    assert fuse(d, ave_width=2.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=2.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=2.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=2.9, rename_keys=True) == with_deps(convert_tasks(d))
     assert fuse(d, ave_width=3, rename_keys=False) == with_deps(
-        {"a": 1, "c": (f, (f, "a"), (f, "a", "a"), (f, "a", "a", "a"))}
+        convert_tasks({"a": 1, "c": (f, (f, "a"), (f, "a", "a"), (f, "a", "a", "a"))})
     )
     assert fuse(d, ave_width=3, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b2-b3-c": (f, (f, "a"), (f, "a", "a"), (f, "a", "a", "a")),
-            "c": "b1-b2-b3-c",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-b3-c": (f, (f, "a"), (f, "a", "a"), (f, "a", "a", "a")),
+                "c": "b1-b2-b3-c",
+            }
+        )
     )
 
     d = {"a": 1, "b1": (f, "a"), "b2": (f, "a"), "c": (f, "a", "b1", "b2")}
-    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(convert_tasks(d))
     assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
-        {"a": 1, "c": (f, "a", (f, "a"), (f, "a"))}
+        convert_tasks({"a": 1, "c": (f, "a", (f, "a"), (f, "a"))})
     )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {"a": 1, "b1-b2-c": (f, "a", (f, "a"), (f, "a")), "c": "b1-b2-c"}
+        convert_tasks({"a": 1, "b1-b2-c": (f, "a", (f, "a"), (f, "a")), "c": "b1-b2-c"})
     )
 
     d = {
@@ -395,19 +408,23 @@ def test_fuse_reductions_single_input():
         "d2": (f, "c"),
         "e": (f, "d1", "d2"),
     }
-    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(convert_tasks(d))
     assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
-        {"a": 1, "c": (f, (f, "a"), (f, "a")), "e": (f, (f, "c"), (f, "c"))}
+        convert_tasks(
+            {"a": 1, "c": (f, (f, "a"), (f, "a")), "e": (f, (f, "c"), (f, "c"))}
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b2-c": (f, (f, "a"), (f, "a")),
-            "d1-d2-e": (f, (f, "c"), (f, "c")),
-            "c": "b1-b2-c",
-            "e": "d1-d2-e",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-c": (f, (f, "a"), (f, "a")),
+                "d1-d2-e": (f, (f, "c"), (f, "c")),
+                "c": "b1-b2-c",
+                "e": "d1-d2-e",
+            }
+        )
     )
 
     d = {
@@ -420,43 +437,51 @@ def test_fuse_reductions_single_input():
         "c2": (f, "b3", "b4"),
         "d": (f, "c1", "c2"),
     }
-    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(convert_tasks(d))
     expected = with_deps(
-        {
-            "a": 1,
-            "c1": (f, (f, "a"), (f, "a")),
-            "c2": (f, (f, "a"), (f, "a")),
-            "d": (f, "c1", "c2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "c1": (f, (f, "a"), (f, "a")),
+                "c2": (f, (f, "a"), (f, "a")),
+                "d": (f, "c1", "c2"),
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=False) == expected
     assert fuse(d, ave_width=2.9, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b1-b2-c1": (f, (f, "a"), (f, "a")),
-            "b3-b4-c2": (f, (f, "a"), (f, "a")),
-            "d": (f, "c1", "c2"),
-            "c1": "b1-b2-c1",
-            "c2": "b3-b4-c2",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-c1": (f, (f, "a"), (f, "a")),
+                "b3-b4-c2": (f, (f, "a"), (f, "a")),
+                "d": (f, "c1", "c2"),
+                "c1": "b1-b2-c1",
+                "c2": "b3-b4-c2",
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=True) == expected
     assert fuse(d, ave_width=2.9, rename_keys=True) == expected
     assert fuse(d, ave_width=3, rename_keys=False) == with_deps(
-        {"a": 1, "d": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a")))}
+        convert_tasks(
+            {"a": 1, "d": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a")))}
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b2-b3-b4-c1-c2-d": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "d": "b1-b2-b3-b4-c1-c2-d",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-b3-b4-c1-c2-d": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "d": "b1-b2-b3-b4-c1-c2-d",
+            }
+        )
     )
 
     d = {
@@ -477,90 +502,102 @@ def test_fuse_reductions_single_input():
         "d2": (f, "c3", "c4"),
         "e": (f, "d1", "d2"),
     }
-    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(convert_tasks(d))
     expected = with_deps(
-        {
-            "a": 1,
-            "c1": (f, (f, "a"), (f, "a")),
-            "c2": (f, (f, "a"), (f, "a")),
-            "c3": (f, (f, "a"), (f, "a")),
-            "c4": (f, (f, "a"), (f, "a")),
-            "d1": (f, "c1", "c2"),
-            "d2": (f, "c3", "c4"),
-            "e": (f, "d1", "d2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "c1": (f, (f, "a"), (f, "a")),
+                "c2": (f, (f, "a"), (f, "a")),
+                "c3": (f, (f, "a"), (f, "a")),
+                "c4": (f, (f, "a"), (f, "a")),
+                "d1": (f, "c1", "c2"),
+                "d2": (f, "c3", "c4"),
+                "e": (f, "d1", "d2"),
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=False) == expected
     assert fuse(d, ave_width=2.9, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b1-b2-c1": (f, (f, "a"), (f, "a")),
-            "b3-b4-c2": (f, (f, "a"), (f, "a")),
-            "b5-b6-c3": (f, (f, "a"), (f, "a")),
-            "b7-b8-c4": (f, (f, "a"), (f, "a")),
-            "d1": (f, "c1", "c2"),
-            "d2": (f, "c3", "c4"),
-            "e": (f, "d1", "d2"),
-            "c1": "b1-b2-c1",
-            "c2": "b3-b4-c2",
-            "c3": "b5-b6-c3",
-            "c4": "b7-b8-c4",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-c1": (f, (f, "a"), (f, "a")),
+                "b3-b4-c2": (f, (f, "a"), (f, "a")),
+                "b5-b6-c3": (f, (f, "a"), (f, "a")),
+                "b7-b8-c4": (f, (f, "a"), (f, "a")),
+                "d1": (f, "c1", "c2"),
+                "d2": (f, "c3", "c4"),
+                "e": (f, "d1", "d2"),
+                "c1": "b1-b2-c1",
+                "c2": "b3-b4-c2",
+                "c3": "b5-b6-c3",
+                "c4": "b7-b8-c4",
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=True) == expected
     assert fuse(d, ave_width=2.9, rename_keys=True) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "d1": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            "d2": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            "e": (f, "d1", "d2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "d1": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                "d2": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                "e": (f, "d1", "d2"),
+            }
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=False) == expected
     assert fuse(d, ave_width=4.6, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b1-b2-b3-b4-c1-c2-d1": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "b5-b6-b7-b8-c3-c4-d2": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "e": (f, "d1", "d2"),
-            "d1": "b1-b2-b3-b4-c1-c2-d1",
-            "d2": "b5-b6-b7-b8-c3-c4-d2",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-b3-b4-c1-c2-d1": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "b5-b6-b7-b8-c3-c4-d2": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "e": (f, "d1", "d2"),
+                "d1": "b1-b2-b3-b4-c1-c2-d1",
+                "d2": "b5-b6-b7-b8-c3-c4-d2",
+            }
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=True) == expected
     assert fuse(d, ave_width=4.6, rename_keys=True) == expected
     assert fuse(d, ave_width=4.7, rename_keys=False) == with_deps(
-        {
-            "a": 1,
-            "e": (
-                f,
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            ),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "e": (
+                    f,
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                ),
+            }
+        )
     )
     assert fuse(d, ave_width=4.7, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e": (
-                f,
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            ),
-            "e": "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e": (
+                    f,
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                ),
+                "e": "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e",
+            }
+        )
     )
 
     d = {
@@ -597,202 +634,222 @@ def test_fuse_reductions_single_input():
         "e2": (f, "d3", "d4"),
         "f": (f, "e1", "e2"),
     }
-    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1.9, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1.9, rename_keys=True) == with_deps(convert_tasks(d))
     expected = with_deps(
-        {
-            "a": 1,
-            "c1": (f, (f, "a"), (f, "a")),
-            "c2": (f, (f, "a"), (f, "a")),
-            "c3": (f, (f, "a"), (f, "a")),
-            "c4": (f, (f, "a"), (f, "a")),
-            "c5": (f, (f, "a"), (f, "a")),
-            "c6": (f, (f, "a"), (f, "a")),
-            "c7": (f, (f, "a"), (f, "a")),
-            "c8": (f, (f, "a"), (f, "a")),
-            "d1": (f, "c1", "c2"),
-            "d2": (f, "c3", "c4"),
-            "d3": (f, "c5", "c6"),
-            "d4": (f, "c7", "c8"),
-            "e1": (f, "d1", "d2"),
-            "e2": (f, "d3", "d4"),
-            "f": (f, "e1", "e2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "c1": (f, (f, "a"), (f, "a")),
+                "c2": (f, (f, "a"), (f, "a")),
+                "c3": (f, (f, "a"), (f, "a")),
+                "c4": (f, (f, "a"), (f, "a")),
+                "c5": (f, (f, "a"), (f, "a")),
+                "c6": (f, (f, "a"), (f, "a")),
+                "c7": (f, (f, "a"), (f, "a")),
+                "c8": (f, (f, "a"), (f, "a")),
+                "d1": (f, "c1", "c2"),
+                "d2": (f, "c3", "c4"),
+                "d3": (f, "c5", "c6"),
+                "d4": (f, "c7", "c8"),
+                "e1": (f, "d1", "d2"),
+                "e2": (f, "d3", "d4"),
+                "f": (f, "e1", "e2"),
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=False) == expected
     assert fuse(d, ave_width=2.9, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b1-b2-c1": (f, (f, "a"), (f, "a")),
-            "b3-b4-c2": (f, (f, "a"), (f, "a")),
-            "b5-b6-c3": (f, (f, "a"), (f, "a")),
-            "b7-b8-c4": (f, (f, "a"), (f, "a")),
-            "b10-b9-c5": (f, (f, "a"), (f, "a")),
-            "b11-b12-c6": (f, (f, "a"), (f, "a")),
-            "b13-b14-c7": (f, (f, "a"), (f, "a")),
-            "b15-b16-c8": (f, (f, "a"), (f, "a")),
-            "d1": (f, "c1", "c2"),
-            "d2": (f, "c3", "c4"),
-            "d3": (f, "c5", "c6"),
-            "d4": (f, "c7", "c8"),
-            "e1": (f, "d1", "d2"),
-            "e2": (f, "d3", "d4"),
-            "f": (f, "e1", "e2"),
-            "c1": "b1-b2-c1",
-            "c2": "b3-b4-c2",
-            "c3": "b5-b6-c3",
-            "c4": "b7-b8-c4",
-            "c5": "b10-b9-c5",
-            "c6": "b11-b12-c6",
-            "c7": "b13-b14-c7",
-            "c8": "b15-b16-c8",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-c1": (f, (f, "a"), (f, "a")),
+                "b3-b4-c2": (f, (f, "a"), (f, "a")),
+                "b5-b6-c3": (f, (f, "a"), (f, "a")),
+                "b7-b8-c4": (f, (f, "a"), (f, "a")),
+                "b10-b9-c5": (f, (f, "a"), (f, "a")),
+                "b11-b12-c6": (f, (f, "a"), (f, "a")),
+                "b13-b14-c7": (f, (f, "a"), (f, "a")),
+                "b15-b16-c8": (f, (f, "a"), (f, "a")),
+                "d1": (f, "c1", "c2"),
+                "d2": (f, "c3", "c4"),
+                "d3": (f, "c5", "c6"),
+                "d4": (f, "c7", "c8"),
+                "e1": (f, "d1", "d2"),
+                "e2": (f, "d3", "d4"),
+                "f": (f, "e1", "e2"),
+                "c1": "b1-b2-c1",
+                "c2": "b3-b4-c2",
+                "c3": "b5-b6-c3",
+                "c4": "b7-b8-c4",
+                "c5": "b10-b9-c5",
+                "c6": "b11-b12-c6",
+                "c7": "b13-b14-c7",
+                "c8": "b15-b16-c8",
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=True) == expected
     assert fuse(d, ave_width=2.9, rename_keys=True) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "d1": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            "d2": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            "d3": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            "d4": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            "e1": (f, "d1", "d2"),
-            "e2": (f, "d3", "d4"),
-            "f": (f, "e1", "e2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "d1": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                "d2": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                "d3": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                "d4": (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                "e1": (f, "d1", "d2"),
+                "e2": (f, "d3", "d4"),
+                "f": (f, "e1", "e2"),
+            }
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=False) == expected
     assert fuse(d, ave_width=4.6, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b1-b2-b3-b4-c1-c2-d1": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "b5-b6-b7-b8-c3-c4-d2": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "b10-b11-b12-b9-c5-c6-d3": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "b13-b14-b15-b16-c7-c8-d4": (
-                f,
-                (f, (f, "a"), (f, "a")),
-                (f, (f, "a"), (f, "a")),
-            ),
-            "e1": (f, "d1", "d2"),
-            "e2": (f, "d3", "d4"),
-            "f": (f, "e1", "e2"),
-            "d1": "b1-b2-b3-b4-c1-c2-d1",
-            "d2": "b5-b6-b7-b8-c3-c4-d2",
-            "d3": "b10-b11-b12-b9-c5-c6-d3",
-            "d4": "b13-b14-b15-b16-c7-c8-d4",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-b3-b4-c1-c2-d1": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "b5-b6-b7-b8-c3-c4-d2": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "b10-b11-b12-b9-c5-c6-d3": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "b13-b14-b15-b16-c7-c8-d4": (
+                    f,
+                    (f, (f, "a"), (f, "a")),
+                    (f, (f, "a"), (f, "a")),
+                ),
+                "e1": (f, "d1", "d2"),
+                "e2": (f, "d3", "d4"),
+                "f": (f, "e1", "e2"),
+                "d1": "b1-b2-b3-b4-c1-c2-d1",
+                "d2": "b5-b6-b7-b8-c3-c4-d2",
+                "d3": "b10-b11-b12-b9-c5-c6-d3",
+                "d4": "b13-b14-b15-b16-c7-c8-d4",
+            }
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=True) == expected
     assert fuse(d, ave_width=4.6, rename_keys=True) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "e1": (
-                f,
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            ),
-            "e2": (
-                f,
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            ),
-            "f": (f, "e1", "e2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "e1": (
+                    f,
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                ),
+                "e2": (
+                    f,
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                ),
+                "f": (f, "e1", "e2"),
+            }
+        )
     )
     assert fuse(d, ave_width=4.7, rename_keys=False) == expected
     assert fuse(d, ave_width=7.4, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1": (
-                f,
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            ),
-            "b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2": (
-                f,
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-            ),
-            "f": (f, "e1", "e2"),
-            "e1": "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1",
-            "e2": "b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1": (
+                    f,
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                ),
+                "b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2": (
+                    f,
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                ),
+                "f": (f, "e1", "e2"),
+                "e1": "b1-b2-b3-b4-b5-b6-b7-b8-c1-c2-c3-c4-d1-d2-e1",
+                "e2": "b10-b11-b12-b13-b14-b15-b16-b9-c5-c6-c7-c8-d3-d4-e2",
+            }
+        )
     )
     assert fuse(d, ave_width=4.7, rename_keys=True) == expected
     assert fuse(d, ave_width=7.4, rename_keys=True) == expected
     assert fuse(d, ave_width=7.5, rename_keys=False) == with_deps(
-        {
-            "a": 1,
-            "f": (
-                f,
-                (
+        convert_tasks(
+            {
+                "a": 1,
+                "f": (
                     f,
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (
+                        f,
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    ),
+                    (
+                        f,
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    ),
                 ),
-                (
-                    f,
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                ),
-            ),
-        }
+            }
+        )
     )
     assert fuse(d, ave_width=7.5, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f": (
-                f,
-                (
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f": (
                     f,
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    (
+                        f,
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    ),
+                    (
+                        f,
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                        (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
+                    ),
                 ),
-                (
-                    f,
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                    (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
-                ),
-            ),
-            "f": "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f",
-        }
+                "f": "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f",
+            }
+        )
     )
 
     d = {"a": 1, "b": (f, "a")}
-    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({"b": (f, 1)})
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(
+        convert_tasks({"b": (f, 1)})
+    )
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps(
-        {"a-b": (f, 1), "b": "a-b"}
+        convert_tasks({"a-b": (f, 1), "b": "a-b"})
     )
 
     d = {"a": 1, "b": (f, "a"), "c": (f, "b"), "d": (f, "c")}
-    assert fuse(d, ave_width=1, rename_keys=False) == with_deps({"d": (f, (f, (f, 1)))})
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(
+        convert_tasks({"d": (f, (f, (f, 1)))})
+    )
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps(
-        {"a-b-c-d": (f, (f, (f, 1))), "d": "a-b-c-d"}
+        convert_tasks({"a-b-c-d": (f, (f, (f, 1))), "d": "a-b-c-d"})
     )
 
     d = {"a": 1, "b": (f, "a"), "c": (f, "a", "b"), "d": (f, "a", "c")}
     assert fuse(d, ave_width=1, rename_keys=False) == with_deps(
-        {"a": 1, "d": (f, "a", (f, "a", (f, "a")))}
+        convert_tasks({"a": 1, "d": (f, "a", (f, "a", (f, "a")))})
     )
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps(
-        {"a": 1, "b-c-d": (f, "a", (f, "a", (f, "a"))), "d": "b-c-d"}
+        convert_tasks({"a": 1, "b-c-d": (f, "a", (f, "a", (f, "a"))), "d": "b-c-d"})
     )
 
     d = {
@@ -805,30 +862,41 @@ def test_fuse_reductions_single_input():
         "f": (f, "e1", "b2"),
     }
     expected = with_deps(
-        {"a": 1, "b2": (f, "a"), "e1": (f, (f, (f, (f, "a")))), "f": (f, "e1", "b2")}
+        convert_tasks(
+            {
+                "a": 1,
+                "b2": (f, "a"),
+                "e1": (f, (f, (f, (f, "a")))),
+                "f": (f, "e1", "b2"),
+            }
+        )
     )
     assert fuse(d, ave_width=1, rename_keys=False) == expected
     assert fuse(d, ave_width=1.9, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b2": (f, "a"),
-            "b1-c1-d1-e1": (f, (f, (f, (f, "a")))),
-            "f": (f, "e1", "b2"),
-            "e1": "b1-c1-d1-e1",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b2": (f, "a"),
+                "b1-c1-d1-e1": (f, (f, (f, (f, "a")))),
+                "f": (f, "e1", "b2"),
+                "e1": "b1-c1-d1-e1",
+            }
+        )
     )
     assert fuse(d, ave_width=1, rename_keys=True) == expected
     assert fuse(d, ave_width=1.9, rename_keys=True) == expected
     assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
-        {"a": 1, "f": (f, (f, (f, (f, (f, "a")))), (f, "a"))}
+        convert_tasks({"a": 1, "f": (f, (f, (f, (f, (f, "a")))), (f, "a"))})
     )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b2-c1-d1-e1-f": (f, (f, (f, (f, (f, "a")))), (f, "a")),
-            "f": "b1-b2-c1-d1-e1-f",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-c1-d1-e1-f": (f, (f, (f, (f, (f, "a")))), (f, "a")),
+                "f": "b1-b2-c1-d1-e1-f",
+            }
+        )
     )
 
     d = {
@@ -841,40 +909,48 @@ def test_fuse_reductions_single_input():
         "f": (f, "a", "e1", "b2"),
     }
     expected = with_deps(
-        {
-            "a": 1,
-            "b2": (f, "a"),
-            "e1": (f, "a", (f, "a", (f, "a", (f, "a")))),
-            "f": (f, "a", "e1", "b2"),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b2": (f, "a"),
+                "e1": (f, "a", (f, "a", (f, "a", (f, "a")))),
+                "f": (f, "a", "e1", "b2"),
+            }
+        )
     )
     assert fuse(d, ave_width=1, rename_keys=False) == expected
     assert fuse(d, ave_width=1.9, rename_keys=False) == expected
     expected = with_deps(
-        {
-            "a": 1,
-            "b2": (f, "a"),
-            "b1-c1-d1-e1": (f, "a", (f, "a", (f, "a", (f, "a")))),
-            "f": (f, "a", "e1", "b2"),
-            "e1": "b1-c1-d1-e1",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b2": (f, "a"),
+                "b1-c1-d1-e1": (f, "a", (f, "a", (f, "a", (f, "a")))),
+                "f": (f, "a", "e1", "b2"),
+                "e1": "b1-c1-d1-e1",
+            }
+        )
     )
     assert fuse(d, ave_width=1, rename_keys=True) == expected
     assert fuse(d, ave_width=1.9, rename_keys=True) == expected
     assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
-        {"a": 1, "f": (f, "a", (f, "a", (f, "a", (f, "a", (f, "a")))), (f, "a"))}
+        convert_tasks(
+            {"a": 1, "f": (f, "a", (f, "a", (f, "a", (f, "a", (f, "a")))), (f, "a"))}
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-b2-c1-d1-e1-f": (
-                f,
-                "a",
-                (f, "a", (f, "a", (f, "a", (f, "a")))),
-                (f, "a"),
-            ),
-            "f": "b1-b2-c1-d1-e1-f",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-b2-c1-d1-e1-f": (
+                    f,
+                    "a",
+                    (f, "a", (f, "a", (f, "a", (f, "a")))),
+                    (f, "a"),
+                ),
+                "f": "b1-b2-c1-d1-e1-f",
+            }
+        )
     )
 
     d = {
@@ -893,26 +969,30 @@ def test_fuse_reductions_single_input():
         "g": (f, "f"),
     }
     assert fuse(d, ave_width=1, rename_keys=False) == with_deps(
-        {
-            "a": 1,
-            "d1": (f, (f, (f, "a"))),
-            "d2": (f, (f, (f, "a"))),
-            "d3": (f, (f, (f, "a"))),
-            "g": (f, (f, (f, "d1", "d2", "d3"))),
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "d1": (f, (f, (f, "a"))),
+                "d2": (f, (f, (f, "a"))),
+                "d3": (f, (f, (f, "a"))),
+                "g": (f, (f, (f, "d1", "d2", "d3"))),
+            }
+        )
     )
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps(
-        {
-            "a": 1,
-            "b1-c1-d1": (f, (f, (f, "a"))),
-            "b2-c2-d2": (f, (f, (f, "a"))),
-            "b3-c3-d3": (f, (f, (f, "a"))),
-            "e-f-g": (f, (f, (f, "d1", "d2", "d3"))),
-            "d1": "b1-c1-d1",
-            "d2": "b2-c2-d2",
-            "d3": "b3-c3-d3",
-            "g": "e-f-g",
-        }
+        convert_tasks(
+            {
+                "a": 1,
+                "b1-c1-d1": (f, (f, (f, "a"))),
+                "b2-c2-d2": (f, (f, (f, "a"))),
+                "b3-c3-d3": (f, (f, (f, "a"))),
+                "e-f-g": (f, (f, (f, "d1", "d2", "d3"))),
+                "d1": "b1-c1-d1",
+                "d2": "b2-c2-d2",
+                "d3": "b3-c3-d3",
+                "g": "e-f-g",
+            }
+        )
     )
 
     d = {
@@ -925,21 +1005,26 @@ def test_fuse_reductions_single_input():
         "g": (f, "d", "f"),
     }
     assert fuse(d, ave_width=1, rename_keys=False) == with_deps(
-        {"b": (f, 1), "d": (f, "b", (f, "b")), "g": (f, "d", (f, (f, "d")))}
+        convert_tasks(
+            {"b": (f, 1), "d": (f, "b", (f, "b")), "g": (f, "d", (f, (f, "d")))}
+        )
     )
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps(
-        {
-            "a-b": (f, 1),
-            "c-d": (f, "b", (f, "b")),
-            "e-f-g": (f, "d", (f, (f, "d"))),
-            "b": "a-b",
-            "d": "c-d",
-            "g": "e-f-g",
-        }
+        convert_tasks(
+            {
+                "a-b": (f, 1),
+                "c-d": (f, "b", (f, "b")),
+                "e-f-g": (f, "d", (f, (f, "d"))),
+                "b": "a-b",
+                "d": "c-d",
+                "g": "e-f-g",
+            }
+        )
     )
 
 
-def test_fuse_stressed():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_stressed(convert_tasks):
     def f(*args):
         return args
 
@@ -1011,20 +1096,23 @@ def test_fuse_stressed():
     assert rv == with_deps(rv[0])
 
 
-def test_fuse_reductions_multiple_input():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_reductions_multiple_input(convert_tasks):
     def f(*args):
         return args
 
     d = {"a1": 1, "a2": 2, "b": (f, "a1", "a2"), "c": (f, "b")}
-    assert fuse(d, ave_width=2, rename_keys=False) == with_deps({"c": (f, (f, 1, 2))})
+    assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
+        convert_tasks({"c": (f, (f, 1, 2))})
+    )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {"a1-a2-b-c": (f, (f, 1, 2)), "c": "a1-a2-b-c"}
+        convert_tasks({"a1-a2-b-c": (f, (f, 1, 2)), "c": "a1-a2-b-c"})
     )
     assert fuse(d, ave_width=1, rename_keys=False) == with_deps(
-        {"a1": 1, "a2": 2, "c": (f, (f, "a1", "a2"))}
+        convert_tasks({"a1": 1, "a2": 2, "c": (f, (f, "a1", "a2"))})
     )
     assert fuse(d, ave_width=1, rename_keys=True) == with_deps(
-        {"a1": 1, "a2": 2, "b-c": (f, (f, "a1", "a2")), "c": "b-c"}
+        convert_tasks({"a1": 1, "a2": 2, "b-c": (f, (f, "a1", "a2")), "c": "b-c"})
     )
 
     d = {
@@ -1035,21 +1123,25 @@ def test_fuse_reductions_multiple_input():
         "b3": (f, "a2"),
         "c": (f, "b1", "b2", "b3"),
     }
-    expected = with_deps(d)
+    expected = with_deps(convert_tasks(d))
     assert fuse(d, ave_width=1, rename_keys=False) == expected
     assert fuse(d, ave_width=2.9, rename_keys=False) == expected
     assert fuse(d, ave_width=1, rename_keys=True) == expected
     assert fuse(d, ave_width=2.9, rename_keys=True) == expected
     assert fuse(d, ave_width=3, rename_keys=False) == with_deps(
-        {"a1": 1, "a2": 2, "c": (f, (f, "a1"), (f, "a1", "a2"), (f, "a2"))}
+        convert_tasks(
+            {"a1": 1, "a2": 2, "c": (f, (f, "a1"), (f, "a1", "a2"), (f, "a2"))}
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=True) == with_deps(
-        {
-            "a1": 1,
-            "a2": 2,
-            "b1-b2-b3-c": (f, (f, "a1"), (f, "a1", "a2"), (f, "a2")),
-            "c": "b1-b2-b3-c",
-        }
+        convert_tasks(
+            {
+                "a1": 1,
+                "a2": 2,
+                "b1-b2-b3-c": (f, (f, "a1"), (f, "a1", "a2"), (f, "a2")),
+                "c": "b1-b2-b3-c",
+            }
+        )
     )
 
     d = {
@@ -1061,27 +1153,31 @@ def test_fuse_reductions_multiple_input():
         "c1": (f, "b1", "b2"),
         "c2": (f, "b2", "b3"),
     }
-    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps(convert_tasks(d))
     assert fuse(d, ave_width=2, rename_keys=False) == with_deps(
-        {
-            "a1": 1,
-            "a2": 2,
-            "b2": (f, "a1", "a2"),
-            "c1": (f, (f, "a1"), "b2"),
-            "c2": (f, "b2", (f, "a2")),
-        }
+        convert_tasks(
+            {
+                "a1": 1,
+                "a2": 2,
+                "b2": (f, "a1", "a2"),
+                "c1": (f, (f, "a1"), "b2"),
+                "c2": (f, "b2", (f, "a2")),
+            }
+        )
     )
     assert fuse(d, ave_width=2, rename_keys=True) == with_deps(
-        {
-            "a1": 1,
-            "a2": 2,
-            "b2": (f, "a1", "a2"),
-            "b1-c1": (f, (f, "a1"), "b2"),
-            "b3-c2": (f, "b2", (f, "a2")),
-            "c1": "b1-c1",
-            "c2": "b3-c2",
-        }
+        convert_tasks(
+            {
+                "a1": 1,
+                "a2": 2,
+                "b2": (f, "a1", "a2"),
+                "b1-c1": (f, (f, "a1"), "b2"),
+                "b3-c2": (f, "b2", (f, "a2")),
+                "c1": "b1-c1",
+                "c2": "b3-c2",
+            }
+        )
     )
 
     d = {
@@ -1094,27 +1190,31 @@ def test_fuse_reductions_multiple_input():
         "c2": (f, "b2", "b3"),
         "d": (f, "c1", "c2"),
     }
-    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(d)
-    assert fuse(d, ave_width=1, rename_keys=True) == with_deps(d)
+    assert fuse(d, ave_width=1, rename_keys=False) == with_deps(convert_tasks(d))
+    assert fuse(d, ave_width=1, rename_keys=True) == with_deps(convert_tasks(d))
 
     # A more aggressive heuristic could do this at `ave_width=2`.  Perhaps
     # we can improve this.  Nevertheless, this is behaving as intended.
     assert fuse(d, ave_width=3, rename_keys=False) == with_deps(
-        {
-            "a1": 1,
-            "a2": 2,
-            "b2": (f, "a1", "a2"),
-            "d": (f, (f, (f, "a1"), "b2"), (f, "b2", (f, "a2"))),
-        }
+        convert_tasks(
+            {
+                "a1": 1,
+                "a2": 2,
+                "b2": (f, "a1", "a2"),
+                "d": (f, (f, (f, "a1"), "b2"), (f, "b2", (f, "a2"))),
+            }
+        )
     )
     assert fuse(d, ave_width=3, rename_keys=True) == with_deps(
-        {
-            "a1": 1,
-            "a2": 2,
-            "b2": (f, "a1", "a2"),
-            "b1-b3-c1-c2-d": (f, (f, (f, "a1"), "b2"), (f, "b2", (f, "a2"))),
-            "d": "b1-b3-c1-c2-d",
-        }
+        convert_tasks(
+            {
+                "a1": 1,
+                "a2": 2,
+                "b2": (f, "a1", "a2"),
+                "b1-b3-c1-c2-d": (f, (f, (f, "a1"), "b2"), (f, "b2", (f, "a2"))),
+                "d": "b1-b3-c1-c2-d",
+            }
+        )
     )
 
 
@@ -1158,7 +1258,8 @@ def test_SubgraphCallable():
     assert f2(1, 2) == f(1, 2)
 
 
-def test_fuse_subgraphs():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_subgraphs(convert_tasks):
     dsk = {
         "x-1": 1,
         "inc-1": (inc, "x-1"),
@@ -1173,58 +1274,70 @@ def test_fuse_subgraphs():
 
     res = fuse(dsk, "inc-6", fuse_subgraphs=True)
     sol = with_deps(
-        {
-            "inc-6": "add-inc-x-1",
-            "add-inc-x-1": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", (inc, (inc, "x-1"))),
-                        "inc-6": (inc, (inc, (add, "add-1", (inc, (inc, "add-1"))))),
-                    },
-                    "inc-6",
-                    (),
+        convert_tasks(
+            {
+                "inc-6": "add-inc-x-1",
+                "add-inc-x-1": (
+                    SubgraphCallable(
+                        {
+                            "x-1": 1,
+                            "add-1": (add, "x-1", (inc, (inc, "x-1"))),
+                            "inc-6": (
+                                inc,
+                                (inc, (add, "add-1", (inc, (inc, "add-1")))),
+                            ),
+                        },
+                        "inc-6",
+                        (),
+                    ),
                 ),
-            ),
-        }
+            }
+        )
     )
     assert res == sol
 
     res = fuse(dsk, "inc-6", fuse_subgraphs=True, rename_keys=False)
     sol = with_deps(
-        {
-            "inc-6": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", (inc, (inc, "x-1"))),
-                        "inc-6": (inc, (inc, (add, "add-1", (inc, (inc, "add-1"))))),
-                    },
-                    "inc-6",
-                    (),
-                ),
-            )
-        }
+        convert_tasks(
+            {
+                "inc-6": (
+                    SubgraphCallable(
+                        {
+                            "x-1": 1,
+                            "add-1": (add, "x-1", (inc, (inc, "x-1"))),
+                            "inc-6": (
+                                inc,
+                                (inc, (add, "add-1", (inc, (inc, "add-1")))),
+                            ),
+                        },
+                        "inc-6",
+                        (),
+                    ),
+                )
+            }
+        )
     )
     assert res == sol
 
     res = fuse(dsk, "add-2", fuse_subgraphs=True)
     sol = with_deps(
-        {
-            "add-inc-x-1": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", (inc, (inc, "x-1"))),
-                        "add-2": (add, "add-1", (inc, (inc, "add-1"))),
-                    },
-                    "add-2",
-                    (),
+        convert_tasks(
+            {
+                "add-inc-x-1": (
+                    SubgraphCallable(
+                        {
+                            "x-1": 1,
+                            "add-1": (add, "x-1", (inc, (inc, "x-1"))),
+                            "add-2": (add, "add-1", (inc, (inc, "add-1"))),
+                        },
+                        "add-2",
+                        (),
+                    ),
                 ),
-            ),
-            "add-2": "add-inc-x-1",
-            "inc-6": (inc, (inc, "add-2")),
-        }
+                "add-2": "add-inc-x-1",
+                "inc-6": (inc, (inc, "add-2")),
+            }
+        )
     )
     assert res == sol
 
@@ -1234,25 +1347,27 @@ def test_fuse_subgraphs():
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
             with_deps(
-                {
-                    "x-1": 1,
-                    "inc-2": (inc, (inc, "x-1")),
-                    "inc-6": "inc-add-1",
-                    "inc-add-1": (
-                        SubgraphCallable(
-                            {
-                                "add-1": (add, "x-1", "inc-2"),
-                                "inc-6": (
-                                    inc,
-                                    (inc, (add, "add-1", (inc, (inc, "add-1")))),
-                                ),
-                            },
-                            "inc-6",
-                            inkeys,
-                        ),
-                    )
-                    + inkeys,
-                }
+                convert_tasks(
+                    {
+                        "x-1": 1,
+                        "inc-2": (inc, (inc, "x-1")),
+                        "inc-6": "inc-add-1",
+                        "inc-add-1": (
+                            SubgraphCallable(
+                                {
+                                    "add-1": (add, "x-1", "inc-2"),
+                                    "inc-6": (
+                                        inc,
+                                        (inc, (add, "add-1", (inc, (inc, "add-1")))),
+                                    ),
+                                },
+                                "inc-6",
+                                inkeys,
+                            ),
+                        )
+                        + inkeys,
+                    }
+                )
             )
         )
     assert res in sols
@@ -1263,29 +1378,32 @@ def test_fuse_subgraphs():
     for inkeys in itertools.permutations(("x-1", "inc-2")):
         sols.append(
             with_deps(
-                {
-                    "x-1": 1,
-                    "inc-2": (inc, (inc, "x-1")),
-                    "inc-add-1": (
-                        SubgraphCallable(
-                            {
-                                "add-1": (add, "x-1", "inc-2"),
-                                "add-2": (add, "add-1", (inc, (inc, "add-1"))),
-                            },
-                            "add-2",
-                            inkeys,
-                        ),
-                    )
-                    + inkeys,
-                    "add-2": "inc-add-1",
-                    "inc-6": (inc, (inc, "add-2")),
-                }
+                convert_tasks(
+                    {
+                        "x-1": 1,
+                        "inc-2": (inc, (inc, "x-1")),
+                        "inc-add-1": (
+                            SubgraphCallable(
+                                {
+                                    "add-1": (add, "x-1", "inc-2"),
+                                    "add-2": (add, "add-1", (inc, (inc, "add-1"))),
+                                },
+                                "add-2",
+                                inkeys,
+                            ),
+                        )
+                        + inkeys,
+                        "add-2": "inc-add-1",
+                        "inc-6": (inc, (inc, "add-2")),
+                    }
+                )
             )
         )
     assert res in sols
 
 
-def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_subgraphs_linear_chains_of_duplicate_deps(convert_tasks):
     dsk = {
         "x-1": 1,
         "add-1": (add, "x-1", "x-1"),
@@ -1297,28 +1415,31 @@ def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
 
     res = fuse(dsk, "add-5", fuse_subgraphs=True)
     sol = with_deps(
-        {
-            "add-x-1": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", "x-1"),
-                        "add-2": (add, "add-1", "add-1"),
-                        "add-3": (add, "add-2", "add-2"),
-                        "add-4": (add, "add-3", "add-3"),
-                        "add-5": (add, "add-4", "add-4"),
-                    },
-                    "add-5",
-                    (),
+        convert_tasks(
+            {
+                "add-x-1": (
+                    SubgraphCallable(
+                        {
+                            "x-1": 1,
+                            "add-1": (add, "x-1", "x-1"),
+                            "add-2": (add, "add-1", "add-1"),
+                            "add-3": (add, "add-2", "add-2"),
+                            "add-4": (add, "add-3", "add-3"),
+                            "add-5": (add, "add-4", "add-4"),
+                        },
+                        "add-5",
+                        (),
+                    ),
                 ),
-            ),
-            "add-5": "add-x-1",
-        }
+                "add-5": "add-x-1",
+            }
+        )
     )
     assert res == sol
 
 
-def test_dont_fuse_numpy_arrays():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_dont_fuse_numpy_arrays(convert_tasks):
     """
     Some types should stay in the graph bare
 
@@ -1327,17 +1448,22 @@ def test_dont_fuse_numpy_arrays():
     np = pytest.importorskip("numpy")
     dsk = {"x": np.arange(5), "y": (inc, "x")}
 
-    assert fuse(dsk, "y")[0] == dsk
+    assert fuse(dsk, "y")[0] == convert_tasks(dsk)
 
 
-def test_fuse_config():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_fuse_config(convert_tasks):
     with dask.config.set({"optimization.fuse.active": False}):
         d = {
             "a": 1,
             "b": (inc, "a"),
         }
         dependencies = {"b": ("a",)}
-        assert fuse(d, "b", dependencies=dependencies) == (d, dependencies)
+        # import pdb; pdb.set_trace()
+        assert fuse(d, "b", dependencies=dependencies) == (
+            convert_tasks(d),
+            dependencies,
+        )
 
 
 def test_fused_keys_max_length():  # generic fix for gh-5999

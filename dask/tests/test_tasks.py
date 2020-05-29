@@ -121,12 +121,19 @@ def test_task_from_spec():
     assert dsk["x"].kwargs == {"extra": 0.1}
     assert dsk["x"].annotations == {}
 
+    from dask.optimization import SubgraphCallable
+
     # Nesting
     N = namedtuple("N", ("a b"))
 
     dsk = Task.from_spec(
         {
             "a": 0.1,
+            "b": (
+                SubgraphCallable(
+                    {"x-1": 1, "add-1": (inc, "x-1", "x-1"),}, "add-1", (),
+                ),
+            ),
             "w": N(inc, 1),
             "x": (
                 apply,
@@ -160,6 +167,13 @@ def test_task_from_spec():
     assert dsk["z"] == task
     assert get(dsk, "z") == inc(inc(inc(inc(1))))
 
+    # SubgraphCallables
+    task = Task(
+        SubgraphCallable({"x-1": 1, "add-1": Task(inc, ["x-1", "x-1"]),}, "add-1", ())
+    )
+    assert dsk["b"] == task
+
+    # High Level Graphs
     from dask.highlevelgraph import HighLevelGraph
 
     layer_a = {("a", i): (inc, i) for i in range(4)}
@@ -206,6 +220,24 @@ def test_task_to_spec():
     assert hlg.dependencies == dsk.dependencies
     assert hlg.layers["a"] == {("a", i): (inc, i) for i in range(4)}
     assert hlg.layers["b"] == {("b", i): (inc, ("a", i)) for i in range(4)}
+
+    # Test SubgraphCallable graphs get appropriately converted
+    from dask.optimization import SubgraphCallable
+
+    dsk = {
+        "z": Task(
+            SubgraphCallable(
+                {"x-1": 1, "add-1": Task(inc, ["x-1", "x-1"]),}, "add-1", (),
+            ),
+        )
+    }
+    expected = {
+        "z": (
+            SubgraphCallable({"x-1": 1, "add-1": (inc, "x-1", "x-1"),}, "add-1", (),),
+        )
+    }
+
+    assert Task.to_spec(dsk) == expected
 
 
 def test_task_to_tuple():
