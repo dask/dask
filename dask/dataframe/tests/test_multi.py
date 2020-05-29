@@ -594,11 +594,11 @@ def test_indexed_concat(join):
     b = dd.repartition(B, [1, 2, 5, 8])
 
     expected = pd.concat([A, B], axis=0, join=join, sort=False)
-    result = concat_indexed_dataframes([a, b], join=join)
-    assert_eq(result, expected)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
+        result = concat_indexed_dataframes([a, b], join=join)
+        assert_eq(result, expected)
         assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == sorted(
             concat_indexed_dataframes([a, b], join=join).dask
         )
@@ -626,10 +626,13 @@ def test_concat(join):
 
     kwargs = {"sort": False}
 
-    for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2), (ddf1, ddf3, pdf1, pdf3)]:
+    for (dd1, dd2, pd1, pd2) in [
+        (ddf1, ddf2, pdf1, pdf2),
+        (ddf1, ddf3, pdf1, pdf3),
+    ]:
 
         expected = pd.concat([pd1, pd2], join=join, **kwargs)
-        result = dd.concat([dd1, dd2], join=join)
+        result = dd.concat([dd1, dd2], join=join, **kwargs)
         assert_eq(result, expected)
 
     # test outer only, inner has a problem on pandas side
@@ -642,7 +645,7 @@ def test_concat(join):
         (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
     ]:
         expected = pd.concat([pd1, pd2], **kwargs)
-        result = dd.concat([dd1, dd2])
+        result = dd.concat([dd1, dd2], **kwargs)
         assert_eq(result, expected)
 
 
@@ -1901,7 +1904,7 @@ def test_append():
             warnings.simplefilter("ignore", FutureWarning)
             expected = pandas_obj.append(pandas_append)
 
-        result = dask_obj.append(dask_append)
+            result = dask_obj.append(dask_append)
 
         assert_eq(result, expected)
 

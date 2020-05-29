@@ -4,6 +4,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.6
+  - pyyaml
   # optional dependencies pulled in by pip install dask[array, dataframe]
   - numpy=1.15
   - pandas=0.23
