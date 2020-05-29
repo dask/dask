@@ -39,6 +39,7 @@ class CSVSubgraph(Mapping):
         reader,
         blocks,
         is_first,
+        head,
         header,
         kwargs,
         dtypes,
@@ -51,10 +52,12 @@ class CSVSubgraph(Mapping):
         self.reader = reader
         self.blocks = blocks
         self.is_first = is_first
-        self.header = header
+        self.head = head if collection else None #example pandas DF for metadata
+        self.header = header #prepend to all blocks
         self.kwargs = kwargs
         self.dtypes = dtypes
         self.columns = columns
+        self.collection = collection
         self.enforce = enforce
         self.colname, self.paths = path or (None, None)
         self.delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
@@ -353,6 +356,7 @@ def text_blocks_to_pandas(
         blocks,
         is_first,
         head,
+        header,
         kwargs,
         dtypes,
         columns,
