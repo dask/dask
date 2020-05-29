@@ -369,28 +369,35 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
 
     """
 
+    # https://github.com/pandas-dev/pandas/issues/34455
+    if isinstance(df._meta.index, pd.Float64Index):
+        return df
+
+    if not isinstance(group_key, list):
+        group_key = [group_key]
+
+    packed_meta = df._meta[group_key]
+    packed_meta[_PAYLOAD_COL] = b""
+
     def _pack_payload(partition: pd.DataFrame) -> pd.DataFrame:
         try:
             # Technically distributed is an optional dependency
             from distributed.protocol import serialize_bytes
         except ImportError:
             return partition
-        if partition.empty:
-            return partition
-        # this entire re-indexing is only necessary because we hit a pandas bug for float indices
-        df = partition.reset_index()
-        index_name = partition.index.name or _INTERMEDIATE_INDEX_NAME
-        group_key.append(index_name)
-        # TODO: The shuffle-group will perform another groupby. Maybe this can be merged
-        res = df.groupby(group_key, sort=False, observed=True).apply(serialize_bytes)
-        res.name = _PAYLOAD_COL
-        res = res.reset_index().set_index(index_name)
-        return res
 
-    if not isinstance(group_key, list):
-        group_key = [group_key]
-    packed_meta = df._meta[group_key]
-    packed_meta[_PAYLOAD_COL] = b""
+        if partition.empty:
+            return packed_meta
+
+        # TODO: The shuffle-group will perform another groupby. Maybe this can
+        # be merged
+
+        res = partition.groupby(
+            group_key, sort=False, observed=True, as_index=False
+        ).apply(serialize_bytes)
+        res.columns = group_key + [_PAYLOAD_COL]
+        # import ipdb; ipdb.set_trace()
+        return res
 
     return df.map_partitions(_pack_payload, meta=packed_meta)
 
@@ -398,23 +405,23 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
 def unpack_payload(df: DataFrame, meta: DataFrame) -> DataFrame:
     """Revert payload packing of ``pack_payload`` and restores full dataframe."""
 
+    # https://github.com/pandas-dev/pandas/issues/34455
+    if isinstance(df._meta.index, pd.Float64Index):
+        return df
+
     def _unpack_payload(partition: pd.DataFrame) -> pd.DataFrame:
-        if partition.empty:
-            return partition
         try:
             # Technically distributed is an optional dependency
             from distributed.protocol import deserialize_bytes
         except ImportError:
             return partition
-        mapped = partition[_PAYLOAD_COL].map(lambda part: deserialize_bytes(part))
-        if len(partition) == 0:
+
+        if partition.empty:
             return meta
-        else:
-            res = pd.concat(mapped.values, copy=False,)
-            if meta.index.name is not None:
-                return res.set_index(meta.index.name)
-            else:
-                res = res.set_index(_INTERMEDIATE_INDEX_NAME)
+
+        mapped = partition[_PAYLOAD_COL].map(lambda part: deserialize_bytes(part))
+
+        return pd.concat(mapped.values, copy=False,)
 
     return df.map_partitions(_unpack_payload, meta=meta)
 
