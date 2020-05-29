@@ -17,7 +17,7 @@ from ..base import tokenize, compute, compute_as_if_collection, is_dask_collecti
 from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
-from ..utils import digit, insert, M
+from ..utils import digit, insert, M, is_dataframe_like
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
 from typing import List
@@ -395,8 +395,14 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
         res = partition.groupby(
             group_key, sort=False, observed=True, as_index=False
         ).apply(serialize_bytes)
-        res.columns = group_key + [_PAYLOAD_COL]
-        # import ipdb; ipdb.set_trace()
+
+        # For pandas > 1.0.4 this is deterministically a DF but for older
+        # versions we need to handle the series as well
+        if is_dataframe_like(res):
+            res.columns = group_key + [_PAYLOAD_COL]
+        else:
+            res.name = _PAYLOAD_COL
+            res = pd.concat([partition[group_key], res], axis=1)
         return res
 
     return df.map_partitions(_pack_payload, meta=packed_meta)
