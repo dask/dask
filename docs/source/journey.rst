@@ -120,7 +120,7 @@ Nothing blocks.*
 Eventually the computation completes.  The Worker stores this result in its
 local memory::
 
-    data['x'] = ...
+    data['z'] = ...
 
 And transmits back a success, and the number of bytes of the result::
 
