@@ -338,8 +338,6 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 _PAYLOAD_COL = "__dask_payload_bytes"
 
-_INTERMEDIATE_INDEX_NAME = "__int_index_name"
-
 
 def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
     """
@@ -369,8 +367,15 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
 
     """
 
-    # https://github.com/pandas-dev/pandas/issues/34455
-    if isinstance(df._meta.index, pd.Float64Index):
+    if (
+        # https://github.com/pandas-dev/pandas/issues/34455
+        isinstance(df._meta.index, pd.Float64Index)
+        or
+        # TODO: Try to find out what's going on an file a bug report
+        # For datetime indices the apply seems to be corrupt
+        # s.t. apply(lambda x:x) returns different values
+        isinstance(df._meta.index, pd.DatetimeIndex)
+    ):
         return df
 
     if not isinstance(group_key, list):
@@ -413,8 +418,15 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
 def unpack_payload(df: DataFrame, meta: DataFrame) -> DataFrame:
     """Revert payload packing of ``pack_payload`` and restores full dataframe."""
 
-    # https://github.com/pandas-dev/pandas/issues/34455
-    if isinstance(df._meta.index, pd.Float64Index):
+    if (
+        # https://github.com/pandas-dev/pandas/issues/34455
+        isinstance(df._meta.index, pd.Float64Index)
+        or
+        # TODO: Try to find out what's going on an file a bug report
+        # For datetime indices the apply seems to be corrupt
+        # s.t. apply(lambda x:x) returns different values
+        isinstance(df._meta.index, pd.DatetimeIndex)
+    ):
         return df
 
     def _unpack_payload(partition: pd.DataFrame) -> pd.DataFrame:
@@ -427,9 +439,9 @@ def unpack_payload(df: DataFrame, meta: DataFrame) -> DataFrame:
         if partition.empty:
             return meta
 
-        mapped = partition[_PAYLOAD_COL].map(lambda part: deserialize_bytes(part))
+        mapped = partition[_PAYLOAD_COL].map(deserialize_bytes)
 
-        return pd.concat(mapped.values, copy=False,)
+        return pd.concat(mapped.values)
 
     return df.map_partitions(_unpack_payload, meta=meta)
 

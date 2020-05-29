@@ -24,6 +24,8 @@ from dask.dataframe.shuffle import (
     rearrange_by_divisions,
     maybe_buffered_partd,
     remove_nans,
+    pack_payload,
+    unpack_payload,
 )
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -1000,3 +1002,22 @@ def test_set_index_overlap():
     a = a.set_index("key", sorted=True)
     b = a.repartition(divisions=a.divisions)
     assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "group_key",
+    [
+        # Only one group
+        "A",
+        # two groups
+        "B",
+        # multiple keys
+        ["A", "B"],
+    ],
+)
+def test_pack_payload(group_key):
+
+    df = pd.DataFrame({"A": [1, 1, 1, 1], "B": [1, 1, 2, 2], "payload": range(4)})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(unpack_payload(pack_payload(ddf, group_key), meta=df), ddf)
