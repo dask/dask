@@ -2164,7 +2164,9 @@ class Array(DaskMethodsMixin):
         """
         from .overlap import map_overlap
 
-        return map_overlap(self, func, depth, boundary, trim, **kwargs)
+        return map_overlap(
+            func, self, depth=depth, boundary=boundary, trim=trim, **kwargs
+        )
 
     @derived_from(np.ndarray)
     def cumsum(self, axis, dtype=None, out=None):

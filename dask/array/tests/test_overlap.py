@@ -322,9 +322,146 @@ def test_map_overlap():
 )
 def test_map_overlap_no_depth(boundary):
     x = da.arange(10, chunks=5)
-
     y = x.map_overlap(lambda i: i, depth=0, boundary=boundary, dtype=x.dtype)
     assert_eq(y, x)
+
+
+def test_map_overlap_multiarray():
+    # Same ndim, same numblocks, same chunks
+    x = da.arange(10, chunks=5)
+    y = da.arange(10, chunks=5)
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    assert_eq(z, 2 * np.arange(10))
+
+    # Same ndim, same numblocks, different chunks
+    x = da.arange(10, chunks=(2, 3, 5))
+    y = da.arange(10, chunks=(5, 3, 2))
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    assert z.chunks == ((2, 3, 3, 2),)
+    assert_eq(z, 2 * np.arange(10))
+
+    # Same ndim, different numblocks, different chunks
+    x = da.arange(10, chunks=(10,))
+    y = da.arange(10, chunks=(4, 4, 2))
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    assert z.chunks == ((4, 4, 2),)
+    assert_eq(z, 2 * np.arange(10))
+
+    # Different ndim, different numblocks, different chunks
+    x = da.arange(10, chunks=(10,))
+    y = da.arange(10).reshape(1, 10).rechunk((1, (4, 4, 2)))
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    assert z.chunks == ((1,), (4, 4, 2))
+    assert z.shape == (1, 10)
+    assert_eq(z, 2 * np.arange(10)[np.newaxis])
+
+    # Note: checks on arange equality in all of the above help ensure that
+    # trimming is applied appropriately to result chunks (i.e. results
+    # are not somehow shifted)
+
+
+def test_map_overlap_multiarray_defaults():
+    # Check that by default, chunk alignment and arrays of varying dimensionality
+    # are supported by with no effect on result shape
+    # (i.e. defaults are pass-through to map_blocks)
+    x = da.ones((10,), chunks=10)
+    y = da.ones((1, 10), chunks=5)
+    z = da.map_overlap(lambda x, y: x + y, x, y)
+    # func should be called twice and get (5,) and (1, 5) arrays of ones each time
+    assert_eq(z.shape, (1, 10))
+    assert_eq(z.sum(), 20)
+
+
+def test_map_overlap_multiarray_different_depths():
+    x = da.ones(5, dtype="int")
+    y = da.ones(5, dtype="int")
+
+    def run(depth):
+        return da.map_overlap(
+            lambda x, y: x.sum() + y.sum(), x, y, depth=depth, chunks=(0,), trim=False
+        ).compute()
+
+    # Check that the number of elements added
+    # to arrays in overlap works as expected
+    # when depths differ for each array
+    assert_eq(run([0, 0]), 10)
+    assert_eq(run([0, 1]), 12)
+    assert_eq(run([1, 1]), 14)
+    assert_eq(run([1, 2]), 16)
+    assert_eq(run([0, 5]), 20)
+    assert_eq(run([5, 5]), 30)
+
+    # Ensure that depth > chunk size results in error
+    with pytest.raises(ValueError):
+        run([0, 6])
+
+
+def test_map_overlap_multiarray_uneven_numblocks_exception():
+    x = da.arange(10, chunks=(10,))
+    y = da.arange(10, chunks=(5, 5))
+    with pytest.raises(ValueError):
+        # Fail with chunk alignment explicitly disabled
+        da.map_overlap(lambda x, y: x + y, x, y, align_arrays=False).compute()
+
+
+def test_map_overlap_multiarray_block_broadcast():
+    def func(x, y):
+        # Return result with expected padding
+        z = x.size + y.size
+        return np.ones((3, 3)) * z
+
+    # Chunks in trailing dimension will be unified to two chunks of size 6
+    # and block broadcast will allow chunks from x to repeat
+    x = da.ones((12,), chunks=12)  # numblocks = (1,) -> (2, 2) after broadcast
+    y = da.ones((16, 12), chunks=(8, 6))  # numblocks = (2, 2)
+    z = da.map_overlap(func, x, y, chunks=(3, 3), depth=1, trim=True)
+    assert_eq(z, z)
+    assert z.shape == (2, 2)
+    # func call will receive (8,) and (10, 8) arrays for each of 4 blocks
+    assert_eq(z.sum(), 4 * (10 * 8 + 8))
+
+
+def test_map_overlap_multiarray_variadic():
+    # Test overlapping row slices from 3D arrays
+    xs = [
+        # Dim 0 will unify to chunks of size 4 for all:
+        da.ones((12, 1, 1), chunks=((12,), 1, 1)),
+        da.ones((12, 8, 1), chunks=((8, 4), 8, 1)),
+        da.ones((12, 8, 4), chunks=((4, 8), 8, 4)),
+    ]
+
+    def func(*args):
+        return np.array([sum([x.size for x in args])])
+
+    x = da.map_overlap(func, *xs, chunks=(1,), depth=1, trim=False, drop_axis=[1, 2])
+
+    # Each func call should get 4 rows from each array padded by 1 in each dimension
+    size_per_slice = sum([np.pad(x[:4], 1, mode="constant").size for x in xs])
+    assert x.shape == (3,)
+    assert all(x.compute() == size_per_slice)
+
+
+def test_map_overlap_deprecated_signature():
+    def func(x):
+        return np.array(x.sum())
+
+    x = da.ones(3)
+
+    # Old positional signature: func, depth, boundary, trim
+    with pytest.warns(FutureWarning):
+        y = da.map_overlap(x, func, 0, "reflect", True)
+        assert y.compute() == 3
+        assert y.shape == (3,)
+
+    with pytest.warns(FutureWarning):
+        y = da.map_overlap(x, func, 1, "reflect", True)
+        assert y.compute() == 5
+        assert y.shape == (3,)
+
+    with pytest.warns(FutureWarning):
+        y = da.map_overlap(x, func, 1, "reflect", False)
+        assert y.compute() == 5
+        assert y.shape == (5,)
 
 
 def test_nearest_overlap():
