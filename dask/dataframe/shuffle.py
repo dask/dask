@@ -338,31 +338,85 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 _PAYLOAD_COL = "__dask_payload_bytes"
 
-
-def _pack_payload(partition: pd.DataFrame, group_key: List[str]) -> pd.DataFrame:
-    try:
-        # Technically distributed is an optional dependency
-        from distributed.protocol import serialize_bytes
-    except ImportError:
-        return partition
-
-    # TODO: The shuffle-group will perform another groupby. Maybe this can be merged
-    res = partition.groupby(group_key, sort=False, observed=True).apply(serialize_bytes)
-    res.name = _PAYLOAD_COL
-    return res.reset_index()
+_INTERMEDIATE_INDEX_NAME = "__int_index_name"
 
 
-def _unpack_payload(partition: pd.DataFrame) -> pd.DataFrame:
-    try:
-        # Technically distributed is an optional dependency
-        from distributed.protocol import deserialize_bytes
-    except ImportError:
-        return partition
+def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
+    """
+    Pack all payload columns (everything except of group_key) into a single
+    columns. This column will contain a single byte string containing the
+    serialized and compressed payload data. The payload data is just dead weight
+    when reshuffling. By compressing it once before the shuffle starts, this
+    saves a lot of memory and network/disk IO.
 
-    return pd.concat(
-        partition[_PAYLOAD_COL].map(lambda part: deserialize_bytes(part)).values,
-        copy=False,
-    )
+    Example as applied to one partition::
+
+        >>> df = pd.DataFrame({
+        ...     "group_key": [1, 1, 2, 2],
+        ...     "payloadA": [...],
+        ...     "payloadB": [...],
+        ...     "payloadC": [...],
+        ... })
+        >>> pack_payload(df, "group_key")
+
+        pd.DataFrame({
+            "group_key": [1, 2],
+            "__dask_payload_bytes": [
+                b"compressed_payload_group_key1",
+                b"compressed_payload_group_key2",
+            ]
+        })
+
+    """
+
+    def _pack_payload(partition: pd.DataFrame) -> pd.DataFrame:
+        try:
+            # Technically distributed is an optional dependency
+            from distributed.protocol import serialize_bytes
+        except ImportError:
+            return partition
+        if partition.empty:
+            return partition
+        # this entire re-indexing is only necessary because we hit a pandas bug for float indices
+        df = partition.reset_index()
+        index_name = partition.index.name or _INTERMEDIATE_INDEX_NAME
+        group_key.append(index_name)
+        # TODO: The shuffle-group will perform another groupby. Maybe this can be merged
+        res = df.groupby(group_key, sort=False, observed=True).apply(serialize_bytes)
+        res.name = _PAYLOAD_COL
+        res = res.reset_index().set_index(index_name)
+        return res
+
+    if not isinstance(group_key, list):
+        group_key = [group_key]
+    packed_meta = df._meta[group_key]
+    packed_meta[_PAYLOAD_COL] = b""
+
+    return df.map_partitions(_pack_payload, meta=packed_meta)
+
+
+def unpack_payload(df: DataFrame, meta: DataFrame) -> DataFrame:
+    """Revert payload packing of ``pack_payload`` and restores full dataframe."""
+
+    def _unpack_payload(partition: pd.DataFrame) -> pd.DataFrame:
+        if partition.empty:
+            return partition
+        try:
+            # Technically distributed is an optional dependency
+            from distributed.protocol import deserialize_bytes
+        except ImportError:
+            return partition
+        mapped = partition[_PAYLOAD_COL].map(lambda part: deserialize_bytes(part))
+        if len(partition) == 0:
+            return meta
+        else:
+            res = pd.concat(mapped.values, copy=False,)
+            if meta.index.name is not None:
+                return res.set_index(meta.index.name)
+            else:
+                res = res.set_index(_INTERMEDIATE_INDEX_NAME)
+
+    return df.map_partitions(_unpack_payload, meta=meta)
 
 
 def rearrange_by_column(
@@ -376,21 +430,17 @@ def rearrange_by_column(
 ):
     shuffle = shuffle or config.get("shuffle", None) or "disk"
 
-    packed_meta = df._meta[[col]]
-    packed_meta[_PAYLOAD_COL] = b""
-
-    df2 = df.map_partitions(_pack_payload, group_key=col, meta=packed_meta)
+    df2 = pack_payload(df, col)
     if shuffle == "disk":
-        df2 = rearrange_by_column_disk(df, col, npartitions, compute=compute)
+        df3 = rearrange_by_column_disk(df2, col, npartitions, compute=compute)
     elif shuffle == "tasks":
-        df2 = rearrange_by_column_tasks(
-            df, col, max_branch, npartitions, ignore_index=ignore_index
+        df3 = rearrange_by_column_tasks(
+            df2, col, max_branch, npartitions, ignore_index=ignore_index
         )
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
-    df3 = df2.map_partitions(_unpack_payload, meta=df._meta)
-    return df3
+    return unpack_payload(df3, df._meta)
 
 
 class maybe_buffered_partd(object):
