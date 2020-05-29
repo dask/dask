@@ -1,9 +1,12 @@
+from contextlib import contextmanager
 import io
+
 import pytest
 
+# import dask
 from dask.dataframe.io.sql import read_sql_table
+from dask.dataframe.utils import assert_eq, PANDAS_GT_0240
 from dask.utils import tmpfile
-from dask.dataframe.utils import assert_eq
 
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
@@ -332,3 +335,97 @@ def test_no_character_index_without_divisions(db):
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
+
+
+@contextmanager
+def tmp_db_uri():
+    with tmpfile() as f:
+        yield "sqlite:///%s" % f
+
+
+@pytest.mark.parametrize("npartitions", (1, 2))
+@pytest.mark.parametrize("parallel", (False, True))
+def test_to_sql(npartitions, parallel):
+    df_by_age = df.set_index("age")
+    df_appended = pd.concat([df, df,])
+
+    ddf = dd.from_pandas(df, npartitions)
+    ddf_by_age = ddf.set_index("age")
+
+    # Simple round trip test: use existing "number" index_col
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, parallel=parallel)
+        result = read_sql_table("test", uri, "number")
+        assert_eq(df, result)
+
+    # Test writing no index, and reading back in with one of the other columns as index (`read_sql_table` requires
+    # an index_col)
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, parallel=parallel, index=False)
+
+        result = read_sql_table("test", uri, "negish")
+        assert_eq(df.set_index("negish"), result)
+
+        result = read_sql_table("test", uri, "age")
+        assert_eq(df_by_age, result)
+
+    # Index by "age" instead
+    with tmp_db_uri() as uri:
+        ddf_by_age.to_sql("test", uri, parallel=parallel)
+        result = read_sql_table("test", uri, "age")
+        assert_eq(df_by_age, result)
+
+    # Index column can't have "object" dtype if no partitions are provided
+    with tmp_db_uri() as uri:
+        ddf.set_index("name").to_sql("test", uri)
+        with pytest.raises(
+            TypeError,
+            match='Provided index column is of type "object".  If divisions is not provided the index column type must be numeric or datetime.',  # noqa: E501
+        ):
+            read_sql_table("test", uri, "name")
+
+    # Test various "if_exists" values
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri)
+
+        # Writing a table that already exists fails
+        with pytest.raises(ValueError, match="Table 'test' already exists"):
+            ddf.to_sql("test", uri)
+
+        ddf.to_sql("test", uri, parallel=parallel, if_exists="append")
+        result = read_sql_table("test", uri, "number")
+
+        assert_eq(df_appended, result)
+
+        ddf_by_age.to_sql("test", uri, parallel=parallel, if_exists="replace")
+        result = read_sql_table("test", uri, "age")
+        assert_eq(df_by_age, result)
+
+    # Verify number of partitions returned, when compute=False
+    with tmp_db_uri() as uri:
+        result = ddf.to_sql("test", uri, parallel=parallel, compute=False)
+
+        # the first result is from the "meta" insert
+        actual = len(result.compute())
+
+        assert actual == npartitions
+
+
+def test_to_sql_kwargs():
+    ddf = dd.from_pandas(df, 2)
+    with tmp_db_uri() as uri:
+        # "method" keyword is allowed iff pandas>=0.24.0
+        if PANDAS_GT_0240:
+            ddf.to_sql("test", uri, method="multi")
+        else:
+            with pytest.raises(
+                NotImplementedError,
+                match=r"'method' requires pandas>=0.24.0. You have version 0.23.\d",
+            ):
+                ddf.to_sql("test", uri, method="multi")
+
+        # Other, unknown keywords always disallowed
+        with pytest.raises(
+            TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
+        ):
+            ddf.to_sql("test", uri, unknown=None)

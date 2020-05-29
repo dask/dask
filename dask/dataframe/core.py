@@ -1406,6 +1406,38 @@ Dask Name: {name}, {task} tasks"""
 
         return to_csv(self, filename, **kwargs)
 
+    def to_sql(
+        self,
+        name: str,
+        uri: str,
+        schema=None,
+        if_exists: str = "fail",
+        index: bool = True,
+        index_label=None,
+        chunksize=None,
+        dtype=None,
+        method=None,
+        compute=True,
+        parallel=False,
+    ):
+        """ See dd.to_sql docstring for more information """
+        from .io import to_sql
+
+        return to_sql(
+            self,
+            name=name,
+            uri=uri,
+            schema=schema,
+            if_exists=if_exists,
+            index=index,
+            index_label=index_label,
+            chunksize=chunksize,
+            dtype=dtype,
+            method=method,
+            compute=compute,
+            parallel=parallel,
+        )
+
     def to_json(self, filename, *args, **kwargs):
         """ See dd.to_json docstring for more information """
         from .io import to_json
