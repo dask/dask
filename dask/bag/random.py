@@ -5,52 +5,10 @@ from functools import partial
 
 
 def sample(population, k):
-    """
-    Chooses k unique random elements from a population bag.
-
-    Returns a new bag containing elements from the population while
-    leaving the original population unchanged.
-
-    Parameters
-    ----------
-    population : Bag
-        Elements to sample.
-    k : integer, optional
-        Number of elements to sample.
-    Examples
-    --------
-    >>> import dask.bag as db # doctest: +SKIP
-    >>> from dask.bag import random # doctest: +SKIP
-    >>>
-    >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
-    >>> list(random.sample(b, 3).compute()) # doctest: +SKIP
-    [1, 3, 5]
-    """
     return _sample(population=population, k=k, replace=False)
 
 
 def choices(population, k=1):
-    """
-    Return a k sized list of population elements chosen with replacement.
-
-    If the relative weights or cumulative weights are not specified,
-    the selections are made with equal probability.
-
-    Parameters
-    ----------
-    population : Bag
-        Elements to sample.
-    k : integer, optional
-        Number of elements to sample.
-    Examples
-    --------
-    >>> import dask.bag as db # doctest: +SKIP
-    >>> from dask.bag import random # doctest: +SKIP
-    >>>
-    >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
-    >>> list(random.choices(b, 3).compute()) # doctest: +SKIP
-    [1, 1, 5]
-    """
     return _sample(population=population, k=k, replace=True)
 
 
