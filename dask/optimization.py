@@ -41,7 +41,7 @@ def cull(dsk, keys):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
-    convert = config.get("optimization.cull.convert_tasks", False)
+    convert = config.get("optimization.cull.convert-tasks", False)
 
     seen = set()
     dependencies = dict()
@@ -126,7 +126,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
             keys = [keys]
         keys = set(flatten(keys))
 
-    convert = config.get("optimization.fuse_linear.convert_tasks", False)
+    convert = config.get("optimization.fuse_linear.convert-tasks", False)
 
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
@@ -251,7 +251,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
 
-    convert = config.get("optimization.inline.convert_tasks", False)
+    convert = config.get("optimization.inline.convert-tasks", False)
 
     if dependencies and isinstance(next(iter(dependencies.values())), list):
         dependencies = {k: set(v) for k, v in dependencies.items()}
@@ -350,7 +350,7 @@ def inline_functions(
         )
         for k in keys:
             del dsk[k]
-    elif config.get("optimization.inline.convert_tasks", False):
+    elif config.get("optimization.inline.convert-tasks", False):
         dsk = Task.from_spec(dsk)
 
     return dsk
@@ -508,7 +508,7 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
-    convert = config.get("optimization.fuse.convert_tasks", False)
+    convert = config.get("optimization.fuse.convert-tasks", False)
 
     if not config.get("optimization.fuse.active"):
         return Task.from_spec(dsk) if convert else dsk, dependencies

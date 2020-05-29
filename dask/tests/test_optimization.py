@@ -43,16 +43,16 @@ def convert_tasks(request):
     finally:
         pass
 
-
-def test_cull():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_cull(convert_tasks):
     # 'out' depends on 'x' and 'y', but not 'z'
     d = {"x": 1, "y": (inc, "x"), "z": (inc, "x"), "out": (add, "y", 10)}
     culled, dependencies = cull(d, "out")
-    assert culled == {"x": 1, "y": (inc, "x"), "out": (add, "y", 10)}
+    assert culled == convert_tasks({"x": 1, "y": (inc, "x"), "out": (add, "y", 10)})
     assert dependencies == {"x": [], "y": ["x"], "out": ["y"]}
 
     assert cull(d, "out") == cull(d, ["out"])
-    assert cull(d, ["out", "z"])[0] == d
+    assert cull(d, ["out", "z"])[0] == convert_tasks(d)
     assert cull(d, [["out"], ["z"]]) == cull(d, ["out", "z"])
     pytest.raises(KeyError, lambda: cull(d, "badkey"))
 

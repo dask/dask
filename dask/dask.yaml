@@ -8,9 +8,16 @@ array:
     size: 120  # pixels
 
 optimization:
+  cull:
+    convert-tasks: true
+  inline:
+    convert-tasks: true
+  fuse_linear:
+    convert-tasks: true
   fuse:
     active: true
     ave-width: 1
+    convert-tasks: true
     max-width: null  # 1.5 + ave_width * log(ave_width + 1)
     max-height: .inf
     max-depth-new-edges: null  # ave_width * 1.5
