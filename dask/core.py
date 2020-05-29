@@ -318,7 +318,7 @@ def reverse_dict(d):
     return result
 
 
-def subs(task, key, val):
+def subs(task, key, val, convert=False):
     """ Perform a substitution on a task
 
     Examples
@@ -370,8 +370,7 @@ def subs(task, key, val):
 
         return (
             Task.from_call(task[0], *(Task.from_spec(a) for a in newargs))
-            if config.get("convert_tasks", False)
-            else task[:1] + tuple(newargs)
+            if convert else task[:1] + tuple(newargs)
         )
     else:
         try:

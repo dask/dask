@@ -41,6 +41,8 @@ def cull(dsk, keys):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
+    convert = config.get("convert_tasks", False)
+
     seen = set()
     dependencies = dict()
     out = {}
@@ -50,7 +52,7 @@ def cull(dsk, keys):
         new_work = []
         for k in work:
             dependencies_k = get_dependencies(dsk, k, as_list=True)  # fuse needs lists
-            out[k] = dsk[k]
+            out[k] = Task.from_spec(dsk[k]) if convert else dsk[k]
             dependencies[k] = dependencies_k
             for d in dependencies_k:
                 if d not in seen:
@@ -189,7 +191,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
             parent = chain.pop()
             dependencies[parent].update(dependencies.pop(child))
             dependencies[parent].remove(child)
-            val = subs(dsk[parent], child, val)
+            val = subs(dsk[parent], child, val, convert)
             fused.add(child)
             child = parent
         fused.add(child)
@@ -210,7 +212,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
                 new_key = rv[old_key]
                 deps.remove(old_key)
                 deps.add(new_key)
-                rv[key] = subs(rv[key], old_key, new_key)
+                rv[key] = subs(rv[key], old_key, new_key, convert)
         if keys is not None:
             for key in aliases - keys:
                 del rv[key]
@@ -279,7 +281,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
                 replace = keysubs[dep]
             else:
                 replace = dsk[dep]
-            val = subs(val, dep, replace)
+            val = subs(val, dep, replace, convert)
         keysubs[key] = val
 
     # Make new dask with substitutions
@@ -287,7 +289,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     for key, val in dsk.items():
         if key not in dsk2:
             for item in keys & dependencies[key]:
-                val = subs(val, item, keysubs[item])
+                val = subs(val, item, keysubs[item], convert)
             dsk2[key] = val
     return dsk2
 
@@ -661,7 +663,7 @@ def fuse(
                         (no_new_edges or height < max_depth_new_edges)
                     ):
                         # Perform substitutions as we go
-                        val = subs(dsk[parent], child_key, child_task)
+                        val = subs(dsk[parent], child_key, child_task, convert)
                         deps_parent.remove(child_key)
                         deps_parent |= deps_pop(child_key)
                         del rv[child_key]
@@ -782,7 +784,7 @@ def fuse(
                         children_deps = set()
                         for child_info in children_info:
                             cur_child = child_info[0]
-                            val = subs(val, cur_child, child_info[1])
+                            val = subs(val, cur_child, child_info[1], convert)
                             del rv[cur_child]
                             children_deps |= deps_pop(cur_child)
                             reducible_remove(cur_child)

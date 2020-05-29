@@ -102,17 +102,6 @@ def test_fuse_all(convert_tasks):
         "b": 2,
     }
 
-    # from pprint import pprint
-    # pprint(fuse(d, rename_keys=False))
-    # pprint(with_deps(fn(
-    #     {
-    #         "NEW": (inc, "y"),
-    #         "w": (inc, (inc, "y")),
-    #         "y": (inc, (add, "a", "b")),
-    #         "a": 1,
-    #         "b": 2,
-    #     })))
-
     assert fuse(d, rename_keys=False) == with_deps(
         fn(
             {
