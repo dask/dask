@@ -718,7 +718,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     if density and isinstance(bins, Array) and bins.ndim == 0:
         raise NotImplementedError(
-            "When `density` is True, the number of bins cannot be a delayed Dask array. "
+            "When `density` is True, `bins` cannot be a scalar Dask object. "
             "It must be a concrete number or a (possibly-delayed) array/sequence of bin edges."
         )
 
