@@ -1432,7 +1432,7 @@ def test_half_indexed_dataframe_avoids_shuffle():
 
     list_eq(c, cc)
 
-    assert len(cc.dask) < 500
+    assert len(cc.dask) < 525
 
 
 def test_errors_for_merge_on_frame_columns():
