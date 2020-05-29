@@ -52,7 +52,7 @@ class CSVSubgraph(Mapping):
         self.reader = reader
         self.blocks = blocks
         self.is_first = is_first
-        self.head = head if collection else None #example pandas DF for metadata
+        self.head = head if collection else None  # example pandas DF for metadata
         self.header = header #prepend to all blocks
         self.kwargs = kwargs
         self.dtypes = dtypes
@@ -60,7 +60,6 @@ class CSVSubgraph(Mapping):
         self.collection = collection
         self.enforce = enforce
         self.colname, self.paths = path or (None, None)
-        self.delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
 
     def __getitem__(self, key):
         try:
@@ -88,19 +87,17 @@ class CSVSubgraph(Mapping):
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        return from_delayed(
-            self.delayed_pandas_read_text(
-                self.reader,
-                block,
-                self.header,
-                rest_kwargs,
-                self.dtypes,
-                self.columns,
-                write_header=write_header,
-                enforce=self.enforce,
-                path=path_info,
+        return (pandas_read_text,
+                        self.reader,
+                        block,
+                        self.header,
+                        rest_kwargs,
+                        self.dtypes,
+                        self.columns,
+                        write_header,
+                        self.enforce,
+                        path_info,
             )
-        )
 
     def __len__(self):
         return len(self.blocks)
@@ -334,9 +331,7 @@ def text_blocks_to_pandas(
             sublist[1:] = [False,] * len(sublist[1:])
     is_first = tuple(flatten(block_lists))
 
-    name = "read-csv-" + tokenize(
-        reader, blocks, header, kwargs, dtypes, columns, collection, path,
-    )
+    name = "read-csv-" + tokenize( reader, columns )
 
     if collection:
         if path:
@@ -365,7 +360,7 @@ def text_blocks_to_pandas(
         path,
     )
 
-    return new_dd_object(subgraph, name, head, (None,) * (len(block_lists) + 1))
+    return new_dd_object(subgraph, name, head, (None,) * (len(blocks) + 1))
 
 
 def auto_blocksize(total_memory, cpu_count):
@@ -529,6 +524,8 @@ def read_pandas(
         for c in head.columns:
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
+
+    values = [[dsk.dask.values() for dsk in block] for block in values]
 
     return text_blocks_to_pandas(
         reader,
