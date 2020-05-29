@@ -29,15 +29,23 @@ def ishashable(x):
 def istask(x):
     """ Is x a runnable task?
 
-    A task is a :class:`dask.task.Task` object or a
+    A task is a :class:`Task` object or a
     tuple with a callable first argument
+
+    Returns
+    -------
+    result : :class:`Task`, :class:`TupleTask` or False
+        Returns the Task type if task is a task, otherwise False.
+        Types are Truthy in python.
 
     Examples
     --------
 
     >>> inc = lambda x: x + 1
     >>> istask((inc, 1))
-    True
+    TupleTask
+    >>> istask(Task(inc, [1]))
+    Task
     >>> istask(1)
     False
     """
