@@ -49,7 +49,9 @@ def _meta_from_array(x, columns=None, index=None, meta_df=None):
         dtypes = [fields[n][0] if n in fields else "f8" for n in columns]
     elif x.ndim == 1:
         if np.isscalar(columns) or columns is None:
-            return meta_df._constructor_sliced([], name=columns, dtype=x.dtype, index=index)
+            return meta_df._constructor_sliced(
+                [], name=columns, dtype=x.dtype, index=index
+            )
         elif len(columns) == 1:
             return meta_df._constructor(
                 np.array([], dtype=x.dtype), columns=columns, index=index
