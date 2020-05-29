@@ -77,7 +77,7 @@ def _meta_from_array(x, columns=None, index=None, meta_df=None):
 
 
 def from_array(x, chunksize=50000, columns=None, meta_df=None):
-    """ Read any slicable array into a Dask Dataframe
+    """ Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
@@ -392,7 +392,7 @@ def from_dask_array(x, columns=None, index=None, meta_df=None):
         The default output index depends on whether `x` has any unknown
         chunks. If there are any unknown chunks, the output has ``None``
         for all the divisions (one per chunk). If all the chunks are known,
-        a default index with known divsions is created.
+        a default index with known divisions is created.
 
         Specifying `index` can be useful if you're conforming a Dask Array
         to an existing dask Series or DataFrame, and you would like the
