@@ -41,7 +41,7 @@ def cull(dsk, keys):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
-    convert = config.get("convert_tasks", False)
+    convert = config.get("optimization.cull.convert_tasks", False)
 
     seen = set()
     dependencies = dict()
@@ -126,7 +126,7 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
             keys = [keys]
         keys = set(flatten(keys))
 
-    convert = config.get("convert_tasks", False)
+    convert = config.get("optimization.fuse_linear.convert_tasks", False)
 
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
@@ -251,7 +251,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
 
-    convert = config.get("convert_tasks", False)
+    convert = config.get("optimization.inline.convert_tasks", False)
 
     if dependencies and isinstance(next(iter(dependencies.values())), list):
         dependencies = {k: set(v) for k, v in dependencies.items()}
@@ -350,7 +350,7 @@ def inline_functions(
         )
         for k in keys:
             del dsk[k]
-    elif config.get("convert_tasks", False):
+    elif config.get("optimization.inline.convert_tasks", False):
         dsk = Task.from_spec(dsk)
 
     return dsk
@@ -508,7 +508,7 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
-    convert = config.get("convert_tasks", False)
+    convert = config.get("optimization.fuse.convert_tasks", False)
 
     if not config.get("optimization.fuse.active"):
         return Task.from_spec(dsk) if convert else dsk, dependencies
@@ -851,7 +851,7 @@ def fuse(
                 parent = rdeps[parent][0]
 
     if fuse_subgraphs:
-        _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
+        _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys, convert)
 
     if key_renamer:
         for root_key, fused_keys in fused_trees.items():
@@ -865,12 +865,12 @@ def fuse(
     return rv, deps
 
 
-def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
+def _inplace_fuse_subgraphs(
+    dsk, keys, dependencies, fused_trees, rename_keys, convert_tasks
+):
     """Subroutine of fuse.
 
     Mutates dsk, depenencies, and fused_trees inplace"""
-
-    convert = config.get("convert_tasks", False)
 
     # locate all members of linear chains
     child2parent = {}
@@ -926,7 +926,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
         # Create new task
         inkeys = tuple(inkeys_set)
         task = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
-        dsk[outkey] = Task.from_spec(task) if convert else task
+        dsk[outkey] = Task.from_spec(task) if convert_tasks else task
 
         # Mutate `fused_trees` if key renaming is needed (renaming done in fuse)
         if rename_keys:

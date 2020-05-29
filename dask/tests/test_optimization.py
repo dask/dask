@@ -29,8 +29,16 @@ def double(x):
 @pytest.fixture
 def convert_tasks(request):
     """ Configure dask to convert tuple tasks to Task objects """
+
+    options = {
+        "optimization.cull.convert_tasks": request.param,
+        "optimization.inline.convert_tasks": request.param,
+        "optimization.fuse.convert_tasks": request.param,
+        "optimization.fuse_linear.convert_tasks": request.param,
+    }
+
     try:
-        with config.set({"convert_tasks": request.param}):
+        with config.set(options):
             yield Task.from_spec if request.param is True else lambda x: x
     finally:
         pass
