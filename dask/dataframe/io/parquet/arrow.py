@@ -630,7 +630,11 @@ class ArrowEngine(Engine):
         i_offset = 0
         if append and division_info is None:
             ignore_divisions = True
-        fs.mkdirs(path, exist_ok=True)
+
+        if append:
+            fs.mkdirs(path, exist_ok=True)
+        else:
+            fs.mkdirs(path)
 
         if append:
             try:
