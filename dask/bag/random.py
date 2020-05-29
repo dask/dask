@@ -1,29 +1,30 @@
 import heapq
 import math
-import random
+
+import random as rnd
 from functools import partial
 
 
 def sample(population, k):
-    """
-    Chooses k unique random elements from a population bag.
+    """Chooses k unique random elements from a bag.
 
     Returns a new bag containing elements from the population while
     leaving the original population unchanged.
 
     Parameters
     ----------
-    population : Bag
+    population: Bag
         Elements to sample.
-    k : integer, optional
+    k: integer, optional
         Number of elements to sample.
+
     Examples
     --------
     >>> import dask.bag as db # doctest: +SKIP
-    >>> from dask.bag import random # doctest: +SKIP
-    >>>
-    >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
-    >>> list(random.sample(b, 3).compute()) # doctest: +SKIP
+    ... from dask.bag import random
+    ...
+    ... b = db.from_sequence(range(5), npartitions=2)
+    ... list(random.sample(b, 3).compute())
     [1, 3, 5]
     """
     return _sample(population=population, k=k, replace=False)
@@ -31,24 +32,22 @@ def sample(population, k):
 
 def choices(population, k=1):
     """
-    Return a k sized list of population elements chosen with replacement.
-
-    If the relative weights or cumulative weights are not specified,
-    the selections are made with equal probability.
+    Return a k sized list of elements chosen with replacement.
 
     Parameters
     ----------
-    population : Bag
+    population: Bag
         Elements to sample.
-    k : integer, optional
+    k: integer, optional
         Number of elements to sample.
+
     Examples
     --------
     >>> import dask.bag as db # doctest: +SKIP
-    >>> from dask.bag import random # doctest: +SKIP
-    >>>
-    >>> b = db.from_sequence(range(5), npartitions=2) # doctest: +SKIP
-    >>> list(random.choices(b, 3).compute()) # doctest: +SKIP
+    ... from dask.bag import random
+    ...
+    ... b = db.from_sequence(range(5), npartitions=2)
+    ... list(random.choices(b, 3).compute())
     [1, 1, 5]
     """
     return _sample(population=population, k=k, replace=True)
@@ -73,16 +72,16 @@ def _sample_map_partitions(population, k, replace):
 
     Returns
     -------
-    sample : list
+    sample: list
         List of sampled elements from the partition.
-    lx : int
+    lx: int
         Number of elements on the partition.
-    k : int
+    k: int
         Number of elements to sample.
     """
     lx = len(population)
     real_k = k if k <= lx else lx
-    sample_func = random.choices if replace else random.sample
+    sample_func = rnd.choices if replace else rnd.sample
     # because otherwise it raises IndexError:
     sampled = [] if real_k == 0 else sample_func(population=population, k=real_k)
     return sampled, lx
@@ -120,7 +119,7 @@ def _sample_reduce(reduce_iter, k, replace):
             p_i = n_i / (k_i * n)
             p += [p_i] * k_i
 
-    sample_func = random.choices if replace else _weighted_sampling_without_replacement
+    sample_func = rnd.choices if replace else _weighted_sampling_without_replacement
     return sample_func(population=s, weights=p, k=k)
 
 
@@ -129,5 +128,5 @@ def _weighted_sampling_without_replacement(population, weights, k):
     Source:
         Weighted random sampling with a reservoir, Pavlos S. Efraimidis, Paul G. Spirakis
     """
-    elt = [(math.log(random.random()) / weights[i], i) for i in range(len(weights))]
+    elt = [(math.log(rnd.random()) / weights[i], i) for i in range(len(weights))]
     return [population[x[1]] for x in heapq.nlargest(k, elt)]

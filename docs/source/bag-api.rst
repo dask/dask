@@ -62,22 +62,25 @@ Top-level functions
    map_partitions
    zip
 
+Random Sampling
+---------------
+
+.. currentmodule:: dask.bag.random
+
+.. autosummary::
+    choices
+    sample
+
 Turn Bags into other things
 ---------------------------
+
+.. currentmodule:: dask.bag
 
 .. autosummary::
    Bag.to_textfiles
    Bag.to_dataframe
    Bag.to_delayed
    Bag.to_avro
-
-Random
-------
-
-.. autosummary::
-   random.sample
-   random.choices
-
 
 Bag methods
 -----------
@@ -98,3 +101,12 @@ Other functions
 .. autofunction:: map_partitions
 .. autofunction:: map
 .. autofunction:: zip
+
+
+
+Random Sampling
+---------------
+
+.. automodule:: dask.bag.random
+   :members:
+
