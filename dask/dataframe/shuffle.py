@@ -402,7 +402,9 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
             res.columns = group_key + [_PAYLOAD_COL]
         else:
             res.name = _PAYLOAD_COL
-            res = pd.concat([partition[group_key], res], axis=1)
+            group = partition[group_key].drop_duplicates()
+            group.index = res.index
+            res = pd.concat([group, res], axis=1)
         return res
 
     return df.map_partitions(_pack_payload, meta=packed_meta)
