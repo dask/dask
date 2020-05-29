@@ -92,6 +92,7 @@ Dataframe
     DataFrame.to_json
     DataFrame.to_parquet
     DataFrame.to_records
+    DataFrame.to_sql
     DataFrame.truediv
     DataFrame.values
     DataFrame.var
@@ -326,6 +327,7 @@ Store DataFrames
    to_parquet
    to_hdf
    to_records
+   to_sql
    to_bag
    to_json
 
@@ -409,6 +411,7 @@ Storage and Conversion
 .. autofunction:: to_hdf
 .. autofunction:: to_parquet
 .. autofunction:: to_json
+.. autofunction:: to_sql
 
 Rolling
 ~~~~~~~
