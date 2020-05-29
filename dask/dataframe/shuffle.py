@@ -20,6 +20,7 @@ from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -335,6 +336,35 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
     return df3
 
 
+_PAYLOAD_COL = "__dask_payload_bytes"
+
+
+def _pack_payload(partition: pd.DataFrame, group_key: List[str]) -> pd.DataFrame:
+    try:
+        # Technically distributed is an optional dependency
+        from distributed.protocol import serialize_bytes
+    except ImportError:
+        return partition
+
+    # TODO: The shuffle-group will perform another groupby. Maybe this can be merged
+    res = partition.groupby(group_key, sort=False, observed=True).apply(serialize_bytes)
+    res.name = _PAYLOAD_COL
+    return res.reset_index()
+
+
+def _unpack_payload(partition: pd.DataFrame) -> pd.DataFrame:
+    try:
+        # Technically distributed is an optional dependency
+        from distributed.protocol import deserialize_bytes
+    except ImportError:
+        return partition
+
+    return pd.concat(
+        partition[_PAYLOAD_COL].map(lambda part: deserialize_bytes(part)).values,
+        copy=False,
+    )
+
+
 def rearrange_by_column(
     df,
     col,
@@ -345,14 +375,22 @@ def rearrange_by_column(
     ignore_index=False,
 ):
     shuffle = shuffle or config.get("shuffle", None) or "disk"
+
+    packed_meta = df._meta[[col]]
+    packed_meta[_PAYLOAD_COL] = b""
+
+    df2 = df.map_partitions(_pack_payload, group_key=col, meta=packed_meta)
     if shuffle == "disk":
-        return rearrange_by_column_disk(df, col, npartitions, compute=compute)
+        df2 = rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == "tasks":
-        return rearrange_by_column_tasks(
+        df2 = rearrange_by_column_tasks(
             df, col, max_branch, npartitions, ignore_index=ignore_index
         )
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
+
+    df3 = df2.map_partitions(_unpack_payload, meta=df._meta)
+    return df3
 
 
 class maybe_buffered_partd(object):
