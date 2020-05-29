@@ -175,11 +175,6 @@ def get(dsk, out, cache=None):
     >>> get(d, 'y')
     2
     """
-    # TODO(sjperkins)
-    # This merely exists for testing purposes,
-    # remove when PR is ready
-    dsk = Task.from_spec(dsk)
-
     for k in flatten(out) if isinstance(out, list) else [out]:
         if k not in dsk:
             raise KeyError("{0} is not a key in the graph".format(k))
