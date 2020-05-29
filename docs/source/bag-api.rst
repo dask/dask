@@ -71,14 +71,6 @@ Turn Bags into other things
    Bag.to_delayed
    Bag.to_avro
 
-Random
-------
-
-.. autosummary::
-   random.sample
-   random.choices
-
-
 Bag methods
 -----------
 
@@ -98,3 +90,14 @@ Other functions
 .. autofunction:: map_partitions
 .. autofunction:: map
 .. autofunction:: zip
+
+
+.. currentmodule:: dask.bag.random
+
+Random
+------
+
+.. autosummary::
+   choices
+
+.. autofunction:: choices
