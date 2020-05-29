@@ -39,12 +39,22 @@ properties:
   optimization:
     type: object
     properties:
+
       cull:
         type: object
         description: Options for Dask's culling optimizations
         properties:
 
-          convert_task:
+          convert-tasks:
+            type: boolean
+            description: Turn conversion to Task objects on/off
+
+      inline:
+        type: object
+        description: Options for Dask's inline optimizations
+        properties:
+
+          convert-tasks:
             type: boolean
             description: Turn conversion to Task objects on/off
 
@@ -53,7 +63,7 @@ properties:
         description: Options for Dask's linear task fusion optimizations
         properties:
 
-          convert_task:
+          convert-tasks:
             type: boolean
             description: Turn conversion to Task objects on/off
 
@@ -73,7 +83,7 @@ properties:
               Upper limit for width, where width = num_nodes / height, a good measure
               of parallelizability
 
-          convert_task:
+          convert-tasks:
             type: boolean
             description: Turn conversion to Task objects on/off
 
@@ -111,12 +121,3 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
-
-      inline:
-        type: object
-        description: Options for Dask's inline optimizations
-        properties:
-
-          convert_task:
-            type: boolean
-            description: Turn conversion to Task objects on/off

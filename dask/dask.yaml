@@ -9,15 +9,15 @@ array:
 
 optimization:
   cull:
-    convert-tasks: true
+    convert-tasks: false
   inline:
-    convert-tasks: true
+    convert-tasks: false
   fuse_linear:
-    convert-tasks: true
+    convert-tasks: false
   fuse:
     active: true
     ave-width: 1
-    convert-tasks: true
+    convert-tasks: false
     max-width: null  # 1.5 + ave_width * log(ave_width + 1)
     max-height: .inf
     max-depth-new-edges: null  # ave_width * 1.5

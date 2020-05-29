@@ -43,6 +43,7 @@ def convert_tasks(request):
     finally:
         pass
 
+
 @pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
 def test_cull(convert_tasks):
     # 'out' depends on 'x' and 'y', but not 'z'

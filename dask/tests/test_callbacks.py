@@ -96,13 +96,9 @@ def test_nested_schedulers():
         get_threaded(outer_dsk, "b")
 
     assert not Callback.active
-    # TODO(sjperkins)
-    # Change this back
-    # Probably don't want to force new tasks here
-    from dask.task import Task
 
-    assert outer_callback.dsk == Task.from_spec(outer_dsk)
-    assert inner_callback.dsk == Task.from_spec(inner_dsk)
+    assert outer_callback.dsk == outer_dsk
+    assert inner_callback.dsk == inner_dsk
     assert not Callback.active
 
 
