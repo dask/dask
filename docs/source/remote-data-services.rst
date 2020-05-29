@@ -213,7 +213,7 @@ for example, using `AlibabaCloud OSS`:
 Google Cloud Storage
 --------------------
 
-Google Cloud Storage is                                                                                                                                            a RESTful online file storage web service for storing
+Google Cloud Storage is a RESTful online file storage web service for storing
 and accessing data on Google's infrastructure.
 
 The GCS back-end is identified by the
