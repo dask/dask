@@ -3,7 +3,6 @@ import pandas as pd
 
 import dask
 from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
-from dask.chain import _extra_deps
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
@@ -399,3 +398,8 @@ def to_sql(
         dask.compute(result)
     else:
         return result
+
+
+@delayed
+def _extra_deps(func, *args, extras=None, **kwargs):
+    return func(*args, **kwargs)
