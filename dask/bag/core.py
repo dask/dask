@@ -136,15 +136,17 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
         dependencies = {k: get_dependencies(dsk, task=v) for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
 
-    inline_keys = {
-        k
-        for k, v in dsk.items()
+    inline_keys = set()
+
+    for k, v in dsk.items():
+        task_type = spec_type(v)
         if (
-            (type(v) is Task and v.function is list)
-            or (type(v) is tuple and v and v[0] is list)
-        )
-        and len(dependents[k]) == 1
-    }
+            (task_type is Task and v.function is list)
+            or (task_type is TupleTask and v[0] is list)
+        ) and len(dependents[k]) == 1:
+
+            inline_keys.add(k)
+
     inline_keys.difference_update(flatten(keys))
     dsk = inline(dsk, inline_keys, inline_constants=False)
     for k in inline_keys:

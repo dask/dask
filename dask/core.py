@@ -1,6 +1,5 @@
 from collections import defaultdict
 
-from .config import config
 from .utils_test import add, inc  # noqa: F401
 from .task import spec_type, Task, TupleTask
 

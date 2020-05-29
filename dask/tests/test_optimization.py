@@ -814,11 +814,12 @@ def test_fuse_reductions_single_input(convert_tasks):
             }
         )
     )
+    long_str = "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f"
     assert fuse(d, ave_width=7.5, rename_keys=True) == with_deps(
         convert_tasks(
             {
                 "a": 1,
-                "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f": (
+                long_str: (
                     f,
                     (
                         f,
@@ -831,7 +832,7 @@ def test_fuse_reductions_single_input(convert_tasks):
                         (f, (f, (f, "a"), (f, "a")), (f, (f, "a"), (f, "a"))),
                     ),
                 ),
-                "f": "b1-b10-b11-b12-b13-b14-b15-b16-b2-b3-b4-b5-b6-b7-b8-b9-c1-c2-c3-c4-c5-c6-c7-c8-d1-d2-d3-d4-e1-e2-f",
+                "f": long_str,
             }
         )
     )
