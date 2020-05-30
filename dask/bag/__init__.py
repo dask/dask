@@ -16,6 +16,7 @@ try:
     from .utils import assert_eq
     from .avro import read_avro
     from ..base import compute
+    from dask.bag import random
 except ImportError as e:
     msg = (
         "Dask bag requirements are not installed.\n\n"

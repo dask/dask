@@ -103,7 +103,6 @@ Other functions
 .. autofunction:: zip
 
 
-
 Random Sampling
 ---------------
 
