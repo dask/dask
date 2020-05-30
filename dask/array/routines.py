@@ -12,7 +12,7 @@ from tlz import concat, sliding_window, interleave
 from ..compatibility import apply
 from ..core import flatten
 from ..base import tokenize, is_dask_collection
-from ..delayed import unpack_collections
+from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
@@ -696,8 +696,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    scalar_bins = (bins.ndim if isinstance(bins, Array) else np.ndim(bins)) == 0
-    # ^ `np.ndim` is not implemented by Dask array.
+    if isinstance(bins, Array):
+        scalar_bins = bins.ndim == 0
+        # ^ `np.ndim` is not implemented by Dask array.
+    elif isinstance(bins, Delayed):
+        scalar_bins = bins._length is None or bins._length == 1
+    else:
+        scalar_bins = np.ndim(bins) == 0
 
     if bins is None or (scalar_bins and range is None):
         raise ValueError(
@@ -716,11 +721,18 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             "See the numpy.histogram docstring for more information."
         )
 
-    if density and isinstance(bins, Array) and bins.ndim == 0:
+    if density and scalar_bins and isinstance(bins, (Array, Delayed)):
         raise NotImplementedError(
             "When `density` is True, `bins` cannot be a scalar Dask object. "
             "It must be a concrete number or a (possibly-delayed) array/sequence of bin edges."
         )
+
+    for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
+        if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
+            raise TypeError(
+                "Dask types besides Array and Delayed are not supported "
+                "for `histogram`. For argument `{}`, got: {!r}".format(argname, val)
+            )
 
     if range is not None:
         try:
