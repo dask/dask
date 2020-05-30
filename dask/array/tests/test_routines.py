@@ -746,7 +746,7 @@ def test_histogram_delayed_bins(density, weighted):
 def test_histogram_delayed_n_bins_raises_with_density():
     data = da.random.random(10, chunks=2)
     with pytest.raises(
-        NotImplementedError, match="number of bins cannot be a delayed Dask array"
+        NotImplementedError, match="`bins` cannot be a scalar Dask object"
     ):
         da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
 
