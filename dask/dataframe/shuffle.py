@@ -238,7 +238,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = [v for v in divisions]
+    df4.divisions = divisions.tolist()
 
     return df4.map_partitions(M.sort_index)
 
