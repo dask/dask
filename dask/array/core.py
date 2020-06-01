@@ -600,6 +600,9 @@ def map_blocks(
         except Exception:
             dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
+    if meta is None:
+        dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
+
     if drop_axis:
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
