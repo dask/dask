@@ -92,7 +92,7 @@ def from_array(x, chunksize=50000, columns=None, target_dataframe=None):
     or have a record dtype:
 
         x.dtype == [('name', 'O'), ('balance', 'i8')]
-    
+
     Parameters
     ----------
     x : array_like
