@@ -100,10 +100,10 @@ def from_array(x, chunksize=50000, columns=None, target_dataframe=None):
         The number of rows per partition to use.
     columns : list or string, optional
         list of column names if DataFrame, single string if Series
-    target_dataframe : DataFrame Instance, optional
+    target_dataframe : object, optional
         An optional `target_dataframe` parameter can be passed for dask
-        to decide which type of DataFrame back-end to convert
-        the dask array into. When `None`, uses Pandas Backend to instantiate.
+        to specify the concrete dataframe type to use for partitions of
+        the Dask dataframe. By default, pandas DataFrame is used.
 
     Returns
     -------
@@ -414,10 +414,10 @@ def from_dask_array(x, columns=None, index=None, target_dataframe=None):
         Specifying `index` can be useful if you're conforming a Dask Array
         to an existing dask Series or DataFrame, and you would like the
         indices to match.
-    target_dataframe : DataFrame Instance, optional
+    target_dataframe : object, optional
         An optional `target_dataframe` parameter can be passed for dask
-        to decide which type of DataFrame back-end to convert
-        the dask array into. When `None`, uses Pandas Backend to instantiate.
+        to specify the concrete dataframe type to be returned.
+        By default, pandas DataFrame is used.
 
     Examples
     --------

@@ -1450,8 +1450,8 @@ class Array(DaskMethodsMixin):
             indices to match.
         target_dataframe : object, optional
             An optional `target_dataframe` parameter can be passed for dask
-            to decide which type of DataFrame back-end to convert
-            the dask array into. When `None`, uses Pandas Backend to instantiate.
+            to specify the concrete dataframe type to use for partitions of
+            the Dask dataframe. By default, pandas DataFrame is used.
 
         See Also
         --------
