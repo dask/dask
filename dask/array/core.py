@@ -4269,13 +4269,11 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to stack")
     if not allow_unknown_chunksizes and not all(x.shape == seq[0].shape for x in seq):
-        idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
+        idx = [x for x in filter(lambda x: x[1].shape != seq[0].shape, enumerate(seq))]
         raise ValueError(
             "Stacked arrays must have the same shape. "
-            "The first {0} had shape {1}, while array "
-            "{2} has shape {3}".format(
-                idx[0], seq[0].shape, idx[0] + 1, seq[idx[0]].shape
-            )
+            "The first array had shape {0}, while array "
+            "{1} has shape {2}".format(seq[0].shape, idx[0][0], idx[0][1].shape)
         )
 
     meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
