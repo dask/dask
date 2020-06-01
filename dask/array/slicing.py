@@ -786,8 +786,12 @@ def normalize_index(idx, shape):
     >>> normalize_index((Ellipsis, None), (10,))
     (slice(None, None, None), None)
     """
+    from .core import from_array
+
     if not isinstance(idx, tuple):
         idx = (idx,)
+    if isinstance(idx[0], np.ndarray) and idx[0].shape == shape:
+        idx = (from_array(idx[0]), *idx[1:])
     idx = replace_ellipsis(len(shape), idx)
     n_sliced_dims = 0
     for i in idx:
