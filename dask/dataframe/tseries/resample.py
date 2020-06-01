@@ -124,16 +124,7 @@ class Resampler(object):
             )
             raise ValueError(msg)
         self.obj = obj
-        rule = pd.tseries.frequencies.to_offset(rule)
-        day_nanos = pd.tseries.frequencies.Day().nanos
-
-        if getnanos(rule) and day_nanos % rule.nanos:
-            raise NotImplementedError(
-                "Resampling frequency %s that does"
-                " not evenly divide a day is not "
-                "implemented" % rule
-            )
-        self._rule = rule
+        self._rule = pd.tseries.frequencies.to_offset(rule)
         self._kwargs = kwargs
 
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
