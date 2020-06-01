@@ -790,7 +790,7 @@ def normalize_index(idx, shape):
 
     if not isinstance(idx, tuple):
         idx = (idx,)
-    if isinstance(idx[0], np.ndarray) and idx[0].shape == shape:
+    if isinstance(idx[0], np.ndarray) and idx[0].shape == shape and len(shape) > 1:
         idx = (from_array(idx[0]), *idx[1:])
     idx = replace_ellipsis(len(shape), idx)
     n_sliced_dims = 0
