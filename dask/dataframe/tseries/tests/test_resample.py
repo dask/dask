@@ -131,9 +131,9 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
 def test_resample_does_not_evenly_divide_day():
     import numpy as np
 
-    p = 100
-    index = pd.date_range(start="2012-01-02", periods=p, freq="H")
-    df = pd.DataFrame({"p": np.random.random(p)}, index=index)
+    index = pd.date_range("2012-01-02", "2012-02-02", freq="H")
+    index = index.union(pd.date_range("2012-03-02", "2012-04-02", freq="H"))
+    df = pd.DataFrame({"p": np.random.random(len(index))}, index=index)
     ddf = dd.from_pandas(df, npartitions=5)
     # Frequency doesn't evenly divide day
     expected = df.resample("2D").count()
