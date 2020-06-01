@@ -61,20 +61,11 @@ Top-level functions
    map
    map_partitions
    zip
-
-Random Sampling
----------------
-
-.. currentmodule:: dask.bag.random
-
-.. autosummary::
-    choices
-    sample
+   random.choices
+   random.sample
 
 Turn Bags into other things
 ---------------------------
-
-.. currentmodule:: dask.bag
 
 .. autosummary::
    Bag.to_textfiles
