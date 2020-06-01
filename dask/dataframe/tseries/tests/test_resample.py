@@ -130,6 +130,7 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
 
 def test_resample_does_not_evenly_divide_day():
     import numpy as np
+
     p = 100
     index = pd.date_range(start="2012-01-02", periods=p, freq="H")
     df = pd.DataFrame({"p": np.random.random(p)}, index=index)
