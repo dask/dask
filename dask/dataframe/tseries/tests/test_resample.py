@@ -143,7 +143,10 @@ def test_resample_does_not_evenly_divide_day():
 
 
 def test_series_resample_does_not_evenly_divide_day():
-    index = pd.date_range(start="2012-01-02", periods=100, freq="T")
+    index = pd.date_range("2012-01-02 00:00:00", "2012-01-02 01:00:00", freq="T")
+    index = index.union(
+        pd.date_range("2012-01-02 06:00:00", "2012-01-02 08:00:00", freq="T")
+    )
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
