@@ -328,10 +328,11 @@ def subs(task, key, val, convert=False):
     if type_task is Task:
         return Task(
             task.function,
-            subs(task.args, key, val),
-            {k: subs(v, key, val) for k, v in task.kwargs.items()}
-            if task.kwargs
-            else None,
+            subs(task.args, key, val, convert),
+            (None if not task.kwargs
+             else {k: subs(v, key, val, convert)
+                   for k, v in task.kwargs.items()} if isinstance(task, dict)
+             else task.kwargs),
             task.annotations,
         )
     elif type_task is TupleTask:
@@ -341,11 +342,11 @@ def subs(task, key, val, convert=False):
             type_arg = spec_type(arg)
 
             if type_arg is Task:
-                arg = subs(arg, key, val)
+                arg = subs(arg, key, val, convert)
             elif type_arg is TupleTask:
-                arg = subs(arg, key, val)
+                arg = subs(arg, key, val, convert)
             elif type_arg is list:
-                arg = [subs(x, key, val) for x in arg]
+                arg = [subs(x, key, val, convert) for x in arg]
             elif type_arg is type(key):
                 try:
                     # Can't do a simple equality check, since this may trigger
@@ -377,7 +378,7 @@ def subs(task, key, val, convert=False):
             pass
 
         if type_task is list:
-            return [subs(x, key, val) for x in task]
+            return [subs(x, key, val, convert) for x in task]
 
         return task
 

@@ -28,7 +28,9 @@ from dask.bag.core import (
     from_delayed,
 )
 from dask.bag.utils import assert_eq
+from dask import config
 from dask.delayed import Delayed
+from dask.task import Task
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
@@ -49,6 +51,19 @@ def iseven(x):
 
 def isodd(x):
     return x % 2 == 1
+
+
+@pytest.fixture
+def convert_tasks(request):
+    """ Configure dask to convert tuple tasks to Task objects """
+
+    options = {"optimization.cull.convert_tasks": request.param}
+
+    try:
+        with config.set(options):
+            yield Task.from_spec if request.param is True else lambda x: x
+    finally:
+        pass
 
 
 def test_Bag():
@@ -536,17 +551,18 @@ def test_lazify():
     assert lazify(a) == b
 
 
-def test_inline_singleton_lists():
+@pytest.mark.parametrize("convert_tasks", [False, True], indirect=True)
+def test_inline_singleton_lists(convert_tasks):
     inp = {"b": (list, "a"), "c": (f, "b", 1)}
     out = {"c": (f, (list, "a"), 1)}
     assert inline_singleton_lists(inp, ["c"]) == out
 
     out = {"c": (f, "a", 1)}
-    assert optimize(inp, ["c"], rename_fused_keys=False) == out
+    assert optimize(inp, ["c"], rename_fused_keys=False) == convert_tasks(out)
 
     # If list is an output key, don't fuse it
     assert inline_singleton_lists(inp, ["b", "c"]) == inp
-    assert optimize(inp, ["b", "c"], rename_fused_keys=False) == inp
+    assert optimize(inp, ["b", "c"], rename_fused_keys=False) == convert_tasks(inp)
 
     inp = {"b": (list, "a"), "c": (f, "b", 1), "d": (f, "b", 2)}
     assert inline_singleton_lists(inp, ["c", "d"]) == inp
@@ -559,11 +575,18 @@ def test_inline_singleton_lists():
 def test_rename_fused_keys_bag():
     inp = {"b": (list, "a"), "c": (f, "b", 1)}
 
-    outp = optimize(inp, ["c"], rename_fused_keys=False)
+    with dask.config.set({"optimization.cull.convert_tasks": False}):
+        outp = optimize(inp, ["c"], rename_fused_keys=False)
+
     assert outp.keys() == {"c"}
     assert outp["c"][1:] == ("a", 1)
 
-    with dask.config.set({"optimization.fuse.rename-keys": False}):
+    options = {
+        "optimization.fuse.rename-keys": False,
+        "optimization.cull.convert_tasks": False
+    }
+
+    with dask.config.set(options):
         assert optimize(inp, ["c"]) == outp
 
     # By default, fused keys are renamed

@@ -94,6 +94,7 @@ def lazify_task(task, start=True):
         return [lazify_task(arg, False) for arg in task]
     elif task_type is Task:
         if not start and task.function in (list, reify):
+            assert len(task.args) == 1
             return lazify_task(task.args[0], start=False)
         else:
             return Task(task.function, lazify_task(task.args, start=False))
@@ -103,8 +104,7 @@ def lazify_task(task, start=True):
         if not start and head in (list, reify):
             return lazify_task(*tail, start=False)
         else:
-            # return (head,) + tuple([lazify_task(arg, False) for arg in tail])
-            return Task(head, lazify_task(tail, False))
+            return (head,) + tuple([lazify_task(arg, False) for arg in tail])
     else:
         return task
 
