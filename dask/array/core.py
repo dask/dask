@@ -3464,8 +3464,6 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
-    from . import wrap
-
     seq = [asarray(a) for a in seq]
 
     if not seq:
@@ -3499,10 +3497,12 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq2)
     if n == 0:
+        from .creation import empty_like, empty
+
         try:
-            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
+            return empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
-            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
+            return empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
         return seq2[0]
 
@@ -4262,8 +4262,6 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     concatenate
     """
-    from . import wrap
-
     seq = [asarray(a) for a in seq]
 
     if not seq:
@@ -4297,10 +4295,12 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
 
     n = len(seq2)
     if n == 0:
+        from .creation import empty_like, empty
+
         try:
-            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
+            return empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
         except TypeError:
-            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
+            return empty(shape, chunks=shape, dtype=meta.dtype)
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq2))
@@ -4638,7 +4638,7 @@ def _vindex_array(x, dict_indexes):
 
     # output has a zero dimension, just create a new zero-shape array with the
     # same dtype
-    from .wrap import empty
+    from .creation import empty
 
     result_1d = empty(
         tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name

@@ -5,7 +5,7 @@ from numbers import Integral
 from tlz import merge, pipe, concat, partial, get
 from tlz.curried import map
 
-from . import chunk, wrap
+from . import chunk, creation
 from .core import (
     Array,
     map_blocks,
@@ -359,7 +359,7 @@ def constant(x, axis, depth, value):
     chunks[axis] = (depth,)
 
     try:
-        c = wrap.full_like(
+        c = creation.full_like(
             getattr(x, "_meta", x),
             value,
             shape=tuple(map(sum, chunks)),
@@ -367,7 +367,7 @@ def constant(x, axis, depth, value):
             dtype=x.dtype,
         )
     except TypeError:
-        c = wrap.full(
+        c = creation.full(
             tuple(map(sum, chunks)), value, chunks=tuple(chunks), dtype=x.dtype
         )
 
@@ -514,14 +514,14 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks[k] = (d,)
 
             try:
-                empty = wrap.empty_like(
+                empty = creation.empty_like(
                     getattr(x, "_meta", x),
                     shape=empty_shape,
                     chunks=empty_chunks,
                     dtype=x.dtype,
                 )
             except TypeError:
-                empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
+                empty = creation.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
 
             out_chunks = list(x.chunks)
             ax_chunks = list(out_chunks[k])

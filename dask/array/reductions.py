@@ -14,9 +14,8 @@ from . import chunk
 from .core import _concatenate2, Array, handle_out, implements
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
-from .creation import arange, diagonal
+from .creation import arange, diagonal, zeros, ones
 from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
-from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
