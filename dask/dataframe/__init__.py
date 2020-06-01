@@ -24,6 +24,7 @@ try:
         demo,
         to_hdf,
         to_records,
+        to_sql,
         to_bag,
         read_json,
         to_json,
@@ -51,6 +52,6 @@ except ImportError as e:
         "Dask dataframe requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install dask                     # either conda install\n"
-        "  python -m pip install dask[dataframe] --upgrade  # or python -m pip install"
+        '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
     )
     raise ImportError(msg) from e

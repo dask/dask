@@ -1,6 +1,92 @@
 Changelog
 =========
 
+2.17.2 / 2020-05-28
+-------------------
+
+Core
+++++
+
+- Re-add the ``complete`` extra (:pr:`6257`) `Jim Crist-Harif`_
+
+DataFrame
++++++++++
+
+- Raise error if ``resample`` isn't going to give right answer (:pr:`6244`) `Julia Signell`_
+
+
+2.17.1 / 2020-05-28
+-------------------
+
+Array
++++++
+
+- Empty array rechunk (:pr:`6233`) `Andrew Fulton`_
+
+Core
+++++
+
+- Make ``pyyaml`` required (:pr:`6250`) `Jim Crist-Harif`_
+- Fix install commands from ``ImportError`` (:pr:`6238`) `Gaurav Sheni`_
+- Remove issue template (:pr:`6249`) `Jacob Tomlinson`_
+
+DataFrame
++++++++++
+
+- Pass ``ignore_index`` to ``dd_shuffle`` from ``DataFrame.shuffle`` (:pr:`6247`) `Richard (Rick) Zamora`_
+- Cope with missing HDF keys (:pr:`6204`) `Martin Durant`_
+- Generalize ``describe`` & ``quantile`` apis (:pr:`5137`) `GALI PREM SAGAR`_
+
+
+2.17.0 / 2020-05-26
+-------------------
+
+Array
++++++
+
+- Small improvements to ``da.pad`` (:pr:`6213`) `Mark Boer`_
+- Return ``tuple`` if multiple outputs in ``dask.array.apply_gufunc``, add test to check for tuple (:pr:`6207`) `Kai Mühlbauer`_
+- Support ``stack`` with unknown chunksizes (:pr:`6195`) `swapna`_
+
+Bag
++++
+
+- Random Choice on Bags (:pr:`6208`) `Antonio Ercole De Luca`_
+
+Core
+++++
+
+- Raise warning ``delayed.visualise()`` (:pr:`6216`) `Amol Umbarkar`_
+- Ensure other pickle arguments work (:pr:`6229`) `John A Kirkham`_
+- Overhaul ``fuse()`` config (:pr:`6198`) `Guido Imperiale`_
+- Update ``dask.order.order`` to consider "next" nodes using both FIFO and LIFO (:pr:`5872`) `Erik Welch`_
+
+DataFrame
++++++++++
+
+- Use 0 as ``fill_value`` for more agg methods (:pr:`6245`) `Julia Signell`_
+- Generalize ``rearrange_by_column_tasks`` and add ``DataFrame.shuffle`` (:pr:`6066`) `Richard (Rick) Zamora`_
+- Xfail ``test_rolling_numba_engine`` for newer numba and older pandas (:pr:`6236`) `James Bourbeau`_
+- Generalize ``fix_overlap`` (:pr:`6240`) `GALI PREM SAGAR`_
+- Fix ``DataFrame.shape`` with no columns (:pr:`6237`) `noreentry`_
+- Avoid shuffle when setting a presorted index with overlapping divisions (:pr:`6226`) `Krishan Bhasin`_
+- Adjust the Parquet engine classes to allow more easily subclassing (:pr:`6211`) `Marius van Niekerk`_
+- Fix ``dd.merge_asof`` with ``left_on='col'`` & ``right_index=True`` (:pr:`6192`) `noreentry`_
+- Disable warning for ``concat`` (:pr:`6210`) `Tung Dang`_
+- Move ``AUTO_BLOCKSIZE`` out of ``read_csv`` signature (:pr:`6214`) `Jim Crist-Harif`_
+- ``.loc`` indexing with callable (:pr:`6185`) `Endre Mark Borza`_
+- Avoid apply in ``_compute_sum_of_squares`` for groupby std agg (:pr:`6186`) `Richard (Rick) Zamora`_
+- Minor correction to ``test_parquet`` (:pr:`6190`) `Brian Larsen`_
+- Adhering to the passed pat for delimeter join and fix error message (:pr:`6194`) `GALI PREM SAGAR`_
+- Skip ``test_to_parquet_with_get`` if no parquet libs available (:pr:`6188`) `Scott Sanderson`_
+
+Documentation
++++++++++++++
+
+- Added documentation for ``distributed.Event`` class (:pr:`6231`) `Nils Braun`_
+- Doc write to remote (:pr:`6124`) `Ray Bell`_
+
+
 2.16.0 / 2020-05-08
 -------------------
 
@@ -3160,3 +3246,16 @@ Other
 .. _`Adam Lewis`: https://github.com/balast
 .. _`David Chudzicki`: https://github.com/dchudz
 .. _`Nick Evans`: https://github.com/nre
+.. _`Kai Mühlbauer`: https://github.com/kmuehlbauer
+.. _`swapna`: https://github.com/swapna-pg
+.. _`Antonio Ercole De Luca`: https://github.com/eracle
+.. _`Amol Umbarkar`: https://github.com/mindhash
+.. _`noreentry`: https://github.com/noreentry
+.. _`Marius van Niekerk`: https://github.com/mariusvniekerk
+.. _`Tung Dang`: https://github.com/3cham
+.. _`Jim Crist-Harif`: https://github.com/jcrist
+.. _`Brian Larsen`: https://github.com/brl0
+.. _`Nils Braun`: https://github.com/nils-braun
+.. _`Scott Sanderson`: https://github.com/ssanderson
+.. _`Gaurav Sheni`: https://github.com/gsheni
+.. _`Andrew Fulton`: https://github.com/andrewfulton9
