@@ -128,12 +128,32 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
     assert_eq(actual, expected)
 
 
-def test_series_resample_not_implemented():
-    index = pd.date_range(start="2012-01-02", periods=100, freq="T")
+def test_resample_does_not_evenly_divide_day():
+    import numpy as np
+
+    index = pd.date_range("2012-01-02", "2012-02-02", freq="H")
+    index = index.union(pd.date_range("2012-03-02", "2012-04-02", freq="H"))
+    df = pd.DataFrame({"p": np.random.random(len(index))}, index=index)
+    ddf = dd.from_pandas(df, npartitions=5)
+    # Frequency doesn't evenly divide day
+    expected = df.resample("2D").count()
+    result = ddf.resample("2D").count().compute()
+
+    assert_eq(result, expected)
+
+
+def test_series_resample_does_not_evenly_divide_day():
+    index = pd.date_range("2012-01-02 00:00:00", "2012-01-02 01:00:00", freq="T")
+    index = index.union(
+        pd.date_range("2012-01-02 06:00:00", "2012-01-02 08:00:00", freq="T")
+    )
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
-    pytest.raises(NotImplementedError, lambda: resample(ds, "57T"))
+    expected = s.resample("57T").mean()
+    result = ds.resample("57T").mean().compute()
+
+    assert_eq(result, expected)
 
 
 def test_unknown_divisions_error():
