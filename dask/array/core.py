@@ -1448,7 +1448,7 @@ class Array(DaskMethodsMixin):
             Specifying ``index`` can be useful if you're conforming a Dask Array
             to an existing dask Series or DataFrame, and you would like the
             indices to match.
-        target_dataframe : DataFrame Instance, optional
+        target_dataframe : object, optional
             An optional `target_dataframe` parameter can be passed for dask
             to decide which type of DataFrame back-end to convert
             the dask array into. When `None`, uses Pandas Backend to instantiate.
