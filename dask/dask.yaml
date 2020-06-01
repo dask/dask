@@ -9,7 +9,7 @@ array:
 
 optimization:
   cull:
-    convert-tasks: false
+    convert-tasks: true
   inline:
     convert-tasks: false
   fuse_linear:

@@ -13,7 +13,7 @@ from .core import (
     reverse_dict,
     ishashable,
 )
-from .task import Task
+from .task import Task, TupleTask
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -576,7 +576,7 @@ def fuse(
         reducible -= keys
 
     for k, v in dsk.items():
-        if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
+        if type(v) not in (tuple, Task) and not isinstance(v, (numbers.Number, str)):
             reducible.discard(k)
 
     if not reducible and (

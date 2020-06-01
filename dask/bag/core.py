@@ -94,19 +94,17 @@ def lazify_task(task, start=True):
         return [lazify_task(arg, False) for arg in task]
     elif task_type is Task:
         if not start and task.function in (list, reify):
-            return lazify_task(task.args, start=False)
+            return lazify_task(task.args[0], start=False)
         else:
-            return Task(task.function, [lazify_task(arg, False) for arg in task.args])
-
+            return Task(task.function, lazify_task(task.args, start=False))
     elif task_type is TupleTask:
         head, tail = task[0], task[1:]
 
         if not start and head in (list, reify):
             return lazify_task(*tail, start=False)
-        elif config.get("convert_tasks", False):
-            return Task.from_call(head, *(lazify_task(arg, False) for arg in tail))
         else:
-            return (head,) + tuple([lazify_task(arg, False) for arg in tail])
+            # return (head,) + tuple([lazify_task(arg, False) for arg in tail])
+            return Task(head, lazify_task(tail, False))
     else:
         return task
 
