@@ -1459,9 +1459,7 @@ class Array(DaskMethodsMixin):
         """
         from ..dataframe import from_dask_array
 
-        return from_dask_array(
-            self, columns=columns, index=index, meta=meta
-        )
+        return from_dask_array(self, columns=columns, index=index, meta=meta)
 
     def __bool__(self):
         if self.size > 1:
