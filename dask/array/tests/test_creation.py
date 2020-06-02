@@ -26,14 +26,15 @@ from dask.array.numpy_compat import _numpy_117, _numpy_118
         "full",
     ],
 )
-@pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
 @pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
-@pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
+@pytest.mark.parametrize(
+    "shape, chunks",
+    [((10, 10), (4, 4)), ([10, 10], (4, 4)), (np.array([10, 10]), (4, 4)), (10, (4,)),],
+)
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
+def test_array_creation(funcname, shape, dtype, cast_chunks, chunks):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
-    shape = cast_shape(shape)
     chunks = cast_chunks(chunks)
 
     if "full" in funcname:
@@ -59,6 +60,23 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
 
     if "empty" not in funcname:
         assert (np_r == np.asarray(da_r)).all()
+
+
+@pytest.mark.parametrize("funcname", ["ones", "zeros", "empty", "full"])
+def test_array_creation_default_dtype(funcname):
+    if funcname == "full":
+        sol = np.full((10, 10), 4)
+        res = da.full((10, 10), 4, chunks=(4, 4))
+    else:
+        sol = getattr(np, funcname)((10, 10))
+        res = getattr(da, funcname)((10, 10), chunks=(4, 4))
+    assert_eq(sol, res)
+
+
+def test_array_creation_shape_dask_array():
+    a = da.ones(10)
+    with pytest.raises(TypeError, match="Dask array input not supported"):
+        da.ones(a)
 
 
 @pytest.mark.parametrize("endpoint", [True, False])

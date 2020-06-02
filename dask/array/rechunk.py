@@ -20,8 +20,8 @@ from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
+from .creation import empty
 from .utils import validate_axis
-from .wrap import empty
 from .. import config
 
 

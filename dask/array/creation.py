@@ -1,15 +1,16 @@
 from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
-from operator import add, getitem
 from numbers import Integral, Number
+from operator import add, getitem
+from textwrap import dedent
 
 import numpy as np
 from tlz import accumulate, sliding_window
 
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
-from ..utils import derived_from
+from ..utils import derived_from, funcname
 from . import chunk
 from .core import (
     Array,
@@ -23,8 +24,80 @@ from .core import (
     cached_cumsum,
 )
 from .ufunc import rint
-from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
+
+
+def _doc_creation(np_func):
+    """Adds docstring to a creation function"""
+
+    def f(func):
+        if np_func.__doc__ is not None:
+            func.__doc__ = (
+                dedent(
+                    f"""
+            Blocked variant of `np.{func.__name__}`
+
+            Follows the signature of %(name)s exactly except that it also requires a
+            keyword argument chunks=(...)
+
+            Original signature follows below:
+            """
+                )
+                + dedent(np_func.__doc__)
+            )
+        return func
+
+    return f
+
+
+def _handle_creation(func, shape, dtype, *args, chunks="auto", name=None, **kwargs):
+    if isinstance(shape, Array):
+        raise TypeError(
+            "Dask array input not supported. "
+            "Please use tuple, list, or a 1D numpy array instead."
+        )
+
+    if isinstance(shape, np.ndarray):
+        shape = shape.tolist()
+
+    if not isinstance(shape, (tuple, list)):
+        shape = (shape,)
+
+    dtype = np.dtype(dtype)
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
+
+    if not name:
+        name = funcname(func) + "-" + tokenize(func, shape, chunks, dtype, args, kwargs)
+
+    func = partial(func, dtype=dtype, **kwargs)
+
+    keys = product([name], *[range(len(bd)) for bd in chunks])
+    vals = ((func,) + (s,) + args for s in product(*chunks))
+    dsk = dict(zip(keys, vals))
+
+    return Array(dsk, name, chunks, dtype=dtype)
+
+
+@_doc_creation(np.ones)
+def ones(shape, dtype=None, chunks="auto", **kwargs):
+    return _handle_creation(np.ones, shape, dtype, chunks=chunks)
+
+
+@_doc_creation(np.zeros)
+def zeros(shape, dtype=None, chunks="auto", **kwargs):
+    return _handle_creation(np.zeros, shape, dtype, chunks=chunks)
+
+
+@_doc_creation(np.empty)
+def empty(shape, dtype=None, chunks="auto", **kwargs):
+    return _handle_creation(np.empty, shape, dtype, chunks=chunks)
+
+
+@_doc_creation(np.full)
+def full(shape, fill_value, dtype=None, chunks="auto", **kwargs):
+    if dtype is None:
+        dtype = np.array(fill_value).dtype
+    return _handle_creation(np.full, shape, dtype, fill_value, chunks=chunks)
 
 
 def empty_like(a, dtype=None, chunks=None):
