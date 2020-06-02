@@ -769,9 +769,10 @@ def normalize_index(idx, shape):
     1.  Replaces ellipses with many full slices
     2.  Adds full slices to end of index
     3.  Checks bounding conditions
-    4.  Replaces numpy arrays with lists
-    5.  Posify's integers and lists
-    6.  Normalizes slices to canonical form
+    4.  Replace multidimensional numpy arrays with dask arrays
+    5.  Replaces numpy arrays with lists
+    6.  Posify's integers and lists
+    7.  Normalizes slices to canonical form
 
     Examples
     --------
@@ -785,9 +786,20 @@ def normalize_index(idx, shape):
     (slice(7, None, None),)
     >>> normalize_index((Ellipsis, None), (10,))
     (slice(None, None, None), None)
+    >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
+    (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
+    from .core import from_array
+
     if not isinstance(idx, tuple):
         idx = (idx,)
+
+    # if a > 1D numpy.array is provided, cast it to a dask array
+    if len(idx) > 0 and len(shape) > 1:
+        i = idx[0]
+        if isinstance(i, np.ndarray) and i.shape == shape:
+            idx = (from_array(i), *idx[1:])
+
     idx = replace_ellipsis(len(shape), idx)
     n_sliced_dims = 0
     for i in idx:

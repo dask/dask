@@ -948,3 +948,13 @@ def test_gh4043(lock, asarray, fancy):
     a2 = da.from_array(np.ones(3), chunks=1, asarray=asarray, lock=lock, fancy=fancy)
     al = da.stack([a1, a2])
     assert_eq(al, al)
+
+
+def test_slice_array_3d_with_bool_numpy_array():
+    # https://github.com/dask/dask/issues/6089
+    array = da.arange(0, 24).reshape((4, 3, 2))
+    mask = np.arange(0, 24).reshape((4, 3, 2)) > 12
+
+    actual = array[mask].compute()
+    expected = np.arange(13, 24)
+    assert_eq(actual, expected)
