@@ -18,6 +18,7 @@ def _parse_wrap_args(func, args, kwargs, shape):
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
+    name = kwargs.pop("name", None)
     chunks = kwargs.pop("chunks", "auto")
 
     dtype = kwargs.pop("dtype", None)
@@ -26,7 +27,6 @@ def _parse_wrap_args(func, args, kwargs, shape):
     dtype = np.dtype(dtype)
 
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    name = kwargs.pop("name", None)
 
     name = name or funcname(func) + "-" + tokenize(
         func, shape, chunks, dtype, args, kwargs
@@ -121,8 +121,8 @@ def wrap(wrap_func, func, **kwargs):
     template = """
     Blocked variant of %(name)s
 
-    Follows the signature of %(name)s exactly except that it also requires a
-    keyword argument chunks=(...)
+    Follows the signature of %(name)s exactly except that it also features
+    optional keyword arguments ``chunks: int, tuple, or dict`` and ``name: str``.
 
     Original signature follows below.
     """
@@ -137,13 +137,39 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype="f8")
 zeros = w(np.zeros, dtype="f8")
 empty = w(np.empty, dtype="f8")
-full = w(np.full)
 
 
 w_like = wrap(wrap_func_like_safe)
 
 
-ones_like = w_like(np.ones, func_like=np.ones_like)
-zeros_like = w_like(np.zeros, func_like=np.zeros_like)
 empty_like = w_like(np.empty, func_like=np.empty_like)
-full_like = w_like(np.full, func_like=np.full_like)
+
+
+# full and full_like require special casing due to argument check on fill_value
+# Generate wrapped functions only once
+_full = w(np.full)
+_full_like = w_like(np.full, func_like=np.full_like)
+
+
+def full(shape, fill_value, *args, **kwargs):
+    # np.isscalar has somewhat strange behavior:
+    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
+    if np.ndim(fill_value) != 0:
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
+        )
+    return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
+
+
+def full_like(a, fill_value, *args, **kwargs):
+    if np.ndim(fill_value) != 0:
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
+        )
+    return _full_like(a=a, fill_value=fill_value, *args, **kwargs,)
+
+
+full.__doc__ = _full.__doc__
+full.__name__ = _full.__name__
+full_like.__doc__ = _full_like.__doc__
+full_like.__name__ = _full_like.__name__
