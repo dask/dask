@@ -20,7 +20,7 @@ from ..sizeof import sizeof
 from ..utils import digit, insert, M, is_dataframe_like
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
-from typing import List
+from typing import List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -339,7 +339,33 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 _PAYLOAD_COL = "__dask_payload_bytes"
 
 
-def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
+def pack_payload_pandas(partition: pd.DataFrame, group_key: List[str]) -> pd.DataFrame:
+    try:
+        # Technically distributed is an optional dependency
+        from distributed.protocol import serialize_bytes
+    except ImportError:
+        return partition
+
+    if partition.empty:
+        res = partition[group_key]
+        res[_PAYLOAD_COL] = b""
+        return res
+
+    res = partition.groupby(group_key, sort=False, observed=True, as_index=False).apply(
+        serialize_bytes
+    )
+
+    # For pandas > 1.0.4 this is deterministically a DF but for older
+    # versions we need to handle the series as well
+    if not is_dataframe_like(res):
+        res.name = _PAYLOAD_COL
+        res = res.to_frame().reset_index()
+
+    res.columns = group_key + [_PAYLOAD_COL]
+    return res
+
+
+def pack_payload(df: DataFrame, group_key: Union[List[str], str]) -> DataFrame:
     """
     Pack all payload columns (everything except of group_key) into a single
     columns. This column will contain a single byte string containing the
@@ -347,23 +373,31 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
     when reshuffling. By compressing it once before the shuffle starts, this
     saves a lot of memory and network/disk IO.
 
-    Example as applied to one partition::
+    Example::
 
-        >>> df = pd.DataFrame({
-        ...     "group_key": [1, 1, 2, 2],
-        ...     "payloadA": [...],
-        ...     "payloadB": [...],
-        ...     "payloadC": [...],
-        ... })
-        >>> pack_payload(df, "group_key")
+        >>> import pandas as pd
+        ... import dask.dataframe as dd
+        ... from dask.dataframe.shuffle import pack_payload
+        ...
+        ... df = pd.DataFrame({"A": [1, 1] * 2 + [2, 2] * 2 + [3, 3] * 2, "B": range(12)})
+        ... ddf = dd.from_pandas(df, npartitions=2)
 
-        pd.DataFrame({
-            "group_key": [1, 2],
-            "__dask_payload_bytes": [
-                b"compressed_payload_group_key1",
-                b"compressed_payload_group_key2",
-            ]
-        })
+        >>> ddf.partitions[0].compute()
+
+        A  B
+        0  1  0
+        1  1  1
+        2  1  2
+        3  1  3
+        4  2  4
+        5  2  5
+
+        >>> pack_payload(ddf, "A").partitions[0].compute()
+
+        A                               __dask_payload_bytes
+        0  1  b'\x03\x00\x00\x00\x00\x00\x00\x00)\x00\x00\x03...
+        1  2  b'\x03\x00\x00\x00\x00\x00\x00\x00)\x00\x00\x03...
+
 
     """
 
@@ -381,9 +415,6 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
     if not isinstance(group_key, list):
         group_key = [group_key]
 
-    packed_meta = df._meta[group_key]
-    packed_meta[_PAYLOAD_COL] = b""
-
     def _pack_payload(partition: pd.DataFrame) -> pd.DataFrame:
         try:
             # Technically distributed is an optional dependency
@@ -392,27 +423,22 @@ def pack_payload(df: DataFrame, group_key: List[str]) -> DataFrame:
             return partition
 
         if partition.empty:
-            return packed_meta
-
-        # TODO: The shuffle-group will perform another groupby. Maybe this can
-        # be merged
-
-        res = partition.groupby(
-            group_key, sort=False, observed=True, as_index=False
-        ).apply(serialize_bytes)
-
-        # For pandas > 1.0.4 this is deterministically a DF but for older
-        # versions we need to handle the series as well
-        if is_dataframe_like(res):
-            res.columns = group_key + [_PAYLOAD_COL]
+            res = partition[group_key]
+            res[_PAYLOAD_COL] = b""
         else:
-            res.name = _PAYLOAD_COL
-            group = partition[group_key].drop_duplicates()
-            group.index = res.index
-            res = pd.concat([group, res], axis=1)
+            res = partition.groupby(
+                group_key,
+                sort=False,
+                observed=True,
+                # Keep the as_index s.t. the group values are not dropped. With this
+                # the behaviour seems to be consistent along pandas versions
+                as_index=True,
+            ).apply(lambda x: pd.Series({_PAYLOAD_COL: serialize_bytes(x)}))
+
+            res = res.reset_index()
         return res
 
-    return df.map_partitions(_pack_payload, meta=packed_meta)
+    return df.map_partitions(_pack_payload, meta=_pack_payload(df._meta))
 
 
 def unpack_payload(df: DataFrame, meta: DataFrame) -> DataFrame:
