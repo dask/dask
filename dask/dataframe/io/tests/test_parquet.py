@@ -2483,7 +2483,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
                 if pa.types.is_timestamp(col.type) and (
                     col.type.unit in ("s", "ms", "us")
                 ):
-                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000,}[
+                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000}[
                         col.type.unit
                     ]
 
@@ -2518,3 +2518,24 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
     # this should not fail, but instead produce timestamps that are in the valid range
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
+
+
+@write_read_engines_xfail
+def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
+    tmp = str(tmpdir)
+    size = 1_000
+    npartitions = 4
+    b = np.arange(npartitions).repeat(size // npartitions)
+    data = pd.DataFrame(
+        {
+            "myindex": np.arange(size),
+            "A": np.random.random(size=size),
+            "B": pd.Categorical(b),
+        }
+    ).set_index("myindex")
+    df1 = dd.from_pandas(data, npartitions=npartitions)
+    df1.to_parquet(tmp, partition_on="B", engine=write_engine)
+
+    expect = df1[df1["B"] == 1]
+    got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
+    assert_eq(expect, got, check_divisions=False)
