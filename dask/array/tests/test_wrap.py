@@ -42,6 +42,17 @@ def test_full():
     assert a.name.startswith("full-")
 
 
+def test_full_error_nonscalar_fill_value():
+    with pytest.raises(ValueError, match="fill_value must be scalar"):
+        da.full((3, 3), [100, 100], chunks=(2, 2), dtype="i8")
+
+
+def test_full_like_error_nonscalar_fill_value():
+    x = np.full((3, 3), 1, dtype="i8")
+    with pytest.raises(ValueError, match="fill_value must be scalar"):
+        da.full_like(x, [100, 100], chunks=(2, 2), dtype="i8")
+
+
 def test_can_make_really_big_array_of_ones():
     ones((1000000, 1000000), chunks=(100000, 100000))
     ones(shape=(1000000, 1000000), chunks=(100000, 100000))
