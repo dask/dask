@@ -79,3 +79,41 @@ def test_reshape_unknown_sizes():
         a.reshape((60, -1, -1))
     with pytest.raises(ValueError):
         A.reshape((60, -1, -1))
+
+
+def test_reshape_user_provided_chunks():
+    # https://github.com/dask/dask/issues/6272
+    x = np.arange(20).reshape((2, 2, 5))
+    a = da.from_array(x, chunks=(1, 1, 5))
+    b = a.reshape(
+        (4, 5), inchunks=((1, 1), (1, 1), (5,)), outchunks=((1, 1, 1, 1), (5,))
+    )
+
+    # validate inchunks used, no rechunk-merge
+    assert len(b.dask.layers[b._name]) == 4
+
+    # validate outchunks used
+    assert b.chunks == ((1, 1, 1, 1), (5,))
+
+
+def test_reshape_user_provided_chunks_checked():
+    x = np.arange(20).reshape((2, 2, 5))
+    a = da.from_array(x, chunks=(1, 1, 5))
+
+    # provide both or neither
+    with pytest.raises(ValueError, match="provide both"):
+        a.reshape((4, 5), inchunks=a.chunks)
+
+    with pytest.raises(ValueError, match="provide both"):
+        a.reshape((4, 5), outchunks=((1, 1, 1, 1), (5,)))
+
+    # right lengths / dimensions
+    with pytest.raises(ValueError):
+        a.reshape((4, 5), inchunks=((1, 1), (1, 1)), outchunks=((1, 1, 1, 1), (5,)))
+
+    with pytest.raises(ValueError):
+        a.reshape((4, 5), inchunks=a.chunks, outchunks=(5,))
+
+    # matching chunks
+    with pytest.raises(ValueError, match="20 != 4"):
+        a.reshape((4, 5), inchunks=a.chunks, outchunks=(1, 1))

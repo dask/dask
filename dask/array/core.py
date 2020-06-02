@@ -1778,12 +1778,12 @@ class Array(DaskMethodsMixin):
         return choose(self, choices)
 
     @derived_from(np.ndarray)
-    def reshape(self, *shape):
+    def reshape(self, *shape, inchunks=None, outchunks=None):
         from .reshape import reshape
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
-        return reshape(self, shape)
+        return reshape(self, shape, inchunks=inchunks, outchunks=outchunks)
 
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.

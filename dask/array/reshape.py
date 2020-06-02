@@ -4,7 +4,7 @@ from operator import mul
 
 import numpy as np
 
-from .core import Array
+from .core import Array, normalize_chunks
 from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
@@ -133,7 +133,7 @@ def contract_tuple(chunks, factor):
     return tuple(out)
 
 
-def reshape(x, shape):
+def reshape(x, shape, inchunks=None, outchunks=None):
     """Reshape array to new shape
 
     This is a parallelized version of the ``np.reshape`` function with the
@@ -145,13 +145,72 @@ def reshape(x, shape):
 
     .. _`row-major order`: https://en.wikipedia.org/wiki/Row-_and_column-major_order
 
-    When communication is necessary this algorithm depends on the logic within
-    rechunk.  It endeavors to keep chunk sizes roughly the same when possible.
+    Parameters
+    ----------
+    shape : tuple
+        The new shape should be compatible with the original shape and should satisfy
+        Dask's additional restrictions. If
+        an integer, then the result will be a 1-D array of that length.
+        One shape dimension can be -1. In this case, the value is
+        inferred from the length of the array and remaining dimensions.
+    inchunks, outchunks: tuple, optional
+        How to rechunk the array during reshaping. By default, the array is rechunked
+        to keep roughly the same chunk sizes in the output as the input.
+
+        If either ``inchunks`` or ``outchunks`` is provided then both must be provided.
+        The chunks must have the following properties
+
+        * The length of `inchunks` must match the dimensions of the input array.
+        * The length of `outchunks` must match the dimensions of the output array.
+        * The number of blocks formed by `inchunks` and `outchunks` must match.
+
+        See the examples for more.
+
+    inchunks : tuple, optional
+        The chunks to use for an intermediate re-chunked array. By default, the array
+        is rechunked to keep roughly the same chunk sizes.
+    outchunks : tuple, optional
+        The chunks to use for the output array.
+
+    Notes
+    -----
+    By default, when communication is necessary this algorithm depends on the
+    logic within rechunk.  It endeavors to keep chunk sizes roughly the same
+    when possible.
+
+    If communication is undesirable, you can manually specify the intermediate
+    and output chunks to use. This can be useful when you have unavoidably large
+    chunks that you can't control (you're reading files produced by some other
+    system, for example). See the examples for more.
 
     See Also
     --------
     dask.array.rechunk
     numpy.reshape
+
+    Examples
+    --------
+    By default ``reshape`` will rechunk the arrays to ensure that the output
+    chunks aren't too large or small. If you need full control over the
+    rechunking structure, you can specify ``inchunks`` and ``outchunks``.
+
+    >>> x = np.arange(2 * 2 * 5).reshape((2, 2, 5))
+    >>> a = da.from_array(x, chunks=(1, 1, 5))
+    >>> a.reshape((4, 5)).chunks
+    ((2, 2), (5,))
+
+    This has merged two of the chunks. If this is undesirable you can manually
+    specify the rechunking needed for reshaping.
+
+    >>> b = a.reshape((4, 5),
+    ...               inchunks=((1, 1), (1, 1), (5,)),
+    ...               outchunks=((1, 1, 1, 1), (5,)))
+    >>> b.chunks
+    ((1, 1, 1, 1), (5,))
+
+    Notice that `inchunk` has the same number of dimensions (tuples)
+    as the input array, while `outchunks` has the same number as the
+    output array.
     """
     # Sanitize inputs, look for -1 in shape
     from .slicing import sanitize_index
@@ -191,14 +250,31 @@ def reshape(x, shape):
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
         return Array(graph, name, chunks, meta=meta)
 
+    if (inchunks is None or outchunks is None) and (inchunks is not outchunks):
+        raise ValueError(
+            "Must provide both 'inchunks' and 'outchunks' if " "either is provided."
+        )
     # Logic for how to rechunk
-    inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
+    if inchunks is None and outchunks is None:
+        inchunks2, outchunks2 = reshape_rechunk(x.shape, shape, x.chunks)
+        if inchunks is None:
+            inchunks = inchunks2
+        if outchunks is None:
+            outchunks = outchunks2
+    elif outchunks is not None:
+        outchunks = normalize_chunks(outchunks, shape=shape)
     x2 = x.rechunk(inchunks)
 
     # Construct graph
     in_keys = list(product([x2.name], *[range(len(c)) for c in inchunks]))
     out_keys = list(product([name], *[range(len(c)) for c in outchunks]))
     shapes = list(product(*outchunks))
+    if len(out_keys) != len(in_keys):
+        raise ValueError(
+            "Number of blocks from inchunks and outchunks must "
+            "match. '{} != {}'".format(len(out_keys), len(in_keys))
+        )
+
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
