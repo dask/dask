@@ -1430,7 +1430,7 @@ class Array(DaskMethodsMixin):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
-    def to_dask_dataframe(self, columns=None, index=None, target_dataframe=None):
+    def to_dask_dataframe(self, columns=None, index=None, meta=None):
         """ Convert dask Array to dask Dataframe
 
         Parameters
@@ -1448,8 +1448,8 @@ class Array(DaskMethodsMixin):
             Specifying ``index`` can be useful if you're conforming a Dask Array
             to an existing dask Series or DataFrame, and you would like the
             indices to match.
-        target_dataframe : object, optional
-            An optional `target_dataframe` parameter can be passed for dask
+        meta : object, optional
+            An optional `meta` parameter can be passed for dask
             to specify the concrete dataframe type to use for partitions of
             the Dask dataframe. By default, pandas DataFrame is used.
 
@@ -1460,7 +1460,7 @@ class Array(DaskMethodsMixin):
         from ..dataframe import from_dask_array
 
         return from_dask_array(
-            self, columns=columns, index=index, target_dataframe=target_dataframe
+            self, columns=columns, index=index, meta=meta
         )
 
     def __bool__(self):

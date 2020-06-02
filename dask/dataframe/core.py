@@ -3782,7 +3782,7 @@ class DataFrame(_Frame):
                         )
                     )
                 kwargs[k] = from_dask_array(
-                    v, index=self.index, target_dataframe=self._meta
+                    v, index=self.index, meta=self._meta
                 )
 
         pairs = list(sum(kwargs.items(), ()))

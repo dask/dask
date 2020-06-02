@@ -20,7 +20,7 @@ from ...utils import M, ensure_dict
 lock = Lock()
 
 
-def _meta_from_array(x, columns=None, index=None, target_dataframe=None):
+def _meta_from_array(x, columns=None, index=None, meta=None):
     """ Create empty DataFrame or Series which has correct dtype """
 
     if x.ndim > 2:
@@ -34,8 +34,8 @@ def _meta_from_array(x, columns=None, index=None, target_dataframe=None):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
         index = index._meta
 
-    if target_dataframe is None:
-        target_dataframe = pd.DataFrame()
+    if meta is None:
+        meta = pd.DataFrame()
 
     if getattr(x.dtype, "names", None) is not None:
         # record array has named columns
@@ -50,11 +50,11 @@ def _meta_from_array(x, columns=None, index=None, target_dataframe=None):
         dtypes = [fields[n][0] if n in fields else "f8" for n in columns]
     elif x.ndim == 1:
         if np.isscalar(columns) or columns is None:
-            return target_dataframe._constructor_sliced(
+            return meta._constructor_sliced(
                 [], name=columns, dtype=x.dtype, index=index
             )
         elif len(columns) == 1:
-            return target_dataframe._constructor(
+            return meta._constructor(
                 np.array([], dtype=x.dtype), columns=columns, index=index
             )
         raise ValueError(
@@ -74,10 +74,10 @@ def _meta_from_array(x, columns=None, index=None, target_dataframe=None):
         dtypes = [x.dtype] * len(columns)
 
     data = {c: np.array([], dtype=dt) for (c, dt) in zip(columns, dtypes)}
-    return target_dataframe._constructor(data, columns=columns, index=index)
+    return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array(x, chunksize=50000, columns=None, target_dataframe=None):
+def from_array(x, chunksize=50000, columns=None, meta=None):
     """ Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
@@ -100,8 +100,8 @@ def from_array(x, chunksize=50000, columns=None, target_dataframe=None):
         The number of rows per partition to use.
     columns : list or string, optional
         list of column names if DataFrame, single string if Series
-    target_dataframe : object, optional
-        An optional `target_dataframe` parameter can be passed for dask
+    meta : object, optional
+        An optional `meta` parameter can be passed for dask
         to specify the concrete dataframe type to use for partitions of
         the Dask dataframe. By default, pandas DataFrame is used.
 
@@ -111,9 +111,9 @@ def from_array(x, chunksize=50000, columns=None, target_dataframe=None):
         A dask DataFrame/Series
     """
     if isinstance(x, da.Array):
-        return from_dask_array(x, columns=columns, target_dataframe=target_dataframe)
+        return from_dask_array(x, columns=columns, meta=meta)
 
-    meta = _meta_from_array(x, columns, target_dataframe=target_dataframe)
+    meta = _meta_from_array(x, columns, meta=meta)
 
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
@@ -393,7 +393,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
-def from_dask_array(x, columns=None, index=None, target_dataframe=None):
+def from_dask_array(x, columns=None, index=None, meta=None):
     """ Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
@@ -414,8 +414,8 @@ def from_dask_array(x, columns=None, index=None, target_dataframe=None):
         Specifying `index` can be useful if you're conforming a Dask Array
         to an existing dask Series or DataFrame, and you would like the
         indices to match.
-    target_dataframe : object, optional
-        An optional `target_dataframe` parameter can be passed for dask
+    meta : object, optional
+        An optional `meta` parameter can be passed for dask
         to specify the concrete dataframe type to be returned.
         By default, pandas DataFrame is used.
 
@@ -438,7 +438,7 @@ def from_dask_array(x, columns=None, index=None, target_dataframe=None):
     dask.dataframe._Frame.values: Reverse conversion
     dask.dataframe._Frame.to_records: Reverse conversion
     """
-    meta = _meta_from_array(x, columns, index, target_dataframe=target_dataframe)
+    meta = _meta_from_array(x, columns, index, meta=meta)
 
     if x.ndim == 2 and len(x.chunks[1]) > 1:
         x = x.rechunk({1: x.shape[1]})
