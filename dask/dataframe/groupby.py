@@ -1790,6 +1790,7 @@ class SeriesGroupBy(_GroupBy):
 
         super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
         levels = _determine_levels(self.index)
