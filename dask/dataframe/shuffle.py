@@ -376,15 +376,18 @@ def pack_payload(df: DataFrame, group_key: Union[List[str], str]) -> DataFrame:
     Example::
 
         >>> import pandas as pd
-        ... import dask.dataframe as dd
-        ... from dask.dataframe.shuffle import pack_payload
-        ...
-        ... df = pd.DataFrame({"A": [1, 1] * 2 + [2, 2] * 2 + [3, 3] * 2, "B": range(12)})
-        ... ddf = dd.from_pandas(df, npartitions=2)
+        >>> import dask.dataframe as dd
+        >>> from dask.dataframe.shuffle import pack_payload
+
+        >>> df = pd.DataFrame({
+        ...    "A": [1, 1] * 2 + [2, 2] * 2 + [3, 3] * 2,
+        ...    "B": range(12)
+        ... })
+
+        >>> ddf = dd.from_pandas(df, npartitions=2)
 
         >>> ddf.partitions[0].compute()
-
-        A  B
+           A  B
         0  1  0
         1  1  1
         2  1  2
@@ -393,11 +396,9 @@ def pack_payload(df: DataFrame, group_key: Union[List[str], str]) -> DataFrame:
         5  2  5
 
         >>> pack_payload(ddf, "A").partitions[0].compute()
-
-        A                               __dask_payload_bytes
-        0  1  b'\x03\x00\x00\x00\x00\x00\x00\x00)\x00\x00\x03...
-        1  2  b'\x03\x00\x00\x00\x00\x00\x00\x00)\x00\x00\x03...
-
+           A                               __dask_payload_bytes
+        0  1  b'...
+        1  2  b'...
 
     """
 
