@@ -2949,7 +2949,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, sort=True, ascending=False, dropna=None, split_every=None, split_out=1
+        self, sort=None, ascending=False, dropna=None, split_every=None, split_out=1
     ):
         """
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
