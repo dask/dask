@@ -527,7 +527,7 @@ Dask Name: {name}, {task} tasks"""
             split_out_setup=split_out_setup,
             split_out_setup_kwargs=split_out_setup_kwargs,
             ignore_index=ignore_index,
-            **kwargs
+            **kwargs,
         )
 
     def __len__(self):
@@ -2951,11 +2951,19 @@ Dask Name: {name}, {task} tasks""".format(
     def value_counts(
         self, sort=True, ascending=False, dropna=None, split_every=None, split_out=1
     ):
-        if dropna is not None and not PANDAS_GT_110:
-            raise NotImplementedError(
-                "dropna is not a valid argument for dask.dataframe.value_counts "
-                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
-            )
+        """
+        Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
+        True.
+        """
+        kwargs = {"sort": sort, "ascending": ascending}
+        if dropna is not None:
+            if not PANDAS_GT_110:
+                raise NotImplementedError(
+                    "dropna is not a valid argument for dask.dataframe.value_counts "
+                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+                )
+            kwargs["dropna"] = dropna
+
         return aca(
             self,
             chunk=M.value_counts,
@@ -2966,9 +2974,7 @@ Dask Name: {name}, {task} tasks""".format(
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            sort=sort,
-            ascending=ascending,
-            dropna=dropna,
+            **kwargs,
         )
 
     @derived_from(pd.Series)
@@ -4868,7 +4874,7 @@ def apply_concat_apply(
     split_out_setup_kwargs=None,
     sort=None,
     ignore_index=False,
-    **kwargs
+    **kwargs,
 ):
     """Apply a function to blocks, then concat, then apply again
 

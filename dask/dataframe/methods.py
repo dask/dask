@@ -10,7 +10,6 @@ from .utils import (
     is_index_like,
     is_dataframe_like,
     PANDAS_GT_0250,
-    PANDAS_GT_110,
     hash_object_dispatch,
     group_split_dispatch,
 )
@@ -282,23 +281,16 @@ def unique(x, series_name=None):
     return out
 
 
-def value_counts_aggregate(x, sort=True, ascending=False, dropna=None):
-    groupby_kwargs = {}
-    if dropna is not None:
-        if not PANDAS_GT_110:
-            raise NotImplementedError(
-                "dropna is not a valid argument for pandas < 1.1.0"
-            )
-        groupby_kwargs["dropna"] = dropna
+def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
+    # sort and ascending don't actually matter until the agg step
+    return x.groupby(level=0, **groupby_kwargs).sum()
 
-    out = x.groupby(level=0, **groupby_kwargs).sum()
+
+def value_counts_aggregate(x, sort=True, ascending=False, **groupby_kwargs):
+    out = value_counts_combine(x, **groupby_kwargs)
     if sort:
         return out.sort_values(ascending=ascending)
     return out
-
-
-def value_counts_combine(x, dropna=None):
-    return value_counts_aggregate(x, sort=False, dropna=dropna)
 
 
 def nbytes(x):
