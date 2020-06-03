@@ -4103,13 +4103,13 @@ def test_meta_error_message():
     assert "pandas" in str(info.value)
 
 
-def test_assign_index():
+def test_assign_index_raises_deprecation_warning():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf_copy = ddf.copy()
-
-    ddf.index = ddf.index * 10
+    with pytest.warns(FutureWarning, match="deprecated"):
+        ddf.index = ddf.index * 10
 
     expected = df.copy()
     expected.index = expected.index * 10
