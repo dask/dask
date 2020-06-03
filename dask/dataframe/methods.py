@@ -297,7 +297,7 @@ def value_counts_aggregate(x, sort=True, ascending=False, dropna=None):
     return out
 
 
-def value_counts_combine(x, ascending=False, dropna=None):
+def value_counts_combine(x, dropna=None):
     return value_counts_aggregate(x, sort=False, dropna=dropna)
 
 

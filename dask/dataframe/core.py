@@ -2949,7 +2949,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, sort=False, ascending=False, dropna=None, split_every=None, split_out=1
+        self, sort=True, ascending=False, dropna=None, split_every=None, split_out=1
     ):
         if dropna is not None and not PANDAS_GT_110:
             raise NotImplementedError(
