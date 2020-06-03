@@ -10,6 +10,7 @@ from .utils import (
     is_index_like,
     is_dataframe_like,
     PANDAS_GT_0250,
+    PANDAS_GT_110,
     hash_object_dispatch,
     group_split_dispatch,
 )
@@ -284,7 +285,7 @@ def unique(x, series_name=None):
 def value_counts_aggregate(x, sort=True, ascending=False, dropna=None):
     groupby_kwargs = {}
     if dropna is not None:
-        if PANDAS_VERSION < "1.1.0":
+        if not PANDAS_GT_110:
             raise NotImplementedError(
                 "dropna is not a valid argument for pandas < 1.1.0"
             )

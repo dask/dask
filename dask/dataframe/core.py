@@ -63,6 +63,7 @@ from .utils import (
     has_known_categories,
     PANDAS_VERSION,
     PANDAS_GT_100,
+    PANDAS_GT_110,
     index_summary,
     is_dataframe_like,
     is_series_like,
@@ -2950,7 +2951,7 @@ Dask Name: {name}, {task} tasks""".format(
     def value_counts(
         self, split_every=None, split_out=1, sort=None, ascending=False, dropna=None
     ):
-        if dropna is not None and PANDAS_VERSION < "1.1.0":
+        if dropna is not None and not PANDAS_GT_110:
             raise NotImplementedError(
                 "dropna is not a valid argument for dask.dataframe.value_counts "
                 "if pandas < 1.1.0"

@@ -12,7 +12,7 @@ import dask.array as da
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
@@ -1038,7 +1038,7 @@ def test_value_counts_not_sorted():
 def test_value_counts_with_dropna():
     df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
     ddf = dd.from_pandas(df, npartitions=3)
-    if PANDAS_VERSION < "1.1.0":
+    if not PANDAS_GT_110:
         with pytest.raises(NotImplementedError, match="dropna is not a valid argument"):
             ddf.x.value_counts(dropna=False)
         return
