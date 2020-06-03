@@ -2201,7 +2201,7 @@ Dask Name: {name}, {task} tasks"""
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _describe_nonnumeric_1d(self, data, split_every=False):
-        vcounts = data.value_counts(split_every)
+        vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
 
