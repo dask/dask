@@ -2998,9 +2998,6 @@ Dask Name: {name}, {task} tasks""".format(
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
-        """
-        Note that the index and divisions are assumed to remain unchanged.
-        """
         if is_series_like(arg) and is_dask_collection(arg):
             return series_map(self, arg)
         if not (
@@ -3391,6 +3388,14 @@ class Index(Series):
                 )
             else:
                 return self.map_partitions(M.to_frame, meta=self._meta.to_frame())
+
+    @insert_meta_param_description(pad=12)
+    @derived_from(pd.Series)
+    def map(self, arg, na_action=None, meta=no_default):
+        """
+        Note that the index and divisions are assumed to remain unchanged.
+        """
+        return super().map(arg, na_action=na_action, meta=meta)
 
 
 class DataFrame(_Frame):
