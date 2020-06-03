@@ -1043,8 +1043,6 @@ def test_value_counts_with_dropna():
             ddf.x.value_counts(dropna=False)
         return
 
-    # If https://github.com/pandas-dev/pandas/pull/30584 doesn't get in
-    # before 1.1.0 then this will fail and the version check needs to be changed
     result = ddf.x.value_counts(dropna=False)
     expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)

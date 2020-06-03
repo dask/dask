@@ -787,7 +787,7 @@ Dask Name: {name}, {task} tasks"""
         chunk_kwargs=None,
         aggregate_kwargs=None,
         combine_kwargs=None,
-        **kwargs
+        **kwargs,
     ):
         """Generic row-wise reductions.
 
@@ -917,7 +917,7 @@ Dask Name: {name}, {task} tasks"""
             chunk_kwargs=chunk_kwargs,
             aggregate_kwargs=aggregate_kwargs,
             combine_kwargs=combine_kwargs,
-            **kwargs
+            **kwargs,
         )
 
     @derived_from(pd.DataFrame)
@@ -1266,7 +1266,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 meta=meta,
                 enforce_metadata=False,
-                **kwargs
+                **kwargs,
             )
 
         if method in ("pad", "ffill"):
@@ -2949,12 +2949,12 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, split_every=None, split_out=1, sort=None, ascending=False, dropna=None
+        self, sort=False, ascending=False, dropna=None, split_every=None, split_out=1
     ):
         if dropna is not None and not PANDAS_GT_110:
             raise NotImplementedError(
                 "dropna is not a valid argument for dask.dataframe.value_counts "
-                "if pandas < 1.1.0"
+                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
         return aca(
             self,
@@ -3188,7 +3188,7 @@ Dask Name: {name}, {task} tasks""".format(
                 convert_dtype=convert_dtype,
                 args=args,
                 udf=True,
-                **kwds
+                **kwds,
             )
             warnings.warn(meta_warning(meta))
 
@@ -3622,7 +3622,7 @@ class DataFrame(_Frame):
         npartitions=None,
         divisions=None,
         inplace=False,
-        **kwargs
+        **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
 
@@ -3714,7 +3714,7 @@ class DataFrame(_Frame):
                 drop=drop,
                 npartitions=npartitions,
                 divisions=divisions,
-                **kwargs
+                **kwargs,
             )
 
     @derived_from(pd.DataFrame)
@@ -4184,7 +4184,7 @@ class DataFrame(_Frame):
         reduce=None,
         args=(),
         meta=no_default,
-        **kwds
+        **kwds,
     ):
         """ Parallel version of pandas.DataFrame.apply
 
@@ -4717,7 +4717,7 @@ def elemwise(op, *args, **kwargs):
         try:
             divisions = op(
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
-                **kwargs
+                **kwargs,
             )
             if isinstance(divisions, pd.Index):
                 divisions = divisions.tolist()
@@ -5105,7 +5105,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
-    **kwargs
+    **kwargs,
 ):
     """ Apply Python function on each DataFrame partition.
 
@@ -5196,7 +5196,7 @@ def map_partitions(
             dependencies=dependencies,
             _func=func,
             _meta=meta,
-            **kwargs3
+            **kwargs3,
         )
     else:
         kwargs4 = kwargs if simple else kwargs3
