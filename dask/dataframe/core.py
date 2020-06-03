@@ -443,6 +443,12 @@ Dask Name: {name}, {task} tasks"""
 
     @index.setter
     def index(self, value):
+        warnings.warn(
+            "Assigning values to index is deprecated since dask 2.18.0 "
+            "and will be an error in a future release. To silence this warning, "
+            "use the syntax set_index(value) instead.",
+            FutureWarning,
+        )
         self.divisions = value.divisions
         result = map_partitions(
             methods.assign_index, self, value, enforce_metadata=False
