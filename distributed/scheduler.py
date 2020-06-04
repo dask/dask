@@ -809,6 +809,10 @@ class TaskPrefix:
     def __init__(self, name):
         self.name = name
         self.groups = []
+
+        # store timings for each prefix-action
+        self.all_durations = defaultdict(float)
+
         if self.name in dask.config.get("distributed.scheduler.default-task-durations"):
             self.duration_average = parse_timedelta(
                 dask.config.get("distributed.scheduler.default-task-durations")[
@@ -4127,12 +4131,19 @@ class Scheduler(ServerNode):
                 return {}
 
             if startstops:
-                L = [
-                    (startstop["start"], startstop["stop"])
-                    for startstop in startstops
-                    if startstop["action"] == "compute"
-                ]
-                if L:
+                L = list()
+                for startstop in startstops:
+                    stop = startstop["stop"]
+                    start = startstop["start"]
+                    action = startstop["action"]
+                    if action == "compute":
+                        L.append((start, stop))
+
+                    # record timings of all actions -- a cheaper way of
+                    # getting timing info compared with get_task_stream()
+                    ts.prefix.all_durations[action] += stop - start
+
+                if len(L) > 0:
                     compute_start, compute_stop = L[0]
                 else:  # This is very rare
                     compute_start = compute_stop = None

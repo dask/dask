@@ -64,6 +64,8 @@ from distributed.utils import log_errors, format_time, parse_timedelta
 from distributed.diagnostics.progress_stream import color_of, progress_quads
 from distributed.diagnostics.graph_layout import GraphLayout
 from distributed.diagnostics.task_stream import TaskStreamPlugin
+from distributed.diagnostics.task_stream import color_of as ts_color_of
+from distributed.diagnostics.task_stream import colors as ts_color_lookup
 
 if dask.config.get("distributed.dashboard.export-tool"):
     from distributed.dashboard.export_tool import ExportTool
@@ -438,6 +440,206 @@ class BandwidthWorkers(DashboardComponent):
             update(self.source, result)
 
 
+class ComputerPerKey(DashboardComponent):
+    """ Bar chart showing time spend in action by key prefix"""
+
+    def __init__(self, scheduler, **kwargs):
+        with log_errors():
+            self.last = 0
+            self.scheduler = scheduler
+
+            es = [p for p in self.scheduler.plugins if isinstance(p, TaskStreamPlugin)]
+            if not es:
+                self.plugin = TaskStreamPlugin(self.scheduler)
+            else:
+                self.plugin = es[0]
+
+            compute_data = {
+                "times": [0.2, 0.1],
+                "color": [ts_color_lookup["transfer"], ts_color_lookup["compute"]],
+                "names": ["sum", "sum_partial"],
+            }
+
+            self.compute_source = ColumnDataSource(data=compute_data)
+
+            fig = figure(
+                title="Compute Time Per Task",
+                tools="",
+                id="bk-Compute-by-key-plot",
+                name="compute_time_per_key",
+                x_range=["a", "b"],
+                **kwargs,
+            )
+
+            rect = fig.vbar(
+                source=self.compute_source,
+                x="names",
+                top="times",
+                width=0.7,
+                color="color",
+                legend_field="names",
+            )
+
+            fig.y_range.start = 0
+            fig.min_border_right = 20
+            fig.min_border_bottom = 60
+            fig.yaxis.axis_label = "Time (s)"
+            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0s")
+            fig.yaxis.ticker = AdaptiveTicker(**TICKS_1024)
+            fig.xaxis.major_label_orientation = -math.pi / 12
+            rect.nonselection_glyph = None
+
+            fig.xaxis.minor_tick_line_alpha = 0
+            fig.xgrid.visible = False
+
+            fig.toolbar.logo = None
+            fig.toolbar_location = None
+
+            hover = HoverTool()
+            hover.tooltips = """
+            <div>
+                <p><b>Name:</b> @names</p>
+                <p><b>Time:</b> @times s</p>
+            </div>
+            """
+            hover.point_policy = "follow_mouse"
+            fig.add_tools(hover)
+
+            self.fig = fig
+
+    @without_property_validation
+    def update(self):
+        with log_errors():
+            compute_times = defaultdict(float)
+
+            for key, ts in self.scheduler.task_prefixes.items():
+                name = key_split(key)
+                for action, t in ts.all_durations.items():
+                    if action == "compute":
+                        compute_times[name] += t
+
+            # order by largest time first
+            compute_times = sorted(
+                compute_times.items(), key=lambda x: x[1], reverse=True
+            )
+
+            compute_colors = list()
+            compute_names = list()
+            compute_time = list()
+            for name, t in compute_times:
+                compute_names.append(name)
+                compute_colors.append(ts_color_of(name))
+                compute_time.append(t)
+
+            self.fig.x_range.factors = compute_names
+            self.fig.title.text = "Compute Time Per Task"
+
+            compute_result = dict(
+                times=compute_time, color=compute_colors, names=compute_names,
+            )
+
+            update(self.compute_source, compute_result)
+
+
+class AggregateAction(DashboardComponent):
+    """ Bar chart showing time spend in action by key prefix"""
+
+    def __init__(self, scheduler, **kwargs):
+        with log_errors():
+            self.last = 0
+            self.scheduler = scheduler
+
+            es = [p for p in self.scheduler.plugins if isinstance(p, TaskStreamPlugin)]
+            if not es:
+                self.plugin = TaskStreamPlugin(self.scheduler)
+            else:
+                self.plugin = es[0]
+
+            action_data = {
+                "times": [0.2, 0.1],
+                "color": [ts_color_lookup["transfer"], ts_color_lookup["compute"]],
+                "names": ["transfer", "compute"],
+            }
+
+            self.action_source = ColumnDataSource(data=action_data)
+
+            fig = figure(
+                title="Aggregate Per Action",
+                tools="",
+                id="bk-aggregate-per-action-plot",
+                name="aggregate_per_action",
+                x_range=["a", "b"],
+                **kwargs,
+            )
+
+            rect = fig.vbar(
+                source=self.action_source,
+                x="names",
+                top="times",
+                width=0.7,
+                color="color",
+                legend_field="names",
+            )
+
+            fig.y_range.start = 0
+            fig.min_border_right = 20
+            fig.min_border_bottom = 60
+            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0s")
+            fig.yaxis.axis_label = "Time (s)"
+            fig.yaxis.ticker = AdaptiveTicker(**TICKS_1024)
+            fig.xaxis.major_label_orientation = -math.pi / 12
+            fig.xaxis.major_label_text_font_size = "16px"
+            rect.nonselection_glyph = None
+
+            fig.xaxis.minor_tick_line_alpha = 0
+            fig.xgrid.visible = False
+
+            fig.toolbar.logo = None
+            fig.toolbar_location = None
+
+            hover = HoverTool()
+            hover.tooltips = """
+            <div>
+                <p><b>Name:</b> @names</p>
+                <p><b>Time:</b> @times s</p>
+            </div>
+            """
+            hover.point_policy = "follow_mouse"
+            fig.add_tools(hover)
+
+            self.fig = fig
+
+    @without_property_validation
+    def update(self):
+        with log_errors():
+            agg_times = defaultdict(float)
+
+            for key, ts in self.scheduler.task_prefixes.items():
+                for action, t in ts.all_durations.items():
+                    agg_times[action] += t
+
+            # order by largest time first
+            agg_times = sorted(agg_times.items(), key=lambda x: x[1], reverse=True)
+
+            agg_colors = list()
+            agg_names = list()
+            agg_time = list()
+            for action, t in agg_times:
+                agg_names.append(action)
+                if action == "compute":
+                    agg_colors.append("purple")
+                else:
+                    agg_colors.append(ts_color_lookup[action])
+                agg_time.append(t)
+
+            self.fig.x_range.factors = agg_names
+            self.fig.title.text = "Aggregate Time Per Action"
+
+            action_result = dict(times=agg_time, color=agg_colors, names=agg_names,)
+
+            update(self.action_source, action_result)
+
+
 class MemoryByKey(DashboardComponent):
     """ Bar chart showing memory use by key prefix"""
 
@@ -664,42 +866,14 @@ class CurrentLoad(DashboardComponent):
                     getattr(self.scheduler.workers[ws.address], "memory_limit", inf)
                     or inf
                 )
-                pause = (
-                    getattr(
-                        self.scheduler.workers[ws.address],
-                        "memory_target_fraction",
-                        inf,
-                    )
-                    or inf
-                )
-                spill = (
-                    getattr(
-                        self.scheduler.workers[ws.address],
-                        "memory_target_fraction",
-                        inf,
-                    )
-                    or inf
-                )
-                target = (
-                    getattr(
-                        self.scheduler.workers[ws.address],
-                        "memory_target_fraction",
-                        inf,
-                    )
-                    or inf
-                )
 
                 if limit > max_limit and limit != inf:
                     max_limit = limit
 
                 if nb > limit:
-                    nbytes_color.append("black")
-                elif nb > pause:
                     nbytes_color.append("red")
-                elif nb > target:
+                elif nb > limit / 2:
                     nbytes_color.append("orange")
-                elif nb > target * 0.85:
-                    nbytes_color.append("yellow")
                 else:
                     nbytes_color.append("blue")
 
@@ -1926,6 +2100,24 @@ def individual_bandwidth_workers_doc(scheduler, extra, doc):
 def individual_memory_by_key_doc(scheduler, extra, doc):
     with log_errors():
         component = MemoryByKey(scheduler, sizing_mode="stretch_both")
+        component.update()
+        add_periodic_callback(doc, component, 500)
+        doc.add_root(component.fig)
+        doc.theme = BOKEH_THEME
+
+
+def individual_compute_time_per_key_doc(scheduler, extra, doc):
+    with log_errors():
+        component = ComputerPerKey(scheduler, sizing_mode="stretch_both")
+        component.update()
+        add_periodic_callback(doc, component, 500)
+        doc.add_root(component.fig)
+        doc.theme = BOKEH_THEME
+
+
+def individual_aggregate_time_per_action_doc(scheduler, extra, doc):
+    with log_errors():
+        component = AggregateAction(scheduler, sizing_mode="stretch_both")
         component.update()
         add_periodic_callback(doc, component, 500)
         doc.add_root(component.fig)

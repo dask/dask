@@ -32,6 +32,8 @@ from .components.scheduler import (
     individual_bandwidth_types_doc,
     individual_bandwidth_workers_doc,
     individual_memory_by_key_doc,
+    individual_compute_time_per_key_doc,
+    individual_aggregate_time_per_action_doc,
 )
 from .worker import counters_doc
 
@@ -83,6 +85,8 @@ applications = {
     "/individual-bandwidth-types": individual_bandwidth_types_doc,
     "/individual-bandwidth-workers": individual_bandwidth_workers_doc,
     "/individual-memory-by-key": individual_memory_by_key_doc,
+    "/individual-compute-time-per-key": individual_compute_time_per_key_doc,
+    "/individual-aggregate-time-per-action": individual_aggregate_time_per_action_doc,
 }
 
 try:
