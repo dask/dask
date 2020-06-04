@@ -119,27 +119,41 @@ class HighLevelGraph(Mapping):
         ...     graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
         ...     return new_collection(name, graph)
         """
-        layers = {name: layer}
-        deps = {}
-        deps[name] = set()
-        for collection in toolz.unique(dependencies, key=id):
-            if is_dask_collection(collection):
-                graph = collection.__dask_graph__()
-                if isinstance(graph, HighLevelGraph):
-                    layers.update(graph.layers)
-                    deps.update(graph.dependencies)
-                    with ignoring(AttributeError):
-                        deps[name] |= set(collection.__dask_layers__())
-                else:
-                    try:
-                        [key] = collection.__dask_layers__()
-                    except AttributeError:
-                        key = id(graph)
-                    layers[key] = graph
-                    deps[name].add(key)
-                    deps[key] = set()
-            else:
-                raise TypeError(type(collection))
+        if any(toolz.remove(is_dask_collection, toolz.unique(dependencies, key=id))):
+            raise TypeError
+
+        graphs_and_layers = [
+            (collection.__dask_graph__(), collection.__dask_layers__())
+            for collection in toolz.unique(dependencies, key=id)
+        ]
+
+        hlgs = filter(lambda x: isinstance(x[0], HighLevelGraph), graphs_and_layers)
+        others = filter(
+            lambda x: not isinstance(x[0], HighLevelGraph), graphs_and_layers
+        )
+
+        layers = toolz.merge((graph.layers for graph, _ in hlgs))
+        deps = toolz.merge((graph.dependencies for graph, _ in hlgs))
+
+        if name in deps:
+            with ignoring(AttributeError):
+                deps[name] |= {layer for _, layer in hlgs}
+        else:
+            deps[name] = {layer for _, layer in hlgs}
+
+        if name in layers:
+            layers[name] = {**layer, **layers[name]}
+        else:
+            layers[name] = layer
+
+        for graph, layer in others:
+            try:
+                [key] = layer
+            except AttributeError:
+                key = id(graph)
+            layers[key] = graph
+            deps[name].add(key)
+            deps[key] = set()
 
         return cls(layers, deps)
 
