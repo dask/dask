@@ -122,14 +122,16 @@ class HighLevelGraph(Mapping):
         if any(toolz.remove(is_dask_collection, toolz.unique(dependencies, key=id))):
             raise TypeError
 
-        graphs_and_layers = [
-            (collection.__dask_graph__(), collection.__dask_layers__())
+        graphs_and_collections = [
+            (collection.__dask_graph__(), collection)
             for collection in toolz.unique(dependencies, key=id)
         ]
 
-        hlgs = filter(lambda x: isinstance(x[0], HighLevelGraph), graphs_and_layers)
+        hlgs = filter(
+            lambda x: isinstance(x[0], HighLevelGraph), graphs_and_collections
+        )
         others = filter(
-            lambda x: not isinstance(x[0], HighLevelGraph), graphs_and_layers
+            lambda x: not isinstance(x[0], HighLevelGraph), graphs_and_collections
         )
 
         layers = toolz.merge((graph.layers for graph, _ in hlgs))
@@ -137,18 +139,18 @@ class HighLevelGraph(Mapping):
 
         if name in deps:
             with ignoring(AttributeError):
-                deps[name] |= {layer for _, layer in hlgs}
+                deps[name] |= {collection.__dask_layers__() for _, collection in hlgs}
         else:
-            deps[name] = {layer for _, layer in hlgs}
+            deps[name] = {collection.__dask_layers__() for _, collection in hlgs}
 
         if name in layers:
             layers[name] = {**layer, **layers[name]}
         else:
             layers[name] = layer
 
-        for graph, layer in others:
+        for graph, collection in others:
             try:
-                [key] = layer
+                [key] = collection.__dask_layers__()
             except AttributeError:
                 key = id(graph)
             layers[key] = graph
