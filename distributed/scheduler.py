@@ -5165,10 +5165,17 @@ class Scheduler(ServerNode):
         )
 
         from bokeh.plotting import save, output_file
+        from bokeh.core.templates import get_env
 
         with tmpfile(extension=".html") as fn:
             output_file(filename=fn, title="Dask Performance Report")
-            save(tabs, filename=fn)
+            template_directory = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "dashboard", "templates"
+            )
+            template_environment = get_env()
+            template_environment.loader.searchpath.append(template_directory)
+            template = template_environment.get_template("performance_report.html")
+            save(tabs, filename=fn, template=template)
 
             with open(fn) as f:
                 data = f.read()
