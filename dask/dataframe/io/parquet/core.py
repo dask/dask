@@ -291,6 +291,7 @@ def to_parquet(
     write_metadata_file=True,
     compute=True,
     compute_kwargs=None,
+    optimize_graph=True,
     **kwargs
 ):
     """Store Dask.dataframe to Parquet files
@@ -333,6 +334,9 @@ def to_parquet(
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
+    optimize_graph : bool, optional
+        If True (default), the graph is optimized before computation.
+        Otherwise the graph is run as is. This can be useful for debugging.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
     **kwargs :
@@ -446,7 +450,7 @@ def to_parquet(
             index_cols=index_cols,
             **kwargs_pass
         )
-        for d, filename in zip(df.to_delayed(), filenames)
+        for d, filename in zip(df.to_delayed(optimize_graph=optimize_graph), filenames)
     ]
 
     # single task to complete
