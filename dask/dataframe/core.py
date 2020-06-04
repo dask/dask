@@ -767,7 +767,7 @@ Dask Name: {name}, {task} tasks"""
         Returns
         -------
         Series
-            A Series whose index is the parition number and whose values
+            A Series whose index is the partition number and whose values
             are the memory usage of each partition in bytes.
         """
         return self.map_partitions(
@@ -3781,7 +3781,7 @@ class DataFrame(_Frame):
                             v.npartitions, self.npartitions
                         )
                     )
-                kwargs[k] = from_dask_array(v, index=self.index)
+                kwargs[k] = from_dask_array(v, index=self.index, meta=self._meta)
 
         pairs = list(sum(kwargs.items(), ()))
 
