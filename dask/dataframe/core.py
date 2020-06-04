@@ -63,6 +63,7 @@ from .utils import (
     has_known_categories,
     PANDAS_VERSION,
     PANDAS_GT_100,
+    PANDAS_GT_110,
     index_summary,
     is_dataframe_like,
     is_series_like,
@@ -526,7 +527,7 @@ Dask Name: {name}, {task} tasks"""
             split_out_setup=split_out_setup,
             split_out_setup_kwargs=split_out_setup_kwargs,
             ignore_index=ignore_index,
-            **kwargs
+            **kwargs,
         )
 
     def __len__(self):
@@ -786,7 +787,7 @@ Dask Name: {name}, {task} tasks"""
         chunk_kwargs=None,
         aggregate_kwargs=None,
         combine_kwargs=None,
-        **kwargs
+        **kwargs,
     ):
         """Generic row-wise reductions.
 
@@ -916,7 +917,7 @@ Dask Name: {name}, {task} tasks"""
             chunk_kwargs=chunk_kwargs,
             aggregate_kwargs=aggregate_kwargs,
             combine_kwargs=combine_kwargs,
-            **kwargs
+            **kwargs,
         )
 
     @derived_from(pd.DataFrame)
@@ -1265,7 +1266,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 meta=meta,
                 enforce_metadata=False,
-                **kwargs
+                **kwargs,
             )
 
         if method in ("pad", "ffill"):
@@ -2200,7 +2201,7 @@ Dask Name: {name}, {task} tasks"""
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _describe_nonnumeric_1d(self, data, split_every=False):
-        vcounts = data.value_counts(split_every)
+        vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
 
@@ -2947,7 +2948,22 @@ Dask Name: {name}, {task} tasks""".format(
         return self.drop_duplicates(split_every=split_every).count()
 
     @derived_from(pd.Series)
-    def value_counts(self, split_every=None, split_out=1):
+    def value_counts(
+        self, sort=None, ascending=False, dropna=None, split_every=None, split_out=1
+    ):
+        """
+        Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
+        True.
+        """
+        kwargs = {"sort": sort, "ascending": ascending}
+        if dropna is not None:
+            if not PANDAS_GT_110:
+                raise NotImplementedError(
+                    "dropna is not a valid argument for dask.dataframe.value_counts "
+                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+                )
+            kwargs["dropna"] = dropna
+
         return aca(
             self,
             chunk=M.value_counts,
@@ -2958,6 +2974,7 @@ Dask Name: {name}, {task} tasks""".format(
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            **kwargs,
         )
 
     @derived_from(pd.Series)
@@ -3177,7 +3194,7 @@ Dask Name: {name}, {task} tasks""".format(
                 convert_dtype=convert_dtype,
                 args=args,
                 udf=True,
-                **kwds
+                **kwds,
             )
             warnings.warn(meta_warning(meta))
 
@@ -3611,7 +3628,7 @@ class DataFrame(_Frame):
         npartitions=None,
         divisions=None,
         inplace=False,
-        **kwargs
+        **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
 
@@ -3703,7 +3720,7 @@ class DataFrame(_Frame):
                 drop=drop,
                 npartitions=npartitions,
                 divisions=divisions,
-                **kwargs
+                **kwargs,
             )
 
     @derived_from(pd.DataFrame)
@@ -4173,7 +4190,7 @@ class DataFrame(_Frame):
         reduce=None,
         args=(),
         meta=no_default,
-        **kwds
+        **kwds,
     ):
         """ Parallel version of pandas.DataFrame.apply
 
@@ -4706,7 +4723,7 @@ def elemwise(op, *args, **kwargs):
         try:
             divisions = op(
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
-                **kwargs
+                **kwargs,
             )
             if isinstance(divisions, pd.Index):
                 divisions = divisions.tolist()
@@ -4857,7 +4874,7 @@ def apply_concat_apply(
     split_out_setup_kwargs=None,
     sort=None,
     ignore_index=False,
-    **kwargs
+    **kwargs,
 ):
     """Apply a function to blocks, then concat, then apply again
 
@@ -5094,7 +5111,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
-    **kwargs
+    **kwargs,
 ):
     """ Apply Python function on each DataFrame partition.
 
@@ -5185,7 +5202,7 @@ def map_partitions(
             dependencies=dependencies,
             _func=func,
             _meta=meta,
-            **kwargs3
+            **kwargs3,
         )
     else:
         kwargs4 = kwargs if simple else kwargs3

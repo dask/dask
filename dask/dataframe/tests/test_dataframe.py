@@ -12,7 +12,7 @@ import dask.array as da
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
@@ -1018,6 +1018,33 @@ def test_value_counts():
     ddf = dd.from_pandas(df, npartitions=3)
     result = ddf.x.value_counts()
     expected = df.x.value_counts()
+    assert_eq(result, expected)
+    result2 = ddf.x.value_counts(split_every=2)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+
+def test_value_counts_not_sorted():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, 3, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.x.value_counts(sort=False)
+    expected = df.x.value_counts(sort=False)
+    assert_eq(result, expected)
+    result2 = ddf.x.value_counts(split_every=2)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+
+def test_value_counts_with_dropna():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    if not PANDAS_GT_110:
+        with pytest.raises(NotImplementedError, match="dropna is not a valid argument"):
+            ddf.x.value_counts(dropna=False)
+        return
+
+    result = ddf.x.value_counts(dropna=False)
+    expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)
     result2 = ddf.x.value_counts(split_every=2)
     assert_eq(result2, expected)

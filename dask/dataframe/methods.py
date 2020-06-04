@@ -281,12 +281,16 @@ def unique(x, series_name=None):
     return out
 
 
-def value_counts_combine(x):
-    return x.groupby(level=0).sum()
+def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
+    # sort and ascending don't actually matter until the agg step
+    return x.groupby(level=0, **groupby_kwargs).sum()
 
 
-def value_counts_aggregate(x):
-    return x.groupby(level=0).sum().sort_values(ascending=False)
+def value_counts_aggregate(x, sort=True, ascending=False, **groupby_kwargs):
+    out = value_counts_combine(x, **groupby_kwargs)
+    if sort:
+        return out.sort_values(ascending=ascending)
+    return out
 
 
 def nbytes(x):
