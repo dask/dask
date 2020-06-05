@@ -20,7 +20,7 @@ following two ways:
 
        helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
        helm repo update                             # get latest Helm charts
-       helm install dask/dask                     # deploy standard Dask chart
+       helm install myrelease dask/dask             # deploy standard Dask chart
 
     This is a good choice if you want to do the following:
 
@@ -30,6 +30,16 @@ following two ways:
     4.  Try out Dask for the first time on a cloud-based system
         like Amazon, Google, or Microsoft Azure
         (see also our :doc:`Cloud documentation <cloud>`)
+
+    You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
+    Helm Dask cluster from within your Python session.
+
+    .. code-block:: python
+
+       from dask_kubernetes import HelmCluster
+
+       cluster = HelmCluster(release_name="myrelease")
+       cluster.scale(10)
 
     .. note::
 
