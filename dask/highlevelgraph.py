@@ -85,6 +85,61 @@ class HighLevelGraph(Mapping):
         return self.layers
 
     @classmethod
+    def from_collection(cls, name, layer, collection):
+        """ Construct a HighLevelGraph from a new layer and a collection
+
+        This constructs a HighLevelGraph in the common case where we have a single
+        new layer and one collection on which we want to depend.
+
+        This pulls out the ``__dask_layers__()`` method of the collection if
+        it exists, and adds them to the dependencies for this new layer.  It
+        also merges all of the layers from all of the dependent collections
+        together into the new layers for this graph.
+
+        Parameters
+        ----------
+        name : str
+            The name of the new layer
+        layer : Mapping
+            The graph layer itself
+        collection : Dask collections
+            A dask collections (like array or dataframe) that
+            has a graph of itself
+
+        Examples
+        --------
+
+        In typical usage we make a new task layer, and then pass that layer
+        along with all dependent collections to this method.
+
+        >>> def add(self, other):
+        ...     name = 'add-' + tokenize(self, other)
+        ...     layer = {(name, i): (add, input_key, other)
+        ...              for i, input_key in enumerate(self.__dask_keys__())}
+        ...     graph = HighLevelGraph.from_collection(name, layer, self)
+        ...     return new_collection(name, graph)
+        """
+        if is_dask_collection(collection):
+            graph = collection.__dask_graph__()
+            if isinstance(graph, HighLevelGraph):
+                layers = graph.layers.copy()
+                layers.update({name: layer})
+                deps = graph.dependencies.copy()
+                with ignoring(AttributeError):
+                    deps.update({name: set(collection.__dask_layers__())})
+            else:
+                try:
+                    [key] = collection.__dask_layers__()
+                except AttributeError:
+                    key = id(graph)
+                layers = {key: graph}
+                deps = {name: set(key), key: set()}
+        else:
+            raise TypeError(type(collection))
+
+        return cls(layers, deps)
+
+    @classmethod
     def from_collections(cls, name, layer, dependencies=()):
         """ Construct a HighLevelGraph from a new layer and a set of collections
 
@@ -119,6 +174,8 @@ class HighLevelGraph(Mapping):
         ...     graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
         ...     return new_collection(name, graph)
         """
+        if len(dependencies) == 1:
+            return cls.from_collection(name, layer, dependencies[0])
         layers = {name: layer}
         deps = {}
         deps[name] = set()
