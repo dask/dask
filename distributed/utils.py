@@ -931,7 +931,9 @@ def ensure_bytes(s):
     >>> ensure_bytes(b'123')
     b'123'
     """
-    if hasattr(s, "encode"):
+    if isinstance(s, bytes):
+        return s
+    elif hasattr(s, "encode"):
         return s.encode()
     else:
         try:

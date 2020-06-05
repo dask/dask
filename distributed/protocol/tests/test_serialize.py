@@ -190,9 +190,19 @@ def test_empty_loads_deep():
     assert isinstance(e2[0][0][0], Empty)
 
 
-def test_serialize_bytes():
-    for x in [1, "abc", np.arange(5), b"ab" * int(40e6)]:
-        b = serialize_bytes(x)
+@pytest.mark.parametrize(
+    "kwargs", [{}, {"serializers": ["pickle"]},],
+)
+def test_serialize_bytes(kwargs):
+    for x in [
+        1,
+        "abc",
+        np.arange(5),
+        b"ab" * int(40e6),
+        int(2 ** 26) * b"ab",
+        (int(2 ** 25) * b"ab", int(2 ** 25) * b"ab"),
+    ]:
+        b = serialize_bytes(x, **kwargs)
         assert isinstance(b, bytes)
         y = deserialize_bytes(b)
         assert str(x) == str(y)
