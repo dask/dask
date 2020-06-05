@@ -132,7 +132,7 @@ class HighLevelGraph(Mapping):
                     [key] = collection.__dask_layers__()
                 except AttributeError:
                     key = id(graph)
-                layers = {key: graph}
+                layers = {name: layer, key: graph}
                 deps = {name: set(key), key: set()}
         else:
             raise TypeError(type(collection))
