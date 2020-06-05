@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import List
+from typing import List, Union
 import warnings
 import weakref
 
@@ -230,7 +230,7 @@ old_cluster_kwargs = {
 
 def SSHCluster(
     hosts: List[str] = None,
-    connect_options: dict = {},
+    connect_options: Union[List[dict], dict] = {},
     worker_options: dict = {},
     scheduler_options: dict = {},
     worker_module: str = "distributed.cli.dask_worker",
@@ -261,8 +261,9 @@ def SSHCluster(
     hosts: List[str]
         List of hostnames or addresses on which to launch our cluster.
         The first will be used for the scheduler and the rest for workers.
-    connect_options: dict, optional
+    connect_options: dict or list of dict, optional
         Keywords to pass through to ``asyncssh.connect``.
+        If a list it must have the same length as ``hosts``.
     worker_options: dict, optional
         Keywords to pass on to workers.
     scheduler_options: dict, optional
@@ -311,11 +312,19 @@ def SSHCluster(
         kwargs.setdefault("worker_addrs", hosts)
         return OldSSHCluster(**kwargs)
 
+    if isinstance(connect_options, list) and len(connect_options) != len(hosts):
+        raise RuntimeError(
+            "When specifying a list of connect_options you must provide a "
+            "dictionary for each address."
+        )
+
     scheduler = {
         "cls": Scheduler,
         "options": {
             "address": hosts[0],
-            "connect_options": connect_options,
+            "connect_options": connect_options
+            if isinstance(connect_options, dict)
+            else connect_options[0],
             "kwargs": scheduler_options,
             "remote_python": remote_python,
         },
@@ -325,7 +334,9 @@ def SSHCluster(
             "cls": Worker,
             "options": {
                 "address": host,
-                "connect_options": connect_options,
+                "connect_options": connect_options
+                if isinstance(connect_options, dict)
+                else connect_options[i + 1],
                 "kwargs": worker_options,
                 "worker_module": worker_module,
                 "remote_python": remote_python,

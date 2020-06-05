@@ -115,3 +115,34 @@ async def test_unimplemented_options():
             scheduler_kwargs={"idle_timeout": "5s", "port": 0},
         ) as cluster:
             assert cluster
+
+
+@pytest.mark.asyncio
+async def test_list_of_connect_options():
+    async with SSHCluster(
+        ["127.0.0.1"] * 3,
+        connect_options=[dict(known_hosts=None)] * 3,
+        asynchronous=True,
+        scheduler_options={"port": 0, "idle_timeout": "5s"},
+        worker_options={"death_timeout": "5s"},
+    ) as cluster:
+        assert len(cluster.workers) == 2
+        async with Client(cluster, asynchronous=True) as client:
+            result = await client.submit(lambda x: x + 1, 10)
+            assert result == 11
+        assert not cluster._supports_scaling
+
+        assert "SSH" in repr(cluster)
+
+
+@pytest.mark.asyncio
+async def test_list_of_connect_options_raises():
+    with pytest.raises(RuntimeError):
+        async with SSHCluster(
+            ["127.0.0.1"] * 3,
+            connect_options=[dict(known_hosts=None)] * 4,  # Mismatch in length 4 != 3
+            asynchronous=True,
+            scheduler_options={"port": 0, "idle_timeout": "5s"},
+            worker_options={"death_timeout": "5s"},
+        ) as _:
+            pass
