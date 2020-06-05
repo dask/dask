@@ -3011,6 +3011,34 @@ def _check_regular_chunks(chunkset):
     return True
 
 
+def from_blocks(func, block_shape=None, block_pattern=None, **kwargs):
+    """ Create a dask array from a function
+
+    Examples
+    --------
+    >>> import dask
+    >>> import dask.array as da
+    >>> def load_one_block(block_id, block_info):
+    >>>    # Use block_id or block_info to determine which data to load
+    >>>    return np.full((1, 3), block_id[0])
+    >>> array = da.from_blocks(load_one_block, block_shape=(1, 3), block_pattern=(2, 3), dtype="int64")
+    >>> array
+    dask.array<load_one_block, shape=(2, 9), dtype=int64, chunksize=(1, 3), chunktype=numpy.ndarray>
+    >>> array.compute()
+    array([[0, 0, 0, 0, 0, 0, 0, 0, 0],
+           [1, 1, 1, 1, 1, 1, 1, 1, 1]])
+    """
+    if block_shape is not None and block_pattern is not None:
+        if "chunks" in kwargs:
+            raise KeyError(
+                "Only specify one of chunks or block_shape and block_pattern"
+            )
+        if "chunks" not in kwargs:
+            kwargs["chunks"] = [(s,) * p for s, p in zip(block_shape, block_pattern)]
+
+    return map_blocks(func, **kwargs)
+
+
 def from_delayed(value, shape, dtype=None, meta=None, name=None):
     """ Create a dask array from a dask delayed value
 

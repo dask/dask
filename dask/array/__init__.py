@@ -12,6 +12,7 @@ try:
         to_npy_stack,
         from_npy_stack,
         from_delayed,
+        from_blocks,
         asarray,
         asanyarray,
         PerformanceWarning,
