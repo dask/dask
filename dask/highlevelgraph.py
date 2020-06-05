@@ -133,7 +133,7 @@ class HighLevelGraph(Mapping):
                 except AttributeError:
                     key = id(graph)
                 layers = {name: layer, key: graph}
-                deps = {name: set(key), key: set()}
+                deps = {name: {key}, key: set()}
         else:
             raise TypeError(type(collection))
 
