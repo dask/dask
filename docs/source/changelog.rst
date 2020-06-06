@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2.18.0 - 2020-06-05
+-------------------
+
+- Merge frames in ``deserialize_bytes`` (:pr:`3639`) `John Kirkham`_
+- Allow ``SSHCluster`` to take a list of ``connect_options`` (:pr:`3854`) `Jacob Tomlinson`_
+- Add favicon to performance report (:pr:`3852`) `Jacob Tomlinson`_
+- Add dashboard plots for the amount of time spent per key and for transfer/serialization (:pr:`3792`) `Benjamin Zaitlen`_
+- Fix variable name in journey of a task documentation (:pr:`3840`) `Matthias Bussonnier`_
+- Fix typo in journey of a task doc (:pr:`3838`) `James Bourbeau`_
+- Register ``dask_cudf`` serializers (:pr:`3832`) `John Kirkham`_
+- Fix key check in ``rebalance`` missing keys (:pr:`3834`) `Jacob Tomlinson`_
+- Allow collection of partial profile information in case of exceptions (:pr:`3773`) `Florian Jetter`_
+
+
 2.17.0 - 2020-05-26
 -------------------
 
@@ -1777,3 +1791,4 @@ significantly without many new features.
 .. _`Nils Braun`: https://github.com/nils-braun
 .. _`Nick Evans`: https://github.com/nre
 .. _`Scott Sanderson`: https://github.com/ssanderson
+.. _`Matthias Bussonnier`: https://github.com/Carreau
