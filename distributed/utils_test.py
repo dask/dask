@@ -1447,7 +1447,7 @@ def check_process_leak(check=True):
     yield
 
     if check:
-        for i in range(100):
+        for i in range(200):
             if not set(mp_context.active_children()):
                 break
             else:

@@ -481,3 +481,30 @@ async def test_run_spec(cleanup):
             assert not s.workers
 
             await asyncio.gather(*[w.finished() for w in workers.values()])
+
+
+@pytest.mark.asyncio
+async def test_run_spec_cluster_worker_names(cleanup):
+    worker = {"cls": Worker, "options": {"nthreads": 1}}
+
+    class MyCluster(SpecCluster):
+        def _new_worker_name(self, worker_number):
+            return f"prefix-{self._name }-{worker_number}-suffix"
+
+    async with SpecCluster(
+        asynchronous=True, scheduler=scheduler, worker=worker
+    ) as cluster:
+        cluster.scale(2)
+        await cluster
+        worker_names = [0, 1]
+        assert list(cluster.worker_spec) == worker_names
+        assert sorted(list(cluster.workers)) == worker_names
+
+    async with MyCluster(
+        asynchronous=True, scheduler=scheduler, worker=worker, name="test-name"
+    ) as cluster:
+        worker_names = ["prefix-test-name-0-suffix", "prefix-test-name-1-suffix"]
+        cluster.scale(2)
+        await cluster
+        assert list(cluster.worker_spec) == worker_names
+        assert sorted(list(cluster.workers)) == worker_names
