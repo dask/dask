@@ -208,7 +208,7 @@ async def test_remove_worker_from_scheduler(s, a, b):
     )
 
     assert a.address in s.stream_comms
-    s.remove_worker(address=a.address)
+    await s.remove_worker(address=a.address)
     assert a.address not in s.nthreads
     assert len(s.workers[b.address].processing) == len(dsk)  # b owns everything
     s.validate_state()
@@ -217,9 +217,9 @@ async def test_remove_worker_from_scheduler(s, a, b):
 @gen_cluster()
 async def test_remove_worker_by_name_from_scheduler(s, a, b):
     assert a.address in s.stream_comms
-    assert s.remove_worker(address=a.name) == "OK"
+    assert await s.remove_worker(address=a.name) == "OK"
     assert a.address not in s.nthreads
-    assert s.remove_worker(address=a.address) == "already-removed"
+    assert await s.remove_worker(address=a.address) == "already-removed"
     s.validate_state()
 
 
@@ -230,7 +230,7 @@ async def test_clear_events_worker_removal(s, a, b):
     assert b.address in s.events
     assert b.address in s.nthreads
 
-    s.remove_worker(address=a.address)
+    await s.remove_worker(address=a.address)
     # Shortly after removal, the events should still be there
     assert a.address in s.events
     assert a.address not in s.nthreads
@@ -489,7 +489,7 @@ async def test_ready_remove_worker(s, a, b):
 
     assert all(len(w.processing) > w.nthreads for w in s.workers.values())
 
-    s.remove_worker(address=a.address)
+    await s.remove_worker(address=a.address)
 
     assert set(s.workers) == {b.address}
     assert all(len(w.processing) > w.nthreads for w in s.workers.values())

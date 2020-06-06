@@ -1565,7 +1565,7 @@ class Scheduler(ServerNode):
             address = nanny_addr or worker
 
             self.worker_send(worker, {"op": "close", "report": False})
-            self.remove_worker(address=worker, safe=safe)
+            await self.remove_worker(address=worker, safe=safe)
 
     ###########
     # Stimuli #
@@ -1724,7 +1724,9 @@ class Scheduler(ServerNode):
 
             for plugin in self.plugins[:]:
                 try:
-                    plugin.add_worker(scheduler=self, worker=address)
+                    result = plugin.add_worker(scheduler=self, worker=address)
+                    if inspect.isawaitable(result):
+                        await result
                 except Exception as e:
                     logger.exception(e)
 
@@ -2159,7 +2161,7 @@ class Scheduler(ServerNode):
 
         return tuple(seen)
 
-    def remove_worker(self, comm=None, address=None, safe=False, close=True):
+    async def remove_worker(self, comm=None, address=None, safe=False, close=True):
         """
         Remove worker from cluster
 
@@ -2240,7 +2242,9 @@ class Scheduler(ServerNode):
 
             for plugin in self.plugins[:]:
                 try:
-                    plugin.remove_worker(scheduler=self, worker=address)
+                    result = plugin.remove_worker(scheduler=self, worker=address)
+                    if inspect.isawaitable(result):
+                        await result
                 except Exception as e:
                     logger.exception(e)
 
@@ -2735,7 +2739,7 @@ class Scheduler(ServerNode):
         finally:
             if worker in self.stream_comms:
                 worker_comm.abort()
-                self.remove_worker(address=worker)
+                await self.remove_worker(address=worker)
 
     def add_plugin(self, plugin=None, idempotent=False, **kwargs):
         """
@@ -2848,8 +2852,12 @@ class Scheduler(ServerNode):
             with log_errors():
                 # Remove suspicious workers from the scheduler but allow them to
                 # reconnect.
-                for worker in missing_workers:
-                    self.remove_worker(address=worker, close=False)
+                await asyncio.gather(
+                    *[
+                        self.remove_worker(address=worker, close=False)
+                        for worker in missing_workers
+                    ]
+                )
                 for key, workers in missing_keys.items():
                     # Task may already be gone if it was held by a
                     # `missing_worker`
@@ -2897,7 +2905,7 @@ class Scheduler(ServerNode):
                 try:
                     # Ask the worker to close if it doesn't have a nanny,
                     # otherwise the nanny will kill it anyway
-                    self.remove_worker(address=addr, close=addr not in nannies)
+                    await self.remove_worker(address=addr, close=addr not in nannies)
                 except Exception as e:
                     logger.info(
                         "Exception while restarting.  This is normal", exc_info=True
@@ -3484,8 +3492,9 @@ class Scheduler(ServerNode):
                         *[self.close_worker(worker=w, safe=True) for w in worker_keys]
                     )
                 if remove:
-                    for w in worker_keys:
-                        self.remove_worker(address=w, safe=True)
+                    await asyncio.gather(
+                        *[self.remove_worker(address=w, safe=True) for w in worker_keys]
+                    )
 
                 self.log_event(
                     "all",
@@ -5263,7 +5272,7 @@ class Scheduler(ServerNode):
                 steal.remove_key_from_stealable(ts)
                 steal.put_key_in_stealable(ts)
 
-    def check_worker_ttl(self):
+    async def check_worker_ttl(self):
         now = time()
         for ws in self.workers.values():
             if ws.last_seen < now - self.worker_ttl:
@@ -5272,7 +5281,7 @@ class Scheduler(ServerNode):
                     self.worker_ttl,
                     ws,
                 )
-                self.remove_worker(address=ws.address)
+                await self.remove_worker(address=ws.address)
 
     def check_idle(self):
         if any(ws.processing for ws in self.workers.values()) or self.unrunnable:

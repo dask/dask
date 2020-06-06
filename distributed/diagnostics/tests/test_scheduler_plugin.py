@@ -70,6 +70,41 @@ async def test_add_remove_worker(s):
     assert events == []
 
 
+@gen_cluster(nthreads=[], client=False)
+async def test_async_add_remove_worker(s):
+    events = []
+
+    class MyPlugin(SchedulerPlugin):
+        async def add_worker(self, worker, scheduler):
+            assert scheduler is s
+            events.append(("add_worker", worker))
+
+        async def remove_worker(self, worker, scheduler):
+            assert scheduler is s
+            events.append(("remove_worker", worker))
+
+    plugin = MyPlugin()
+    s.add_plugin(plugin)
+    assert events == []
+
+    async with Worker(s.address) as a:
+        async with Worker(s.address) as b:
+            pass
+
+    assert set(events) == {
+        ("add_worker", a.address),
+        ("add_worker", b.address),
+        ("remove_worker", a.address),
+        ("remove_worker", b.address),
+    }
+
+    events[:] = []
+    s.remove_plugin(plugin)
+    async with Worker(s.address):
+        pass
+    assert events == []
+
+
 @pytest.mark.asyncio
 async def test_lifecycle(cleanup):
     class LifeCycle(SchedulerPlugin):

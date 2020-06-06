@@ -516,6 +516,7 @@ class Server:
                             handler = self.stream_handlers[op]
                             if is_coroutine_function(handler):
                                 self.loop.add_callback(handler, **merge(extra, msg))
+                                await gen.sleep(0)
                             else:
                                 handler(**merge(extra, msg))
                         else:

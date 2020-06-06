@@ -187,7 +187,7 @@ class WorkStealing(SchedulerPlugin):
                 pdb.set_trace()
             raise
 
-    def move_task_confirm(self, key=None, worker=None, state=None):
+    async def move_task_confirm(self, key=None, worker=None, state=None):
         try:
             try:
                 ts = self.scheduler.tasks[key]
@@ -256,7 +256,7 @@ class WorkStealing(SchedulerPlugin):
                 try:
                     self.scheduler.send_task_to_worker(thief.address, key)
                 except CommClosedError:
-                    self.scheduler.remove_worker(thief.address)
+                    await self.scheduler.remove_worker(thief.address)
                 self.log.append(("confirm", key, victim.address, thief.address))
             else:
                 raise ValueError("Unexpected task state: %s" % state)
