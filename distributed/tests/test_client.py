@@ -1847,6 +1847,15 @@ def test_bad_address():
         assert "connect" in str(e).lower()
 
 
+def test_informative_error_on_cluster_type():
+    with pytest.raises(TypeError) as exc_info:
+        Client(LocalCluster)
+
+    assert "Scheduler address must be a string or a Cluster instance" in str(
+        exc_info.value
+    )
+
+
 @gen_cluster(client=True)
 async def test_long_error(c, s, a, b):
     def bad(x):

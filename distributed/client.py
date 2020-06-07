@@ -650,13 +650,19 @@ class Client:
 
         if isinstance(address, (rpc, PooledRPCCall)):
             self.scheduler = address
-        elif hasattr(address, "scheduler_address"):
+        elif isinstance(getattr(address, "scheduler_address", None), str):
             # It's a LocalCluster or LocalCluster-compatible object
             self.cluster = address
             with suppress(AttributeError):
                 loop = address.loop
             if security is None:
                 security = getattr(self.cluster, "security", None)
+        elif address is not None and not isinstance(address, str):
+            raise TypeError(
+                "Scheduler address must be a string or a Cluster instance, got {}".format(
+                    type(address)
+                )
+            )
 
         if security is None:
             security = Security()
