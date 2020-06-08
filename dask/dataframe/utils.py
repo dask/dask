@@ -25,6 +25,7 @@ from ._compat import (  # noqa: F401
     PANDAS_GT_0240,
     PANDAS_GT_0250,
     PANDAS_GT_100,
+    PANDAS_GT_110,
     HAS_INT_NA,
     tm,
 )

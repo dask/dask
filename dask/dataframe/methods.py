@@ -78,7 +78,7 @@ def boundary_slice(
     Columns: []
     Index: []
     """
-    if df.empty:
+    if len(df.index) == 0:
         return df
 
     if kind == "loc" and not df.index.is_monotonic:
@@ -153,7 +153,10 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
-    typ = pd.DataFrame if isinstance(count, pd.Series) else pd.Series
+    if is_series_like(count):
+        typ = type(count.to_frame())
+    else:
+        typ = type(q)
 
     if is_timedelta_col:
         mean = pd.to_timedelta(mean)
@@ -163,14 +166,15 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         q = q.apply(lambda x: pd.to_timedelta(x))
 
     part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+
     q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]
-    if isinstance(q, pd.Series) and typ == pd.DataFrame:
+    if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
 
-    result = pd.concat([part1, q, part3], sort=False)
+    result = concat([part1, q, part3], sort=False)
 
-    if isinstance(result, pd.Series):
+    if is_series_like(result):
         result.name = name
 
     return result
@@ -218,10 +222,10 @@ def describe_nonnumeric_aggregate(stats, name):
 
         first = pd.Timestamp(min_ts, tz=tz)
         last = pd.Timestamp(max_ts, tz=tz)
-        index += ["first", "last"]
-        values += [top, freq, first, last]
+        index.extend(["first", "last"])
+        values.extend([top, freq, first, last])
     else:
-        values += [top, freq]
+        values.extend([top, freq])
 
     return pd.Series(values, index=index, name=name)
 
@@ -277,12 +281,16 @@ def unique(x, series_name=None):
     return out
 
 
-def value_counts_combine(x):
-    return x.groupby(level=0).sum()
+def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
+    # sort and ascending don't actually matter until the agg step
+    return x.groupby(level=0, **groupby_kwargs).sum()
 
 
-def value_counts_aggregate(x):
-    return x.groupby(level=0).sum().sort_values(ascending=False)
+def value_counts_aggregate(x, sort=True, ascending=False, **groupby_kwargs):
+    out = value_counts_combine(x, **groupby_kwargs)
+    if sort:
+        return out.sort_values(ascending=ascending)
+    return out
 
 
 def nbytes(x):
@@ -351,7 +359,13 @@ concat_dispatch = Dispatch("concat")
 
 
 def concat(
-    dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore_index=False
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    ignore_index=False,
+    **kwargs
 ):
     """Concatenate, handling some edge cases:
 
@@ -382,15 +396,22 @@ def concat(
             uniform=uniform,
             filter_warning=filter_warning,
             ignore_index=ignore_index,
+            **kwargs
         )
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(
-    dfs, axis=0, join="outer", uniform=False, filter_warning=True, ignore_index=False
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    ignore_index=False,
+    **kwargs
 ):
     if axis == 1:
-        return pd.concat(dfs, axis=axis, join=join, sort=False)
+        return pd.concat(dfs, axis=axis, join=join, **kwargs)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
@@ -461,7 +482,7 @@ def concat_pandas(
                 cat_mask = pd.concat(
                     [(df.dtypes == "category").to_frame().T for df in dfs3],
                     join=join,
-                    sort=False,
+                    **kwargs
                 ).any()
 
         if cat_mask.any():
@@ -470,7 +491,7 @@ def concat_pandas(
             out = pd.concat(
                 [df[df.columns.intersection(not_cat)] for df in dfs3],
                 join=join,
-                sort=False,
+                **kwargs
             )
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
@@ -511,7 +532,8 @@ def concat_pandas(
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter("ignore", FutureWarning)
-            out = pd.concat(dfs2, join=join, sort=False)
+
+            out = pd.concat(dfs2, join=join, **kwargs)
     # Re-add the index if needed
     if ind is not None:
         out.index = ind

@@ -29,8 +29,10 @@ from dask.array.numpy_compat import _numpy_117, _numpy_118
 @pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
 @pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
+@pytest.mark.parametrize("name", [None, "my-name"])
+@pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
+def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
     shape = cast_shape(shape)
@@ -48,17 +50,27 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
     if "like" in funcname:
         a = np.random.randint(0, 10, shape).astype(dtype)
 
-        np_r = np_func(a)
-        da_r = da_func(a, chunks=chunks)
+        np_r = np_func(a, order=order)
+        da_r = da_func(a, order=order, chunks=chunks, name=name)
     else:
-        np_r = np_func(shape, dtype=dtype)
-        da_r = da_func(shape, dtype=dtype, chunks=chunks)
+        np_r = np_func(shape, order=order, dtype=dtype)
+        da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
 
     assert np_r.shape == da_r.shape
     assert np_r.dtype == da_r.dtype
 
     if "empty" not in funcname:
         assert (np_r == np.asarray(da_r)).all()
+
+    if name is None:
+        assert funcname.split("_")[0] in da_r.name
+    else:
+        assert da_r.name == name
+
+    if "order" == "F":
+        assert np.isfortran(da_r.compute())
+    else:
+        assert not np.isfortran(da_r.compute())
 
 
 @pytest.mark.skipif(
@@ -775,12 +787,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
             ),
         ),
         "maximum",
-        pytest.param(
-            "mean",
-            marks=pytest.mark.skip(
-                reason="Bug dask changes the dtype to float: https://github.com/dask/dask/issues/5303"
-            ),
-        ),
+        "mean",
         "minimum",
         pytest.param(
             "reflect",
@@ -821,8 +828,9 @@ def test_pad_3d_data(dtype, pad_widths, mode):
 
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
 def test_pad_udf(kwargs):
-    def udf_pad(vector, pad_width, iaxis, kwargs):
-        scaler = kwargs.get("scaler", 1)
+    def udf_pad(vector, pad_width, iaxis, inner_kwargs):
+        assert kwargs == inner_kwargs
+        scaler = inner_kwargs.get("scaler", 1)
         vector[: pad_width[0]] = -scaler * pad_width[0]
         vector[-pad_width[1] :] = scaler * pad_width[1]
         return vector
@@ -834,8 +842,8 @@ def test_pad_udf(kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
 
-    np_r = np.pad(np_a, pad_width, udf_pad, kwargs=kwargs)
-    da_r = da.pad(da_a, pad_width, udf_pad, kwargs=kwargs)
+    np_r = np.pad(np_a, pad_width, udf_pad, **kwargs)
+    da_r = da.pad(da_a, pad_width, udf_pad, **kwargs)
 
     assert_eq(np_r, da_r)
 

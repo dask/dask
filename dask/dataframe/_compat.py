@@ -9,6 +9,8 @@ PANDAS_VERSION = LooseVersion(pd.__version__)
 PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0")
 PANDAS_GT_0250 = PANDAS_VERSION >= LooseVersion("0.25.0")
 PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
+PANDAS_GT_104 = PANDAS_VERSION >= LooseVersion("1.0.4")
+PANDAS_GT_110 = PANDAS_VERSION >= LooseVersion("1.1.0")
 HAS_INT_NA = PANDAS_GT_0240
 
 

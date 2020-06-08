@@ -362,6 +362,43 @@ def test_stack_rechunk():
     assert_eq(z, np.stack([x.compute(), y.compute()], axis=0))
 
 
+def test_stack_unknown_chunksizes():
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    a_df = pd.DataFrame({"x": np.arange(12)})
+    b_df = pd.DataFrame({"y": np.arange(12) * 10})
+
+    a_ddf = dd.from_pandas(a_df, sort=False, npartitions=3)
+    b_ddf = dd.from_pandas(b_df, sort=False, npartitions=3)
+
+    a_x = a_ddf.values
+    b_x = b_ddf.values
+
+    assert np.isnan(a_x.shape[0])
+    assert np.isnan(b_x.shape[0])
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([a_x, b_x], axis=0)
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([a_x, b_x], axis=0, allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=0))
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([a_x, b_x], axis=1)
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([a_x, b_x], axis=1, allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=1))
+
+
 def test_concatenate():
     a, b, c = [
         Array(
@@ -2277,8 +2314,7 @@ def test_from_array_tasks_always_call_getter(x, chunks):
 
 
 def test_from_array_ndarray_onechunk():
-    """ndarray with a single chunk produces a minimal single key dict
-    """
+    """ndarray with a single chunk produces a minimal single key dict"""
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
@@ -2297,8 +2333,7 @@ def test_from_array_ndarray_getitem():
 
 @pytest.mark.parametrize("x", [[1, 2], (1, 2), memoryview(b"abc")])
 def test_from_array_list(x):
-    """Lists, tuples, and memoryviews are automatically converted to ndarray
-    """
+    """Lists, tuples, and memoryviews are automatically converted to ndarray"""
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
     assert isinstance(dx.dask[dx.name, 0], np.ndarray)
@@ -2311,8 +2346,7 @@ def test_from_array_list(x):
 
 @pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
 def test_from_array_scalar(type_):
-    """Python and numpy scalars are automatically converted to ndarray
-    """
+    """Python and numpy scalars are automatically converted to ndarray"""
     if type_ == np.datetime64:
         x = np.datetime64("2000-01-01")
     else:
@@ -3584,8 +3618,10 @@ def test_stack_errs():
     with pytest.raises(ValueError) as e:
         da.stack([da.zeros((2,), chunks=2)] * 10 + [da.zeros((3,), chunks=3)] * 10)
 
-    assert "shape" in str(e.value).lower()
-    assert "(2,)" in str(e.value)
+    assert (
+        str(e.value)
+        == "Stacked arrays must have the same shape. The first array had shape (2,), while array 11 has shape (3,)."
+    )
     assert len(str(e.value)) < 105
 
 

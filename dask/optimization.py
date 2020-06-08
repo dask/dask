@@ -1,6 +1,7 @@
 import math
 import numbers
 import re
+from enum import Enum
 
 from . import config, core
 from .core import (
@@ -38,27 +39,24 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    out_keys = []
+
     seen = set()
     dependencies = dict()
-
+    out = {}
     work = list(set(flatten(keys)))
+
     while work:
         new_work = []
-        out_keys += work
-        deps = [
-            (k, get_dependencies(dsk, k, as_list=True))  # fuse needs lists
-            for k in work
-        ]
-        dependencies.update(deps)
-        for _, deplist in deps:
-            for d in deplist:
+        for k in work:
+            dependencies_k = get_dependencies(dsk, k, as_list=True)  # fuse needs lists
+            out[k] = dsk[k]
+            dependencies[k] = dependencies_k
+            for d in dependencies_k:
                 if d not in seen:
                     seen.add(d)
                     new_work.append(d)
-        work = new_work
 
-    out = {k: dsk[k] for k in out_keys}
+        work = new_work
 
     return out, dependencies
 
@@ -369,9 +367,9 @@ def functions_of(task):
             if type(task) in sequence_types:
                 if istask(task):
                     funcs.add(unwrap_partial(task[0]))
-                    new_work += task[1:]
+                    new_work.extend(task[1:])
                 else:
-                    new_work += task
+                    new_work.extend(task)
         work = new_work
 
     return funcs
@@ -414,16 +412,28 @@ def default_fused_keys_renamer(keys, max_fused_key_length=120):
         return (_enforce_max_key_limit(concatenated_name),) + first_key[1:]
 
 
+# PEP-484 compliant singleton constant
+# https://www.python.org/dev/peps/pep-0484/#support-for-singleton-types-in-unions
+class Default(Enum):
+    token = 0
+
+    def __repr__(self) -> str:
+        return "<default>"
+
+
+_default = Default.token
+
+
 def fuse(
     dsk,
     keys=None,
     dependencies=None,
-    ave_width=None,
-    max_width=None,
-    max_height=None,
-    max_depth_new_edges=None,
-    rename_keys=None,
-    fuse_subgraphs=None,
+    ave_width=_default,
+    max_width=_default,
+    max_height=_default,
+    max_depth_new_edges=_default,
+    rename_keys=_default,
+    fuse_subgraphs=_default,
 ):
     """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
@@ -449,29 +459,41 @@ def fuse(
         This optional input often comes from ``cull``
     ave_width: float (default 1)
         Upper limit for ``width = num_nodes / height``, a good measure of
-        parallelizability
-    max_width: int
-        Don't fuse if total width is greater than this
-    max_height: int
-        Don't fuse more than this many levels
-    max_depth_new_edges: int
-        Don't fuse if new dependencies are added after this many levels
-    rename_keys: bool or func, optional
+        parallelizability.
+        dask.config key: ``optimization.fuse.ave-width``
+    max_width: int (default infinite)
+        Don't fuse if total width is greater than this.
+        dask.config key: ``optimization.fuse.max-width``
+    max_height: int or None (default None)
+        Don't fuse more than this many levels. Set to None to dynamically
+        adjust to ``1.5 + ave_width * log(ave_width + 1)``.
+        dask.config key: ``optimization.fuse.max-height``
+    max_depth_new_edges: int or None (default None)
+        Don't fuse if new dependencies are added after this many levels.
+        Set to None to dynamically adjust to ave_width * 1.5.
+        dask.config key: ``optimization.fuse.max-depth-new-edges``
+    rename_keys: bool or func, optional (default True)
         Whether to rename the fused keys with ``default_fused_keys_renamer``
         or not.  Renaming fused keys can keep the graph more understandable
         and comprehensive, but it comes at the cost of additional processing.
         If False, then the top-most key will be used.  For advanced usage, a
         function to create the new name is also accepted.
-    fuse_subgraphs : bool, optional
+        dask.config key: ``optimization.fuse.rename-keys``
+    fuse_subgraphs : bool or None, optional (default None)
         Whether to fuse multiple tasks into ``SubgraphCallable`` objects.
+        Set to None to let the default optimizer of individual dask collections decide.
+        If no collection-specific default exists, None defaults to False.
+        dask.config key: ``optimization.fuse.subgraphs``
 
     Returns
     -------
-    dsk: output graph with keys fused
-    dependencies: dict mapping dependencies after fusion.  Useful side effect
-        to accelerate other downstream optimizations.
+    dsk
+        output graph with keys fused
+    dependencies
+        dict mapping dependencies after fusion.  Useful side effect to accelerate other
+        downstream optimizations.
     """
-    if not config.get("optimization.fuse.active", True):
+    if not config.get("optimization.fuse.active"):
         return dsk, dependencies
 
     if keys is not None and not isinstance(keys, set):
@@ -479,32 +501,41 @@ def fuse(
             keys = [keys]
         keys = set(flatten(keys))
 
-    # Assign reasonable, not too restrictive defaults
-    if ave_width is None:
-        ave_width = config.get("optimization.fuse.ave-width", 1)
-    if max_height is None:
-        max_height = config.get("optimization.fuse.max-height", None) or len(dsk)
-    max_depth_new_edges = (
-        max_depth_new_edges
-        or config.get("optimization.fuse.max-depth-new-edges", None)
-        or ave_width * 1.5
-    )
-    max_width = (
-        max_width
-        or config.get("optimization.fuse.max-width", None)
-        or 1.5 + ave_width * math.log(ave_width + 1)
-    )
-    fuse_subgraphs = fuse_subgraphs or config.get("optimization.fuse.subgraphs", False)
+    # Read defaults from dask.yaml and/or user-defined config file
+    if ave_width is _default:
+        ave_width = config.get("optimization.fuse.ave-width")
+        assert ave_width is not _default
+    if max_height is _default:
+        max_height = config.get("optimization.fuse.max-height")
+        assert max_height is not _default
+    if max_depth_new_edges is _default:
+        max_depth_new_edges = config.get("optimization.fuse.max-depth-new-edges")
+        assert max_depth_new_edges is not _default
+    if max_depth_new_edges is None:
+        max_depth_new_edges = ave_width * 1.5
+    if max_width is _default:
+        max_width = config.get("optimization.fuse.max-width")
+        assert max_width is not _default
+    if max_width is None:
+        max_width = 1.5 + ave_width * math.log(ave_width + 1)
+    if fuse_subgraphs is _default:
+        fuse_subgraphs = config.get("optimization.fuse.subgraphs")
+        assert fuse_subgraphs is not _default
+    if fuse_subgraphs is None:
+        fuse_subgraphs = False
 
     if not ave_width or not max_height:
         return dsk, dependencies
 
-    if rename_keys is None:
-        rename_keys = config.get("optimization.fuse.rename-keys", True)
+    if rename_keys is _default:
+        rename_keys = config.get("optimization.fuse.rename-keys")
+        assert rename_keys is not _default
     if rename_keys is True:
         key_renamer = default_fused_keys_renamer
     elif rename_keys is False:
         key_renamer = None
+    elif not callable(rename_keys):
+        raise TypeError("rename_keys must be a boolean or callable")
     else:
         key_renamer = rename_keys
     rename_keys = key_renamer is not None
@@ -805,7 +836,7 @@ def fuse(
     if fuse_subgraphs:
         _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
 
-    if rename_keys:
+    if key_renamer:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
             if alias is not None and alias not in rv:

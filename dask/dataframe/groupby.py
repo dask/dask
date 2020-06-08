@@ -700,8 +700,10 @@ def _build_agg_args(spec):
         impls = _build_agg_args_single(result_column, func, input_column)
 
         # overwrite existing result-columns, generate intermediates only once
-        chunks.update((spec[0], spec) for spec in impls["chunk_funcs"])
-        aggs.update((spec[0], spec) for spec in impls["aggregate_funcs"])
+        for spec in impls["chunk_funcs"]:
+            chunks[spec[0]] = spec
+        for spec in impls["aggregate_funcs"]:
+            aggs[spec[0]] = spec
 
         finalizers.append(impls["finalizer"])
 
@@ -895,8 +897,15 @@ def _groupby_apply_funcs(df, *index, **kwargs):
 
 
 def _compute_sum_of_squares(grouped, column):
-    base = grouped[column] if column is not None else grouped
-    return base.apply(lambda x: (x ** 2).sum())
+    # Note: CuDF cannot use `groupby.apply`.
+    # Need to unpack groupby to compute sum of squares
+    if hasattr(grouped, "grouper"):
+        keys = grouped.grouper
+    else:
+        # Handle CuDF groupby object (different from pandas)
+        keys = grouped.grouping.keys
+    df = grouped.obj[column].pow(2) if column else grouped.obj.pow(2)
+    return df.groupby(keys).sum()
 
 
 def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False):
@@ -1781,6 +1790,7 @@ class SeriesGroupBy(_GroupBy):
 
         super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
         levels = _determine_levels(self.index)

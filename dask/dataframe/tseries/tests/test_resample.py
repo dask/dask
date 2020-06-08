@@ -46,6 +46,18 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
     assert expected.index[-1] == divisions[-1]
 
 
+@pytest.mark.parametrize("method", ["count", "nunique", "size", "sum"])
+def test_resample_has_correct_fill_value(method):
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="h"))
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
+
+    assert_eq(
+        getattr(ds.resample("30min"), method)(), getattr(ps.resample("30min"), method)()
+    )
+
+
 def test_resample_agg():
     index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
     ps = pd.Series(range(len(index)), index=index)
@@ -70,12 +82,78 @@ def test_resample_agg_passes_kwargs():
     assert (ds.resample("2h").agg(foo, bar=2) == 2).compute().all()
 
 
-def test_series_resample_not_implemented():
-    index = pd.date_range(start="2012-01-02", periods=100, freq="T")
+def test_resample_throws_error_when_parition_index_does_not_match_index():
+    index = pd.date_range("1-1-2000", "2-15-2000", freq="D")
+    index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="D"))
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=5)
+    with pytest.raises(ValueError, match="Index is not contained within new index."):
+        ds.resample("2M").count().compute()
+
+
+def test_resample_pads_last_division_to_avoid_off_by_one():
+    # https://github.com/dask/dask/issues/6230
+    times = [
+        1545362463409128000,
+        1545362504369352000,
+        1545362545326966000,
+        1545363118769636000,
+        1545363159726490000,
+        1545363200687178000,
+        1545363241648824000,
+        1573318190393973000,
+        1573318231353350000,
+        1573318272313774000,
+        1573318313275299000,
+        1573318354233962000,
+        1573318395195456000,
+        1573318436154609000,
+        1580687544437145000,
+        1580687585394881000,
+        1580687667316809000,
+        1580687708275414000,
+        1580687790195742000,
+        1580687831154951000,
+        1580687872115363000,
+        1580687954035133000,
+        1559127673402811000,
+    ]
+
+    df = pd.DataFrame({"Time": times, "Counts": range(len(times))})
+    df["Time"] = pd.to_datetime(df["Time"], utc=True)
+    expected = df.set_index("Time").resample("1Q").size()
+
+    ddf = dd.from_pandas(df, npartitions=2).set_index("Time")
+    actual = ddf.resample("1Q").size().compute()
+    assert_eq(actual, expected)
+
+
+def test_resample_does_not_evenly_divide_day():
+    import numpy as np
+
+    index = pd.date_range("2012-01-02", "2012-02-02", freq="H")
+    index = index.union(pd.date_range("2012-03-02", "2012-04-02", freq="H"))
+    df = pd.DataFrame({"p": np.random.random(len(index))}, index=index)
+    ddf = dd.from_pandas(df, npartitions=5)
+    # Frequency doesn't evenly divide day
+    expected = df.resample("2D").count()
+    result = ddf.resample("2D").count().compute()
+
+    assert_eq(result, expected)
+
+
+def test_series_resample_does_not_evenly_divide_day():
+    index = pd.date_range("2012-01-02 00:00:00", "2012-01-02 01:00:00", freq="T")
+    index = index.union(
+        pd.date_range("2012-01-02 06:00:00", "2012-01-02 08:00:00", freq="T")
+    )
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
-    pytest.raises(NotImplementedError, lambda: resample(ds, "57T"))
+    expected = s.resample("57T").mean()
+    result = ds.resample("57T").mean().compute()
+
+    assert_eq(result, expected)
 
 
 def test_unknown_divisions_error():

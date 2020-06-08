@@ -17,6 +17,7 @@ from weakref import WeakValueDictionary
 from functools import lru_cache
 
 from .core import get_deps
+
 from .optimization import key_split  # noqa: F401
 
 
