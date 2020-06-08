@@ -21,12 +21,11 @@ from ...base import tokenize
 
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
-from ..core import new_dd_object, DataFrame
+from ..core import new_dd_object
 from ...core import flatten
 from ...delayed import delayed
-from ...utils import asciitable, parse_bytes, ensure_dict
+from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from .io import from_delayed
 
 import fsspec.implementations.local
 from fsspec.compression import compr
