@@ -170,6 +170,4 @@ def full_like(a, fill_value, *args, **kwargs):
 
 
 full.__doc__ = _full.__doc__
-full.__name__ = _full.__name__
 full_like.__doc__ = _full_like.__doc__
-full_like.__name__ = _full_like.__name__
