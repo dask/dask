@@ -28,29 +28,28 @@ def _resample_series(
     how_args,
     how_kwargs,
 ):
-    out = getattr(series.resample(rule, **resample_kwargs), how)(
-        *how_args, **how_kwargs
-    )
+
     if PANDAS_GT_0240:
         new_index = pd.date_range(
             start.tz_localize(None),
             end.tz_localize(None),
             freq=rule,
             closed=reindex_closed,
-            name=out.index.name,
+            name=series.index.name,
         ).tz_localize(start.tz, nonexistent="shift_forward")
 
     else:
         new_index = pd.date_range(
-            start, end, freq=rule, closed=reindex_closed, name=out.index.name
+            start, end, freq=rule, closed=reindex_closed, name=series.index.name
         )
 
-    if not out.index.isin(new_index).all():
-        raise ValueError(
-            "Index is not contained within new index. This can often be "
-            "resolved by using larger partitions, or unambiguous "
-            "frequencies: 'Q', 'A'..."
-        )
+    label = resample_kwargs.get("label") or "right"
+
+    # add bin to left of start
+    bins = new_index.insert(0, new_index[0] - pd.tseries.frequencies.to_offset(rule))
+    intervals = pd.cut(series.index, bins)
+    out = getattr(series.groupby(intervals), how)(*how_args, **how_kwargs)
+    out.index = out.index.map(lambda x: getattr(x, label)).categories
 
     return out.reindex(new_index, fill_value=fill_value)
 
