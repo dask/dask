@@ -15,10 +15,12 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
+from dask.core import flatten
 from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
     pandas_read_text,
     auto_blocksize,
+    block_mask,
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
@@ -187,9 +189,9 @@ def test_text_blocks_to_pandas_simple(reader, files):
     values = text_blocks_to_pandas(
         reader, blocks, header, head, kwargs, collection=False
     )
-    assert isinstance(values, list)
-    assert len(values) == 3
-    assert all(hasattr(item, "dask") for item in values)
+    assert isinstance(values, dd.DataFrame)
+    assert hasattr(values, "dask")
+    assert len(values.dask) == 3
 
     assert_eq(df.amount.sum(), 100 + 200 + 300 + 400 + 500 + 600)
 
@@ -288,7 +290,7 @@ def test_enforce_dtypes(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b"\n")[0] + b"\n"
     dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, collection=False)
-    dfs = dask.compute(*dfs, scheduler="sync")
+    dfs = dask.compute(dfs, scheduler="sync")
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
 
@@ -454,7 +456,7 @@ def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
         assert has_known_categories(df.path)
 
         dfs = dd_read("2014-01-*.csv", include_path_column=True, collection=False)
-        result = dfs[0].compute()
+        result = dfs.compute()
         assert result.path.dtype == "category"
         assert has_known_categories(result.path)
 
@@ -1552,3 +1554,17 @@ def test_to_csv_line_ending():
         with open(filename, "rb") as f:
             raw = f.read()
     assert raw in expected
+
+
+@pytest.mark.parametrize(
+    "block_lists",
+    [
+        [[1, 2], [3], [4, 5, 6]],
+        [],
+        [[], [], [1], [], [1]],
+        [list(range(i)) for i in range(10)],
+    ],
+)
+def test_block_mask(block_lists):
+    mask = list(block_mask(block_lists))
+    assert len(mask) == len(list(flatten(block_lists)))

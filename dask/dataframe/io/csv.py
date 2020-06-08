@@ -33,6 +33,9 @@ from fsspec.compression import compr
 
 
 class CSVSubgraph(Mapping):
+    """
+    Subgraph for reading CSV files.
+    """
     def __init__(
         self,
         name,
@@ -53,7 +56,7 @@ class CSVSubgraph(Mapping):
         self.blocks = blocks
         self.is_first = is_first
         self.head = head if collection else None  # example pandas DF for metadata
-        self.header = header #prepend to all blocks
+        self.header = header  # prepend to all blocks
         self.kwargs = kwargs
         self.dtypes = dtypes
         self.columns = columns
@@ -87,17 +90,18 @@ class CSVSubgraph(Mapping):
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        return (pandas_read_text,
-                        self.reader,
-                        block,
-                        self.header,
-                        rest_kwargs,
-                        self.dtypes,
-                        self.columns,
-                        write_header,
-                        self.enforce,
-                        path_info,
-            )
+        return (
+            pandas_read_text,
+            self.reader,
+            block,
+            self.header,
+            rest_kwargs,
+            self.dtypes,
+            self.columns,
+            write_header,
+            self.enforce,
+            path_info,
+        )
 
     def __len__(self):
         return len(self.blocks)
@@ -264,7 +268,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
 ):
-    """ Convert blocks of bytes to a dask.dataframe or other high-level object
+    """ Convert blocks of bytes to a dask.dataframe
 
     This accepts a list of lists of values of bytes where each list corresponds
     to one file, and the value of bytes concatenate to comprise the entire
@@ -290,7 +294,7 @@ def text_blocks_to_pandas(
 
     Returns
     -------
-    A dask.dataframe or list of delayed values
+    A dask.dataframe
     """
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues
@@ -325,16 +329,13 @@ def text_blocks_to_pandas(
 
     blocks = tuple(flatten(block_lists))
     # Create mask of first blocks from nested block_lists
-    for sublist in block_lists:
-        sublist[0] = True
-        if len(sublist) > 1:
-            sublist[1:] = [False,] * len(sublist[1:])
-    is_first = tuple(flatten(block_lists))
+    is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize( reader, columns )
+    name = "read-csv-" + tokenize(reader, columns, enforce)
 
     if collection:
         if path:
+            colname, paths = path
             head = head.assign(
                 **{
                     colname: pd.Categorical.from_codes(
@@ -361,6 +362,14 @@ def text_blocks_to_pandas(
     )
 
     return new_dd_object(subgraph, name, head, (None,) * (len(blocks) + 1))
+
+
+def block_mask(block_lists):
+    for block in block_lists:
+        if not block:
+            continue
+        yield True
+        yield from (False for _ in block[1:])
 
 
 def auto_blocksize(total_memory, cpu_count):
