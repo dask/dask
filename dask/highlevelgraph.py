@@ -143,7 +143,7 @@ class HighLevelGraph(Mapping):
         ...     return new_collection(name, graph)
         """
         if len(dependencies) == 1:
-            return cls.from_collection(name, layer, dependencies[0])
+            return cls._from_collection(name, layer, dependencies[0])
         layers = {name: layer}
         deps = {}
         deps[name] = set()
