@@ -47,11 +47,17 @@ def _resample_series(
 
     # add bin to left of start
     bins = new_index.insert(0, new_index[0] - pd.tseries.frequencies.to_offset(rule))
-    intervals = pd.cut(series.index, bins)
-    out = getattr(series.groupby(intervals), how)(*how_args, **how_kwargs)
-    out.index = out.index.map(lambda x: getattr(x, label)).categories
 
-    return out.reindex(new_index, fill_value=fill_value)
+    # divide index into the bins
+    intervals = pd.cut(series.index, bins)
+
+    # group the series by the binned index and aggregate
+    out = getattr(series.groupby(intervals), how)(*how_args, **how_kwargs)
+
+    # use edge of interval index as index value
+    out.index = getattr(out.index.categories, label)
+
+    return out
 
 
 def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
