@@ -443,12 +443,6 @@ Dask Name: {name}, {task} tasks"""
 
     @index.setter
     def index(self, value):
-        warnings.warn(
-            "Assigning values to index is deprecated since dask 2.18.0 "
-            "and will be an error in a future release. To silence this warning, "
-            "use the syntax set_index(value) instead.",
-            FutureWarning,
-        )
         self.divisions = value.divisions
         result = map_partitions(
             methods.assign_index, self, value, enforce_metadata=False
@@ -3021,7 +3015,7 @@ Dask Name: {name}, {task} tasks""".format(
         else:
             meta = make_meta(meta, index=getattr(make_meta(self), "index", None))
 
-        return Series(graph, name, meta, self.divisions)
+        return self.__class__(graph, name, meta, self.divisions)
 
     @derived_from(pd.Series)
     def dropna(self):
@@ -3393,9 +3387,14 @@ class Index(Series):
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
         """
-        Note that the index and divisions are assumed to remain unchanged.
+        Note that this method clears any known divisions.
+
         """
-        return super().map(arg, na_action=na_action, meta=meta)
+        return (
+            super(Index, self)
+            .map(arg, na_action=na_action, meta=meta)
+            .clear_divisions()
+        )
 
 
 class DataFrame(_Frame):
