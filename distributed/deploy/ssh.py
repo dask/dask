@@ -262,10 +262,10 @@ def SSHCluster(
         List of hostnames or addresses on which to launch our cluster.
         The first will be used for the scheduler and the rest for workers.
     connect_options: dict or list of dict, optional
-        Keywords to pass through to ``asyncssh.connect``.
+        Keywords to pass through to :func:asyncssh.connect`.
         This could include things such as ``port``, ``username``, ``password``
-        or ``known_hosts``. See docs for ``asyncssh.connect`` and
-        ``asyncssh.SSHClientConnectionOptions`` for full information.
+        or ``known_hosts``. See docs for :func:`asyncssh.connect` and
+        :class:`asyncssh.SSHClientConnectionOptions` for full information.
         If a list it must have the same length as ``hosts``.
     worker_options: dict, optional
         Keywords to pass on to workers.
