@@ -318,6 +318,10 @@ intersphinx_mapping = {
         "https://docs.scipy.org/doc/numpy/",
         "https://docs.scipy.org/doc/numpy/objects.inv",
     ),
+    "asyncssh": (
+        "https://asyncssh.readthedocs.io/en/latest/",
+        "https://asyncssh.readthedocs.io/en/latest/objects.inv",
+    )
 }
 
 # Redirects
