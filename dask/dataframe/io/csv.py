@@ -35,6 +35,7 @@ class CSVSubgraph(Mapping):
     """
     Subgraph for reading CSV files.
     """
+
     def __init__(
         self,
         name,
