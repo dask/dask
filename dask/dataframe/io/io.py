@@ -13,15 +13,15 @@ from ...delayed import delayed
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
 from ..shuffle import set_partition
-from ..utils import insert_meta_param_description, check_meta, make_meta
+from ..utils import insert_meta_param_description, check_meta, make_meta, is_series_like
 
 from ...utils import M, ensure_dict
 
 lock = Lock()
 
 
-def _meta_from_array(x, columns=None, index=None):
-    """ Create empty pd.DataFrame or pd.Series which has correct dtype """
+def _meta_from_array(x, columns=None, index=None, meta=None):
+    """ Create empty DataFrame or Series which has correct dtype """
 
     if x.ndim > 2:
         raise ValueError(
@@ -33,6 +33,9 @@ def _meta_from_array(x, columns=None, index=None):
         if not isinstance(index, Index):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
         index = index._meta
+
+    if meta is None:
+        meta = pd.DataFrame()
 
     if getattr(x.dtype, "names", None) is not None:
         # record array has named columns
@@ -47,9 +50,11 @@ def _meta_from_array(x, columns=None, index=None):
         dtypes = [fields[n][0] if n in fields else "f8" for n in columns]
     elif x.ndim == 1:
         if np.isscalar(columns) or columns is None:
-            return pd.Series([], name=columns, dtype=x.dtype, index=index)
+            return meta._constructor_sliced(
+                [], name=columns, dtype=x.dtype, index=index
+            )
         elif len(columns) == 1:
-            return pd.DataFrame(
+            return meta._constructor(
                 np.array([], dtype=x.dtype), columns=columns, index=index
             )
         raise ValueError(
@@ -69,11 +74,11 @@ def _meta_from_array(x, columns=None, index=None):
         dtypes = [x.dtype] * len(columns)
 
     data = {c: np.array([], dtype=dt) for (c, dt) in zip(columns, dtypes)}
-    return pd.DataFrame(data, columns=columns, index=index)
+    return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array(x, chunksize=50000, columns=None):
-    """ Read any slicable array into a Dask Dataframe
+def from_array(x, chunksize=50000, columns=None, meta=None):
+    """ Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
@@ -88,11 +93,27 @@ def from_array(x, chunksize=50000, columns=None):
 
         x.dtype == [('name', 'O'), ('balance', 'i8')]
 
+    Parameters
+    ----------
+    x : array_like
+    chunksize : int, optional
+        The number of rows per partition to use.
+    columns : list or string, optional
+        list of column names if DataFrame, single string if Series
+    meta : object, optional
+        An optional `meta` parameter can be passed for dask
+        to specify the concrete dataframe type to use for partitions of
+        the Dask dataframe. By default, pandas DataFrame is used.
+
+    Returns
+    -------
+    dask.DataFrame or dask.Series
+        A dask DataFrame/Series
     """
     if isinstance(x, da.Array):
-        return from_dask_array(x, columns=columns)
+        return from_dask_array(x, columns=columns, meta=meta)
 
-    meta = _meta_from_array(x, columns)
+    meta = _meta_from_array(x, columns, meta=meta)
 
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
@@ -102,10 +123,10 @@ def from_array(x, chunksize=50000, columns=None):
     dsk = {}
     for i in range(0, int(ceil(len(x) / chunksize))):
         data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if isinstance(meta, pd.Series):
-            dsk[name, i] = (pd.Series, data, None, meta.dtype, meta.name)
+        if is_series_like(meta):
+            dsk[name, i] = (type(meta), data, None, meta.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, data, None, meta.columns)
+            dsk[name, i] = (type(meta), data, None, meta.columns)
     return new_dd_object(dsk, name, meta, divisions)
 
 
@@ -372,7 +393,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
-def from_dask_array(x, columns=None, index=None):
+def from_dask_array(x, columns=None, index=None, meta=None):
     """ Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
@@ -388,11 +409,15 @@ def from_dask_array(x, columns=None, index=None):
         The default output index depends on whether `x` has any unknown
         chunks. If there are any unknown chunks, the output has ``None``
         for all the divisions (one per chunk). If all the chunks are known,
-        a default index with known divsions is created.
+        a default index with known divisions is created.
 
         Specifying `index` can be useful if you're conforming a Dask Array
         to an existing dask Series or DataFrame, and you would like the
         indices to match.
+    meta : object, optional
+        An optional `meta` parameter can be passed for dask
+        to specify the concrete dataframe type to be returned.
+        By default, pandas DataFrame is used.
 
     Examples
     --------
@@ -413,7 +438,7 @@ def from_dask_array(x, columns=None, index=None):
     dask.dataframe._Frame.values: Reverse conversion
     dask.dataframe._Frame.to_records: Reverse conversion
     """
-    meta = _meta_from_array(x, columns, index)
+    meta = _meta_from_array(x, columns, index, meta=meta)
 
     if x.ndim == 2 and len(x.chunks[1]) > 1:
         x = x.rechunk({1: x.shape[1]})
@@ -450,10 +475,10 @@ def from_dask_array(x, columns=None, index=None):
     for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
         if x.ndim == 2:
             chunk = chunk[0]
-        if isinstance(meta, pd.Series):
-            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, meta.name)
+        if is_series_like(meta):
+            dsk[name, i] = (type(meta), chunk, ind, x.dtype, meta.name)
         else:
-            dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
+            dsk[name, i] = (type(meta), chunk, ind, meta.columns)
 
     to_merge.extend([ensure_dict(x.dask), dsk])
     return new_dd_object(merge(*to_merge), name, meta, divisions)
