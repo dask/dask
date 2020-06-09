@@ -14,6 +14,7 @@ from distributed.protocol import (
 )
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
 from distributed.protocol.numpy import itemsize
+from distributed.protocol.pickle import HIGHEST_PROTOCOL
 from distributed.protocol.compression import maybe_compress
 from distributed.system import MEMORY_LIMIT
 from distributed.utils import tmpfile, nbytes
@@ -57,6 +58,7 @@ def test_serialize():
         np.array(["abc"], dtype="S3"),
         np.array(["abc"], dtype="U3"),
         np.array(["abc"], dtype=object),
+        np.array([np.arange(3), np.arange(4, 6)], dtype=object),
         np.ones(shape=(5,), dtype=("f8", 32)),
         np.ones(shape=(5,), dtype=[("x", "f8", 32)]),
         np.ones(shape=(5,), dtype=np.dtype([("a", "i1"), ("b", "f8")], align=False)),
@@ -79,11 +81,23 @@ def test_dumps_serialize_numpy(x):
         frames = decompress(header, frames)
     for frame in frames:
         assert isinstance(frame, (bytes, memoryview))
+    if x.dtype.char == "O" and any(isinstance(e, np.ndarray) for e in x.flat):
+        if HIGHEST_PROTOCOL >= 5:
+            assert len(frames) > 1
+        else:
+            assert len(frames) == 1
     y = deserialize(header, frames)
 
-    np.testing.assert_equal(x, y)
+    assert x.shape == y.shape
+    assert x.dtype == y.dtype
     if x.flags.c_contiguous or x.flags.f_contiguous:
         assert x.strides == y.strides
+
+    if x.dtype.char == "O":
+        for e_x, e_y in zip(x.flat, y.flat):
+            np.testing.assert_equal(e_x, e_y)
+    else:
+        np.testing.assert_equal(x, y)
 
 
 @pytest.mark.parametrize(
