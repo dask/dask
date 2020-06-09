@@ -31,7 +31,18 @@ class ParquetSubgraph(Mapping):
     """
     Subgraph for reading Parquet files.
 
-    Enables optimizations (see optimize_read_parquet_getitem).
+    Parameters
+    ----------
+    name : str
+    optimized_parts : Set[int]
+        The part numbers that have been optimized away, say because of
+        optimize_read_parquet_predicate_pushdown. For these parts we
+        simply return ``self.meta`` and avoid reading any data.
+
+    See Also
+    ========
+    dask.dataframe.optimize.optimize_read_parquet_getitem
+    dask.dataframe.optimize.optimize_read_parquet_predicate_pushdown
     """
 
     def __init__(
@@ -51,6 +62,7 @@ class ParquetSubgraph(Mapping):
         categories,
         gather_statistics,
         split_row_groups,
+        optimized_parts,
     ):
         self.name = name
         self.engine = engine
@@ -67,6 +79,7 @@ class ParquetSubgraph(Mapping):
         self.categories = categories
         self.gather_statistics = gather_statistics
         self.split_row_groups = split_row_groups
+        self.optimized_parts = optimized_parts
 
     def __repr__(self):
         return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
@@ -85,6 +98,9 @@ class ParquetSubgraph(Mapping):
 
         if i < 0 or i >= len(self.parts):
             raise KeyError(key)
+
+        if i in self.optimized_parts:
+            return self.meta
 
         part = self.parts[i]
         if not isinstance(part, list):
@@ -289,6 +305,7 @@ def read_parquet(
         categories,
         gather_statistics,
         split_row_groups,
+        {},
     )
 
     # Set the index that was previously treated as a column
@@ -687,7 +704,6 @@ def process_statistics(parts, statistics, filters, index, chunksize):
     Used in read_parquet.
     """
     index_in_columns = False
-    # breakpoint()
     if statistics:
         result = list(
             zip(

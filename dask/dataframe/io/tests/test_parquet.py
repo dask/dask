@@ -2180,13 +2180,29 @@ def test_optimize_pushdown_filter(tmpdir, engine):
     ddf = dd.read_parquet(fn, engine=engine, name="df-")
     result = ddf[ddf["A"] == 1]
     dsk, = dask.optimize(result)
-    breakpoint()
     result.compute()
 
 
 def test_subgraph_getitem():
     meta = pd.DataFrame(columns=["a"])
-    subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})
+    subgraph = ParquetSubgraph(
+        "name",
+        "pyarrow",
+        "fs",
+        meta,
+        [],
+        [],
+        [0, 1, 2],
+        {},
+        [],
+        [],
+        None,
+        [],
+        [],
+        True,
+        True,
+        {},
+    )
 
     with pytest.raises(KeyError):
         subgraph["foo"]
@@ -2499,7 +2515,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
                 if pa.types.is_timestamp(col.type) and (
                     col.type.unit in ("s", "ms", "us")
                 ):
-                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000,}[
+                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000}[
                         col.type.unit
                     ]
 

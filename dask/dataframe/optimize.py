@@ -74,7 +74,13 @@ def optimize_read_parquet_predicate_pushdown(dsk, keys):
                 # (('read-parquet-new', (.,)), ( ... ))
                 new_indices = ((name, block.indices[0][1]), block.indices[1])
                 numblocks = block.numblocks.copy()
-                numblocks[name] = numblocks.pop(old.name)
+                del numblocks[old.name]
+                numblocks[name] = (len(new),)
+
+                if block is filter_layer:
+                    # also update the numblocks for the eq
+                    numblocks[block.getitem_key.output] = (len(new),)
+
                 new_block = type(block)(
                     block.output,
                     block.output_indices,
@@ -89,7 +95,6 @@ def optimize_read_parquet_predicate_pushdown(dsk, keys):
                 dependencies[block.output].discard(old.name)
 
     new_hlg = HighLevelGraph(layers, dependencies)
-    breakpoint()
     return new_hlg
 
 
@@ -150,6 +155,7 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # (('read-parquet-new', (.,)), ( ... ))
                 new_indices = ((name, block.indices[0][1]), block.indices[1])
                 numblocks = {name: block.numblocks[old.name]}
+
                 new_block = Blockwise(
                     block.output,
                     block.output_indices,
@@ -186,6 +192,7 @@ def optimize_read_parquet_getitem(dsk, keys):
             old.categories,
             old.gather_statistics,
             old.split_row_groups,
+            old.optimized_parts,
         )
         layers[name] = new
         if name != old.name:
@@ -200,6 +207,8 @@ def filter_parquet_subgraph(subgraph, filters):
 
     # TODO: I would love to avoid read_metadata.
     # Might be able to with a bit of work...
+    # TODO: See if we can avoid filtering parts hereish.
+    # This might be difficult
     meta, statistics, parts = subgraph.engine.read_metadata(
         subgraph.fs,
         subgraph.paths,
@@ -212,9 +221,26 @@ def filter_parquet_subgraph(subgraph, filters):
     )
     index = subgraph.index
 
+    if len(parts) >= len(subgraph):
+        # We actually optimized a partition
+        return subgraph, subgraph.name
+
+    old_paths = [x["piece"][0] for x in subgraph.parts]
+    new_paths = [x["piece"][0] for x in parts]
+    new_parts = []
+    j = 0
+    optimized_parts = set()
+    for i, path in enumerate(old_paths):
+        if path in new_paths:
+            new_parts.append(parts[j])
+            j += 1
+        else:
+            new_parts.append(subgraph.parts[i])
+            optimized_parts.add(i)
+
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index, subgraph.chunksize
+        new_parts, subgraph.statistics, filters, index, subgraph.chunksize
     )
     name = "read-parquet-" + tokenize(subgraph.name, filters)
 
@@ -234,5 +260,6 @@ def filter_parquet_subgraph(subgraph, filters):
         subgraph.categories,
         subgraph.gather_statistics,
         subgraph.split_row_groups,
+        optimized_parts,
     )
     return filtered, name
