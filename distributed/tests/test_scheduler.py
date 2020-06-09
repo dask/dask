@@ -17,7 +17,7 @@ import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
 from distributed.comm import Comm
-from distributed.core import connect, rpc, ConnectionPool
+from distributed.core import connect, rpc, ConnectionPool, Status
 from distributed.scheduler import Scheduler
 from distributed.client import wait
 from distributed.metrics import time
@@ -736,7 +736,10 @@ async def test_retire_workers_n(c, s, a, b):
     await s.retire_workers(n=0, close_workers=True)
     assert len(s.workers) == 0
 
-    while not (a.status.startswith("clos") and b.status.startswith("clos")):
+    while not (
+        a.status in (Status.closed, Status.closing, Status.closing_gracefully)
+        and b.status in (Status.closed, Status.closing, Status.closing_gracefully)
+    ):
         await asyncio.sleep(0.01)
 
 

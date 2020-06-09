@@ -18,7 +18,7 @@ from tornado import gen
 
 from .comm import get_address_host, unparse_host_port
 from .comm.addressing import address_from_user_args
-from .core import RPCClosed, CommClosedError, coerce_to_address
+from .core import RPCClosed, CommClosedError, coerce_to_address, Status
 from .metrics import time
 from .node import ServerNode
 from . import preloading
@@ -35,6 +35,7 @@ from .utils import (
     TimeoutError,
 )
 from .worker import run, parse_memory_limit, Worker
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class Nanny(ServerNode):
 
     _instances = weakref.WeakSet()
     process = None
-    status = None
+    status = Status.undefined
 
     def __init__(
         self,
@@ -218,7 +219,7 @@ class Nanny(ServerNode):
 
         self._listen_address = listen_address
         Nanny._instances.add(self)
-        self.status = "init"
+        self.status = Status.init
 
     def __repr__(self):
         return "<Nanny: %s, threads: %d>" % (self.worker_address, self.nthreads)
@@ -291,7 +292,7 @@ class Nanny(ServerNode):
         response = await self.instantiate()
         if response == "running":
             assert self.worker_address
-            self.status = "running"
+            self.status = Status.running
         else:
             await self.close()
 
@@ -405,7 +406,7 @@ class Nanny(ServerNode):
 
     def memory_monitor(self):
         """ Track worker's memory.  Restart if it goes above terminate fraction """
-        if self.status != "running":
+        if self.status != Status.running:
             return
         process = self.process.process
         if process is None:
@@ -434,7 +435,7 @@ class Nanny(ServerNode):
         self.loop.add_callback(self._on_exit, exitcode)
 
     async def _on_exit(self, exitcode):
-        if self.status not in ("closing", "closed"):
+        if self.status not in (Status.closing, Status.closed):
             try:
                 await self.scheduler.unregister(address=self.worker_address)
             except (EnvironmentError, CommClosedError):
@@ -443,11 +444,15 @@ class Nanny(ServerNode):
                     return
 
             try:
-                if self.status not in ("closing", "closed", "closing-gracefully"):
+                if self.status not in (
+                    Status.closing,
+                    Status.closed,
+                    Status.closing_gracefully,
+                ):
                     if self.auto_restart:
                         logger.warning("Restarting worker")
                         await self.instantiate()
-                elif self.status == "closing-gracefully":
+                elif self.status == Status.closing_gracefully:
                     await self.close()
 
             except Exception:
@@ -469,20 +474,20 @@ class Nanny(ServerNode):
 
         This is used as part of the cluster shutdown process.
         """
-        self.status = "closing-gracefully"
+        self.status = Status.closing_gracefully
 
     async def close(self, comm=None, timeout=5, report=None):
         """
         Close the worker process, stop all comms.
         """
-        if self.status == "closing":
+        if self.status == Status.closing:
             await self.finished()
-            assert self.status == "closed"
+            assert self.status == Status.closed
 
-        if self.status == "closed":
+        if self.status == Status.closed:
             return "OK"
 
-        self.status = "closing"
+        self.status = Status.closing
         logger.info("Closing Nanny at %r", self.address)
 
         for preload in self.preloads:
@@ -496,7 +501,7 @@ class Nanny(ServerNode):
             pass
         self.process = None
         await self.rpc.close()
-        self.status = "closed"
+        self.status = Status.closed
         if comm:
             await comm.write("OK")
         await ServerNode.close(self)
@@ -513,7 +518,7 @@ class WorkerProcess:
         env,
         config,
     ):
-        self.status = "init"
+        self.status = Status.init
         self.silence_logs = silence_logs
         self.worker_kwargs = worker_kwargs
         self.worker_start_args = worker_start_args
@@ -532,9 +537,9 @@ class WorkerProcess:
         Ensure the worker process is started.
         """
         enable_proctitle_on_children()
-        if self.status == "running":
+        if self.status == Status.running:
             return self.status
-        if self.status == "starting":
+        if self.status == Status.starting:
             await self.running.wait()
             return self.status
 
@@ -561,7 +566,7 @@ class WorkerProcess:
         self.process.set_exit_callback(self._on_exit)
         self.running = asyncio.Event()
         self.stopped = asyncio.Event()
-        self.status = "starting"
+        self.status = Status.starting
 
         try:
             await self.process.start()
@@ -606,13 +611,13 @@ class WorkerProcess:
         return self.process.pid if self.process and self.process.is_alive() else None
 
     def mark_stopped(self):
-        if self.status != "stopped":
+        if self.status != Status.stopped:
             r = self.process.exitcode
             assert r is not None
             if r != 0:
                 msg = self._death_message(self.process.pid, r)
                 logger.info(msg)
-            self.status = "stopped"
+            self.status = Status.stopped
             self.stopped.set()
             # Release resources
             self.process.close()
@@ -635,13 +640,13 @@ class WorkerProcess:
         loop = IOLoop.current()
         deadline = loop.time() + timeout
 
-        if self.status == "stopped":
+        if self.status == Status.stopped:
             return
-        if self.status == "stopping":
+        if self.status == Status.stopping:
             await self.stopped.wait()
             return
-        assert self.status in ("starting", "running")
-        self.status = "stopping"
+        assert self.status in (Status.starting, Status.running)
+        self.status = Status.stopping
 
         process = self.process
         self.child_stop_q.put(
@@ -669,7 +674,7 @@ class WorkerProcess:
     async def _wait_until_connected(self, uid):
         delay = 0.05
         while True:
-            if self.status != "starting":
+            if self.status != Status.starting:
                 return
             try:
                 msg = self.init_result_q.get_nowait()

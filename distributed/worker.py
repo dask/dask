@@ -68,6 +68,8 @@ from .utils_comm import pack_data, gather_from_workers, retry_operation
 from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
 from .versions import get_versions
 
+from .core import Status
+
 logger = logging.getLogger(__name__)
 
 LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
@@ -832,7 +834,7 @@ class Worker(ServerNode):
                 middle = (_start + _end) / 2
                 self._update_latency(_end - start)
                 self.scheduler_delay = response["time"] - middle
-                self.status = "running"
+                self.status = Status.running
                 break
             except EnvironmentError:
                 logger.info("Waiting to connect to: %26s", self.scheduler.address)
@@ -881,7 +883,7 @@ class Worker(ServerNode):
 
                 if response["status"] == "missing":
                     for i in range(10):
-                        if self.status != "running":
+                        if self.status != Status.running:
                             break
                         else:
                             await asyncio.sleep(0.05)
@@ -918,7 +920,7 @@ class Worker(ServerNode):
             logger.exception(e)
             raise
         finally:
-            if self.reconnect and self.status == "running":
+            if self.reconnect and self.status == Status.running:
                 logger.info("Connection to scheduler broken.  Reconnecting...")
                 self.loop.add_callback(self.heartbeat)
             else:
@@ -991,9 +993,13 @@ class Worker(ServerNode):
     #############
 
     async def start(self):
-        if self.status and self.status.startswith("clos"):
+        if self.status and self.status in (
+            Status.closed,
+            Status.closing,
+            Status.closing_gracefully,
+        ):
             return
-        assert self.status is None, self.status
+        assert self.status is Status.undefined, self.status
 
         await super().start()
 
@@ -1095,7 +1101,7 @@ class Worker(ServerNode):
         self, report=True, timeout=10, nanny=True, executor_wait=True, safe=False
     ):
         with log_errors():
-            if self.status in ("closed", "closing"):
+            if self.status in (Status.closed, Status.closing):
                 await self.finished()
                 return
 
@@ -1106,9 +1112,9 @@ class Worker(ServerNode):
                 logger.info("Stopping worker at %s", self.address)
             except ValueError:  # address not available if already closed
                 logger.info("Stopping worker")
-            if self.status not in ("running", "closing-gracefully"):
+            if self.status not in (Status.running, Status.closing_gracefully):
                 logger.info("Closed worker has not yet started: %s", self.status)
-            self.status = "closing"
+            self.status = Status.closing
 
             for preload in self.preloads:
                 await preload.teardown()
@@ -1164,7 +1170,7 @@ class Worker(ServerNode):
             self.stop()
             await self.rpc.close()
 
-            self.status = "closed"
+            self.status = Status.closed
             await ServerNode.close(self)
 
             setproctitle("dask-worker [closed]")
@@ -1176,14 +1182,14 @@ class Worker(ServerNode):
         This first informs the scheduler that we're shutting down, and asks it
         to move our data elsewhere.  Afterwards, we close as normal
         """
-        if self.status.startswith("closing"):
+        if self.status in (Status.closing, Status.closing_gracefully):
             await self.finished()
 
-        if self.status == "closed":
+        if self.status == Status.closed:
             return
 
         logger.info("Closing worker gracefully: %s", self.address)
-        self.status = "closing-gracefully"
+        self.status = Status.closing_gracefully
         await self.scheduler.retire_workers(workers=[self.address], remove=False)
         await self.close(safe=True, nanny=not self.lifetime_restart)
 
@@ -1194,7 +1200,7 @@ class Worker(ServerNode):
     async def wait_until_closed(self):
         warnings.warn("wait_until_closed has moved to finished()")
         await self.finished()
-        assert self.status == "closed"
+        assert self.status == Status.closed
 
     ################
     # Worker Peers #
@@ -1707,7 +1713,7 @@ class Worker(ServerNode):
                 if key in self.dep_state:
                     self.transition_dep(key, "memory")
 
-            if report and self.batched_stream and self.status == "running":
+            if report and self.batched_stream and self.status == Status.running:
                 self.send_task_state_to_scheduler(key)
             else:
                 raise CommClosedError
@@ -1960,7 +1966,7 @@ class Worker(ServerNode):
         return deps, total_bytes
 
     async def gather_dep(self, worker, dep, deps, total_nbytes, cause=None):
-        if self.status != "running":
+        if self.status != Status.running:
             return
         with log_errors():
             response = {}
@@ -2493,7 +2499,7 @@ class Worker(ServerNode):
 
     async def execute(self, key, report=False):
         executor_error = None
-        if self.status in ("closing", "closed", "closing-gracefully"):
+        if self.status in (Status.closing, Status.closed, Status.closing_gracefully):
             return
         try:
             if key not in self.executing or key not in self.task_state:
@@ -2928,7 +2934,7 @@ class Worker(ServerNode):
             raise
 
     def validate_state(self):
-        if self.status != "running":
+        if self.status != Status.running:
             return
         try:
             for key, workers in self.who_has.items():

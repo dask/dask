@@ -11,7 +11,7 @@ from tornado import gen
 
 from .adaptive import Adaptive
 from .cluster import Cluster
-from ..core import rpc, CommClosedError
+from ..core import rpc, CommClosedError, Status
 from ..utils import (
     LoopRunner,
     silence_logging,
@@ -304,7 +304,7 @@ class SpecCluster(Cluster):
             pre = list(set(self.workers))
             to_close = set(self.workers) - set(self.worker_spec)
             if to_close:
-                if self.scheduler.status == "running":
+                if self.scheduler.status == Status.running:
                     await self.scheduler_comm.retire_workers(workers=list(to_close))
                 tasks = [self.workers[w].close() for w in to_close if w in self.workers]
                 await asyncio.wait(tasks)
@@ -390,7 +390,7 @@ class SpecCluster(Cluster):
 
         await self.scheduler.close()
         for w in self._created:
-            assert w.status == "closed", w.status
+            assert w.status == Status.closed, w.status
 
         if hasattr(self, "_old_logging_level"):
             silence_logging(self._old_logging_level)

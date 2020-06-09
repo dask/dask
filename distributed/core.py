@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict, deque
 from contextlib import suppress
+from enum import Enum
 from functools import partial
 import inspect
 import logging
@@ -37,6 +38,46 @@ from .utils import (
     TimeoutError,
 )
 from . import protocol
+
+
+class Status(Enum):
+    """
+    This Enum contains the various states a worker, scheduler and nanny can be
+    in. Some of the status can only be observed in one of nanny, scheduler or
+    worker but we put them in the same Enum as they are compared with each
+    other.
+    """
+
+    closed = "closed"
+    closing = "closing"
+    closing_gracefully = "closing-gracefully"
+    init = "init"
+    running = "running"
+    starting = "starting"
+    stopped = "stopped"
+    stopping = "stopping"
+    undefined = None
+
+    def __eq__(self, other):
+        """
+        Implement equality checking with backward compatibility.
+
+        If other object instance is string, we compare with the values, but we
+        actually want to make sure the value compared with is in the list of
+        possible Status, this avoid comparison with non-existing status.
+        """
+        if isinstance(other, type(self)):
+            return self.value == other.value
+        elif isinstance(other, str) or (other is None):
+            assert other in [
+                s.value for s in type(self)
+            ], f"comparison with non-existing states {other}"
+            return other == self.value
+        raise TypeError(
+            f"'==' not supported between instances of"
+            f" {type(self).__module__+'.'+type(self).__qualname__!r} and"
+            f" {type(other).__module__+'.'+type(other).__qualname__!r}"
+        )
 
 
 class RPCClosed(IOError):
@@ -197,7 +238,7 @@ class Server:
 
         self.io_loop.add_callback(set_thread_ident)
         self._startup_lock = asyncio.Lock()
-        self.status = None
+        self.status = Status.undefined
 
         self.rpc = ConnectionPool(
             limit=connection_limit,
@@ -211,6 +252,19 @@ class Server:
 
         self.__stopped = False
 
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, new_status):
+        if isinstance(new_status, Status):
+            self._status = new_status
+        elif isinstance(new_status, str) or new_status is None:
+            corresponding_enum_variants = [s for s in Status if s.value == new_status]
+            assert len(corresponding_enum_variants) == 1
+            self._status = corresponding_enum_variants[0]
+
     async def finished(self):
         """ Wait until the server has finished """
         await self._event_finished.wait()
@@ -219,12 +273,12 @@ class Server:
         async def _():
             timeout = getattr(self, "death_timeout", 0)
             async with self._startup_lock:
-                if self.status == "running":
+                if self.status == Status.running:
                     return self
                 if timeout:
                     try:
                         await asyncio.wait_for(self.start(), timeout=timeout)
-                        self.status = "running"
+                        self.status = Status.running
                     except Exception:
                         await self.close(timeout=1)
                         raise TimeoutError(
@@ -234,7 +288,7 @@ class Server:
                         )
                 else:
                     await self.start()
-                    self.status = "running"
+                    self.status = Status.running
             return self
 
         return _().__await__()
@@ -458,7 +512,7 @@ class Server:
                             self._ongoing_coroutines.add(result)
                             result = await result
                     except (CommClosedError, CancelledError) as e:
-                        if self.status == "running":
+                        if self.status == Status.running:
                             logger.info("Lost connection to %r: %s", address, e)
                         break
                     except Exception as e:
@@ -651,7 +705,7 @@ class rpc:
         self.comms = {}
         self.address = coerce_to_address(arg)
         self.timeout = timeout
-        self.status = "running"
+        self.status = Status.running
         self.deserialize = deserialize
         self.serializers = serializers
         self.deserializers = deserializers if deserializers is not None else serializers
@@ -677,7 +731,7 @@ class rpc:
 
         As is done in __getattr__ below.
         """
-        if self.status == "closed":
+        if self.status == Status.closed:
             raise RPCClosed("RPC Closed")
         to_clear = set()
         open = False
@@ -745,9 +799,9 @@ class rpc:
         return send_recv_from_rpc
 
     def close_rpc(self):
-        if self.status != "closed":
+        if self.status != Status.closed:
             rpc.active.discard(self)
-        self.status = "closed"
+        self.status = Status.closed
         return asyncio.gather(*self.close_comms())
 
     def __enter__(self):
@@ -763,9 +817,9 @@ class rpc:
         await self.close_rpc()
 
     def __del__(self):
-        if self.status != "closed":
+        if self.status != Status.closed:
             rpc.active.discard(self)
-            self.status = "closed"
+            self.status = Status.closed
             still_open = [comm for comm in self.comms if not comm.closed()]
             if still_open:
                 logger.warning(
