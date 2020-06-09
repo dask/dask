@@ -186,8 +186,7 @@ def test_text_blocks_to_pandas_simple(reader, files):
     assert isinstance(df, dd.DataFrame)
     assert list(df.columns) == ["name", "amount", "id"]
 
-    values = text_blocks_to_pandas(
-        reader, blocks, header, head, kwargs)
+    values = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
     assert isinstance(values, dd.DataFrame)
     assert hasattr(values, "dask")
     assert len(values.dask) == 3
@@ -303,9 +302,7 @@ def test_enforce_columns(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b"\n")[0] + b"\n"
     with pytest.raises(ValueError):
-        dfs = text_blocks_to_pandas(
-            reader, blocks, header, head, {}, enforce=True
-        )
+        dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, enforce=True)
         dask.compute(*dfs, scheduler="sync")
 
 
