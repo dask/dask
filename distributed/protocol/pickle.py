@@ -1,9 +1,10 @@
 import logging
 import pickle
-from pickle import HIGHEST_PROTOCOL
 
 import cloudpickle
 
+
+HIGHEST_PROTOCOL = pickle.HIGHEST_PROTOCOL
 
 logger = logging.getLogger(__name__)
 

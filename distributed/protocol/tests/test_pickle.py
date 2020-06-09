@@ -1,6 +1,7 @@
 from functools import partial
 import gc
 from operator import add
+import pickle
 import weakref
 import sys
 
@@ -8,11 +9,6 @@ import pytest
 
 from distributed.protocol import deserialize, serialize
 from distributed.protocol.pickle import HIGHEST_PROTOCOL, dumps, loads
-
-try:
-    from pickle import PickleBuffer
-except ImportError:
-    pass
 
 
 def test_pickle_data():
@@ -29,7 +25,7 @@ def test_pickle_out_of_band():
 
         def __reduce_ex__(self, protocol):
             if protocol >= 5:
-                return MemoryviewHolder, (PickleBuffer(self.mv),)
+                return MemoryviewHolder, (pickle.PickleBuffer(self.mv),)
             else:
                 return MemoryviewHolder, (self.mv.tobytes(),)
 
@@ -42,7 +38,7 @@ def test_pickle_out_of_band():
         mvh2 = loads(d, buffers=l)
 
         assert len(l) == 1
-        assert isinstance(l[0], PickleBuffer)
+        assert isinstance(l[0], pickle.PickleBuffer)
         assert memoryview(l[0]) == mv
     else:
         mvh2 = loads(dumps(mvh))
@@ -84,7 +80,7 @@ def test_pickle_numpy():
         l = []
         d = dumps(x, buffer_callback=l.append)
         assert len(l) == 1
-        assert isinstance(l[0], PickleBuffer)
+        assert isinstance(l[0], pickle.PickleBuffer)
         assert memoryview(l[0]) == memoryview(x)
         assert (loads(d, buffers=l) == x).all()
 
