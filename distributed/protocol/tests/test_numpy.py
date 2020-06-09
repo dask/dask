@@ -77,9 +77,8 @@ def test_dumps_serialize_numpy(x):
     header, frames = serialize(x)
     if "compression" in header:
         frames = decompress(header, frames)
-    buffer_interface = memoryview
     for frame in frames:
-        assert isinstance(frame, (bytes, buffer_interface))
+        assert isinstance(frame, (bytes, memoryview))
     y = deserialize(header, frames)
 
     np.testing.assert_equal(x, y)
