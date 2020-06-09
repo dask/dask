@@ -4699,16 +4699,7 @@ def elemwise(op, *args, **kwargs):
     meta = kwargs.pop("meta", no_default)
     out = kwargs.pop("out", None)
     transform_divisions = kwargs.pop("transform_divisions", True)
-    # filter_key = kwargs.pop("filter_key", None)
-    if op in {
-        operator.lt,
-        operator.le,
-        operator.eq,
-        operator.ne,
-        operator.ge,
-        operator.gt,
-    }:
-        filter_key = kwargs.pop("filter_key", None)
+    filter_key = kwargs.pop("filter_key", None)
 
     _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 

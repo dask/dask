@@ -63,14 +63,34 @@ def optimize_read_parquet_predicate_pushdown(dsk, keys):
             filters = [[(column_layer.getitem_key, symbol, other)]]
 
             old = layers[k]
-            new = filter_parquet_subgraph(old, filters)
-            # print("HI!")
-            name = "read-parquet-" + tokenize(old.name, new.filters)  # TODO
+            new, name = filter_parquet_subgraph(old, filters)
             layers[name] = new
             if name != old.name:
                 del layers[old.name]
+            dependencies[name] = dependencies.pop(old.name)
+
+            for block in [column_layer, filter_layer]:
+                # (('read-parquet-old', (.,)), ( ... )) ->
+                # (('read-parquet-new', (.,)), ( ... ))
+                new_indices = ((name, block.indices[0][1]), block.indices[1])
+                numblocks = {name: block.numblocks[old.name]}
+                new_block = type(block)(
+                    block.output,
+                    block.output_indices,
+                    block.dsk,
+                    new_indices,
+                    numblocks,
+                    block.concatenate,
+                    block.new_axes,
+                )
+                layers[block.output] = new_block
+                dependencies[block.output].add(name)
+                dependencies[block.output].discard(old.name)
+
+            # dependencies[name] = dependencies.pop(k)
 
     new_hlg = HighLevelGraph(layers, dependencies)
+    breakpoint()
     return new_hlg
 
 
@@ -197,9 +217,10 @@ def filter_parquet_subgraph(subgraph, filters):
     parts, divisions, index, index_in_columns = process_statistics(
         parts, statistics, filters, index, subgraph.chunksize
     )
+    name = "read-parquet-" + tokenize(subgraph.name, filters)
 
     filtered = ParquetSubgraph(
-        subgraph.name,
+        name,
         subgraph.engine,
         subgraph.fs,
         subgraph.meta,
@@ -215,4 +236,4 @@ def filter_parquet_subgraph(subgraph, filters):
         subgraph.gather_statistics,
         subgraph.split_row_groups,
     )
-    return filtered
+    return filtered, name
