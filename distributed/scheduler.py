@@ -3606,7 +3606,7 @@ class Scheduler(ServerNode):
         """
         if not dask.config.get("distributed.scheduler.pickle"):
             logger.warn(
-                "Tried to call 'feed' route with custom fucntions, but "
+                "Tried to call 'feed' route with custom functions, but "
                 "pickle is disallowed.  Set the 'distributed.scheduler.pickle'"
                 "config value to True to use the 'feed' route (this is mostly "
                 "commonly used with progress bars)"
