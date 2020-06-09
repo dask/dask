@@ -3612,7 +3612,6 @@ class Scheduler(ServerNode):
                 "commonly used with progress bars)"
             )
             return
-        import pickle
 
         interval = parse_timedelta(interval)
         with log_errors():
