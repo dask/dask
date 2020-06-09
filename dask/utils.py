@@ -96,8 +96,8 @@ def import_required(mod_name, error_msg):
     """
     try:
         return import_module(mod_name)
-    except ImportError:
-        raise RuntimeError(error_msg)
+    except ImportError as e:
+        raise RuntimeError(error_msg) from e
 
 
 @contextmanager
@@ -1224,13 +1224,13 @@ def parse_bytes(s):
 
     try:
         n = float(prefix)
-    except ValueError:
-        raise ValueError("Could not interpret '%s' as a number" % prefix)
+    except ValueError as e:
+        raise ValueError("Could not interpret '%s' as a number" % prefix) from e
 
     try:
         multiplier = byte_sizes[suffix.lower()]
-    except KeyError:
-        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+    except KeyError as e:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix) from e
 
     result = n * multiplier
     return int(result)
