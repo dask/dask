@@ -81,7 +81,7 @@ def dumps(msg, serializers=None, on_error="message", context=None):
         for i, frame in enumerate(out_frames):
             if type(frame) is memoryview and frame.strides != (1,):
                 try:
-                    frame = frame.cast("b")
+                    frame = frame.cast("B")
                 except TypeError:
                     frame = frame.tobytes()
                 out_frames[i] = frame
