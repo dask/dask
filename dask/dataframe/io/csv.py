@@ -47,7 +47,6 @@ class CSVSubgraph(Mapping):
         kwargs,
         dtypes,
         columns,
-        collection,
         enforce,
         path,
     ):
@@ -55,12 +54,11 @@ class CSVSubgraph(Mapping):
         self.reader = reader
         self.blocks = blocks
         self.is_first = is_first
-        self.head = head if collection else None  # example pandas DF for metadata
+        self.head = head  # example pandas DF for metadata
         self.header = header  # prepend to all blocks
         self.kwargs = kwargs
         self.dtypes = dtypes
         self.columns = columns
-        self.collection = collection
         self.enforce = enforce
         self.colname, self.paths = path or (None, None)
 
@@ -263,7 +261,6 @@ def text_blocks_to_pandas(
     header,
     head,
     kwargs,
-    collection=True,
     enforce=False,
     specified_dtypes=None,
     path=None,
@@ -285,10 +282,8 @@ def text_blocks_to_pandas(
         all blocks
     head : pd.DataFrame
         An example Pandas DataFrame to be used for metadata.
-        Can be ``None`` if ``collection==False``
     kwargs : dict
         Keyword arguments to pass down to ``reader``
-    collection: boolean, optional (defaults to True)
     path : tuple, optional
         A tuple containing column name for path and list of all paths
 
@@ -333,18 +328,17 @@ def text_blocks_to_pandas(
 
     name = "read-csv-" + tokenize(reader, columns, enforce, head)
 
-    if collection:
-        if path:
-            colname, paths = path
-            head = head.assign(
-                **{
-                    colname: pd.Categorical.from_codes(
-                        np.zeros(len(head), dtype=int), paths
-                    )
-                }
-            )
-        if len(unknown_categoricals):
-            head = clear_known_categories(head, cols=unknown_categoricals)
+    if path:
+        colname, paths = path
+        head = head.assign(
+            **{
+                colname: pd.Categorical.from_codes(
+                    np.zeros(len(head), dtype=int), paths
+                )
+            }
+        )
+    if len(unknown_categoricals):
+        head = clear_known_categories(head, cols=unknown_categoricals)
 
     subgraph = CSVSubgraph(
         name,
@@ -356,7 +350,6 @@ def text_blocks_to_pandas(
         kwargs,
         dtypes,
         columns,
-        collection,
         enforce,
         path,
     )
@@ -400,7 +393,6 @@ def read_pandas(
     reader,
     urlpath,
     blocksize="default",
-    collection=True,
     lineterminator=None,
     compression=None,
     sample=256000,
@@ -549,7 +541,6 @@ def read_pandas(
         header,
         head,
         kwargs,
-        collection=collection,
         enforce=enforce,
         specified_dtypes=specified_dtypes,
         path=path,
@@ -592,8 +583,6 @@ blocksize : str, int or None, optional
     based on available physical memory and the number of cores, up to a maximum
     of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
     ``None``, a single block is used for each file.
-collection : boolean, optional
-    Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int, optional
     Number of bytes to use when determining dtypes
 assume_missing : bool, optional
@@ -637,7 +626,6 @@ def make_reader(reader, reader_name, file_type):
     def read(
         urlpath,
         blocksize="default",
-        collection=True,
         lineterminator=None,
         compression=None,
         sample=256000,
@@ -651,7 +639,6 @@ def make_reader(reader, reader_name, file_type):
             reader,
             urlpath,
             blocksize=blocksize,
-            collection=collection,
             lineterminator=lineterminator,
             compression=compression,
             sample=sample,

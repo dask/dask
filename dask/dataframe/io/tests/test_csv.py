@@ -182,13 +182,12 @@ def test_text_blocks_to_pandas_simple(reader, files):
     head = pandas_read_text(reader, files["2014-01-01.csv"], b"", {})
     header = files["2014-01-01.csv"].split(b"\n")[0] + b"\n"
 
-    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs, collection=True)
+    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
     assert isinstance(df, dd.DataFrame)
     assert list(df.columns) == ["name", "amount", "id"]
 
     values = text_blocks_to_pandas(
-        reader, blocks, header, head, kwargs, collection=False
-    )
+        reader, blocks, header, head, kwargs)
     assert isinstance(values, dd.DataFrame)
     assert hasattr(values, "dask")
     assert len(values.dask) == 3
@@ -204,7 +203,7 @@ def test_text_blocks_to_pandas_kwargs(reader, files):
     head = pandas_read_text(reader, files["2014-01-01.csv"], b"", kwargs)
     header = files["2014-01-01.csv"].split(b"\n")[0] + b"\n"
 
-    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs, collection=True)
+    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
     assert list(df.columns) == ["name", "id"]
     result = df.compute()
     assert (result.columns == df.columns).all()
@@ -289,7 +288,7 @@ tsv_blocks = [
 def test_enforce_dtypes(reader, blocks):
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b"\n")[0] + b"\n"
-    dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, collection=False)
+    dfs = text_blocks_to_pandas(reader, blocks, header, head, {})
     dfs = dask.compute(dfs, scheduler="sync")
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
@@ -305,7 +304,7 @@ def test_enforce_columns(reader, blocks):
     header = blocks[0][0].split(b"\n")[0] + b"\n"
     with pytest.raises(ValueError):
         dfs = text_blocks_to_pandas(
-            reader, blocks, header, head, {}, collection=False, enforce=True
+            reader, blocks, header, head, {}, enforce=True
         )
         dask.compute(*dfs, scheduler="sync")
 
@@ -455,7 +454,7 @@ def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
         assert df.path.dtype == "category"
         assert has_known_categories(df.path)
 
-        dfs = dd_read("2014-01-*.csv", include_path_column=True, collection=False)
+        dfs = dd_read("2014-01-*.csv", include_path_column=True)
         result = dfs.compute()
         assert result.path.dtype == "category"
         assert has_known_categories(result.path)
