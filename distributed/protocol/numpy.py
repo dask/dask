@@ -1,7 +1,6 @@
 import math
 import numpy as np
 
-from .utils import frame_split_size, merge_frames
 from .serialize import dask_serialize, dask_deserialize
 from . import pickle
 
@@ -87,10 +86,7 @@ def serialize_numpy_ndarray(x):
     if broadcast_to is not None:
         header["broadcast_to"] = broadcast_to
 
-    if x.nbytes > 1e5:
-        frames = frame_split_size(data)
-    else:
-        frames = [data]
+    frames = [data]
 
     header["lengths"] = [x.nbytes]
 
@@ -100,11 +96,10 @@ def serialize_numpy_ndarray(x):
 @dask_deserialize.register(np.ndarray)
 def deserialize_numpy_ndarray(header, frames):
     with log_errors():
-        if len(frames) > 1:
-            frames = merge_frames(header, frames)
+        (frame,) = frames
 
         if header.get("pickle"):
-            return pickle.loads(frames[0])
+            return pickle.loads(frame)
 
         is_custom, dt = header["dtype"]
         if is_custom:
@@ -117,7 +112,7 @@ def deserialize_numpy_ndarray(header, frames):
         else:
             shape = header["shape"]
 
-        x = np.ndarray(shape, dtype=dt, buffer=frames[0], strides=header["strides"])
+        x = np.ndarray(shape, dtype=dt, buffer=frame, strides=header["strides"])
 
         return x
 
