@@ -365,6 +365,13 @@ def text_blocks_to_pandas(
 
 
 def block_mask(block_lists):
+    """
+    Yields a flat iterable of booleans to mark the zeroth elements of the
+    nested input ``block_lists`` in a flattened output.
+
+    >>> list(block_mask([[1, 2], [3, 4], [5]]))
+    [True, False, True, False, True]
+    """
     for block in block_lists:
         if not block:
             continue
