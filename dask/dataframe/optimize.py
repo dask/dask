@@ -47,13 +47,13 @@ def optimize_read_parquet_predicate_pushdown(dsk, keys):
     dependencies = dsk.dependencies.copy()
 
     for k in read_parquets:
-        dependents = dsk.dependents[k]
+        deps = dsk.dependents[k]
         # Check for presence of df[df.A == 0],
         # i.e. two getitems.
-        if len(dependents) == 2 and all(
-            isinstance(dsk.layers[dep], BlockwiseGetitem) for dep in dependents
+        if len(deps) == 2 and all(
+            isinstance(layers[dep], BlockwiseGetitem) for dep in deps
         ):
-            column_layer, filter_layer = [layers[x] for x in dependents]
+            column_layer, filter_layer = [layers[x] for x in deps]
             if column_layer.can_pushdown:
                 # got the names backwards
                 column_layer, filter_layer = filter_layer, column_layer
@@ -73,7 +73,8 @@ def optimize_read_parquet_predicate_pushdown(dsk, keys):
                 # (('read-parquet-old', (.,)), ( ... )) ->
                 # (('read-parquet-new', (.,)), ( ... ))
                 new_indices = ((name, block.indices[0][1]), block.indices[1])
-                numblocks = {name: block.numblocks[old.name]}
+                numblocks = block.numblocks.copy()
+                numblocks[name] = numblocks.pop(old.name)
                 new_block = type(block)(
                     block.output,
                     block.output_indices,
@@ -86,8 +87,6 @@ def optimize_read_parquet_predicate_pushdown(dsk, keys):
                 layers[block.output] = new_block
                 dependencies[block.output].add(name)
                 dependencies[block.output].discard(old.name)
-
-            # dependencies[name] = dependencies.pop(k)
 
     new_hlg = HighLevelGraph(layers, dependencies)
     breakpoint()

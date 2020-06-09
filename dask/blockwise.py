@@ -442,7 +442,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             block_names.add(name)
             for x in ind:
                 all_indices.add(x)
-    assert set(numblocks) == block_names
+    assert set(numblocks) == block_names, set(numblocks) ^ block_names
 
     dummy_indices = all_indices - set(out_indices)
 
