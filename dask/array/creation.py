@@ -220,11 +220,10 @@ def _get_like_function_shapes_chunks(a, chunks, shape):
     """
     if shape is None:
         shape = a.shape
-    if chunks is None:
-        if shape is None:
+        if chunks is None:
             chunks = a.chunks
-        else:
-            chunks = "auto"
+    elif chunks is None:
+        chunks = "auto"
     return shape, chunks
 
 
