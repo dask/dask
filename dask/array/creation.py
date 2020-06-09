@@ -73,7 +73,7 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return empty(shape, dtype=(dtype or a.dtype), chunks=chunks, name=name)
+    return empty(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
 
 
 def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -115,7 +115,7 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return ones(shape, dtype=(dtype or a.dtype), chunks=chunks, name=name)
+    return ones(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
 
 
 def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -157,7 +157,7 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return zeros(shape, dtype=(dtype or a.dtype), chunks=chunks, name=name)
+    return zeros(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
 
 
 def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shape=None):
@@ -203,7 +203,14 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return full(shape, fill_value, dtype=(dtype or a.dtype), chunks=chunks, name=name)
+    return full(
+        shape,
+        fill_value,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+    )
 
 
 def _get_like_function_shapes_chunks(a, chunks, shape):
