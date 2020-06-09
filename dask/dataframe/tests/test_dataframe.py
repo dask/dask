@@ -4108,8 +4108,12 @@ def test_map_index():
     ddf = dd.from_pandas(df, npartitions=2)
     assert ddf.known_divisions is True
 
-    actual = ddf.index.map(lambda x: x * 10)
-    assert actual.known_divisions is False
+    cleared = ddf.index.map(lambda x: x * 10)
+    assert cleared.known_divisions is False
+
+    applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
+    assert applied.known_divisions is True
+    assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
 
 
 def test_assign_index():

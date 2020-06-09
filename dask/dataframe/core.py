@@ -3384,17 +3384,24 @@ class Index(Series):
                 return self.map_partitions(M.to_frame, meta=self._meta.to_frame())
 
     @insert_meta_param_description(pad=12)
-    @derived_from(pd.Series)
-    def map(self, arg, na_action=None, meta=no_default):
+    @derived_from(pd.Index)
+    def map(self, arg, na_action=None, meta=no_default, is_monotonic=False):
         """
         Note that this method clears any known divisions.
 
+        If your mapping function is monotonically increasing then use `is_monotonic`
+        to apply the maping function to the old divisions and assign the new
+        divisions to the output.
+
         """
-        return (
-            super(Index, self)
-            .map(arg, na_action=na_action, meta=meta)
-            .clear_divisions()
-        )
+        applied = super(Index, self).map(arg, na_action=na_action, meta=meta)
+        if is_monotonic and self.known_divisions:
+            applied.divisions = tuple(
+                pd.Series(self.divisions).map(arg, na_action=na_action)
+            )
+        else:
+            applied = applied.clear_divisions()
+        return applied
 
 
 class DataFrame(_Frame):
