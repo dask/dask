@@ -35,6 +35,7 @@ from ..utils import (
     funcname,
     memory_repr,
     put_lines,
+    has_keyword,
     M,
     key_split,
     OperatorMethodMixin,
@@ -5138,6 +5139,13 @@ def map_partitions(
     else:
         meta = make_meta(meta, index=meta_index)
 
+    partition_info = {
+        "npartitions" : 0,
+        "partition_number" : 0,
+        "divisions" : tuple(),
+        "curr_partition_divisions":tuple()
+    }
+
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
             (name, 0): (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)
@@ -5158,6 +5166,8 @@ def map_partitions(
         if isinstance(arg, _Frame):
             args2.append(arg)
             dependencies.append(arg)
+            partition_info["npartitions"] = arg.npartitions
+            partition_info["divisions"] = arg.divisions
             continue
         arg = normalize_arg(arg)
         arg2, collections = unpack_collections(arg)
@@ -5176,6 +5186,10 @@ def map_partitions(
         kwargs3[k] = v
         if collections:
             simple = False
+
+    if has_keyword(func, "partition_info"):
+        kwargs3["partition_info"] = partition_info
+
 
     if enforce_metadata:
         dsk = partitionwise_graph(

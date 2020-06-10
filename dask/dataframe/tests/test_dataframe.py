@@ -810,6 +810,21 @@ def test_map_partitions_type():
     assert isinstance(result, pd.Series)
     assert all(x == pd.DataFrame for x in result)
 
+def test_map_partitions_magic():
+
+    def f(df, partition_info=None):
+        print(partition_info)
+        print("I'm in teh fn")
+        if partition_info:
+            df["a"] = partition_info["npartitions"]
+        return df
+    
+    result = d.map_partitions(f, meta=d)
+
+    print(result.compute(scheduler="single-threaded"))
+
+    assert False
+
 
 def test_map_partitions_names():
     func = lambda x: x
