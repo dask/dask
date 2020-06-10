@@ -2492,6 +2492,7 @@ def test_gh580():
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
 
+
 def test_gh6305():
     df = pd.DataFrame({"x": np.arange(3, dtype=float)})
     ddf = dd.from_pandas(df, 1)
@@ -2499,6 +2500,7 @@ def test_gh6305():
     ds = ddf["x"]
 
     is_broadcastable([ddf_index_only], ds)
+
 
 def test_rename_dict():
     renamer = {"a": "A", "b": "B"}
