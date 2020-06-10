@@ -390,7 +390,7 @@ def test_merge_asof_left_on_right_index(
             assert_eq(c, C)
 
 
-def test_merge_asof_indexed():
+def test_merge_asof_indexed_two_partitions():
     A = pd.DataFrame({"left_val": ["a", "b", "c"]}, index=[1, 5, 10])
     a = dd.from_pandas(A, npartitions=2)
     B = pd.DataFrame({"right_val": [1, 2, 3, 6, 7]}, index=[1, 2, 3, 6, 7])
