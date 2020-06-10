@@ -42,7 +42,7 @@ from ..utils import (
     typename,
 )
 from ..array.core import Array, normalize_arg
-from ..array.utils import empty_like_safe, zeros_like_safe
+from ..array.utils import zeros_like_safe
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -4776,7 +4776,7 @@ def elemwise(op, *args, **kwargs):
         parts = [
             d._meta
             if _is_broadcastable(d)
-            else empty_like_safe(d, (), dtype=d.dtype)
+            else np.empty((), dtype=d.dtype)
             if isinstance(d, Array)
             else d._meta_nonempty
             for d in dasks
