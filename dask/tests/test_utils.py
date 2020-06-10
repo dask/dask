@@ -525,6 +525,7 @@ def test_parse_bytes():
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
     assert parse_bytes(123) == 123
+    assert parse_bytes(".5GB") == 500000000
 
 
 def test_parse_timedelta():

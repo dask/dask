@@ -1211,7 +1211,7 @@ def parse_bytes(s):
     if isinstance(s, (int, float)):
         return int(s)
     s = s.replace(" ", "")
-    if not s[0].isdigit():
+    if not any(char.isdigit() for char in s):
         s = "1" + s
 
     for i in range(len(s) - 1, -1, -1):
