@@ -11,7 +11,7 @@ import warnings
 import click
 import dask
 from dask.system import CPU_COUNT
-from distributed import Nanny, Security
+from distributed import Nanny
 from distributed.cli.utils import check_python_3, install_signal_handlers
 from distributed.comm import get_address_host_port
 from distributed.preloading import validate_preload_argv
@@ -278,17 +278,15 @@ def main(
         )
         dashboard = bokeh
 
-    sec = Security(
-        **{
-            k: v
-            for k, v in [
-                ("tls_ca_file", tls_ca_file),
-                ("tls_worker_cert", tls_cert),
-                ("tls_worker_key", tls_key),
-            ]
-            if v is not None
-        }
-    )
+    sec = {
+        k: v
+        for k, v in [
+            ("tls_ca_file", tls_ca_file),
+            ("tls_worker_cert", tls_cert),
+            ("tls_worker_key", tls_key),
+        ]
+        if v is not None
+    }
 
     if nprocs > 1 and not nanny:
         logger.error(

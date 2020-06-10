@@ -97,6 +97,9 @@ class Nanny(ServerNode):
     ):
         self._setup_logging(logger)
         self.loop = loop or IOLoop.current()
+
+        if isinstance(security, dict):
+            security = Security(**security)
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("worker")

@@ -666,6 +666,8 @@ class Client:
 
         if security is None:
             security = Security()
+        elif isinstance(security, dict):
+            security = Security(**security)
         elif security is True:
             security = Security.temporary()
             self._startup_kwargs["security"] = security

@@ -507,6 +507,8 @@ class Worker(ServerNode):
             self, preload, preload_argv, file_dir=self.local_directory
         )
 
+        if isinstance(security, dict):
+            security = Security(**security)
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("worker")

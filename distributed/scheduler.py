@@ -1128,6 +1128,8 @@ class Scheduler(ServerNode):
             preload_argv = dask.config.get("distributed.scheduler.preload-argv")
         self.preloads = preloading.process_preloads(self, preload, preload_argv)
 
+        if isinstance(security, dict):
+            security = Security(**security)
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args("scheduler")

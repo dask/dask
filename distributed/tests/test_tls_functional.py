@@ -3,12 +3,21 @@ Various functional tests for TLS networking.
 Most are taken from other test files and adapted.
 """
 import asyncio
+import pytest
 
-from distributed import Nanny, worker_client, Queue
+from distributed import Scheduler, Worker, Client, Nanny, worker_client, Queue
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.nanny import Nanny
-from distributed.utils_test import gen_tls_cluster, inc, double, slowinc, slowadd
+from distributed.utils_test import (  # noqa: F401
+    gen_tls_cluster,
+    inc,
+    double,
+    slowinc,
+    slowadd,
+    tls_config,
+    cleanup,
+)
 
 
 @gen_tls_cluster(client=True)
@@ -172,3 +181,35 @@ async def test_retire_workers(c, s, a, b):
     while a.status != "closed":
         await asyncio.sleep(0.01)
         assert time() < start + 5
+
+
+@pytest.mark.asyncio
+async def test_security_dict_input_no_security(cleanup):
+    async with Scheduler(security={}) as s:
+        async with Worker(s.address, security={}) as w:
+            async with Client(s.address, security={}, asynchronous=True) as c:
+                result = await c.submit(inc, 1)
+                assert result == 2
+
+
+@pytest.mark.asyncio
+async def test_security_dict_input(cleanup):
+    conf = tls_config()
+    ca_file = conf["distributed"]["comm"]["tls"]["ca-file"]
+    client = conf["distributed"]["comm"]["tls"]["client"]["cert"]
+    worker = conf["distributed"]["comm"]["tls"]["worker"]["cert"]
+    scheduler = conf["distributed"]["comm"]["tls"]["scheduler"]["cert"]
+
+    async with Scheduler(
+        security={"tls_ca_file": ca_file, "tls_scheduler_cert": scheduler}
+    ) as s:
+        async with Worker(
+            s.address, security={"tls_ca_file": ca_file, "tls_worker_cert": worker}
+        ) as w:
+            async with Client(
+                s.address,
+                security={"tls_ca_file": ca_file, "tls_client_cert": client},
+                asynchronous=True,
+            ) as c:
+                result = await c.submit(inc, 1)
+                assert result == 2
