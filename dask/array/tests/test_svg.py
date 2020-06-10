@@ -52,7 +52,7 @@ def test_errors():
     assert "unknown chunk sizes" in str(excpt.value)
 
 
-def test_repr_html():
+def test_repr_html_size_units():
     x = da.ones((10000, 5000))
     x = da.ones((3000, 10000), chunks=(1000, 1000))
     text = x._repr_html_()
