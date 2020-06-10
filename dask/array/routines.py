@@ -182,10 +182,10 @@ def flip(m, axis):
     sl = m.ndim * [slice(None)]
     try:
         sl[axis] = slice(None, None, -1)
-    except IndexError:
+    except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
-        )
+        ) from e
     sl = tuple(sl)
 
     return m[sl]

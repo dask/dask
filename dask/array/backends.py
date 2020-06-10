@@ -25,10 +25,10 @@ def register_cupyx():
     try:
         from cupy.sparse import hstack
         from cupy.sparse import vstack
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "Stacking of sparse arrays requires at least CuPy version 8.0.0"
-        )
+        ) from e
 
     def _concat_cupy_sparse(L, axis=0):
         if axis == 0:

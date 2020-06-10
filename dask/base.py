@@ -169,10 +169,10 @@ class DaskMethodsMixin(object):
     def __await__(self):
         try:
             from distributed import wait, futures_of
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "Using async/await with dask requires the `distributed` package"
-            )
+            ) from e
         from tornado import gen
 
         @gen.coroutine

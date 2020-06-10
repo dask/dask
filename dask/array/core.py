@@ -4555,13 +4555,13 @@ def _vindex_array(x, dict_indexes):
 
     try:
         broadcast_indexes = np.broadcast_arrays(*dict_indexes.values())
-    except ValueError:
+    except ValueError as e:
         # note: error message exactly matches numpy
         shapes_str = " ".join(str(a.shape) for a in dict_indexes.values())
         raise IndexError(
             "shape mismatch: indexing arrays could not be "
             "broadcast together with shapes " + shapes_str
-        )
+        ) from e
     broadcast_shape = broadcast_indexes[0].shape
 
     lookup = dict(zip(dict_indexes, broadcast_indexes))

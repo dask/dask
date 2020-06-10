@@ -28,11 +28,11 @@ def dir_server():
             try:
                 requests.get("http://localhost:8999")
                 break
-            except requests.exceptions.ConnectionError:
+            except requests.exceptions.ConnectionError as e:
                 time.sleep(0.1)
                 timeout -= 0.1
                 if timeout < 0:
-                    raise RuntimeError("Server did not appear")
+                    raise RuntimeError("Server did not appear") from e
         yield d
         p.terminate()
 
