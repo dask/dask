@@ -1,6 +1,28 @@
 Changelog
 =========
 
+2.18.1 / 2020-06-09
+-------------------
+
+Array
++++++
+
+- Don't try to set name on ``full`` (:pr:`6299`) `Julia Signell`_
+- Histogram: support lazy values for range/bins (another way) (:pr:`6252`) `Gabe Joseph`_
+
+Core
+++++
+
+- Fix exception causes in ``utils.py`` (:pr:`6302`) `Ram Rachum`_
+- Improve performance of ``HighLevelGraph`` construction (:pr:`6293`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Now readthedocs builds unrelased features' docstrings (:pr:`6295`) `Antonio Ercole De Luca`_
+- Add ``asyncssh`` intersphinx mappings (:pr:`6298`) `Jacob Tomlinson`_
+
+
 2.18.0 / 2020-06-05
 -------------------
 
