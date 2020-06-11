@@ -4678,7 +4678,7 @@ def is_broadcastable(dfs, s):
         and s.npartitions == 1
         and s.known_divisions
         and any(
-            s.divisions == (min(df.columns), max(df.columns))
+            s.divisions == (df.columns.min(), df.columns.max())
             for df in dfs
             if isinstance(df, DataFrame)
         )

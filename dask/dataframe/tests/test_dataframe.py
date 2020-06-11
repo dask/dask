@@ -24,6 +24,7 @@ from dask.dataframe.core import (
     has_parallel_type,
     iter_chunks,
     total_mem_usage,
+    is_broadcastable,
 )
 from dask.dataframe import methods
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps, PANDAS_VERSION
@@ -2490,6 +2491,15 @@ def test_gh580():
     ddf = dd.from_pandas(df, 2)
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
+
+
+def test_gh6305():
+    df = pd.DataFrame({"x": np.arange(3, dtype=float)})
+    ddf = dd.from_pandas(df, 1)
+    ddf_index_only = ddf.set_index("x")
+    ds = ddf["x"]
+
+    is_broadcastable([ddf_index_only], ds)
 
 
 def test_rename_dict():
