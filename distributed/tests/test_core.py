@@ -471,7 +471,7 @@ async def test_ports(loop):
         server3.stop()
 
 
-def stream_div(stream=None, x=None, y=None):
+def stream_div(comm=None, x=None, y=None):
     return x / y
 
 

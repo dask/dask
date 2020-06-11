@@ -31,7 +31,7 @@ class LockExtension:
 
         self.scheduler.extensions["locks"] = self
 
-    async def acquire(self, stream=None, name=None, id=None, timeout=None):
+    async def acquire(self, comm=None, name=None, id=None, timeout=None):
         with log_errors():
             if isinstance(name, list):
                 name = tuple(name)
@@ -59,7 +59,7 @@ class LockExtension:
                 self.ids[name] = id
             return result
 
-    def release(self, stream=None, name=None, id=None):
+    def release(self, comm=None, name=None, id=None):
         with log_errors():
             if isinstance(name, list):
                 name = tuple(name)

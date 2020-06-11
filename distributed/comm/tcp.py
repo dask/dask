@@ -33,17 +33,17 @@ logger = logging.getLogger(__name__)
 MAX_BUFFER_SIZE = MEMORY_LIMIT / 2
 
 
-def set_tcp_timeout(stream):
+def set_tcp_timeout(comm):
     """
     Set kernel-level TCP timeout on the stream.
     """
-    if stream.closed():
+    if comm.closed():
         return
 
     timeout = dask.config.get("distributed.comm.timeouts.tcp")
     timeout = int(parse_timedelta(timeout, default="seconds"))
 
-    sock = stream.socket
+    sock = comm.socket
 
     # Default (unsettable) value on Windows
     # https://msdn.microsoft.com/en-us/library/windows/desktop/dd877220(v=vs.85).aspx
@@ -92,15 +92,15 @@ def set_tcp_timeout(stream):
         logger.warning("Could not set timeout on TCP stream: %s", e)
 
 
-def get_stream_address(stream):
+def get_stream_address(comm):
     """
     Get a stream's local address.
     """
-    if stream.closed():
+    if comm.closed():
         return "<closed>"
 
     try:
-        return unparse_host_port(*stream.socket.getsockname()[:2])
+        return unparse_host_port(*comm.socket.getsockname()[:2])
     except EnvironmentError:
         # Probably EBADF
         return "<closed>"

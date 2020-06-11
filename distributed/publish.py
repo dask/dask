@@ -26,7 +26,7 @@ class PublishExtension:
         self.scheduler.handlers.update(handlers)
         self.scheduler.extensions["publish"] = self
 
-    def put(self, stream=None, keys=None, data=None, name=None, client=None):
+    def put(self, comm=None, keys=None, data=None, name=None, client=None):
         with log_errors():
             if name in self.datasets:
                 raise KeyError("Dataset %s already exists" % name)
@@ -34,7 +34,7 @@ class PublishExtension:
             self.datasets[name] = {"data": data, "keys": keys}
             return {"status": "OK", "name": name}
 
-    def delete(self, stream=None, name=None):
+    def delete(self, comm=None, name=None):
         with log_errors():
             out = self.datasets.pop(name, {"keys": []})
             self.scheduler.client_releases_keys(

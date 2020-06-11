@@ -1580,7 +1580,7 @@ class Scheduler(ServerNode):
         setproctitle("dask-scheduler [closed]")
         disable_gc_diagnosis()
 
-    async def close_worker(self, stream=None, worker=None, safe=None):
+    async def close_worker(self, comm=None, worker=None, safe=None):
         """ Remove a worker from the cluster
 
         This both removes the worker from our local state and also sends a
@@ -2703,7 +2703,7 @@ class Scheduler(ServerNode):
             else:
                 self.transitions({key: "forgotten"})
 
-    def release_worker_data(self, stream=None, keys=None, worker=None):
+    def release_worker_data(self, comm=None, keys=None, worker=None):
         ws = self.workers[worker]
         tasks = {self.tasks[k] for k in keys}
         removed_tasks = tasks & ws.has_what
@@ -3798,7 +3798,7 @@ class Scheduler(ServerNode):
         self.log_event("all", {"action": "run-function", "function": function})
         return run(self, stream, function=function, args=args, kwargs=kwargs, wait=wait)
 
-    def set_metadata(self, stream=None, keys=None, value=None):
+    def set_metadata(self, comm=None, keys=None, value=None):
         try:
             metadata = self.task_metadata
             for key in keys[:-1]:
@@ -3811,7 +3811,7 @@ class Scheduler(ServerNode):
 
             pdb.set_trace()
 
-    def get_metadata(self, stream=None, keys=None, default=no_default):
+    def get_metadata(self, comm=None, keys=None, default=no_default):
         metadata = self.task_metadata
         for key in keys[:-1]:
             metadata = metadata[key]
@@ -3823,7 +3823,7 @@ class Scheduler(ServerNode):
             else:
                 raise
 
-    def get_task_status(self, stream=None, keys=None):
+    def get_task_status(self, comm=None, keys=None):
         return {
             key: (self.tasks[key].state if key in self.tasks else None) for key in keys
         }
@@ -4912,7 +4912,7 @@ class Scheduler(ServerNode):
     # Utility functions #
     #####################
 
-    def add_resources(self, stream=None, worker=None, resources=None):
+    def add_resources(self, comm=None, worker=None, resources=None):
         ws = self.workers[worker]
         if resources:
             ws.resources.update(resources)

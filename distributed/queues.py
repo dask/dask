@@ -44,7 +44,7 @@ class QueueExtension:
 
         self.scheduler.extensions["queues"] = self
 
-    def create(self, stream=None, name=None, client=None, maxsize=0):
+    def create(self, comm=None, name=None, client=None, maxsize=0):
         logger.debug("Queue name: {}".format(name))
         if name not in self.queues:
             self.queues[name] = asyncio.Queue(maxsize=maxsize)
@@ -52,7 +52,7 @@ class QueueExtension:
         else:
             self.client_refcount[name] += 1
 
-    def release(self, stream=None, name=None, client=None):
+    def release(self, comm=None, name=None, client=None):
         if name not in self.queues:
             return
 
@@ -66,7 +66,7 @@ class QueueExtension:
                 self.scheduler.client_releases_keys(keys=keys, client="queue-%s" % name)
 
     async def put(
-        self, stream=None, name=None, key=None, data=None, client=None, timeout=None
+        self, comm=None, name=None, key=None, data=None, client=None, timeout=None
     ):
         if key is not None:
             record = {"type": "Future", "value": key}
@@ -82,7 +82,7 @@ class QueueExtension:
             self.scheduler.client_releases_keys(keys=[key], client="queue-%s" % name)
             del self.future_refcount[name, key]
 
-    async def get(self, stream=None, name=None, client=None, timeout=None, batch=False):
+    async def get(self, comm=None, name=None, client=None, timeout=None, batch=False):
         def process(record):
             """ Add task status if known """
             if record["type"] == "Future":
@@ -122,7 +122,7 @@ class QueueExtension:
             record = process(record)
             return record
 
-    def qsize(self, stream=None, name=None, client=None):
+    def qsize(self, comm=None, name=None, client=None):
         return self.queues[name].qsize()
 
 
