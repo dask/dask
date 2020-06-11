@@ -235,7 +235,7 @@ def SSHCluster(
     scheduler_options: dict = {},
     worker_module: str = "distributed.cli.dask_worker",
     remote_python: str = None,
-    **kwargs
+    **kwargs,
 ):
     """ Deploy a Dask cluster using SSH
 
@@ -315,6 +315,10 @@ def SSHCluster(
         kwargs.setdefault("worker_addrs", hosts)
         return OldSSHCluster(**kwargs)
 
+    if not hosts:
+        raise ValueError(
+            f"`hosts` must be a non empty list, value {repr(hosts)!r} found."
+        )
     if isinstance(connect_options, list) and len(connect_options) != len(hosts):
         raise RuntimeError(
             "When specifying a list of connect_options you must provide a "

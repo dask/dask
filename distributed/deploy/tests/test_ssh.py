@@ -8,6 +8,16 @@ from distributed.deploy.ssh import SSHCluster
 from distributed.utils_test import loop  # noqa: F401
 
 
+def test_ssh_hosts_None():
+    with pytest.raises(ValueError):
+        SSHCluster(hosts=None)
+
+
+def test_ssh_hosts_empty_list():
+    with pytest.raises(ValueError):
+        SSHCluster(hosts=[])
+
+
 @pytest.mark.asyncio
 async def test_basic():
     async with SSHCluster(
