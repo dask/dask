@@ -185,6 +185,9 @@ def test_interface(loop):
                 assert all("127.0.0.1" == d["host"] for d in info["workers"].values())
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 7), reason="Intermittent failure on old Python version"
+)
 def test_pid_file(loop):
     def check_pidfile(proc, pidfile):
         start = time()
