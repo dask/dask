@@ -198,7 +198,7 @@ concurrent.futures
 ~~~~~~~~~~~~~~~~~~
 
 The :class:`distributed.Client` API is modeled after :mod:`concurrent.futures`
-and :pep:`3184`.  It has a few notable differences:
+and :pep:`3148`.  It has a few notable differences:
 
 *  ``distributed`` accepts :class:`~distributed.client.Future` objects within
    calls to ``submit/map``. When chaining computations, it is preferable to
@@ -216,4 +216,4 @@ API, use the object returned by the
 :meth:`~distributed.client.Client.get_executor` method.
 
 
-.. _PEP-3184: https://www.python.org/dev/peps/pep-3148/
+.. _PEP-3148: https://www.python.org/dev/peps/pep-3148/
