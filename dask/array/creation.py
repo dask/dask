@@ -27,7 +27,7 @@ from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
 
-def empty_like(a, dtype=None, chunks=None):
+def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return a new array with the same shape and type as a given array.
 
@@ -38,9 +38,17 @@ def empty_like(a, dtype=None, chunks=None):
         returned array.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -64,14 +72,11 @@ def empty_like(a, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
-    return empty(
-        a.shape,
-        dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return empty(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
 
 
-def ones_like(a, dtype=None, chunks=None):
+def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return an array of ones with the same shape and type as a given array.
 
@@ -82,9 +87,17 @@ def ones_like(a, dtype=None, chunks=None):
         the returned array.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -101,14 +114,11 @@ def ones_like(a, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
-    return ones(
-        a.shape,
-        dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return ones(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
 
 
-def zeros_like(a, dtype=None, chunks=None):
+def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return an array of zeros with the same shape and type as a given array.
 
@@ -119,9 +129,17 @@ def zeros_like(a, dtype=None, chunks=None):
         the returned array.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -138,14 +156,11 @@ def zeros_like(a, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
-    return zeros(
-        a.shape,
-        dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
-    )
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+    return zeros(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
 
 
-def full_like(a, fill_value, dtype=None, chunks=None):
+def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shape=None):
     """
     Return a full array with the same shape and type as a given array.
 
@@ -158,9 +173,17 @@ def full_like(a, fill_value, dtype=None, chunks=None):
         Fill value.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -179,12 +202,29 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
     return full(
-        a.shape,
+        shape,
         fill_value,
         dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
+        order=order,
+        chunks=chunks,
+        name=name,
     )
+
+
+def _get_like_function_shapes_chunks(a, chunks, shape):
+    """
+    Helper function for finding shapes and chunks for *_like()
+    array creation functions.
+    """
+    if shape is None:
+        shape = a.shape
+        if chunks is None:
+            chunks = a.chunks
+    elif chunks is None:
+        chunks = "auto"
+    return shape, chunks
 
 
 def linspace(
@@ -1162,8 +1202,8 @@ def pad(array, pad_width, mode="constant", **kwargs):
     }
     try:
         unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
-    except KeyError:
-        raise ValueError("mode '{}' is not supported".format(mode))
+    except KeyError as e:
+        raise ValueError("mode '{}' is not supported".format(mode)) from e
     if unsupported_kwargs:
         raise ValueError(
             "unsupported keyword arguments for mode '{}': {}".format(
