@@ -104,6 +104,7 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+from functools import partial
 import os
 from concurrent.futures import Executor, Future
 from queue import Queue, Empty
@@ -530,11 +531,8 @@ class SynchronousExecutor(Executor):
         return fut
 
 
-def apply_sync(func, args=(), kwds={}, callback=None):
-    """ A naive synchronous version of apply_async """
-    res = func(*args, **kwds)
-    if callback is not None:
-        callback(res)
+synchronous_executor = SynchronousExecutor()
+apply_sync = partial(executor_apply_async, synchronous_executor)
 
 
 def get_sync(dsk, keys, **kwargs):
