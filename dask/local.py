@@ -504,6 +504,13 @@ def get_async(
     return nested_get(result, state["cache"])
 
 
+def executor_apply_async(executor, func, args=(), kwds={}, callback=None):
+    """ A apply_async implementation for `concurrent.futures.Executor`s """
+    fut = executor.submit(func, *args, **kwds)
+    if callback is not None:
+        fut.add_done_callback(lambda f: callback(f.result()))
+
+
 """ Synchronous concrete version of get_async
 
 Usually we supply a multi-core apply_async function.  Here we provide a
