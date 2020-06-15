@@ -789,6 +789,8 @@ def assert_eq(
     check_index=True,
     **kwargs,
 ):
+    __tracebackhide__ = True
+
     if check_divisions:
         assert_divisions(a)
         assert_divisions(b)
