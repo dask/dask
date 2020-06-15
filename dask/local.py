@@ -524,10 +524,7 @@ GIL
 class SynchronousExecutor(Executor):
     def submit(self, fn, *args, **kwargs):
         fut = Future()
-        try:
-            fut.set_result(fn(*args, **kwargs))
-        except Exception as e:
-            fut.set_exception(e)
+        fut.set_result(fn(*args, **kwargs))
         return fut
 
 
