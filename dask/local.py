@@ -105,6 +105,7 @@ significantly on space and computation complexity.
 See the function ``inline_functions`` for more information.
 """
 import os
+from concurrent.futures import Executor, Future
 from queue import Queue, Empty
 
 from . import config
@@ -517,6 +518,16 @@ Usually we supply a multi-core apply_async function.  Here we provide a
 sequential one.  This is useful for debugging and for code dominated by the
 GIL
 """
+
+
+class SynchronousExecutor(Executor):
+    def submit(self, fn, *args, **kwargs):
+        fut = Future()
+        try:
+            fut.set_result(fn(*args, **kwargs))
+        except Exception as e:
+            fut.set_exception(e)
+        return fut
 
 
 def apply_sync(func, args=(), kwds={}, callback=None):
