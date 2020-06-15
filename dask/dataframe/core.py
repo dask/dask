@@ -2487,7 +2487,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             is_anchored = offset.isAnchored()
 
-        include_right = is_anchored or not hasattr(offset, "_inc")
+        include_right = is_anchored or not hasattr(offset, "delta")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -6133,11 +6133,15 @@ def idxmaxmin_row(x, fn=None, skipna=True):
 def idxmaxmin_combine(x, fn=None, skipna=True):
     if len(x) == 0:
         return x
-    return (
-        x.groupby(level=0)
-        .apply(idxmaxmin_row, fn=fn, skipna=skipna)
-        .reset_index(level=1, drop=True)
-    )
+    result = x.groupby(level=0).apply(idxmaxmin_row, fn=fn, skipna=skipna)
+    # TODO(MultiIndex): this looks fishy, and needs to be cleaned up.
+    # We have different behaviors pre / post pandas 1.1, as a result
+    # of https://github.com/pandas-dev/pandas/issues/32579. I think
+    # this may be related to split_every, but it's not straightforward
+    # when we need to reset the index.
+    if result.index.nlevels == 2:
+        result = result.reset_index(level=1, drop=True)
+    return result
 
 
 def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
