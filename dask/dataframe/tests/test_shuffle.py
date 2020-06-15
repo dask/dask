@@ -14,7 +14,7 @@ from copy import copy
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm, assert_categorical_equal
+from dask.dataframe._compat import tm, assert_categorical_equal, PANDAS_GT_110
 from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe.shuffle import (
@@ -762,6 +762,9 @@ def test_set_index_empty_partition():
 def test_set_index_on_empty():
     test_vals = [1, 2, 3, 4]
     converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
+    check_kwargs = {}
+    if PANDAS_GT_110:
+        check_kwargs["check_freq"] = False
 
     for converter in converters:
         df = pd.DataFrame([{"x": converter(x), "y": x} for x in test_vals])
@@ -772,7 +775,7 @@ def test_set_index_on_empty():
         ddf = ddf[ddf.y > df.y.max()].set_index("x")
         expected_df = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(ddf, expected_df)
+        assert assert_eq(ddf, expected_df, **check_kwargs)
         assert ddf.npartitions == 1
 
 
@@ -916,8 +919,12 @@ def test_set_index_timestamp():
         assert ts1.value == ts2.value
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div)
-    assert_eq(df2, ddf.set_index("A"))
+    check_kwargs = {}
+    if PANDAS_GT_110:
+        check_kwargs["check_freq"] = False
+
+    assert_eq(df2, ddf_new_div, **check_kwargs)
+    assert_eq(df2, ddf.set_index("A"), **check_kwargs)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])

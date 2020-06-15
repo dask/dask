@@ -4105,7 +4105,7 @@ class DataFrame(_Frame):
             left_index=on is None,
             right_index=True,
             left_on=on,
-            suffixes=[lsuffix, rsuffix],
+            suffixes=(lsuffix, rsuffix),
             npartitions=npartitions,
             shuffle=shuffle,
         )
