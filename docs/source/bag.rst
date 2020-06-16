@@ -102,7 +102,7 @@ comes at cost.  Bags have the following known limitations:
     same way that standard Python containers tend to be slower than NumPy
     arrays and Pandas DataFrames
 4.  Bag's ``groupby`` is slow.  You should try to use Bag's ``foldby`` if possible.
-    Using ``foldby`` requires more thought tough
+    Using ``foldby`` requires more thought though
 
 
 Name

@@ -649,15 +649,106 @@ def test_histogram_normed_deprecation():
 
 
 @pytest.mark.parametrize(
-    "bins, hist_range", [(None, None), (10, None), (None, (1, 10))]
+    "bins, hist_range",
+    [
+        (None, None),
+        (10, None),
+        (10, 1),
+        (None, (1, 10)),
+        (10, [0, 1, 2]),
+        (10, [0]),
+        (10, np.array([[0, 1]])),
+        (10, da.array([[0, 1]])),
+        ([[0, 1, 2]], None),
+        (np.array([[0, 1, 2]]), None),
+        (da.array([[0, 1, 2]]), None),
+    ],
 )
 def test_histogram_bin_range_raises(bins, hist_range):
     data = da.random.random(10, chunks=2)
-    with pytest.raises(ValueError) as info:
+    with pytest.raises((ValueError, TypeError)) as info:
         da.histogram(data, bins=bins, range=hist_range)
     err_msg = str(info.value)
-    assert "bins" in err_msg
-    assert "range" in err_msg
+    assert "bins" in err_msg or "range" in err_msg
+
+
+@pytest.mark.parametrize("density", [True, False])
+@pytest.mark.parametrize("weighted", [True, False])
+@pytest.mark.parametrize("non_delayed_i", [None, 0, 1])
+@pytest.mark.parametrize("delay_n_bins", [False, True])
+def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins):
+    n = 100
+    v = np.random.random(n)
+    vd = da.from_array(v, chunks=10)
+
+    if weighted:
+        weights = np.random.random(n)
+        weights_d = da.from_array(weights, chunks=vd.chunks)
+
+    d_range = [vd.min(), vd.max()]
+    if non_delayed_i is not None:
+        d_range[non_delayed_i] = d_range[non_delayed_i].compute()
+    hist_d, bins_d = da.histogram(
+        vd,
+        bins=da.array(n) if delay_n_bins and not density else n,
+        range=d_range,
+        density=density,
+        weights=weights_d if weighted else None,
+    )
+
+    hist, bins = np.histogram(
+        v,
+        bins=n,
+        range=[v.min(), v.max()],
+        density=density,
+        weights=weights if weighted else None,
+    )
+
+    assert_eq(hist_d, hist)
+    assert_eq(bins_d, bins)
+
+
+@pytest.mark.parametrize("density", [True, False])
+@pytest.mark.parametrize("weighted", [True, False])
+def test_histogram_delayed_bins(density, weighted):
+    n = 100
+    v = np.random.random(n)
+    bins = np.array([0, 0.2, 0.5, 0.8, 1])
+
+    vd = da.from_array(v, chunks=10)
+    bins_d = da.from_array(bins, chunks=2)
+
+    if weighted:
+        weights = np.random.random(n)
+        weights_d = da.from_array(weights, chunks=vd.chunks)
+
+    hist_d, bins_d2 = da.histogram(
+        vd,
+        bins=bins_d,
+        range=[bins_d[0], bins_d[-1]],
+        density=density,
+        weights=weights_d if weighted else None,
+    )
+
+    hist, bins = np.histogram(
+        v,
+        bins=bins,
+        range=[bins[0], bins[-1]],
+        density=density,
+        weights=weights if weighted else None,
+    )
+
+    assert bins_d is bins_d2
+    assert_eq(hist_d, hist)
+    assert_eq(bins_d2, bins)
+
+
+def test_histogram_delayed_n_bins_raises_with_density():
+    data = da.random.random(10, chunks=2)
+    with pytest.raises(
+        NotImplementedError, match="`bins` cannot be a scalar Dask object"
+    ):
+        da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
 
 
 def test_cov():

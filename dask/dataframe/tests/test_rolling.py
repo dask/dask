@@ -43,12 +43,6 @@ def shifted_sum(df, before, after, c=0):
     return df + a + b + c
 
 
-def ts_shifted_sum(df, before, after, c=0):
-    a = df.shift(before.seconds)
-    b = df.shift(-after.seconds)
-    return df + a + b + c
-
-
 @pytest.mark.parametrize("npartitions", [1, 4])
 def test_map_overlap(npartitions):
     ddf = dd.from_pandas(df, npartitions)

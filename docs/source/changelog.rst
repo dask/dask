@@ -1,6 +1,60 @@
 Changelog
 =========
 
+2.18.1 / 2020-06-09
+-------------------
+
+Array
++++++
+
+- Don't try to set name on ``full`` (:pr:`6299`) `Julia Signell`_
+- Histogram: support lazy values for range/bins (another way) (:pr:`6252`) `Gabe Joseph`_
+
+Core
+++++
+
+- Fix exception causes in ``utils.py`` (:pr:`6302`) `Ram Rachum`_
+- Improve performance of ``HighLevelGraph`` construction (:pr:`6293`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Now readthedocs builds unrelased features' docstrings (:pr:`6295`) `Antonio Ercole De Luca`_
+- Add ``asyncssh`` intersphinx mappings (:pr:`6298`) `Jacob Tomlinson`_
+
+
+2.18.0 / 2020-06-05
+-------------------
+
+Array
++++++
+
+- Cast slicing index to dask array if same shape as original (:pr:`6273`) `Julia Signell`_
+- Fix ``stack`` error message (:pr:`6268`) `Stephanie Gott`_
+- ``full`` & ``full_like``: error on non-scalar ``fill_value`` (:pr:`6129`) `Huite`_
+- Support for multiple arrays in ``map_overlap`` (:pr:`6165`) `Eric Czech`_
+- Pad resample divisions so that edges are counted (:pr:`6255`) `Julia Signell`_
+
+Bag
++++
+
+- Random sampling of k elements from a dask bag #4799 (:pr:`6239`) `Antonio Ercole De Luca`_
+
+DataFrame
++++++++++
+
+- Add ``dropna``, ``sort``, and ``ascending`` to ``sort_values`` (:pr:`5880`) `Julia Signell`_
+- Generalize ``from_dask_array`` (:pr:`6263`) `GALI PREM SAGAR`_
+- Add derived docstring for ``SeriesGroupby.nunique`` (:pr:`6284`) `Julia Signell`_
+- Remove ``NotImplementedError`` in resample with rule  (:pr:`6274`) `Abdulelah Bin Mahfoodh`_
+- Add ``dd.to_sql`` (:pr:`6038`) `Ryan Williams`_
+
+Documentation
++++++++++++++
+
+- Update remote data section (:pr:`6258`) `Ray Bell`_
+
+
 2.17.2 / 2020-05-28
 -------------------
 
@@ -3259,3 +3313,8 @@ Other
 .. _`Scott Sanderson`: https://github.com/ssanderson
 .. _`Gaurav Sheni`: https://github.com/gsheni
 .. _`Andrew Fulton`: https://github.com/andrewfulton9
+.. _`Stephanie Gott`: https://github.com/stephaniegott
+.. _`Huite`: https://github.com/Huite
+.. _`Ryan Williams`: https://github.com/ryan-williams
+.. _`Eric Czech`: https://github.com/eric-czech
+.. _`Abdulelah Bin Mahfoodh`: https://github.com/abduhbm

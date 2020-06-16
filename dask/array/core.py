@@ -1430,7 +1430,7 @@ class Array(DaskMethodsMixin):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
-    def to_dask_dataframe(self, columns=None, index=None):
+    def to_dask_dataframe(self, columns=None, index=None, meta=None):
         """ Convert dask Array to dask Dataframe
 
         Parameters
@@ -1448,6 +1448,10 @@ class Array(DaskMethodsMixin):
             Specifying ``index`` can be useful if you're conforming a Dask Array
             to an existing dask Series or DataFrame, and you would like the
             indices to match.
+        meta : object, optional
+            An optional `meta` parameter can be passed for dask
+            to specify the concrete dataframe type to use for partitions of
+            the Dask dataframe. By default, pandas DataFrame is used.
 
         See Also
         --------
@@ -1455,7 +1459,7 @@ class Array(DaskMethodsMixin):
         """
         from ..dataframe import from_dask_array
 
-        return from_dask_array(self, columns=columns, index=index)
+        return from_dask_array(self, columns=columns, index=index, meta=meta)
 
     def __bool__(self):
         if self.size > 1:
@@ -4551,13 +4555,13 @@ def _vindex_array(x, dict_indexes):
 
     try:
         broadcast_indexes = np.broadcast_arrays(*dict_indexes.values())
-    except ValueError:
+    except ValueError as e:
         # note: error message exactly matches numpy
         shapes_str = " ".join(str(a.shape) for a in dict_indexes.values())
         raise IndexError(
             "shape mismatch: indexing arrays could not be "
             "broadcast together with shapes " + shapes_str
-        )
+        ) from e
     broadcast_shape = broadcast_indexes[0].shape
 
     lookup = dict(zip(dict_indexes, broadcast_indexes))

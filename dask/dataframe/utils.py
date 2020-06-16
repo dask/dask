@@ -25,6 +25,7 @@ from ._compat import (  # noqa: F401
     PANDAS_GT_0240,
     PANDAS_GT_0250,
     PANDAS_GT_100,
+    PANDAS_GT_110,
     HAS_INT_NA,
     tm,
 )
@@ -190,7 +191,7 @@ def raise_on_meta_error(funcname=None, udf=False):
             "{2}"
         )
         msg = msg.format(" in `{0}`".format(funcname) if funcname else "", repr(e), tb)
-        raise ValueError(msg)
+        raise ValueError(msg) from e
 
 
 UNKNOWN_CATEGORIES = "__UNKNOWN_CATEGORIES__"
